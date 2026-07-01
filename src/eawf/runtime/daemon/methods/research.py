@@ -65,6 +65,7 @@ from eawf.kernel.state.enums import (
     AgentSessionStatus,
     CampaignStatus,
     ClaimStatus,
+    Confidence,
     EffortBucket,
     OpenQuestionStatus,
     StoreKind,
@@ -82,6 +83,7 @@ from eawf.kernel.store.kinds.research_campaign import (
 )
 from eawf.kernel.store.kinds.research_round import ResearchRoundPayload
 from eawf.kernel.store.paths import store_path
+from eawf.platform.scrub.scan import rewrite_text
 from eawf.runtime.budget.policy import DEFAULT_ENFORCE, EnforceMode
 from eawf.runtime.daemon.dispatch_runner import (
     _CHUNK_BATCH_LINES,
@@ -100,9 +102,10 @@ from eawf.runtime.session.store import (
     close_session,
     start_session,
 )
-from eawf.workflow.dispatch.llm_assist import assist_with_schema
+from eawf.workflow.dispatch.llm_assist import LLMAssistError, assist_with_schema
 from eawf.workflow.dispatch.routing import model_for_runtime
 from eawf.workflow.evidence._io import load_state
+from eawf.workflow.verify.dispatch_close import DispatchCloseBlockedError
 
 if TYPE_CHECKING:
     from eawf.kernel.spec.research_campaign import StagedDispatch
@@ -1142,6 +1145,103 @@ def _append_researcher_event(
     ctx.last_event_id = event.id
 
 
+async def _bind_researcher_body(
+    prompt: str,
+    *,
+    spawn: Callable[[str], Any],
+    dispatch_scope: str,
+) -> ResearcherReportBody:
+    """Bind the researcher body, synthesizing a BLOCKED fallback on assist failure.
+
+    Mirrors the executor synth-fallback: when the researcher output never
+    validates as a :class:`ResearcherReportBody` even after the bounded re-ask
+    loop (e.g. prose, not JSON), :func:`assist_with_schema` raises
+    :class:`LLMAssistError`. Rather than let that unparseable output abort the
+    whole campaign round, record a typed BLOCKED body so the round persists the
+    degrade. The BLOCKED verdict is tolerated downstream by the caller's
+    :class:`DispatchCloseBlockedError` handler.
+
+    Args:
+        prompt: The researcher dispatch prompt.
+        spawn: The bounded re-ask spawn callable the assist loop drives.
+        dispatch_scope: The campaign-scoped dispatch id, for the log line.
+
+    Returns:
+        The bound researcher body, or a synthesized BLOCKED body on assist
+        exhaustion.
+
+    Raises:
+        TypeError: When the validated body is not a researcher body (the
+            validator narrows this, so it is defensive only).
+    """
+    try:
+        assist = await assist_with_schema(
+            prompt, spawn=spawn, validator=ResearcherReportBody.model_validate
+        )
+    except LLMAssistError as exc:
+        logger.info(
+            f"_bind_researcher_body scope={dispatch_scope} assist=failed "
+            f"attempts={exc.attempts} action=synth_blocked_body"
+        )
+        return ResearcherReportBody(
+            verdict=AgentReportVerdict.BLOCKED,
+            confidence=Confidence.LOW,
+            summary=f"researcher output did not validate after {exc.attempts} attempt(s)",
+            question="researcher produced no parseable findings; re-run or narrow the domain",
+            recommendation="re-dispatch the researcher with a tighter prompt",
+            findings=[],
+            evidence_refs=[],
+        )
+    candidate = assist.body
+    if not isinstance(candidate, ResearcherReportBody):  # pragma: no cover - validator narrows
+        raise TypeError(f"assist returned non-researcher body: {candidate.role!r}")
+    return candidate
+
+
+def _harden_researcher_body(
+    body: ResearcherReportBody, *, dispatch_scope: str
+) -> ResearcherReportBody:
+    """Prepare a researcher body for persistence, tolerating two degrade modes.
+
+    Two body-level invariants would otherwise abort a campaign round on an
+    otherwise-usable finding:
+
+    * **EviBound** -- the :class:`AgentReportPayload` validator rejects a
+      researcher PASS with an empty ``evidence_refs`` (only PASS is gated). A
+      shallow / offline researcher legitimately has no citeable refs, so
+      downgrade to PASS_WITH_FOLLOWUPS (still close-ready) instead.
+    * **Store scrub** -- :func:`append_agent_report` rejects a body whose prose
+      names an absolute path / sensitive token. Mirror the executor path and
+      rewrite every string field through the canonical scrub redactor so ids and
+      repo-relative paths survive while local tokens are neutralised.
+
+    Args:
+        body: The bound (or synthesized) researcher body.
+        dispatch_scope: The campaign-scoped dispatch id, for the log line.
+
+    Returns:
+        A researcher body safe to persist through the report store.
+    """
+    if body.verdict is AgentReportVerdict.PASS and not body.evidence_refs:
+        body = body.model_copy(update={"verdict": AgentReportVerdict.PASS_WITH_FOLLOWUPS})
+        logger.info(
+            f"_harden_researcher_body scope={dispatch_scope} "
+            "downgrade=uncited_pass verdict=pass-with-followups"
+        )
+
+    def _walk(value: object) -> object:
+        if isinstance(value, str):
+            return rewrite_text(value)
+        if isinstance(value, list):
+            return [_walk(item) for item in value]
+        if isinstance(value, dict):
+            return {key: _walk(item) for key, item in value.items()}
+        return value
+
+    redacted = _walk(body.model_dump(mode="json"))
+    return ResearcherReportBody.model_validate(redacted)
+
+
 async def _spawn_researcher_agent_end(
     ctx: MethodContext,
     *,
@@ -1242,18 +1342,15 @@ async def _spawn_researcher_agent_end(
             on_chunk=_on_chunk,
         )
 
-    assist = await assist_with_schema(
-        prompt,
-        spawn=_assist_spawn,
-        validator=ResearcherReportBody.model_validate,
-    )
+    body = await _bind_researcher_body(prompt, spawn=_assist_spawn, dispatch_scope=dispatch_scope)
     # Final flush: empty any partial batch so the persisted researcher tail is
     # complete + emit the finish lifecycle marker for the Feed.
     _flush_chunk_buffer()
     _append_researcher_event(ctx, phase="finish", dispatch=dispatch, scope_id=scope_id)
-    body = assist.body
-    if not isinstance(body, ResearcherReportBody):  # pragma: no cover - validator narrows
-        raise TypeError(f"assist returned non-researcher body: {body.role!r}")
+    # Harden the body for persistence: downgrade an uncited PASS + redact local
+    # tokens so neither the EviBound invariant nor the report-store scrub aborts
+    # the round on an otherwise-usable finding.
+    body = _harden_researcher_body(body, dispatch_scope=dispatch_scope)
 
     metered = price_spawn_result(spawn_result)
     tokens = DispatchTokens(
@@ -1263,26 +1360,38 @@ async def _spawn_researcher_agent_end(
         cache_read_input_tokens=metered.cache_read_input_tokens,
     )
     pid = captured_pid[-1] if captured_pid else spawn_result.subprocess_pid
-    run_dispatch(
-        ctx,
-        wave_id=dispatch_scope,
-        primary_runtime=runtime_triple,
-        fallback_runtime=runtime_triple,
-        model=metered.model,
-        pricing_version=metered.pricing_version,
-        primary_error=None,
-        tokens=tokens,
-        cost_usd=metered.cost_usd,
-        session_id=session_id,
-        report_body=body,
-        pgid=pid,
-        enforce=_resolve_budget_enforce(state_path),
-        output_text=spawn_result.text,
-        # Researcher spend is a campaign cost, not a wave cost (W15): never fold
-        # it into a wave budget. The dispatch_cost event books it to the
-        # campaign scope, which is where a campaign-cost query reads it.
-        accrue_wave_budget=False,
-    )
+    try:
+        run_dispatch(
+            ctx,
+            wave_id=dispatch_scope,
+            primary_runtime=runtime_triple,
+            fallback_runtime=runtime_triple,
+            model=metered.model,
+            pricing_version=metered.pricing_version,
+            primary_error=None,
+            tokens=tokens,
+            cost_usd=metered.cost_usd,
+            session_id=session_id,
+            report_body=body,
+            pgid=pid,
+            enforce=_resolve_budget_enforce(state_path),
+            output_text=spawn_result.text,
+            # Researcher spend is a campaign cost, not a wave cost (W15): never fold
+            # it into a wave budget. The dispatch_cost event books it to the
+            # campaign scope, which is where a campaign-cost query reads it.
+            accrue_wave_budget=False,
+        )
+    except DispatchCloseBlockedError:
+        # A researcher may legitimately return FAIL / BLOCKED (e.g. it could
+        # not answer without web access). run_dispatch's close gate raises on a
+        # non-close-ready verdict -- correct for a WAVE close, but a campaign
+        # round is not a wave close: the report is already persisted, so record
+        # the finding and let the round proceed rather than aborting the whole
+        # run. The session close + return below still run.
+        logger.info(
+            f"_spawn_researcher_agent_end scope={dispatch_scope} "
+            f"verdict={body.verdict.value} not close-ready; recorded, continuing"
+        )
     # Close the researcher session (W17): mirror the executor close so a
     # completed researcher never leaks as a phantom ACTIVE session stuck in
     # current.active_session_ids.

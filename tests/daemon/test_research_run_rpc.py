@@ -38,7 +38,12 @@ from eawf.kernel.spec.research_campaign import (
     StagedDispatch,
     stage_campaign,
 )
-from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
+from eawf.kernel.state.enums import (
+    AgentReportVerdict,
+    AgentSessionRole,
+    AgentSessionStatus,
+    StoreKind,
+)
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import AgentReportPayload, ResearcherReportBody
@@ -533,6 +538,257 @@ def test_research_run_rpc_uses_live_producer_without_stub(
         for sid in final_state.current.active_session_ids
         if sid in final_state.agent_sessions
     )
+
+
+class _BodyOverrideAdapter(_ResearchSpawnAdapter):
+    """A live-spawn adapter whose researcher body is a fixed override dict.
+
+    Reuses the parent's spawn plumbing (pid callback, chunk stream) but returns
+    a caller-supplied agent_end body so a test can drive the live producer with
+    an uncited PASS or a BLOCKED verdict -- the two shapes the P30-I21 live e2e
+    surfaced as round-aborting crashes (finding 5).
+    """
+
+    def __init__(self, body: dict[str, object]) -> None:
+        super().__init__()
+        self._body = body
+
+    async def spawn_session(
+        self, prompt: str, *, model: str, cwd: str | None = None, **kwargs: Any
+    ) -> SpawnResult:
+        self.spawn_calls += 1
+        self.prompts.append(prompt)
+        on_spawn = kwargs.get("on_spawn")
+        if callable(on_spawn):
+            on_spawn(43210 + self.spawn_calls)
+        on_chunk = kwargs.get("on_chunk")
+        if callable(on_chunk):
+            await on_chunk("researching...")
+        return SpawnResult(
+            session_id=f"research-{self.spawn_calls}",
+            runtime="claude-code",
+            model=model,
+            resolved_model=model,
+            subprocess_pid=43210 + self.spawn_calls,
+            exit_status=0,
+            text=json.dumps(self._body),
+            input_tokens=100,
+            output_tokens=25,
+            cache_creation_input_tokens=0,
+            cache_creation_5m_input_tokens=0,
+            cache_creation_1h_input_tokens=0,
+            cache_read_input_tokens=0,
+            started_at=_T0,
+            ended_at=_T1,
+        )
+
+
+def test_run_campaign_live_uncited_pass_downgraded_not_crashed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An uncited PASS researcher is downgraded, not crashed (finding 5).
+
+    The EviBound invariant rejects a researcher PASS with empty ``evidence_refs``;
+    letting the ``AgentReportPayload`` ValidationError escape aborted the whole
+    campaign round in the live e2e. The live producer now downgrades the verdict
+    to ``pass-with-followups`` so the finding is recorded and the round persists.
+    """
+    ctx, state_path = _build_live_ctx(tmp_path)
+    uncited_pass = {
+        "role": "researcher",
+        "verdict": "pass",
+        "confidence": "medium",
+        "summary": "surveyed with no citeable refs",
+        "question": "what does this reveal",
+        "findings": ["a finding with no evidence"],
+        "recommendation": "pursue",
+        "evidence_refs": [],
+    }
+    adapter = _BodyOverrideAdapter(uncited_pass)
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.research.select_adapter",
+        lambda _runtime: adapter,
+    )
+
+    async def body() -> None:
+        await create_campaign(ctx, _stage_params("campaign-uncited"))
+        await run(ctx, {"campaign_id": "campaign-uncited", "round_budget": 1})
+        await _wait_for_research_run("campaign-uncited")
+
+    _run(body)
+
+    # The run did not abort: a round persisted and every researcher report landed
+    # with the verdict downgraded to pass-with-followups (never a bare PASS).
+    rounds = read_campaign_rounds(state_path, "campaign-uncited")
+    assert len(rounds) == 1
+    reports = _read_envelopes(store_path(state_path, StoreKind.RESEARCHER_REPORT))
+    assert reports
+    payloads = [AgentReportPayload.model_validate(row.payload) for row in reports]
+    assert all(p.body.verdict is AgentReportVerdict.PASS_WITH_FOLLOWUPS for p in payloads)
+
+
+def test_run_campaign_live_blocked_researcher_does_not_abort_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A live BLOCKED researcher records the round instead of aborting (finding 5).
+
+    ``run_dispatch``'s close gate raises ``DispatchCloseBlockedError`` on a
+    non-close-ready verdict -- correct for a wave close, but a campaign round is
+    not a wave close. The report is already persisted, so the live producer
+    records it and lets the run proceed rather than crashing the whole campaign.
+    """
+    ctx, state_path = _build_live_ctx(tmp_path)
+    blocked = {
+        "role": "researcher",
+        "verdict": "blocked",
+        "confidence": "high",
+        "summary": "cannot answer without web access",
+        "question": "grant web access to proceed",
+        "findings": ["a partial finding"],
+        "recommendation": "unblock and retry",
+        "evidence_refs": [{"kind": "store_record", "ref": "src/x.py:1"}],
+    }
+    adapter = _BodyOverrideAdapter(blocked)
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.research.select_adapter",
+        lambda _runtime: adapter,
+    )
+
+    async def body() -> None:
+        await create_campaign(ctx, _stage_params("campaign-blocked-live"))
+        await run(ctx, {"campaign_id": "campaign-blocked-live", "round_budget": 1})
+        await _wait_for_research_run("campaign-blocked-live")
+
+    _run(body)
+
+    # The run reached terminal without crashing: a round persisted and the
+    # blocked researcher report landed on disk.
+    rounds = read_campaign_rounds(state_path, "campaign-blocked-live")
+    assert len(rounds) == 1
+    reports = _read_envelopes(store_path(state_path, StoreKind.RESEARCHER_REPORT))
+    assert reports
+    payloads = [AgentReportPayload.model_validate(row.payload) for row in reports]
+    assert all(p.body.verdict is AgentReportVerdict.BLOCKED for p in payloads)
+
+
+class _ProseAdapter(_ResearchSpawnAdapter):
+    """A live-spawn adapter whose researcher never emits parseable JSON.
+
+    Every spawn (initial + re-ask) returns prose, so ``assist_with_schema``
+    exhausts its bounded re-ask loop and raises ``LLMAssistError`` -- the third
+    round-aborting trigger the P30-I21 live re-run surfaced (finding 5).
+    """
+
+    async def spawn_session(
+        self, prompt: str, *, model: str, cwd: str | None = None, **kwargs: Any
+    ) -> SpawnResult:
+        self.spawn_calls += 1
+        self.prompts.append(prompt)
+        on_spawn = kwargs.get("on_spawn")
+        if callable(on_spawn):
+            on_spawn(43210 + self.spawn_calls)
+        return SpawnResult(
+            session_id=f"research-{self.spawn_calls}",
+            runtime="claude-code",
+            model=model,
+            resolved_model=model,
+            subprocess_pid=43210 + self.spawn_calls,
+            exit_status=0,
+            text="This is a prose answer with no JSON object at all.",
+            input_tokens=100,
+            output_tokens=25,
+            cache_creation_input_tokens=0,
+            cache_creation_5m_input_tokens=0,
+            cache_creation_1h_input_tokens=0,
+            cache_read_input_tokens=0,
+            started_at=_T0,
+            ended_at=_T1,
+        )
+
+
+def test_run_campaign_live_unparseable_researcher_synthesizes_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unparseable researcher synthesizes a blocked body, not a crash (finding 5).
+
+    When the researcher output never validates (prose, not JSON) even after the
+    bounded re-ask loop, ``assist_with_schema`` raises ``LLMAssistError``. The
+    live producer mirrors the executor synth-fallback: it records a BLOCKED
+    researcher body so the round persists rather than the unparseable output
+    aborting the whole campaign run.
+    """
+    ctx, state_path = _build_live_ctx(tmp_path)
+    adapter = _ProseAdapter()
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.research.select_adapter",
+        lambda _runtime: adapter,
+    )
+
+    async def body() -> None:
+        await create_campaign(ctx, _stage_params("campaign-prose"))
+        await run(ctx, {"campaign_id": "campaign-prose", "round_budget": 1})
+        await _wait_for_research_run("campaign-prose")
+
+    _run(body)
+
+    # The run did not abort: a round persisted and a synthesized BLOCKED report
+    # landed. The re-ask loop ran (more than one spawn) before the fallback.
+    assert adapter.spawn_calls > 1
+    rounds = read_campaign_rounds(state_path, "campaign-prose")
+    assert len(rounds) == 1
+    reports = _read_envelopes(store_path(state_path, StoreKind.RESEARCHER_REPORT))
+    assert reports
+    payloads = [AgentReportPayload.model_validate(row.payload) for row in reports]
+    assert all(p.body.verdict is AgentReportVerdict.BLOCKED for p in payloads)
+    assert all("did not validate" in p.body.summary for p in payloads)
+
+
+def test_run_campaign_live_absolute_path_report_is_redacted_not_crashed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A researcher citing an absolute path is redacted, not crashed (finding 5).
+
+    The report-store scrub rejects a body whose prose names an absolute path with
+    ``AgentReportScrubError``. Letting it escape aborted the campaign round in the
+    live e2e. The live producer now rewrites local tokens through the canonical
+    scrub redactor (mirroring the executor path) so the finding persists.
+    """
+    from eawf.platform.scrub.scan import scan_text
+
+    ctx, state_path = _build_live_ctx(tmp_path)
+    abs_path_body = {
+        "role": "researcher",
+        "verdict": "pass",
+        "confidence": "high",
+        "summary": "surveyed the repo at /tmp/xyzzy/secret/workspace/repo",
+        "question": "what does the layout reveal",
+        "findings": ["config lives at /tmp/xyzzy/secret/workspace/repo/.ea/state.json"],
+        "recommendation": "read the state file",
+        "evidence_refs": [{"kind": "store_record", "ref": "src/x.py:1"}],
+    }
+    adapter = _BodyOverrideAdapter(abs_path_body)
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.research.select_adapter",
+        lambda _runtime: adapter,
+    )
+
+    async def body() -> None:
+        await create_campaign(ctx, _stage_params("campaign-abspath"))
+        await run(ctx, {"campaign_id": "campaign-abspath", "round_budget": 1})
+        await _wait_for_research_run("campaign-abspath")
+
+    _run(body)
+
+    # The run did not abort: a round persisted and the persisted report carries no
+    # surviving absolute-path scrub finding (the local token was redacted).
+    rounds = read_campaign_rounds(state_path, "campaign-abspath")
+    assert len(rounds) == 1
+    reports = _read_envelopes(store_path(state_path, StoreKind.RESEARCHER_REPORT))
+    assert reports
+    payloads = [AgentReportPayload.model_validate(row.payload) for row in reports]
+    for p in payloads:
+        assert "/tmp/xyzzy/secret" not in p.body.summary
+        assert not scan_text(p.body.summary)
 
 
 def test_research_run_runs_with_no_active_wave_scoped_to_campaign(
