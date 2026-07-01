@@ -49,6 +49,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.kernel.store.kinds.agent_report import AgentReportBody
+from eawf.runtime.runtimes.stream_json import unwrap_agent_json
 from eawf.workflow.agent_report.store import parse_agent_report_body
 
 if TYPE_CHECKING:
@@ -266,7 +267,10 @@ async def assist_with_schema(
     for attempt in range(1, max_attempts + 1):
         result = await spawn(current_prompt)
         try:
-            decoded = json.loads(result.text)
+            # Peel the runtime's stream-json result envelope + strip any prose /
+            # code fence the model wrapped around the report so a well-formed
+            # body binds on attempt 1 instead of being rejected as invalid_json.
+            decoded = json.loads(unwrap_agent_json(result.text))
             body = validator(decoded)
         except (json.JSONDecodeError, ValidationError) as exc:
             failure = _failure_from_exc(attempt=attempt, exc=exc)

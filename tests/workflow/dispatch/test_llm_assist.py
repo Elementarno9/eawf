@@ -123,6 +123,31 @@ def test_assist_with_schema_valid_output_validates_into_result() -> None:
     assert spawn.prompts == ["solve it"]
 
 
+def test_assist_with_schema_binds_report_inside_stream_json_envelope() -> None:
+    """A valid report wrapped in the claude stream-json envelope + prose + a
+    ```json fence binds on attempt 1 -- no re-ask, no synthesized placeholder.
+
+    Regression for the executor-report synthesis defect: ``claude -p`` returns
+    ``{"type":"result","result":"<prose + ```json fence>"}`` and the bind path
+    must unwrap the envelope + strip the prose/fence before validation.
+    """
+    inner = _valid_body_json()
+    prose_and_fence = (
+        "Here is the completed report for the wave.\n\n"
+        f"```json\n{inner}\n```\n\nLet me know if anything else is needed."
+    )
+    envelope = json.dumps({"type": "result", "subtype": "success", "result": prose_and_fence})
+    spawn = _RecordingSpawn([envelope])
+    result = asyncio.run(assist_with_schema("solve it", spawn=spawn))
+
+    assert result.attempts_used == 1
+    assert result.prior_failures == []
+    assert result.body.role == "executor"
+    assert result.body.verdict.value == "pass"
+    # Bound from the FIRST spawn -- no re-ask fired.
+    assert spawn.calls == 1
+
+
 # ---------------------------------------------------------------------------
 # Success criterion 2a: schema-mismatch triggers a bounded re-ask
 # ---------------------------------------------------------------------------
