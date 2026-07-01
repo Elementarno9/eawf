@@ -227,7 +227,7 @@ def test_decision_status_rejects_unknown() -> None:
 
 
 def test_campaign_status_values() -> None:
-    expected = {"active", "cancelled"}
+    expected = {"active", "converged", "cancelled"}
     actual = {m.value for m in enums.CampaignStatus}
     assert actual == expected
 

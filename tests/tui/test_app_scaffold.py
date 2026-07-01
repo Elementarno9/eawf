@@ -434,16 +434,22 @@ def test_state_binding_reconnects_when_push_stream_ends(
             daemon_probe_interval_s=0.01,
         )
         monkeypatch.setattr(binder, "_daemon_socket_available", lambda: len(calls) <= 1)
+        # W04: disable the reconnect throttle so the on-drop reconnect fires
+        # within the tight test window (production throttles to ~5s).
+        binder._reconnect_min_interval = 0.0
         await binder.connect()
         await asyncio.sleep(0.2)
         await binder.disconnect()
 
     asyncio.run(body())
-    expected = (
+    # W04: the first subscribe carries no cursor; the reconnect resumes from the
+    # last delivered event id (since=EV-live) so it does not re-request backlog.
+    first = ("state.subscribe", {"kinds": ["event"], "scope_id": "urn:eawf:v1:state:QR"})
+    reconnect = (
         "state.subscribe",
-        {"kinds": ["event"], "scope_id": "urn:eawf:v1:state:QR"},
+        {"kinds": ["event"], "scope_id": "urn:eawf:v1:state:QR", "since": "EV-live"},
     )
-    assert calls == [expected, expected]
+    assert calls == [first, reconnect]
     assert seen_events
     assert [e.id for e in seen_events] == ["EV-live", "EV-live"]
     assert any(v is True for v in seen_degraded)

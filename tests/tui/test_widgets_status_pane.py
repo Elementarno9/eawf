@@ -771,11 +771,15 @@ def test_build_status_lines_effort_shows_consumed_estimate_eu() -> None:
 
 
 def test_build_status_lines_effort_shows_signed_variance_pct() -> None:
-    """EFFORT surfaces the signed M26 variance % (under-run is negative)."""
+    """EFFORT surfaces the signed precision % delta (under-run is negative).
+
+    W09 relabelled the metric variance -> precision; the row now reads
+    ``precision:`` with the same signed % delta.
+    """
     lines = build_status_lines(_state_estimates_with_bucket())
-    variance = next(line for line in lines if line.startswith("variance:"))
+    precision = next(line for line in lines if line.startswith("precision:"))
     # (1.2 - 3.5) / 3.5 * 100 = -65.7 % (a hard under-run so far).
-    assert "-65.7%" in variance
+    assert "-65.7%" in precision
 
 
 def test_build_status_lines_effort_shows_velocity_sparkline() -> None:
@@ -800,17 +804,17 @@ def test_build_status_lines_effort_shows_eta_date() -> None:
 def test_build_status_lines_effort_all_absent_collapses_to_awaiting() -> None:
     """No estimate / actuals → the single dim awaiting-first-wave collapse line.
 
-    With none of effort / variance / velocity carrying data the EFFORT block
+    With none of effort / precision / velocity carrying data the EFFORT block
     collapses to the one :data:`EFFORT_AWAITING` line rather than three
     stacked ``— no data`` rows -- and never a fabricated 0 % bar. The
-    per-metric ``effort:`` / ``variance:`` / ``velocity:`` rows are absent.
+    per-metric ``effort:`` / ``precision:`` / ``velocity:`` rows are absent.
     """
     lines = build_status_lines(_load(_PHASE_ITER_WAVE))
     effort = _section(lines, "EFFORT")
     assert effort == [EFFORT_AWAITING]
     assert "0%" not in EFFORT_AWAITING  # not a fake 0 % bar
     assert not any(line.startswith("effort:") for line in lines)
-    assert not any(line.startswith("variance:") for line in lines)
+    assert not any(line.startswith("precision:") for line in lines)
     assert not any(line.startswith("velocity:") for line in lines)
 
 
@@ -835,7 +839,7 @@ def test_build_status_lines_effort_estimate_only_no_actuals_collapses() -> None:
     assert effort == [EFFORT_AWAITING]
     assert "0%" not in EFFORT_AWAITING  # not a fake 0 % bar against the live estimate
     assert "/" not in EFFORT_AWAITING  # no ``-/3.5`` prefix either
-    assert not any(line.startswith(("effort:", "variance:", "velocity:")) for line in lines)
+    assert not any(line.startswith(("effort:", "precision:", "velocity:")) for line in lines)
 
 
 def test_build_status_lines_effort_present_metric_expands_with_selective_dash() -> None:
@@ -861,11 +865,11 @@ def test_build_status_lines_effort_present_metric_expands_with_selective_dash() 
     # The block is expanded (not the collapsed awaiting line).
     assert effort != [EFFORT_AWAITING]
     velocity = _row(lines, "velocity:")
-    variance = _row(lines, "variance:")
-    # Velocity is present (a populated burn day), variance shows its own dash.
+    precision = _row(lines, "precision:")
+    # Velocity is present (a populated burn day), precision shows its own dash.
     assert EMPTY_STATE not in velocity
     assert any(g in velocity for g in ("▁", "█", "▇"))
-    assert EMPTY_STATE in variance  # selectively-absent metric keeps its own dash
+    assert EMPTY_STATE in precision  # selectively-absent metric keeps its own dash
 
 
 def test_build_status_lines_effort_ascii_mode() -> None:
@@ -1481,7 +1485,7 @@ def test_status_pane_paints_effort_block_under_palette() -> None:
             rendered = app.export_screenshot()
             assert "effort:" in rendered
             assert "1.2/3.5" in rendered
-            assert "variance:" in rendered
+            assert "precision:" in rendered
 
     asyncio.run(body())
 
