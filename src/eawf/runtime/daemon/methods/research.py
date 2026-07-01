@@ -681,6 +681,21 @@ async def add_question(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
 # --------------------------------------------------------------------------
 
 
+def _normalize_claim_text(text: str) -> str:
+    """Return a whitespace / case-normalized key for near-duplicate claim dedup.
+
+    Casefolds + collapses runs of whitespace so trivially-different phrasings of
+    the same finding (extra spaces, capitalization) compact to one claim (W20).
+
+    Args:
+        text: The finding line / claim text to normalize.
+
+    Returns:
+        The normalized dedup key.
+    """
+    return " ".join(text.split()).casefold()
+
+
 def reconcile_round_claims(
     state: State,
     findings: RoundFindings,
@@ -718,9 +733,27 @@ def reconcile_round_claims(
     resolved_scope = _resolve_research_scope(state, scope_id)
     claims = dict(state.claims or {})
     written: list[str] = []
+    # W20 compaction (dedup-only policy): a finding whose normalized full text
+    # matches a LIVE claim already on the scope's ledger -- or one written
+    # earlier this round -- is collapsed (not re-added), so a trivial question
+    # that keeps re-surfacing the same finding across rounds does not grow the
+    # ledger unboundedly. The dedup key is the FULL finding line (truncation is
+    # display-only), so it matches a live claim's description when the row's
+    # title was truncated. Synthesising per-domain clusters is a follow-up.
+    seen_texts = {
+        _normalize_claim_text(c.description if c.description is not None else c.title)
+        for c in claims.values()
+        if c.scope_id == resolved_scope and c.status in (ClaimStatus.OPEN, ClaimStatus.SUPPORTED)
+    }
+    compacted = 0
     for domain, body in zip(findings.domains, findings.bodies, strict=True):
         evidence = [ref.ref for ref in body.evidence_refs]
         for index, line in enumerate(body.findings):
+            key = _normalize_claim_text(line)
+            if key in seen_texts:
+                compacted += 1
+                continue
+            seen_texts.add(key)
             claim_id = f"CLM-r{findings.round_number}-{domain}-{index}"
             title = line if len(line) <= 72 else f"{line[:69]}..."
             description = None if len(line) <= 72 else line[:500]
@@ -788,7 +821,8 @@ def reconcile_round_claims(
             raised += 1
     logger.info(
         f"reconcile_round_claims round={findings.round_number} scope={resolved_scope!r} "
-        f"claims={len(written)} answered_questions={answered} raised_clarifications={raised}"
+        f"claims={len(written)} compacted={compacted} answered_questions={answered} "
+        f"raised_clarifications={raised}"
     )
     return written
 

@@ -163,15 +163,17 @@ def test_run_campaign_folds_claims_into_canonical_state(tmp_path: Path) -> None:
             RunCampaignParams(campaign_id="campaign-fold", round_budget=2),
             produce_agent_end=_produce_findings,
         )
-        # 1 finding/domain x 2 domains x 2 rounds = 4 claim ids.
-        assert len(result["claim_ids"]) == 4
+        # 1 finding/domain x 2 domains = 2 distinct claims; round 2 re-surfaced
+        # the same two findings and was compacted (W20 dedup), so the ledger
+        # stays at 2 rather than growing to 4.
+        assert len(result["claim_ids"]) == 2
         state = load_state(state_path)
         assert state.claims is not None
         # Every reconciled claim id resolves to a real OPEN Claim row on state.
         for claim_id in result["claim_ids"]:
             assert claim_id in state.claims, claim_id
             assert state.claims[claim_id].status is ClaimStatus.OPEN
-        assert len(state.claims) == 4
+        assert len(state.claims) == 2
 
     _run(body)
 

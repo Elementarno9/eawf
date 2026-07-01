@@ -411,6 +411,37 @@ def test_run_campaign_flips_to_terminal_converged(tmp_path: Path) -> None:
     _run(body)
 
 
+def test_run_campaign_compacts_duplicate_findings_across_rounds(tmp_path: Path) -> None:
+    """Identical findings re-surfaced across rounds collapse to one claim (W20).
+
+    _produce_findings returns the SAME finding line per domain every round, so a
+    2-round run must NOT grow the ledger: round 2's duplicates dedup against the
+    live claims from round 1, keeping the claim count at the round-1 total.
+    """
+    from eawf.kernel.state.enums import ClaimStatus
+    from eawf.workflow.evidence._io import load_state
+
+    ctx, state_path = _build_live_ctx(tmp_path)
+
+    async def body() -> None:
+        await create_campaign(ctx, _stage_params("campaign-dedup"))
+        run_campaign(
+            ctx,
+            RunCampaignParams(campaign_id="campaign-dedup", round_budget=2),
+            produce_agent_end=_produce_findings,
+        )
+        state = load_state(state_path)
+        # Two domains x one distinct finding each = 2 live claims, NOT 4 (round 2
+        # re-surfaced the same two findings and was compacted).
+        live = [c for c in state.claims.values() if c.status is ClaimStatus.OPEN]
+        assert len(live) == 2
+        rounds = read_campaign_rounds(state_path, "campaign-dedup")
+        assert [r.round_number for r in rounds] == [1, 2]
+        assert rounds[1].claim_ids == []  # round 2 wrote no new claim (all deduped)
+
+    _run(body)
+
+
 def test_run_campaign_halts_on_saturation(tmp_path: Path) -> None:
     """A round returning no findings saturates and halts the loop early."""
     state_path = tmp_path / "state.json"

@@ -176,12 +176,15 @@ def _stage_params(campaign_id: str) -> dict[str, Any]:
     }
 
 
-def _agent_end_body(domain: str, *, evidence_ref: str) -> dict[str, object]:
+def _agent_end_body(domain: str, *, evidence_ref: str, round_number: int = 1) -> dict[str, object]:
     """A valid researcher ``agent_end`` body fixture carrying one finding line.
 
     The finding line's evidence ref is parameterised so the acceptance can drive
     a campaign whose surviving-claim evidence either resolves (a real temp file)
-    or does not (a missing path) -- the two halves of the EviBound assertion.
+    or does not (a missing path) -- the two halves of the EviBound assertion. The
+    finding carries the round number so each round's finding is DISTINCT (a real
+    campaign evolves), exercising the multi-round machinery rather than the W20
+    dedup degenerate case.
     """
     return {
         "role": "researcher",
@@ -189,7 +192,7 @@ def _agent_end_body(domain: str, *, evidence_ref: str) -> dict[str, object]:
         "confidence": "medium",
         "summary": f"surveyed {domain}",
         "question": f"what does {domain} reveal",
-        "findings": [f"{domain} converges on a stable answer"],
+        "findings": [f"{domain} converges on a stable answer (r{round_number})"],
         "alternatives": [],
         "recommendation": f"pursue {domain}",
         "evidence_refs": [{"kind": "store_record", "ref": evidence_ref}],
@@ -250,7 +253,10 @@ class _SteeringSpawner:
         if len(self.spawned) == self._dispatches_per_round + 1:
             self.steer_injected_at_call = len(self.spawned)
             _inject_steer(self._state_path, self._campaign_id)
-        return _agent_end_body(dispatch.domain, evidence_ref=self._evidence_ref)
+        round_number = (len(self.spawned) - 1) // self._dispatches_per_round + 1
+        return _agent_end_body(
+            dispatch.domain, evidence_ref=self._evidence_ref, round_number=round_number
+        )
 
 
 # --------------------------------------------------------------------------
@@ -323,8 +329,8 @@ def test_campaign_acceptance_two_rounds_steer_claims_checkpoint_and_evibound(
         assert any(_STEER_NOTE in note for note in rounds[1].steer_notes), rounds[1].steer_notes
         # The per-round findings + claim ids are persisted on the round record.
         assert rounds[0].finding_lines == [
-            "market-structure converges on a stable answer",
-            "pricing-models converges on a stable answer",
+            "market-structure converges on a stable answer (r1)",
+            "pricing-models converges on a stable answer (r1)",
         ]
         assert rounds[1].claim_ids == [
             "CLM-r2-market-structure-0",
