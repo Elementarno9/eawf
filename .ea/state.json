@@ -9323,6 +9323,34 @@
       "scope_id": "P30-I21-W16",
       "status": "done",
       "updated_at": "2026-07-01T17:12:26.133211Z"
+    },
+    "P30-I21-W17": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I21-W17",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W17",
+      "model": null,
+      "scope_id": "P30-I21-W17",
+      "status": "done",
+      "updated_at": "2026-07-01T17:17:04.538301Z"
+    },
+    "P30-I21-W18": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I21-W18",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W18",
+      "model": null,
+      "scope_id": "P30-I21-W18",
+      "status": "done",
+      "updated_at": "2026-07-01T17:20:09.438719Z"
     }
   },
   "agent_sessions": {
@@ -23933,6 +23961,32 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I21-W16",
       "updated_at": "2026-07-01T17:12:24.802164Z"
+    },
+    "P30-I21-W17": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W17-bucket-20260701T171703Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I21-W17",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I21-W17",
+      "updated_at": "2026-07-01T17:17:03.203439Z"
+    },
+    "P30-I21-W18": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W18-bucket-20260701T172008Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I21-W18",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I21-W18",
+      "updated_at": "2026-07-01T17:20:08.095287Z"
     }
   },
   "fleet_run": null,
@@ -27282,7 +27336,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-01T17:12:26.166337Z",
+  "updated_at": "2026-07-01T17:20:09.470950Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -101607,10 +101661,10 @@
         "P30-I21-W18",
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-01T17:17:03.186083Z",
+      "closed_at": "2026-07-01T17:17:04.538301Z",
+      "commit": "2a6470204eaa2f8f52777ac2fe0e8b0767d05e8c",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -101633,12 +101687,12 @@
       },
       "iter_id": "P30-I21",
       "opened_at": "2026-07-01T14:47:15.695676Z",
-      "outcome": null,
+      "outcome": "researcher sessions close on completion (no phantom active); reconcile links answering claims to their OpenQuestion + resolves it ANSWERED both ways; tests assert closed sessions + resolution",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -101665,10 +101719,10 @@
       "blocks": [
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-01T17:20:08.077899Z",
+      "closed_at": "2026-07-01T17:20:09.438719Z",
+      "commit": "1749469c2c10d74787c128874f37ff236706339b",
       "deps": [
         "P30-I21-W17"
       ],
@@ -101693,12 +101747,12 @@
       },
       "iter_id": "P30-I21",
       "opened_at": "2026-07-01T14:47:16.246505Z",
-      "outcome": null,
+      "outcome": "a researcher verdict=blocked with a question raises a BLOCKING OpenQuestion (operator checkpoint gating its round) via the shared add-question writer; test proves the clarification surfaces",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
