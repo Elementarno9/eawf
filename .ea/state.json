@@ -9141,6 +9141,34 @@
       "scope_id": "P30-I21-W03",
       "status": "done",
       "updated_at": "2026-07-01T15:49:33.917473Z"
+    },
+    "P30-I21-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I21-W05",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W05",
+      "model": null,
+      "scope_id": "P30-I21-W05",
+      "status": "done",
+      "updated_at": "2026-07-01T16:01:24.263654Z"
+    },
+    "P30-I21-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I21-W06",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W06",
+      "model": null,
+      "scope_id": "P30-I21-W06",
+      "status": "done",
+      "updated_at": "2026-07-01T15:56:47.203017Z"
     }
   },
   "agent_sessions": {
@@ -23582,41 +23610,35 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I21-W03",
       "updated_at": "2026-07-01T15:09:12.714380Z"
+    },
+    "P30-I21-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W05-bucket-20260701T160122Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I21-W05",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I21-W05",
+      "updated_at": "2026-07-01T16:01:22.902173Z"
+    },
+    "P30-I21-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W06-bucket-20260701T155516Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I21-W06",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I21-W06",
+      "updated_at": "2026-07-01T15:55:16.322099Z"
     }
   },
-  "fleet_run": {
-    "armed_at": "2026-06-13T23:47:22.335461Z",
-    "concurrency": 1,
-    "convergence": "drain",
-    "counters": {
-      "blocked": 0,
-      "claimed": 1,
-      "clean_rounds": 0,
-      "closed": 0,
-      "dispatched": 1,
-      "failed": 1,
-      "forked": 0,
-      "forks_resolved": 0,
-      "rounds": 0,
-      "spent_eu": 0.0,
-      "spent_usd": 0.0
-    },
-    "elapsed_hours": 422.1168027408333,
-    "ended_at": "2026-07-01T13:54:22.825328Z",
-    "eu_cap": null,
-    "forks": [],
-    "frontier": [
-      "P30-I20-W25"
-    ],
-    "hard_halt": false,
-    "kclean_k": 2,
-    "lanes": {},
-    "run_state": "done",
-    "terminal_reason": "drained",
-    "throughput": 0.0,
-    "usd_cap": 1.0,
-    "waves_cap": 1
-  },
+  "fleet_run": null,
   "goals": {
     "G01": {
       "closed_at": null,
@@ -26963,7 +26985,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-01T15:49:51.251450Z",
+  "updated_at": "2026-07-01T16:01:24.294238Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -100585,10 +100607,10 @@
       "blocks": [
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-01T16:01:22.880786Z",
+      "closed_at": "2026-07-01T16:01:24.263654Z",
+      "commit": "ba6f49a9b492e06de02fdb1f73eeae87d7fec26b",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -100611,12 +100633,12 @@
       },
       "iter_id": "P30-I21",
       "opened_at": "2026-07-01T14:46:19.510196Z",
-      "outcome": null,
+      "outcome": "fleet fill parks terminal/absent-wave redispatch (counted, dropped, no churn); stale EAWF fleet_run cleared; regression test asserts a closed frontier wave is parked not respawned",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -100643,10 +100665,10 @@
       "blocks": [
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-01T15:55:16.301050Z",
+      "closed_at": "2026-07-01T15:56:47.203017Z",
+      "commit": "74c86007afc020ba3e7419e38b45c98d33fdd0af",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -100670,12 +100692,12 @@
       },
       "iter_id": "P30-I21",
       "opened_at": "2026-07-01T14:46:20.063887Z",
-      "outcome": null,
+      "outcome": "CLI + TUI console log lines now carry a timestamp matching the daemon file-log shape; test asserts the TextualHandler asctime prefix",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
