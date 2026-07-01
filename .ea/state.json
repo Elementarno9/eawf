@@ -9393,6 +9393,20 @@
       "scope_id": "P30-I21-W21",
       "status": "done",
       "updated_at": "2026-07-01T17:34:15.785604Z"
+    },
+    "P30-I21-W23": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I21-W23",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W23",
+      "model": null,
+      "scope_id": "P30-I21-W23",
+      "status": "done",
+      "updated_at": "2026-07-01T21:34:55.555300Z"
     }
   },
   "agent_sessions": {
@@ -13433,7 +13447,7 @@
       "title": "Downscope telemetry and bucket recalibration backlog"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -24068,6 +24082,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I21-W21",
       "updated_at": "2026-07-01T17:34:14.443293Z"
+    },
+    "P30-I21-W23": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W23-bucket-20260701T213454Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I21-W23",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I21-W23",
+      "updated_at": "2026-07-01T21:34:54.000674Z"
     }
   },
   "fleet_run": null,
@@ -26327,7 +26354,8 @@
         "P30-I21-W19",
         "P30-I21-W20",
         "P30-I21-W21",
-        "P30-I21-W22"
+        "P30-I21-W22",
+        "P30-I21-W23"
       ]
     }
   },
@@ -27417,7 +27445,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-01T17:47:53.668605Z",
+  "updated_at": "2026-07-01T21:34:55.589467Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -102108,6 +102136,62 @@
         }
       ],
       "title": "Re-close P30 with validated v0.6.0 release annotation",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W23": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-01T21:34:53.973591Z",
+      "closed_at": "2026-07-01T21:34:55.555300Z",
+      "commit": "23f1308a7a65859c1fb13285b554bee5dbe21458",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/runtime/sandbox/jail.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W23",
+      "intent": {
+        "desired_outcome": "the jail allows /dev writes so git + shell /dev/null redirects work",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "seatbelt denied /dev/null write so git commit failed in a jailed agent",
+        "risks": [
+          "over-broad /dev allow mitigated since /dev is device nodes not filesystem"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T21:34:38.789511Z",
+      "outcome": "seatbelt jail allows /dev writes so git + shell /dev/null redirects work in a jailed agent; real-seatbelt smoke proves echo > /dev/null passes; e2e-surfaced sandbox gap fixed",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "a jailed agent can git commit; seatbelt allows /dev/null write; real-seatbelt smoke passes",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a jailed agent can git commit; seatbelt allows /dev/null write; real-seatbelt smoke passes",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Allow /dev writes in the seatbelt jail for git",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
