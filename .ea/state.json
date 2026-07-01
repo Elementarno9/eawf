@@ -9267,6 +9267,34 @@
       "scope_id": "P30-I21-W12",
       "status": "done",
       "updated_at": "2026-07-01T16:50:51.155995Z"
+    },
+    "P30-I21-W13": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I21-W13",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W13",
+      "model": null,
+      "scope_id": "P30-I21-W13",
+      "status": "done",
+      "updated_at": "2026-07-01T16:55:40.979975Z"
+    },
+    "P30-I21-W14": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I21-W14",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W14",
+      "model": null,
+      "scope_id": "P30-I21-W14",
+      "status": "done",
+      "updated_at": "2026-07-01T17:03:12.045641Z"
     }
   },
   "agent_sessions": {
@@ -23825,6 +23853,32 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I21-W12",
       "updated_at": "2026-07-01T16:50:47.809706Z"
+    },
+    "P30-I21-W13": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W13-bucket-20260701T165539Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I21-W13",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I21-W13",
+      "updated_at": "2026-07-01T16:55:39.571843Z"
+    },
+    "P30-I21-W14": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W14-bucket-20260701T170310Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I21-W14",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I21-W14",
+      "updated_at": "2026-07-01T17:03:10.704373Z"
     }
   },
   "fleet_run": null,
@@ -27174,7 +27228,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-01T16:50:51.156202Z",
+  "updated_at": "2026-07-01T17:03:12.079379Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -101263,10 +101317,10 @@
       "blocks": [
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-01T16:55:39.553112Z",
+      "closed_at": "2026-07-01T16:55:40.979975Z",
+      "commit": "37b12b0dd81292cc7539afbcdb4219b0906ecdd4",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -101289,12 +101343,12 @@
       },
       "iter_id": "P30-I21",
       "opened_at": "2026-07-01T14:47:13.561317Z",
-      "outcome": null,
+      "outcome": "researcher spawn wires on_chunk (output streams live to Watch) + emits research.researcher.spawn/finish Feed markers per domain; test asserts markers + agent.output.chunk",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -101322,10 +101376,10 @@
         "P30-I21-W15",
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-01T17:03:10.685775Z",
+      "closed_at": "2026-07-01T17:03:12.045641Z",
+      "commit": "08ed214d661cf4334e1c2e38ceb2bc944eae2054",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -101348,12 +101402,12 @@
       },
       "iter_id": "P30-I21",
       "opened_at": "2026-07-01T14:47:14.105945Z",
-      "outcome": null,
+      "outcome": "research.run no longer requires an active wave; researcher session + output anchor to the campaign; run_dispatch skips wave-budget accrual for a wave-less campaign scope; test proves a run with no active wave",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
