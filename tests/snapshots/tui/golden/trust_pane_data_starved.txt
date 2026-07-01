@@ -1,4 +1,4 @@
- ◉ Eä  repo ❯ QR ❯ Trust    ≈ idle    HH:MM UTC
+ ◉ Eä  repo ❯ QR ❯ Trust                                                                            ≈ idle    HH:MM UTC
 
   ╭─ TRUST ───────────────────────────────────────────────╮ ╭─ SAMPLE SIZES ────────────────────────────────────────╮
   │ window all                                            │ │ no data                                               │

@@ -439,6 +439,26 @@ def test_render_header_populated_has_brand_left_of_breadcrumb() -> None:
     assert rendered.index(render_wordmark_markup("$accent")) < rendered.index(_CODE)
 
 
+def test_render_header_right_aligns_runtime_and_clock_to_width() -> None:
+    """With a width, the runtime cell + clock hug the right edge (line fills it)."""
+    from textual.content import Content
+
+    for width in (80, 120, 200):
+        rendered = render_header(_load(_PHASE_ITER_WAVE), "repo", "Home", width=width)
+        # The rendered line's visible cell length equals the header width, i.e.
+        # the right group was padded out to the right edge.
+        assert Content.from_markup(rendered).cell_length == width
+        # The brand + breadcrumb stay left (brand precedes the padding gap).
+        assert rendered.index(render_wordmark_markup("$accent")) < rendered.index("  ")
+
+
+def test_render_header_no_width_keeps_left_packed_form() -> None:
+    """Without a width the legacy left-packed spacing is preserved (fallback)."""
+    rendered = render_header(_load(_PHASE_ITER_WAVE), width=None)
+    # The four-space left-packed separators are present (no width-aware gap).
+    assert "    " in rendered
+
+
 def test_render_header_uses_two_tone_wordmark_accent_on_umlaut_only() -> None:
     # W03: the header leads with brand.render_wordmark_markup -- the E plain
     # and the umlaut (U+00E4) wrapped in the $accent span -- not the whole

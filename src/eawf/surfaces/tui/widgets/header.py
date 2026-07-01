@@ -281,6 +281,7 @@ def render_header(
     mode_name: str | None = None,
     entity: str | None = None,
     render_mode: str = "unicode",
+    width: int | None = None,
 ) -> str:
     """Render the full header content-markup line from *state*.
 
@@ -320,7 +321,22 @@ def render_header(
     wordmark = render_wordmark_markup("$accent")
     brand_glyph = chrome("brand", mode=render_mode)
     brand = f"[b][$accent]{brand_glyph}[/] {wordmark}[/b]"
-    return f"{brand}  {crumb}    [$muted]{runtime}[/]    [$muted]{_clock_text()}[/]"
+    left = f"{brand}  {crumb}"
+    right = f"[$muted]{runtime}[/]    [$muted]{_clock_text()}[/]"
+    if width is None:
+        # No width known (a bare-string caller / older test): keep the legacy
+        # left-packed spacing.
+        return f"{left}    {right}"
+    # Right-align the runtime cell + clock to the header's right edge while the
+    # brand + breadcrumb stay left: pad the gap by the leftover cell width
+    # (markup tags + palette-var styles are stripped by ``cell_length``). A
+    # narrow terminal collapses the gap to a single space rather than clipping.
+    from textual.content import Content
+
+    left_len = Content.from_markup(left).cell_length
+    right_len = Content.from_markup(right).cell_length
+    gap = max(1, width - left_len - right_len)
+    return f"{left}{' ' * gap}{right}"
 
 
 class Header(Static):
@@ -373,6 +389,10 @@ class Header(Static):
             mode_signal.subscribe(self, self._on_mode_change)
         self._repaint()
 
+    def on_resize(self) -> None:
+        """Repaint on resize so the runtime cell + clock keep hugging the right edge."""
+        self._repaint()
+
     def _on_mode_change(self, _mode: str) -> None:
         """Repaint the header line when the active mode changes."""
         self._repaint()
@@ -418,6 +438,9 @@ class Header(Static):
             mode_name = raw_mode if isinstance(raw_mode, str) else None
             mode = mode_title(raw_mode) if isinstance(raw_mode, str) else None
         render_mode = getattr(self.app, "render_mode", "unicode")
+        # Pass the content width so the runtime cell + clock right-align to the
+        # header edge; 0 (pre-layout) falls back to the left-packed form.
+        content_width = self.content_size.width
         self.update(
             render_header(
                 self.state,
@@ -425,6 +448,7 @@ class Header(Static):
                 mode,
                 mode_name=mode_name,
                 render_mode=render_mode,
+                width=content_width or None,
             )
         )
 
