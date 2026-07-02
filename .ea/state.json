@@ -10150,6 +10150,20 @@
       "status": "done",
       "updated_at": "2026-07-02T23:16:36.317797Z"
     },
+    "P30-I23-W48": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W48",
+      "elapsed_eu": 0.0,
+      "harness": "claude-code",
+      "id": "ACT-P30-I23-W48",
+      "model": "claude-fable-5",
+      "scope_id": "P30-I23-W48",
+      "status": "done",
+      "updated_at": "2026-07-02T23:52:17.916908Z"
+    },
     "P30-I23-W49": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13674,7 +13688,9 @@
       "SES-20260702T230518Z-auditor-claude-code",
       "SES-20260702T232502Z-auditor-claude-code"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I23-W52"
+    ],
     "iter_id": "P30-I23",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -25806,6 +25822,19 @@
       "scope_id": "P30-I23-W47",
       "updated_at": "2026-07-02T23:12:20.724680Z"
     },
+    "P30-I23-W48": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W48-bucket-20260702T233017Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I23-W48",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I23-W48",
+      "updated_at": "2026-07-02T23:30:17.655479Z"
+    },
     "P30-I23-W49": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I23-W49-bucket-20260702T222515Z",
@@ -25844,6 +25873,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I23-W51",
       "updated_at": "2026-07-02T21:56:01.155988Z"
+    },
+    "P30-I23-W52": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W52-bucket-20260702T235310Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I23-W52",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I23-W52",
+      "updated_at": "2026-07-02T23:53:10.914923Z"
     }
   },
   "fleet_run": null,
@@ -28326,7 +28368,8 @@
         "P30-I23-W48",
         "P30-I23-W49",
         "P30-I23-W50",
-        "P30-I23-W51"
+        "P30-I23-W51",
+        "P30-I23-W52"
       ]
     }
   },
@@ -29440,7 +29483,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T23:29:36.385938Z",
+  "updated_at": "2026-07-02T23:53:10.915136Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -116781,10 +116824,10 @@
       "blocks": [
         "P30-I23-W34"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-i23",
+      "claimed_at": "2026-07-02T23:30:17.655000Z",
+      "closed_at": "2026-07-02T23:52:17.916908Z",
+      "commit": "2c740a6c82f3e94ae65f8f665be5cbfedbe07492",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W39",
@@ -116860,12 +116903,34 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:39:43.402265Z",
-      "outcome": null,
-      "runtime_baseline": null,
-      "runtime_latest": null,
+      "outcome": "All rendered trees regenerated + goldens re-pinned (18 subagent-spec fixtures, 7 dispatch prompts, codex executor toml, autogen skills page); skill reconcile zero drift; CR-02 pins the W38-W49 clause families on RENDERED surfaces; full tree green after two semantic repins. Closed via the daemonless waiver door with both gates proven green twice on the daemon pre-flight (deterministic evidence rows) and locally (111 passed): the 30s RPC ceiling cancels this wave's 40s daemon-side commit — reactive W52 filed for the disconnect-cancellation defect.",
+      "runtime_baseline": {
+        "api_duration_ms": 14000000,
+        "cache_creation_input_tokens": 900000,
+        "cache_read_input_tokens": 616000000,
+        "captured_at": "2026-07-02T23:30:17.655459Z",
+        "cost_usd": 209.02,
+        "harness": null,
+        "input_tokens": 5200000,
+        "model": null,
+        "output_tokens": 410000,
+        "total_duration_ms": 30000000
+      },
+      "runtime_latest": {
+        "api_duration_ms": 20500000,
+        "cache_creation_input_tokens": 1120000,
+        "cache_read_input_tokens": 840000000,
+        "captured_at": "2026-07-02T23:48:53.258174Z",
+        "cost_usd": 236.2,
+        "harness": "claude-code",
+        "input_tokens": 6100000,
+        "model": "claude-fable-5",
+        "output_tokens": 540000,
+        "total_duration_ms": 37600000
+      },
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -117209,6 +117274,63 @@
       "status": "closed",
       "success_criteria": [],
       "title": "Raise the watchdog hard limit above the verdict-tier bound",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W52": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": "flow-i23",
+      "claimed_at": "2026-07-02T23:53:10.913765Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "reactive incident fix: regression test in tests/daemon/ is the gate; found live on the W48 close loop",
+        "waived_at": "2026-07-02T23:53:10.316348Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/daemon/"
+      ],
+      "gates": [],
+      "id": "P30-I23-W52",
+      "intent": {
+        "desired_outcome": "The daemon completes an in-flight mutation after the requesting client disconnects; a regression test pins a mid-mutation disconnect landing the commit.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "shield state.mutate in the connection handler; regression test"
+        ],
+        "priority_rationale": "Batch-5 gate-heavy closes are guaranteed to outlast the ceiling.",
+        "problem": "A close whose gates outlast the 30s RPC ceiling dies mid-commit: the client disconnect cancels the daemon-side handler, so gate-heavy closes never land via the daemon (W48 reproduced twice).",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T23:53:10.348748Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 14000000,
+        "cache_creation_input_tokens": 900000,
+        "cache_read_input_tokens": 616000000,
+        "captured_at": "2026-07-02T23:53:10.914906Z",
+        "cost_usd": 209.02,
+        "harness": null,
+        "input_tokens": 5200000,
+        "model": null,
+        "output_tokens": 410000,
+        "total_duration_ms": 30000000
+      },
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [],
+      "title": "Shield in-flight mutations from client-disconnect cancellation",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
