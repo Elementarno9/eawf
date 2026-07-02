@@ -378,13 +378,18 @@ FLEET_FLOW_SPECS: tuple[dict[str, object], ...] = (
         },
     },
     {
+        # G14 -- mounting the cockpit over a PERSISTED done run is a replay,
+        # not a live finish: the mount-stale gate keeps the run-summary card
+        # closed and renders the idle hero (the live draining -> done
+        # transition still auto-opens the card; that path is pinned by the
+        # run-summary tests in test_modes_autopilot).
         "flow": "G14-run-summary-terminal",
         "run_kind": "done",
         "key_sequence": ["2"],
         "terminal_state": {
             "current_mode": "autopilot",
-            "top_screen": "RunSummaryModal",
-            "modal_depth": 1,
+            "top_screen": "AutopilotModeScreen",
+            "modal_depth": 0,
         },
     },
     {
@@ -408,13 +413,15 @@ FLEET_FLOW_SPECS: tuple[dict[str, object], ...] = (
         },
     },
     {
+        # G17 -- same mount-stale gate as G14: a persisted CONVERGED run is a
+        # replay at mount, so no card auto-opens and the cockpit lands idle.
         "flow": "G17-campaign-auto-run-terminal",
         "run_kind": "converged",
         "key_sequence": ["2"],
         "terminal_state": {
             "current_mode": "autopilot",
-            "top_screen": "RunSummaryModal",
-            "modal_depth": 1,
+            "top_screen": "AutopilotModeScreen",
+            "modal_depth": 0,
         },
     },
     {
@@ -639,9 +646,10 @@ def test_g16_surfaces_persisted_forks_without_a_daemon(tmp_path: Path) -> None:
 
 
 def test_g17_names_the_converged_terminal_stop(tmp_path: Path) -> None:
-    # C3: G17 drives a CONVERGED terminal run to its auto-raised run-summary, so
-    # the campaign-stop journey lands the run-summary card (the daemon recorded a
-    # convergence stop, distinct from a drain stop).
+    # C3: G17 mounts the cockpit over a persisted CONVERGED terminal run. The
+    # mount-stale gate treats it as a replay (no auto-raised run-summary), so
+    # the journey lands the idle cockpit; the live convergence-stop card is
+    # pinned by the run-summary transition tests in test_modes_autopilot.
     spec_args = next(s for s in FLEET_FLOW_SPECS if s["flow"] == "G17-campaign-auto-run-terminal")
     spec = _spec_with_state(spec_args, tmp_path)
     result = check_tui_flow(spec, _REPO_ROOT)
