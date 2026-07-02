@@ -9772,6 +9772,20 @@
       "status": "done",
       "updated_at": "2026-07-02T17:53:04.616361Z"
     },
+    "P30-I23-W30": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W30",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W30",
+      "model": null,
+      "scope_id": "P30-I23-W30",
+      "status": "done",
+      "updated_at": "2026-07-02T18:03:12.668750Z"
+    },
     "P30-I23-W32": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13277,9 +13291,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P30-I23-W30"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I23",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -28629,7 +28641,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T17:55:43.263575Z",
+  "updated_at": "2026-07-02T18:03:12.669060Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -109492,8 +109504,8 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T17:34:36.210992Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T18:03:12.668750Z",
+      "commit": "07c5c54021fdcf1a65f596645857f9bedbce22de",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W02"
@@ -109598,12 +109610,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:38:16.698628Z",
-      "outcome": null,
+      "outcome": "Live-render visual oracle: mockup_golden_diff IMAGE branch gains a live-capture mode (<live> sentinel: Pilot render -> export SVG -> pinned resvg -> diff vs mockup golden, replacing the frozen tui_png read; resvg-absent blocks cleanly); LayoutFeatures broadened with selection-contrast + right-edge-alignment falsifiers while border/column layout-shape weighting stays dominant; end-to-end real-resvg case RAN on this host; 33 passed + 1 opt-in-regen skip on integrated HEAD",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
