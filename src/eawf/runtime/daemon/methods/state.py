@@ -78,7 +78,7 @@ from eawf.kernel.state.enums import (
     TrackKind,
     WaveStatus,
 )
-from eawf.kernel.state.models import RuntimeLatest, State, Track, Wave
+from eawf.kernel.state.models import CriteriaFloorWaiver, RuntimeLatest, State, Track, Wave
 from eawf.kernel.state.mutations import (
     DecisionMutationError,
     MemoryMutationError,
@@ -2022,6 +2022,14 @@ def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
             effort_bucket=bucket,
             description=description_str,
             intent=intent,
+            criteria_floor_waiver=(
+                CriteriaFloorWaiver(
+                    reason=str(params["criteria_floor_waiver_reason"]),
+                    waived_at=datetime.now(UTC),
+                )
+                if params.get("criteria_floor_waiver_reason")
+                else None
+            ),
         )
     elif op == "remove_wave":
         remove_wave_plan(state, wave_id=str(params["wave_id"]))

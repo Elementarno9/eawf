@@ -32,6 +32,7 @@ from eawf.workflow.lifecycle.phase import (
 )
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
 from tests._criteria_helpers import legacy_criteria
+from tests.conftest import make_floor_waiver
 
 
 def _empty_state() -> State:
@@ -95,6 +96,7 @@ def _add_closed_wave(
         success_criteria=legacy_criteria(
             *(f"criterion {i}" for i in range(1, delivered_criteria + 1))
         ),
+        criteria_floor_waiver=make_floor_waiver(),
         intent=_intent(planned_steps=planned_steps),
     )
     wave = state.waves[wave_id]
@@ -223,6 +225,7 @@ def test_build_ship_gate_drift_audit_wave_without_intent_never_thin() -> None:
         file_scopes=["x"],
         effort_bucket="M",
         success_criteria=legacy_criteria("only one criterion"),
+        criteria_floor_waiver=make_floor_waiver(),
         intent=_intent(planned_steps=1),
     )
     wave = state.waves["P03-I01-W01"]
@@ -261,6 +264,7 @@ def test_build_ship_gate_drift_audit_no_closed_waves_raises() -> None:
         file_scopes=["x"],
         effort_bucket="M",
         success_criteria=legacy_criteria("c1"),
+        criteria_floor_waiver=make_floor_waiver(),
         intent=_intent(planned_steps=1),
     )
     # Wave stays PENDING (not closed).
@@ -294,6 +298,7 @@ def test_build_ship_gate_drift_audit_closed_only_window_ignores_pending() -> Non
         file_scopes=["y"],
         effort_bucket="M",
         success_criteria=legacy_criteria("c1"),
+        criteria_floor_waiver=make_floor_waiver(),
         intent=_intent(planned_steps=3),
     )
 

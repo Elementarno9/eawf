@@ -38,6 +38,7 @@ from eawf.kernel.state.enums import (
 )
 from eawf.kernel.state.models import (
     Audit,
+    CriteriaFloorWaiver,
     CurrentPointers,
     Decision,
     Project,
@@ -1260,6 +1261,7 @@ def test_edit_wave_plan_mutates_pending() -> None:
         title="updated",
         file_scopes=["src/y/"],
         success_criteria=[criterion],
+        criteria_floor_waiver=_floor_waiver(),
     )
     assert w.title == "updated"
     assert w.file_scopes == ["src/y/"]
@@ -1299,6 +1301,7 @@ def _measurable_criterion() -> CriterionSpec:
         evidence_kind="deterministic",
         quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
         measurable_signal="exit code 0 on a clean corpus; cli_exit",
+        gate_ids=["G-01"],
         response=ResponseClause(observe=ObserveVerb.RETURNS, object="200", locus=ProofLocus.PYTEST),
     )
 
@@ -1313,6 +1316,14 @@ def _unmeasurable_criterion() -> CriterionSpec:
         evidence_kind="deterministic",
         quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
         measurable_signal="the widget works properly under all load conditions",
+    )
+
+
+def _floor_waiver() -> CriteriaFloorWaiver:
+    """A valid typed waiver for legacy-criterion authoring under the floor."""
+    return CriteriaFloorWaiver(
+        reason="test fixture: legacy criteria are the subject under test",
+        waived_at=datetime(2026, 7, 2, tzinfo=UTC),
     )
 
 
@@ -1352,11 +1363,24 @@ def test_plan_wave_inserts_measurable_criterion() -> None:
     assert w.success_criteria[0].id == "CR-01"
 
 
-def test_plan_wave_inserts_grandfathered_legacy_criterion() -> None:
+def test_plan_wave_inserts_grandfathered_legacy_criterion_with_waiver() -> None:
     state = _empty_state()
     plan_phase(state, phase_id="P01", title="t")
     plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
     legacy = grandfather_criterion("ship the thing", index=1)
+    # The typed-criteria floor rejects a bare legacy set at author time ...
+    with pytest.raises(LifecycleError, match="typed-criteria floor"):
+        plan_wave(
+            state,
+            wave_id="P01-I01-W01",
+            iter_id="P01-I01",
+            title="w",
+            file_scopes=["x"],
+            effort_bucket="M",
+            success_criteria=[legacy],
+            intent=make_intent(),
+        )
+    # ... and a typed waiver lands it with the bypass visible on the row.
     w = plan_wave(
         state,
         wave_id="P01-I01-W01",
@@ -1366,8 +1390,10 @@ def test_plan_wave_inserts_grandfathered_legacy_criterion() -> None:
         effort_bucket="M",
         success_criteria=[legacy],
         intent=make_intent(),
+        criteria_floor_waiver=_floor_waiver(),
     )
     assert w.success_criteria[0].kind == "legacy"
+    assert w.criteria_floor_waiver is not None
 
 
 def test_edit_wave_plan_rejects_unmeasurable_criterion() -> None:
@@ -1393,7 +1419,7 @@ def test_edit_wave_plan_rejects_unmeasurable_criterion() -> None:
     assert state.waves["P01-I01-W01"].success_criteria == []
 
 
-def test_edit_wave_plan_accepts_grandfathered_legacy_criterion() -> None:
+def test_edit_wave_plan_accepts_grandfathered_legacy_criterion_with_waiver() -> None:
     state = _empty_state()
     plan_phase(state, phase_id="P01", title="t")
     plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
@@ -1407,7 +1433,14 @@ def test_edit_wave_plan_accepts_grandfathered_legacy_criterion() -> None:
         intent=make_intent(),
     )
     legacy = grandfather_criterion("ship the thing", index=1)
-    w = edit_wave_plan(state, wave_id="P01-I01-W01", success_criteria=[legacy])
+    with pytest.raises(LifecycleError, match="typed-criteria floor"):
+        edit_wave_plan(state, wave_id="P01-I01-W01", success_criteria=[legacy])
+    w = edit_wave_plan(
+        state,
+        wave_id="P01-I01-W01",
+        success_criteria=[legacy],
+        criteria_floor_waiver=_floor_waiver(),
+    )
     assert w.success_criteria[0].kind == "legacy"
 
 

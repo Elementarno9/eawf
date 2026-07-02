@@ -90,3 +90,57 @@ def check_criteria_measurability(
         raise LifecycleError(
             f"{entity_kind} {entity_id!r} has unmeasurable success criteria: " + "; ".join(bodies)
         )
+
+
+def check_criteria_floor(
+    criteria: list[CriterionSpec],
+    *,
+    entity_kind: str,
+    entity_id: str,
+    waiver: object | None = None,
+) -> None:
+    """Enforce the plan-time typed-criteria floor at a wave-plan boundary.
+
+    The authoring counterpart of the close-time verifier: a wave may not
+    land with legacy-string (untyped) criteria, and a criterion that claims
+    ``evidence_kind == "deterministic"`` may not land without at least one
+    gate to falsify it (the gateless-deterministic hole). A typed
+    :class:`~eawf.kernel.state.models.CriteriaFloorWaiver` bypasses the
+    floor so repair-burst authoring stays possible but VISIBLE on the wave
+    row -- the caller persists the waiver record.
+
+    An empty criteria list passes: the authoring flow lands the wave first
+    and materialises typed criteria via ``eawf spec sync`` before claim.
+
+    Args:
+        criteria: The success-criterion rows under the floor.
+        entity_kind: Human label for the entity kind (``"wave"``).
+        entity_id: The entity id, interpolated into the error.
+        waiver: The typed waiver record, or ``None`` when not waived.
+
+    Raises:
+        LifecycleError: when a legacy row or a gateless deterministic
+            criterion lands without a waiver.
+    """
+    from eawf.kernel.spec.common import GRANDFATHERED_KIND
+
+    if waiver is not None:
+        return
+    legacy = [criterion.id for criterion in criteria if criterion.kind == GRANDFATHERED_KIND]
+    if legacy:
+        raise LifecycleError(
+            f"{entity_kind} {entity_id!r} fails the typed-criteria floor: "
+            f"legacy-string criteria {legacy}; author typed criteria (spec sync) "
+            "or attach a criteria_floor_waiver with a >= 20-char reason"
+        )
+    gateless = [
+        criterion.id
+        for criterion in criteria
+        if criterion.evidence_kind == "deterministic" and not criterion.gate_ids
+    ]
+    if gateless:
+        raise LifecycleError(
+            f"{entity_kind} {entity_id!r} fails the typed-criteria floor: "
+            f"criteria {gateless} claim evidence_kind=deterministic with no gate "
+            "attached (the gateless-deterministic hole); attach a falsifying gate"
+        )

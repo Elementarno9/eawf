@@ -25,11 +25,19 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.kernel.state.ids import natural_key
-from eawf.kernel.state.models import ActualSummary, RuntimeBaseline, RuntimeLatest, State, Wave
+from eawf.kernel.state.models import (
+    ActualSummary,
+    CriteriaFloorWaiver,
+    RuntimeBaseline,
+    RuntimeLatest,
+    State,
+    Wave,
+)
 from eawf.observability.telemetry.join import _duration_ms_to_eu, _tokens_to_eu
 from eawf.workflow.estimation.buckets import default_estimate_summary
 from eawf.workflow.lifecycle._errors import (
     LifecycleError,
+    check_criteria_floor,
     check_criteria_measurability,
     check_title_clarity,
 )
@@ -204,6 +212,7 @@ def plan_wave(
     effort_bucket: EffortBucket | None = None,
     description: str | None = None,
     intent: IntentBrief | None = None,
+    criteria_floor_waiver: CriteriaFloorWaiver | None = None,
 ) -> Wave:
     """Insert a new wave with status ``pending``.
 
@@ -290,6 +299,15 @@ def plan_wave(
     check_criteria_measurability(
         list(success_criteria or []), entity_kind="wave", entity_id=wave_id
     )
+    # The typed-criteria floor rejects legacy-string rows and gateless
+    # deterministic claims at author time; a typed waiver bypasses it and
+    # is persisted on the wave row so the bypass stays visible.
+    check_criteria_floor(
+        list(success_criteria or []),
+        entity_kind="wave",
+        entity_id=wave_id,
+        waiver=criteria_floor_waiver,
+    )
     wave = Wave(
         id=wave_id,
         iter_id=iter_id,
@@ -308,6 +326,7 @@ def plan_wave(
         opened_at=datetime.now(UTC),
         closed_at=None,
         intent=intent,
+        criteria_floor_waiver=criteria_floor_waiver,
     )
     state.waves[wave_id] = wave
     if wave_id not in it.wave_ids:
@@ -371,6 +390,7 @@ def edit_wave_plan(
     effort_bucket: EffortBucket | None = None,
     description: str | None = None,
     intent: IntentBrief | None = None,
+    criteria_floor_waiver: CriteriaFloorWaiver | None = None,
 ) -> Wave:
     """Mutate a PENDING wave's plan-time fields. Rejects non-PENDING waves.
 
@@ -419,8 +439,17 @@ def edit_wave_plan(
         )
     if success_criteria is not None:
         # Gate the new criteria before any field mutates so a rejected edit
-        # leaves the wave untouched. Grandfathered legacy rows are exempt.
+        # leaves the wave untouched. Grandfathered legacy rows are exempt
+        # from measurability but NOT from the typed-criteria floor.
         check_criteria_measurability(list(success_criteria), entity_kind="wave", entity_id=wave_id)
+        check_criteria_floor(
+            list(success_criteria),
+            entity_kind="wave",
+            entity_id=wave_id,
+            waiver=criteria_floor_waiver
+            if criteria_floor_waiver is not None
+            else wave.criteria_floor_waiver,
+        )
     if title is not None:
         wave.title = title
     if file_scopes is not None:
@@ -435,6 +464,8 @@ def edit_wave_plan(
         wave.__pydantic_validator__.validate_assignment(wave, "description", description)
     if intent is not None:
         wave.__pydantic_validator__.validate_assignment(wave, "intent", intent)
+    if criteria_floor_waiver is not None:
+        wave.criteria_floor_waiver = criteria_floor_waiver
     intent_problem = repr(intent.problem) if intent is not None else None
     logger.info(
         f"edit_wave_plan id={wave_id} title={title!r} file_scopes={file_scopes} "

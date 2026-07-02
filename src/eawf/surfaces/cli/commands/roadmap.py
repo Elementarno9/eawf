@@ -727,6 +727,16 @@ def roadmap_revise_cmd(
             help="Comma-separated success-criterion strings (only with --add-wave).",
         ),
     ] = None,
+    criteria_floor_waiver: Annotated[
+        str | None,
+        typer.Option(
+            "--criteria-floor-waiver",
+            help=(
+                "Waive the typed-criteria floor for --add-wave with legacy --success "
+                "strings; pass a >= 20-char reason. The waiver persists on the wave."
+            ),
+        ),
+    ] = None,
     files: Annotated[
         str | None,
         typer.Option("--files", help="Comma-separated file globs (only with --add-wave)."),
@@ -834,6 +844,7 @@ def roadmap_revise_cmd(
     from pydantic import ValidationError as PydValidationError
 
     from eawf.kernel.spec.common import grandfather_criterion
+    from eawf.kernel.state.models import CriteriaFloorWaiver
     from eawf.surfaces.cli._mutation import state_transaction
     from eawf.workflow.lifecycle.transitions import (
         LifecycleError,
@@ -944,6 +955,14 @@ def roadmap_revise_cmd(
                         effort_bucket=bucket,
                         description=description,
                         intent=intent,
+                        criteria_floor_waiver=(
+                            CriteriaFloorWaiver(
+                                reason=criteria_floor_waiver,
+                                waived_at=datetime.now(UTC),
+                            )
+                            if criteria_floor_waiver is not None
+                            else None
+                        ),
                     )
                     action_summary = f"added wave {full_wave_id}"
                 elif remove_wave:

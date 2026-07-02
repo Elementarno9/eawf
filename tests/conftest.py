@@ -44,3 +44,21 @@ def tmp_repo(tmp_path: Path) -> Path:
     eawf.platform.install. For now it returns a bare temp directory.
     """
     return tmp_path
+
+
+def make_floor_waiver():
+    """Build a typed criteria-floor waiver for legacy-criterion fixtures.
+
+    The plan-time typed-criteria floor (P30-I23-W26) rejects a wave
+    authored with grandfathered legacy rows; fixtures that deliberately
+    model migration-era legacy waves attach this waiver so the modelled
+    state stays constructible while the floor stays on for real authoring.
+    """
+    from datetime import UTC, datetime
+
+    from eawf.kernel.state.models import CriteriaFloorWaiver
+
+    return CriteriaFloorWaiver(
+        reason="test fixture models a migration-era legacy wave",
+        waived_at=datetime(2026, 7, 2, tzinfo=UTC),
+    )

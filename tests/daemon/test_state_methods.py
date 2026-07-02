@@ -1573,6 +1573,7 @@ def test_mutate_roadmap_revise_add_wave_inserts_pending_wave(tmp_path: Path) -> 
             "title": "New wave",
             "file_scopes": ["src/eawf/x.py"],
             "success_criteria": ["does x"],
+            "criteria_floor_waiver_reason": "test fixture: legacy success strings under test",
             "effort_bucket": "S",
             "intent": {
                 "problem": "x is unhandled",
@@ -1588,6 +1589,9 @@ def test_mutate_roadmap_revise_add_wave_inserts_pending_wave(tmp_path: Path) -> 
         assert "P50-I01-W01" in new_state["waves"]
         assert new_state["waves"]["P50-I01-W01"]["status"] == "pending"
         assert "P50-I01-W01" in new_state["iters"]["P50-I01"]["wave_ids"]
+        # The typed-criteria floor waiver persists visibly on the wave row.
+        waiver = new_state["waves"]["P50-I01-W01"]["criteria_floor_waiver"]
+        assert waiver is not None and "test fixture" in waiver["reason"]
 
     _run(body)
 

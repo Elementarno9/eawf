@@ -59,7 +59,7 @@ from eawf.workflow.lifecycle.transitions import (
 from eawf.workflow.verify import readiness as readiness_mod
 from eawf.workflow.verify.models import CloseReadiness
 from tests._criteria_helpers import legacy_criteria
-from tests.conftest import make_intent
+from tests.conftest import make_floor_waiver, make_intent
 
 WAVE_ID = "P01-I01-W01"
 
@@ -114,6 +114,7 @@ def _seed_wave(state: State, *, success_criteria: list[str] | None = None) -> No
         title="wave",
         file_scopes=["src/"],
         success_criteria=legacy_criteria(*(success_criteria or [])),
+        criteria_floor_waiver=make_floor_waiver(),
         effort_bucket="M",
         intent=make_intent(),
     )
@@ -1139,6 +1140,8 @@ def test_seams_dont_block_on_failing_deterministic_gate(
                 "src/",
                 "--success",
                 "legacy",
+                "--criteria-floor-waiver",
+                "test fixture models a migration-era legacy wave",
                 "--effort-bucket",
                 "M",
             ],

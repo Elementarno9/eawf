@@ -39,6 +39,7 @@ from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.phase import build_ship_gate_drift_audit, close_phase
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
 from tests._criteria_helpers import legacy_criteria
+from tests.conftest import make_floor_waiver
 
 
 def _empty_state() -> State:
@@ -103,6 +104,7 @@ def _closable_phase(*, closed_iter_audit_id: str = "AUD-ITER") -> State:
             file_scopes=[f"f{idx}"],
             effort_bucket="M",
             success_criteria=legacy_criteria(*(f"criterion {i}" for i in range(1, delivered + 1))),
+            criteria_floor_waiver=make_floor_waiver(),
             intent=_intent(planned_steps=planned),
         )
         wave = state.waves[wave_id]
@@ -231,6 +233,7 @@ def test_close_phase_accepts_minor_verdict_ship_gate_audit() -> None:
             file_scopes=[f"f{idx}"],
             effort_bucket="M",
             success_criteria=legacy_criteria(*(f"criterion {i}" for i in range(1, delivered + 1))),
+            criteria_floor_waiver=make_floor_waiver(),
             intent=_intent(planned_steps=planned),
         )
         wave = state.waves[wave_id]

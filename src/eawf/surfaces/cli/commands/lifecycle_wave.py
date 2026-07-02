@@ -466,10 +466,23 @@ def wave_plan_cmd(
         str | None,
         typer.Option("--description", help="Optional long-form wave description (≤500 chars)."),
     ] = None,
+    criteria_floor_waiver: Annotated[
+        str | None,
+        typer.Option(
+            "--criteria-floor-waiver",
+            help=(
+                "Waive the typed-criteria floor for legacy --success strings; "
+                "pass a >= 20-char reason. The waiver persists on the wave."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Plan a new pending wave under an open iter."""
+    from datetime import UTC, datetime
+
     from eawf.kernel.spec.common import grandfather_criterion
     from eawf.kernel.spec.intent import IntentBrief
+    from eawf.kernel.state.models import CriteriaFloorWaiver
     from eawf.workflow.lifecycle.transitions import plan_wave
 
     flags: GlobalFlags = ctx.obj
@@ -550,6 +563,14 @@ def wave_plan_cmd(
                 effort_bucket=effort_bucket,
                 description=description,
                 intent=wave_intent,
+                criteria_floor_waiver=(
+                    CriteriaFloorWaiver(
+                        reason=criteria_floor_waiver,
+                        waived_at=datetime.now(UTC),
+                    )
+                    if criteria_floor_waiver is not None
+                    else None
+                ),
             )
         ),
         mutation_kind=MutationKind.ROADMAP_REVISE,

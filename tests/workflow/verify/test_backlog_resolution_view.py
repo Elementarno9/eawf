@@ -34,7 +34,7 @@ from eawf.workflow.lifecycle.wave import claim_wave, plan_wave
 from eawf.workflow.verify import readiness as readiness_mod
 from eawf.workflow.verify.readiness import wired_audit_dsl_kinds
 from tests._criteria_helpers import legacy_criteria
-from tests.conftest import make_intent
+from tests.conftest import make_floor_waiver, make_intent
 
 WAVE_ID = "P30-I10-W02"
 
@@ -79,6 +79,7 @@ def _seed_wave(state: State) -> None:
         title="wave",
         file_scopes=["src/"],
         success_criteria=legacy_criteria("legacy one"),
+        criteria_floor_waiver=make_floor_waiver(),
         effort_bucket="M",
         intent=make_intent(),
     )

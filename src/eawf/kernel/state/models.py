@@ -567,6 +567,26 @@ class RuntimeLatest(RuntimeBaseline):
     """Latest cumulative runtime counters captured while a wave is active."""
 
 
+class CriteriaFloorWaiver(_StrictModel):
+    """Typed waiver of the plan-time typed-criteria floor on one wave.
+
+    The floor rejects a wave authored with legacy-string (untyped)
+    criteria; repair-burst authoring stays possible by attaching this
+    record instead -- visible on the wave row rather than silently
+    bypassed. The 20-char reason floor forces a real rationale, mirroring
+    :class:`~eawf.kernel.spec.common.DeferredDeliverable`.
+
+    Attributes:
+        reason: Why typed criteria could not be authored now (>= 20 chars).
+        waived_at: When the waiver was granted.
+        waived_by: The granting session / actor id, when known.
+    """
+
+    reason: Annotated[str, Field(min_length=20, max_length=500)]
+    waived_at: UtcDatetime
+    waived_by: str | None = None
+
+
 class Wave(_DescribedEntity):
     """Atomic execution unit under an iter.
 
@@ -612,6 +632,7 @@ class Wave(_DescribedEntity):
     runtime_preference: list[str] | None = None
     dispatch_history: list[DispatchAnnotation] = Field(default_factory=list)
     intent: IntentBrief | None = None
+    criteria_floor_waiver: CriteriaFloorWaiver | None = None
 
 
 class Hypothesis(_StrictModel):
@@ -1506,13 +1527,13 @@ class FleetRun(_StrictModel):
 class State(_StrictModel):
     """Top-level eawf state document.
 
-    ``schema_version`` accepts the full ``"1.0"`` through ``"1.12"`` range so
+    ``schema_version`` accepts the full ``"1.0"`` through ``"1.13"`` range so
     an on-disk state written before any bump still re-validates after the
     model advances — the migrate chain rewrites the version string in place,
     but a read of an un-migrated state must never reject. The accepted set
     drives the migrate guard's model-supported max, so the literals move in
     lockstep with the migration steps (``v1_0_to_v1_1`` through
-    ``v1_11_to_v1_12``). The ``1.5`` edge is purely additive — it registers
+    ``v1_12_to_v1_13``). The ``1.5`` edge is purely additive — it registers
     :attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum
     value no existing state row references, so no historical fact changes.
     The ``1.6`` edge is likewise purely additive — it adds the top-level
@@ -1578,6 +1599,7 @@ class State(_StrictModel):
         "1.10",
         "1.11",
         "1.12",
+        "1.13",
     ]
     scope_kind: ScopeKind
     urn: UrnStr
