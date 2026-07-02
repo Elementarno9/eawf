@@ -29,10 +29,11 @@ under the Q25 LOC cap; this module re-exports the full surface so the
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import NamedTuple
 
 from eawf.kernel.spec.roadmap_plan import RoadmapPlan, RoadmapPlanWave
-from eawf.kernel.state.models import State
+from eawf.kernel.state.models import CriteriaFloorWaiver, State
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.iter_ import (
     activate_iter,
@@ -119,6 +120,10 @@ def plan_roadmap(state: State, *, plan: RoadmapPlan) -> PlannedRoadmap:
 
     wave_ids: list[str] = []
     for iter_id, wave_plan in _roadmap_waves_in_dep_order(plan):
+        # Propose-staged waves carry the plan document's free-form criteria
+        # strings; the typed criteria land via spec sync before activation,
+        # so the propose stage waives the plan-time typed-criteria floor
+        # with a visible record instead of blocking the whole propose.
         plan_wave(
             state,
             wave_id=wave_plan.id,
@@ -131,9 +136,26 @@ def plan_roadmap(state: State, *, plan: RoadmapPlan) -> PlannedRoadmap:
             effort_bucket=wave_plan.effort_bucket,
             description=wave_plan.description,
             intent=wave_plan.intent,
+            criteria_floor_waiver=_propose_stage_floor_waiver(wave_plan),
         )
         wave_ids.append(wave_plan.id)
     return PlannedRoadmap(phase_id=phase.id, iter_ids=iter_ids, wave_ids=wave_ids)
+
+
+def _propose_stage_floor_waiver(wave_plan: RoadmapPlanWave) -> CriteriaFloorWaiver | None:
+    """Return the propose-stage criteria-floor waiver, or ``None``.
+
+    Only a wave whose plan document supplies free-form (legacy) criteria
+    strings needs the waiver; a wave staged without criteria passes the
+    floor on its own and stays waiver-free so the spec-sync authoring
+    path keeps full enforcement.
+    """
+    if not wave_plan.success_criteria:
+        return None
+    return CriteriaFloorWaiver(
+        reason="staged by roadmap propose; typed criteria land via spec sync",
+        waived_at=datetime.now(UTC),
+    )
 
 
 def _roadmap_waves_in_dep_order(plan: RoadmapPlan) -> list[tuple[str, RoadmapPlanWave]]:
