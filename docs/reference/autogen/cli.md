@@ -528,6 +528,7 @@ Manage phase / iter / wave specs (init / validate / promote / archive / show).
 | Verb | Summary |
 |---|---|
 | `archive` | Atomically ``git rm`` the spec file + write the archived cache entry. |
+| `convert-legacy` | Convert a scope's legacy criterion rows to typed, gated rows. |
 | `init` | Scaffold a new spec via daemon proxy (or in-process fallback). |
 | `promote` | Forward-graduate DRAFT → READY → IMPLEMENTED through the daemon. |
 | `show` | Print a spec body (cache + on-disk; ``--from-git`` walks history). |
