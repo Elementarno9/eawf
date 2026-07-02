@@ -9716,6 +9716,20 @@
       "status": "done",
       "updated_at": "2026-07-02T17:18:07.800674Z"
     },
+    "P30-I23-W13": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W13",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W13",
+      "model": null,
+      "scope_id": "P30-I23-W13",
+      "status": "done",
+      "updated_at": "2026-07-02T21:26:11.404109Z"
+    },
     "P30-I23-W14": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -9786,6 +9800,34 @@
       "status": "done",
       "updated_at": "2026-07-02T20:20:01.567089Z"
     },
+    "P30-I23-W19": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W19",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W19",
+      "model": null,
+      "scope_id": "P30-I23-W19",
+      "status": "done",
+      "updated_at": "2026-07-02T21:26:26.379703Z"
+    },
+    "P30-I23-W20": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W20",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W20",
+      "model": null,
+      "scope_id": "P30-I23-W20",
+      "status": "done",
+      "updated_at": "2026-07-02T21:26:31.562244Z"
+    },
     "P30-I23-W21": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -9841,6 +9883,20 @@
       "scope_id": "P30-I23-W24",
       "status": "done",
       "updated_at": "2026-07-02T16:05:06.600685Z"
+    },
+    "P30-I23-W25": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W25",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W25",
+      "model": null,
+      "scope_id": "P30-I23-W25",
+      "status": "done",
+      "updated_at": "2026-07-02T21:23:10.026763Z"
     },
     "P30-I23-W26": {
       "actual_cost_usd": 0.0,
@@ -9981,6 +10037,20 @@
       "scope_id": "P30-I23-W42",
       "status": "done",
       "updated_at": "2026-07-02T17:55:43.263201Z"
+    },
+    "P30-I23-W44": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W44",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W44",
+      "model": null,
+      "scope_id": "P30-I23-W44",
+      "status": "done",
+      "updated_at": "2026-07-02T21:27:04.949338Z"
     },
     "P30-I23-W50": {
       "actual_cost_usd": 0.0,
@@ -13418,13 +13488,7 @@
       "SES-20260510T214731Z-operator-claude",
       "SES-20260702T190717Z-auditor-claude-code"
     ],
-    "active_wave_ids": [
-      "P30-I23-W13",
-      "P30-I23-W19",
-      "P30-I23-W20",
-      "P30-I23-W44",
-      "P30-I23-W25"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I23",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -29082,7 +29146,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T20:48:36.953038Z",
+  "updated_at": "2026-07-02T21:27:04.949543Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -111246,8 +111310,8 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T19:43:40.380700Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T21:26:11.404109Z",
+      "commit": "00855230bbb309de1ebed66c4889516a772e2d9b",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W12"
@@ -111314,12 +111378,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:38:05.126113Z",
-      "outcome": null,
+      "outcome": "Close floor pack scoped to wave file_scopes: scoped grep/pytest floor checks anchor on the wave's declared files (python-profile floor pack updated); integration suite green on integrated HEAD.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -112050,8 +112114,8 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T19:43:41.142124Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T21:26:26.379703Z",
+      "commit": "31f35895b73f058ba57016f0ebb9de6a79a8e6ad",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W06"
@@ -112120,12 +112184,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:38:09.305011Z",
-      "outcome": null,
+      "outcome": "Fleet clean-close path executes deterministic gates via the shared dispatch_close runner before the daemon closes on behalf of a sandboxed agent; refusal keeps the wave open with a typed reason; suite green on integrated HEAD.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -112189,8 +112253,8 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T19:43:41.869317Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T21:26:31.562244Z",
+      "commit": "8838e57640ca8556b48dc35d35bafa56c9d14c4b",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W03",
@@ -112278,12 +112342,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:38:09.965953Z",
-      "outcome": null,
+      "outcome": "Daemonless close now enforces verdict + deterministic gates (portalocker fallback parity with the daemon path); test_daemonless_close_teeth 16 green; flags carried: stale preflight pin repaired parent-side, _mutation.py blunt --no-runtime bypass door stays (follow-up).",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -112923,8 +112987,8 @@
       ],
       "claim_session_id": "flow-i23",
       "claimed_at": "2026-07-02T20:37:55.945247Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T21:23:10.026763Z",
+      "commit": "c1e19a1317b2a17c4732d706c94d6368a768498b",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W23",
@@ -112990,12 +113054,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:38:13.302764Z",
-      "outcome": null,
+      "outcome": "130 I20/I21 legacy criterion rows drained through the W24 converter (all typed + gated; W22 excluded for the W36 runbook); refused rows persist named reasons on waiver_reason; verify.odr_blocking flipped true in .ea/config.yaml with the tighten-only readiness overlay and daemon ITER_CLOSE threading (absorbed W23 follow-up).",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -115687,8 +115751,8 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T19:43:43.247260Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T21:27:04.949338Z",
+      "commit": "9b7fba76f1e37bea2f59d2f94837aca9db226378",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W42"
@@ -115767,12 +115831,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:39:40.249131Z",
-      "outcome": null,
+      "outcome": "Skill runtime options documented in argument hints + bodies across the registry; reconcile + registry suites green; plugin-install goldens re-pinned on integrated HEAD.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
