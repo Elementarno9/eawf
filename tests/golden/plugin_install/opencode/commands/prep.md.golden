@@ -22,7 +22,7 @@ PLANNED-queue state:
      `/roadmap revise`. On `replace`, hand back to `/roadmap drop`
      + `/roadmap propose`.
    - **Case B — PLANNED phase with empty wave DAG.** Dispatch the
-     `planner` agent (`build/eawf-plugin/agents/planner.md`). The
+     `planner` agent (`.claude/agents/planner.md`). The
      planner returns a sequence of `eawf roadmap revise --add-wave`
      commands (or a YAML payload). **Apply the planner's commands
      first** through the daemon-backed roadmap surface — waves land as

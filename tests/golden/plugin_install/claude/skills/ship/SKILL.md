@@ -12,7 +12,7 @@ disable-model-invocation: true
 
 `/ship` reads the phase `CloseReadiness` projection (gate-pack aggregate + `EvidenceRecord` summary + outstanding follow-ups) to decide what gates still need clearing. The phase-close commit only lands once `CloseReadiness.status == "ready"`. The phase-PR body is synthesized from the same projection so reviewer and tool see the same shape. `MEMORY` mutations driven by ship (e.g. release-notes entries) carry an explicit `MutationKind` for downstream audit.
 
-The per-criterion close gate runs `run_oracle` (`workflow/verify/oracle.run_oracle`) over each wave's `CriterionSpec`. Enforcement is advisory by default — the band-scoped `verify.enforce` bit defaults to `False`, so a failing oracle or a cross-vendor jury veto is surfaced advisory rather than blocking the close unless a quality band opts in. The trust scorecard (`workflow/estimation/trust_scorecard.TrustScorecard`) reads the closed-wave store projection live, so ship's EU-calibration tier is read off real history rather than recomputed.
+The per-criterion close gate runs `run_oracle` (`workflow/verify/oracle.run_oracle`) over each wave's `CriterionSpec`. Enforcement is profile-driven and LIVE on shipped profiles: a failing deterministic gate or a close-ready refusal BLOCKS the daemon close; only an unearned jury veto stays advisory (`jury_block_authority` gates the flip). Do not treat a green close as evidence unless deterministic evidence rows exist. The trust scorecard (`workflow/estimation/trust_scorecard.TrustScorecard`) reads the closed-wave store projection live, so ship's EU-calibration tier is read off real history rather than recomputed.
 
 ## Canonical algorithm
 

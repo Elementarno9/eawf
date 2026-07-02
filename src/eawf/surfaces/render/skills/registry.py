@@ -194,7 +194,7 @@ PLANNED-queue state:
      `/roadmap revise`. On `replace`, hand back to `/roadmap drop`
      + `/roadmap propose`.
    - **Case B — PLANNED phase with empty wave DAG.** Dispatch the
-     `planner` agent (`build/eawf-plugin/agents/planner.md`). The
+     `planner` agent (`.claude/agents/planner.md`). The
      planner returns a sequence of `eawf roadmap revise --add-wave`
      commands (or a YAML payload). **Apply the planner's commands
      first** through the daemon-backed roadmap surface — waves land as
@@ -325,11 +325,18 @@ before any jury spawn. The top tier consults the cross-vendor jury
 (`observability/eval/cross_vendor_jury.convene_cross_vendor_jury`)
 only when the wave's verdict requirement is `"always"`.
 
-Enforcement is advisory by default: the band-scoped `verify.enforce`
-bit defaults to `False` (the close gate stays advisory) and
-`cross_vendor_jury` defaults to `False` on the agent-driven profile,
-so a jury veto (`FAIL`) is held advisory by `jury_block_authority`
-unless a band opts in. A criterion may also name a `QualityDimension`
+Enforcement is profile-driven, not off: the model default for
+`verify.enforce` is `False`, but both shipped active profiles enable
+it, so on a live repo the daemon `wave.close` RPC EXECUTES
+deterministic gates (`_enforce_wave_close_gate`, enforce narrowing at
+`runtime/daemon/methods/state.py`), verdict-always waves spawn a real
+fresh-context auditor at close, the fleet clean-close path runs the
+same deterministic gates before close-on-behalf, and the daemonless
+fallback enforces verdict + deterministic gates too. The jury tier
+blocks only at EARNED authority (`jury_block_authority`); an
+uncalibrated jury veto stays advisory. Do not treat a green close as
+evidence unless deterministic evidence rows exist. A criterion may
+also name a `QualityDimension`
 (`kernel/spec/common.QualityDimension`) so the verdict is attributable
 to one ISO-25010 quality axis.
 
@@ -371,10 +378,11 @@ entries) carry an explicit `MutationKind` for downstream audit.
 
 The per-criterion close gate runs `run_oracle`
 (`workflow/verify/oracle.run_oracle`) over each wave's
-`CriterionSpec`. Enforcement is advisory by default — the band-scoped
-`verify.enforce` bit defaults to `False`, so a failing oracle or a
-cross-vendor jury veto is surfaced advisory rather than blocking the
-close unless a quality band opts in. The trust scorecard
+`CriterionSpec`. Enforcement is profile-driven and LIVE on shipped
+profiles: a failing deterministic gate or a close-ready refusal
+BLOCKS the daemon close; only an unearned jury veto stays advisory
+(`jury_block_authority` gates the flip). Do not treat a green close
+as evidence unless deterministic evidence rows exist. The trust scorecard
 (`workflow/estimation/trust_scorecard.TrustScorecard`) reads the
 closed-wave store projection live, so ship's EU-calibration tier is
 read off real history rather than recomputed.

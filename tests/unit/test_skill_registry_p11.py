@@ -215,3 +215,39 @@ def test_ship_options_documents_model_executed_dry_run() -> None:
     assert "model-executed" in options
     # The engine parses commit/push/pr, not a dry_run arg.
     assert "workflow/skills/ship.py" in options
+
+
+# ---- W47: tense-accurate enforcement prose + live paths ---------------------
+
+
+def test_audit_and_ship_bodies_teach_live_enforcement() -> None:
+    """CR-01: no 'advisory by default' overclaim survives; the tiered truth
+    (daemon gates execute; only an unearned jury veto stays advisory) and
+    the green-close caveat are taught instead."""
+    import inspect
+
+    from eawf.surfaces.render.skills import registry as skill_registry
+
+    source = inspect.getsource(skill_registry)
+    assert "Enforcement is advisory by default" not in source
+    assert "Enforcement is profile-driven" in source
+    assert source.count("Do not treat a green close") >= 2
+
+
+def test_prep_body_points_at_rendered_planner_path() -> None:
+    import inspect
+
+    from eawf.surfaces.render.skills import registry as skill_registry
+
+    source = inspect.getsource(skill_registry)
+    assert ".claude/agents/planner.md" in source
+    assert "build/eawf-plugin/agents/planner.md" not in source
+
+
+def test_skill_authoring_docs_name_the_overlay_limitation() -> None:
+    from pathlib import Path
+
+    concepts = (Path(__file__).resolve().parents[2] / "docs" / "concepts.md").read_text(
+        encoding="utf-8"
+    )
+    assert "reach `eawf skill run`, not the Claude slash surface" in concepts

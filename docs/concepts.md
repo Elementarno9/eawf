@@ -59,7 +59,7 @@ Eä is an agent-driven development framework. The CLI and runtime adapters are o
 : Integration layer for tools such as Claude Code, Codex, or OpenCode. Adapters render skills, agents, hooks, and settings without becoming workflow source of truth.
 
 **Skill**
-: Operator-facing workflow command such as `/research`, `/prep`, `/audit`, `/polish`, `/ship`, `/review`, `/roadmap`, or `/flow`.
+: Operator-facing workflow command such as `/research`, `/prep`, `/audit`, `/polish`, `/ship`, `/review`, `/roadmap`, or `/flow`. Custom skill overlays (workspace `.ea/skills/` and user `~/.eawf/skills/`) reach `eawf skill run`, not the Claude slash surface — the plugin installer renders builtins only until the P31 overlay merge.
 
 **Agent role**
 : Typed role assigned to an agent or wave. The canonical field name is `agent_role`; the bare `role` is reserved for already-namespaced role specs.
