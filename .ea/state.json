@@ -9702,6 +9702,20 @@
       "status": "done",
       "updated_at": "2026-07-02T16:39:35.831408Z"
     },
+    "P30-I23-W27": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W27",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W27",
+      "model": null,
+      "scope_id": "P30-I23-W27",
+      "status": "done",
+      "updated_at": "2026-07-02T17:31:04.409841Z"
+    },
     "P30-I23-W37": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13168,8 +13182,7 @@
     "active_wave_ids": [
       "P30-I23-W14",
       "P30-I23-W15",
-      "P30-I23-W22",
-      "P30-I23-W27"
+      "P30-I23-W22"
     ],
     "iter_id": "P30-I23",
     "phase_id": "P30",
@@ -24927,7 +24940,7 @@
     },
     "P30-I23-W27": {
       "confidence": "low",
-      "current_store_record_id": "EST-P30-I23-W27-bucket-20260702T170349Z",
+      "current_store_record_id": "EST-P30-I23-W27-bucket-20260702T173041Z",
       "display": "1.0 EU · exp ~30m · pess ~108m",
       "expected_eu": 1.0,
       "expected_minutes": 30.0,
@@ -24936,7 +24949,7 @@
       "pessimistic_minutes": 108.0,
       "reference_class": "bucket:M",
       "scope_id": "P30-I23-W27",
-      "updated_at": "2026-07-02T17:03:49.070048Z"
+      "updated_at": "2026-07-02T17:30:41.892849Z"
     },
     "P30-I23-W37": {
       "confidence": "low",
@@ -28455,7 +28468,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T17:20:58.171633Z",
+  "updated_at": "2026-07-02T17:31:04.410105Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -106119,6 +106132,27 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/daemon",
+              "-k",
+              "close_gate and auditor or close_gate and jury",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W07",
@@ -106168,7 +106202,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -106237,6 +106271,27 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/eval/jury/test_cross_vendor_jury.py",
+              "tests/unit/test_jury_discrimination_gate.py",
+              "tests/daemon/test_wave_cross_vendor_jury_gate.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W08",
@@ -106286,7 +106341,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -106377,6 +106432,90 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon",
+              "-k",
+              "close or mutate",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/daemon",
+              "-k",
+              "close_gate",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon",
+              "-k",
+              "close or mutate",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-05",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/daemon",
+              "-k",
+              "close_gate",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-06",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W09",
@@ -106427,8 +106566,8 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01",
-            "G-02"
+            "G-03",
+            "G-04"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -106452,8 +106591,8 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01",
-            "G-02"
+            "G-05",
+            "G-06"
           ],
           "id": "CR-03",
           "kind": "deterministic",
@@ -106522,6 +106661,25 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon/test_mutation_watchdog.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W10",
@@ -106571,7 +106729,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -106637,6 +106795,25 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon/test_state_root_guard.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W11",
@@ -106686,7 +106863,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -106869,6 +107046,26 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/verify/test_readiness.py",
+              "tests/workflow/verify/test_floor_pack_integration.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W13",
@@ -106918,7 +107115,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -107363,6 +107560,26 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/eval/test_jury_stores.py",
+              "tests/cli/test_jury_label.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W17",
@@ -107412,7 +107629,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -107477,6 +107694,25 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/eval/test_gold_label_seed.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W18",
@@ -107526,7 +107762,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "behavioral",
@@ -107595,6 +107831,27 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon",
+              "-k",
+              "fleet and close",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W19",
@@ -107644,7 +107901,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -107712,6 +107969,46 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/cli/test_daemonless_close_teeth.py",
+              "tests/unit/cli/test_daemonless_close_waiver.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/cli/test_daemonless_close_teeth.py",
+              "tests/unit/cli/test_daemonless_close_waiver.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W20",
@@ -107761,7 +108058,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -107785,7 +108082,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-03"
           ],
           "id": "CR-03",
           "kind": "deterministic",
@@ -107855,6 +108152,46 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/evidence/test_incident_fold.py",
+              "tests/daemon/test_state_clobber_regression.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/evidence/test_incident_fold.py",
+              "tests/daemon/test_state_clobber_regression.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W21",
@@ -107904,7 +108241,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -107928,7 +108265,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-03"
           ],
           "id": "CR-03",
           "kind": "deterministic",
@@ -108345,6 +108682,25 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_i20_i21_legacy_drain.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W25",
@@ -108394,7 +108750,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -108565,8 +108921,8 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T17:03:49.069919Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T17:31:04.409841Z",
+      "commit": "22992e9c492333899b00d9967d9d05fbeb4dfae4",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W02"
@@ -108611,6 +108967,25 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/runtime/hooks/test_session_end_stdin.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W27",
@@ -108625,12 +109000,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:38:14.727062Z",
-      "outcome": null,
+      "outcome": "Claude hook wrappers forward stdin JSON verbatim to eawf hook run (argv synthesis only on empty-stdin/TTY fallback, bash-3.2 safe, fail-open); runner adapter bridges the REAL SessionEnd/Stop shape (flat usage block, string cost_usd) to the capture parser - closes the EU=0 leak (D-EU-CAPTURE primary seam); 10-test gate green on integrated HEAD; goldens regenerated in a separate test: commit; spec gate bindings repaired to per-criterion rows before close",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -108661,7 +109036,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-03"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -108726,6 +109101,25 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/test_runtime_capture_present.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W28",
@@ -108775,7 +109169,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "attested",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "behavioral",
@@ -108948,6 +109342,48 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_p30_i16_w14.py",
+              "tests/unit/test_p30_i20_w17.py",
+              "tests/unit/daemon/test_close_gate_mockup_golden_diff.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_p30_i16_w14.py",
+              "tests/unit/test_p30_i20_w17.py",
+              "tests/unit/daemon/test_close_gate_mockup_golden_diff.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W30",
@@ -108998,7 +109434,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-03"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -109022,7 +109458,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-04"
           ],
           "id": "CR-03",
           "kind": "deterministic",
@@ -109089,6 +109525,44 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_visual_gate_census.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_visual_gate_census.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W31",
@@ -109138,7 +109612,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -109162,7 +109636,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-03"
           ],
           "id": "CR-03",
           "kind": "deterministic",
@@ -109227,6 +109701,25 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_commit_prefix_lint.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W32",
@@ -109276,7 +109769,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -109350,6 +109843,44 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_i23_drive_recording.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_i23_drive_recording.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W33",
@@ -109399,7 +109930,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -109423,7 +109954,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "attested",
           "gate_ids": [
-            "G-01"
+            "G-03"
           ],
           "id": "CR-03",
           "kind": "behavioral",
@@ -109678,6 +110209,25 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_i22_review_artifact.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W35",
@@ -109727,7 +110277,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "attested",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "behavioral",
@@ -109791,6 +110341,44 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_reclose_staging.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_reclose_staging.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W36",
@@ -109840,7 +110428,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -109864,7 +110452,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-03"
           ],
           "id": "CR-03",
           "kind": "deterministic",
@@ -110279,6 +110867,28 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_dispatch_renderer.py",
+              "tests/integration/",
+              "-q",
+              "-k",
+              "dispatch_prompt or references"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W40",
@@ -110328,7 +110938,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "behavioral",
@@ -110396,6 +111006,46 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_dispatch_role_tier.py",
+              "tests/unit/test_role_contract_projection.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_dispatch_role_tier.py",
+              "tests/unit/test_role_contract_projection.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W41",
@@ -110445,7 +111095,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "behavioral",
@@ -110469,7 +111119,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-03"
           ],
           "id": "CR-03",
           "kind": "structural",
@@ -110656,6 +111306,26 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_render_claude_agents.py",
+              "tests/unit/test_prompt_rule_clauses.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W43",
@@ -110706,7 +111376,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-03"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -110786,6 +111456,26 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_skill_registry_p11.py",
+              "tests/unit/test_skill_reconcile.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W44",
@@ -110836,7 +111526,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-03"
           ],
           "id": "CR-02",
           "kind": "behavioral",
@@ -110906,6 +111596,48 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/",
+              "-q",
+              "-k",
+              "skill_prep or skill_audit or skill_ship or skill_flow"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/",
+              "-q",
+              "-k",
+              "skill_prep or skill_audit or skill_ship or skill_flow"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W45",
@@ -110955,7 +111687,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "structural",
@@ -110979,7 +111711,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-03"
           ],
           "id": "CR-03",
           "kind": "behavioral",
@@ -111049,6 +111781,27 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/",
+              "-q",
+              "-k",
+              "skill_research or skill_polish or skill_review or skill_agent_dispatch or roadmap_dry_run"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W46",
@@ -111098,7 +111851,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "behavioral",
@@ -111276,6 +112029,28 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_skill_reconcile.py",
+              "tests/unit/test_cli_skill_render.py",
+              "tests/unit/test_plugin_install_codex.py",
+              "tests/unit/test_prompt_rule_clauses.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W48",
@@ -111325,7 +112100,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -111409,6 +112184,28 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/",
+              "tests/daemon/",
+              "-q",
+              "-k",
+              "dispatch_close or report_output"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W49",
@@ -111459,7 +112256,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-03"
           ],
           "id": "CR-02",
           "kind": "behavioral",
