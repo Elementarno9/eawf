@@ -9604,6 +9604,20 @@
       "status": "done",
       "updated_at": "2026-07-02T15:50:53.201823Z"
     },
+    "P30-I23-W12": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W12",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W12",
+      "model": null,
+      "scope_id": "P30-I23-W12",
+      "status": "done",
+      "updated_at": "2026-07-02T17:18:07.800674Z"
+    },
     "P30-I23-W23": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13112,7 +13126,6 @@
     "active_wave_ids": [
       "P30-I23-W03",
       "P30-I23-W04",
-      "P30-I23-W12",
       "P30-I23-W14",
       "P30-I23-W15",
       "P30-I23-W16",
@@ -28403,7 +28416,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T17:15:36.562750Z",
+  "updated_at": "2026-07-02T17:18:07.800932Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -106667,8 +106680,8 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T17:03:45.433847Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T17:18:07.800674Z",
+      "commit": "8ea625753bcad850cec2db33b11700b6b7b5a531",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W02"
@@ -106715,12 +106728,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:38:04.449877Z",
-      "outcome": null,
+      "outcome": "resolve_wave_verify_block gains the verdict-always preservation arm: a non-band gateless verdict-always wave keeps enforce=True (D-TEETH); mechanical waves still narrow; 28-test readiness suite + 86 verify suite green on integrated HEAD; the one daemon-fixture fallout (jury-gate L-bucket premise) fixed with a threaded effort override",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
