@@ -9758,6 +9758,20 @@
       "status": "done",
       "updated_at": "2026-07-02T17:31:04.409841Z"
     },
+    "P30-I23-W29": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W29",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W29",
+      "model": null,
+      "scope_id": "P30-I23-W29",
+      "status": "done",
+      "updated_at": "2026-07-02T17:53:04.616361Z"
+    },
     "P30-I23-W32": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13236,7 +13250,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P30-I23-W29",
       "P30-I23-W30",
       "P30-I23-W40",
       "P30-I23-W42"
@@ -25010,7 +25023,7 @@
     },
     "P30-I23-W29": {
       "confidence": "low",
-      "current_store_record_id": "EST-P30-I23-W29-bucket-20260702T173435Z",
+      "current_store_record_id": "EST-P30-I23-W29-bucket-20260702T175100Z",
       "display": "0.25 EU · exp ~8m · pess ~27m",
       "expected_eu": 0.25,
       "expected_minutes": 7.5,
@@ -25019,7 +25032,7 @@
       "pessimistic_minutes": 27.0,
       "reference_class": "bucket:XS",
       "scope_id": "P30-I23-W29",
-      "updated_at": "2026-07-02T17:34:35.585259Z"
+      "updated_at": "2026-07-02T17:51:00.009003Z"
     },
     "P30-I23-W30": {
       "confidence": "low",
@@ -28590,7 +28603,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T17:42:57.303597Z",
+  "updated_at": "2026-07-02T17:53:04.616694Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -109363,8 +109376,8 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T17:34:35.585129Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T17:53:04.616361Z",
+      "commit": "e643f58fd2c09279eb91f7a57a54ca171885e618",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W02"
@@ -109409,12 +109422,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:38:16.038097Z",
-      "outcome": null,
+      "outcome": "Runtime-label double-count killed at the telemetry read seam: runtime_triple_label (inverse of the idle W21 helper, now with production callers) folds claude-code onto the closed claude key in _runtime_or_none; codex/opencode pass through, junk coerces None; write-site wrap pinned as impossible (DispatchCostPayload rejects claude-code) — wave re-specced after the executor's verified blocked report; 7-test gate + 40 observability tests green",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -109424,7 +109437,7 @@
           ],
           "id": "CR-01",
           "kind": "deterministic",
-          "measurable_signal": "the payload model test asserts a dispatch_cost append with input label 'claude' persists the same canonical label as a 'claude-code' append, under pytest exit zero",
+          "measurable_signal": "the labels suite asserts claude-code and claude fold to one RuntimeName key at the ingest seam, codex passes through, and junk coerces to None, under pytest exit zero",
           "oracle_tier": 2,
           "quality_dimension": "functional_suitability",
           "required": true,
@@ -109433,11 +109446,11 @@
             "gate_ref": null,
             "jury_reason": null,
             "locus": "pytest",
-            "object": "zero from tests/daemon/test_dispatch_cost_labels.py asserting the dispatch_cost append persists the canonical runtime label",
+            "object": "zero from tests/daemon/test_dispatch_cost_labels.py asserting both spellings fold to one closed key at the read seam",
             "observe": "exits",
             "quantifier": "single"
           },
-          "text": "A dispatch_cost append built with input runtime label 'claude' persists the canonical label via canonical_runtime_label (src/eawf/kernel/store/kinds/events/base.py:46) wrapped at the dispatch_runner.py:700 payload construction, identical to a 'claude-code'-labeled append, so cost-by-runtime no longer double-counts one runtime as two.",
+          "text": "_runtime_or_none (src/eawf/observability/telemetry/sources/dispatch_cost.py) folds the adapter-id label claude-code onto the event triple claude via the un-idled runtime_triple_label helper (src/eawf/kernel/store/kinds/events/base.py), so both spellings of one runtime aggregate under one closed RuntimeName key instead of double-counting; the write site keeps the closed RuntimeTriple literal unchanged (a write-site claude-code wrap is rejected by DispatchCostPayload.runtime).",
           "waiver_reason": null
         }
       ],
