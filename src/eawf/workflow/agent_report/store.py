@@ -123,6 +123,15 @@ def append_agent_report(
     path = store_path(state_path, store_kind)
     attempt = _next_attempt(path, base_id=base_id, role_value=session.role.value)
     report_id = report_record_id(role=session.role, base_id=base_id, attempt=attempt)
+    # Fail-fast id-shape invariant: the role token appears exactly once. A
+    # doubled prefix (AR-auditor-auditor-...) means a role-prefixed base_id
+    # slipped past mint normalization.
+    role_token = session.role.value.replace("-", "_")
+    expected_prefix = f"AR-{role_token}-"
+    if not report_id.startswith(expected_prefix) or report_id[len(expected_prefix) :].startswith(
+        f"{role_token}-"
+    ):
+        raise ValueError(f"minted report id doubles the role prefix: {report_id!r}")
     artifact_list = list(artifact_ids or [])
     blob_list = list(blob_refs or [])
     header = AgentReportHeader(

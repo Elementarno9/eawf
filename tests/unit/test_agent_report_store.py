@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -14,8 +15,10 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import (
     AgentReportEvidenceRef,
     AgentReportPayload,
+    AuditorReportBody,
     ExecutorReportBody,
     ResearcherReportBody,
+    report_record_id,
 )
 from eawf.kernel.store.paths import store_path
 from eawf.workflow.agent_report.store import (
@@ -139,6 +142,49 @@ def test_append_agent_report_writes_attempt_one(tmp_path: Path) -> None:
     payload = AgentReportPayload.model_validate(parsed.payload)
     assert payload.header.attempt == 1
     assert payload.header.role is AgentSessionRole.EXECUTOR
+
+
+_AUDITOR_ID_RE = re.compile(r"^AR-auditor-(?!auditor-)")
+
+
+@pytest.mark.parametrize("base_id", ["P30-I20-W58", "auditor-P30-I20-W58"])
+def test_report_record_id_role_prefix_appears_once(base_id: str) -> None:
+    """A plain or role-prefixed base_id mints an id with one role prefix.
+
+    CR-02: minting an auditor id from a base_id already carrying the role
+    token used to double it (AR-auditor-auditor-...); it now matches
+    ^AR-auditor-(?!auditor-) and both inputs collapse to the same id.
+    """
+    report_id = report_record_id(role=AgentSessionRole.AUDITOR, base_id=base_id, attempt=1)
+    assert _AUDITOR_ID_RE.match(report_id)
+    assert report_id == "AR-auditor-P30-I20-W58-01"
+
+
+def test_append_agent_report_normalizes_role_prefixed_base_id(tmp_path: Path) -> None:
+    """The append path mints a single-prefix auditor id for a role-prefixed base.
+
+    CR-02: the store-layer id-shape assertion carries the invariant end to
+    end -- appending with a role-prefixed base_id writes a header id
+    matching ^AR-auditor-(?!auditor-), never a doubled prefix.
+    """
+    body = AuditorReportBody(
+        role="auditor",
+        verdict=AgentReportVerdict.PASS,
+        confidence=Confidence.HIGH,
+        summary="re-read the diff against the criteria",
+        target_id="P30-I20-W58",
+    )
+    result = append_agent_report(
+        state=_state(role=AgentSessionRole.AUDITOR),
+        state_path=_state_path(tmp_path),
+        session_id="SES-001",
+        base_id="auditor-P30-I20-W58",
+        body=body,
+        generated_at=datetime(2026, 5, 14, tzinfo=UTC),
+    )
+    assert _AUDITOR_ID_RE.match(result.envelope.id)
+    assert result.envelope.id == "AR-auditor-P30-I20-W58-01"
+    assert result.urn.endswith("/auditor_report/AR-auditor-P30-I20-W58-01")
 
 
 def test_append_agent_report_copies_agent_principal_id_to_header(tmp_path: Path) -> None:

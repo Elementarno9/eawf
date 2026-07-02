@@ -40,6 +40,7 @@ from eawf.workflow.dispatch.llm_assist import LLMAssistError
 from eawf.workflow.dispatch.verdict import (
     ExecutorSelfReportError,
     WaveVerdictGate,
+    _is_security_scoped,
     assert_not_executor_self_report,
     build_auditor_prompt,
     parse_auditor_report_body,
@@ -302,6 +303,49 @@ def test_verdict_requirement_security_keyword_in_criteria_is_always() -> None:
         title="mechanical edit",
         success_criteria=["enforce the sandbox deny-list at dispatch"],
     )
+    assert verdict_requirement(wave) == "always"
+
+
+def test_is_security_scoped_auth_word_boundary_drops_code_keeps_word() -> None:
+    """Whole-word scan: an ``AUTH-3`` code is not scoped; a real word is.
+
+    CR-01: the bare-substring scan armed ``"auth"`` on the wave code
+    ``AUTH-3``; the word-boundary scan drops that false positive while a
+    standalone ``"auth"`` in prose still classifies security-scoped.
+    """
+    code_wave = _make_wave(agent_role="executor", effort_bucket="XS", title="AUTH-3")
+    word_wave = _make_wave(agent_role="executor", effort_bucket="XS", title="harden the auth flow")
+    assert _is_security_scoped(code_wave) is False
+    assert _is_security_scoped(word_wave) is True
+
+
+def test_is_security_scoped_ignores_substring_embeddings() -> None:
+    """A keyword embedded in a larger word is not a whole-word match.
+
+    ``"egress"`` inside ``"regression"`` and ``"auth"`` inside
+    ``"authority"`` are the dominant P30 false positives the word-boundary
+    scan removes.
+    """
+    regression_wave = _make_wave(
+        agent_role="executor", effort_bucket="XS", title="fix a regression in the authority map"
+    )
+    assert _is_security_scoped(regression_wave) is False
+
+
+def test_verdict_requirement_auth_code_title_is_mechanical() -> None:
+    """A small executor wave titled with an ``AUTH-N`` code stays mechanical.
+
+    CR-01 at the policy layer: the code no longer inflates the wave to an
+    ``"always"`` requirement, so it is sampled or skipped like any other
+    mechanical wave.
+    """
+    wave = _make_wave(agent_role="executor", effort_bucket="XS", title="AUTH-3")
+    assert verdict_requirement(wave) in {"sampled", "skip"}
+
+
+def test_verdict_requirement_auth_word_title_is_always() -> None:
+    """A standalone ``auth`` word still forces an ``always`` requirement."""
+    wave = _make_wave(agent_role="executor", effort_bucket="XS", title="harden the auth flow")
     assert verdict_requirement(wave) == "always"
 
 

@@ -254,6 +254,12 @@ class AgentReportPayload(_StrictModel):
 def report_record_id(*, role: AgentSessionRole, base_id: str, attempt: int) -> str:
     """Return a stable record id for one role/base/attempt tuple.
 
+    A caller that passes a ``base_id`` already carrying the role token (an
+    operator-supplied ``"auditor-P30-..."``) is normalized so the role
+    prefix appears exactly once: the returned id always matches
+    ``^AR-<role_token>-(?!<role_token>-)``. Without this the mint doubled
+    the prefix into ``AR-auditor-auditor-...``.
+
     Raises:
         ValueError: When ``base_id`` is empty or ``attempt`` is less than one.
     """
@@ -263,6 +269,11 @@ def report_record_id(*, role: AgentSessionRole, base_id: str, attempt: int) -> s
         raise ValueError("attempt must be >= 1")
     role_token = role.value.replace("-", "_")
     base_token = _REPORT_ID_RE.sub("-", base_id.strip()).strip("-")
+    # Drop a redundant leading role token so a role-prefixed base_id does
+    # not double the prefix in the minted id.
+    role_prefix = f"{role_token}-"
+    if base_token.startswith(role_prefix):
+        base_token = base_token[len(role_prefix) :].strip("-")
     return f"AR-{role_token}-{base_token}-{attempt:02d}"
 
 

@@ -51,6 +51,7 @@ diff cold.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -223,12 +224,20 @@ def _is_security_scoped(wave: Wave) -> bool:
     """Return whether *wave* names a security-relevant keyword.
 
     Scans the wave title and success criteria for any
-    :data:`_SECURITY_KEYWORDS` substring. A security-scoped wave forces an
-    ``"always"`` verdict requirement so a sandbox / auth / egress
-    regression cannot be sampled past the close gate.
+    :data:`_SECURITY_KEYWORDS` as a **whole word**. A hyphen is treated as
+    part of the token so a wave-code shape such as ``"AUTH-3"`` does NOT
+    arm the ``"auth"`` keyword, and a substring embedded in a larger word
+    (``"authority"``, ``"regression"`` for ``"egress"``) is not a match --
+    only a standalone ``"auth"`` / ``"egress"`` classifies. A
+    security-scoped wave forces an ``"always"`` verdict requirement so a
+    sandbox / auth / egress regression cannot be sampled past the close
+    gate.
     """
     corpus = _wave_text_corpus(wave)
-    return any(keyword in corpus for keyword in _SECURITY_KEYWORDS)
+    return any(
+        re.search(rf"(?<![\w-]){re.escape(keyword)}(?![\w-])", corpus)
+        for keyword in _SECURITY_KEYWORDS
+    )
 
 
 def _is_sampled(wave_id: str, *, sample_every: int = _SAMPLE_EVERY) -> bool:
