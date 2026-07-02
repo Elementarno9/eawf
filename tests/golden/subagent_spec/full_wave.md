@@ -88,6 +88,23 @@ Your `agent_end` report carries an `EvidenceRecord` per success criterion (`evid
 - Spec is missing success criteria or file list.
 - Scope grows beyond the named files.
 - Tests fail and you cannot reproduce locally.
+## DoR — refuse the dispatch unless ALL hold
+
+- Every success criterion is typed (kind != legacy) and pins the production call site as file:line — "wired at file:line", never "function X exists".
+- The binding-pass disease is validating existence instead of wiring.
+- Waves planned BEFORE the I22 legacy-criteria drain may carry grandfathered kind=legacy rows: do not refuse those — flag each legacy row in `followups` and verify it as written.
+- file_scopes is non-empty and criteria pin contracts verbatim (enum values, key maps, API shapes) — not "adopt X chassis".
+- Each deterministic criterion carries >=1 gate you can run locally.
+
+If any check fails on a post-drain wave, emit verdict=blocked naming the gap. Never start work on an unready spec.
+
+## DoD — before you emit the close-ready report
+
+- Cite, per criterion, the file:line where the behaviour is WIRED (a production call site), not where it is defined.
+- Boundary AND error-path tests for every public function touched: empty / single / off-by-one / max-length; TypeError / ValueError / KeyError / ValidationError.
+- files_changed lists the REAL touched paths — the parent syncs wave scopes from it before close.
+- Run NO eawf command in the worktree; the parent closes the wave from your report.
+- evidence_refs is REQUIRED: one entry per success criterion (a gate command plus its exit code, a file:line where the behaviour is wired, or a store URN); an empty list on a criteria-bearing wave refuses close-ready.
 
 ## Workflow
 

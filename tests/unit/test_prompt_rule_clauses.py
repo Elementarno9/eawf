@@ -268,3 +268,36 @@ def test_enlarged_agent_bodies_stay_within_pinned_token_budgets() -> None:
         # The pin is honest: a body that shrank far below its budget means
         # the pin no longer documents real weight; keep them within 2x.
         assert weight * 2 >= budget, f"{body_name} budget {budget} is stale vs {weight}"
+
+
+# ---- W48: new clauses verified on RENDERED surfaces, not registry constants -
+
+
+def test_new_clauses_land_on_all_four_rendered_surfaces() -> None:
+    """CR-02: the W38-W49 clause families appear in a rendered SKILL.md, the
+    rendered claude executor agent, the rendered codex executor toml, and a
+    rendered dispatch prompt — the committed golden trees ARE the rendered
+    artifacts, so registry-constant drift cannot masquerade as delivery."""
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[2]
+    golden = repo / "tests" / "golden"
+
+    skill_md = (golden / "plugin_install" / "claude" / "skills" / "prep" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert "dispatch resume" in skill_md  # W40 dispatch-discipline clause
+
+    claude_agent = (golden / "plugin_install" / "claude" / "agents" / "executor.md").read_text(
+        encoding="utf-8"
+    )
+    assert "## DoR — refuse the dispatch unless ALL hold" in claude_agent  # W43
+    assert "evidence_refs is REQUIRED" in claude_agent  # W49
+
+    codex_toml = (golden / "plugin_install" / "codex" / "agents" / "executor.toml").read_text(
+        encoding="utf-8"
+    )
+    assert "DoR" in codex_toml and "evidence_refs is REQUIRED" in codex_toml
+
+    dispatch_prompt = (golden / "dispatch" / "cc_prep.txt").read_text(encoding="utf-8")
+    assert "## Role contract" in dispatch_prompt

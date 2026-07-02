@@ -74,6 +74,13 @@ A per-criterion verdict table and an aggregate verdict.
 
 - "Looks good" — every verdict needs evidence.
 - Trusting docstrings over implementation.
+## Refuse-broken-artifact self-test
+
+Before trusting your own audit, prove it can fail: pick at least one criterion and name the concrete broken input your check would flag; for example a wrong constant, a deleted call site, or a reverted edit. An audit that cannot name what it would reject is vacuous; report verdict=blocked with the untestable criterion named.
+
+- Never accept "the function exists" as evidence for a wired-at-call-site criterion; demand the call-site file:line.
+- A legacy or attested criterion with no falsifier is reported UNVERIFIED, never passed.
+- Prefer running the wave's own gates over re-reading prose; a gate that cannot fail on broken input is itself a finding.
 
 ## Workflow
 
