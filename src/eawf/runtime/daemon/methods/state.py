@@ -2954,6 +2954,7 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     # kind keeps the single-lock path below.
     if mutation.kind == MutationKind.WAVE_CLOSE:
         ctx.in_flight_mutations += 1
+        ctx.mutation_started(mutation.mutation_id, mutation.kind.value)
         try:
             return await _mutate_wave_close(
                 ctx,
@@ -2966,7 +2967,13 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 repo_root_override=args.repo_root,
             )
         finally:
+            duration_ms = ctx.mutation_finished(mutation.mutation_id)
             ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
+            if duration_ms is not None:
+                logger.info(
+                    f"mutate finished mutation_kind={mutation.kind.value} "
+                    f"scope={mutation.scope_id!r} duration_ms={duration_ms:.1f}"
+                )
 
     # The portalock keeps the daemon's defense-in-depth guard live
     # (rule 4 V1 carve-out); concurrent recovery writers serialise
@@ -2974,8 +2981,10 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     from eawf.runtime.lock import portalock
 
     ctx.in_flight_mutations += 1
+    ctx.mutation_started(mutation.mutation_id, mutation.kind.value)
     try:
-        with portalock.acquire(state_path, timeout=5.0):
+        with portalock.acquire(state_path, timeout=5.0) as generic_lock_handle:
+            ctx.active_lock_handle = generic_lock_handle
             state, payload = _read_state(state_path)
             before_version = _state_version(payload)
 
@@ -3117,7 +3126,14 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 )
             return result
     finally:
+        ctx.active_lock_handle = None
+        duration_ms = ctx.mutation_finished(mutation.mutation_id)
         ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
+        if duration_ms is not None:
+            logger.info(
+                f"mutate finished mutation_kind={mutation.kind.value} "
+                f"scope={mutation.scope_id!r} duration_ms={duration_ms:.1f}"
+            )
 
 
 async def _mutate_wave_close(
@@ -3221,7 +3237,8 @@ async def _mutate_wave_close(
     )
 
     # ---- Phase 2: commit under the lock (ms-scale + bounded verdict tier) --
-    with portalock.acquire(state_path, timeout=5.0):
+    with portalock.acquire(state_path, timeout=5.0) as lock_handle:
+        ctx.active_lock_handle = lock_handle
         state, payload = _read_state(state_path)
         before_version = _state_version(payload)
         if before_version != preflight_version:
@@ -3327,6 +3344,8 @@ async def _mutate_wave_close(
         if drift_envelope is not None:
             append_envelope(event_path, drift_envelope)
         wal.mark_fsynced(wal_path, mutation.mutation_id)
+
+    ctx.active_lock_handle = None
 
     # ---- Phase 3: post-lock tail --------------------------------------------
     if wave_close_evidence:

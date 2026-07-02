@@ -66,6 +66,11 @@ class StatusResult(BaseModel):
     active_subscriptions: int
     in_flight_mutations: int
     last_event_id: str
+    #: Per-mutation in-flight telemetry (P30-I23-W10): one row per live
+    #: mutation with its kind, wall-clock start, and running duration, so
+    #: a wedged close is visible in ``eawf daemon status`` instead of
+    #: only through client timeouts.
+    in_flight: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ShutdownParams(BaseModel):
@@ -135,6 +140,15 @@ async def status(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         active_subscriptions=active_subs,
         in_flight_mutations=ctx.in_flight_mutations,
         last_event_id=ctx.last_event_id,
+        in_flight=[
+            {
+                "mutation_id": mutation_id,
+                "kind": entry.kind,
+                "started_at": entry.started_at,
+                "duration_s": round(time.monotonic() - entry.started_at_monotonic, 3),
+            }
+            for mutation_id, entry in getattr(ctx, "in_flight_details", {}).items()
+        ],
     )
     return result.model_dump(mode="json")
 

@@ -11,10 +11,12 @@ W01 wires only the ``daemon.*`` namespace. Subsequent waves attach
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any, Final
 
 logger = logging.getLogger(__name__)
@@ -51,6 +53,25 @@ class DaemonValidationError(ValueError):
     catch this subclass first to pick the more specific wire code. The
     ``validation_failed: `` message prefix is preserved by every raiser.
     """
+
+
+@dataclass
+class MutationInFlight:
+    """One in-flight mutation's telemetry row (P30-I23-W10).
+
+    Attributes:
+        kind: The mutation kind value (e.g. ``wave_close``).
+        started_at_monotonic: ``time.monotonic()`` at registration; the
+            watchdog measures hold duration against it.
+        started_at: Wall-clock ISO stamp for ``daemon.status``.
+        task: The asyncio task driving the mutation; the watchdog aborts
+            it past the hard limit.
+    """
+
+    kind: str
+    started_at_monotonic: float
+    started_at: str
+    task: Any = None
 
 
 @dataclass
@@ -115,6 +136,30 @@ class MethodContext:
     wal_dir: Any = field(default=None)
     idempotency_cache: Any = field(default=None)
     last_activity: float = field(default_factory=time.monotonic)
+    #: Per-mutation in-flight telemetry (P30-I23-W10): mutation_id ->
+    #: :class:`MutationInFlight`. Populated at the in_flight increment,
+    #: cleared at decrement; ``daemon.status`` projects it and the
+    #: mutation watchdog sweeps it for over-ceiling holds.
+    in_flight_details: dict[str, MutationInFlight] = field(default_factory=dict)
+    #: The LockHandle of the mutation currently holding the state lock,
+    #: or ``None``. The watchdog belt-and-braces heartbeat ticks it.
+    active_lock_handle: Any = field(default=None)
+
+    def mutation_started(self, mutation_id: str, kind: str) -> None:
+        """Register an in-flight mutation for telemetry + the watchdog."""
+        self.in_flight_details[mutation_id] = MutationInFlight(
+            kind=kind,
+            started_at_monotonic=time.monotonic(),
+            started_at=datetime.now(UTC).isoformat(),
+            task=asyncio.current_task(),
+        )
+
+    def mutation_finished(self, mutation_id: str) -> float | None:
+        """Clear an in-flight mutation; return its duration in ms."""
+        entry = self.in_flight_details.pop(mutation_id, None)
+        if entry is None:
+            return None
+        return (time.monotonic() - entry.started_at_monotonic) * 1000.0
 
     def touch_activity(self) -> None:
         """Refresh :attr:`last_activity` to the current monotonic time.

@@ -19,13 +19,17 @@ import logging.handlers
 import os
 import signal
 import sys
+import time
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
 from eawf import __version__
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.resolve import resolve_with_reason
+from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.paths import store_path
 from eawf.observability.logging.scrub import SensitiveScrubber
 from eawf.runtime.daemon import PROTOCOL_VERSION
@@ -308,6 +312,136 @@ def _build_watchdog(ctx: MethodContext, idle_timeout_seconds: float) -> IdleTime
     )
 
 
+#: Soft alarm ceiling for one in-flight mutation (seconds). Mirrors the
+#: portalock hold ceiling: past it the watchdog logs a structured alarm.
+_MUTATION_ALARM_SECONDS: float = 120.0
+
+#: Hard abort limit (seconds). Past it the watchdog cancels the mutation
+#: task so the daemon recovers WITHOUT the manual pkill + rm ceremony
+#: (ZD-R6). Overridable via ``EAWF_MUTATION_HARD_LIMIT_SECONDS``.
+_MUTATION_HARD_LIMIT_SECONDS: float = 300.0
+
+
+def _resolve_mutation_hard_limit() -> float:
+    """Return the watchdog hard-abort limit in seconds."""
+    raw = os.environ.get("EAWF_MUTATION_HARD_LIMIT_SECONDS", "")
+    try:
+        value = float(raw)
+    except ValueError:
+        return _MUTATION_HARD_LIMIT_SECONDS
+    return value if value > 0 else _MUTATION_HARD_LIMIT_SECONDS
+
+
+async def run_mutation_watchdog_loop(
+    ctx: MethodContext,
+    *,
+    stop_event: asyncio.Event,
+    tick_seconds: float = 15.0,
+    alarm_seconds: float = _MUTATION_ALARM_SECONDS,
+    hard_limit_seconds: float | None = None,
+) -> None:
+    """Sweep in-flight mutations: alarm past the ceiling, abort past the limit.
+
+    The self-deadlock watchdog (P30-I23-W10). Each tick it walks
+    ``ctx.in_flight_details``:
+
+    * past *alarm_seconds* it logs a structured WARNING naming the
+      mutation kind + held duration (observability; no action);
+    * past the hard limit it CANCELS the mutation's asyncio task —
+      unwinding the task releases the portalock through the context
+      manager — and emits a typed ``mutation_watchdog_abort`` incident
+      event, retiring the manual pkill + rm recovery ceremony;
+    * belt-and-braces with the W04 ticker, it heartbeats the registered
+      ``ctx.active_lock_handle`` so a live hold never reads stale.
+
+    Args:
+        ctx: Live server context carrying the in-flight registry.
+        stop_event: Daemon shutdown event; ends the loop.
+        tick_seconds: Sweep cadence.
+        alarm_seconds: Soft alarm ceiling per mutation.
+        hard_limit_seconds: Hard abort limit; ``None`` resolves the env
+            override / default.
+    """
+    limit = hard_limit_seconds if hard_limit_seconds is not None else _resolve_mutation_hard_limit()
+    while not stop_event.is_set():
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(stop_event.wait(), timeout=tick_seconds)
+        if stop_event.is_set():
+            return
+        handle = ctx.active_lock_handle
+        if handle is not None and hasattr(handle, "heartbeat"):
+            with contextlib.suppress(OSError):
+                handle.heartbeat()
+        now = time.monotonic()
+        for mutation_id, entry in list(ctx.in_flight_details.items()):
+            held = now - entry.started_at_monotonic
+            if held < alarm_seconds:
+                continue
+            if held < limit:
+                logger.warning(
+                    f"mutation_watchdog alarm mutation_id={mutation_id!r} "
+                    f"kind={entry.kind} duration_s={held:.1f} limit_s={limit:.0f}"
+                )
+                continue
+            logger.error(
+                f"mutation_watchdog abort mutation_id={mutation_id!r} "
+                f"kind={entry.kind} duration_s={held:.1f} limit_s={limit:.0f}"
+            )
+            task = entry.task
+            if task is not None and not task.done():
+                task.cancel()
+            ctx.in_flight_details.pop(mutation_id, None)
+            _publish_watchdog_abort(ctx, mutation_id=mutation_id, kind=entry.kind, held=held)
+
+
+def _publish_watchdog_abort(
+    ctx: MethodContext,
+    *,
+    mutation_id: str,
+    kind: str,
+    held: float,
+) -> None:
+    """Emit the typed ``mutation_watchdog_abort`` incident event."""
+    now = datetime.now(UTC)
+    summary = f"mutation_watchdog_abort kind={kind} duration_s={held:.1f}"
+    payload = EventPayload(
+        timestamp=now,
+        event_type="mutation_watchdog_abort",
+        actor="daemon",
+        command="mutation_watchdog",
+        args_hash="",
+        before_state_version=None,
+        after_state_version=None,
+        status="error",
+        message=summary,
+        extras={"mutation_id": mutation_id, "kind": kind, "duration_s": round(held, 1)},
+    ).model_dump(mode="json")
+    envelope = Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=kind,
+        created_at=now,
+        updated_at=None,
+        summary=summary,
+        payload=payload,
+        blob_refs=[],
+        artifact_ids=[],
+    )
+    if ctx.event_path is not None:
+        with contextlib.suppress(OSError):
+            append_envelope(Path(ctx.event_path), envelope)
+    if ctx.bus is not None and hasattr(ctx.bus, "publish"):
+        ctx.bus.publish(envelope)
+    ctx.last_event_id = envelope.id
+
+
+def _schedule_mutation_watchdog(ctx: MethodContext) -> asyncio.Task[None] | None:
+    """Schedule the self-deadlock mutation watchdog on the running loop."""
+    assert isinstance(ctx.shutdown_event, asyncio.Event)
+    return asyncio.create_task(run_mutation_watchdog_loop(ctx, stop_event=ctx.shutdown_event))
+
+
 def _schedule_session_ttl_sweep(ctx: MethodContext) -> asyncio.Task[None] | None:
     """Schedule the session-handle TTL sweep loop on the running loop.
 
@@ -487,6 +621,7 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
     ttl_task = _schedule_session_ttl_sweep(ctx)
     stale_wave_task = _schedule_stale_wave_sweep(ctx)
     wal_gc_task = _schedule_wal_gc_sweep(ctx)
+    mutation_watchdog_task = _schedule_mutation_watchdog(ctx)
     try:
         await ctx.shutdown_event.wait()
     finally:
@@ -505,6 +640,10 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
             wal_gc_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await wal_gc_task
+        if mutation_watchdog_task is not None:
+            mutation_watchdog_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await mutation_watchdog_task
         server.close()
         await server.wait_closed()
 
@@ -552,6 +691,7 @@ async def _run_windows_server(ctx: MethodContext) -> None:
     ttl_task = _schedule_session_ttl_sweep(ctx)
     stale_wave_task = _schedule_stale_wave_sweep(ctx)
     wal_gc_task = _schedule_wal_gc_sweep(ctx)
+    mutation_watchdog_task = _schedule_mutation_watchdog(ctx)
     try:
         await ctx.shutdown_event.wait()
     finally:
@@ -570,6 +710,10 @@ async def _run_windows_server(ctx: MethodContext) -> None:
             wal_gc_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await wal_gc_task
+        if mutation_watchdog_task is not None:
+            mutation_watchdog_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await mutation_watchdog_task
         pipe_server.stop()
 
 
