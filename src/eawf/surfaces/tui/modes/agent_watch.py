@@ -105,7 +105,7 @@ from eawf.surfaces.tui.widgets.empty_state import (
     seal_hero_css,
 )
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
-from eawf.surfaces.tui.widgets.footer import render_hint_label
+from eawf.surfaces.tui.widgets.footer import Footer, render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
 from eawf.surfaces.tui.widgets.output_tail import OutputTail, format_agent_output_lines
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, status_sigil, tint
@@ -161,6 +161,23 @@ CANCEL_NO_DAEMON: str = "cancel: daemon unavailable -- request not issued"
 
 #: Result line when there is no session to cancel.
 CANCEL_NO_TARGET: str = "cancel: no session to cancel"
+
+#: Result line when cancel targets a session that is no longer ACTIVE — a
+#: finished stream is a replay, so there is no child process to stop.
+CANCEL_NOT_ACTIVE_TEMPLATE: str = "cancel: session already {status} -- nothing to stop"
+
+#: Result line when pause targets a session that is no longer ACTIVE.
+PAUSE_NOT_ACTIVE_TEMPLATE: str = "pause: session already {status} -- nothing to pause"
+
+#: Idle line replacing the cancel prompt when the watched session is terminal:
+#: the stream is a recorded replay, so advertising a kill would be dishonest.
+WATCH_REPLAY_TEMPLATE: str = "session {status} -- replaying its recorded stream"
+
+#: Id of the session-picker scroll listing browsable executor sessions.
+SESSION_PICKER_ID: str = "watch-session-picker"
+
+#: CSS class on each session-picker row.
+SESSION_PICKER_ROW_CLASS: str = "watch-picker-row"
 
 #: Id of the raw-output tail pane mounted beneath the typed lifecycle stream.
 WATCH_OUTPUT_ID: str = "watch-output"
@@ -469,28 +486,50 @@ def pick_watch_target(state: State | None) -> WatchTarget | None:
     """
     if state is None or not state.agent_sessions:
         return None
-    executors = [
-        sess for sess in state.agent_sessions.values() if sess.role is AgentSessionRole.EXECUTOR
-    ]
+    executors = _executor_sessions(state)
     if not executors:
         return None
     active = [sess for sess in executors if sess.status is AgentSessionStatus.ACTIVE]
     pool = active if active else executors
     picked = max(pool, key=lambda sess: sess.started_at)
-    attempt = _latest_attempt(state, wave_id=picked.scope_id)
-    target = WatchTarget(
-        session_id=picked.id,
-        wave_id=picked.scope_id,
-        runtime=picked.runtime,
-        status=picked.status,
-        attempt=attempt,
-        log_handle=_log_handle(state, wave_id=picked.scope_id, attempt=attempt),
-    )
+    target = _session_watch_target(state, picked)
     logger.info(
         f"pick_watch_target session={target.session_id!r} wave={target.wave_id} "
         f"runtime={target.runtime!r} status={target.status.value} active={bool(active)}"
     )
     return target
+
+
+def _executor_sessions(state: State) -> list[AgentSession]:
+    """Return every executor session in *state* (any lifecycle status)."""
+    return [
+        sess for sess in state.agent_sessions.values() if sess.role is AgentSessionRole.EXECUTOR
+    ]
+
+
+def _session_watch_target(state: State, session: AgentSession) -> WatchTarget:
+    """Build the FA4 :class:`WatchTarget` for one *session* row.
+
+    Shared by the default pick (:func:`pick_watch_target`) and the session
+    picker's Enter-zoom, so both resolve the wave attempt + session-log
+    handle identically.
+
+    Args:
+        state: The bound read-only state the session came from.
+        session: The executor session to watch.
+
+    Returns:
+        The watch target streaming *session*'s wave.
+    """
+    attempt = _latest_attempt(state, wave_id=session.scope_id)
+    return WatchTarget(
+        session_id=session.id,
+        wave_id=session.scope_id,
+        runtime=session.runtime,
+        status=session.status,
+        attempt=attempt,
+        log_handle=_log_handle(state, wave_id=session.scope_id, attempt=attempt),
+    )
 
 
 def _latest_attempt(state: State, *, wave_id: str) -> int:
@@ -1563,6 +1602,204 @@ class LaneGrid(Widget):
         return self._rows[self.selected]
 
 
+@dataclass(frozen=True)
+class SessionPickerRow:
+    """One browsable executor session in the picker.
+
+    Attributes:
+        session_id: The session record key the Enter-zoom resolves.
+        wave_id: The wave the session scopes to.
+        runtime: The runtime adapter the session ran on.
+        status: The session lifecycle status (drives the row sigil).
+        started_label: The session start time as a compact ``HH:MM`` label.
+    """
+
+    session_id: str
+    wave_id: str
+    runtime: str
+    status: AgentSessionStatus
+    started_label: str
+
+
+def session_picker_rows(state: State | None) -> tuple[SessionPickerRow, ...]:
+    """Project *state*'s executor sessions into picker rows, newest first.
+
+    Every executor session is browsable regardless of lifecycle status — the
+    picker exists precisely so finished sessions stay reachable once their
+    fleet lanes are deleted. Order is most-recent ``started_at`` first so the
+    default selection lands on the newest run.
+
+    Args:
+        state: The bound read-only state, or ``None`` (fresh / user scope).
+
+    Returns:
+        The picker display rows, newest first; empty when no executor
+        session exists.
+    """
+    if state is None or not state.agent_sessions:
+        return ()
+    executors = sorted(_executor_sessions(state), key=lambda s: s.started_at, reverse=True)
+    return tuple(
+        SessionPickerRow(
+            session_id=sess.id,
+            wave_id=sess.scope_id,
+            runtime=sess.runtime,
+            status=sess.status,
+            started_label=sess.started_at.strftime("%H:%M"),
+        )
+        for sess in executors
+    )
+
+
+def render_picker_row(row: SessionPickerRow, *, selected: bool = False, mode: RenderMode) -> str:
+    """Render one session-picker row: ``<sigil> <wave> <runtime> <status> <start>``.
+
+    Leads with the session's lifecycle sigil so running / closed / failed
+    sessions read apart at a glance; the selected row leads with the accent
+    hue so the Enter-zoom target reads as highlighted.
+
+    Args:
+        row: The picker display row.
+        selected: Whether this row is the current Enter-zoom target.
+        mode: The App's resolved render-mode label — selects the sigil glyph
+            column.
+
+    Returns:
+        A content-markup picker-row string.
+    """
+    wave_tint = "$accent" if selected else "$text"
+    return (
+        f"{session_sigil_markup(row.status, mode=mode)} "
+        f"[{wave_tint}]{escape_markup(row.wave_id)}[/] "
+        f"[$muted]{escape_markup(row.runtime)}[/] "
+        f"[$muted]{escape_markup(row.status.value)}[/] "
+        f"[$muted]{escape_markup(row.started_label)}[/]"
+    )
+
+
+class SessionPicker(Widget):
+    """The browsable executor-session list for the watch mode.
+
+    Mounted when nothing is live to stream (no in-flight fleet lane, no
+    ACTIVE session grid) but two or more executor sessions exist: one
+    selectable row per session, newest first, each reading
+    ``<sigil> <wave> <runtime> <status> <start>``. Arrows move the selection;
+    Enter posts a :class:`Pick` message so the host screen zooms the chosen
+    session into the FA4 single-session view — the browse path the lane grid
+    cannot provide once completed lanes are deleted.
+    """
+
+    DEFAULT_CSS: ClassVar[str] = """
+    SessionPicker {
+        height: 1fr;
+    }
+    SessionPicker #watch-session-picker {
+        height: 1fr;
+        border: round $accent;
+    }
+    SessionPicker .watch-picker-row {
+        height: auto;
+        padding: 0 1;
+    }
+    SessionPicker .watch-picker-row.-selected {
+        background: #0c5a44;
+    }
+    """
+
+    #: ``up`` / ``down`` move the session selection; ``enter`` zooms the
+    #: selected session. Arrows stay primary (no vim aliases).
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("up", "select_prev", "up", show=False),
+        Binding("down", "select_next", "down", show=False),
+        Binding("enter", "zoom_session", "zoom", show=False),
+    ]
+
+    #: Index of the selected session row; ``0`` when non-empty.
+    selected: reactive[int] = reactive(0, init=False)
+
+    class Pick(Message):
+        """Posted when Enter zooms the selected session.
+
+        Attributes:
+            session_id: The selected session's record key — the FA4 zoom
+                target the host screen resolves and pins.
+        """
+
+        def __init__(self, session_id: str) -> None:
+            super().__init__()
+            self.session_id = session_id
+
+    def __init__(self, rows: tuple[SessionPickerRow, ...], *, mode: RenderMode) -> None:
+        """Build the picker over *rows* in render *mode*.
+
+        Args:
+            rows: The picker rows (:func:`session_picker_rows`), newest first.
+            mode: The App's resolved render-mode label, threaded into each
+                row's lifecycle sigil.
+        """
+        super().__init__()
+        self._rows = rows
+        self._mode = mode
+
+    def compose(self) -> ComposeResult:
+        """Yield the selectable session rows."""
+        with VerticalScroll(id=SESSION_PICKER_ID):
+            for index, row in enumerate(self._rows):
+                selected = index == self.selected
+                classes = (
+                    f"{SESSION_PICKER_ROW_CLASS} {LANE_SELECTED_CLASS}"
+                    if selected
+                    else SESSION_PICKER_ROW_CLASS
+                )
+                yield Static(
+                    render_picker_row(row, selected=selected, mode=self._mode), classes=classes
+                )
+
+    def on_mount(self) -> None:
+        """Seed the selection at the newest session (the first row)."""
+        self.set_reactive(type(self).selected, 0 if self._rows else -1)
+
+    def action_select_prev(self) -> None:
+        """Move the selection to the previous session row (clamped at the top)."""
+        if self._rows:
+            self.selected = max(0, self.selected - 1)
+
+    def action_select_next(self) -> None:
+        """Move the selection to the next session row (clamped at the bottom)."""
+        if self._rows:
+            self.selected = min(len(self._rows) - 1, self.selected + 1)
+
+    def action_zoom_session(self) -> None:
+        """Zoom the selected session to the FA4 view (Enter).
+
+        Posts a :class:`Pick` message carrying the selected session id so the
+        host screen pins it as the watched target. A no-op when no row is
+        selected.
+        """
+        row = self._selected_row()
+        if row is None:
+            return
+        self.post_message(self.Pick(row.session_id))
+        logger.info(f"session_picker_zoom session={row.session_id!r} wave={row.wave_id}")
+
+    def watch_selected(self) -> None:
+        """Repaint the session rows so the selection accent + tint move."""
+        if not self.is_mounted:
+            return
+        for index, widget in enumerate(self.query(f".{SESSION_PICKER_ROW_CLASS}").results(Static)):
+            if index >= len(self._rows):
+                continue
+            selected = index == self.selected
+            widget.update(render_picker_row(self._rows[index], selected=selected, mode=self._mode))
+            widget.set_class(selected, LANE_SELECTED_CLASS)
+
+    def _selected_row(self) -> SessionPickerRow | None:
+        """Return the selected picker row, or ``None`` when none is selected."""
+        if not self._rows or not 0 <= self.selected < len(self._rows):
+            return None
+        return self._rows[self.selected]
+
+
 class VerdictRollupPane(Widget):
     """The fleet verdict-rollup pane: each wave's latest verdict, outcome-tinted.
 
@@ -1697,17 +1934,43 @@ class AgentWatchModeScreen(ScopeScreen):
         Binding("escape", "leave_zoom", "back", show=False),
     ]
 
-    #: Footer hints for the agent-watch zoom. The mode digits are surfaced by
-    #: the always-visible mode row, not duplicated here. Every label is produced
-    #: through :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the
-    #: key tokens stay pinned to the canonical vocabulary. ``l`` (view log) is
+    #: Footer hints for the agent-watch zoom (also the mount-time default).
+    #: The mode digits are surfaced by the always-visible mode row, not
+    #: duplicated here. Every label is produced through
+    #: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
+    #: tokens stay pinned to the canonical vocabulary. ``l`` (view log) is
     #: bound (affordance parity) but kept off the strip: it is not a member of
     #: the footer's frozen token vocabulary, so advertising it there would fail
-    #: the authoring-time guard -- the Binding itself is the affordance.
+    #: the authoring-time guard -- the Binding itself is the affordance. The
+    #: ``↑↓`` token is deliberately absent: its canonical action is ``select``
+    #: and the zoom's arrows SCROLL the stream, so advertising it would lie;
+    #: the scroll bindings stay live unadvertised, the same treatment as ``l``.
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = (
-        render_hint_label("↑↓", "select"),
         render_hint_label("x", "cancel"),
         render_hint_label("space", "pause"),
+        render_hint_label("Esc", "back"),
+        render_hint_label("w/r/u", "scope"),
+        render_hint_label("/", "palette"),
+        render_hint_label("?", "help"),
+        render_hint_label("q", "quit"),
+    )
+
+    #: Footer hints when the browsable session picker (or the selectable FA3
+    #: lane grid) is the body: arrows genuinely move a selection there and
+    #: Enter opens the highlighted row, so the strip advertises both.
+    _SELECT_HINTS: ClassVar[tuple[str, ...]] = (
+        render_hint_label("↑↓", "select"),
+        render_hint_label("Enter", "open"),
+        render_hint_label("Esc", "back"),
+        render_hint_label("w/r/u", "scope"),
+        render_hint_label("/", "palette"),
+        render_hint_label("?", "help"),
+        render_hint_label("q", "quit"),
+    )
+
+    #: Footer hints for the parity grid (no selection cursor, no single
+    #: watched target — the grid streams every ACTIVE session side-by-side).
+    _GRID_HINTS: ClassVar[tuple[str, ...]] = (
         render_hint_label("Esc", "back"),
         render_hint_label("w/r/u", "scope"),
         render_hint_label("/", "palette"),
@@ -1730,6 +1993,15 @@ class AgentWatchModeScreen(ScopeScreen):
     #: session-grid / single-session / honest-empty path. When mounted it
     #: supersedes the session surfaces -- the fleet lanes are the live truth.
     _lane_grid: LaneGrid | None = None
+
+    #: The browsable session picker, mounted when nothing is live to stream
+    #: but two or more executor sessions exist; ``None`` on every other path.
+    _picker: SessionPicker | None = None
+
+    #: Which body surface the last compose landed on (``"zoom"`` / ``"lanes"``
+    #: / ``"grid"`` / ``"picker"``) — drives the per-case footer hints so the
+    #: strip never advertises a selection cursor while arrows scroll.
+    _body_case: str = "zoom"
 
     #: The ACTIVE-executor session-id set the body was last composed for, so
     #: the poll backstop recomposes only when the dispatched fleet actually
@@ -1773,6 +2045,7 @@ class AgentWatchModeScreen(ScopeScreen):
         self._lane_parity = lane_parity_key(state)
         self._grid = None
         self._lane_grid = None
+        self._picker = None
         # Count of tail lines the persisted-store sync owns. Reset per recompose
         # (the tail is rebuilt) so the next sync re-seeds; gates the live push so
         # store + push never double-render a line (W58).
@@ -1782,18 +2055,31 @@ class AgentWatchModeScreen(ScopeScreen):
         # target, even while the fleet still reports lanes / multiple sessions
         # (the operator chose to drill ONE lane out of the parallel surface).
         if self._zoom_pending:
+            self._body_case = "zoom"
             self.target = self.target if self.target is not None else self._pick_target()
             yield from self._compose_single_session(mode=mode)
             return
         lane_rows = lane_grid_rows(state)
         if lane_rows:
+            self._body_case = "lanes"
             self._lane_grid = LaneGrid(lane_rows, mode=mode)
             yield self._lane_grid
             return
         if len(sessions) >= 2:
+            self._body_case = "grid"
             self._grid = WatchGrid(sessions, degraded=self._degraded(), mode=mode)
             yield self._grid
             return
+        # With nothing live to stream but several finished sessions on record,
+        # surface the browsable picker — the lanes are deleted on completion,
+        # so this is the only path back into a finished session's replay.
+        picker_rows = session_picker_rows(state)
+        if not sessions and len(picker_rows) >= 2:
+            self._body_case = "picker"
+            self._picker = SessionPicker(picker_rows, mode=mode)
+            yield self._picker
+            return
+        self._body_case = "zoom"
         self.target = self._pick_target()
         yield from self._compose_single_session(mode=mode)
 
@@ -1853,6 +2139,30 @@ class AgentWatchModeScreen(ScopeScreen):
         logger.info(f"on_lane_grid_zoom wave={message.wave_id}")
         self.call_after_refresh(self._zoom_to_target)
 
+    def on_session_picker_pick(self, message: SessionPicker.Pick) -> None:
+        """Zoom the picked session to the FA4 single-session view (Enter).
+
+        The picker names a session id; this resolves it back to its state row,
+        pins the FA4 :class:`WatchTarget` for it, and recomposes into the
+        single-session zoom (a finished session replays its recorded stream).
+        An unknown session id (a stale row raced a state poll) is a no-op so
+        the picker stays put.
+
+        Args:
+            message: The picker message carrying the selected session id.
+        """
+        message.stop()
+        state = self._current_state()
+        session = (state.agent_sessions or {}).get(message.session_id) if state else None
+        if state is None or session is None:
+            logger.debug(f"on_session_picker_pick no_session id={message.session_id!r}")
+            return
+        self.target = _session_watch_target(state, session)
+        self._picker = None
+        self._zoom_pending = True
+        logger.info(f"on_session_picker_pick session={message.session_id!r}")
+        self.call_after_refresh(self._zoom_to_target)
+
     async def _zoom_to_target(self) -> None:
         """Recompose into the FA4 single-session zoom for the pinned target.
 
@@ -1869,6 +2179,7 @@ class AgentWatchModeScreen(ScopeScreen):
         # the store yields nothing, so the tail never double-renders a line.
         if not self._sync_output_from_store():
             self._seed_output_from_buffer()
+        self._refresh_hints()
 
     #: Set once an FA3 -> FA4 zoom drills into a lane, so every later compose /
     #: recompose lands on the single-session zoom for the pinned target rather
@@ -1902,6 +2213,10 @@ class AgentWatchModeScreen(ScopeScreen):
         # the store yields nothing, so the tail never double-renders a line.
         if not self._sync_output_from_store():
             self._seed_output_from_buffer()
+        # Deferred: the body case is decided while the compose generator is
+        # consumed, after this mount hook runs -- refresh once the first paint
+        # has landed so the hints match the actual body surface.
+        self.call_after_refresh(self._refresh_hints)
 
     def _seed_from_buffer(self) -> None:
         """Seed the freshly-composed surface from the App's live event buffer.
@@ -2048,6 +2363,26 @@ class AgentWatchModeScreen(ScopeScreen):
         # the store yields nothing, so the tail never double-renders a line.
         if not self._sync_output_from_store():
             self._seed_output_from_buffer()
+        self._refresh_hints()
+
+    def _refresh_hints(self) -> None:
+        """Re-pin the footer hints to the current body case.
+
+        The zoom scrolls with arrows while the picker and the lane grid move a
+        selection with them, so one static strip cannot be honest for all
+        four surfaces; this re-routes the case's authored tuple through the
+        footer chokepoint after every (re)compose. Degrades to a no-op under a
+        bare harness without the chassis footer.
+        """
+        hints_by_case: dict[str, tuple[str, ...]] = {
+            "zoom": self.FOOTER_HINTS,
+            "picker": self._SELECT_HINTS,
+            "lanes": self._SELECT_HINTS,
+            "grid": self._GRID_HINTS,
+        }
+        footer = self.query(Footer)
+        if footer:
+            footer.first(Footer).set_hints(hints_by_case.get(self._body_case, self.FOOTER_HINTS))
 
     def _on_render_mode(self, _mode: object) -> None:
         """Repaint the mode-sensitive chrome when the App's render mode flips.
@@ -2159,16 +2494,23 @@ class AgentWatchModeScreen(ScopeScreen):
         SIGTERM-class stop of this lane is never one keystroke; only on a
         confirmed ``Yes`` does it issue the ``agent.kill`` request for the
         watched session's wave + attempt through the daemon-client seam and
-        surface the typed outcome. With no target there is nothing to cancel
-        (surfaced honestly without opening the modal); when the daemon is
-        unreachable the result says so rather than implying a kill.
-        ``agent.kill`` is still a daemon-side placeholder that returns
-        ``killed=false``, so the surfaced result reports that honestly rather
-        than faking a successful kill.
+        surface the typed outcome. With no target there is nothing to cancel,
+        and a non-ACTIVE target has no child process left to stop — both are
+        surfaced honestly without opening the modal (the status gate matters
+        once the daemon kill goes live: a real SIGTERM ladder must never aim
+        at a finished session's replay). When the daemon is unreachable the
+        result says so rather than implying a kill. ``agent.kill`` is still a
+        daemon-side placeholder that returns ``killed=false``, so the surfaced
+        result reports that honestly rather than faking a successful kill.
         """
         target = self.target
         if target is None:
             self._set_result(f"[$warn]{CANCEL_NO_TARGET}[/]")
+            return
+        if target.status is not AgentSessionStatus.ACTIVE:
+            line = CANCEL_NOT_ACTIVE_TEMPLATE.format(status=target.status.value)
+            self._set_result(f"[$muted]{line}[/]")
+            logger.info(f"action_cancel_session not_active status={target.status.value}")
             return
         from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
 
@@ -2195,12 +2537,19 @@ class AgentWatchModeScreen(ScopeScreen):
         deliberate operator stop the daemon persists and
         :func:`eawf.workflow.lifecycle.wave.claim_wave` reads to block the next
         claim. Pause is non-destructive (no confirm). With no target there is
-        nothing to pause (surfaced honestly); the line carries the persisted
-        verdict, or the honest unavailable line when the daemon is unreachable.
+        nothing to pause, and a non-ACTIVE target has nothing running to
+        pause — both are surfaced honestly without an RPC; otherwise the
+        toast carries the persisted verdict, or the honest unavailable line
+        when the daemon is unreachable.
         """
         target = self.target
         if target is None:
             self._set_result(f"[$warn]{PAUSE_NO_TARGET}[/]")
+            return
+        if target.status is not AgentSessionStatus.ACTIVE:
+            line = PAUSE_NOT_ACTIVE_TEMPLATE.format(status=target.status.value)
+            self._set_result(f"[$muted]{line}[/]")
+            logger.info(f"action_pause_session not_active status={target.status.value}")
             return
         result_line = self._issue_pause()
         self._set_result(result_line)
@@ -2235,14 +2584,28 @@ class AgentWatchModeScreen(ScopeScreen):
     _LEAVE_MODE: ClassVar[str] = "feed"
 
     def action_leave_zoom(self) -> None:
-        """Leave the session zoom for the broad Feed mode (``Esc``).
+        """Leave the session zoom (``Esc``) — back to the picker, else Feed.
 
-        Switches back to the whole-fleet :data:`_LEAVE_MODE` (the live-stream
-        Feed the zoom drills one session out of) via the App's ``switch_mode``
-        seam, the way the crash-frame returns to the feed; degrades to a quiet
-        no-op under a bare harness whose App exposes no ``switch_mode`` (the
-        binding stays live for affordance parity).
+        A zoom entered while the browsable picker is available (nothing live,
+        two or more executor sessions on record) steps back OUT to the picker
+        so the operator can open the next session; every other case switches
+        back to the whole-fleet :data:`_LEAVE_MODE` (the live-stream Feed the
+        zoom drills one session out of) via the App's ``switch_mode`` seam.
+        Degrades to a quiet no-op under a bare harness whose App exposes no
+        ``switch_mode`` (the binding stays live for affordance parity).
         """
+        state = self._current_state()
+        if (
+            self._body_case == "zoom"
+            and not active_executor_sessions(state)
+            and not lane_grid_rows(state)
+            and len(session_picker_rows(state)) >= 2
+        ):
+            self._zoom_pending = False
+            self.target = None
+            logger.info("action_leave_zoom to=picker")
+            self.call_after_refresh(self._recompose_and_reseed)
+            return
         switch_mode = getattr(self.app, "switch_mode", None)
         if callable(switch_mode):
             switch_mode(self._LEAVE_MODE)
@@ -2430,15 +2793,22 @@ class AgentWatchModeScreen(ScopeScreen):
         )
 
     def _cancel_idle_line(self) -> str:
-        """Return the idle cancel-result line wearing the failed-look mark.
+        """Return the idle result line for the watched target's status.
 
-        Leads the idle :data:`CANCEL_IDLE` copy with the failed-x cancel mark
-        (:func:`cancel_mark`) so the destructive kill verb reads with the
-        failed look the rest of the reskin uses, in the active render column.
+        An ACTIVE (or absent) target leads the idle :data:`CANCEL_IDLE` copy
+        with the failed-x cancel mark (:func:`cancel_mark`) so the destructive
+        kill verb reads with the failed look the rest of the reskin uses. A
+        terminal target replaces the prompt with the honest replay notice —
+        advertising a cancel for a finished session would offer a kill that
+        cannot happen.
 
         Returns:
-            A content-markup result line: the cancel mark + the idle copy.
+            A content-markup result line: the cancel prompt or replay notice.
         """
+        target = self.target
+        if target is not None and target.status is not AgentSessionStatus.ACTIVE:
+            notice = WATCH_REPLAY_TEMPLATE.format(status=target.status.value)
+            return f"[$muted]{notice}[/]"
         return f"{cancel_mark(mode=self._render_mode())} [$muted]{CANCEL_IDLE}[/]"
 
     def _render_mode(self) -> RenderMode:
@@ -2568,6 +2938,7 @@ class AgentWatchModeScreen(ScopeScreen):
 
 __all__ = [
     "CANCEL_IDLE",
+    "CANCEL_NOT_ACTIVE_TEMPLATE",
     "CANCEL_NO_DAEMON",
     "CANCEL_NO_TARGET",
     "EMPTY_NOTICE",
@@ -2578,9 +2949,12 @@ __all__ = [
     "LANE_SELECTED_CLASS",
     "LOG_NO_HANDLE",
     "LOG_NO_TARGET",
+    "PAUSE_NOT_ACTIVE_TEMPLATE",
     "PAUSE_NO_DAEMON",
     "PAUSE_NO_TARGET",
     "ROLLUP_EMPTY_NOTICE",
+    "SESSION_PICKER_ID",
+    "SESSION_PICKER_ROW_CLASS",
     "WATCH_DEGRADED",
     "WATCH_EMPTY_ID",
     "WATCH_GRID_EMPTY_ID",
@@ -2588,6 +2962,7 @@ __all__ = [
     "WATCH_HEADER_ID",
     "WATCH_LIST_ID",
     "WATCH_OUTPUT_ID",
+    "WATCH_REPLAY_TEMPLATE",
     "WATCH_RESULT_ID",
     "WATCH_ROLLUP_EMPTY_ID",
     "WATCH_ROLLUP_ID",
@@ -2600,6 +2975,8 @@ __all__ = [
     "LaneGrid",
     "LaneGridRow",
     "LaneState",
+    "SessionPicker",
+    "SessionPickerRow",
     "VerdictRollupPane",
     "WatchGrid",
     "WatchTarget",
@@ -2613,8 +2990,10 @@ __all__ = [
     "parity_session_ids",
     "pick_watch_target",
     "render_lane_row",
+    "render_picker_row",
     "render_verdict_rollup_row",
     "render_watch_header",
+    "session_picker_rows",
     "session_routes_event",
     "session_sigil_markup",
     "tile_dom_id",

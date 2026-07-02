@@ -53,16 +53,23 @@ from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.modes.agent_watch import (
     CANCEL_IDLE,
     CANCEL_NO_DAEMON,
+    CANCEL_NOT_ACTIVE_TEMPLATE,
     EMPTY_NOTICE,
     LOG_NO_HANDLE,
     PAUSE_NO_DAEMON,
     PAUSE_NO_TARGET,
+    PAUSE_NOT_ACTIVE_TEMPLATE,
+    SESSION_PICKER_ROW_CLASS,
     WATCH_EMPTY_ID,
+    WATCH_HEADER_ID,
     WATCH_OUTPUT_ID,
+    WATCH_REPLAY_TEMPLATE,
+    WATCH_RESULT_ID,
     WATCH_ROW_CLASS,
     WATCH_TILE_CLASS,
     WATCH_TILE_ROW_CLASS,
     AgentWatchModeScreen,
+    SessionPicker,
     WatchGrid,
     WatchTarget,
     WatchTile,
@@ -70,6 +77,7 @@ from eawf.surfaces.tui.modes.agent_watch import (
     load_output_chunk_lines,
     pick_watch_target,
     render_watch_header,
+    session_picker_rows,
     tile_dom_id,
 )
 from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
@@ -1361,5 +1369,180 @@ def test_app_output_buffer_is_bounded(tmp_path: Path) -> None:
             # The freshest line survived; the oldest scrolled off.
             assert buffer[-1] == (_WAVE, f"line {LIVE_OUTPUT_BUFFER_MAX + 99}")
             assert (_WAVE, "line 0") not in buffer
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Session picker + status-gated cancel / pause (P30-I22-W07)
+# --------------------------------------------------------------------------
+
+
+def _closed_sessions() -> dict[str, AgentSession]:
+    """Two finished executor sessions on different waves; ``S-2`` is newest."""
+    return {
+        "S-1": _session(
+            "S-1",
+            scope_id="P01-I01-W01",
+            status=AgentSessionStatus.CLOSED,
+            started_at=_T0,
+        ),
+        "S-2": _session(
+            "S-2",
+            scope_id="P01-I01-W02",
+            status=AgentSessionStatus.CLOSED,
+            started_at=_T0 + timedelta(minutes=5),
+        ),
+    }
+
+
+def test_session_picker_rows_newest_first_any_status() -> None:
+    """Picker rows cover every executor session, newest ``started_at`` first."""
+    sessions = _closed_sessions()
+    sessions["S-3"] = _session(
+        "S-3",
+        scope_id="P01-I01-W03",
+        status=AgentSessionStatus.FAILED,
+        started_at=_T0 + timedelta(minutes=2),
+    )
+    rows = session_picker_rows(_state(sessions=sessions))
+    assert [row.session_id for row in rows] == ["S-2", "S-3", "S-1"]
+    assert rows[0].wave_id == "P01-I01-W02"
+    assert rows[1].status is AgentSessionStatus.FAILED
+    assert rows[0].started_label == "12:05"
+
+
+def test_session_picker_rows_empty_state_and_no_executors() -> None:
+    """No state / no executor sessions yield the honest empty tuple."""
+    assert session_picker_rows(None) == ()
+    assert session_picker_rows(_state()) == ()
+    observer = _session("S-9", role=AgentSessionRole.OPERATOR)
+    assert session_picker_rows(_state(sessions={"S-9": observer})) == ()
+
+
+def test_watch_picker_lists_finished_sessions_with_select_hints(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With only finished sessions the mode mounts the browsable picker.
+
+    Nothing is live (no lane, no ACTIVE session) but two finished sessions
+    exist, so the body is the session picker -- newest first -- and the footer
+    advertises the selection cursor.
+    """
+    from eawf.surfaces.tui.widgets.footer import Footer
+
+    state_path = _write_state(tmp_path, _state(sessions=_closed_sessions()))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            picker = pane.query(SessionPicker)
+            assert picker, "expected the session picker body case"
+            rows = pane.query(f".{SESSION_PICKER_ROW_CLASS}").results()
+            texts = [str(row.render()) for row in rows]
+            assert len(texts) == 2
+            assert "P01-I01-W02" in texts[0]  # newest first
+            assert "P01-I01-W01" in texts[1]
+            hints = " ".join(pane.query_one(Footer).hints)
+            assert "select" in hints and "open" in hints
+
+    asyncio.run(body())
+
+
+def test_watch_picker_enter_zooms_and_esc_returns(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Enter zooms the highlighted session; Esc steps back out to the picker."""
+    from eawf.surfaces.tui.widgets.footer import Footer
+
+    state_path = _write_state(tmp_path, _state(sessions=_closed_sessions()))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            await pilot.press("enter")  # zoom the newest (selected) session
+            await settle_screen(pilot)
+            header = pane.query(f"#{WATCH_HEADER_ID}")
+            assert header, "expected the FA4 zoom after Enter"
+            assert "P01-I01-W02" in str(header.first().render())
+            zoom_hints = " ".join(pane.query_one(Footer).hints)
+            assert "select" not in zoom_hints  # arrows scroll here, not select
+            await pilot.press("escape")  # back out to the picker
+            await settle_screen(pilot)
+            assert pane.query(SessionPicker), "Esc should return to the picker"
+
+    asyncio.run(body())
+
+
+def test_watch_cancel_on_closed_session_is_inert(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cancel on a finished session never opens the kill confirm.
+
+    A single CLOSED session auto-zooms; ``x`` must surface the honest
+    "already closed" toast without a ConfirmModal, and the idle line reads the
+    replay notice instead of advertising a cancel that cannot happen.
+    """
+    closed = _session("S-1", status=AgentSessionStatus.CLOSED)
+    state_path = _write_state(tmp_path, _state(sessions={"S-1": closed}))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            result = pane.query(f"#{WATCH_RESULT_ID}")
+            idle = str(result.first().render())
+            assert WATCH_REPLAY_TEMPLATE.format(status="closed") in idle
+            assert CANCEL_IDLE not in idle
+            await pilot.press("x")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, AgentWatchModeScreen)  # no confirm modal
+            toasts = "\n".join(toast_messages(app))
+            assert CANCEL_NOT_ACTIVE_TEMPLATE.format(status="closed") in toasts
+
+    asyncio.run(body())
+
+
+def test_watch_pause_on_closed_session_is_inert(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pause on a finished session surfaces the honest toast, no RPC."""
+    closed = _session("S-1", status=AgentSessionStatus.CLOSED)
+    state_path = _write_state(tmp_path, _state(sessions={"S-1": closed}))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            await pilot.press("space")
+            await settle_screen(pilot)
+            toasts = "\n".join(toast_messages(app))
+            assert PAUSE_NOT_ACTIVE_TEMPLATE.format(status="closed") in toasts
 
     asyncio.run(body())
