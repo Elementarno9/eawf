@@ -10052,6 +10052,20 @@
       "status": "done",
       "updated_at": "2026-07-02T17:55:43.263201Z"
     },
+    "P30-I23-W43": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W43",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W43",
+      "model": null,
+      "scope_id": "P30-I23-W43",
+      "status": "done",
+      "updated_at": "2026-07-02T22:12:53.907669Z"
+    },
     "P30-I23-W44": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -10218,6 +10232,20 @@
       "runtime": "claude-code",
       "scope_id": "P30-I23-W41::audit",
       "started_at": "2026-07-02T21:48:47.089452Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260702T220628Z-auditor-claude-code": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260702T220628Z-auditor-claude-code",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "scope_id": "P30-I23-W43::audit",
+      "started_at": "2026-07-02T22:06:28.642281Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -13529,7 +13557,8 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude",
       "SES-20260702T190717Z-auditor-claude-code",
-      "SES-20260702T214847Z-auditor-claude-code"
+      "SES-20260702T214847Z-auditor-claude-code",
+      "SES-20260702T220628Z-auditor-claude-code"
     ],
     "active_wave_ids": [],
     "iter_id": "P30-I23",
@@ -25572,6 +25601,19 @@
       "scope_id": "P30-I23-W42",
       "updated_at": "2026-07-02T17:34:38.161694Z"
     },
+    "P30-I23-W43": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W43-bucket-20260702T215839Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I23-W43",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I23-W43",
+      "updated_at": "2026-07-02T21:58:39.384566Z"
+    },
     "P30-I23-W44": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I23-W44-bucket-20260702T194343Z",
@@ -29203,7 +29245,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T21:57:36.931360Z",
+  "updated_at": "2026-07-02T22:12:53.907841Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -115654,10 +115696,10 @@
         "P30-I23-W48",
         "P30-I23-W49"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-i23",
+      "claimed_at": "2026-07-02T21:58:39.380961Z",
+      "closed_at": "2026-07-02T22:12:53.907669Z",
+      "commit": "a0f9469b39fd70b36b3caac525da9b3127eab9be",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W38",
@@ -115738,12 +115780,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:39:39.509972Z",
-      "outcome": null,
+      "outcome": "Five DoR/DoD contract blocks landed in the agent registry bodies (executor criteria-fidelity with legacy carve-out sans evidence_refs bullet; operator 8-item dispatch loop; auditor refuse-broken-artifact; planner typed-criteria floor + HALT; researcher verify ladder) and propagate into rendered role contracts + both plugin trees; per-body token budgets pinned.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
