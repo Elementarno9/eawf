@@ -222,6 +222,94 @@ def test_research_skill_registered_with_canonical_name() -> None:
     assert cls is ResearchSkill
 
 
+# --- P30-I23-W46: runtime options (rounds / agents / budget) ------------------
+
+
+def _event_payload(state_dir: Path, event_type: str) -> dict:
+    """Return the first ``event.jsonl`` payload whose ``event_type`` matches."""
+    lines = (state_dir / "store" / "event.jsonl").read_text(encoding="utf-8").splitlines()
+    for raw in lines:
+        payload = orjson.loads(raw)["payload"]
+        if payload["event_type"] == event_type:
+            return cast(dict, payload)
+    raise AssertionError(f"no {event_type} event in {lines}")
+
+
+def test_research_agents_defaults_to_agent_count_leaf(state_dir: Path) -> None:
+    """No ``--agents`` resolves the previously-idle research.agent_count leaf (4)."""
+    env = run_skill(ResearchSkill(), _ctx())
+    assert env.header.status == "ok"
+    payload = _event_payload(state_dir, "research.resolve_scope")
+    assert payload["agents"] == 4  # research.agent_count built-in default
+
+
+def test_research_agents_flag_caps_fanout_width(state_dir: Path) -> None:
+    """``--agents`` below the question count trims the fan-out envelope list."""
+    ctx = _ctx()
+    ctx.args = {"depth": "deep", "agents": 2}
+    env = run_skill(ResearchSkill(), ctx)
+    body = ResearchBody.model_validate(cast(dict, env.body))
+    assert body.research_plan is not None
+    assert len(body.questions) == 3  # deep -> 3 slots
+    # agents=2 caps the fan-out below the question count.
+    assert len(body.research_plan.fanout_envelopes) == 2
+    payload = _event_payload(state_dir, "research.fanout_plan")
+    assert payload["agents"] == 2
+    assert payload["fanout_envelopes"] == 2
+
+
+def test_research_agents_flag_out_of_band_clamped(state_dir: Path) -> None:
+    """An ``--agents`` value above the leaf max clamps to 12."""
+    ctx = _ctx()
+    ctx.args = {"agents": 99}
+    run_skill(ResearchSkill(), ctx)
+    payload = _event_payload(state_dir, "research.resolve_scope")
+    assert payload["agents"] == 12
+
+
+def test_research_malformed_agents_falls_back_to_leaf(state_dir: Path) -> None:
+    """A non-numeric ``--agents`` degrades to the agent_count leaf (4)."""
+    ctx = _ctx()
+    ctx.args = {"agents": "wat"}
+    run_skill(ResearchSkill(), ctx)
+    payload = _event_payload(state_dir, "research.resolve_scope")
+    assert payload["agents"] == 4
+
+
+def test_research_rounds_recorded_in_resolve_scope(state_dir: Path) -> None:
+    """``--rounds`` is parsed and recorded on the resolve-scope trace."""
+    ctx = _ctx()
+    ctx.args = {"rounds": 3}
+    run_skill(ResearchSkill(), ctx)
+    payload = _event_payload(state_dir, "research.resolve_scope")
+    assert payload["rounds"] == 3
+
+
+def test_research_rounds_below_floor_defaults_to_one(state_dir: Path) -> None:
+    """A below-floor / malformed ``--rounds`` degrades to a single round."""
+    ctx = _ctx()
+    ctx.args = {"rounds": "nope"}
+    run_skill(ResearchSkill(), ctx)
+    payload = _event_payload(state_dir, "research.resolve_scope")
+    assert payload["rounds"] == 1
+
+
+def test_research_budget_recorded_in_resolve_scope(state_dir: Path) -> None:
+    """``--budget`` is parsed and recorded; absent it stays ``None`` (uncapped)."""
+    ctx = _ctx()
+    ctx.args = {"budget": 5000}
+    run_skill(ResearchSkill(), ctx)
+    payload = _event_payload(state_dir, "research.resolve_scope")
+    assert payload["budget"] == 5000
+
+
+def test_research_budget_absent_is_none(state_dir: Path) -> None:
+    env = run_skill(ResearchSkill(), _ctx())
+    assert env.header.status == "ok"
+    payload = _event_payload(state_dir, "research.resolve_scope")
+    assert payload["budget"] is None
+
+
 def _write_state_with_open_questions(state_dir: Path) -> None:
     """Write a valid state.json carrying two live questions + one dropped."""
     payload = {

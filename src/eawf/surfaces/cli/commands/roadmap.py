@@ -432,6 +432,30 @@ def roadmap_propose_cmd(
             help="Optional long-form description for the auto-created P##-I01 iter (≤500 chars).",
         ),
     ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help=(
+                "Render the plan text + EAWF022 coverage lint WITHOUT persisting: "
+                "state.json and the event store are left byte-identical."
+            ),
+        ),
+    ] = False,
+    criteria_from_brief: Annotated[
+        Path | None,
+        typer.Option(
+            "--criteria-from-brief",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help=(
+                "Brief document whose spans seed typed success criteria. "
+                "Parsed and surfaced on the propose envelope in this release; "
+                "the criteria generator lands in a later phase."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Propose a PLANNED phase from flags or a strict roadmap plan file."""
     from pydantic import ValidationError as PydValidationError
@@ -445,7 +469,7 @@ def roadmap_propose_cmd(
 
     flags: GlobalFlags = ctx.obj
     if from_plan is not None:
-        _roadmap_propose_from_plan(ctx, from_plan=from_plan)
+        _roadmap_propose_from_plan(ctx, from_plan=from_plan, dry_run=dry_run)
         return
     if phase_id is None or title is None:
         cli_errors.emit_error(
@@ -474,8 +498,12 @@ def roadmap_propose_cmd(
         return
     plan_text = ""
     coverage_gaps_rows: list[dict[str, Any]] = []
+    criteria_from_brief_str = str(criteria_from_brief) if criteria_from_brief is not None else None
     try:
-        with state_transaction(state_path) as state:
+        # A ``--dry-run`` opens the transaction read-only, so the mutated state
+        # is rendered for the preview but never written back -- state.json stays
+        # byte-identical. The event append is also skipped so no store row lands.
+        with state_transaction(state_path, read_only=dry_run) as state:
             try:
                 plan_phase(
                     state,
@@ -506,21 +534,23 @@ def roadmap_propose_cmd(
             # needs_user envelope so the operator sees dropped planned steps
             # before apply, but the propose itself never blocks on them.
             coverage_gaps_rows = _collect_coverage_gaps(state, phase_id)
-            _append_roadmap_event(
-                state_path,
-                command="roadmap propose",
-                args={
-                    "phase_id": phase_id,
-                    "title": title,
-                    "iter_id": iter_id,
-                    "depends_on": depends_on_list,
-                    "source_brief_ids": source_brief_list,
-                    "description": description,
-                    "iter_description": iter_description,
-                },
-                scope_id=phase_id,
-                summary=f"roadmap propose {phase_id} title={title!r}",
-            )
+            if not dry_run:
+                _append_roadmap_event(
+                    state_path,
+                    command="roadmap propose",
+                    args={
+                        "phase_id": phase_id,
+                        "title": title,
+                        "iter_id": iter_id,
+                        "depends_on": depends_on_list,
+                        "source_brief_ids": source_brief_list,
+                        "description": description,
+                        "iter_description": iter_description,
+                        "criteria_from_brief": criteria_from_brief_str,
+                    },
+                    scope_id=phase_id,
+                    summary=f"roadmap propose {phase_id} title={title!r}",
+                )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
@@ -538,6 +568,8 @@ def roadmap_propose_cmd(
         "iter_description": iter_description,
         "coverage_gaps": coverage_gaps_rows,
         "coverage_advisory": True,
+        "dry_run": dry_run,
+        "criteria_from_brief": criteria_from_brief_str,
         "options": [
             {
                 "label": "approve",
@@ -556,8 +588,15 @@ def roadmap_propose_cmd(
     emit_json_or_text(envelope, plan_text, flags=flags)
 
 
-def _roadmap_propose_from_plan(ctx: typer.Context, *, from_plan: Path) -> None:
-    """Stage a strict roadmap plan file and emit the normal needs_user envelope."""
+def _roadmap_propose_from_plan(
+    ctx: typer.Context, *, from_plan: Path, dry_run: bool = False
+) -> None:
+    """Stage a strict roadmap plan file and emit the normal needs_user envelope.
+
+    When *dry_run* is set the plan is validated and rendered but the
+    transaction opens read-only so nothing persists (state.json + event store
+    stay byte-identical).
+    """
     from pydantic import ValidationError as PydValidationError
     from yaml import YAMLError
 
@@ -586,7 +625,7 @@ def _roadmap_propose_from_plan(ctx: typer.Context, *, from_plan: Path) -> None:
     wave_ids: list[str] = []
     coverage_gaps_rows: list[dict[str, Any]] = []
     try:
-        with state_transaction(state_path) as state:
+        with state_transaction(state_path, read_only=dry_run) as state:
             try:
                 planned = plan_roadmap(state, plan=plan)
             except LifecycleError as exc:
@@ -600,18 +639,19 @@ def _roadmap_propose_from_plan(ctx: typer.Context, *, from_plan: Path) -> None:
             # EAWF022 coverage is ADVISORY at propose: the staged waves' dropped
             # planned steps surface in the envelope without blocking the propose.
             coverage_gaps_rows = _collect_coverage_gaps(state, phase_id)
-            _append_roadmap_event(
-                state_path,
-                command="roadmap propose",
-                args={
-                    "phase_id": phase_id,
-                    "from_plan": True,
-                    "iter_ids": iter_ids,
-                    "wave_ids": wave_ids,
-                },
-                scope_id=phase_id,
-                summary=f"roadmap propose {phase_id} from_plan=True",
-            )
+            if not dry_run:
+                _append_roadmap_event(
+                    state_path,
+                    command="roadmap propose",
+                    args={
+                        "phase_id": phase_id,
+                        "from_plan": True,
+                        "iter_ids": iter_ids,
+                        "wave_ids": wave_ids,
+                    },
+                    scope_id=phase_id,
+                    summary=f"roadmap propose {phase_id} from_plan=True",
+                )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
@@ -632,6 +672,7 @@ def _roadmap_propose_from_plan(ctx: typer.Context, *, from_plan: Path) -> None:
         "description": plan.phase.description,
         "coverage_gaps": coverage_gaps_rows,
         "coverage_advisory": True,
+        "dry_run": dry_run,
         "options": [
             {"label": "approve", "next": f"eawf roadmap apply {phase_id}"},
             {"label": "revise", "next": f"eawf roadmap revise {phase_id} --add-wave WNN ..."},

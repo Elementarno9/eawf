@@ -18,6 +18,18 @@ Honoured args:
 - ``report_only`` (or alias ``y``=False) — toggles ``body.report_only``.
 - ``max_fixes`` — caps applied items (the v0.1 stub doesn't apply
   anything; the cap survives in the body for downstream waves).
+- ``auto_apply_safe`` — when true, applies safe groups automatically
+  (flips ``report_only`` off unless an explicit ``report_only`` / ``y``
+  overrides it). Explicit ``report_only`` and ``y`` win over this flag.
+- ``category`` — restricts the sweep to one of
+  ``naming|docstrings|logs|errors|dead-code`` (default ``all``); recorded
+  on the fan-out + apply-gate traces and surfaced in
+  ``next_valid_actions``.
+
+Note: the ``polish.auto_apply_safe`` / ``polish.deletion_policy``
+layered-config LEAVES the ``--auto-apply-safe`` flag would resolve through
+are not yet registered (config_keys.py / leaf_catalog.py / defaults.py);
+until they land the flag is honoured only from ``ctx.args``.
 """
 
 from __future__ import annotations
@@ -53,6 +65,16 @@ def _coerce_bool(value: Any, *, default: bool = False) -> bool:
     return bool(value)
 
 
+def _coerce_category(value: Any) -> str:
+    """Normalise ``ctx.args['category']`` to a lowercase sweep filter.
+
+    A missing / blank value degrades to ``all`` (sweep every category).
+    """
+    if isinstance(value, str) and value.strip():
+        return value.strip().lower()
+    return "all"
+
+
 @register
 class PolishSkill(Skill):
     """Concrete ``/polish`` skill (Phase 4 W02)."""
@@ -69,9 +91,15 @@ class PolishSkill(Skill):
 
         # Default to report-only so v0.1 polish runs are non-destructive.
         report_only = _coerce_bool(args.get("report_only"), default=True)
+        auto_apply_safe = _coerce_bool(args.get("auto_apply_safe"), default=False)
+        # ``--auto-apply-safe`` applies safe groups automatically, so it flips
+        # report_only off -- but an explicit ``report_only`` / ``y`` still wins.
+        if args.get("report_only") is None and auto_apply_safe:
+            report_only = False
         # The ``-y`` flag inverts: -y → not report_only.
         if args.get("y") is not None:
             report_only = not _coerce_bool(args.get("y"))
+        category = _coerce_category(args.get("category"))
 
         persisted_records: list[str] = []
 
@@ -90,8 +118,8 @@ class PolishSkill(Skill):
             state_path=state_path,
             scope_id=scope_id,
             event_type="polish.fanout",
-            summary="polish: read-only fanout (v0.1 stub)",
-            payload={"skipped": True},
+            summary=f"polish: read-only fanout (v0.1 stub) category={category}",
+            payload={"skipped": True, "category": category},
         )
         persisted_records.append(evt_id)
 
@@ -141,8 +169,12 @@ class PolishSkill(Skill):
             state_path=state_path,
             scope_id=scope_id,
             event_type="polish.apply_gate",
-            summary=f"polish: report_only={report_only}",
-            payload={"report_only": report_only},
+            summary=f"polish: report_only={report_only} auto_apply_safe={auto_apply_safe}",
+            payload={
+                "report_only": report_only,
+                "auto_apply_safe": auto_apply_safe,
+                "category": category,
+            },
         )
         persisted_records.append(evt_id)
 
@@ -164,11 +196,15 @@ class PolishSkill(Skill):
             report_only=report_only,
         )
 
+        next_actions = ["eawf audit", "eawf phase prepare-close", "eawf ship"]
+        if category != "all":
+            next_actions.insert(0, f"eawf polish --category {category}")
+
         return SkillResult(
             status="ok",
             body=body.model_dump(mode="json"),
             persisted_store_records=persisted_records,
-            next_valid_actions=["eawf audit", "eawf phase prepare-close", "eawf ship"],
+            next_valid_actions=next_actions,
         )
 
 

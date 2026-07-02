@@ -16,6 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import cast
 
+import orjson
 import pytest
 
 from eawf.surfaces.render.envelope import EnvelopeWarning
@@ -145,3 +146,53 @@ def test_review_skill_registered_with_canonical_name() -> None:
 
     cls = registry.lookup("/review")
     assert cls is ReviewSkill
+
+
+# --- P30-I23-W46: runtime options (level / criteria) --------------------------
+
+
+def _event_payload(state_dir: Path, event_type: str) -> dict:
+    """Return the first ``event.jsonl`` payload whose ``event_type`` matches."""
+    lines = (state_dir / "store" / "event.jsonl").read_text(encoding="utf-8").splitlines()
+    for raw in lines:
+        payload = orjson.loads(raw)["payload"]
+        if payload["event_type"] == event_type:
+            return cast(dict, payload)
+    raise AssertionError(f"no {event_type} event in {lines}")
+
+
+def test_review_level_high_recorded_in_findings(state_dir: Path) -> None:
+    """``--level high`` is parsed and recorded on the findings trace."""
+    ctx = _ctx()
+    ctx.args = {"level": "high"}
+    env = run_skill(ReviewSkill(), ctx)
+    assert env.header.status == "ok"
+    assert _event_payload(state_dir, "review.findings")["level"] == "high"
+
+
+def test_review_default_level_is_medium(state_dir: Path) -> None:
+    run_skill(ReviewSkill(), _ctx())
+    assert _event_payload(state_dir, "review.findings")["level"] == "medium"
+
+
+def test_review_invalid_level_falls_back_to_medium(state_dir: Path) -> None:
+    ctx = _ctx()
+    ctx.args = {"level": "wat"}
+    run_skill(ReviewSkill(), ctx)
+    assert _event_payload(state_dir, "review.findings")["level"] == "medium"
+
+
+def test_review_criteria_wave_surfaced_in_next_actions(state_dir: Path) -> None:
+    """``--criteria <wave-id>`` seeds the review context + records the wave."""
+    ctx = _ctx()
+    ctx.args = {"criteria": "P30-I23-W46"}
+    env = run_skill(ReviewSkill(), ctx)
+    assert env.footer.next_valid_actions[0] == ("eawf wave show --dispatch-prompt P30-I23-W46")
+    assert _event_payload(state_dir, "review.findings")["criteria_wave"] == "P30-I23-W46"
+    assert _event_payload(state_dir, "review.resolve_pr")["criteria_wave"] == "P30-I23-W46"
+
+
+def test_review_no_criteria_wave_absent_from_next_actions(state_dir: Path) -> None:
+    env = run_skill(ReviewSkill(), _ctx())
+    assert not any("--dispatch-prompt" in a for a in env.footer.next_valid_actions)
+    assert _event_payload(state_dir, "review.findings")["criteria_wave"] is None

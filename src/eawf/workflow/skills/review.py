@@ -20,6 +20,13 @@ Honoured args (passed via ``ctx.args``):
 - ``post`` — toggles ``body.posted=True``.
 - ``recommendation`` — one of the four frozen literals; defaults to
   ``"comment"`` so the body validates.
+- ``level`` — ``low|medium|high`` finding-confidence threshold (default
+  ``medium``); recorded on the findings trace so a downstream finding pass
+  can filter against it. An out-of-ladder value falls back to ``medium``.
+- ``criteria`` — a wave id whose success criteria seed the review context;
+  recorded on the resolve/findings traces and surfaced as the first
+  ``next_valid_actions`` command so the reviewer reads the criteria the
+  diff must satisfy.
 """
 
 from __future__ import annotations
@@ -47,6 +54,12 @@ _VALID_RECOMMENDATIONS: tuple[str, ...] = (
     "fix_locally",
 )
 
+#: Finding-confidence threshold ladder for ``--level`` (default ``medium``).
+#: ``low`` surfaces every candidate finding; ``high`` only the
+#: high-confidence ones. The v0.1 stub records the threshold on the review
+#: trace so a downstream finding pass can filter against it.
+_VALID_LEVELS: tuple[str, ...] = ("low", "medium", "high")
+
 
 def _coerce_recommendation(value: Any) -> ReviewRecommendation:
     """Normalise ``ctx.args['recommendation']`` to the frozen literal."""
@@ -55,6 +68,20 @@ def _coerce_recommendation(value: Any) -> ReviewRecommendation:
         if candidate in _VALID_RECOMMENDATIONS:
             return candidate  # type: ignore[return-value]
     return "comment"
+
+
+def _coerce_level(value: Any) -> str:
+    """Normalise ``ctx.args['level']`` to a finding-confidence threshold.
+
+    A missing or out-of-ladder value falls back to ``medium`` rather than
+    aborting the run, matching the lenient-coercion contract of the other
+    review args.
+    """
+    if isinstance(value, str):
+        candidate = value.strip().lower()
+        if candidate in _VALID_LEVELS:
+            return candidate
+    return "medium"
 
 
 def _coerce_bool(value: Any) -> bool:
@@ -84,9 +111,16 @@ class ReviewSkill(Skill):
         head = str(args.get("head") or "HEAD")
         recommendation = _coerce_recommendation(args.get("recommendation"))
         do_post = _coerce_bool(args.get("post", False))
+        level = _coerce_level(args.get("level"))
+        criteria_wave = str(args.get("criteria") or args.get("criteria_wave") or "") or None
 
         persisted_records: list[str] = []
         next_actions: list[str] = ["eawf review --post", "eawf prep -i"]
+        # Pulling the reviewed wave's success criteria into the review context
+        # is the model's job; surface the source command so the reviewer reads
+        # the criteria the diff must satisfy.
+        if criteria_wave is not None:
+            next_actions.insert(0, f"eawf wave show --dispatch-prompt {criteria_wave}")
 
         # Step 1 — probe ran. Step 2: resolve PR.
         evt_id = emit_event(
@@ -94,7 +128,12 @@ class ReviewSkill(Skill):
             scope_id=scope_id,
             event_type="review.resolve_pr",
             summary=f"review: resolve pr={pr_url or '(active branch)'} base={base} head={head}",
-            payload={"pr_url": pr_url, "base": base, "head": head},
+            payload={
+                "pr_url": pr_url,
+                "base": base,
+                "head": head,
+                "criteria_wave": criteria_wave,
+            },
         )
         persisted_records.append(evt_id)
 
@@ -143,8 +182,12 @@ class ReviewSkill(Skill):
             state_path=state_path,
             scope_id=scope_id,
             event_type="review.findings",
-            summary=f"review: recommendation={recommendation}",
-            payload={"recommendation": recommendation},
+            summary=f"review: recommendation={recommendation} level={level}",
+            payload={
+                "recommendation": recommendation,
+                "level": level,
+                "criteria_wave": criteria_wave,
+            },
         )
         persisted_records.append(evt_id)
 

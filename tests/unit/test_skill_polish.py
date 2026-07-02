@@ -15,6 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import cast
 
+import orjson
 import pytest
 
 from eawf.surfaces.render.envelope import EnvelopeWarning
@@ -131,3 +132,70 @@ def test_polish_skill_registered_with_canonical_name() -> None:
 
     cls = registry.lookup("/polish")
     assert cls is PolishSkill
+
+
+# --- P30-I23-W46: runtime options (auto_apply_safe / category) ----------------
+
+
+def _event_payload(state_dir: Path, event_type: str) -> dict:
+    """Return the first ``event.jsonl`` payload whose ``event_type`` matches."""
+    lines = (state_dir / "store" / "event.jsonl").read_text(encoding="utf-8").splitlines()
+    for raw in lines:
+        payload = orjson.loads(raw)["payload"]
+        if payload["event_type"] == event_type:
+            return cast(dict, payload)
+    raise AssertionError(f"no {event_type} event in {lines}")
+
+
+def test_polish_auto_apply_safe_flips_report_only(state_dir: Path) -> None:
+    """``--auto-apply-safe`` applies safe groups, so report_only flips off."""
+    ctx = _ctx()
+    ctx.args = {"auto_apply_safe": True}
+    env = run_skill(PolishSkill(), ctx)
+    body = PolishBody.model_validate(cast(dict, env.body))
+    assert body.report_only is False
+    payload = _event_payload(state_dir, "polish.apply_gate")
+    assert payload["auto_apply_safe"] is True
+
+
+def test_polish_explicit_report_only_wins_over_auto_apply_safe(state_dir: Path) -> None:
+    """An explicit ``report_only`` overrides ``--auto-apply-safe``."""
+    ctx = _ctx()
+    ctx.args = {"auto_apply_safe": True, "report_only": True}
+    env = run_skill(PolishSkill(), ctx)
+    body = PolishBody.model_validate(cast(dict, env.body))
+    assert body.report_only is True
+
+
+def test_polish_y_flag_wins_over_auto_apply_safe(state_dir: Path) -> None:
+    """``y=False`` (report only) overrides ``--auto-apply-safe``."""
+    ctx = _ctx()
+    ctx.args = {"auto_apply_safe": True, "y": False}
+    env = run_skill(PolishSkill(), ctx)
+    body = PolishBody.model_validate(cast(dict, env.body))
+    assert body.report_only is True
+
+
+def test_polish_category_recorded_and_surfaced(state_dir: Path) -> None:
+    """``--category`` is recorded on the sweep traces + a rerun action."""
+    ctx = _ctx()
+    ctx.args = {"category": "naming"}
+    env = run_skill(PolishSkill(), ctx)
+    assert env.header.status == "ok"
+    assert _event_payload(state_dir, "polish.fanout")["category"] == "naming"
+    assert _event_payload(state_dir, "polish.apply_gate")["category"] == "naming"
+    assert "eawf polish --category naming" in env.footer.next_valid_actions
+
+
+def test_polish_default_category_is_all(state_dir: Path) -> None:
+    """No ``--category`` records ``all`` and emits no category-rerun action."""
+    env = run_skill(PolishSkill(), _ctx())
+    assert _event_payload(state_dir, "polish.fanout")["category"] == "all"
+    assert not any("--category" in a for a in env.footer.next_valid_actions)
+
+
+def test_polish_malformed_category_defaults_to_all(state_dir: Path) -> None:
+    ctx = _ctx()
+    ctx.args = {"category": "   "}
+    run_skill(PolishSkill(), ctx)
+    assert _event_payload(state_dir, "polish.fanout")["category"] == "all"
