@@ -155,7 +155,7 @@ def _patch_jury(
 # --------------------------------------------------------------------------- #
 
 
-def _state_payload(*, wave_id: str, title: str) -> dict[str, Any]:
+def _state_payload(*, wave_id: str, title: str, effort_bucket: str = "L") -> dict[str, Any]:
     return {
         "schema_version": "1.0",
         "scope_kind": "repo",
@@ -218,7 +218,7 @@ def _state_payload(*, wave_id: str, title: str) -> dict[str, Any]:
                         "measurable_signal": _CRITERION,
                     }
                 ],
-                "effort_bucket": "L",
+                "effort_bucket": effort_bucket,
                 "agent_role": "executor",
                 "opened_at": _now().isoformat(),
                 "sessions": {},
@@ -376,13 +376,17 @@ def _setup(
     wave_title: str = "native tui modes chassis",
     write_spec: bool = True,
     cross_vendor_jury: bool = True,
+    effort_bucket: str = "L",
 ) -> tuple[Path, MethodContext, Mutation]:
     _write_enforcing_profile(tmp_path, uiux_bands=uiux_bands, cross_vendor_jury=cross_vendor_jury)
     _init_git_repo(tmp_path)
     if write_spec:
         _write_wave_spec(tmp_path, wave_id=_BAND_WAVE)
     state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path, _state_payload(wave_id=_BAND_WAVE, title=wave_title))
+    _write_state(
+        state_path,
+        _state_payload(wave_id=_BAND_WAVE, title=wave_title, effort_bucket=effort_bucket),
+    )
     ctx = _build_ctx(tmp_path, state_path)
     mutation = Mutation(
         kind=MutationKind.WAVE_CLOSE,
@@ -495,8 +499,14 @@ def test_non_band_wave_does_not_convene_jury(
     # The wave title matches no band token (band list lists 'tui', title is plain)
     # and the fixture wave carries no UI file_scopes, so the structural arm
     # does not band it either.
+    # A genuinely mechanical wave: the S bucket keeps verdict_requirement
+    # below "always", so the W12 verdict-always preservation arm does not
+    # fire and the band narrowing stays in effect for this non-band wave.
     state_path, ctx, mutation = _setup(
-        tmp_path, uiux_bands=[_BAND_TOKEN], wave_title="backend telemetry rollup"
+        tmp_path,
+        uiux_bands=[_BAND_TOKEN],
+        wave_title="backend telemetry rollup",
+        effort_bucket="S",
     )
 
     async def body() -> None:
