@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+import pytest
 
 from eawf.runtime.lock import portalock, stale
 
@@ -117,3 +120,19 @@ def test_pid_missing_treated_as_stale(tmp_path: Path) -> None:
         )
     )
     assert stale.is_stale(lock_path)
+
+
+def test_live_holder_past_stale_window_stays_unstealable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Compress the stale window so a short hold outlives it. The background
+    # ticker owned by acquire refreshes heartbeat_at faster than the window,
+    # so a live holder is never seen as stale even past STALE_HEARTBEAT_SECONDS.
+    monkeypatch.setattr(stale, "STALE_HEARTBEAT_SECONDS", 0.5)
+    target = tmp_path / "state.json"
+    target.write_text("{}")
+    with portalock.acquire(
+        target, timeout=1.0, heartbeat_interval=0.05, hold_ceiling=100.0
+    ) as lock:
+        time.sleep(0.8)
+        assert not stale.is_stale(lock.path)

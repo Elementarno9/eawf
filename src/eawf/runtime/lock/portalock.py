@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import socket
+import threading
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -26,6 +27,15 @@ import portalocker
 from eawf.runtime.lock import sibling, stale
 
 logger = logging.getLogger(__name__)
+
+# Refresh cadence for the held-lock heartbeat ticker. Chosen well below
+# stale.STALE_HEARTBEAT_SECONDS so several refreshes land inside the stale
+# window and a live holder never ages into the steal path.
+HEARTBEAT_INTERVAL_SECONDS: float = 15.0
+
+# Hold duration past which a WARNING is logged. Observability only: no forced
+# release -- escalation of a genuinely wedged holder is the watchdog's job.
+HOLD_CEILING_SECONDS: float = 120.0
 
 
 class LockTimeout(Exception):  # noqa: N818
@@ -76,12 +86,98 @@ def _write_holder(fh: IO[str], path: Path) -> None:
     os.fsync(fh.fileno())
 
 
+def _heartbeat_loop(
+    handle: LockHandle,
+    stop_event: threading.Event,
+    *,
+    interval: float,
+    ceiling: float,
+    start_monotonic: float,
+) -> None:
+    """Refresh *handle*'s heartbeat every *interval* seconds until *stop_event* is set.
+
+    Runs on a daemon thread owned by :func:`acquire`. Keeping ``heartbeat_at``
+    fresh is what lets a live holder outlive ``stale.STALE_HEARTBEAT_SECONDS``
+    without being seen as stale by :func:`eawf.runtime.lock.stale.is_stale`.
+    The first tick past *ceiling* logs one ``hold_ceiling_exceeded`` WARNING
+    carrying ``duration_s`` -- observability only, no forced release.
+
+    Args:
+        handle: The active lock handle whose heartbeat is refreshed.
+        stop_event: Set by :func:`acquire` on release to terminate the loop.
+        interval: Seconds between heartbeat refreshes.
+        ceiling: Hold-duration ceiling in seconds; the first tick past it warns.
+        start_monotonic: ``time.monotonic()`` captured at acquire time.
+    """
+    ceiling_warned = False
+    while not stop_event.wait(interval):
+        try:
+            handle.heartbeat()
+        except Exception:
+            # Surface the failure rather than swallow it silently; keep ticking
+            # so a transient write error does not blind the stale detector.
+            logger.warning(f"heartbeat refresh-failed path={handle.path}", exc_info=True)
+        if not ceiling_warned:
+            duration_s = time.monotonic() - start_monotonic
+            if duration_s > ceiling:
+                logger.warning(
+                    f"hold_ceiling_exceeded path={handle.path} "
+                    f"duration_s={duration_s:.1f} ceiling_s={ceiling:.1f}"
+                )
+                ceiling_warned = True
+
+
+@contextmanager
+def _heartbeat_ticker(
+    handle: LockHandle,
+    *,
+    interval: float | None,
+    ceiling: float | None,
+) -> Iterator[None]:
+    """Run the heartbeat ticker for the duration of the ``with`` block.
+
+    Starts a daemon thread on enter and stops + joins it on exit, so the ticker
+    can never outlive the lock hold or write through a closed descriptor.
+    ``stop_event`` wakes the loop immediately regardless of *interval*, so the
+    bounded join returns promptly.
+
+    Args:
+        handle: The active lock handle whose heartbeat is refreshed.
+        interval: Seconds between refreshes; ``None`` uses the module default.
+        ceiling: Hold-duration ceiling; ``None`` uses the module default.
+    """
+    effective_interval = interval if interval is not None else HEARTBEAT_INTERVAL_SECONDS
+    effective_ceiling = ceiling if ceiling is not None else HOLD_CEILING_SECONDS
+    stop_event = threading.Event()
+    ticker = threading.Thread(
+        target=_heartbeat_loop,
+        args=(handle, stop_event),
+        kwargs={
+            "interval": effective_interval,
+            "ceiling": effective_ceiling,
+            "start_monotonic": time.monotonic(),
+        },
+        name=f"eawf-lock-heartbeat-{handle.path.name}",
+        daemon=True,
+    )
+    ticker.start()
+    try:
+        yield
+    finally:
+        stop_event.set()
+        ticker.join(timeout=5.0)
+        if ticker.is_alive():
+            logger.warning(f"acquire heartbeat-ticker-still-alive path={handle.path}")
+
+
 @contextmanager
 def acquire(
     target: Path,
     *,
     timeout: float | None = None,
     on_event: Callable[[dict[str, object]], None] | None = None,
+    heartbeat_interval: float | None = None,
+    hold_ceiling: float | None = None,
 ) -> Iterator[LockHandle]:
     """Acquire an exclusive advisory lock for *target*.
 
@@ -89,12 +185,22 @@ def acquire(
     The context manager yields a :class:`LockHandle`; the lock is released
     on exit regardless of exceptions.
 
+    While the lock is held a daemon thread refreshes ``heartbeat_at`` every
+    *heartbeat_interval* seconds so a live holder never ages into the stale
+    steal path, and logs a ``hold_ceiling_exceeded`` WARNING once a hold
+    passes *hold_ceiling*. The ticker is stopped and joined before the handle
+    is released, so it can never outlive the hold.
+
     Args:
         target: The file being protected (e.g. ``state.json``).
         timeout: Seconds to wait before raising :exc:`LockTimeout`.
                  Defaults to ``EA_LOCK_TIMEOUT`` env variable (default 5.0 s).
         on_event: Optional callback invoked with event dicts on notable
                   occurrences such as ``"lock_stolen"``.
+        heartbeat_interval: Seconds between heartbeat refreshes while held.
+                 Defaults to :data:`HEARTBEAT_INTERVAL_SECONDS`.
+        hold_ceiling: Hold duration in seconds past which a WARNING is logged.
+                 Defaults to :data:`HOLD_CEILING_SECONDS`.
 
     Raises:
         LockTimeout: When the lock cannot be acquired within *timeout*.
@@ -161,7 +267,11 @@ def acquire(
     )
 
     try:
-        yield handle
+        # The ticker refreshes heartbeat_at while held and is stopped + joined
+        # on exit, before the file handle is touched, so a live holder stays
+        # un-stealable without the thread ever outliving the hold.
+        with _heartbeat_ticker(handle, interval=heartbeat_interval, ceiling=hold_ceiling):
+            yield handle
     finally:
         try:
             portalocker.unlock(fh)

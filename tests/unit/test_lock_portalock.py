@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -94,3 +96,56 @@ def test_acquire_reads_env_lock_timeout_at_runtime(
         with pytest.raises(portalock.LockTimeout):
             with portalock.acquire(target):
                 pass
+
+
+def test_ticker_refreshes_heartbeat_during_hold(tmp_path: Path) -> None:
+    target = tmp_path / "state.json"
+    target.write_text("{}")
+    with portalock.acquire(
+        target, timeout=1.0, heartbeat_interval=0.02, hold_ceiling=100.0
+    ) as lock:
+        first = json.loads(lock.path.read_text())["heartbeat_at"]
+        time.sleep(0.2)
+        # No manual heartbeat() call: the background ticker did the refresh.
+        second = json.loads(lock.path.read_text())["heartbeat_at"]
+    assert second > first
+
+
+def test_hold_ceiling_exceeded_warning_emitted(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    target = tmp_path / "state.json"
+    target.write_text("{}")
+    with (
+        caplog.at_level(logging.WARNING, logger="eawf.runtime.lock.portalock"),
+        portalock.acquire(target, timeout=1.0, heartbeat_interval=0.02, hold_ceiling=0.1),
+    ):
+        time.sleep(0.3)
+    ceiling = [r for r in caplog.records if "hold_ceiling_exceeded" in r.getMessage()]
+    assert ceiling, "expected a hold_ceiling_exceeded warning"
+    assert all(r.levelno == logging.WARNING for r in ceiling)
+    assert any("duration_s=" in r.getMessage() for r in ceiling)
+
+
+def test_hold_ceiling_not_warned_for_short_hold(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    target = tmp_path / "state.json"
+    target.write_text("{}")
+    with (
+        caplog.at_level(logging.WARNING, logger="eawf.runtime.lock.portalock"),
+        portalock.acquire(target, timeout=1.0, heartbeat_interval=0.02, hold_ceiling=5.0),
+    ):
+        time.sleep(0.1)
+    assert not any("hold_ceiling_exceeded" in r.getMessage() for r in caplog.records)
+
+
+def test_heartbeat_ticker_does_not_outlive_hold(tmp_path: Path) -> None:
+    target = tmp_path / "state.json"
+    target.write_text("{}")
+    with portalock.acquire(target, timeout=1.0, heartbeat_interval=0.02) as lock:
+        held = [t.name for t in threading.enumerate()]
+        assert any(n.startswith("eawf-lock-heartbeat") for n in held), held
+        assert lock.path.exists()
+    remaining = [t for t in threading.enumerate() if t.name.startswith("eawf-lock-heartbeat")]
+    assert remaining == []
