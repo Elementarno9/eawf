@@ -9876,6 +9876,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-07-02-A-P30-I20-iter-close.md",
       "urn": "urn:eawf:v1:artifact:P30-I20/ART-A-P30-i20"
     },
+    "ART-A-P30-i22": {
+      "created_at": "2026-07-02T15:44:30.812921Z",
+      "id": "ART-A-P30-i22",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-07-02-A-P30-I22-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P30-I22/ART-A-P30-i22"
+    },
     "ART-A09-P08": {
       "created_at": "2026-05-10T23:05:27.654670Z",
       "id": "ART-A09-P08",
@@ -10580,6 +10590,17 @@
       "kind": "evaluation",
       "report_artifact_id": "ART-A-P30-i20",
       "scope_id": "P30-I20",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A-P30-i22": {
+      "check_results": [],
+      "created_at": "2026-07-02T15:44:31.437627Z",
+      "id": "A-P30-i22",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A-P30-i22",
+      "scope_id": "P30-I22",
       "status": "complete",
       "verdict": "pass"
     },
@@ -26878,16 +26899,16 @@
       ]
     },
     "P30-I22": {
-      "audit_id": null,
+      "audit_id": "A-P30-i22",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-07-02T15:44:31.993554Z",
       "description": "Reactive repair iter: the P30-I21 live e2e surfaced a self-close-in-sandbox prompt bug, a research-round crash on non-ideal researcher output, and a blocked-verdict error mapping. Fixes land here.",
       "estimate_id": null,
       "id": "P30-I22",
       "intent": null,
       "opened_at": "2026-07-01T23:38:22.494312Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "E2E-surfaced repairs (findings 3/4/5)",
       "trigger": "none",
       "wave_ids": [
@@ -27356,6 +27377,17 @@
       "status": "active",
       "store_record_id": "MEM-P30-I20-close-A-P30-i20",
       "summary": "iter P30-I20 closed with audit A-P30-i20; waves closed=54; outcomes P30-I20-W01: reserved EAWF_SKIP_PERF and validated config escape-hatch env handling | P30-I20-W02: repaired git-state drift pins and honored drift acknowledgements | P30-I20-W03: accepted JSONL store-fragment artifact URIs and strict doc verify passes",
+      "tier": "working"
+    },
+    "MEM-P30-I22-close-A-P30-i22": {
+      "confidence": "high",
+      "id": "MEM-P30-I22-close-A-P30-i22",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-07-02T15:44:31.993554Z",
+      "scope_id": "P30-I22",
+      "status": "active",
+      "store_record_id": "MEM-P30-I22-close-A-P30-i22",
+      "summary": "iter P30-I22 closed with audit A-P30-i22; waves closed=10; outcomes P30-I22-W01: headless dispatch prompt no longer instructs self-close; daemon closes on behalf | P30-I22-W02: researcher path hardened to executor parity; campaign converges live | P30-I22-W03: blocked verdict maps to typed DISPATCH_CLOSE_BLOCKED (-32011), not -32603",
       "tier": "working"
     }
   },
@@ -28069,7 +28101,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T15:34:02.444407Z",
+  "updated_at": "2026-07-02T15:44:31.994804Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
