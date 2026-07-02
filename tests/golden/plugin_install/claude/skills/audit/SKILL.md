@@ -1,7 +1,7 @@
 ---
 name: audit
 description: "Fresh-context verification of a phase deliverable or wave outcome. Spawns a fresh auditor subagent that re-reads the diff against the success criteria."
-argument-hint: "<phase-id|wave-id|commit-range>"
+argument-hint: "<phase-id|wave-id|commit-range> [--kind=evaluation|ship-gate] [--level=quick|standard|deep] [--enforce]"
 user-invocable: true
 disable-model-invocation: false
 ---
@@ -15,6 +15,12 @@ disable-model-invocation: false
 3. Dispatch the auditor subagent with paths, line numbers, criteria.
 4. Parse the verdict; convert refutations into TODOs or new waves.
 5. Render audit evidence through `eawf audit show --md`.
+
+## Options
+
+- `--kind evaluation|ship-gate` — selects the check plan; resolved by `_resolve_kind` from `ctx.args["kind"]`. Default is the profile-driven branch.
+- `--level quick|standard|deep` — maps to check-plan breadth over the default evaluation / ship-gate check sets. Default `standard`; config leaf `audit.default_level`.
+- `--enforce` — the audit's OWN aggregate verdict treats advisory-fail findings as fail; no daemon-gate coupling. Default false.
 
 ## Cross-links
 

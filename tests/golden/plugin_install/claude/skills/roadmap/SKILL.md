@@ -1,7 +1,7 @@
 ---
 name: roadmap
 description: "Plan / revise / apply / drop / show PLANNED-scope phases on the eawf roadmap queue. Mutates state.json via the lifecycle transitions; one phase at a time."
-argument-hint: "propose|revise|apply|drop|show <phase-id> [flags]"
+argument-hint: "propose|revise|apply|drop|show <phase-id> [--dry-run] [--criteria-from-brief=<path>] [flags]"
 user-invocable: true
 disable-model-invocation: true
 ---
@@ -15,6 +15,11 @@ disable-model-invocation: true
 3. **`apply`** is the post-propose confirmation step. It validates that the phase is PLANNED with at least one wave and emits an `ok` envelope; the actual planning is already persisted (propose does the state mutation). Use it as the handoff into `/prep`.
 4. **`drop`** archives a PLANNED phase (PLANNED → ARCHIVED) when the operator rejects the proposed plan.
 5. **`show`** renders the queue: text table (default), markdown (`--md`), or JSON envelope (`--json`).
+
+## Options
+
+- `--dry-run` (on `propose`) — render the plan text plus the EAWF022 coverage lint WITHOUT the state mutation `propose` normally persists. Default off.
+- `--criteria-from-brief <path>` — surface the EAWF022 propose-coverage lint against the named brief so no brief span lands uncovered by a criterion or an explicit deferral. Default none.
 
 ## Pre-flight checklist
 

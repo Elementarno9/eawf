@@ -49,6 +49,23 @@ read off real history rather than recomputed.
    phase. This is the final instance of the per-close bookkeeping rule
    the iter followed throughout: After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + event store) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close.
 
+## Options
+
+- `--dry-run` — RETAINED. Dry-run is model-executed prose semantics:
+  the ship engine parses only `commit` / `push` / `pr`
+  (`workflow/skills/ship.py`), NOT a `dry_run` arg, so `/ship
+  --dry-run` means YOU (the model) render the plan and skip the
+  irreversible steps — the engine does not gate on it.
+- `--gauntlet full|scoped` — `full` is the default and MANDATORY for a
+  migration wave or the iter-close run; `scoped` is legal only for a
+  re-run. Config leaf `ship.gauntlet`.
+- `--release v<X.Y.Z>` — inject the `(release=vX.Y.Z)` annotation into
+  the phase-close commit subject as a standalone paren group (never
+  fused into another group such as `(audit=..., release=...)`).
+  Default none.
+- `--skip-pr-pass` — skip the step-6 PR-review pass on a re-run after a
+  green pass. Default false.
+
 ## Pre-flight checklist
 
 - [ ] All waves under `<phase-id>` are complete.
@@ -71,5 +88,5 @@ strategy are pre-resolved by config.
 Skill envelope carrying the PR URL, the post-merge state mutation, and
 any deferred follow-ups.
 
-<!-- argument hint: <phase-id> [--dry-run] -->
+<!-- argument hint: <phase-id> [--dry-run] [--gauntlet=full|scoped] [--release=v<X.Y.Z>] [--skip-pr-pass] -->
 ARGUMENTS: $ARGUMENTS

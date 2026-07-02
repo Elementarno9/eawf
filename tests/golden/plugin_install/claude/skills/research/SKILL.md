@@ -1,7 +1,7 @@
 ---
 name: research
 description: "Read-only investigation of an open question. Produces a research brief or surfaces findings inline; no code changes, no state mutations."
-argument-hint: "<topic-slug> [--final]"
+argument-hint: "<topic-slug> [--depth=shallow|medium|deep|exhaustive] [--final] [--rounds=<n>] [--agents=<n>] [--budget=<tokens>]"
 user-invocable: true
 disable-model-invocation: false
 ---
@@ -20,9 +20,13 @@ disable-model-invocation: false
 
 The brief body conforms to `kernel/spec/intent.IntentBrief` — typed claims with `evidence_refs` (a brief is promotable iff every claim has at least one resolving + entailing reference; the EviBound rung-1 gate in `platform/artifacts/validation.validate_markdown_artifact` enforces this at promotion time, not at ingestion). The session also emits an optional dispatch-plan when the verdict names a follow-up wave the brief informs, so `/prep` and `/roadmap propose` can wire the brief into the next wave's References block automatically.
 
-## `--depth` flag
+## Options
 
-`--depth shallow|medium|deep|exhaustive` controls survey budget (file reads, external fetches, cross-wave grep sweeps). Default is `medium`; pin via `research.default_depth` in the layered config (reuses `StageProfile`, no new key).
+- `--depth shallow|medium|deep|exhaustive` — survey budget (file reads, external fetches, cross-wave grep sweeps); read from `ctx.args["depth"]`, then the `research.default_depth` layered-config leaf (reuses `StageProfile`, no new key). Default `medium`.
+- `--final` — persist a research brief with `references` and render it through `eawf research show --md`. Default off.
+- `--rounds <n>` — bound the fan-out iteration count (today the fan-out is depth-derived only). Default `1`.
+- `--agents <n>` — fan-out width; resolves through the `research.agent_count` layered-config leaf. Default `4`.
+- `--budget <tokens>` — recorded on the envelope; enforcement binds once metering rows exist. Default uncapped.
 
 ## Spike convention
 

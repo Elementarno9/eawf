@@ -67,6 +67,21 @@ direction is locked and an interactive surface needs a full statechart
    `<!-- eawf-template: spike-brief -->` on line 1. Return the output
    envelope.
 
+## Options
+
+Spike is model-driven, so these are prose parameters the session
+honours, not engine-parsed flags:
+
+- `--rounds <n>` — number of multi-axis AUQ rounds; parameterizes the
+  default "3-6 axes per round" shape. Default is model-judged.
+- `--axes-per-round <m>` — axes batched into each `AskUserQuestion`
+  round. Default `3-6`.
+- `--worktree` — make the execution-spike isolation branch explicit
+  and mandatory: when passed, code that imports `eawf.*` runs in a
+  dedicated worktree branch rather than the local PoC scope.
+- `--final` / `--from-briefs <paths>` / `--postmortem <phase-id>` — see
+  the canonical algorithm above.
+
 ## PoC allowance + execution-spike isolation
 
 A spike MAY produce throwaway runnable artifacts to ground direction
@@ -140,5 +155,5 @@ critical contracts when applicable, the labelled open follow-ups, and
 the References + Provenance + Scrub chassis tail. The footer records
 the persisted brief path + sentinel when `--final` was passed.
 
-<!-- argument hint: <spike-slug> [--final] [--from-briefs <path1,path2,...>] [--postmortem <phase-id>] -->
+<!-- argument hint: <spike-slug> [--final] [--from-briefs <path1,path2,...>] [--postmortem <phase-id>] [--rounds=<n>] [--axes-per-round=<m>] [--worktree] -->
 ARGUMENTS: $ARGUMENTS

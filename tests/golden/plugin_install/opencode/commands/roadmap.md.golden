@@ -31,6 +31,15 @@ description: "Plan / revise / apply / drop / show PLANNED-scope phases on the ea
 5. **`show`** renders the queue: text table (default), markdown
    (`--md`), or JSON envelope (`--json`).
 
+## Options
+
+- `--dry-run` (on `propose`) — render the plan text plus the EAWF022
+  coverage lint WITHOUT the state mutation `propose` normally
+  persists. Default off.
+- `--criteria-from-brief <path>` — surface the EAWF022 propose-coverage
+  lint against the named brief so no brief span lands uncovered by a
+  criterion or an explicit deferral. Default none.
+
 ## Pre-flight checklist
 
 - [ ] The daemon is the canonical mutator; roadmap commands proxy
@@ -55,5 +64,5 @@ walking back via drop).
 `show` — body shape varies per command. JSON envelope is the
 machine surface; the default text render is for terminal use.
 
-<!-- argument hint: propose|revise|apply|drop|show <phase-id> [flags] -->
+<!-- argument hint: propose|revise|apply|drop|show <phase-id> [--dry-run] [--criteria-from-brief=<path>] [flags] -->
 ARGUMENTS: $ARGUMENTS

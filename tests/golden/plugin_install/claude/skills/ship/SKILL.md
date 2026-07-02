@@ -1,7 +1,7 @@
 ---
 name: ship
 description: "Close out a phase by running the full local CI surface, opening the phase PR, and (after merge) advancing state."
-argument-hint: "<phase-id> [--dry-run]"
+argument-hint: "<phase-id> [--dry-run] [--gauntlet=full|scoped] [--release=v<X.Y.Z>] [--skip-pr-pass]"
 user-invocable: true
 disable-model-invocation: true
 ---
@@ -23,6 +23,13 @@ The per-criterion close gate runs `run_oracle` (`workflow/verify/oracle.run_orac
 5. Open the phase PR via `gh pr create`.
 6. **PR-review pass.** Read remote review comments via `gh pr view <PR> --comments` (or the inline equivalent). For each actionable finding, append a follow-up wave to the current iter via `eawf roadmap revise --add-wave` (not a new iter — per the `iter-phase-close-timing` rule). Implement, re-push, wait for green CI, re-request review until clean.
 7. **Bundle close in the final pre-merge commit.** Once CI is green and the review-passed branch is on the remote, emit a single `[P<NN>] state: close iter + phase (audit=<id>)` commit (the legacy `[P<NN>-CORE] state: ...` form remains valid per the `commit-prefix` block in AGENTS.md) that bundles `eawf iter close P<NN>-I<MM>` + `eawf phase close P<NN>` (no other touched files). The operator merges that commit to end the phase. This is the final instance of the per-close bookkeeping rule the iter followed throughout: After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + event store) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close.
+
+## Options
+
+- `--dry-run` — RETAINED. Dry-run is model-executed prose semantics: the ship engine parses only `commit` / `push` / `pr` (`workflow/skills/ship.py`), NOT a `dry_run` arg, so `/ship --dry-run` means YOU (the model) render the plan and skip the irreversible steps — the engine does not gate on it.
+- `--gauntlet full|scoped` — `full` is the default and MANDATORY for a migration wave or the iter-close run; `scoped` is legal only for a re-run. Config leaf `ship.gauntlet`.
+- `--release v<X.Y.Z>` — inject the `(release=vX.Y.Z)` annotation into the phase-close commit subject as a standalone paren group (never fused into another group such as `(audit=..., release=...)`). Default none.
+- `--skip-pr-pass` — skip the step-6 PR-review pass on a re-run after a green pass. Default false.
 
 ## Pre-flight checklist
 

@@ -59,6 +59,20 @@ PLANNED-queue state:
 6. Validate the rendered plan with `eawf plan show --md`; wave tags
    and bucket roll-ups must match state.
 
+## Options
+
+- `--auto-resume` — emit `eawf dispatch resume` before every claim
+  batch in `next_valid_actions`; config leaf `prep.auto_resume`.
+  Default **true**.
+- `--out-of-order` — emitted `eawf wave claim` commands carry
+  `--out-of-order` so the W## monotonic sibling gate does not reject
+  reactive or parallel-frontier claims. Default false.
+- `--ceremony lite|full` — override the `compute_ceremony`
+  recommendation the plan-mode proposal surfaces. Default is the
+  computed recommendation.
+- `--runtime <id>` — batch runtime-ladder override applied to the
+  emitted dispatch commands. Default is the ladder head.
+
 ## Pre-flight checklist
 
 - [ ] Confirm current branch is the long-running phase branch.
@@ -93,5 +107,5 @@ the expected cherry-pick order. The envelope's
 `body.plan_mode_approval` records the approval source
 (`use-as-is`, `revise`, `replace`, `planner-approve`).
 
-<!-- argument hint: <phase-id> -->
+<!-- argument hint: <phase-id> [--auto-resume] [--out-of-order] [--ceremony=lite|full] [--runtime=<id>] -->
 ARGUMENTS: $ARGUMENTS

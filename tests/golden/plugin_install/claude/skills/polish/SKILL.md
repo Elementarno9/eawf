@@ -1,7 +1,7 @@
 ---
 name: polish
 description: "Repo-wide consistency sweep. Aligns naming, docstring style, log fields, error message phrasing, and removes dead code."
-argument-hint: "[--scope=<dir|file>]"
+argument-hint: "[--scope=<dir|file>] [--auto-apply-safe] [--category=naming|docstrings|logs|errors|dead-code]"
 user-invocable: true
 disable-model-invocation: true
 ---
@@ -13,6 +13,12 @@ disable-model-invocation: true
 1. Resolve scope: default = entire `src/eawf/`; `--scope=<dir|file>` narrows.
 2. Sweep checks: naming, docstrings, log fields, error message phrasing, dead code, citation density, draft sentinels, scrub status.
 3. Apply fixes inline. If a change touches public API, stop and ask.
+
+## Options
+
+- `--scope=<dir|file>` — narrow the sweep from the default entire `src/eawf/` to one directory or file.
+- `--auto-apply-safe` — auto-apply the small "safe" subset (formatting, comment phrasing) without an `AskUserQuestion` prompt; config leaf `polish.auto_apply_safe`. Default false.
+- `--category naming|docstrings|logs|errors|dead-code` — filter the sweep to one check category. Default is all categories.
 
 ## Pre-flight checklist
 

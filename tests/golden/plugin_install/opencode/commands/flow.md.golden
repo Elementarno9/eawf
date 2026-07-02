@@ -25,6 +25,27 @@ description: "Run /research → /prep → /audit → /polish → /ship sequentia
 3. On any non-`ok` status (`blocked`, `needs_user`, `failed`,
    `partial`), short-circuit with the failing step's repair commands.
 
+## Options
+
+- `--auto-accept=<stage>[,<stage>...]` — the inter-stage gate is
+  executed by YOU (the model) against `flow.auto_accept.<stage>`; the
+  flow engine reads only `stop_after` / `args_per_step` / `resume_from`
+  and does NOT enforce auto-accept. Listing a stage advances past its
+  gate without the operator prompt.
+- `--stop-after=<stage>` — engine-parsed (`ctx.args["stop_after"]`);
+  halt the pipeline after the named stage. Default none (full run).
+- `--resume` / `--resume-from` — engine-parsed
+  (`ctx.args["resume_from"]`); replay from the recorded checkpoint and
+  refuse on drift. Default off.
+- `--args-per-step=<json>` — engine-parsed
+  (`ctx.args["args_per_step"]`); per-stage argument overrides. Default
+  inherits the flow args.
+- `--caps=eu=<f>,usd=<f>,tokens=<n>` — record a spend ceiling and halt
+  the pipeline when actuals exceed it (honest-empty until EU capture
+  lands); reuses `flow.budget.*`. Default uncapped.
+- `--max-repair-cycles=<n>` — stop re-entering a failing stage past N
+  cycles. Default `3`; config leaf `flow.max_repair_cycles`.
+
 ## Pre-flight checklist
 
 - [ ] All upstream skills are installed.
@@ -48,5 +69,5 @@ inter-stage gate decisions. Status is `ok` when every step passed
 (after any auto-accept or operator confirm), otherwise the first
 non-`ok` step's status is propagated.
 
-<!-- argument hint: <task-slug> [--auto-accept=<stage>[,<stage>...]] -->
+<!-- argument hint: <task-slug> [--auto-accept=<stage>[,<stage>...]] [--stop-after=<stage>] [--resume] [--args-per-step=<json>] [--caps=eu=..,usd=..] [--max-repair-cycles=<n>] -->
 ARGUMENTS: $ARGUMENTS

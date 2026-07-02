@@ -1,7 +1,7 @@
 ---
 name: spike
 description: "Read-only multi-axis direction investigation that unblocks /roadmap propose or /design: N rounds x M axis picks, optional postmortem + scope deltas. No state mutations."
-argument-hint: "<spike-slug> [--final] [--from-briefs <path1,path2,...>] [--postmortem <phase-id>]"
+argument-hint: "<spike-slug> [--final] [--from-briefs <path1,path2,...>] [--postmortem <phase-id>] [--rounds=<n>] [--axes-per-round=<m>] [--worktree]"
 user-invocable: true
 disable-model-invocation: false
 ---
@@ -34,6 +34,15 @@ Reach for `/spike` when multiple decisions block `/roadmap propose` and must be 
 7. Open follow-ups. Enumerate explicitly — "none" is rare. Label each with a next-action (next-spike, next-research, hypothesis-open, blocked-on-EU, blocked-on-demo).
 8. Hand-off declaration. The Summary closes with a literal `next:` line naming the unblocked skill and its args.
 9. Self-lint, then write (on `--final`) `.ea/local/research/<YYYY-MM-DD>-<slug>.md` with the sentinel `<!-- eawf-template: spike-brief -->` on line 1. Return the output envelope.
+
+## Options
+
+Spike is model-driven, so these are prose parameters the session honours, not engine-parsed flags:
+
+- `--rounds <n>` — number of multi-axis AUQ rounds; parameterizes the default "3-6 axes per round" shape. Default is model-judged.
+- `--axes-per-round <m>` — axes batched into each `AskUserQuestion` round. Default `3-6`.
+- `--worktree` — make the execution-spike isolation branch explicit and mandatory: when passed, code that imports `eawf.*` runs in a dedicated worktree branch rather than the local PoC scope.
+- `--final` / `--from-briefs <paths>` / `--postmortem <phase-id>` — see the canonical algorithm above.
 
 ## PoC allowance + execution-spike isolation
 

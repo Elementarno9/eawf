@@ -1,7 +1,7 @@
 ---
 name: prep
 description: "Activate the next PLANNED phase: surface its DAG for operator approval, then run the activate_phase hard gate and dispatch subagents per wave."
-argument-hint: "<phase-id>"
+argument-hint: "<phase-id> [--auto-resume] [--out-of-order] [--ceremony=lite|full] [--runtime=<id>]"
 user-invocable: true
 disable-model-invocation: true
 ---
@@ -24,6 +24,13 @@ disable-model-invocation: true
 4. **Claim, then dispatch each wave under the activated iter.** Before every claim batch: Run `uv run eawf dispatch resume` before EVERY claim batch. A shared-daemon test run or TUI mount leaks `dispatch_paused=true` into the live claim path; the pause gate is unconditional. If resume reports success but claims still reject, restart the daemon — the flag can persist in a stale process. And: Pass `--out-of-order` on `eawf wave claim` for reactive, interleaved, or parallel-frontier waves; the W## monotonic sibling gate rejects them otherwise. For each parallel wave, dispatch a worktree subagent. No eawf command runs inside a worktree — a shared daemon reverts the claim (the `eawf schema dump` precedent), and any golden regen or state mutation there means STOP and report. The dispatch prompt already forbids this; never override that clause when authoring the prompt.
 5. **Land, reconcile, then record each finished wave.** For each sequential wave, run inline; cherry-pick parallel-wave commits in between as they finish. Before close: reconcile the wave's declared `file_scopes` against the executor report's `files_changed` and run `eawf wave update --files <real>` while the wave is still CLAIMED — `update --files` is rejected on CLOSED waves. Then: After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + event store) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close.
 6. Validate the rendered plan with `eawf plan show --md`; wave tags and bucket roll-ups must match state.
+
+## Options
+
+- `--auto-resume` — emit `eawf dispatch resume` before every claim batch in `next_valid_actions`; config leaf `prep.auto_resume`. Default **true**.
+- `--out-of-order` — emitted `eawf wave claim` commands carry `--out-of-order` so the W## monotonic sibling gate does not reject reactive or parallel-frontier claims. Default false.
+- `--ceremony lite|full` — override the `compute_ceremony` recommendation the plan-mode proposal surfaces. Default is the computed recommendation.
+- `--runtime <id>` — batch runtime-ladder override applied to the emitted dispatch commands. Default is the ladder head.
 
 ## Pre-flight checklist
 

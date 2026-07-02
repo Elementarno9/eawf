@@ -1,7 +1,7 @@
 ---
 name: review
 description: "Code review of an open PR or local diff. Surfaces issues with severity tags; no scope creep, no praise."
-argument-hint: "[<PR# | commit-range>]"
+argument-hint: "[<PR# | commit-range>] [--level=low|medium|high] [--criteria=<wave-id>]"
 user-invocable: true
 disable-model-invocation: false
 ---
@@ -15,6 +15,11 @@ disable-model-invocation: false
 3. Apply rules in order: correctness > security > clarity > style.
 4. Tag findings: 🔴 blocker, 🟠 must-fix, 🟡 should-fix, 🔵 nit.
 5. Check artifact chassis and dense references when reviewing docs or promoted artifacts.
+
+## Options
+
+- `--level low|medium|high` — finding-confidence threshold for the pass; higher surfaces fewer, higher-confidence findings. Default `medium`; config leaf `review.default_level`.
+- `--criteria <wave-id>` — pull the named wave's success criteria into the review context so findings are graded against them. Default none.
 
 ## Pre-flight checklist
 

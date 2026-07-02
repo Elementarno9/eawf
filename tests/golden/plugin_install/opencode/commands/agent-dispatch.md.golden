@@ -28,6 +28,18 @@ next dispatch starts from the operator's pinned ladder.
 4. The daemon's `agent.dispatch` RPC is the canonical mutator; the skill
    routes to `eawf wave dispatch` via `next_valid_actions`.
 
+## Options
+
+- `--runtime <id>` — override the `Wave.runtime_preference` ladder head
+  for this dispatch. Default is the ladder head.
+- `--headless` — route `next_valid_actions` to the daemon headless
+  spawn path instead of the interactive dispatch. Default false.
+- `--model <id>` — thread a spawn-model override into the dispatch
+  command (the daemon spawn path already resolves it via
+  `_resolve_spawn_model`). Default is the ladder-resolved model.
+- `--sandbox-profile` is NOT accepted — there is no receiving seam at
+  HEAD, so the flag would be inert; it is deferred to P31.
+
 ## Pre-flight checklist
 
 - [ ] The wave is claimed before dispatch.
@@ -49,5 +61,5 @@ falling through to the daemon default.
 Skill envelope with `header.skill = "/agent-dispatch"`. Body carries
 wave_id, runtime_preference, and resolved_runtime.
 
-<!-- argument hint: <wave-id> [--runtime=<id>] -->
+<!-- argument hint: <wave-id> [--runtime=<id>] [--headless] [--model=<id>] -->
 ARGUMENTS: $ARGUMENTS
