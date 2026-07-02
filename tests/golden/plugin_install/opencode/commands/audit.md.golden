@@ -53,6 +53,8 @@ to one ISO-25010 quality axis.
       `audit + polish + ship CI + PR review pass` per the
       `iter-phase-close-timing` rule in AGENTS.md; `/audit` runs
       before that close.
+- [ ] For an iter-close audit, a full-tree test run exists as evidence:
+      Iter-close and any schema/migration wave run ALL of `tests/` — never a scoped subset. Scoped gauntlets have hidden persisted-schema fixture fallout across six test dirs.
 
 ## Decision surfaces
 

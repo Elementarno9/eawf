@@ -21,8 +21,8 @@ disable-model-invocation: true
    - **Case C — no PLANNED phase by that id.** Reject with exit 4 and hint `Run \`eawf roadmap propose --phase <id> --title ...\` first.` for the operator.
 
 3. **Optional spike first.** Before claiming a wave whose success criteria are not yet writable, run `/research <topic>` as a *spike* (read-only) per the `spike-workflow` rule in AGENTS.md. The spike produces a brief under `.ea/local/<YYYY-MM-DD>-<slug>.md` (or the conventional `.ea/local/research/` sub-directory). When a matching spike brief exists, the plan-mode proposal in case A MUST reference it by repo-relative path so the operator and the dispatched executor read the same source-of-truth artifact — the wave dispatch renderer surfaces matching briefs under a `## References` section automatically.
-4. For each parallel wave under the activated iter, dispatch a worktree subagent.
-5. For each sequential wave, run inline; cherry-pick parallel-wave commits in between as they finish.
+4. **Claim, then dispatch each wave under the activated iter.** Before every claim batch: Run `uv run eawf dispatch resume` before EVERY claim batch. A shared-daemon test run or TUI mount leaks `dispatch_paused=true` into the live claim path; the pause gate is unconditional. If resume reports success but claims still reject, restart the daemon — the flag can persist in a stale process. And: Pass `--out-of-order` on `eawf wave claim` for reactive, interleaved, or parallel-frontier waves; the W## monotonic sibling gate rejects them otherwise. For each parallel wave, dispatch a worktree subagent. No eawf command runs inside a worktree — a shared daemon reverts the claim (the `eawf schema dump` precedent), and any golden regen or state mutation there means STOP and report. The dispatch prompt already forbids this; never override that clause when authoring the prompt.
+5. **Land, reconcile, then record each finished wave.** For each sequential wave, run inline; cherry-pick parallel-wave commits in between as they finish. Before close: reconcile the wave's declared `file_scopes` against the executor report's `files_changed` and run `eawf wave update --files <real>` while the wave is still CLAIMED — `update --files` is rejected on CLOSED waves. Then: After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + event store) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close.
 6. Validate the rendered plan with `eawf plan show --md`; wave tags and bucket roll-ups must match state.
 
 ## Pre-flight checklist
@@ -33,6 +33,10 @@ disable-model-invocation: true
 - [ ] Every wave has success criteria, agent role, effort bucket, and file scope.
 - [ ] The target phase exists in `state.phases` with status `planned` (otherwise hand back to `/roadmap propose`).
 - [ ] If a spike preceded the claim, its brief path is cited in the plan-mode proposal (case A) so the dispatched subagent reads it.
+- [ ] Dispatch is resumed before every claim batch: Run `uv run eawf dispatch resume` before EVERY claim batch. A shared-daemon test run or TUI mount leaks `dispatch_paused=true` into the live claim path; the pause gate is unconditional. If resume reports success but claims still reject, restart the daemon — the flag can persist in a stale process.
+- [ ] Reactive, interleaved, or parallel-frontier claims carry the out-of-order flag: Pass `--out-of-order` on `eawf wave claim` for reactive, interleaved, or parallel-frontier waves; the W## monotonic sibling gate rejects them otherwise.
+- [ ] The declared scope is reconciled against the report before close: Before close: reconcile the wave's declared `file_scopes` against the executor report's `files_changed` and run `eawf wave update --files <real>` while the wave is still CLAIMED — `update --files` is rejected on CLOSED waves.
+- [ ] The daemon is restarted after any schema or state-model bump: After any `schema_version` or state-model bump: run `eawf daemon stop` (it respawns fresh) BEFORE the next close — a daemon still running the old model rejects the new state shape.
 
 ## Decision surfaces
 

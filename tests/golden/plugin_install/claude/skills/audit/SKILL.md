@@ -31,6 +31,7 @@ Enforcement is advisory by default: the band-scoped `verify.enforce` bit default
 - [ ] The auditor must NOT have access to the parent conversation.
 - [ ] Every quantitative claim must include source evidence and dense citation refs.
 - [ ] The target iter is NOT yet closed. Iter close is gated on `audit + polish + ship CI + PR review pass` per the `iter-phase-close-timing` rule in AGENTS.md; `/audit` runs before that close.
+- [ ] For an iter-close audit, a full-tree test run exists as evidence: Iter-close and any schema/migration wave run ALL of `tests/` — never a scoped subset. Scoped gauntlets have hidden persisted-schema fixture fallout across six test dirs.
 
 ## Decision surfaces
 

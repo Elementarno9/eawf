@@ -11,14 +11,17 @@ description: "Run /research → /prep → /audit → /polish → /ship sequentia
    the remote review comments, addresses feedback by appending
    waves to the current iter, then bundles iter + phase close in
    the final pre-merge commit per the `iter-phase-close-timing`
-   rule in AGENTS.md).
+   rule in AGENTS.md). The `/prep` stage claims and dispatches waves,
+   so its claim path carries the operator gotchas:
+   Run `uv run eawf dispatch resume` before EVERY claim batch. A shared-daemon test run or TUI mount leaks `dispatch_paused=true` into the live claim path; the pause gate is unconditional. If resume reports success but claims still reject, restart the daemon — the flag can persist in a stale process.
 2. **Inter-stage gate (default).** After each step returns
    `status=ok`, check `flow.auto_accept.<stage>` (via
    `uv run eawf config get flow.auto_accept.<stage>`). When `false`
    (the default) and the stage was not listed in `--auto-accept`,
    ask the operator via `AskUserQuestion` whether to proceed —
    options: `proceed` / `skip-next` / `stop`. When `true`, advance
-   without a prompt.
+   without a prompt. Between a wave close and the next stage:
+   After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + event store) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close.
 3. On any non-`ok` status (`blocked`, `needs_user`, `failed`,
    `partial`), short-circuit with the failing step's repair commands.
 

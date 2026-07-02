@@ -17,12 +17,12 @@ The per-criterion close gate runs `run_oracle` (`workflow/verify/oracle.run_orac
 ## Canonical algorithm
 
 1. Resolve `<phase-id>`; verify all waves under it are complete.
-2. Run the local verification gauntlet (pre-commit, mypy, pytest, ruff).
+2. Run the local verification gauntlet (pre-commit, mypy, pytest, ruff). Iter-close and any schema/migration wave run ALL of `tests/` — never a scoped subset. Scoped gauntlets have hidden persisted-schema fixture fallout across six test dirs.
 3. Validate artifact markdown and PR prose against the chassis/scrub rules.
 4. Push the long-running feature branch.
 5. Open the phase PR via `gh pr create`.
 6. **PR-review pass.** Read remote review comments via `gh pr view <PR> --comments` (or the inline equivalent). For each actionable finding, append a follow-up wave to the current iter via `eawf roadmap revise --add-wave` (not a new iter — per the `iter-phase-close-timing` rule). Implement, re-push, wait for green CI, re-request review until clean.
-7. **Bundle close in the final pre-merge commit.** Once CI is green and the review-passed branch is on the remote, emit a single `[P<NN>] state: close iter + phase (audit=<id>)` commit (the legacy `[P<NN>-CORE] state: ...` form remains valid per the `commit-prefix` block in AGENTS.md) that bundles `eawf iter close P<NN>-I<MM>` + `eawf phase close P<NN>` (no other touched files). The operator merges that commit to end the phase.
+7. **Bundle close in the final pre-merge commit.** Once CI is green and the review-passed branch is on the remote, emit a single `[P<NN>] state: close iter + phase (audit=<id>)` commit (the legacy `[P<NN>-CORE] state: ...` form remains valid per the `commit-prefix` block in AGENTS.md) that bundles `eawf iter close P<NN>-I<MM>` + `eawf phase close P<NN>` (no other touched files). The operator merges that commit to end the phase. This is the final instance of the per-close bookkeeping rule the iter followed throughout: After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + event store) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close.
 
 ## Pre-flight checklist
 

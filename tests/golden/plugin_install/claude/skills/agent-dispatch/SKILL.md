@@ -23,6 +23,8 @@ Dispatch resolves the wave's `RoleSpec` (`role`, `model`, `tools`, `isolation`) 
 
 - [ ] The wave is claimed before dispatch.
 - [ ] The runtime ladder reflects how the planner sized the wave.
+- [ ] Dispatch is resumed before the claim that precedes this dispatch: Run `uv run eawf dispatch resume` before EVERY claim batch. A shared-daemon test run or TUI mount leaks `dispatch_paused=true` into the live claim path; the pause gate is unconditional. If resume reports success but claims still reject, restart the daemon — the flag can persist in a stale process.
+- [ ] Reactive or parallel-frontier claims pass the out-of-order flag: Pass `--out-of-order` on `eawf wave claim` for reactive, interleaved, or parallel-frontier waves; the W## monotonic sibling gate rejects them otherwise.
 
 ## Decision surfaces
 

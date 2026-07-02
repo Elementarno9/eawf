@@ -28,6 +28,7 @@ read off real history rather than recomputed.
 
 1. Resolve `<phase-id>`; verify all waves under it are complete.
 2. Run the local verification gauntlet (pre-commit, mypy, pytest, ruff).
+   Iter-close and any schema/migration wave run ALL of `tests/` — never a scoped subset. Scoped gauntlets have hidden persisted-schema fixture fallout across six test dirs.
 3. Validate artifact markdown and PR prose against the chassis/scrub
    rules.
 4. Push the long-running feature branch.
@@ -45,7 +46,8 @@ read off real history rather than recomputed.
    `commit-prefix` block in AGENTS.md) that bundles
    `eawf iter close P<NN>-I<MM>` + `eawf phase close P<NN>` (no
    other touched files). The operator merges that commit to end the
-   phase.
+   phase. This is the final instance of the per-close bookkeeping rule
+   the iter followed throughout: After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + event store) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close.
 
 ## Pre-flight checklist
 
