@@ -796,6 +796,7 @@ def _compute_wave_close_readiness(
     *,
     state_path: Path,
     repo_root: Path,
+    defer_verdict_kinds: bool = False,
 ) -> CloseReadiness | None:
     """Return the enforcing pre-close readiness view for a wave-close mutation.
 
@@ -838,12 +839,26 @@ def _compute_wave_close_readiness(
     )
     if verify_block is None or not verify_block.enforce:
         return None
+    deferred: frozenset[str] = frozenset()
+    if defer_verdict_kinds:
+        # D-LOCK-SPLIT pre-flight: an un-gated verdict-kind criterion is
+        # enforced by the under-lock verdict / jury tier (which writes the
+        # auditor evidence this rollup reads), so its PENDING status must
+        # not block the lock-free phase.
+        deferred = frozenset(
+            criterion.id
+            for criterion in state.waves[wave_id].success_criteria
+            if criterion.required
+            and not criterion.gate_ids
+            and criterion.evidence_kind != "deterministic"
+        )
     return compute_readiness(
         wave_id,
         state=state,
         store_dir=_store_dir(state_path),
         repo_root=repo_root,
         config_root=_config_root_for_state_path(state_path),
+        deferred_criterion_ids=deferred,
     )
 
 
@@ -1479,6 +1494,7 @@ async def _enforce_wave_close_gate(
     *,
     state_path: Path,
     repo_root: Path,
+    tier: str = "all",
 ) -> list[EvidenceRecord]:
     """Run the enforcing wave-close gate via the ordered oracle.
 
@@ -1584,6 +1600,11 @@ async def _enforce_wave_close_gate(
         verify_block.cross_vendor_jury and block_authority is BlockAuthority.BLOCKING
     )
     if verdict_requirement(wave) == "always" and not jury_replaces_auditor:
+        # The whole wave is covered by the blocking single-auditor; the
+        # deterministic tier defers to the verdict tier (the auditor spawn
+        # is lock-scoped and W08-bounded under the D-LOCK-SPLIT ordering).
+        if tier == "deterministic":
+            return []
         await _produce_high_risk_verdict(
             state,
             wave,
@@ -1626,6 +1647,14 @@ async def _enforce_wave_close_gate(
         if not criterion.required:
             continue
         gates = [g for g in gate_specs if g.criterion_id == criterion.id]
+        # D-LOCK-SPLIT tier filter: a gated criterion scores at the
+        # deterministic tier (off-lock); an un-gated criterion falls to the
+        # verdict / jury tier (under the lock, W08-bounded). tier="all"
+        # keeps the pre-split single-pass behaviour for non-split callers.
+        if tier == "deterministic" and not gates:
+            continue
+        if tier == "verdict" and gates:
+            continue
         result = await run_oracle(
             criterion,
             gates,
@@ -2919,6 +2948,26 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
     apply_func = _resolve_apply(mutation.kind)
 
+    # WAVE_CLOSE rides the D-LOCK-SPLIT path: lock-free pre-flight
+    # (deterministic gates + floor pack, the minutes-long shell-outs) then
+    # an optimistic ms-scale commit under the lock. Every other mutation
+    # kind keeps the single-lock path below.
+    if mutation.kind == MutationKind.WAVE_CLOSE:
+        ctx.in_flight_mutations += 1
+        try:
+            return await _mutate_wave_close(
+                ctx,
+                mutation=mutation,
+                idempotency_key=idempotency_key,
+                cache=cache,
+                state_path=state_path,
+                event_path=event_path,
+                wal_path=wal_path,
+                repo_root_override=args.repo_root,
+            )
+        finally:
+            ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
+
     # The portalock keeps the daemon's defense-in-depth guard live
     # (rule 4 V1 carve-out); concurrent recovery writers serialise
     # against it through the same lock path.
@@ -2929,83 +2978,9 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         with portalock.acquire(state_path, timeout=5.0):
             state, payload = _read_state(state_path)
             before_version = _state_version(payload)
-            wave_close_readiness: CloseReadiness | None = None
-            wave_close_rollup: WaveSessionRollup | None = None
-            wave_close_evidence: list[EvidenceRecord] = []
-            actual_written_auto = False
-            repo_anchor = (
-                Path(args.repo_root) if args.repo_root else _config_root_for_state_path(state_path)
-            )
 
             try:
-                if mutation.kind == MutationKind.WAVE_CLOSE:
-                    # The shared pre-flight bundle runs the three pre-apply
-                    # checks in their canonical order: structural gate-ref
-                    # validation (regardless of verify.enforce), the enforcing
-                    # ordered-oracle gate (a refusal aborts the whole
-                    # mutation), and the floor-pack readiness compute
-                    # (offloaded to a worker thread so the minutes-long
-                    # pytest / pre-commit / mypy shell-outs do not starve the
-                    # event loop while the state lock is held). The returned
-                    # deterministic-pass rows are persisted only AFTER the
-                    # state write commits (below), so a wave whose close is
-                    # later refused never leaves a stray pass row behind.
-                    preflight = await run_close_preflight(
-                        state,
-                        mutation,
-                        state_path=state_path,
-                        repo_root=repo_anchor,
-                        validate_gate_refs=_validate_wave_close_gate_refs,
-                        enforce_close_gate=_enforce_wave_close_gate,
-                        compute_readiness=_compute_wave_close_readiness,
-                    )
-                    wave_close_evidence = preflight.evidence
-                    wave_close_readiness = preflight.readiness
-                    wave_id = str(mutation.params.get("wave_id", ""))
-                    actual_written_auto = bool(wave_id and wave_id not in (state.actuals or {}))
-                    _, _close_eu_minutes, _close_eu_basis = _wave_close_rollup_config(repo_anchor)
-                    runtime_delta = _wave_runtime_delta(
-                        state,
-                        mutation,
-                        eu_minutes=_close_eu_minutes,
-                        eu_basis=_close_eu_basis,
-                    )
-                    wave_close_rollup = _load_wave_session_rollup(
-                        state,
-                        mutation,
-                        state_path=state_path,
-                        repo_root=repo_anchor,
-                    )
-                    # Prefer cumulative runtime sidecar deltas when present;
-                    # fall back to the older telemetry rollup path.
-                    wave_close_elapsed_eu = (
-                        runtime_delta.elapsed_eu
-                        if runtime_delta is not None
-                        else _wave_close_elapsed_eu(
-                            wave_close_rollup,
-                            eu_minutes=_close_eu_minutes,
-                        )
-                    )
-                    _enforce_nonzero_runtime_close(
-                        state,
-                        mutation,
-                        elapsed_eu=wave_close_elapsed_eu,
-                        state_path=state_path,
-                        repo_root=repo_anchor,
-                    )
-                    _apply_wave_close(
-                        state,
-                        mutation,
-                        wave_session_rollup=wave_close_rollup,
-                        elapsed_eu=wave_close_elapsed_eu,
-                        runtime_delta=runtime_delta,
-                    )
-                    # Recompute the closing wave's Track outcome statuses from
-                    # their samples so closing work that moved a metric updates
-                    # the Track standings (a no-op when no Track owns the wave).
-                    _sync_wave_close_track(state, mutation)
-                else:
-                    apply_func(state, mutation)
+                apply_func(state, mutation)
             except LifecycleError as exc:
                 # Closure-kind (*_CLOSE) rejections surface as -32002
                 # (ValidationError, exit 2); every other lifecycle-guard
@@ -3064,16 +3039,6 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             # extras dict so the envelope shape stays uniform.
             extras: dict[str, str | int | float | bool] = {}
             drift_extras: dict[str, str | int | float | bool] = {}
-            if mutation.kind == MutationKind.WAVE_CLOSE:
-                extras = _compute_wave_close_extras(
-                    state,
-                    mutation,
-                    state_path=state_path,
-                    repo_root=repo_anchor,
-                    readiness=wave_close_readiness,
-                    actual_written_auto=actual_written_auto,
-                )
-                drift_extras = _bucket_drift_extras(state)
 
             envelope = _build_event_envelope(
                 mutation=mutation,
@@ -3127,19 +3092,10 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             # pipeline is no longer write-idle: the trust scorecard reads
             # these ``deterministic`` / ``pass`` rows to label the wave
             # ``verified``. Empty on every advisory / non-enforcing close.
-            if wave_close_evidence:
-                _append_close_evidence(wave_close_evidence, state_path=state_path)
-
             if ctx.bus is not None and hasattr(ctx.bus, "publish"):
                 ctx.bus.publish(envelope)
                 if drift_envelope is not None:
                     ctx.bus.publish(drift_envelope)
-            if mutation.kind == MutationKind.WAVE_CLOSE:
-                _retract_closed_wave_advisories(
-                    state_path,
-                    wave_id=str(mutation.params.get("wave_id", "")),
-                    bus=ctx.bus,
-                )
             ctx.last_event_id = envelope.id
 
             logger.info(
@@ -3162,6 +3118,243 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             return result
     finally:
         ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
+
+
+async def _mutate_wave_close(
+    ctx: MethodContext,
+    *,
+    mutation: Mutation,
+    idempotency_key: str | None,
+    cache: dict[str, _CachedMutation],
+    state_path: Path,
+    event_path: Path,
+    wal_path: Path,
+    repo_root_override: str | None,
+) -> dict[str, Any]:
+    """Run a WAVE_CLOSE as lock-free pre-flight + optimistic ms-scale commit.
+
+    The D-LOCK-SPLIT restructure (ZD-R1, the root wedge): the whole close
+    previously ran inside one ``portalock.acquire`` hold, so a close whose
+    deterministic gates shell out to pytest / pre-commit / mypy held the
+    state lock for minutes and every concurrent mutator LockTimeouted.
+
+    Three phases:
+
+    1. **Pre-flight (no lock)** — snapshot state, capture the pre-flight
+       version, run the W06 :func:`run_close_preflight` bundle with the
+       close gate restricted to the DETERMINISTIC tier, and take the
+       rollup / runtime-delta reads.
+    2. **Commit (lock, ms-scale)** — re-read state and compare versions;
+       when the target wave row itself changed since pre-flight the close
+       is REFUSED with a typed stale error (the caller retries, which
+       re-runs pre-flight off-lock). Then the verdict / jury tier runs
+       (W08-bounded spawns — the one deliberately lock-scoped long step,
+       per D-LOCK-SPLIT), followed by apply, post-validate, WAL, atomic
+       write, and event append.
+    3. **Post-lock** — deterministic-evidence append (its own sibling
+       portalock), bus publish, advisory retraction, idempotency cache.
+
+    Args:
+        ctx: Server context.
+        mutation: The WAVE_CLOSE mutation.
+        idempotency_key: Optional retry key (already cache-missed).
+        cache: The daemon idempotency cache to populate on success.
+        state_path: Path to ``state.json``.
+        event_path: Path to the event JSONL store.
+        wal_path: Path to the daemon WAL directory.
+        repo_root_override: The caller-supplied repo root, or ``None``.
+
+    Returns:
+        Dict matching :class:`MutateResult`.
+
+    Raises:
+        DaemonValidationError: On a lifecycle / gate / schema rejection, or
+            when the optimistic re-check finds the wave row changed during
+            pre-flight (``close_preflight_stale``).
+    """
+    from functools import partial
+
+    from eawf.runtime.lock import portalock
+
+    repo_anchor = (
+        Path(repo_root_override) if repo_root_override else _config_root_for_state_path(state_path)
+    )
+    wave_id = str(mutation.params.get("wave_id", ""))
+
+    # ---- Phase 1: pre-flight, NO lock --------------------------------------
+    state_pre, payload_pre = _read_state(state_path)
+    preflight_version = _state_version(payload_pre)
+    preflight_wave_row = (payload_pre.get("waves") or {}).get(wave_id)
+    try:
+        preflight = await run_close_preflight(
+            state_pre,
+            mutation,
+            state_path=state_path,
+            repo_root=repo_anchor,
+            validate_gate_refs=_validate_wave_close_gate_refs,
+            enforce_close_gate=partial(_enforce_wave_close_gate, tier="deterministic"),
+            compute_readiness=partial(_compute_wave_close_readiness, defer_verdict_kinds=True),
+        )
+    except LifecycleError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    wave_close_readiness = preflight.readiness
+    _, _close_eu_minutes, _close_eu_basis = _wave_close_rollup_config(repo_anchor)
+    runtime_delta = _wave_runtime_delta(
+        state_pre,
+        mutation,
+        eu_minutes=_close_eu_minutes,
+        eu_basis=_close_eu_basis,
+    )
+    wave_close_rollup = _load_wave_session_rollup(
+        state_pre,
+        mutation,
+        state_path=state_path,
+        repo_root=repo_anchor,
+    )
+    wave_close_elapsed_eu = (
+        runtime_delta.elapsed_eu
+        if runtime_delta is not None
+        else _wave_close_elapsed_eu(
+            wave_close_rollup,
+            eu_minutes=_close_eu_minutes,
+        )
+    )
+
+    # ---- Phase 2: commit under the lock (ms-scale + bounded verdict tier) --
+    with portalock.acquire(state_path, timeout=5.0):
+        state, payload = _read_state(state_path)
+        before_version = _state_version(payload)
+        if before_version != preflight_version:
+            # The optimistic re-check: another writer moved state during
+            # pre-flight. Only a change to the TARGET WAVE ROW invalidates
+            # the pre-flight verdicts; unrelated rows moving is fine.
+            commit_wave_row = (payload.get("waves") or {}).get(wave_id)
+            if commit_wave_row != preflight_wave_row:
+                raise DaemonValidationError(
+                    f"validation_failed: close_preflight_stale: wave {wave_id!r} "
+                    "changed during the lock-free pre-flight; retry the close "
+                    "(the retry re-runs pre-flight off-lock)"
+                )
+        wave_close_evidence = list(preflight.evidence)
+        actual_written_auto = bool(wave_id and wave_id not in (state.actuals or {}))
+        try:
+            # The verdict / jury tier is the one deliberately lock-scoped
+            # long step (it mutates state in-memory and appends session
+            # events; W08 bounds every spawn), per D-LOCK-SPLIT.
+            wave_close_evidence.extend(
+                await _enforce_wave_close_gate(
+                    state,
+                    mutation,
+                    state_path=state_path,
+                    repo_root=repo_anchor,
+                    tier="verdict",
+                )
+            )
+            _enforce_nonzero_runtime_close(
+                state,
+                mutation,
+                elapsed_eu=wave_close_elapsed_eu,
+                state_path=state_path,
+                repo_root=repo_anchor,
+            )
+            _apply_wave_close(
+                state,
+                mutation,
+                wave_session_rollup=wave_close_rollup,
+                elapsed_eu=wave_close_elapsed_eu,
+                runtime_delta=runtime_delta,
+            )
+            _sync_wave_close_track(state, mutation)
+        except LifecycleError as exc:
+            raise DaemonValidationError(f"validation_failed: {exc}") from exc
+        except ValidationError as exc:
+            raise DaemonValidationError(f"validation_failed: {exc}") from exc
+        except KeyError as exc:
+            raise DaemonValidationError(f"validation_failed: missing param {exc!s}") from exc
+
+        state.updated_at = datetime.now(UTC)
+        new_payload = state.model_dump(mode="json")
+        post = validate_state(new_payload, strict_optional=False)
+        if post.state is None:
+            raise DaemonValidationError(
+                "validation_failed: post-mutation schema invalid: "
+                + "; ".join(post.schema_errors[:3])
+            )
+        if post.violations:
+            violation_codes = ",".join(v.code for v in post.violations)
+            raise DaemonValidationError(
+                f"validation_failed: post-mutation invariants violated: {violation_codes}"
+            )
+        after_version = _state_version(new_payload)
+
+        extras = _compute_wave_close_extras(
+            state,
+            mutation,
+            state_path=state_path,
+            repo_root=repo_anchor,
+            readiness=wave_close_readiness,
+            actual_written_auto=actual_written_auto,
+        )
+        drift_extras = _bucket_drift_extras(state)
+        envelope = _build_event_envelope(
+            mutation=mutation,
+            before_version=before_version,
+            after_version=after_version,
+            extras=extras,
+        )
+        drift_envelope = (
+            _build_bucket_drift_envelope(
+                mutation=mutation,
+                before_version=before_version,
+                after_version=after_version,
+                extras=drift_extras,
+            )
+            if drift_extras
+            else None
+        )
+        record = WalRecord(
+            record_id=mutation.mutation_id,
+            envelope=envelope,
+            idempotency_key=idempotency_key,
+            written_at=datetime.now(UTC),
+            before_state_version=before_version,
+            after_state_version=after_version,
+        )
+        wal.write_pending(wal_path, record)
+        atomic_write_json_locked(state_path, new_payload)
+        wal.mark_applied(wal_path, mutation.mutation_id)
+        append_envelope(event_path, envelope)
+        if drift_envelope is not None:
+            append_envelope(event_path, drift_envelope)
+        wal.mark_fsynced(wal_path, mutation.mutation_id)
+
+    # ---- Phase 3: post-lock tail --------------------------------------------
+    if wave_close_evidence:
+        _append_close_evidence(wave_close_evidence, state_path=state_path)
+    if ctx.bus is not None and hasattr(ctx.bus, "publish"):
+        ctx.bus.publish(envelope)
+        if drift_envelope is not None:
+            ctx.bus.publish(drift_envelope)
+    _retract_closed_wave_advisories(state_path, wave_id=wave_id, bus=ctx.bus)
+    ctx.last_event_id = envelope.id
+
+    logger.info(
+        f"mutate ok mutation_kind={mutation.kind.value} scope={mutation.scope_id!r} "
+        f"before={before_version} after={after_version} envelope_id={envelope.id!r} "
+        f"lock_split=True"
+    )
+    result = MutateResult(
+        event=envelope.model_dump(mode="json"),
+        before_version=before_version,
+        after_version=after_version,
+        idempotent_replay=False,
+    ).model_dump(mode="json")
+    if idempotency_key is not None:
+        cache[idempotency_key] = _CachedMutation(
+            result=result,
+            cached_at=time.monotonic(),
+        )
+    return result
 
 
 @register("state.wave_land")

@@ -1030,6 +1030,7 @@ def _enforce_readiness(
     scope_id: str,
     readiness: CloseReadiness,
     verify_block: VerifyBlock | None,
+    deferred_criterion_ids: frozenset[str] = frozenset(),
 ) -> None:
     """Raise when the active profile makes close readiness mandatory.
 
@@ -1037,14 +1038,26 @@ def _enforce_readiness(
         scope_id: Wave id being closed.
         readiness: Rolled-up readiness view for the scope.
         verify_block: Active profile verify configuration, or ``None``.
+        deferred_criterion_ids: Criterion ids whose PENDING status does not
+            block here because a later close phase owns their enforcement —
+            the D-LOCK-SPLIT pre-flight defers un-gated verdict-kind
+            criteria to the under-lock verdict / jury tier, which produces
+            the auditor evidence this rollup would otherwise wait for.
+            Empty (the default) keeps the single-pass behaviour.
 
     Raises:
         LifecycleError: When ``verify.enforce`` is true and
-            ``readiness.ready`` is false.
+            ``readiness.ready`` is false after the deferral filter.
     """
     if verify_block is None or not verify_block.enforce or readiness.ready:
         return
-    blocked = _not_ready_criteria(readiness.criteria)
+    blocked = [
+        entry
+        for entry in _not_ready_criteria(readiness.criteria)
+        if not (entry.endswith(":pending") and entry.split(":", 1)[0] in deferred_criterion_ids)
+    ]
+    if not blocked and deferred_criterion_ids:
+        return
     details = ", ".join(blocked) if blocked else "ready=false"
     raise LifecycleError(f"readiness enforcement failed for wave {scope_id!r}: {details}")
 
@@ -1057,6 +1070,7 @@ def compute(
     repo_root: Path,
     config_root: Path | None = None,
     load_profile_verify: bool = True,
+    deferred_criterion_ids: frozenset[str] = frozenset(),
 ) -> CloseReadiness:
     """Return the close-readiness projection for *scope_id*.
 
@@ -1200,7 +1214,12 @@ def compute(
         warnings=warnings,
         waived_gate_ids=waived_gate_ids,
     )
-    _enforce_readiness(scope_id=scope_id, readiness=readiness, verify_block=verify_block)
+    _enforce_readiness(
+        scope_id=scope_id,
+        readiness=readiness,
+        verify_block=verify_block,
+        deferred_criterion_ids=deferred_criterion_ids,
+    )
     return readiness
 
 
