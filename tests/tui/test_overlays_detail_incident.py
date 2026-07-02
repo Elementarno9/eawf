@@ -164,6 +164,7 @@ def test_incident_timeline_rows_one_event_per_entry() -> None:
     rows = incident_timeline_rows(events)
     assert all(label == "event" for label, _ in rows)
     assert len(rows) == 2
-    assert _NOW.isoformat() in rows[0][1]
+    # I22-W09 compact UTC stamps: detail surfaces render "YYYY-MM-DD HH:MM:SS".
+    assert _NOW.strftime("%Y-%m-%d %H:%M:%S") in rows[0][1]
     assert "opened: validate exits 0" in rows[0][1]
     assert "closed: fixed the guard" in rows[1][1]

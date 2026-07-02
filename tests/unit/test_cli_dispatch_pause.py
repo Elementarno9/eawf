@@ -96,7 +96,9 @@ def test_dispatch_resume_reports_not_paused(monkeypatch: pytest.MonkeyPatch) -> 
     result = runner.invoke(app, ["dispatch", "resume"])
     assert result.exit_code == 0, result.output
     assert _FakeToggleClient.captured["method"] == "agent.resume"
-    assert _FakeToggleClient.captured["params"] == {}
+    # P30-I23-W11: pause/resume carry the caller's repo root so the EP3
+    # state-root guard can refuse a wrong-repo daemon bind.
+    assert set(_FakeToggleClient.captured["params"]) == {"repo_root"}
     assert "dispatch_paused=False" in result.stdout
 
 

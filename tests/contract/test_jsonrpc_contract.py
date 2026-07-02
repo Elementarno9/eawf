@@ -460,6 +460,9 @@ def test_status_result_field_set_is_pinned() -> None:
         "active_subscriptions",
         "in_flight_mutations",
         "last_event_id",
+        # P30-I23-W10 — per-mutation telemetry rows (kind, age) for the
+        # self-deadlock watchdog surface.
+        "in_flight",
     }
 
 

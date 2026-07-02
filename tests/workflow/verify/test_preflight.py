@@ -132,10 +132,11 @@ def test_daemon_close_pipeline_calls_run_close_preflight() -> None:
 
     # The daemon imports the bundle (identity, not a re-implementation) ...
     assert daemon_state.run_close_preflight is preflight.run_close_preflight
-    # ... and the WAVE_CLOSE branch of mutate awaits it with the three
-    # daemon seams injected.
-    source = inspect.getsource(daemon_state.mutate)
+    # ... and the WAVE_CLOSE pipeline (mutate delegates to the W09
+    # lock-split ``_mutate_wave_close``) awaits it in its lock-free
+    # pre-flight phase with the three daemon seams injected.
+    source = inspect.getsource(daemon_state._mutate_wave_close)
     assert "await run_close_preflight(" in source
     assert "validate_gate_refs=_validate_wave_close_gate_refs" in source
-    assert "enforce_close_gate=_enforce_wave_close_gate" in source
-    assert "compute_readiness=_compute_wave_close_readiness" in source
+    assert "_enforce_wave_close_gate" in source
+    assert "_compute_wave_close_readiness" in source

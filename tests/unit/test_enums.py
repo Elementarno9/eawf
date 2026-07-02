@@ -513,6 +513,8 @@ def test_store_kind_values() -> None:
         # P30-I18-W03/W04 — campaign run rounds + operator-channel inputs.
         "research_round",
         "operator_input",
+        # P30-I23-W17 — persisted per-juror ballots (calibration substrate).
+        "jury_ballot",
     }
     actual = {m.value for m in enums.StoreKind}
     assert actual == expected

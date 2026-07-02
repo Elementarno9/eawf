@@ -166,7 +166,7 @@ Manage the eawfd background daemon (run, ping, status, stop, logs, reclaim).
 | `run` | Boot the daemon process. |
 | `service-disable` | Stop + uninstall the eawfd service. Idempotent. |
 | `service-enable` | Install + start the eawfd service via the native OS supervisor. |
-| `service-status` | Report the supervisor-level service state (no daemon RPC). |
+| `service-status` | Report the supervisor-level service state plus daemon-health advisories. |
 | `status` | Print operational counters from the running daemon. |
 | `stop` | Request graceful daemon shutdown. |
 
@@ -318,6 +318,14 @@ Iteration lifecycle (open, close).
 | `close` | Close an active iter. Rejects when child waves are still open. |
 | `open` | Open an iter. Pass an iter ID or a phase id (auto-allocates iter). |
 | `plan` | Stage a PLANNED iter under an open phase without moving the current pointer. |
+
+### `eawf jury`
+
+Cross-vendor jury calibration surfaces (gold-label writer).
+
+| Verb | Summary |
+|---|---|
+| `label` | Append an operator gold label for a wave via the daemon. |
 
 ### `eawf mcp`
 

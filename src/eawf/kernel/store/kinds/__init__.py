@@ -15,6 +15,7 @@ from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.kernel.store.kinds.flow import FlowPayload
 from eawf.kernel.store.kinds.incident import IncidentPayload
+from eawf.kernel.store.kinds.jury_ballot import JuryBallotPayload
 from eawf.kernel.store.kinds.memory import MemoryPayload
 from eawf.kernel.store.kinds.operator_input import OperatorInputPayload
 from eawf.kernel.store.kinds.registry_updated import RegistryUpdatedPayload
@@ -50,4 +51,5 @@ PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     StoreKind.RESEARCH_CAMPAIGN: ResearchCampaignPayload,
     StoreKind.RESEARCH_ROUND: ResearchRoundPayload,
     StoreKind.OPERATOR_INPUT: OperatorInputPayload,
+    StoreKind.JURY_BALLOT: JuryBallotPayload,
 }
