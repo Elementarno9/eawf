@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -566,6 +567,130 @@ def test_phase_release_workflow_regex_captures_v060_tag_and_version() -> None:
     tag = captured.group(1)
     assert tag == "v0.6.0"
     assert tag[1:] == "0.6.0"
+
+
+# ---------------------------------------------------------------------------
+# P30-I23-W32: harden the release-annotation lint against the BL-1 fused shape
+# ``(audit=..., release=v0.6.0)`` (the one-character malformation that would
+# silently zero tag + PyPI + npm), and dry-run the drafted W22 phase-close
+# subject against the phase-release.yaml:46 extraction regex.
+# ---------------------------------------------------------------------------
+
+# The drafted W22 phase-close subject that re-closes P30 as v0.6.0. Bare
+# ``[P30] state:`` is the canonical phase-close form; a W-suffixed variant is
+# exercised too since the lint accepts the annotation on any state-type subject.
+_W22_SUBJECT = "[P30] state: close iter + phase (audit=A-P30-I22-ship) (release=v0.6.0)"
+_W22_SUBJECT_WAVE = (
+    "[P30-I21-W22] state: close iter + phase (audit=A-P30-I22-ship) (release=v0.6.0)"
+)
+# BL-1 fused shape: the ``release=`` annotation is welded into the audit paren
+# group instead of standing alone, so the workflow regex never matches it.
+_W22_SUBJECT_FUSED = "[P30] state: close iter + phase (audit=A-P30-I22-ship, release=v0.6.0)"
+
+
+def _workflow_release_regex() -> re.Pattern[str]:
+    """Return the phase-release.yaml:46 extraction regex, read from the YAML.
+
+    Reads the literal out of the workflow so the dry-run assertions stay
+    coupled to the exact regex the release automation runs.
+    """
+    workflow = (_REPO_ROOT / ".github" / "workflows" / "phase-release.yaml").read_text(
+        encoding="utf-8"
+    )
+    pattern_match = re.search(r'match = re\.search\(r"([^"]+)", subject\)', workflow)
+    assert pattern_match is not None, "annotation regex literal not found in phase-release.yaml"
+    return re.compile(pattern_match.group(1))
+
+
+def test_check_release_annotation_rejects_fused_shape(mod) -> None:
+    """CR-01: the fused ``(audit=A-x, release=v0.6.0)`` shape is a hard reject.
+
+    ``release=`` is present, but the annotation is welded into the audit paren
+    group rather than standing alone, so ``_check_release_annotation`` rejects
+    with a diagnostic naming the phase-release.yaml workflow regex.
+    """
+    subject = "[P30] state: close iter + phase (audit=A-x, release=v0.6.0)"
+    result = mod._check_release_annotation(subject)
+    assert result is not None
+    code, diag = result
+    assert code == 1
+    assert "release annotation rejected" in diag
+    assert "phase-release.yaml" in diag
+
+
+def test_check_release_annotation_accepts_standalone_paren_group(mod) -> None:
+    """CR-01: the standalone ``(audit=A-x) (release=v0.6.0)`` group is accepted."""
+    subject = "[P30] state: close iter + phase (audit=A-x) (release=v0.6.0)"
+    assert mod._check_release_annotation(subject) is None
+
+
+def test_lint_rejects_fused_release_annotation(tmp_path: Path, mod) -> None:
+    """CR-01: end-to-end lint rejects the fused shape (exit 1, workflow message)."""
+    msg = _write_msg(
+        tmp_path,
+        "[P30] state: close iter + phase (audit=A-x, release=v0.6.0)\n\nbody\n",
+    )
+    code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
+    assert code == 1
+    assert "release annotation rejected" in diag
+    assert "phase-release.yaml" in diag
+
+
+def test_lint_accepts_standalone_release_annotation(tmp_path: Path, mod) -> None:
+    """CR-01: end-to-end lint accepts the standalone paren group (exit 0)."""
+    msg = _write_msg(
+        tmp_path,
+        "[P30] state: close iter + phase (audit=A-x) (release=v0.6.0)\n\nbody\n",
+    )
+    code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
+    assert code == 0, diag
+
+
+def test_dry_run_w22_subject_passes_lint(tmp_path: Path, mod) -> None:
+    """CR-02: the drafted W22 phase-close subject passes the lint (exit 0)."""
+    msg = _write_msg(tmp_path, f"{_W22_SUBJECT}\n\nbody\n")
+    code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
+    assert code == 0, diag
+
+
+def test_dry_run_w22_wave_suffixed_subject_passes_lint(tmp_path: Path, mod) -> None:
+    """CR-02: the W-suffixed W22 variant also passes the lint (exit 0)."""
+    msg = _write_msg(tmp_path, f"{_W22_SUBJECT_WAVE}\n\nbody\n")
+    code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
+    assert code == 0, diag
+
+
+def test_dry_run_w22_subject_matches_workflow_regex_byte_for_byte(mod) -> None:
+    """CR-02: the drafted W22 subject matches the phase-release.yaml:46 regex.
+
+    The workflow's extraction regex, read out of the YAML, captures
+    ``tag=v0.6.0`` and ``version=0.6.0`` from the drafted subject — so the
+    release automation would tag + publish exactly as intended.
+    """
+    annotation_re = _workflow_release_regex()
+    for subject in (_W22_SUBJECT, _W22_SUBJECT_WAVE):
+        captured = annotation_re.search(subject)
+        assert captured is not None, subject
+        assert captured.group(1) == "v0.6.0"
+        assert captured.group(1)[1:] == "0.6.0"
+
+
+def test_dry_run_fused_w22_subject_fails_lint_and_workflow_regex(tmp_path: Path, mod) -> None:
+    """CR-02: the fused BL-1 shape fails the lint AND the workflow regex.
+
+    Confirms the lint catches exactly what the workflow would silently miss:
+    the fused ``(audit=..., release=v0.6.0)`` shape does not match the
+    phase-release.yaml:46 regex (so the workflow would skip the release), and
+    the hardened lint rejects it up front.
+    """
+    annotation_re = _workflow_release_regex()
+    assert annotation_re.search(_W22_SUBJECT_FUSED) is None
+
+    msg = _write_msg(tmp_path, f"{_W22_SUBJECT_FUSED}\n\nbody\n")
+    code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
+    assert code == 1
+    assert "release annotation rejected" in diag
+    assert "phase-release.yaml" in diag
 
 
 def test_phase_release_workflow_version_source_regex_reads_060() -> None:

@@ -131,7 +131,16 @@ _WAVE_TRAILER_RE = re.compile(
     re.MULTILINE,
 )
 _RELEASE_ANNOTATION_RE = re.compile(r"\(release=v(?P<version>\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?)\)")
-_RELEASE_ANNOTATION_PREFIX_RE = re.compile(r"\(release=")
+# Fires on ANY ``release=`` substring, not just the standalone
+# ``(release=`` paren group. The .github/workflows/phase-release.yaml
+# extraction regex only tags when the annotation is its own paren group,
+# so a fused shape like ``(audit=A-x, release=v0.6.0)`` — a one-character
+# malformation — would silently zero the tag + PyPI + npm publish. Detecting
+# the broader signal lets the lint reject that shape before it lands.
+_RELEASE_ANNOTATION_SIGNAL_RE = re.compile(r"release=")
+# Byte-for-byte copy of the phase-release.yaml:46 extraction regex, kept as a
+# module constant so the reject diagnostic and the workflow stay in lockstep.
+_WORKFLOW_RELEASE_EXTRACTION_RE = r"\(release=(v\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?)\)"
 _SUBJECT_STYLE_BRACKET = "bracket"
 _SUBJECT_STYLE_TRAILER = "trailer"
 _STATE_ONLY_ALLOWED = (
@@ -407,8 +416,21 @@ def _check_coauthor(text: str, env: Mapping[str, str]) -> tuple[int, str]:
 
 
 def _check_release_annotation(subject: str) -> tuple[int, str] | None:
-    """Validate optional ``(release=vX.Y.Z)`` subject annotation."""
-    if not _RELEASE_ANNOTATION_PREFIX_RE.search(subject):
+    """Validate an optional ``(release=vX.Y.Z)`` subject annotation.
+
+    Fires on ANY ``release=`` substring, then accepts only when the
+    annotation is shaped as its own paren group
+    ``(release=v<MAJOR>.<MINOR>.<PATCH>[aN|bN|rcN])``. A fused shape such as
+    ``(audit=A-x, release=v0.6.0)`` carries a ``release=`` signal but does not
+    match the standalone group, so it is a hard reject: the
+    .github/workflows/phase-release.yaml:46 extraction regex would fail to
+    match it and silently skip the tag + PyPI + npm publish.
+
+    Returns ``None`` when no ``release=`` signal is present or the annotation
+    is well-formed; otherwise a ``(1, diagnostic)`` rejection naming the
+    workflow regex.
+    """
+    if not _RELEASE_ANNOTATION_SIGNAL_RE.search(subject):
         return None
     if _RELEASE_ANNOTATION_RE.search(subject):
         return None
@@ -416,8 +438,12 @@ def _check_release_annotation(subject: str) -> tuple[int, str] | None:
         1,
         (
             f"release annotation rejected: {subject!r}\n"
-            "commit lint accepts (release=v...) annotation only when it is shaped "
-            "as '(release=v<MAJOR>.<MINOR>.<PATCH>[aN|bN|rcN])'"
+            "a 'release=' signal is present but not shaped as its own paren group "
+            "'(release=v<MAJOR>.<MINOR>.<PATCH>[aN|bN|rcN])'. The "
+            ".github/workflows/phase-release.yaml:46 extraction regex "
+            f"'{_WORKFLOW_RELEASE_EXTRACTION_RE}' matches only the standalone group, "
+            "so a fused '(audit=..., release=v...)' shape would silently skip the "
+            "tag + PyPI + npm publish"
         ),
     )
 
