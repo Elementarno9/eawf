@@ -67,7 +67,8 @@ def test_backfill_restored_the_known_population() -> None:
     incidents = raw.get("incidents") or {}
     for resolved_id in ("INC-P30-01", "INC-P30-02", "INC-P30-03", "INC-P30-06"):
         assert incidents[resolved_id]["status"] == "resolved"
-    assert incidents["INC-P30-08"]["status"] == "open"
+    # INC-P30-08 closed later in the iter (W31 standing visual gates).
+    assert incidents["INC-P30-08"]["status"] == "resolved"
     # INC-P30-07 reconciled citing the W02 I20 backfill audit.
     reconciled = incidents["INC-P30-07"]
     assert reconciled["status"] == "resolved"

@@ -681,7 +681,10 @@ def _write_cli_verify_profile(tmp_path: Path, *, enforce: bool) -> None:
                 '      cmd: ["git", "show", "no-such-ref-w26-close"]',
                 "      scope: all",
                 "      cadence: every-wave",
-                "      policy: warn",
+                # W13 scoped the floor pack: only a ``policy: block`` row
+                # gates the close; ``warn`` rows surface but never flip
+                # ``ready``, so the enforced-refusal fixture must block.
+                "      policy: block",
                 "",
             ]
         ),
