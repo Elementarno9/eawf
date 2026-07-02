@@ -61,6 +61,32 @@ def canonical_runtime_label(label: str) -> str:
     return _RUNTIME_LABEL_CANON.get(label, label)
 
 
+#: Inverse of :data:`_RUNTIME_LABEL_CANON`: adapter-manifest id -> the short
+#: event-surface ``RuntimeTriple`` spelling.
+_RUNTIME_LABEL_TRIPLE: dict[str, str] = {
+    canonical: triple for triple, canonical in _RUNTIME_LABEL_CANON.items()
+}
+
+
+def runtime_triple_label(label: str) -> str:
+    """Return the event-surface ``RuntimeTriple`` spelling for *label*.
+
+    The inverse of :func:`canonical_runtime_label`: maps the adapter-manifest
+    id (``"claude-code"``) onto the short event triple (``"claude"``) so a
+    consumer whose closed key set uses the triple spelling (the telemetry
+    ``RuntimeName`` literal) folds rows from BOTH surfaces onto one key
+    instead of double-counting one runtime as two. ``codex`` / ``opencode``
+    (and any already-triple label) pass through unchanged.
+
+    Args:
+        label: A runtime label from either surface (event triple or adapter id).
+
+    Returns:
+        The event-triple runtime label.
+    """
+    return _RUNTIME_LABEL_TRIPLE.get(label, label)
+
+
 class TracedEventPayload(BaseModel):
     """Base for C09 typed event payloads carrying the trace-ID chain.
 

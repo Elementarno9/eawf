@@ -40,6 +40,7 @@ from pydantic import ValidationError
 
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.events.base import runtime_triple_label
 from eawf.kernel.store.paths import store_path
 from eawf.observability.telemetry.models import RuntimeName, TelemetryDispatchCost
 
@@ -142,11 +143,21 @@ class DispatchCostSessionSource:
 
 
 def _runtime_or_none(raw: Any) -> RuntimeName | None:
-    """Return *raw* coerced to a closed runtime name, else ``None``."""
-    if isinstance(raw, str) and raw in _RUNTIME_NAMES:
+    """Return *raw* folded onto a closed runtime name, else ``None``.
+
+    Rows may carry either runtime spelling (the event triple ``claude`` or
+    the adapter-manifest id ``claude-code``); both name one runtime, so the
+    ingest folds the adapter id onto the closed triple key via
+    :func:`~eawf.kernel.store.kinds.events.base.runtime_triple_label` instead
+    of dropping it -- the split key double-counted one runtime as two.
+    """
+    if not isinstance(raw, str):
+        return None
+    folded = runtime_triple_label(raw)
+    if folded in _RUNTIME_NAMES:
         # The membership check above narrows the value to the closed
         # RuntimeName literal set; the cast keeps mypy aligned with that.
-        return raw  # type: ignore[return-value]
+        return folded  # type: ignore[return-value]
     return None
 
 
