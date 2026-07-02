@@ -13589,6 +13589,7 @@
       "SES-20260702T220628Z-auditor-claude-code"
     ],
     "active_wave_ids": [
+      "P30-I23-W28",
       "P30-I23-W45",
       "P30-I23-W46"
     ],
@@ -25515,6 +25516,19 @@
       "scope_id": "P30-I23-W27",
       "updated_at": "2026-07-02T17:30:41.892849Z"
     },
+    "P30-I23-W28": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W28-bucket-20260702T224202Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I23-W28",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I23-W28",
+      "updated_at": "2026-07-02T22:42:02.120489Z"
+    },
     "P30-I23-W29": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I23-W29-bucket-20260702T175100Z",
@@ -25673,7 +25687,7 @@
     },
     "P30-I23-W45": {
       "confidence": "low",
-      "current_store_record_id": "EST-P30-I23-W45-bucket-20260702T221400Z",
+      "current_store_record_id": "EST-P30-I23-W45-bucket-20260702T224328Z",
       "display": "2.0 EU · exp ~60m · pess ~216m",
       "expected_eu": 2.0,
       "expected_minutes": 60.0,
@@ -25682,11 +25696,11 @@
       "pessimistic_minutes": 216.0,
       "reference_class": "bucket:L",
       "scope_id": "P30-I23-W45",
-      "updated_at": "2026-07-02T22:14:00.348610Z"
+      "updated_at": "2026-07-02T22:43:28.179089Z"
     },
     "P30-I23-W46": {
       "confidence": "low",
-      "current_store_record_id": "EST-P30-I23-W46-bucket-20260702T221400Z",
+      "current_store_record_id": "EST-P30-I23-W46-bucket-20260702T224329Z",
       "display": "2.0 EU · exp ~60m · pess ~216m",
       "expected_eu": 2.0,
       "expected_minutes": 60.0,
@@ -25695,7 +25709,7 @@
       "pessimistic_minutes": 216.0,
       "reference_class": "bucket:L",
       "scope_id": "P30-I23-W46",
-      "updated_at": "2026-07-02T22:14:00.867788Z"
+      "updated_at": "2026-07-02T22:43:29.247569Z"
     },
     "P30-I23-W49": {
       "confidence": "low",
@@ -29331,7 +29345,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T22:34:05.731168Z",
+  "updated_at": "2026-07-02T22:43:29.247789Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -113591,8 +113605,8 @@
       "blocks": [
         "P30-I23-W33"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-i23",
+      "claimed_at": "2026-07-02T22:37:12.046946Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -113659,11 +113673,33 @@
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:38:15.373781Z",
       "outcome": null,
-      "runtime_baseline": null,
-      "runtime_latest": null,
+      "runtime_baseline": {
+        "api_duration_ms": 14000000,
+        "cache_creation_input_tokens": 900000,
+        "cache_read_input_tokens": 616000000,
+        "captured_at": "2026-07-02T22:42:02.120465Z",
+        "cost_usd": 209.02,
+        "harness": null,
+        "input_tokens": 5200000,
+        "model": null,
+        "output_tokens": 410000,
+        "total_duration_ms": 30000000
+      },
+      "runtime_latest": {
+        "api_duration_ms": 14900000,
+        "cache_creation_input_tokens": 930000,
+        "cache_read_input_tokens": 640000000,
+        "captured_at": "2026-07-02T22:42:21.264899Z",
+        "cost_usd": 213.75,
+        "harness": "claude-code",
+        "input_tokens": 5350000,
+        "model": "claude-fable-5",
+        "output_tokens": 425000,
+        "total_duration_ms": 31200000
+      },
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -116262,8 +116298,30 @@
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:39:41.342575Z",
       "outcome": null,
-      "runtime_baseline": null,
-      "runtime_latest": null,
+      "runtime_baseline": {
+        "api_duration_ms": 14900000,
+        "cache_creation_input_tokens": 930000,
+        "cache_read_input_tokens": 640000000,
+        "captured_at": "2026-07-02T22:43:28.179070Z",
+        "cost_usd": 213.75,
+        "harness": null,
+        "input_tokens": 5350000,
+        "model": null,
+        "output_tokens": 425000,
+        "total_duration_ms": 31200000
+      },
+      "runtime_latest": {
+        "api_duration_ms": 14900000,
+        "cache_creation_input_tokens": 930000,
+        "cache_read_input_tokens": 640000000,
+        "captured_at": "2026-07-02T22:42:21.264899Z",
+        "cost_usd": 213.75,
+        "harness": "claude-code",
+        "input_tokens": 5350000,
+        "model": "claude-fable-5",
+        "output_tokens": 425000,
+        "total_duration_ms": 31200000
+      },
       "runtime_preference": null,
       "sessions": {},
       "status": "claimed",
@@ -116426,8 +116484,30 @@
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:39:42.047090Z",
       "outcome": null,
-      "runtime_baseline": null,
-      "runtime_latest": null,
+      "runtime_baseline": {
+        "api_duration_ms": 14900000,
+        "cache_creation_input_tokens": 930000,
+        "cache_read_input_tokens": 640000000,
+        "captured_at": "2026-07-02T22:43:29.247549Z",
+        "cost_usd": 213.75,
+        "harness": null,
+        "input_tokens": 5350000,
+        "model": null,
+        "output_tokens": 425000,
+        "total_duration_ms": 31200000
+      },
+      "runtime_latest": {
+        "api_duration_ms": 14900000,
+        "cache_creation_input_tokens": 930000,
+        "cache_read_input_tokens": 640000000,
+        "captured_at": "2026-07-02T22:42:21.264899Z",
+        "cost_usd": 213.75,
+        "harness": "claude-code",
+        "input_tokens": 5350000,
+        "model": "claude-fable-5",
+        "output_tokens": 425000,
+        "total_duration_ms": 31200000
+      },
       "runtime_preference": null,
       "sessions": {},
       "status": "claimed",
