@@ -9688,6 +9688,20 @@
       "status": "done",
       "updated_at": "2026-07-02T19:33:20.258007Z"
     },
+    "P30-I23-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W11",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W11",
+      "model": null,
+      "scope_id": "P30-I23-W11",
+      "status": "done",
+      "updated_at": "2026-07-02T19:42:01.304557Z"
+    },
     "P30-I23-W12": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -25065,6 +25079,19 @@
       "scope_id": "P30-I23-W10",
       "updated_at": "2026-07-02T19:22:30.955282Z"
     },
+    "P30-I23-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W11-bucket-20260702T194200Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I23-W11",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I23-W11",
+      "updated_at": "2026-07-02T19:42:00.078094Z"
+    },
     "P30-I23-W12": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I23-W12-bucket-20260702T170345Z",
@@ -28764,7 +28791,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T19:33:20.260244Z",
+  "updated_at": "2026-07-02T19:42:01.306685Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -107056,10 +107083,10 @@
       "blocks": [
         "P30-I23-W33"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T19:42:00.069010Z",
+      "closed_at": "2026-07-02T19:42:01.304557Z",
+      "commit": "5854f19fd341ed52e9f7c2201c6c21c92274e35c",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W10"
@@ -107124,12 +107151,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:38:03.791203Z",
-      "outcome": null,
+      "outcome": "EP3 state-root guard live: mutation-bearing methods (state.mutate, spec verbs, dispatch pause/resume) refuse a caller whose intended state root differs from the daemon-bound root with a typed wrong-state-root error naming both paths and zero write; CLI toggle sends the workspace root; read-only fallback preserved; 5-test gate + 958 daemon+cli tests green; daemon restarted",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
