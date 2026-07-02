@@ -948,6 +948,17 @@ def _goto_tab(modal: ConfigModal, tab: str) -> None:
     modal.field_index = 0
 
 
+def _seek_field(modal: ConfigModal, key: str) -> None:
+    """Point the cursor at *key* within the active tab (within-tab-order robust).
+
+    Anchors on the field's dotted key via the modal's own rendered field list
+    rather than a hardcoded index, so adding a key to a tab (which shifts the
+    alphabetical order) does not silently retarget these interaction tests.
+    """
+    fields = modal._active_fields()
+    modal.field_index = [entry.key for entry in fields].index(key)
+
+
 def test_config_renders_every_registry_tab() -> None:
     """A registry-driven modal shows a tab per ``tabs_sorted()`` — none missing."""
 
@@ -1305,6 +1316,7 @@ def test_config_enter_toggles_bool() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
+            _seek_field(modal, "audit.fix_safe")
             entry = modal._active_field()  # audit.fix_safe (bool)
             assert entry is not None and entry.type == "bool"
             before = current_value(entry, modal._merged, modal._view.dirty)
@@ -1329,6 +1341,7 @@ def test_config_enter_cycles_choice_a_b_c_a() -> None:
             await pilot.pause()
             _goto_tab(modal, "planning")
             await pilot.pause()
+            _seek_field(modal, "planning.approval")
             entry = modal._active_field()
             assert entry is not None and entry.type == "choice"
             choices = list(entry.choices or ())
@@ -1365,7 +1378,7 @@ def test_config_enter_opens_inline_edit_for_int() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            modal.field_index = 1  # audit.flaky_retry_count (int)
+            _seek_field(modal, "audit.flaky_retry_count")
             await pilot.pause()
             entry = modal._active_field()
             assert entry is not None and entry.type == "int"
@@ -1388,7 +1401,7 @@ def test_config_inline_edit_commit_stages_value() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            modal.field_index = 1  # audit.flaky_retry_count (int, 0..5)
+            _seek_field(modal, "audit.flaky_retry_count")  # int, 0..5
             await pilot.pause()
             entry = modal._active_field()
             assert entry is not None
@@ -1425,7 +1438,7 @@ def test_config_inline_edit_same_value_leaves_no_dirty() -> None:
             modal = _push_config(app)
             await pilot.pause()
             _goto_tab(modal, "planning")
-            modal.field_index = 2  # planning.max_parallel_waves (int, default 4)
+            _seek_field(modal, "planning.max_parallel_waves")
             await pilot.pause()
             entry = modal._active_field()
             assert entry is not None and entry.key == "planning.max_parallel_waves"
@@ -1450,6 +1463,7 @@ def test_config_toggle_twice_clears_dirty() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
+            _seek_field(modal, "audit.fix_safe")
             entry = modal._active_field()  # audit.fix_safe (bool)
             assert entry is not None and entry.type == "bool"
             await pilot.press("enter")  # toggle once → dirty
@@ -1477,7 +1491,7 @@ def test_config_inline_edit_input_renders_wider_than_one_cell() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            modal.field_index = 1  # audit.flaky_retry_count (int)
+            _seek_field(modal, "audit.flaky_retry_count")  # int
             await pilot.pause()
             await pilot.press("enter")  # open inline editor
             await pilot.pause()
@@ -1637,7 +1651,7 @@ def test_config_inline_edit_esc_cancels_without_mutation() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            modal.field_index = 1
+            _seek_field(modal, "audit.flaky_retry_count")
             await pilot.pause()
             entry = modal._active_field()
             assert entry is not None
@@ -1663,7 +1677,7 @@ def test_config_inline_edit_out_of_range_int_shows_error_no_mutation() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            modal.field_index = 1  # audit.flaky_retry_count (max 5)
+            _seek_field(modal, "audit.flaky_retry_count")  # max 5
             await pilot.pause()
             entry = modal._active_field()
             assert entry is not None
@@ -2090,7 +2104,7 @@ def test_config_hint_flips_during_inline_edit() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            modal.field_index = 1  # int field
+            _seek_field(modal, "audit.flaky_retry_count")  # int field
             await pilot.pause()
             await pilot.press("enter")  # open inline editor
             await pilot.pause()

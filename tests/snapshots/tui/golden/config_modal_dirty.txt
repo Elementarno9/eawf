@@ -8,9 +8,9 @@
       │                                                                                                          │
       │   audit  daemon  estimation  flow  planning  preferences  prose  research  runtime  ship  statusline  t  │
       │  ╸━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+      │     audit.default_level      [choice]       <standard>                                                   │
       │  >◐ audit.fix_safe           [bool]         <true>                                                       │
       │     audit.flaky_retry_count  [int]          1                                                            │
-      │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │

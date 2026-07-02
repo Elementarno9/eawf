@@ -621,9 +621,14 @@ def test_config_modal_dirty_layer_snapshot() -> None:
         app = EaApp(scope="repo", state_path=_REPO_STATE)
         async with app.run_test(size=_SIZE) as pilot:
             await settle_screen(pilot)
-            _open_config(app)
+            modal = _open_config(app)
             await settle_screen(pilot)
-            await pilot.press("enter")  # toggle the first bool — stages a dirty edit
+            # ``audit.default_level`` (a choice) now sorts first in the audit
+            # tab, so target the first bool (``audit.fix_safe``) explicitly to
+            # keep this test's "toggle a bool stages a dirty edit" intent.
+            modal.field_index = 1
+            await settle_screen(pilot)
+            await pilot.press("enter")  # toggle the bool — stages a dirty edit
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "config_modal_dirty.txt")
 
@@ -662,7 +667,9 @@ def test_config_modal_inline_edit_int_snapshot() -> None:
             await settle_screen(pilot)
             modal = _open_config(app)
             await settle_screen(pilot)
-            modal.field_index = 1  # audit.flaky_retry_count (int)
+            # audit tab order: default_level (choice), fix_safe (bool),
+            # flaky_retry_count (int) -> index 2 is the int field.
+            modal.field_index = 2  # audit.flaky_retry_count (int)
             await settle_screen(pilot)
             await pilot.press("enter")  # open the inline editor
             await settle_screen(pilot)

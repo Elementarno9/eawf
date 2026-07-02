@@ -8,12 +8,12 @@
       │                                                                                                          │
       │   audit  daemon  estimation  flow  planning  preferences  prose  research  runtime  ship  statusline  t  │
       │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-      │  >  planning.approval                      [choice]       <ask>                                          │
+      │  >  dispatch.role_tier_token_cap           [int]          2400                                           │
+      │     planning.approval                      [choice]       <ask>                                          │
       │     planning.auto_plan                     [bool]         <false>                                        │
       │     planning.max_parallel_waves            [int]          4                                              │
       │     planning.require_research_for_unknowns [bool]         <true>                                         │
-      │                                                                                                          │
-      │                                                                                                          │
+      │     prep.auto_resume                       [bool]         <true>                                         │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │

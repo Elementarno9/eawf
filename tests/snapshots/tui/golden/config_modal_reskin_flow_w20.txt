@@ -17,7 +17,7 @@
       │     flow.auto_accept.ship     [bool]         <false>                                                     │
       │     flow.budget.enforce       [choice]       <soft>                                                      │
       │   ◐ flow.budget.multiplier    [float]        <1.5>                                                       │
-      │                                                                                                          │
+      │     flow.max_repair_cycles    [int]          3                                                           │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │
