@@ -1464,7 +1464,7 @@ def _resolve_jury_block_authority(
     # calibrated jury.
     if not cohort.silver and not cohort.gold:
         return BlockAuthority.ADVISORY
-    ballots_by_wave = _load_recorded_ballots()
+    ballots_by_wave = _load_recorded_ballots(state_path)
     # A labelled cohort with NO recorded ballots means the jury has never
     # actually run on those waves -- uncalibrated, so advisory. Scoring it
     # instead would trip validate_jury's phantom-jury hard error and crash
@@ -1478,16 +1478,18 @@ def _resolve_jury_block_authority(
     return jury_block_authority(report, verbosity, authority_config)
 
 
-def _load_recorded_ballots() -> dict[str, tuple[JurorBallot, ...]]:
-    """Return the persisted per-wave juror ballots -- honest-empty today.
+def _load_recorded_ballots(state_path: Path) -> dict[str, tuple[JurorBallot, ...]]:
+    """Return the persisted per-wave juror ballots from the ballot store.
 
-    No ballot store exists yet: juror ballots are not persisted anywhere, so
-    this returns ``{}`` -- the real substrate, not a stub. The jury label
-    writer that persists ballots replaces this body with a store read; the
-    close-path caller already handles the empty map by resolving advisory
-    authority instead of scoring a phantom jury.
+    Un-idled by P30-I23-W17: the convener now appends one ballot row per
+    juror to ``jury_ballot.jsonl``, so the calibration substrate accrues
+    from every convened jury. The close-path caller still resolves
+    advisory authority on an empty map, so a repo with no convened jury
+    keeps the honest-empty behaviour.
     """
-    return {}
+    from eawf.observability.eval.jury_validation import read_recorded_ballots
+
+    return read_recorded_ballots(state_path)
 
 
 async def _enforce_wave_close_gate(

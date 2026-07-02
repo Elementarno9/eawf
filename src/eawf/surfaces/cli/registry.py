@@ -213,6 +213,7 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     # calibrate.
     GroupRow("daemon", "eawf.surfaces.cli.commands.daemon", "daemon_app"),
     GroupRow("spec", "eawf.surfaces.cli.commands.spec", "spec_app"),
+    GroupRow("jury", "eawf.surfaces.cli.commands.jury", "jury_app"),
     GroupRow("bench", "eawf.surfaces.cli.commands.bench", "bench_app"),
     GroupRow("telemetry", "eawf.surfaces.cli.commands.telemetry", "telemetry_app"),
     GroupRow("snapshot", "eawf.surfaces.cli.commands.snapshot", "snapshot_app"),

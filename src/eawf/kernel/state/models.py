@@ -1527,13 +1527,13 @@ class FleetRun(_StrictModel):
 class State(_StrictModel):
     """Top-level eawf state document.
 
-    ``schema_version`` accepts the full ``"1.0"`` through ``"1.13"`` range so
+    ``schema_version`` accepts the full ``"1.0"`` through ``"1.14"`` range so
     an on-disk state written before any bump still re-validates after the
     model advances — the migrate chain rewrites the version string in place,
     but a read of an un-migrated state must never reject. The accepted set
     drives the migrate guard's model-supported max, so the literals move in
     lockstep with the migration steps (``v1_0_to_v1_1`` through
-    ``v1_12_to_v1_13``). The ``1.5`` edge is purely additive — it registers
+    ``v1_13_to_v1_14``). The ``1.5`` edge is purely additive — it registers
     :attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum
     value no existing state row references, so no historical fact changes.
     The ``1.6`` edge is likewise purely additive — it adds the top-level
@@ -1600,6 +1600,7 @@ class State(_StrictModel):
         "1.11",
         "1.12",
         "1.13",
+        "1.14",
     ]
     scope_kind: ScopeKind
     urn: UrnStr

@@ -590,6 +590,7 @@ class StoreKind(StrEnum):
     RESEARCH_CAMPAIGN = "research_campaign"
     RESEARCH_ROUND = "research_round"
     OPERATOR_INPUT = "operator_input"
+    JURY_BALLOT = "jury_ballot"
 
 
 class ArtifactKind(StrEnum):

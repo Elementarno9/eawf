@@ -434,6 +434,62 @@ class JuryValidationReport(BaseModel):
     known_bad_n: int = Field(default=0, ge=0)
 
 
+#: Sibling JSONL store the convener appends one juror-ballot envelope to per
+#: convened juror (P30-I23-W17).
+_JURY_BALLOT_STORE = "jury_ballot.jsonl"
+
+
+def read_recorded_ballots(state_path: Path) -> dict[str, tuple[JurorBallot, ...]]:
+    """Return the persisted per-wave juror ballots, keyed by wave id.
+
+    Reads the envelope rows the convener appends to
+    ``<state_dir>/store/jury_ballot.jsonl`` and rebuilds the per-wave
+    :class:`~eawf.observability.eval.jury.JurorBallot` map the calibration
+    scorer (:func:`validate_jury`) consumes. Abstentions (rows carrying an
+    ``error`` and no verdict) are skipped -- an errored lane cast no vote.
+    A missing store or a malformed line yields the honest subset rather
+    than raising: calibration reads are advisory.
+
+    Args:
+        state_path: Path to ``state.json``; the ballot store resolves
+            under its sibling ``store/`` directory.
+
+    Returns:
+        ``wave_id -> tuple[JurorBallot, ...]``; empty when no ballot has
+        ever been persisted.
+    """
+    import json as _json
+
+    from eawf.kernel.state.enums import AgentSessionRole
+
+    path = state_path.parent / "store" / _JURY_BALLOT_STORE
+    if not path.is_file():
+        return {}
+    ballots: dict[str, list[JurorBallot]] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        if not raw_line.strip():
+            continue
+        try:
+            row = _json.loads(raw_line)
+            payload = row.get("payload") or {}
+            wave_id = payload.get("wave_id")
+            verdict_raw = payload.get("verdict")
+            if not wave_id or verdict_raw is None:
+                continue
+            ballot = JurorBallot(
+                juror_id=str(payload.get("runtime") or "unknown")[:64],
+                acceptance_style="binary",
+                verdict=AgentReportVerdict(verdict_raw),
+                agent_role=AgentSessionRole.AUDITOR,
+                runtime=payload.get("runtime"),
+            )
+        except (ValueError, TypeError) as exc:
+            logger.debug(f"read_recorded_ballots skip-line cause={exc!r}")
+            continue
+        ballots.setdefault(wave_id, []).append(ballot)
+    return {wave_id: tuple(rows) for wave_id, rows in ballots.items()}
+
+
 def _ballots_for_wave(
     wave_id: str,
     ballots_by_wave: Mapping[str, tuple[JurorBallot, ...]],

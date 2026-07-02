@@ -62,12 +62,12 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable, Mapping
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole
+from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, StoreKind
 from eawf.kernel.state.models import State, Wave
 from eawf.observability.eval.jury import (
     JurorBallot,
@@ -589,6 +589,63 @@ async def _convene_one_juror(
     )
 
 
+def _persist_juror_ballots(
+    state_path: Path,
+    *,
+    wave_id: str,
+    jurors: tuple[JurorOutcome, ...] | list[JurorOutcome],
+    now: datetime | None = None,
+) -> None:
+    """Append one ``jury_ballot`` envelope per juror outcome.
+
+    Each row carries the wave id, the juror's runtime / role, and its
+    ballot verdict (or the structured error when the lane failed), so
+    :func:`~eawf.observability.eval.jury_validation.read_recorded_ballots`
+    can rebuild the per-wave ballot map the calibration scorer needs.
+    Best-effort: an OSError is logged, never raised -- losing one
+    calibration row must not fail the close the jury just served.
+
+    Args:
+        state_path: Path to ``state.json``; the ballot store resolves
+            under its sibling ``store/`` directory.
+        wave_id: The wave the jury convened on.
+        jurors: The per-juror outcomes to persist.
+        now: Row timestamp; ``None`` uses the wall clock.
+    """
+    from eawf.kernel.store.append import append_envelope
+    from eawf.kernel.store.envelope import Envelope
+    from eawf.kernel.store.paths import store_path as _store_path
+
+    stamp = now or datetime.now(UTC)
+    ballot_path = _store_path(state_path, StoreKind.JURY_BALLOT)
+    for index, juror in enumerate(jurors, start=1):
+        payload = {
+            "wave_id": wave_id,
+            "runtime": juror.runtime,
+            "verdict": juror.verdict.value if juror.verdict is not None else None,
+            "error": juror.error,
+            "cast_at": stamp.isoformat(),
+        }
+        envelope = Envelope(
+            schema_version="1.0",
+            id=f"JB-{wave_id}-{juror.runtime}-{stamp.strftime('%Y%m%dT%H%M%S')}-{index:02d}",
+            kind=StoreKind.JURY_BALLOT,
+            scope_id=wave_id,
+            created_at=stamp,
+            updated_at=None,
+            summary=f"juror ballot wave={wave_id} runtime={juror.runtime}",
+            payload=payload,
+            blob_refs=[],
+            artifact_ids=[],
+        )
+        try:
+            append_envelope(ballot_path, envelope)
+        except OSError as exc:
+            logger.warning(
+                f"_persist_juror_ballots wave={wave_id} runtime={juror.runtime} error={exc!r}"
+            )
+
+
 def _reduce_jury(
     *,
     wave_id: str,
@@ -788,6 +845,14 @@ async def convene_cross_vendor_jury(
         )
 
     jurors: list[JurorOutcome] = list(await asyncio.gather(*(_one(r) for r in runtimes)))
+
+    # Persist one ballot row per juror (P30-I23-W17): the calibration
+    # substrate was empty by construction because every convened jury's
+    # ballots were dropped on the floor. The append rides the sibling
+    # jury_ballot.jsonl portalock (distinct from the state lock) and a
+    # write failure never fails the jury itself -- calibration data is
+    # advisory to the close.
+    _persist_juror_ballots(state_path, wave_id=wave.id, jurors=jurors, now=now)
 
     return _reduce_jury(
         wave_id=wave.id, jurors=tuple(jurors), quorum=quorum, reliability=reliability
