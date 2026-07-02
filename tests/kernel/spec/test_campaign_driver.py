@@ -34,10 +34,18 @@ import pytest
 from eawf.kernel.spec.campaign_driver import (
     CampaignDriveResult,
     MissingRoundRunnerError,
+    ResearcherDispatchError,
+    RoundFindings,
+    build_round_runner,
     drive_campaign,
 )
 from eawf.kernel.spec.live_rounds import CockpitLevel, SupervisedCadenceError
-from eawf.kernel.spec.research_campaign import ResearchDomainConfig, ResearchProfileBlock
+from eawf.kernel.spec.research_campaign import (
+    ResearchDomainConfig,
+    ResearchProfileBlock,
+    StagedDispatch,
+    stage_campaign,
+)
 from eawf.kernel.spec.round_loop import (
     CheckpointPolicy,
     CheckpointTier,
@@ -257,3 +265,72 @@ def test_drive_campaign_empty_topic_raises_value_error() -> None:
             level=CockpitLevel.LIVE,
             round_runner=_counting_runner(saturate_on=1, seen=[]),
         )
+
+
+# ---------------------------------------------------------------------------
+# build_round_runner -- per-domain dispatch-failure isolation
+# ---------------------------------------------------------------------------
+
+
+def _researcher_body(domain: str) -> dict[str, object]:
+    """A valid researcher ``agent_end`` body fixture for *domain*."""
+    return {
+        "role": "researcher",
+        "verdict": "pass",
+        "confidence": "medium",
+        "summary": f"surveyed {domain}",
+        "question": f"what does {domain} reveal",
+        "findings": [f"{domain}-finding"],
+        "alternatives": [],
+        "recommendation": f"pursue {domain}",
+        "evidence_refs": [{"kind": "store_record", "ref": "src/x.py:1"}],
+    }
+
+
+def _saturate_reducer(findings: RoundFindings) -> SaturationReport:
+    """A reducer that declares the campaign dry immediately."""
+    return _report(saturated=True)
+
+
+class _FailingSpawner:
+    """Spawner stub that raises for the named domains, answers the rest."""
+
+    def __init__(self, failing_domains: frozenset[str]) -> None:
+        self._failing_domains = failing_domains
+
+    def __call__(self, dispatch: StagedDispatch) -> dict[str, object]:
+        if dispatch.domain in self._failing_domains:
+            raise RuntimeError(f"spawn transport died for {dispatch.domain}")
+        return _researcher_body(dispatch.domain)
+
+
+def test_build_round_runner_isolates_single_dispatch_failure() -> None:
+    """One raising spawn folds the surviving domains and records the failure."""
+    staged = stage_campaign("failure isolation", _block(("alpha", "beta", "gamma")))
+    spawner = _FailingSpawner(frozenset({"beta"}))
+    runner, rounds = build_round_runner(staged, spawner, _saturate_reducer)
+
+    outcome = runner(1)
+
+    assert outcome.saturation.saturated is True
+    assert len(rounds) == 1
+    findings = rounds[0]
+    assert findings.domains == ("alpha", "gamma")
+    assert findings.finding_lines == ("alpha-finding", "gamma-finding")
+    assert len(findings.failures) == 1
+    failure = findings.failures[0]
+    assert failure.domain == "beta"
+    assert "RuntimeError" in failure.error
+    assert "spawn transport died" in failure.error
+
+
+def test_build_round_runner_all_dispatch_failures_raise() -> None:
+    """A round where EVERY dispatch fails raises rather than an empty round."""
+    staged = stage_campaign("total failure", _block(("alpha", "beta")))
+    spawner = _FailingSpawner(frozenset({"alpha", "beta"}))
+    runner, rounds = build_round_runner(staged, spawner, _saturate_reducer)
+
+    with pytest.raises(ResearcherDispatchError, match="every researcher dispatch failed"):
+        runner(1)
+    # The wholly-dead round never recorded a findings row.
+    assert rounds == []

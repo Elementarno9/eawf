@@ -100,7 +100,28 @@ class ResearcherDispatchError(ValueError):
     rather than silently dropping the dispatch and producing an empty round
     (which would read as a converged campaign). The message names which
     dispatch domain failed.
+
+    Also raised by the round runner when EVERY dispatch in a round fails to
+    spawn: a wholly-dead round must surface rather than fold as an empty
+    round (which would likewise read as a converged campaign).
     """
+
+
+@dataclass(frozen=True)
+class DispatchFailure:
+    """Structured per-domain record of one failed researcher dispatch.
+
+    A raising spawn is isolated to its own domain -- the remaining domains'
+    findings still fold into the round -- so the failure is recorded here
+    instead of aborting the round.
+
+    Attributes:
+        domain: The research domain whose dispatch raised.
+        error: The raised error, rendered as ``TypeName: message``.
+    """
+
+    domain: str
+    error: str
 
 
 @dataclass(frozen=True)
@@ -123,11 +144,15 @@ class RoundFindings:
             spawned this round.
         domains: The domain names spawned this round, parallel to
             :attr:`bodies`.
+        failures: Structured per-domain records of dispatches whose spawn
+            raised this round; the surviving domains still populate
+            :attr:`bodies` / :attr:`domains`.
     """
 
     round_number: int
     bodies: tuple[ResearcherReportBody, ...] = ()
     domains: tuple[str, ...] = ()
+    failures: tuple[DispatchFailure, ...] = ()
 
     @property
     def finding_lines(self) -> tuple[str, ...]:
@@ -204,13 +229,18 @@ def build_round_runner(
 
     1. converts every :class:`StagedDispatch` in *staged* into a real spawned
        researcher session via the injected *spawn* seam (production binds the
-       daemon ``agent.dispatch`` path; a test binds a stub), and
+       daemon ``agent.dispatch`` path; a test binds a stub) -- a RAISING spawn
+       is isolated to its own domain and recorded as a structured
+       :class:`DispatchFailure`, so one dead researcher does not abort the
+       whole round; only a round where EVERY spawn fails raises
+       :class:`ResearcherDispatchError`, and
     2. parses each returned ``agent_end`` body into a typed
        :class:`ResearcherReportBody` via :func:`parse_researcher_findings` --
        a body that fails to parse raises :class:`ResearcherDispatchError`
        rather than producing a silent empty round, and
-    3. folds the parsed bodies into a :class:`RoundFindings` record, appends it
-       to the returned list, and reduces it to the round's
+    3. folds the parsed bodies (plus any per-domain failures) into a
+       :class:`RoundFindings` record, appends it to the returned list, and
+       reduces it to the round's
        :class:`~eawf.kernel.spec.saturation.SaturationReport` via the injected
        *saturation* reducer.
 
@@ -234,27 +264,50 @@ def build_round_runner(
 
     Raises:
         ResearcherDispatchError: Propagated from the callback when any of the
-            round's spawned researcher bodies fails to parse.
+            round's spawned researcher bodies fails to parse, or when every
+            dispatch in a round fails to spawn (a wholly-dead round must not
+            fold as an empty -- seemingly converged -- round).
     """
     recorder = _RoundRecorder()
 
     def _round_runner(round_number: int) -> RoundOutcome:
         bodies: list[ResearcherReportBody] = []
         domains: list[str] = []
+        failures: list[DispatchFailure] = []
         for dispatch in staged.dispatches:
-            raw = spawn(dispatch)
+            try:
+                raw = spawn(dispatch)
+            except Exception as exc:
+                failures.append(
+                    DispatchFailure(
+                        domain=dispatch.domain,
+                        error=f"{type(exc).__name__}: {exc}",
+                    )
+                )
+                logger.warning(
+                    f"build_round_runner round={round_number} "
+                    f"domain={dispatch.domain!r} dispatch_error={exc!r}"
+                )
+                continue
             bodies.append(parse_researcher_findings(dispatch.domain, raw))
             domains.append(dispatch.domain)
+        if staged.dispatches and not bodies:
+            failed = ", ".join(failure.domain for failure in failures)
+            raise ResearcherDispatchError(
+                f"every researcher dispatch failed in round {round_number}: {failed}"
+            )
         findings = RoundFindings(
             round_number=round_number,
             bodies=tuple(bodies),
             domains=tuple(domains),
+            failures=tuple(failures),
         )
         recorder.rounds.append(findings)
         report = saturation(findings)
         logger.info(
             f"build_round_runner round={round_number} dispatches={len(bodies)} "
-            f"findings={len(findings.finding_lines)} saturated={report.saturated}"
+            f"failures={len(failures)} findings={len(findings.finding_lines)} "
+            f"saturated={report.saturated}"
         )
         return RoundOutcome(saturation=report)
 
