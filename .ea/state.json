@@ -13545,7 +13545,7 @@
       "title": "Downscope telemetry and bucket recalibration backlog"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -26567,7 +26567,75 @@
         "P30-I22-W04",
         "P30-I22-W05",
         "P30-I22-W06",
-        "P30-I22-W07"
+        "P30-I22-W07",
+        "P30-I22-W08",
+        "P30-I22-W09",
+        "P30-I22-W10"
+      ]
+    },
+    "P30-I23": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": "Zero-deadlock close path, verifier teeth, instrumentation + visual oracle, ship integrity, skills/agents prompt hardening, and the recorded-validation tail gating the v0.6.0 re-close. First corpus authored to the typed-criteria DoR.",
+      "estimate_id": null,
+      "id": "P30-I23",
+      "intent": null,
+      "opened_at": "2026-07-02T13:37:56.390789Z",
+      "phase_id": "P30",
+      "status": "planned",
+      "title": "Max-hardening before ship",
+      "trigger": "none",
+      "wave_ids": [
+        "P30-I23-W01",
+        "P30-I23-W02",
+        "P30-I23-W03",
+        "P30-I23-W04",
+        "P30-I23-W05",
+        "P30-I23-W06",
+        "P30-I23-W07",
+        "P30-I23-W08",
+        "P30-I23-W09",
+        "P30-I23-W10",
+        "P30-I23-W11",
+        "P30-I23-W12",
+        "P30-I23-W13",
+        "P30-I23-W14",
+        "P30-I23-W15",
+        "P30-I23-W16",
+        "P30-I23-W17",
+        "P30-I23-W18",
+        "P30-I23-W19",
+        "P30-I23-W20",
+        "P30-I23-W21",
+        "P30-I23-W22",
+        "P30-I23-W23",
+        "P30-I23-W24",
+        "P30-I23-W25",
+        "P30-I23-W26",
+        "P30-I23-W27",
+        "P30-I23-W28",
+        "P30-I23-W29",
+        "P30-I23-W30",
+        "P30-I23-W31",
+        "P30-I23-W32",
+        "P30-I23-W33",
+        "P30-I23-W34",
+        "P30-I23-W35",
+        "P30-I23-W36",
+        "P30-I23-W37",
+        "P30-I23-W38",
+        "P30-I23-W39",
+        "P30-I23-W40",
+        "P30-I23-W41",
+        "P30-I23-W42",
+        "P30-I23-W43",
+        "P30-I23-W44",
+        "P30-I23-W45",
+        "P30-I23-W46",
+        "P30-I23-W47",
+        "P30-I23-W48",
+        "P30-I23-W49"
       ]
     }
   },
@@ -27607,7 +27675,8 @@
         "P30-I19",
         "P30-I20",
         "P30-I21",
-        "P30-I22"
+        "P30-I22",
+        "P30-I23"
       ],
       "opened_at": "2026-06-09T12:29:17.752919Z",
       "outcome_ids": [],
@@ -27658,7 +27727,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T05:41:25.008341Z",
+  "updated_at": "2026-07-02T13:39:45.334067Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -103037,6 +103106,2402 @@
         }
       ],
       "title": "Add watch-mode session picker and status-gate the cancel affordance",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I22-W08": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/screens/overlays/detail_attempts.py",
+        "tests/tui/test_overlays_detail.py"
+      ],
+      "gates": [],
+      "id": "P30-I22-W08",
+      "intent": {
+        "desired_outcome": "Evidence-tab attempt summary and timeline use the units humanizer and the cost-tab table treatment, with the remaining detail tabs swept for missed raw renders",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Operator live-review finding on the shipped I22 TUI waves",
+        "problem": "I22-W05 humanized tokens and restyled the cost tab but the wave-modal evidence tab still renders raw token ints and a plain padded table that wraps at modal width",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I22",
+      "opened_at": "2026-07-02T13:37:54.456848Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Restyle evidence-tab attempt tables and humanize modal token counts",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I22-W09": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/screens/overlays/detail.py",
+        "src/eawf/workflow/agent_report/rollup.py",
+        "tests/tui/test_overlays_detail.py"
+      ],
+      "gates": [],
+      "id": "P30-I22-W09",
+      "intent": {
+        "desired_outcome": "One shared compact-UTC formatter renders YYYY-MM-DD HH:MM:SS with no microseconds or offset at every TUI datetime render site",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Operator directive: no ms, always UTC, drop the offset",
+        "problem": "Detail rows and attempt timelines render full isoformat datetimes with microseconds and a +00:00 offset via _fmt_dt and _attempt_dt",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I22",
+      "opened_at": "2026-07-02T13:37:55.098993Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Render compact UTC timestamps across TUI detail surfaces",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I22-W10": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/evidence.py",
+        "tests/tui/test_modes_evidence.py"
+      ],
+      "gates": [],
+      "id": "P30-I22-W10",
+      "intent": {
+        "desired_outcome": "Enter on a highlighted report row opens a report-detail modal with verdict, summary, evidence_refs and followups, and the footer advertises it",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Operator could not discover how to open an evidence report",
+        "problem": "Evidence mode binds only p-peek on the criterion ledger; agent-report rows have no open affordance so the report body is unreachable",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I22",
+      "opened_at": "2026-07-02T13:37:55.735613Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Add an evidence-report open affordance to Evidence mode",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W01": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W02"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "CHANGELOG.md"
+      ],
+      "gates": [],
+      "id": "P30-I23-W01",
+      "intent": {
+        "desired_outcome": "Committed CHANGELOG section, feature branch pushed to origin at HEAD, local main fast-forwarded",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Backup precedes every other change and the release pre-flight requires the committed section",
+        "problem": "All P30 commits and the CHANGELOG Fixed hunk exist only on this machine",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:37:57.108510Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Secure the phase branch: commit CHANGELOG hunk and push to origin",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W02": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W03",
+        "P30-I23-W04",
+        "P30-I23-W05",
+        "P30-I23-W06",
+        "P30-I23-W12",
+        "P30-I23-W14",
+        "P30-I23-W15",
+        "P30-I23-W16",
+        "P30-I23-W22",
+        "P30-I23-W23",
+        "P30-I23-W24",
+        "P30-I23-W26",
+        "P30-I23-W27",
+        "P30-I23-W29",
+        "P30-I23-W30",
+        "P30-I23-W32",
+        "P30-I23-W37",
+        "P30-I23-W38",
+        "P30-I23-W40",
+        "P30-I23-W42"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W01"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        ".ea/state.json",
+        ".ea/store/decision.jsonl",
+        ".ea/artifacts/audits/",
+        "tests/lint/"
+      ],
+      "gates": [],
+      "id": "P30-I23-W02",
+      "intent": {
+        "desired_outcome": "Eight Decision rows landed, P30-I20 closed with an audit note, and the W22 prefix-rider commits annotated",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Typed ratification precedes code per the DoR",
+        "problem": "The hardening design choices and eleven operator AUQ ratifications have no typed Decision rows and I20 sits ACTIVE with all waves closed",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:37:57.862389Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Ratify I23 decisions and reconcile the ledger",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W03": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W20"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/lifecycle.py",
+        "src/eawf/surfaces/cli/commands/lifecycle_wave.py",
+        "src/eawf/surfaces/cli/_mutation.py",
+        "tests/cli/test_close_timeout_terminal.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W03",
+      "intent": {
+        "desired_outcome": "TimeoutError is terminal and any transport-fallback close is stamped daemon-fallback",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Removes one of the two dual-writer paths before the lock restructure",
+        "problem": "A 30s close-RPC timeout falls through to an ungated in-process close stamped indistinguishably from a daemon close",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:37:58.540779Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Make close-RPC timeout terminal and stamp fallback close mechanism",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W04": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W10"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/lock/portalock.py",
+        "src/eawf/runtime/lock/stale.py",
+        "tests/unit/test_lock_portalock.py",
+        "tests/unit/test_lock_stale.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W04",
+      "intent": {
+        "desired_outcome": "A background ticker refreshes heartbeat_at every 15s and a hold-ceiling warning logs held duration",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Kills the dual-exclusive-holder hazard",
+        "problem": "LockHandle.heartbeat has zero callers so any hold over 60s becomes stealable while the holder is alive",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:37:59.203999Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Heartbeat held state locks and enforce a hold ceiling",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W05": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W09"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/verify/oracle.py",
+        "tests/unit/verify/test_run_oracle.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W05",
+      "intent": {
+        "desired_outcome": "run_checks is invoked via asyncio.to_thread mirroring the W35 readiness fix",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Loop starvation is the zombie class ZD-R2",
+        "problem": "run_oracle executes synchronous subprocess gates budgeted to 3600s on the asyncio loop",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:37:59.853402Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Run the deterministic oracle tier off the daemon event loop",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W06": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W07",
+        "P30-I23-W19",
+        "P30-I23-W20"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/verify/preflight.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "tests/workflow/verify/"
+      ],
+      "gates": [],
+      "id": "P30-I23-W06",
+      "intent": {
+        "desired_outcome": "One pure-read run_close_preflight library the daemon, fleet, and daemonless paths all call",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The lock split, fleet teeth, and daemonless teeth all need one callable pre-flight",
+        "problem": "The daemon-only close enforcement symbols have zero CLI references so daemonless and fleet closes share none of the pipeline",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:00.537088Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Extract the shared wave-close pre-flight verifier library",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W07": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W08"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W06"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "tests/unit/daemon/"
+      ],
+      "gates": [],
+      "id": "P30-I23-W07",
+      "intent": {
+        "desired_outcome": "An advisory jury never displaces the blocking single-auditor; only earned BLOCKING authority does",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "40 verdict-always waves lost their gate this way",
+        "problem": "The profile merge ORs cross_vendor_jury so the blocking single-auditor never fires for in-band high-risk waves",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:01.202892Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Close the jury OR-fold single-auditor bypass",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W08": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W09",
+        "P30-I23-W17"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W07"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/observability/eval/cross_vendor_jury.py",
+        "tests/eval/jury/"
+      ],
+      "gates": [],
+      "id": "P30-I23-W08",
+      "intent": {
+        "desired_outcome": "Every close-time spawn carries a 600s wall-clock ceiling and jurors convene concurrently",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Operator ratified the 600s ceiling; ZD-R3",
+        "problem": "Close-time juror and auditor spawns pass no timeout and jurors convene sequentially so one hung vendor CLI holds the lock forever",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:01.844648Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Bound juror and auditor spawns and parallelize the jury loop",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W09": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W10",
+        "P30-I23-W21",
+        "P30-I23-W33"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W05",
+        "P30-I23-W08"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "tests/daemon/"
+      ],
+      "gates": [],
+      "id": "P30-I23-W09",
+      "intent": {
+        "desired_outcome": "Floor pack and deterministic oracle run before acquire; the under-lock section is re-read plus re-check plus bounded jury plus apply and fsync",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "ZD-R1 the root wedge, pulled forward by operator decision",
+        "problem": "The whole close pipeline runs under one held state portalock so every other mutator LockTimeouts for the whole hold",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:02.491306Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Split wave close into lock-free pre-flight and optimistic commit",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W10": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W11",
+        "P30-I23-W33"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W04",
+        "P30-I23-W09"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/__init__.py",
+        "src/eawf/runtime/daemon/main.py",
+        "src/eawf/runtime/daemon/methods/daemon.py",
+        "tests/daemon/test_mutation_watchdog.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W10",
+      "intent": {
+        "desired_outcome": "Per-mutation duration telemetry plus a watchdog that aborts a mutation wedged past 300s and recovers without restart",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Operator ratified the 300s hard-abort; ZD-R6",
+        "problem": "A wedged close is invisible until clients time out and recovery is a manual pkill plus lock-rm ceremony",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:03.143834Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Add per-mutation telemetry and a self-deadlock watchdog",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W11": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W33"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W10"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/runtime/daemon/methods/agent.py",
+        "tests/daemon/test_state_root_guard.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W11",
+      "intent": {
+        "desired_outcome": "Mutation-bearing methods refuse with a typed wrong-state-root error naming both paths",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Closes the EP3 wrong-repo mutation class",
+        "problem": "The machine-global daemon silently falls back to its bound state path and once mutated a smoke fixture instead of the calling repo",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:03.791203Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Refuse daemon mutations for a mismatched state root",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W12": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W13"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/verify/readiness.py",
+        "tests/workflow/verify/test_readiness.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W12",
+      "intent": {
+        "desired_outcome": "A third preservation arm keeps verdict-always waves un-narrowed",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Larger bypass than the OR-fold",
+        "problem": "Band narrowing never consults verdict_requirement so 58 verdict-always waves narrowed to enforce False",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:04.449877Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Preserve enforcement for verdict-always waves in band narrowing",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W13": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W34"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W12"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/verify/readiness.py",
+        "src/eawf/platform/profiles/data/python.yaml",
+        "tests/workflow/verify/test_floor_pack_integration.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W13",
+      "intent": {
+        "desired_outcome": "The declared scope touched and policy warn keys are honored so the honest path is also the cheap path",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Retires the waiver lifestyle; ZD-R7",
+        "problem": "The floor pack runs whole-tree checks and rejects on pre-existing noise which drove the reflexive triple-waive",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:05.126113Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Scope the close floor pack to wave file_scopes",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W14": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W34"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/conftest.py",
+        "justfile",
+        "tests/unit/test_runtime_dir_isolation.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W14",
+      "intent": {
+        "desired_outcome": "A session-scoped EAWF_RUNTIME_DIR fixture isolates every test daemon from live state",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Kills the flakes and the contamination class; ZD-R14",
+        "problem": "just test shares the live eawfd runtime dir and a suite run committed dispatch_paused true into live state history",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:05.940398Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Isolate test-suite daemons into per-session runtime dirs",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W15": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W21",
+        "P30-I23-W33"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/daemon.py",
+        "src/eawf/runtime/daemon/service_install.py",
+        "src/eawf/observability/doctor/checks.py",
+        ".gitignore",
+        "tests/cli/test_daemon_service_lifecycle.py",
+        "tests/unit/test_doctor_checks.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W15",
+      "intent": {
+        "desired_outcome": "daemon stop can evict the service, start defers to it, and doctor reports agent state plus runtime-dir size",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Closes the EP5 auto-respawn class",
+        "problem": "A launchd KeepAlive agent auto-respawns daemons defeating manual eviction and producing concurrent daemons",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:06.621547Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Manage the launchd agent in daemon stop/start and doctor",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W16": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W34"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/verdict.py",
+        "src/eawf/kernel/store/kinds/agent_report.py",
+        "src/eawf/workflow/agent_report/store.py",
+        "tests/workflow/dispatch/test_verdict.py",
+        "tests/unit/test_agent_report_store.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W16",
+      "intent": {
+        "desired_outcome": "Whole-word keyword scan and a role prefix that appears exactly once in report ids",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Makes the enforcement population honest before the teeth waves",
+        "problem": "Bare substring matching inflates the verdict-always population and the report id mint doubles the role token",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:07.295746Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Fix security-keyword word boundaries and auditor report ids",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W17": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W18"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W08"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/observability/eval/cross_vendor_jury.py",
+        "src/eawf/observability/eval/jury_validation.py",
+        "src/eawf/surfaces/cli/commands/jury.py",
+        "tests/eval/test_jury_stores.py",
+        "tests/cli/test_jury_label.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W17",
+      "intent": {
+        "desired_outcome": "A typed ballot store written by the convener and an eawf jury label CLI appending GoldLabel rows via the daemon",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Block authority needs a labeled cohort",
+        "problem": "No ballot store or gold-label writer exists so jury calibration data is lost by construction",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:07.960574Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Persist juror ballots and ship the eawf jury label writer",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W18": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W34"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W17"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/store/gold_label.jsonl",
+        "tests/eval/test_gold_label_seed.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W18",
+      "intent": {
+        "desired_outcome": "At least 20 labels seeded with at least 8 known-bad from the reopen and incident population",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The reopen class is ground-truth bad",
+        "problem": "Calibration needs a cohort with known-bad rows and none exist",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:08.637032Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Seed the jury gold-label cohort from known-bad waves",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W19": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W49",
+        "P30-I23-W33"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W06"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/fleet.py",
+        "src/eawf/workflow/verify/dispatch_close.py",
+        "tests/daemon/"
+      ],
+      "gates": [],
+      "id": "P30-I23-W19",
+      "intent": {
+        "desired_outcome": "Deterministic gates run via the pre-flight library before close and a failing gate routes to repair",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The autopilot self-QA keystone",
+        "problem": "The fleet clean path closes a wave on the agent's own 3-field report even when blocking gates exist",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:09.305011Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Execute deterministic gates on the fleet clean-close path",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W20": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W33"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W03",
+        "P30-I23-W06"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/lifecycle_wave.py",
+        "tests/cli/test_daemonless_close_teeth.py",
+        "tests/unit/cli/test_daemonless_close_waiver.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W20",
+      "intent": {
+        "desired_outcome": "The pre-flight blocks a failing required gate with the waiver door preserved and stamped",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Closes the enforcement-parity gap that made the waiver door moot",
+        "problem": "The daemonless close logs advisory warnings and applies unconditionally bypassing every oracle tier",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:09.965953Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Enforce verdict and deterministic gates on daemonless close",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W21": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W31",
+        "P30-I23-W34"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W09",
+        "P30-I23-W15"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/evidence/incident.py",
+        "src/eawf/observability/doctor/checks.py",
+        ".ea/store/incident.jsonl",
+        "tests/workflow/evidence/"
+      ],
+      "gates": [],
+      "id": "P30-I23-W21",
+      "intent": {
+        "desired_outcome": "Store re-folded, doctor parity checks added, the clobber class pinned by a regression test, and three new incident rows opened",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Forensic surface must be trustworthy before ship",
+        "problem": "state.json materializes 1 of 6 incident store ids after a stale-cache clobber",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:10.642984Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Repair the incident store-to-state fold with parity checks",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W22": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W34"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tools/idle_contract_gate.py",
+        "tests/unit/test_idle_contract_gate.py",
+        "tests/unit/test_idle_contract_binding_probe.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W22",
+      "intent": {
+        "desired_outcome": "AST call-site detection plus a dynamic-exercise leg reading the stores for three bound contracts",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The blind spot behind EU capture passing while capturing zero",
+        "problem": "A docstring mention discharges NO_CALL_SITE and the gate never checks runtime output",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:11.280548Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Detect idle contracts via AST call sites and dynamic exercise",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W23": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/platform/profiles/models.py",
+        "src/eawf/workflow/lifecycle/iter_.py",
+        "tests/workflow/lifecycle/test_iter_odr_gate.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W23",
+      "intent": {
+        "desired_outcome": "close_iter refuses below-floor iters when odr_blocking is set, default off until the drain lands",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Iter close can honestly enforce a typed floor after W25",
+        "problem": "The oracle-determinism-ratio floor is advisory-only",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:11.951714Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Add an ODR blocking flag behind profile config",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W24": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/spec.py",
+        "src/eawf/surfaces/cli/commands/spec.py",
+        "src/eawf/kernel/spec/common.py",
+        "tests/daemon/test_spec_convert_legacy.py",
+        "tests/cli/test_spec_convert_legacy.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W24",
+      "intent": {
+        "desired_outcome": "A daemon spec.convert_legacy mutation plus CLI proxy with dry-run and a per-row conversion report",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "First live caller for the idle converter",
+        "problem": "The QA-1 converter has zero production callers and the drain never had a live path",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:12.641615Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Ship the live legacy-to-typed criteria converter",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W25": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W43",
+        "P30-I23-W34"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W23",
+        "P30-I23-W24"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        ".ea/state.json",
+        ".ea/config.yaml",
+        "tests/lint/test_i20_i21_legacy_drain.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W25",
+      "intent": {
+        "desired_outcome": "Zero legacy rows across the corpus and odr_blocking flipped on for this repo",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The first conversion corpus and the ODR flip precondition",
+        "problem": "All 130 I20 plus I21 criteria are legacy self-attest because the bypass moved to plan time",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:13.302764Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Drain P30-I20/I21 legacy criteria as the first corpus",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W26": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W34"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/wave.py",
+        "tests/workflow/lifecycle/test_wave_plan_floor.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W26",
+      "intent": {
+        "desired_outcome": "Wave authoring rejects legacy or gateless-deterministic criteria unless a typed waiver is supplied",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Close-time enforcement alone moved the bypass to plan time",
+        "problem": "plan_wave leaves criteria optional and untyped so repair iters authored 130 of 130 legacy",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:14.038792Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Enforce a plan-time typed-criteria floor on wave authoring",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W27": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W28"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/templates/claude/hook.sh.j2",
+        "src/eawf/surfaces/render/hooks.py",
+        "src/eawf/runtime/hooks/runner.py",
+        "tests/runtime/hooks/"
+      ],
+      "gates": [],
+      "id": "P30-I23-W27",
+      "intent": {
+        "desired_outcome": "Wrappers read stdin first and a recorded real payload reaches runtime.capture with a non-empty cost block",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The single root cause of the EU zero story",
+        "problem": "Hook wrappers synthesize payloads from empty argv and discard the stdin JSON Claude actually delivers so EU reads zero on all 672 actuals rows",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:14.727062Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Read Claude hook stdin JSON in session_end and subagent_stop",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W28": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W33"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W27"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/state.json",
+        "tests/workflow/test_runtime_capture_present.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W28",
+      "intent": {
+        "desired_outcome": "One real operator session closes a wave with a stored non-zero runtime delta and a monotone repo test pins it forever",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The binding evidence the whole EU story lacks",
+        "problem": "Zero of 672 actuals rows carry elapsed_eu above zero",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:15.373781Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Record the first inline close with captured elapsed_eu above zero",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W29": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W33"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/dispatch_runner.py",
+        "tests/daemon/test_dispatch_cost_labels.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W29",
+      "intent": {
+        "desired_outcome": "The write site wraps the label with canonical_runtime_label",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Un-idles the I21 helper at its one writer",
+        "problem": "dispatch_cost rows persist raw runtime labels so cost-by-runtime double-counts one runtime as two",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:16.038097Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Canonicalize runtime labels at the dispatch_cost write site",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W30": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W31"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/audit_dsl/kinds/mockup_image_diff.py",
+        "src/eawf/workflow/audit_dsl/registry.py",
+        "src/eawf/surfaces/tui/snapshot/pilot_harness.py",
+        "tests/unit/test_p30_i16_w14.py",
+        "tests/unit/test_p30_i20_w17.py",
+        "tests/unit/daemon/test_close_gate_mockup_golden_diff.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W30",
+      "intent": {
+        "desired_outcome": "A live Pilot capture pipeline diffs export_screenshot renders against mockup goldens with contrast and alignment features",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "W33 and W10 class defects shipped after the oracle existed",
+        "problem": "The image falsifier checks two features over frozen committed PNGs and never diffs a live render",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:16.698628Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Build the live-render visual oracle with broadened falsifier",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W31": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W34"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W21",
+        "P30-I23-W30"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/state.json",
+        "tests/fixtures/mockup_image_diff/",
+        "tests/lint/test_visual_gate_census.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W31",
+      "intent": {
+        "desired_outcome": "Two live-mode visual gates and one tui_flow gate standing on real surfaces and INC-P30-08 closed",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The oracle earns a consumer",
+        "problem": "mockup_golden_diff and tui_flow appear on zero stored wave gates so visual truth stays human-gated",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:17.362525Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Seed standing visual and tui_flow gates on two TUI surfaces",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W32": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W34"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tools/commit_prefix_lint.py",
+        "tests/unit/test_commit_prefix_lint.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W32",
+      "intent": {
+        "desired_outcome": "Any release= substring must match the exact workflow extraction regex and the drafted phase-close subject passes a dry-run test",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "One character away from a zeroed publish chain",
+        "problem": "The lint keys on the literal release= prefix and silently passes the fused shape that forced the June 12 reset",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:38:18.028525Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Harden the release-annotation lint and dry-run the W22 subject",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W33": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W34"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W09",
+        "P30-I23-W10",
+        "P30-I23-W11",
+        "P30-I23-W15",
+        "P30-I23-W19",
+        "P30-I23-W20",
+        "P30-I23-W28",
+        "P30-I23-W29",
+        "P30-I23-W37"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tools/validate_drive_recording.py",
+        ".ea/artifacts/evidence/"
+      ],
+      "gates": [],
+      "id": "P30-I23-W33",
+      "intent": {
+        "desired_outcome": "A recorded capped drive with gate-executing closes, a converged campaign, per-lane jail smoke, and a validator tool asserting cost EU tail and convergence",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Re-close gate conditions 1 and 2",
+        "problem": "Three live drives each found defects the green suite missed and the I21 fixes are code-verified only",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:32.667470Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Run a recorded live drive on the smoke fixture with jail smoke",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W34": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W35"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W13",
+        "P30-I23-W14",
+        "P30-I23-W16",
+        "P30-I23-W18",
+        "P30-I23-W21",
+        "P30-I23-W22",
+        "P30-I23-W25",
+        "P30-I23-W26",
+        "P30-I23-W31",
+        "P30-I23-W32",
+        "P30-I23-W33",
+        "P30-I23-W48",
+        "P30-I23-W49"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/store/evidence.jsonl"
+      ],
+      "gates": [],
+      "id": "P30-I23-W34",
+      "intent": {
+        "desired_outcome": "just test-all green with no waiver plus the two CI-only gates run locally, minting fresh deterministic evidence",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Re-close gate condition 5",
+        "problem": "Zero deterministic-pass evidence rows exist after 2026-06-10 and the I21 burst closed on waived attestations",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:33.333703Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Run the waiver-free full-tree gauntlet with deterministic evidence",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W35": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W36"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W34"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        ".ea/artifacts/reviews/",
+        "tests/lint/test_i22_review_artifact.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W35",
+      "intent": {
+        "desired_outcome": "A fresh-context review over the iter diff with findings triaged and the verdict persisted via the auditor-report store",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Re-close gate condition 6",
+        "problem": "Independent multi-agent review is the only discipline that reliably caught P30 defects and the ship-gate audit false-passed twice",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:33.998658Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Convene a fresh independent multi-agent review of the I23 diff",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W36": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W35"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/state.json",
+        ".ea/specs/P30/P30-I21/P30-I21-W22.md",
+        "tests/lint/test_reclose_staging.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W36",
+      "intent": {
+        "desired_outcome": "P30-I21-W22 retyped via spec sync, the re-close runbook staged with the exact subject and Windows de-scope line, and the wave census clean",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Re-close gate condition 7",
+        "problem": "The release wave is bound by one legacy gateless criterion and the multi-active-iter close order is ambiguous",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:34.666329Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Stage the v0.6.0 re-close ordering and hand off to I21-W22",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W37": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W33"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/spec/campaign_driver.py",
+        "tests/kernel/spec/test_campaign_driver.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W37",
+      "intent": {
+        "desired_outcome": "spawn failures are isolated per dispatch with remaining domains folded and a regression test pinning it",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Load-bearing for the W33 live campaign convergence",
+        "problem": "The uncommitted round-isolation diff was lost so one dead researcher dispatch still aborts the whole campaign round",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:35.321859Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Isolate researcher dispatch failure inside build_round_runner",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W38": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W39",
+        "P30-I23-W43",
+        "P30-I23-W49"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/agents/specs/models.py",
+        "tests/unit/test_subagent_spec_model.py",
+        "tests/unit/test_dispatch_renderer.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W38",
+      "intent": {
+        "desired_outcome": "Both renders instruct report-then-stop with the no-eawf-in-worktree out-of-scope clause and the token-tally handoff named",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The prompts stop teaching the self-close disease",
+        "problem": "The interactive render still orders executors to run eawf wave close and routes mutations through eawf state",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:36.046705Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Rewrite dispatch workflow step 5 to report-then-parent-closes",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W39": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W48"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W38"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/unit/test_prompt_rule_clauses.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W39",
+      "intent": {
+        "desired_outcome": "A two-scope lint over rendered executor prompts and _EXECUTOR_BODY with parent-side bodies allowlisted",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The lint pins the W38 fix",
+        "problem": "Nothing pins the composer fix so a future edit can reintroduce self-close instructions",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:36.761343Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Add rendered-prompt lint banning eawf commands in worktree sections",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W40": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W41"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/lifecycle_wave.py",
+        "src/eawf/surfaces/cli/commands/lifecycle_wave_read.py",
+        "src/eawf/surfaces/cli/commands/pr_review.py",
+        "tests/unit/test_dispatch_renderer.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W40",
+      "intent": {
+        "desired_outcome": "All four CLI render sites pass the workspace root and References render when a matching brief exists",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Operator-dispatched worktrees silently lose the briefs",
+        "problem": "Interactive prompt renders omit repo_root so spike-brief References are dropped and Memory degrades",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:37.475803Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Pass repo_root through the four interactive prompt call sites",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W41": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W43"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W40"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/renderer.py",
+        "src/eawf/kernel/config/registry/config_keys.py",
+        "tests/unit/test_dispatch_role_tier.py",
+        "tests/unit/test_role_contract_projection.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W41",
+      "intent": {
+        "desired_outcome": "resolve_role_blocks feeds all six render sites and the token cap becomes a config leaf defaulting 2400",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Operator ratified the 2400 cap; the designed channel goes live",
+        "problem": "The whole per-role runtime-customization channel is plumbed and dead with zero production callers",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:38.167643Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Wire profile role-tier blocks into live dispatch prompts",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W42": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W44"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/render/skills/registry.py",
+        "tests/unit/test_prompt_rule_clauses.py",
+        "tests/unit/test_skill_registry_p11.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W42",
+      "intent": {
+        "desired_outcome": "Canonical clause texts landed in prep, flow, agent-dispatch, ship, and audit bodies at their declared homes",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Belt-and-braces with the composer clauses",
+        "problem": "None of the seven hard-won operator gotchas appears in any skill body",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:38.827677Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Inject the seven operator gotchas into skill registry bodies",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W43": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W48",
+        "P30-I23-W49"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W38",
+        "P30-I23-W41",
+        "P30-I23-W25"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/render/agents.py",
+        "tests/unit/test_render_claude_agents.py",
+        "tests/unit/test_prompt_rule_clauses.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W43",
+      "intent": {
+        "desired_outcome": "Typed DoR/DoD blocks in all five bodies with the grandfathered-legacy carve-out and a token-accounting test",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The binding-pass discipline reaches every dispatch prompt",
+        "problem": "Agent bodies carry no criteria-fidelity DoR or DoD so executors accept unready specs and auditors accept existence as wiring",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:39.509972Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Add DoR/DoD contract blocks to the five agent registry bodies",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W44": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W45",
+        "P30-I23-W46"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W42"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/render/skills/registry.py",
+        "tests/unit/test_skill_registry_p11.py",
+        "tests/unit/test_skill_reconcile.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W44",
+      "intent": {
+        "desired_outcome": "Every hint and an Options section updated in one wave so the engine waves stay registry-free",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Kills the registry file collision between engine waves",
+        "problem": "Existing engine options are undocumented in hints and new options need declared homes",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:40.249131Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Document skill runtime options in argument hints and bodies",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W45": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W48"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W44"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/skills/prep.py",
+        "src/eawf/workflow/skills/audit.py",
+        "src/eawf/workflow/skills/ship.py",
+        "src/eawf/workflow/skills/flow/__init__.py",
+        "src/eawf/kernel/config/registry/config_keys.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W45",
+      "intent": {
+        "desired_outcome": "auto-resume, out-of-order, ceremony, runtime, level, enforce, gauntlet, release, skip-pr-pass, caps, and max-repair-cycles parsed with defaults and boundary tests",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Ship release validation inherits the exact workflow regex",
+        "problem": "prep, audit, ship, and flow lack the ratified runtime options and config keys",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:41.342575Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Add runtime options to core-loop skill engines",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W46": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W47",
+        "P30-I23-W48"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W44"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/skills/research.py",
+        "src/eawf/workflow/skills/polish.py",
+        "src/eawf/workflow/skills/review.py",
+        "src/eawf/surfaces/cli/commands/roadmap.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W46",
+      "intent": {
+        "desired_outcome": "rounds, agents, budget, auto-apply-safe, category, level, criteria, headless, model, dry-run, and criteria-from-brief parsed with the polish keys added",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "First production consumer for the idle research.agent_count leaf",
+        "problem": "research, polish, review, agent-dispatch, and roadmap lack their ratified options and polish keys are dead prose",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:42.047090Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Add runtime options to research-family and review skill engines",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W47": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W48"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W46"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/render/skills/registry.py",
+        "tests/unit/test_skill_registry_p11.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W47",
+      "intent": {
+        "desired_outcome": "Tense-accurate tiered enforcement prose, the planner path corrected, and the overlay limitation documented",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Skills must not fight the teeth waves",
+        "problem": "Audit and ship bodies teach agents that enforcement is advisory-default and reference nonexistent config keys",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:42.741506Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Fix stale enforcement prose and dead config keys in skill bodies",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W48": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W34"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W39",
+        "P30-I23-W43",
+        "P30-I23-W45",
+        "P30-I23-W46",
+        "P30-I23-W47"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tests/unit/test_skill_reconcile.py",
+        "tests/unit/test_cli_skill_render.py",
+        "tests/unit/test_plugin_install_codex.py",
+        "tests/unit/test_prompt_rule_clauses.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W48",
+      "intent": {
+        "desired_outcome": "Both plugin trees regenerated with zero reconcile drift and goldens asserting each clause in rendered output",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The verification loop for the whole skills cluster",
+        "problem": "Registry edits are invisible until re-rendered and nothing pins the new clauses in the rendered trees",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:43.402265Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Re-render plugin trees and pin render goldens for new clauses",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W49": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I23-W34"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I23-W38",
+        "P30-I23-W43",
+        "P30-I23-W19"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/agents/specs/models.py",
+        "src/eawf/workflow/verify/dispatch_close.py",
+        "src/eawf/surfaces/render/agents.py",
+        "tests/daemon/"
+      ],
+      "gates": [],
+      "id": "P30-I23-W49",
+      "intent": {
+        "desired_outcome": "The prompt requires one ref per criterion and a profile-gated close rung refuses criteria-bearing waves with empty refs",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Operator ratified the two-step rollout; resolves the standing prompt self-contradiction",
+        "problem": "The report prompt forces evidence_refs empty while the executor body demands an EvidenceRecord per criterion",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T13:39:44.063249Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [],
+      "title": "Require evidence refs in headless executor reports",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
