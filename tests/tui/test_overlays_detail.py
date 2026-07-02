@@ -9,6 +9,7 @@ selection messages (:class:`BacklogTable.RowActivated` /
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -47,6 +48,7 @@ from eawf.kernel.store.kinds.agent_report import (
     store_kind_for_role,
 )
 from eawf.kernel.store.paths import store_path
+from eawf.surfaces.render.link_wrap import PreMarkedText
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.screens.overlays.detail import (
     _HISTORY_LINK_LINE,
@@ -963,8 +965,16 @@ def test_resolve_detail_wave_detail_includes_attempt_timeline() -> None:
     assert rows["attempts"] == "2 attempts, 1 retry, 0 blocked, 49 tokens"
     assert rows["error kinds"] == "none"
     timeline = rows["attempt timeline"]
+    # The timeline rides the cost-tab treatment: a PreMarkedText block whose
+    # header carries the accent-bold markup verbatim (the detail overlay's
+    # escaping choke point passes PreMarkedText through untouched).
+    assert isinstance(timeline, PreMarkedText)
     lines = [line.strip() for line in timeline.splitlines() if line.strip()]
-    assert lines[0].split() == [
+    header = lines[0]
+    assert header.startswith("[$accent][b]")
+    assert header.endswith("[/][/]")
+    header_cols = header.removeprefix("[$accent][b]").removesuffix("[/][/]").split()
+    assert header_cols == [
         "att",
         "runtime",
         "started",
@@ -974,8 +984,12 @@ def test_resolve_detail_wave_detail_includes_attempt_timeline() -> None:
         "blocked",
         "tokens",
     ]
+    # Compact space-free timestamps keep each row at eight whitespace-split
+    # columns; the year + UTC offset are dropped from the ISO stamp.
     assert len(lines[1].split()) == 8
     assert len(lines[2].split()) == 8
+    assert "05-27T12:06:00" in lines[2]
+    assert "2026-05-27T12:06:00+00:00" not in lines[2]
     assert "switch" in lines[2]
     assert "34" in lines[2]
 
@@ -996,6 +1010,116 @@ def test_resolve_detail_wave_attempt_rollup_uses_reports_and_errors() -> None:
     assert rows["attempts"] == "2 attempts, 1 retry, 1 blocked, 49 tokens"
     assert rows["error kinds"] == "network_error=1, timeout=2"
     assert "yes" in rows["attempt timeline"]
+
+
+# --------------------------------------------------------------------------
+# Evidence tab — humanized token counts + cost-tab table treatment (W08)
+# --------------------------------------------------------------------------
+
+#: The detail modal card is ``width: 80%; max-width: 120`` with a round border
+#: (one cell each side) and ``padding: 1 2`` (two cells each horizontal side).
+#: At the 140-column test width the cost-tab modal tests use, the card is
+#: ``0.8 * 140 = 112`` cells wide, so its content area is
+#: ``112 - 2 (border) - 4 (padding) = 106`` cells. A restyled timeline row must
+#: fit inside that so it never wraps mid-row.
+_MODAL_CONTENT_WIDTH_AT_140 = 106
+
+
+def _visible_width(line: str) -> int:
+    """Return *line*'s rendered cell width, stripping Textual markup tags."""
+    return len(re.sub(r"\[/?[^\]]*\]", "", line))
+
+
+def _state_with_large_token_wave() -> tuple[State, str]:
+    """Return a state whose wave's first attempt burns a six-digit token tally.
+
+    Attempt 1 spends 352,100 tokens (input 350,000 + output 2,100) so the
+    humanizer renders ``352.1k``; attempt 2 stays small (34 tokens) so a
+    sub-thousand tally still reads raw.
+    """
+    state, wave_id = _state_with_attempted_wave()
+    big = (
+        state.waves[wave_id]
+        .sessions[1]
+        .model_copy(update={"input_tokens": 350_000, "output_tokens": 2_100})
+    )
+    sessions = dict(state.waves[wave_id].sessions)
+    sessions[1] = big
+    rebuilt = state.waves[wave_id].model_copy(update={"sessions": sessions})
+    new_waves = dict(state.waves)
+    new_waves[wave_id] = rebuilt
+    return state.model_copy(update={"waves": new_waves}), wave_id
+
+
+def test_attempt_summary_humanizes_large_token_total() -> None:
+    """CR-01: the attempt summary humanizes the token tally, never a raw int."""
+    state, wave_id = _state_with_large_token_wave()
+    rows = dict(resolve_detail(state, wave_id).evidence)
+    # 352,100 (attempt 1) + 34 (attempt 2) = 352,134 -> "352.1k tokens".
+    assert "352.1k tokens" in rows["attempts"]
+    assert "352134" not in rows["attempts"]
+
+
+def test_attempt_timeline_table_humanizes_token_column() -> None:
+    """CR-01: the timeline tokens column humanizes each tally, never a raw int."""
+    state, wave_id = _state_with_large_token_wave()
+    timeline = dict(resolve_detail(state, wave_id).evidence)["attempt timeline"]
+    assert "352.1k" in timeline
+    assert "352100" not in timeline
+    # The sub-thousand attempt still reads raw.
+    assert "34" in timeline
+
+
+def test_attempt_timeline_table_uses_cost_tab_accent_bold_header() -> None:
+    """CR-02: the timeline rides the cost-tab treatment (PreMarkedText + accent-bold header)."""
+    state, wave_id = _state_with_large_token_wave()
+    timeline = dict(resolve_detail(state, wave_id).evidence)["attempt timeline"]
+    assert isinstance(timeline, PreMarkedText)
+    header = next(line.strip() for line in timeline.splitlines() if line.strip())
+    assert header.startswith("[$accent][b]")
+    assert header.endswith("[/][/]")
+
+
+def test_attempt_timeline_table_fits_modal_width_without_wrap() -> None:
+    """CR-02: every restyled timeline row fits the modal width, so none wraps."""
+    state, wave_id = _state_with_large_token_wave()
+    timeline = dict(resolve_detail(state, wave_id).evidence)["attempt timeline"]
+    lines = [line for line in timeline.splitlines() if line.strip()]
+    assert lines  # a real table, not the honest-empty sentinel
+    for line in lines:
+        assert _visible_width(line) <= _MODAL_CONTENT_WIDTH_AT_140
+
+
+def test_detail_modal_evidence_tab_paints_unwrapped_humanized_attempt_row() -> None:
+    """CR-01 + CR-02: the evidence tab paints a humanized token on a single unwrapped row."""
+
+    async def body() -> None:
+        state, wave_id = _state_with_large_token_wave()
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(140, 48)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = resolve_detail(state, wave_id)
+            modal = DetailModal(card)
+            app.push_screen(modal)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            modal.query_one(TabbedContent).active = "detail-tab-evidence"
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            rendered = capture_screen_text(app)
+            # The humanized tally paints and the raw six-digit int never does.
+            assert "352.1k" in rendered
+            assert "352100" not in rendered
+            # The full attempt row is on one screen line (no mid-row wrap): the
+            # runtime column and the humanized token column share a line.
+            row_line = next(
+                (line for line in rendered.splitlines() if "codex" in line and "352.1k" in line),
+                None,
+            )
+            assert row_line is not None
+
+    asyncio.run(body())
 
 
 # --------------------------------------------------------------------------
