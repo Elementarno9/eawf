@@ -4,15 +4,22 @@ Per Phase 4 W05, ``eawf plugin install claude`` emits one
 ``.claude/hooks/<event>.sh`` per :class:`~eawf.runtime.hooks.event.HookEventType`.
 The output is a small POSIX-bash wrapper that:
 
-1. Reads up to four positional arguments (``$1..$4``) — Claude Code
-   hooks pass arguments, not stdin JSON, so the wrapper is responsible
-   for synthesising a JSON payload.
-2. Synthesises a minimal payload of shape
+1. Reads the JSON document Claude Code delivers on stdin and forwards it
+   verbatim — SessionEnd / Stop / SubagentStop stdin carries the session
+   cost + token usage totals that feed EU capture, so a lossless forward
+   is the primary contract.
+2. Falls back — only when stdin is empty (or a TTY, for interactive smoke
+   runs) — to synthesising a minimal payload of shape
    ``{"hook_event_name": <claude-name>, "claude_event_name":
-   <eawf-event>, "args": [<arg1>, <arg2>, <arg3>, <arg4>]}``.
+   <eawf-event>, "args": [<arg1>, <arg2>, <arg3>, <arg4>]}`` from up to
+   four positional arguments (``$1..$4``).
 3. Pipes the payload to ``uv run eawf hook run <event_type> --runtime
    claude``. The CLI's exit code (0 ok, 9 blocked) is the wrapper's
    exit code.
+
+The read is fail-open: a hook that dies breaks the operator's session,
+so an unreadable / empty stdin degrades to the positional-arg fallback
+rather than aborting.
 
 The wrapper deliberately stays in pure POSIX bash (no ``read -r``
 options, no ``${@:1:4}`` parameter expansions) so it works on macOS

@@ -28,6 +28,7 @@ import logging
 import os
 import time
 from collections.abc import Callable, Iterable
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -184,6 +185,67 @@ def _session_end_payload(event: HookEvent) -> dict[str, Any]:
     return {}
 
 
+def _coerce_cost_usd_string(raw: Any) -> Decimal | None:
+    """Return a string ``cost_usd`` (e.g. ``"0.82"``) as a non-negative Decimal.
+
+    Claude Code's Stop / SessionEnd / SubagentStop hook stdin ships ``cost_usd``
+    as a JSON string, whereas the statusline parser
+    :func:`~eawf.runtime.runtimes.claude.runtime_counters.parse_runtime_counters`
+    only accepts a numeric ``cost_usd``. Returning a :class:`~decimal.Decimal`
+    keeps the value exact through the parser without touching the statusline
+    contract. A non-string, malformed, non-finite, or negative value yields
+    ``None`` so the field is dropped rather than crashing the fail-open hook.
+    """
+    if not isinstance(raw, str):
+        return None
+    try:
+        value = Decimal(raw)
+    except InvalidOperation:
+        return None
+    if not value.is_finite() or value < 0:
+        return None
+    return value
+
+
+def _normalise_claude_hook_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Adapt a real Claude Code hook stdin payload to the statusline parser shape.
+
+    Claude Code delivers hook input on stdin (per the hooks reference): the
+    Stop / SessionEnd / SubagentStop payloads carry token usage under a flat
+    ``usage`` block and a string ``cost_usd`` inside ``cost``, while
+    :func:`~eawf.runtime.runtimes.claude.runtime_counters.parse_runtime_counters`
+    was built against the statusline shape (tokens under
+    ``context_window.current_usage``, a numeric ``cost_usd``). This adapter
+    bridges the two so the shared parser stays the single counter authority:
+
+    - a flat ``usage`` mapping is lifted to ``context_window.current_usage``
+      (only when the payload does not already carry a ``context_window``, so a
+      genuine statusline payload passes through untouched); and
+    - a string ``cost_usd`` inside ``cost`` is coerced to a numeric value.
+
+    The function is a no-op for a payload already in the statusline shape, so
+    existing statusline callers keep their behaviour.
+    """
+    normalised = dict(payload)
+
+    usage = payload.get("usage")
+    if isinstance(usage, dict) and not isinstance(payload.get("context_window"), dict):
+        normalised["context_window"] = {"current_usage": usage}
+
+    cost = payload.get("cost")
+    if isinstance(cost, dict):
+        cost_copy = dict(cost)
+        if isinstance(cost_copy.get("cost_usd"), str):
+            coerced = _coerce_cost_usd_string(cost_copy["cost_usd"])
+            if coerced is not None:
+                cost_copy["cost_usd"] = coerced
+            else:
+                cost_copy.pop("cost_usd", None)
+        normalised["cost"] = cost_copy
+
+    return normalised
+
+
 def capture_runtime_on_session_end(
     event: HookEvent,
     *,
@@ -199,7 +261,7 @@ def capture_runtime_on_session_end(
     from eawf.runtime.runtimes.claude.runtime_counters import parse_runtime_counters
 
     payload = _session_end_payload(event)
-    counters = parse_runtime_counters(payload)
+    counters = parse_runtime_counters(_normalise_claude_hook_payload(payload))
     if counters is None:
         return HookResult(
             name="runtime.capture",

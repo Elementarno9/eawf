@@ -1,0 +1,20 @@
+{
+  "session_id": "sess-placeholder-eu27",
+  "transcript_path": "/workspace/proj/.claude/session.jsonl",
+  "cwd": "/workspace/proj",
+  "hook_event_name": "SessionEnd",
+  "reason": "clear",
+  "cost": {
+    "input_tokens": 152340,
+    "output_tokens": 8215,
+    "total_tokens": 160555,
+    "cached_input_tokens": 141200,
+    "cost_usd": "0.8231"
+  },
+  "usage": {
+    "input_tokens": 152340,
+    "output_tokens": 8215,
+    "cache_creation_input_tokens": 12000,
+    "cache_read_input_tokens": 141200
+  }
+}
