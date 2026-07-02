@@ -91,6 +91,31 @@ def _emit_sync_result(payload: dict[str, Any], *, flags: GlobalFlags) -> None:
     emit_json_or_text(payload, text, flags=flags)
 
 
+def _emit_convert_legacy_result(payload: dict[str, Any], *, flags: GlobalFlags) -> None:
+    """Emit the ``spec.convert_legacy`` per-row report as JSON or text.
+
+    One line per legacy criterion: converted rows name the attached gate
+    kind, refused rows carry their named reason so the operator can
+    hand-author the criterion instead.
+    """
+    mode = "dry-run" if payload.get("dry_run") else "applied"
+    lines = [
+        f"convert-legacy {mode} scope={payload.get('scope_id')!r} "
+        f"converted={payload.get('converted_count')} refused={payload.get('refused_count')}"
+    ]
+    for row in payload.get("rows", []):
+        if row.get("disposition") == "converted":
+            lines.append(
+                f"  {row.get('wave_id')} {row.get('criterion_id')}: "
+                f"converted gate={row.get('gate_kind')}"
+            )
+        else:
+            lines.append(
+                f"  {row.get('wave_id')} {row.get('criterion_id')}: refused ({row.get('reason')})"
+            )
+    emit_json_or_text(payload, "\n".join(lines), flags=flags)
+
+
 # ---- In-process fallback (V1 carve-out) -----------------------------------
 
 
@@ -465,6 +490,58 @@ def spec_sync_cmd(
         raise
     result["proxied"] = True
     _emit_sync_result(result, flags=flags)
+
+
+@spec_app.command("convert-legacy")
+def spec_convert_legacy_cmd(
+    ctx: typer.Context,
+    scope: Annotated[str, typer.Argument(help="Convert scope: P## | P##-I## | wave id.")],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Report the would-convert set without writing state.",
+        ),
+    ] = False,
+) -> None:
+    """Convert a scope's legacy criterion rows to typed, gated rows.
+
+    Pushes every ``kind == legacy`` criterion under the scope through the
+    daemon's ``spec.convert_legacy`` mutation (rule 4 canonical writer):
+    each row gains a typed response clause plus a falsifying blocking gate
+    with the EAWF021 measurability lint applied, or is REFUSED with a
+    named reason and stays legacy (no silent lossy conversion). The
+    per-row conversion report prints either way; ``--dry-run`` computes
+    the same report with no state write.
+
+    Always daemon-mediated: the state mutation is daemon-owned, so there
+    is no in-process fallback.
+    """
+    from eawf.surfaces.cli._mutation import _daemon_reachable
+
+    flags: GlobalFlags = ctx.obj
+    repo_root = (flags.workspace or Path.cwd()).resolve()
+
+    if not _daemon_proxy_enabled_for_spec() or not _daemon_reachable():
+        raise cli_errors.StateConflict(
+            "daemon_required: spec convert-legacy requires the daemon up; run `eawf daemon start`",
+            kind="IntegrityViolation",
+        )
+
+    params: dict[str, Any] = {
+        "scope_id": scope,
+        "dry_run": dry_run,
+        "repo_root": str(repo_root),
+    }
+    try:
+        with DaemonClient() as client:
+            result = client.call("spec.convert_legacy", params)
+    except DaemonRpcError as exc:
+        if exc.code in (-32602, cli_errors.RPC_VALIDATION_FAILED):
+            raise cli_errors.ValidationError(exc.message) from exc
+        raise
+    result["proxied"] = True
+    _emit_convert_legacy_result(result, flags=flags)
 
 
 # ---- Read-only surface ----------------------------------------------------
