@@ -9506,6 +9506,48 @@
       "status": "done",
       "updated_at": "2026-07-02T05:41:25.008134Z"
     },
+    "P30-I22-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I22-W08",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I22-W08",
+      "model": null,
+      "scope_id": "P30-I22-W08",
+      "status": "done",
+      "updated_at": "2026-07-02T15:28:21.626403Z"
+    },
+    "P30-I22-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I22-W09",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I22-W09",
+      "model": null,
+      "scope_id": "P30-I22-W09",
+      "status": "done",
+      "updated_at": "2026-07-02T15:32:04.879248Z"
+    },
+    "P30-I22-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I22-W10",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I22-W10",
+      "model": null,
+      "scope_id": "P30-I22-W10",
+      "status": "done",
+      "updated_at": "2026-07-02T15:34:02.444043Z"
+    },
     "P30-I23-W01": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -9547,6 +9589,20 @@
       "scope_id": "P30-I23-W37",
       "status": "done",
       "updated_at": "2026-07-02T14:35:19.283764Z"
+    },
+    "P30-I23-W50": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W50",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W50",
+      "model": null,
+      "scope_id": "P30-I23-W50",
+      "status": "done",
+      "updated_at": "2026-07-02T14:54:33.920662Z"
     }
   },
   "agent_sessions": {
@@ -12934,10 +12990,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P30-I22-W08",
-      "P30-I22-W10"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I23",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -13731,7 +13784,7 @@
       "title": "Downscope telemetry and bucket recalibration backlog"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -24484,6 +24537,19 @@
       "scope_id": "P30-I22-W08",
       "updated_at": "2026-07-02T14:11:14.372383Z"
     },
+    "P30-I22-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I22-W09-bucket-20260702T152143Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I22-W09",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I22-W09",
+      "updated_at": "2026-07-02T15:21:43.147564Z"
+    },
     "P30-I22-W10": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I22-W10-bucket-20260702T141115Z",
@@ -24535,6 +24601,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I23-W37",
       "updated_at": "2026-07-02T14:29:40.927484Z"
+    },
+    "P30-I23-W50": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W50-bucket-20260702T144929Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I23-W50",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I23-W50",
+      "updated_at": "2026-07-02T14:49:29.319377Z"
     }
   },
   "fleet_run": null,
@@ -26886,7 +26965,8 @@
         "P30-I23-W46",
         "P30-I23-W47",
         "P30-I23-W48",
-        "P30-I23-W49"
+        "P30-I23-W49",
+        "P30-I23-W50"
       ]
     }
   },
@@ -27989,7 +28069,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T14:35:21.499676Z",
+  "updated_at": "2026-07-02T15:34:02.444407Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -103377,8 +103457,8 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T14:11:14.362840Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T15:28:21.626403Z",
+      "commit": "ac82fe95fd9900c74cf212fdd010e87d0bc749a0",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -103432,12 +103512,12 @@
       },
       "iter_id": "P30-I22",
       "opened_at": "2026-07-02T13:37:54.456848Z",
-      "outcome": null,
+      "outcome": "Evidence-tab attempt tables restyled to cost-tab treatment (accent-bold header, escaped rows, PreMarkedText, compact timestamps) and every token figure humanized via the W05 units helper; sweep of remaining detail tabs found no other raw renders; gate 102 passed on integrated HEAD; live SVG render visually verified (352.1k in summary + column, unwrapped rows)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -103497,10 +103577,10 @@
     "P30-I22-W09": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T15:21:43.141860Z",
+      "closed_at": "2026-07-02T15:32:04.879248Z",
+      "commit": "55c1f11cb15bfb41a2f297a54a453ee80fd1544d",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -103555,12 +103635,12 @@
       },
       "iter_id": "P30-I22",
       "opened_at": "2026-07-02T13:37:55.098993Z",
-      "outcome": null,
+      "outcome": "Shared format_compact_utc formatter (surfaces/render/units.py) renders YYYY-MM-DD HH:MM:SS UTC, wired at _fmt_dt (overlays/detail.py) and _attempt_dt (agent_report/rollup.py); sweep converted evidence-mode generated_at + incident timeline, dispositioned init-wizard payload as non-render and status-pane ETA as date-only; 146 tests green; live render verified (claimed 2026-05-27 11:55:00, no offset/micros)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -103622,8 +103702,8 @@
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T14:11:15.009159Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T15:34:02.444043Z",
+      "commit": "157382ca93f94437bc09c93cb323455ed1fcd196",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -103677,12 +103757,12 @@
       },
       "iter_id": "P30-I22",
       "opened_at": "2026-07-02T13:37:55.735613Z",
-      "outcome": null,
+      "outcome": "Enter on highlighted Evidence-mode report row opens report-detail modal (verdict, summary, evidence_refs, followups, attempt provenance) with safe empty-table no-op; footer strip advertises Enter open beside retained p peek; Pilot + snapshot suites green (34) in worktree and on integrated HEAD (136 with detail suite); cherry-picked as 157382ca + 269aa37b with blob match",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -103892,7 +103972,8 @@
         "P30-I23-W37",
         "P30-I23-W38",
         "P30-I23-W40",
-        "P30-I23-W42"
+        "P30-I23-W42",
+        "P30-I23-W50"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T14:19:28.557016Z",
@@ -109847,6 +109928,95 @@
         }
       ],
       "title": "Require evidence refs in headless executor reports",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W50": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T14:49:29.318835Z",
+      "closed_at": "2026-07-02T14:54:33.920662Z",
+      "commit": "76ad28e824075681ca41bd31d76962bcadbf633f",
+      "deps": [
+        "P30-I23-W02"
+      ],
+      "description": "Reactive: the first enforcing close after W02 died STATE_CONFLICT. _resolve_jury_block_authority scores validate_jury(ballots_by_wave={}) once any auditor verdict settles into the silver cohort; a labelled wave without recorded ballots must resolve ADVISORY (jury never ran), not crash every close.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "tests/daemon/test_jury_block_authority_resolve.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon/test_jury_block_authority_resolve.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I23-W50",
+      "intent": {
+        "desired_outcome": "Enforcing closes resolve ADVISORY while the ballot substrate is empty; phantom-jury hard error stays reserved for calibration",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Blocks every close in the drive (deadlock-class); nothing in I23 can close until fixed, so it precedes all other pending waves in practice",
+        "problem": "Every enforcing wave close crashes STATE_CONFLICT once an auditor verdict settles into the silver cohort: validate_jury is scored with an empty ballot map and the phantom-jury check hard-raises",
+        "risks": [
+          "Guard must not mask a real phantom jury once W17 ballot persistence lands; keep the hard error on the calibration path"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T14:48:45.676521Z",
+      "outcome": "Ballotless labelled cohort resolves BlockAuthority.ADVISORY in _resolve_jury_block_authority; _load_recorded_ballots honest-empty seam for the W17 label writer; regression test seeds settled auditor verdict into silver cohort and asserts no raise; daemon restarted on the fix",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "the authority-resolve suite seeds a settled auditor verdict into the silver cohort with no recorded ballots and asserts the resolver returns ADVISORY without raising, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from tests/daemon/test_jury_block_authority_resolve.py asserting a ballotless non-empty cohort resolves ADVISORY",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "_resolve_jury_block_authority (src/eawf/runtime/daemon/methods/state.py) resolves BlockAuthority.ADVISORY when the validation cohort is non-empty but the recorded-ballot substrate is empty, instead of propagating the labelled-wave-has-no-ballots ValueError into every enforcing close; validate_jury keeps its phantom-jury hard error for the calibration path where ballots are expected.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Close-gate jury authority survives ballotless labelled cohort",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
