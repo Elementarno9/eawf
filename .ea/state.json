@@ -9519,6 +9519,20 @@
       "scope_id": "P30-I23-W01",
       "status": "done",
       "updated_at": "2026-07-02T14:18:35.360942Z"
+    },
+    "P30-I23-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W02",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W02",
+      "model": null,
+      "scope_id": "P30-I23-W02",
+      "status": "done",
+      "updated_at": "2026-07-02T14:28:56.526285Z"
     }
   },
   "agent_sessions": {
@@ -12908,8 +12922,7 @@
     ],
     "active_wave_ids": [
       "P30-I22-W08",
-      "P30-I22-W10",
-      "P30-I23-W02"
+      "P30-I22-W10"
     ],
     "iter_id": "P30-I23",
     "phase_id": "P30",
@@ -27949,7 +27962,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T14:27:17.027541Z",
+  "updated_at": "2026-07-02T14:28:56.526521Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -103856,8 +103869,8 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T14:19:28.557016Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T14:28:56.526285Z",
+      "commit": "4a5fe5e1c854bc6017429f5898a87db5a2162093",
       "deps": [
         "P30-I23-W01"
       ],
@@ -103903,12 +103916,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:37:57.862389Z",
-      "outcome": null,
+      "outcome": "8 Decision rows ratified (D-LOCK-SPLIT, D-RPC-TERMINAL, D-TEETH, D-EU-CAPTURE, D-I21-RATIFY, D-WINDOWS-DESCOPE, D-HISTORY-ACCEPT, D-BRANCH-GC); P30-I20 closed against audit A-P30-i20 with standalone artifact; W22 rider SHAs annotated on P30-I21-W22 description; ledger-reconcile lint pins all three",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
