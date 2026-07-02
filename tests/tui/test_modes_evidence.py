@@ -42,6 +42,7 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.models import CurrentPointers, Project, State
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import (
+    AgentReportEvidenceRef,
     AgentReportFollowup,
     AgentReportHeader,
     AgentReportPayload,
@@ -52,7 +53,17 @@ from eawf.kernel.store.kinds.agent_report import (
 from eawf.kernel.store.paths import store_path
 from eawf.observability.eval.cross_vendor_jury import PerItemJurorBallot, RubricItemVote
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.modals.report_detail import (
+    NO_EVIDENCE_REFS_NOTICE,
+    NO_FOLLOWUPS_NOTICE,
+    ReportDetailModal,
+    render_report_detail,
+    report_followup_lines,
+    report_provenance_line,
+    report_ref_lines,
+)
 from eawf.surfaces.tui.modes.evidence import (
+    _EVIDENCE_HINTS,
     ABSTAIN_VOTE,
     EMPTY_NOTICE,
     FAIL_VOTE,
@@ -183,6 +194,7 @@ def _write_executor_report(
     verdict: AgentReportVerdict,
     attempt: int = 1,
     followups: tuple[AgentReportFollowup, ...] = (),
+    evidence_refs: tuple[AgentReportEvidenceRef, ...] = (),
     summary: str = "attempt completed",
 ) -> None:
     """Append one executor report envelope keyed by ``base_id`` to the store."""
@@ -194,6 +206,7 @@ def _write_executor_report(
         wave_id=base_id,
         outcome="done",
         followups=list(followups),
+        evidence_refs=list(evidence_refs),
     )
     report_id = f"AR-executor-{base_id}-{attempt:02d}"
     header = AgentReportHeader(
@@ -431,6 +444,96 @@ def test_sort_evidence_rows_orders_by_natural_wave_then_role() -> None:
         ("P29-I02-W2", "executor"),
         ("P29-I02-W10", "reviewer"),
     ]
+
+
+# --------------------------------------------------------------------------
+# Report-detail modal (W10 Enter-open) -- pure render helpers
+# --------------------------------------------------------------------------
+
+
+def _report_row(
+    *,
+    verdict: str = "pass-with-followups",
+    summary: str = "wired the report-open affordance",
+    followups: tuple[str, ...] = ("regen goldens",),
+    evidence_refs: tuple[str, ...] = ("test: tests/tui/test_modes_evidence.py",),
+    runtime: str = "codex",
+    generated_at: str = "2026-06-01T12:00:00+00:00",
+) -> EvidenceRow:
+    """Build one fully-populated evidence row for the report-detail helpers."""
+    return EvidenceRow(
+        report_id="AR-executor-P29-I02-W22-01",
+        role="executor",
+        verdict=verdict,
+        wave_id="P29-I02-W22",
+        wave_title="Add Evidence pane",
+        attempt=2,
+        summary=summary,
+        followups=followups,
+        eu=1.0,
+        runtime=runtime,
+        generated_at=generated_at,
+        evidence_refs=evidence_refs,
+    )
+
+
+def test_report_ref_lines_empty_is_notice() -> None:
+    """No cited evidence refs renders the honest-empty refs notice."""
+    assert report_ref_lines(()) == (NO_EVIDENCE_REFS_NOTICE,)
+
+
+def test_report_ref_lines_one_per_ref() -> None:
+    """Each cited evidence ref renders one line, in report order."""
+    refs = ("test: a.py", "commit: abc1234")
+    assert report_ref_lines(refs) == refs
+
+
+def test_report_followup_lines_empty_is_notice() -> None:
+    """No emitted follow-ups renders the honest-empty followups notice."""
+    assert report_followup_lines(()) == (NO_FOLLOWUPS_NOTICE,)
+
+
+def test_report_provenance_line_includes_role_attempt_runtime_and_time() -> None:
+    """Provenance names the role, attempt number, runtime, and timestamp."""
+    line = report_provenance_line(_report_row())
+    assert "executor attempt 2" in line
+    assert "via codex" in line
+    assert "at 2026-06-01T12:00:00+00:00" in line
+
+
+def test_report_provenance_line_drops_unknown_runtime_and_time() -> None:
+    """An unknown runtime / timestamp is dropped -- no trailing blank via / at."""
+    line = report_provenance_line(_report_row(runtime="", generated_at=""))
+    assert line == "executor attempt 2"
+
+
+def test_render_report_detail_shows_verdict_summary_refs_followups() -> None:
+    """The full detail block carries verdict, summary, refs, followups, provenance."""
+    block = render_report_detail(_report_row())
+    assert "P29-I02-W22 Add Evidence pane :: executor" in block
+    assert "verdict: pass-with-followups" in block
+    assert "wired the report-open affordance" in block
+    assert "test: tests/tui/test_modes_evidence.py" in block
+    assert "regen goldens" in block
+    assert "executor attempt 2 via codex" in block
+
+
+def test_render_report_detail_empty_refs_and_followups_show_notices() -> None:
+    """A report with no refs / followups renders the honest-empty notices."""
+    block = render_report_detail(_report_row(followups=(), evidence_refs=()))
+    assert NO_EVIDENCE_REFS_NOTICE in block
+    assert NO_FOLLOWUPS_NOTICE in block
+
+
+# --------------------------------------------------------------------------
+# Footer-hint affordance parity (W10 CR-02)
+# --------------------------------------------------------------------------
+
+
+def test_evidence_footer_advertises_enter_open_and_p_peek() -> None:
+    """The Evidence footer advertises the new ``Enter open`` beside ``p peek``."""
+    assert "Enter open" in _EVIDENCE_HINTS
+    assert "p peek" in _EVIDENCE_HINTS
 
 
 # --------------------------------------------------------------------------
@@ -699,5 +802,74 @@ def test_evidence_pane_renders_seeded_ballot_grid_and_tier_ladder(tmp_path: Path
             # The oracle-tier ladder uses the real tier_label names and marks T7.
             assert "T1 static" in frame
             assert "T7 jury" in frame
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Report-detail modal (W10 Enter-open) -- Pilot-driven
+# --------------------------------------------------------------------------
+
+
+def test_evidence_enter_opens_report_detail_for_selected_row(tmp_path: Path) -> None:
+    """Enter over a highlighted report row opens the detail modal (verdict + summary)."""
+
+    async def body() -> None:
+        state = _state_with_wave(wave_id="P29-I02-W22", title="Add Evidence pane")
+        state_path = _write_state(state, tmp_path)
+        _write_executor_report(
+            state_path,
+            base_id="P29-I02-W22",
+            verdict=AgentReportVerdict.PASS_WITH_FOLLOWUPS,
+            summary="report open affordance verified",
+            followups=(AgentReportFollowup(title="regen goldens"),),
+            evidence_refs=(AgentReportEvidenceRef(kind="artifact", ref="x.py"),),
+        )
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("6")
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, EvidenceModeScreen)
+            # Focus the agent-report table so Enter selects its highlighted row
+            # (the ledger owns the separate ``p`` peek drill).
+            screen.query_one("#evidence-table", DataTable).focus()
+            await settle_screen(pilot)
+            depth_before = app.modal_depth()
+            await pilot.press("enter")
+            await settle_screen(pilot)
+            assert app.modal_depth() == depth_before + 1
+            assert isinstance(app.screen, ReportDetailModal)
+            frame = normalize_snapshot(capture_screen_text(app))
+            assert "verdict: pass-with-followups" in frame
+            assert "report open affordance verified" in frame
+            assert "artifact: x.py" in frame
+            assert "regen goldens" in frame
+
+    asyncio.run(body())
+
+
+def test_evidence_enter_empty_table_is_safe_noop() -> None:
+    """Enter over the honest-empty rollup is a safe no-op (no modal, no crash)."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("6")
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, EvidenceModeScreen)
+            assert screen.query_one("#evidence-table", DataTable).row_count == 0
+            # Direct action call: no selectable report, so a no-op (no push).
+            screen.action_open_report()
+            await settle_screen(pilot)
+            assert app.modal_depth() == 0
+            # Keypress path likewise never mounts a modal or crashes the pane.
+            await pilot.press("enter")
+            await settle_screen(pilot)
+            assert app.modal_depth() == 0
+            assert isinstance(app.screen, EvidenceModeScreen)
 
     asyncio.run(body())

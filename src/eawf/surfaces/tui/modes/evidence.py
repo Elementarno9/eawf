@@ -170,6 +170,7 @@ def verdict_sigil(verdict: str, *, mode: RenderMode = DEFAULT_RENDER_MODE) -> Te
 #: tokens stay pinned to the canonical vocabulary.
 _EVIDENCE_HINTS: tuple[str, ...] = (
     render_hint_label("↑↓", "select"),
+    render_hint_label("Enter", "open"),
     render_hint_label("p", "peek"),
     render_hint_label("w/r/u", "scope"),
     render_hint_label("/", "palette"),
@@ -197,6 +198,14 @@ class EvidenceRow:
         eu: The effort-unit estimate of the wave the report advanced, derived
             from the wave's effort bucket; ``0.0`` when the ``base_id`` joins
             no wave in state (a phase-scoped report) or the wave has no bucket.
+        runtime: The runtime that produced the report attempt (e.g. ``codex``
+            / ``claude``); ``""`` when unknown. Part of the attempt provenance
+            the report-detail modal surfaces.
+        generated_at: The report attempt's ISO-8601 generation timestamp, or
+            ``""`` when unknown. Part of the attempt provenance.
+        evidence_refs: The report's evidence references, each projected to a
+            ``<kind>: <ref>`` display string in report order; empty when the
+            report carried none.
     """
 
     report_id: str
@@ -208,6 +217,9 @@ class EvidenceRow:
     summary: str
     followups: tuple[str, ...]
     eu: float = 0.0
+    runtime: str = ""
+    generated_at: str = ""
+    evidence_refs: tuple[str, ...] = ()
 
     @property
     def followup_count(self) -> int:
@@ -288,6 +300,9 @@ def _row_from_report(
         summary=header.summary,
         followups=tuple(followup.title for followup in body.followups),
         eu=eu,
+        runtime=header.runtime,
+        generated_at=header.generated_at.isoformat(),
+        evidence_refs=tuple(f"{ref.kind}: {ref.ref}" for ref in body.evidence_refs),
     )
 
 
@@ -1015,11 +1030,17 @@ class EvidenceModeScreen(ScopeScreen):
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _EVIDENCE_HINTS
 
     #: ``p`` peeks into the selected ledger criterion's evidence chain (the
-    #: why-peek drill modal). Appended to the shared
+    #: why-peek drill modal); ``Enter`` opens the highlighted agent-report row
+    #: in the report-detail modal (verdict / summary / evidence refs /
+    #: followups / attempt provenance). Both are appended to the shared
     #: :class:`~eawf.surfaces.tui.scopes.ScopeScreen` chrome bindings so the
-    #: advertised ``p peek`` footer key resolves to a live binding.
+    #: advertised ``Enter open`` + ``p peek`` footer keys each resolve to a live
+    #: binding. The ``Enter`` binding backs the case where the report table is
+    #: not focused; a focused report table posts ``DataTable.RowSelected`` on
+    #: ``Enter`` instead, routed to :meth:`on_data_table_row_selected`.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("p", "drill", "peek", show=False),
+        Binding("enter", "open_report", "open", show=False),
     ]
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -1111,6 +1132,11 @@ class EvidenceModeScreen(ScopeScreen):
         #: The oracle tier that scored the criterion, marked in the ladder.
         #: ``None`` marks no tier (no oracle result bound).
         self._scored_tier: OracleTier | None = None
+        #: The rollup rows keyed by report id, rebuilt each :meth:`_rebuild`.
+        #: Backs the ``Enter`` report-open affordance -- the highlighted
+        #: ``#evidence-table`` row key resolves back to its
+        #: :class:`EvidenceRow` here without re-reading the store.
+        self._rows_by_id: dict[str, EvidenceRow] = {}
 
     def compose_body(self) -> ComposeResult:
         """Yield the evidence pane body (readiness header + ledger + rollup)."""
@@ -1216,6 +1242,7 @@ class EvidenceModeScreen(ScopeScreen):
         summary.update(evidence_summary_line(rows))
         followups.update(render_followups_block(rows))
         table.clear()
+        self._rows_by_id = {row.report_id: row for row in rows}
         for row in rows:
             table.add_row(
                 row.report_label,
@@ -1448,6 +1475,90 @@ class EvidenceModeScreen(ScopeScreen):
             if view.id == criterion_id:
                 return view
         return None
+
+    def action_open_report(self) -> None:
+        """Open the report-detail modal for the highlighted agent-report row.
+
+        Resolves the highlighted ``#evidence-table`` row to its
+        :class:`EvidenceRow` (:meth:`_selected_report`) and pushes the
+        :class:`~eawf.surfaces.tui.modals.report_detail.ReportDetailModal`. A
+        safe no-op when the rollup is empty or no row is highlighted -- the
+        binding still resolves, so the advertised ``Enter open`` affordance is
+        never a dead click. Backs the case where the report table is not
+        focused; a focused report table routes ``Enter`` through
+        :meth:`on_data_table_row_selected` instead (the DataTable consumes the
+        key), so both paths land on the same modal.
+        """
+        row = self._selected_report()
+        if row is None:
+            logger.info("evidence_report_open skipped reason=no-selection")
+            return
+        self._push_report_modal(row)
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Open the report-detail modal on an ``Enter`` over the report table.
+
+        A focused ``#evidence-table`` posts this message on ``Enter`` (or a
+        row click); a matching row key resolves back to its
+        :class:`EvidenceRow` and opens the modal. Rows selected on the
+        ``#evidence-ledger`` table are ignored here -- the ledger owns the
+        separate ``p`` peek drill -- so the two tables never cross-fire.
+
+        Args:
+            event: The row-selected message from a DataTable on the screen.
+        """
+        if event.data_table.id != "evidence-table":
+            return
+        row = self._rows_by_id.get(str(event.row_key.value))
+        if row is None:
+            logger.info("evidence_report_open skipped reason=no-row")
+            return
+        self._push_report_modal(row)
+
+    def _selected_report(self) -> EvidenceRow | None:
+        """Resolve the highlighted report-table row to its row, or ``None``.
+
+        Reads the ``#evidence-table`` row cursor and maps the highlighted row
+        key (the report id) back to the rebuilt :attr:`_rows_by_id` map.
+        Returns ``None`` when the table carries no rows or the cursor resolves
+        to no known report row.
+
+        Returns:
+            The highlighted :class:`EvidenceRow`, or ``None`` when none is
+            selectable.
+        """
+        tables = self.query("#evidence-table")
+        if not tables:
+            return None
+        table = tables.first(DataTable)
+        if table.row_count == 0:
+            return None
+        try:
+            row_key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
+        except Exception:
+            # The cursor may sit outside any cell on an empty / unfocused
+            # table; treat that as no selection rather than propagating.
+            return None
+        return self._rows_by_id.get(str(row_key.value))
+
+    def _push_report_modal(self, row: EvidenceRow) -> None:
+        """Push the report-detail modal for *row* through the cap-aware gate.
+
+        Routes through the App's cap-aware ``push_modal`` (falling back to
+        ``push_screen`` under a bare harness so the push never raises).
+
+        Args:
+            row: The evidence row whose report to open.
+        """
+        from eawf.surfaces.tui.modals.report_detail import ReportDetailModal
+
+        modal = ReportDetailModal(row, mode=self._render_mode())
+        push_modal = getattr(self.app, "push_modal", None)
+        if callable(push_modal):
+            push_modal(modal)
+        else:
+            self.app.push_screen(modal)
+        logger.info(f"evidence_report_open report={row.report_id!r} verdict={row.verdict!r}")
 
 
 __all__ = [
