@@ -23,6 +23,20 @@ from __future__ import annotations
 import pytest
 
 from eawf.surfaces.render.agents import _EXECUTOR_BODY
+from eawf.surfaces.render.skills.registry import (
+    _AGENT_DISPATCH_BODY,
+    _AUDIT_BODY,
+    _FLOW_BODY,
+    _GOTCHA_DAEMON_RESTART,
+    _GOTCHA_DISPATCH_RESUME,
+    _GOTCHA_FULL_TREE_GAUNTLET,
+    _GOTCHA_NO_EAWF_IN_WORKTREE,
+    _GOTCHA_OUT_OF_ORDER,
+    _GOTCHA_RECONCILE_FILE_SCOPES,
+    _GOTCHA_STATE_BOOKKEEPING,
+    _PREP_BODY,
+    _SHIP_BODY,
+)
 from eawf.workflow.agents.specs.models import SubagentSpec
 
 #: The banned directives: any of these inside a worktree-facing prompt
@@ -34,6 +48,35 @@ _BANNED_EAWF_COMMANDS: tuple[str, ...] = (
 
 #: The worktree-facing prompt sections the composer lint inspects.
 _LINTED_SECTIONS: tuple[str, ...] = ("## Workflow", "## Out of scope")
+
+#: The five skill bodies the operator-gotcha clauses are injected into,
+#: keyed by their ``SkillSpec.skill_name``.
+_SKILL_BODY_BY_NAME: dict[str, str] = {
+    "prep": _PREP_BODY,
+    "flow": _FLOW_BODY,
+    "agent-dispatch": _AGENT_DISPATCH_BODY,
+    "ship": _SHIP_BODY,
+    "audit": _AUDIT_BODY,
+}
+
+#: Each operator-gotcha clause (Roman-numeral id, verbatim clause constant,
+#: and the skill bodies that MUST carry it) per the belt-and-braces
+#: skill-registry homes in the skills-agents-hardening spec section 3.
+_GOTCHA_HOMES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("i", _GOTCHA_DISPATCH_RESUME, ("prep", "flow", "agent-dispatch")),
+    ("ii", _GOTCHA_OUT_OF_ORDER, ("prep", "agent-dispatch")),
+    ("iii", _GOTCHA_NO_EAWF_IN_WORKTREE, ("prep",)),
+    ("iv", _GOTCHA_STATE_BOOKKEEPING, ("prep", "flow", "ship")),
+    ("v", _GOTCHA_FULL_TREE_GAUNTLET, ("ship", "audit")),
+    ("vi", _GOTCHA_RECONCILE_FILE_SCOPES, ("prep",)),
+    ("vii", _GOTCHA_DAEMON_RESTART, ("prep",)),
+)
+
+#: Flattened (numeral, clause, skill) rows so each gotcha home is one
+#: parametrized case.
+_GOTCHA_HOME_CASES: tuple[tuple[str, str, str], ...] = tuple(
+    (numeral, clause, skill) for numeral, clause, skills in _GOTCHA_HOMES for skill in skills
+)
 
 
 def _section(rendered: str, heading: str) -> str:
@@ -132,3 +175,63 @@ def test_lint_raises_on_missing_section() -> None:
     """A prompt missing a linted section fails loudly, never vacuously."""
     with pytest.raises(AssertionError, match="missing the '## Workflow' section"):
         lint_prompt_sections("# Wave X\n\n## Out of scope\n\n- nothing\n")
+
+
+# ---- P30-I23-W42: operator-gotcha clauses land in the skill bodies ----------
+
+
+@pytest.mark.parametrize(
+    ("numeral", "clause", "skill"),
+    _GOTCHA_HOME_CASES,
+    ids=[f"{numeral}-{skill}" for numeral, _clause, skill in _GOTCHA_HOME_CASES],
+)
+def test_gotcha_clause_present_in_declared_home(numeral: str, clause: str, skill: str) -> None:
+    """Each operator gotcha's verbatim clause lands in every declared body.
+
+    The clause constant is the single source, so a substring check pins
+    that the same verbatim text reaches every belt-and-braces home; a
+    clause dropped from one body (or edited in one home and not the others)
+    fails here.
+    """
+    body = _SKILL_BODY_BY_NAME[skill]
+    assert clause in body, f"gotcha ({numeral}) clause is missing from the {skill!r} skill body"
+
+
+def test_seven_distinct_gotchas_are_all_homed() -> None:
+    """Exactly the seven gotchas are covered, each with at least one home."""
+    numerals = [numeral for numeral, _clause, _skills in _GOTCHA_HOMES]
+    assert numerals == ["i", "ii", "iii", "iv", "v", "vi", "vii"]
+    for numeral, clause, skills in _GOTCHA_HOMES:
+        assert clause.strip(), f"gotcha ({numeral}) clause is empty"
+        assert skills, f"gotcha ({numeral}) names no home body"
+
+
+def test_daemon_restart_gotcha_is_a_prep_preflight_row() -> None:
+    """Gotcha (vii) is a NEW row in the ``/prep`` pre-flight checklist.
+
+    CR-01 pins the daemon-restart rule to the pre-flight checklist
+    specifically (not merely somewhere in the body), so it is asserted
+    against the extracted section, and as a checklist ``- [ ]`` row.
+    """
+    preflight = _section(_PREP_BODY, "## Pre-flight checklist")
+    assert _GOTCHA_DAEMON_RESTART in preflight
+    rows = [line for line in preflight.splitlines() if line.lstrip().startswith("- [ ]")]
+    assert any("daemon is restarted" in row for row in rows)
+
+
+def test_command_bearing_gotchas_absent_from_executor_body() -> None:
+    """The command-bearing gotchas stay out of the worktree executor body.
+
+    A worktree executor runs no eawf command (gotcha iii), so the
+    operator-side clauses that name ``eawf`` commands must not leak into
+    ``_EXECUTOR_BODY`` -- that would re-teach the self-mutation
+    anti-pattern the composer lint above guards against.
+    """
+    for clause in (
+        _GOTCHA_DISPATCH_RESUME,
+        _GOTCHA_OUT_OF_ORDER,
+        _GOTCHA_STATE_BOOKKEEPING,
+        _GOTCHA_RECONCILE_FILE_SCOPES,
+        _GOTCHA_DAEMON_RESTART,
+    ):
+        assert clause not in _EXECUTOR_BODY

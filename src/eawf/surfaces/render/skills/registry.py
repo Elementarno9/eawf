@@ -39,6 +39,66 @@ logger = logging.getLogger(__name__)
 # algorithms live in docs/architecture/workflow.md.
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# The seven operator gotchas. Each is a hard-won dispatch-loop rule the
+# operator repeatedly re-learned across P28-P30. The belt-and-braces
+# convention lands every rule at the composer / render level AND as prose in
+# the skill bodies that drive the surface where the rule bites; these
+# constants are the single source per clause, interpolated into every skill
+# body that names them so the multiple homes stay in lockstep and cannot
+# drift. The clause texts are verbatim from the skills-agents-hardening spec
+# so a reader who hits the rule in one body reads the identical rule in the
+# next.
+# ---------------------------------------------------------------------------
+
+_GOTCHA_DISPATCH_RESUME = (
+    "Run `uv run eawf dispatch resume` before EVERY claim batch. A "
+    "shared-daemon test run or TUI mount leaks `dispatch_paused=true` into "
+    "the live claim path; the pause gate is unconditional. If resume reports "
+    "success but claims still reject, restart the daemon — the flag can "
+    "persist in a stale process."
+)
+
+_GOTCHA_OUT_OF_ORDER = (
+    "Pass `--out-of-order` on `eawf wave claim` for reactive, interleaved, "
+    "or parallel-frontier waves; the W## monotonic sibling gate rejects them "
+    "otherwise."
+)
+
+_GOTCHA_NO_EAWF_IN_WORKTREE = (
+    "No eawf command runs inside a worktree — a shared daemon reverts the "
+    "claim (the `eawf schema dump` precedent), and any golden regen or state "
+    "mutation there means STOP and report. The dispatch prompt already "
+    "forbids this; never override that clause when authoring the prompt."
+)
+
+_GOTCHA_STATE_BOOKKEEPING = (
+    "After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping "
+    "(state.json + event store) BEFORE dispatching the next subagent — an "
+    "inline subagent's checkout can revert uncommitted state, silently "
+    "dropping the close."
+)
+
+_GOTCHA_FULL_TREE_GAUNTLET = (
+    "Iter-close and any schema/migration wave run ALL of `tests/` — never a "
+    "scoped subset. Scoped gauntlets have hidden persisted-schema fixture "
+    "fallout across six test dirs."
+)
+
+_GOTCHA_RECONCILE_FILE_SCOPES = (
+    "Before close: reconcile the wave's declared `file_scopes` against the "
+    "executor report's `files_changed` and run `eawf wave update --files "
+    "<real>` while the wave is still CLAIMED — `update --files` is rejected "
+    "on CLOSED waves."
+)
+
+_GOTCHA_DAEMON_RESTART = (
+    "After any `schema_version` or state-model bump: run `eawf daemon stop` "
+    "(it respawns fresh) BEFORE the next close — a daemon still running the "
+    "old model rejects the new state shape."
+)
+
+
 _RESEARCH_BODY = """# /research
 
 ## Canonical algorithm
@@ -106,7 +166,7 @@ Eä-rendered skill envelope (`OutputEnvelope`) with `header.skill =
 persisted brief.
 """
 
-_PREP_BODY = """# /prep
+_PREP_BODY = f"""# /prep
 
 ## Canonical algorithm
 
@@ -152,10 +212,14 @@ PLANNED-queue state:
    read the same source-of-truth artifact — the wave dispatch renderer
    surfaces matching briefs under a `## References` section
    automatically.
-4. For each parallel wave under the activated iter, dispatch a
-   worktree subagent.
-5. For each sequential wave, run inline; cherry-pick parallel-wave
-   commits in between as they finish.
+4. **Claim, then dispatch each wave under the activated iter.**
+   Before every claim batch: {_GOTCHA_DISPATCH_RESUME} And:
+   {_GOTCHA_OUT_OF_ORDER} For each parallel wave, dispatch a worktree
+   subagent. {_GOTCHA_NO_EAWF_IN_WORKTREE}
+5. **Land, reconcile, then record each finished wave.** For each
+   sequential wave, run inline; cherry-pick parallel-wave commits in
+   between as they finish. {_GOTCHA_RECONCILE_FILE_SCOPES} Then:
+   {_GOTCHA_STATE_BOOKKEEPING}
 6. Validate the rendered plan with `eawf plan show --md`; wave tags
    and bucket roll-ups must match state.
 
@@ -170,6 +234,14 @@ PLANNED-queue state:
       (otherwise hand back to `/roadmap propose`).
 - [ ] If a spike preceded the claim, its brief path is cited in the
       plan-mode proposal (case A) so the dispatched subagent reads it.
+- [ ] Dispatch is resumed before every claim batch:
+      {_GOTCHA_DISPATCH_RESUME}
+- [ ] Reactive, interleaved, or parallel-frontier claims carry the
+      out-of-order flag: {_GOTCHA_OUT_OF_ORDER}
+- [ ] The declared scope is reconciled against the report before close:
+      {_GOTCHA_RECONCILE_FILE_SCOPES}
+- [ ] The daemon is restarted after any schema or state-model bump:
+      {_GOTCHA_DAEMON_RESTART}
 
 ## Decision surfaces
 
@@ -186,7 +258,7 @@ the expected cherry-pick order. The envelope's
 (`use-as-is`, `revise`, `replace`, `planner-approve`).
 """
 
-_AUDIT_BODY = """# /audit
+_AUDIT_BODY = f"""# /audit
 
 ## Canonical algorithm
 
@@ -237,6 +309,8 @@ to one ISO-25010 quality axis.
       `audit + polish + ship CI + PR review pass` per the
       `iter-phase-close-timing` rule in AGENTS.md; `/audit` runs
       before that close.
+- [ ] For an iter-close audit, a full-tree test run exists as evidence:
+      {_GOTCHA_FULL_TREE_GAUNTLET}
 
 ## Decision surfaces
 
@@ -250,7 +324,7 @@ Skill envelope with a per-criterion verdict table and an aggregate
 status (`pass | pass-with-followups | fail`).
 """
 
-_SHIP_BODY = """# /ship
+_SHIP_BODY = f"""# /ship
 
 ## Cross-links
 
@@ -276,6 +350,7 @@ read off real history rather than recomputed.
 
 1. Resolve `<phase-id>`; verify all waves under it are complete.
 2. Run the local verification gauntlet (pre-commit, mypy, pytest, ruff).
+   {_GOTCHA_FULL_TREE_GAUNTLET}
 3. Validate artifact markdown and PR prose against the chassis/scrub
    rules.
 4. Push the long-running feature branch.
@@ -293,7 +368,8 @@ read off real history rather than recomputed.
    `commit-prefix` block in AGENTS.md) that bundles
    `eawf iter close P<NN>-I<MM>` + `eawf phase close P<NN>` (no
    other touched files). The operator merges that commit to end the
-   phase.
+   phase. This is the final instance of the per-close bookkeeping rule
+   the iter followed throughout: {_GOTCHA_STATE_BOOKKEEPING}
 
 ## Pre-flight checklist
 
@@ -781,7 +857,7 @@ the References + Provenance + Scrub chassis tail. The footer records
 the persisted brief path + sentinel when `--final` was passed.
 """
 
-_FLOW_BODY = """# /flow
+_FLOW_BODY = f"""# /flow
 
 ## Canonical algorithm
 
@@ -790,14 +866,17 @@ _FLOW_BODY = """# /flow
    the remote review comments, addresses feedback by appending
    waves to the current iter, then bundles iter + phase close in
    the final pre-merge commit per the `iter-phase-close-timing`
-   rule in AGENTS.md).
+   rule in AGENTS.md). The `/prep` stage claims and dispatches waves,
+   so its claim path carries the operator gotchas:
+   {_GOTCHA_DISPATCH_RESUME}
 2. **Inter-stage gate (default).** After each step returns
    `status=ok`, check `flow.auto_accept.<stage>` (via
    `uv run eawf config get flow.auto_accept.<stage>`). When `false`
    (the default) and the stage was not listed in `--auto-accept`,
    ask the operator via `AskUserQuestion` whether to proceed —
    options: `proceed` / `skip-next` / `stop`. When `true`, advance
-   without a prompt.
+   without a prompt. Between a wave close and the next stage:
+   {_GOTCHA_STATE_BOOKKEEPING}
 3. On any non-`ok` status (`blocked`, `needs_user`, `failed`,
    `partial`), short-circuit with the failing step's repair commands.
 
@@ -922,7 +1001,7 @@ Skill envelope with `header.skill = "/memory"`. Body carries verb, name,
 and tier (or a reason on the needs_user path).
 """
 
-_AGENT_DISPATCH_BODY = """# /agent-dispatch
+_AGENT_DISPATCH_BODY = f"""# /agent-dispatch
 
 ## Cross-links
 
@@ -952,6 +1031,10 @@ next dispatch starts from the operator's pinned ladder.
 
 - [ ] The wave is claimed before dispatch.
 - [ ] The runtime ladder reflects how the planner sized the wave.
+- [ ] Dispatch is resumed before the claim that precedes this dispatch:
+      {_GOTCHA_DISPATCH_RESUME}
+- [ ] Reactive or parallel-frontier claims pass the out-of-order flag:
+      {_GOTCHA_OUT_OF_ORDER}
 
 ## Decision surfaces
 

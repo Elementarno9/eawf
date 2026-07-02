@@ -29,6 +29,15 @@ from __future__ import annotations
 
 from eawf.kernel.config.defaults import BUILT_IN_DEFAULTS
 from eawf.surfaces.render.skills import SKILL_REGISTRY
+from eawf.surfaces.render.skills.registry import (
+    _GOTCHA_DAEMON_RESTART,
+    _GOTCHA_DISPATCH_RESUME,
+    _GOTCHA_FULL_TREE_GAUNTLET,
+    _GOTCHA_NO_EAWF_IN_WORKTREE,
+    _GOTCHA_OUT_OF_ORDER,
+    _GOTCHA_RECONCILE_FILE_SCOPES,
+    _GOTCHA_STATE_BOOKKEEPING,
+)
 
 _FLOW_STAGES: tuple[str, ...] = (
     "research",
@@ -38,6 +47,27 @@ _FLOW_STAGES: tuple[str, ...] = (
     "review",
     "polish",
 )
+
+
+#: The operator-gotcha clauses each named skill's frozen registry body must
+#: carry, per the belt-and-braces homes in the skills-agents-hardening spec
+#: (P30-I23-W42). Asserted through ``SKILL_REGISTRY`` so the shipped surface
+#: -- the body ``eawf plugin install`` renders -- is what is checked, not
+#: just the source constant.
+_GOTCHA_REGISTRY_HOMES: dict[str, tuple[str, ...]] = {
+    "prep": (
+        _GOTCHA_DISPATCH_RESUME,
+        _GOTCHA_OUT_OF_ORDER,
+        _GOTCHA_NO_EAWF_IN_WORKTREE,
+        _GOTCHA_STATE_BOOKKEEPING,
+        _GOTCHA_RECONCILE_FILE_SCOPES,
+        _GOTCHA_DAEMON_RESTART,
+    ),
+    "flow": (_GOTCHA_DISPATCH_RESUME, _GOTCHA_STATE_BOOKKEEPING),
+    "agent-dispatch": (_GOTCHA_DISPATCH_RESUME, _GOTCHA_OUT_OF_ORDER),
+    "ship": (_GOTCHA_STATE_BOOKKEEPING, _GOTCHA_FULL_TREE_GAUNTLET),
+    "audit": (_GOTCHA_FULL_TREE_GAUNTLET,),
+}
 
 
 def _spec(name: str):
@@ -89,3 +119,17 @@ def test_remaining_core_skill_bodies_mention_ask_user_question() -> None:
             f"skill {name!r} body must reference AskUserQuestion so discrete"
             " operator decisions surface through the UI prompt"
         )
+
+
+def test_skill_registry_bodies_carry_operator_gotchas() -> None:
+    """P30-I23-W42: each named skill's frozen body carries its gotcha clauses.
+
+    Reads through ``SKILL_REGISTRY`` (the shipped surface) rather than the
+    source constant so a body that resolves to a stale spec fails here.
+    """
+    for name, clauses in _GOTCHA_REGISTRY_HOMES.items():
+        body = _spec(name).body
+        for clause in clauses:
+            assert clause in body, (
+                f"skill {name!r} registry body is missing an operator-gotcha clause"
+            )
