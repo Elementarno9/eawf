@@ -1529,6 +1529,7 @@ async def _enforce_wave_close_gate(
         LifecycleError: When the high-risk single-auditor gate refuses close.
     """
     from eawf.kernel.store.kinds.evidence import deterministic_pass_record
+    from eawf.observability.eval.jury_validation import BlockAuthority
     from eawf.workflow.dispatch.verdict import verdict_requirement
     from eawf.workflow.verify.oracle import run_oracle
     from eawf.workflow.verify.readiness import (
@@ -1563,7 +1564,19 @@ async def _enforce_wave_close_gate(
     # A high-risk wave under an opted-in jury falls through to run_oracle's
     # jury tier; a mechanical wave takes the risk-weighted early-return or
     # the run_oracle path below depending on whether the profile is banded.
-    if verdict_requirement(wave) == "always" and not verify_block.cross_vendor_jury:
+    # The jury's earned authority is computed BEFORE the single-auditor
+    # branch: with the config merge OR-ing cross_vendor_jury across enabled
+    # profiles, a bare cross_vendor_jury check let an ADVISORY jury displace
+    # the one oracle that blocks today (the A4 OR-fold bypass; 40 of P30's
+    # 98 verdict-always waves lost their gate). The jury replaces the
+    # blocking single-auditor only once it has EARNED blocking authority.
+    block_authority = _resolve_jury_block_authority(
+        state, state_path=state_path, verify_block=verify_block
+    )
+    jury_replaces_auditor = (
+        verify_block.cross_vendor_jury and block_authority is BlockAuthority.BLOCKING
+    )
+    if verdict_requirement(wave) == "always" and not jury_replaces_auditor:
         await _produce_high_risk_verdict(
             state,
             wave,
@@ -1592,15 +1605,10 @@ async def _enforce_wave_close_gate(
     events_path = store_path(state_path, StoreKind.EVENT)
     spawn_factory = _jury_spawn_factory(state, wave, repo_root=repo_root)
     gate_specs = _load_gate_specs(wave_id, state)
-    # The staged advisory-to-block gate (TRUST-4): the jury's veto blocks the
-    # close only once it has EARNED blocking authority on eawf's own
-    # distribution. The authority is computed once per close from the validation
-    # substrate and threaded into every per-criterion run_oracle call; with an
-    # empty validation substrate (no labelled cohort today) the jury stays
-    # advisory, so an enforcing close never blocks on an uncalibrated jury.
-    block_authority = _resolve_jury_block_authority(
-        state, state_path=state_path, verify_block=verify_block
-    )
+    # The staged advisory-to-block gate (TRUST-4): block_authority (computed
+    # once above) is threaded into every per-criterion run_oracle call; with
+    # an empty validation substrate the jury stays advisory, so an enforcing
+    # close never blocks on an uncalibrated jury.
     deterministic_evidence: list[EvidenceRecord] = []
     for criterion in wave.success_criteria:
         if not criterion.required:

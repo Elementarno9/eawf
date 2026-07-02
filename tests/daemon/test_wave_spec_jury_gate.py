@@ -61,6 +61,25 @@ from eawf.workflow.dispatch.llm_assist import SpawnFn
 
 pytestmark = pytest.mark.integration
 
+
+@pytest.fixture(autouse=True)
+def _blocking_jury_authority(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Grant BLOCKING jury authority so the jury tier stays reachable.
+
+    P30-I23-W07 closed the OR-fold bypass: a verdict-always wave reaches
+    the jury tier only when the jury has EARNED blocking authority; under
+    ADVISORY the blocking single-auditor fires instead (covered by
+    test_close_gate_auditor_jury_routing.py). These band-jury routing
+    suites exercise the jury tier itself, so the resolver is stubbed.
+    """
+    from eawf.observability.eval.jury_validation import BlockAuthority
+
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.state._resolve_jury_block_authority",
+        lambda state, *, state_path, verify_block: BlockAuthority.BLOCKING,
+    )
+
+
 _T0 = datetime(2026, 6, 3, 12, 0, 0, tzinfo=UTC)
 _BAND_WAVE = "P29-I08-W05"
 _BAND_TOKEN = "tui"
@@ -440,21 +459,35 @@ def test_band_wave_unanimous_pass_writes_reports_and_closes(
 # --------------------------------------------------------------------------- #
 
 
-def test_band_wave_veto_held_advisory_close_proceeds(
+def test_band_wave_advisory_authority_routes_to_auditor_not_jury(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A single FAIL juror veto is held advisory (W10): the banded close proceeds.
+    """ADVISORY authority: the single-auditor fires and NO jury convenes.
 
-    Until I07 TRUST-4 supplies the earned-authority computation, the live
-    cross-vendor jury is uncalibrated on eawf's own distribution, so its veto
-    is advisory: :func:`~eawf.workflow.verify.oracle.jury_block_authority`
-    returns ``"advisory"``, run_oracle's jury tier logs the veto at WARNING and
-    returns ``status="pass"``, and the banded wave CLOSES rather than staying
-    CLAIMED. The per-juror reports (including the dissenting FAIL) are still
-    written, so the veto is recorded for the operator even though it does not
-    block.
+    Post P30-I23-W07 an ADVISORY jury never sees a verdict-always wave at
+    the mutate path — the blocking single-auditor fires instead and the
+    juror lanes stay cold. (The advisory-veto-logs-and-close-proceeds
+    contract still holds at the run_oracle surface, covered by
+    tests/unit/verify/test_run_oracle.py, which other callers such as the
+    fleet clean-close path drive directly.) The verdict producer + gate
+    are stubbed so no real auditor spawns.
     """
-    _patch_jury(
+    from eawf.observability.eval.jury_validation import BlockAuthority
+
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.state._resolve_jury_block_authority",
+        lambda state, *, state_path, verify_block: BlockAuthority.ADVISORY,
+    )
+
+    async def _produce(state: Any, wave: Any, *, state_path: Path, repo_root: Path) -> None:
+        return None
+
+    monkeypatch.setattr("eawf.runtime.daemon.methods.state._produce_high_risk_verdict", _produce)
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.state._enforce_wave_verdict_gate",
+        lambda wave, *, state_path: None,
+    )
+    stubs = _patch_jury(
         monkeypatch,
         verdicts={"claude-code": "pass", "codex": "fail", "opencode": "pass"},
     )
@@ -467,15 +500,11 @@ def test_band_wave_veto_held_advisory_close_proceeds(
         assert payload["waves"][_BAND_WAVE]["status"] == "closed"
 
     _run(body)
-    # The advisory hold logged the veto at WARNING; the close was not blocked.
-    assert any(
-        r.levelname == "WARNING" and "jury_veto_advisory" in r.getMessage() for r in caplog.records
-    )
-    # Each juror's verdict was still written: the dissenting juror's report
-    # carries the FAIL so the operator sees the (advisory) veto.
+    # No juror lane spawned and no juror report written: ADVISORY routes to
+    # the (stubbed) single-auditor, not the jury.
+    assert all(stub.calls == 0 for stub in stubs.values())
     rows = iter_agent_reports(state_path, role=AgentSessionRole.AUDITOR, base_id=_BAND_WAVE)
-    assert len(rows) == len(JURY_RUNTIME_FAMILIES)
-    assert any(not c.passed for row in rows for c in row.payload.body.criteria)
+    assert rows == []
 
 
 # --------------------------------------------------------------------------- #

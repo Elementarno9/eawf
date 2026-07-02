@@ -54,6 +54,26 @@ from eawf.workflow.estimation.trust_scorecard import compute_trust_scorecard
 
 pytestmark = pytest.mark.integration
 
+
+@pytest.fixture(autouse=True)
+def _blocking_jury_authority(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Grant BLOCKING jury authority so the oracle loop stays reachable.
+
+    P30-I23-W07 closed the OR-fold bypass: a verdict-always wave routes to
+    the run_oracle loop only when the jury has EARNED blocking authority;
+    under ADVISORY it takes the blocking single-auditor path (covered by
+    test_verdict_enforced.py / test_close_gate_auditor_jury_routing.py).
+    These suites isolate the run_oracle loop itself, so the authority
+    resolver is stubbed to BLOCKING.
+    """
+    from eawf.observability.eval.jury_validation import BlockAuthority
+
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.state._resolve_jury_block_authority",
+        lambda state, *, state_path, verify_block: BlockAuthority.BLOCKING,
+    )
+
+
 _T0 = datetime(2026, 6, 7, 12, 0, 0, tzinfo=UTC)
 
 _WAVE = "P29-I12-W06"
