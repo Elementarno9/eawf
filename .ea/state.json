@@ -10094,6 +10094,20 @@
       "status": "done",
       "updated_at": "2026-07-02T21:27:04.949338Z"
     },
+    "P30-I23-W46": {
+      "actual_cost_usd": 5.349999999999994,
+      "actual_tokens": 60335000,
+      "agent_runtime_eu": 1.0555555555555556,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W46",
+      "elapsed_eu": 1.0555555555555556,
+      "harness": "claude-code",
+      "id": "ACT-P30-I23-W46",
+      "model": "claude-fable-5",
+      "scope_id": "P30-I23-W46",
+      "status": "done",
+      "updated_at": "2026-07-02T23:10:03.611870Z"
+    },
     "P30-I23-W49": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -10274,6 +10288,20 @@
       "runtime": "claude-code",
       "scope_id": "P30-I23-W43::audit",
       "started_at": "2026-07-02T22:06:28.642281Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260702T230518Z-auditor-claude-code": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260702T230518Z-auditor-claude-code",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "scope_id": "P30-I23-W46::audit",
+      "started_at": "2026-07-02T23:05:18.358218Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -13586,12 +13614,12 @@
       "SES-20260510T214731Z-operator-claude",
       "SES-20260702T190717Z-auditor-claude-code",
       "SES-20260702T214847Z-auditor-claude-code",
-      "SES-20260702T220628Z-auditor-claude-code"
+      "SES-20260702T220628Z-auditor-claude-code",
+      "SES-20260702T230518Z-auditor-claude-code"
     ],
     "active_wave_ids": [
       "P30-I23-W28",
-      "P30-I23-W45",
-      "P30-I23-W46"
+      "P30-I23-W45"
     ],
     "iter_id": "P30-I23",
     "phase_id": "P30",
@@ -29345,7 +29373,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T22:43:29.247789Z",
+  "updated_at": "2026-07-02T23:10:03.612103Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -113686,16 +113714,16 @@
         "total_duration_ms": 30000000
       },
       "runtime_latest": {
-        "api_duration_ms": 14900000,
-        "cache_creation_input_tokens": 930000,
-        "cache_read_input_tokens": 640000000,
-        "captured_at": "2026-07-02T22:42:21.264899Z",
-        "cost_usd": 213.75,
+        "api_duration_ms": 16800000,
+        "cache_creation_input_tokens": 980000,
+        "cache_read_input_tokens": 700000000,
+        "captured_at": "2026-07-02T22:47:23.693403Z",
+        "cost_usd": 219.1,
         "harness": "claude-code",
-        "input_tokens": 5350000,
+        "input_tokens": 5600000,
         "model": "claude-fable-5",
-        "output_tokens": 425000,
-        "total_duration_ms": 31200000
+        "output_tokens": 460000,
+        "total_duration_ms": 33400000
       },
       "runtime_preference": null,
       "sessions": {},
@@ -116311,16 +116339,16 @@
         "total_duration_ms": 31200000
       },
       "runtime_latest": {
-        "api_duration_ms": 14900000,
-        "cache_creation_input_tokens": 930000,
-        "cache_read_input_tokens": 640000000,
-        "captured_at": "2026-07-02T22:42:21.264899Z",
-        "cost_usd": 213.75,
+        "api_duration_ms": 16800000,
+        "cache_creation_input_tokens": 980000,
+        "cache_read_input_tokens": 700000000,
+        "captured_at": "2026-07-02T22:47:23.693403Z",
+        "cost_usd": 219.1,
         "harness": "claude-code",
-        "input_tokens": 5350000,
+        "input_tokens": 5600000,
         "model": "claude-fable-5",
-        "output_tokens": 425000,
-        "total_duration_ms": 31200000
+        "output_tokens": 460000,
+        "total_duration_ms": 33400000
       },
       "runtime_preference": null,
       "sessions": {},
@@ -116412,8 +116440,8 @@
       ],
       "claim_session_id": "exec-w46",
       "claimed_at": "2026-07-02T22:14:00.867673Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T23:10:03.611870Z",
+      "commit": "b5c2aa66b963772d39a04f40cf95d9a0f5061213",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W44"
@@ -116483,7 +116511,7 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:39:42.047090Z",
-      "outcome": null,
+      "outcome": "CR-01 complete after the honest auditor FAIL: research/review/polish/roadmap options (executor, 6e745365) + agent-dispatch headless/model shaping next_valid_actions with eawf dispatch wave --model threading the RPC override + polish keys registered in the operator registry; CR-02 dry-run byte-identical state proven on tmp fixture.",
       "runtime_baseline": {
         "api_duration_ms": 14900000,
         "cache_creation_input_tokens": 930000,
@@ -116497,20 +116525,20 @@
         "total_duration_ms": 31200000
       },
       "runtime_latest": {
-        "api_duration_ms": 14900000,
-        "cache_creation_input_tokens": 930000,
-        "cache_read_input_tokens": 640000000,
-        "captured_at": "2026-07-02T22:42:21.264899Z",
-        "cost_usd": 213.75,
+        "api_duration_ms": 16800000,
+        "cache_creation_input_tokens": 980000,
+        "cache_read_input_tokens": 700000000,
+        "captured_at": "2026-07-02T22:47:23.693403Z",
+        "cost_usd": 219.1,
         "harness": "claude-code",
-        "input_tokens": 5350000,
+        "input_tokens": 5600000,
         "model": "claude-fable-5",
-        "output_tokens": 425000,
-        "total_duration_ms": 31200000
+        "output_tokens": 460000,
+        "total_duration_ms": 33400000
       },
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -116563,7 +116591,7 @@
       ],
       "title": "Add runtime options to research-family and review skill engines",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 60335000,
       "worktree_id": null
     },
     "P30-I23-W47": {
