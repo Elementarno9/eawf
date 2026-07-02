@@ -26455,7 +26455,11 @@
       "wave_ids": [
         "P30-I22-W01",
         "P30-I22-W02",
-        "P30-I22-W03"
+        "P30-I22-W03",
+        "P30-I22-W04",
+        "P30-I22-W05",
+        "P30-I22-W06",
+        "P30-I22-W07"
       ]
     }
   },
@@ -27546,7 +27550,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-01T23:46:23.020627Z",
+  "updated_at": "2026-07-02T03:13:14.471537Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -102539,6 +102543,394 @@
       "title": "Map a blocked verdict to a typed RPC error not -32603",
       "token_budget": null,
       "tokens_consumed": 15000,
+      "worktree_id": null
+    },
+    "P30-I22-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I22-W05",
+        "P30-I22-W06",
+        "P30-I22-W07"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Live review: action outcomes (campaign runs; daemon-denied *_NO_DAEMON lines) stick forever in result Statics. Route them through self.app.notify fading toasts instead. Findings brief: .ea/local/research/2026-07-02-tui-review-followups.md section 1.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/autopilot.py",
+        "src/eawf/surfaces/tui/modes/research_board.py",
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "src/eawf/surfaces/tui/screens/overlays/fork_inbox.py",
+        "tests/tui/**"
+      ],
+      "gates": [],
+      "id": "P30-I22-W04",
+      "intent": {
+        "desired_outcome": "Synchronous action outcomes surface as bottom-right auto-dismissing toasts; only condition banners and modals stay persistent.",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-02-tui-review-followups.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Operator flagged stale persistent results in the v0.6.0 live validation review; toast rack already exists so conversion is low-risk high-visibility polish.",
+        "problem": "Six TUI sites pin the latest action outcome in a never-clearing result Static, so stale outcomes read as current.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I22",
+      "opened_at": "2026-07-02T03:12:24.750398Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "outcome sites behind _set_result at autopilot.py:2047 + _set_action/_set_peek at research_board.py:2968/2964 + agent_watch.py:2386 + fork_inbox.py:545 route through self.app.notify with severity mapped warn->warning / ok+accent->information / NO_DAEMON->error (config_modal.py:1059 pattern); ToastEmi",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "outcome sites behind _set_result at autopilot.py:2047 + _set_action/_set_peek at research_board.py:2968/2964 + agent_watch.py:2386 + fork_inbox.py:545 route through self.app.notify with severity mapped warn->warning / ok+accent->information / NO_DAEMON->error (config_modal.py:1059 pattern); ToastEmitter untouched (snapshot-diff seam stays state-diff only)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "degraded-banner + stale-schema-banner + RunSummaryModal stay persistent (conditions/modal not outcomes)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "degraded-banner + stale-schema-banner + RunSummaryModal stay persistent (conditions/modal not outcomes)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "Pilot tests assert notify fired per converted action and the persistent result line is gone or blank after action",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Pilot tests assert notify fired per converted action and the persistent result line is gone or blank after action",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Convert persistent TUI result lines to bottom-right toasts",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I22-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I22-W07"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I22-W04"
+      ],
+      "description": "Live review: wave-detail cost tab overflows (raw 6-digit token ints, unstyled header, auto-grow widths). One shared k/m formatter (340.2k, 1.2m) for every human token display incl cache reads/writes. Brief section 2 lists all sites + golden fallout.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/screens/overlays/detail_cost.py",
+        "src/eawf/surfaces/tui/screens/overlays/metrics.py",
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "src/eawf/surfaces/tui/widgets/output_tail.py",
+        "tests/tui/**",
+        "tests/snapshots/tui/golden/**"
+      ],
+      "gates": [],
+      "id": "P30-I22-W05",
+      "intent": {
+        "desired_outcome": "One shared lowercase k/m token formatter used at every human display site; cost-tab header accent-bold; table fits the overlay width.",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-02-tui-review-followups.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Operator hit the overflow live during the v0.6.0 validation run (cache_read=311802 rendered raw); formatting inconsistency spans four surfaces.",
+        "problem": "Token counts render as raw integers in the cost tab, agent-watch lane spend, and output tail; the cost-tab table overflows the overlay and its header is unstyled.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I22",
+      "opened_at": "2026-07-02T03:12:43.086435Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "one shared format_tokens helper (lowercase suffixes: 340.2k / 1.2m) replaces the private _format_tokens at metrics.py:184 and is the only human token formatter (grep proves no other k/M formatting remains)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "one shared format_tokens helper (lowercase suffixes: 340.2k / 1.2m) replaces the private _format_tokens at metrics.py:184 and is the only human token formatter (grep proves no other k/M formatting remains)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "detail_cost.py:173-176 four token columns + agent_watch.py:1147+1151 lane spend + output_tail.py:174-175 out-tok all humanized; telemetry/exporter.py Prometheus counters stay raw machine ints",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "detail_cost.py:173-176 four token columns + agent_watch.py:1147+1151 lane spend + output_tail.py:174-175 out-tok all humanized; telemetry/exporter.py Prometheus counters stay raw machine ints",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "cost-tab header row wrapped [$accent][b] per the metrics-title convention (metrics.py:392) and the 8-column table renders within the detail overlay width for 6-digit token values",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "cost-tab header row wrapped [$accent][b] per the metrics-title convention (metrics.py:392) and the 8-column table renders within the detail overlay width for 6-digit token values",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "goldens + assertions regenerated: test_overlays_detail_cost + test_overlays_metrics:295 + test_output_tail:100 + agent_watch_lane_grid golden; full tests/tui green",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "goldens + assertions regenerated: test_overlays_detail_cost + test_overlays_metrics:295 + test_output_tail:100 + agent_watch_lane_grid golden; full tests/tui green",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Humanize token counts repo-wide and restyle the cost-tab table",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I22-W06": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I22-W04"
+      ],
+      "description": "Live review: TUI restart re-opens the run-summary card for a fleet run that finished before the restart. Terminal fleet_run is never cleared from state; the mount-time None baseline misreads it as a fresh done transition. Brief section 3 has the full trace.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/autopilot.py",
+        "tests/tui/test_modes_autopilot.py"
+      ],
+      "gates": [],
+      "id": "P30-I22-W06",
+      "intent": {
+        "desired_outcome": "A TUI mounted onto an already-terminal fleet_run shows the idle hero and never auto-opens the run-summary card; live draining-to-done transitions still open it.",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-02-tui-review-followups.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Every restart after any autopilot run replays the stale card; hydrate path is test-uncovered (all three run-summary tests seed a draining run first).",
+        "problem": "A persisted terminal fleet_run plus the mount-time _last_run_state=None default makes a fresh TUI misread done as a new transition and re-open the stale run summary.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I22",
+      "opened_at": "2026-07-02T03:12:58.173636Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "_last_run_state seeds from the current state snapshot during on_mount (autopilot.py:1032/1065) so a pre-existing terminal run is not a None-to-done transition and _maybe_open_run_summary (autopilot.py:1842) does not fire on mount",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "_last_run_state seeds from the current state snapshot during on_mount (autopilot.py:1032/1065) so a pre-existing terminal run is not a None-to-done transition and _maybe_open_run_summary (autopilot.py:1842) does not fire on mount",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "cockpit vitals render the idle hero for a mount-fresh done run (render_cockpit_vitals gate at autopilot.py:709 extended); a genuine draining-to-done transition still opens the card (existing tests at test_modes_autopilot.py:996+1021+1052 stay green)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "cockpit vitals render the idle hero for a mount-fresh done run (render_cockpit_vitals gate at autopilot.py:709 extended); a genuine draining-to-done transition still opens the card (existing tests at test_modes_autopilot.py:996+1021+1052 stay green)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "new Pilot test mounts the app with a persisted done fleet_run and asserts no RunSummaryModal opens and the idle hero renders",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "new Pilot test mounts the app with a persisted done fleet_run and asserts no RunSummaryModal opens and the idle hero renders",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Gate autopilot run-summary against a persisted done fleet_run",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I22-W07": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I22-W04",
+        "P30-I22-W05"
+      ],
+      "description": "Live review: Watch mode pins one finished session with no way to browse others, and still offers cancel on a done session. Mode was designed for live in-flight lanes only (FA3/FA4); lanes are deleted on completion so nothing is selectable afterwards. Brief section 4.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "tests/tui/**"
+      ],
+      "gates": [],
+      "id": "P30-I22-W07",
+      "intent": {
+        "desired_outcome": "A session picker lists sessions with status sigils when nothing is in-flight; cancel and pause are inert with a toast on non-ACTIVE sessions; footer hints match each body case.",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-02-tui-review-followups.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Wrong-UX cancel is benign today (daemon agent.kill placeholder) but becomes a real SIGTERM once kill wires up; picker gap blocks the operator from reviewing past sessions at all.",
+        "problem": "Watch mode has no finished-session browsing (pick_watch_target falls back to newest any-status session with zero navigation) and the cancel affordance never reads session status.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I22",
+      "opened_at": "2026-07-02T03:13:14.471340Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "new picker body case in compose_body (agent_watch.py:1748) lists state.agent_sessions newest-first with the _SESSION_SIGIL status glyphs when no lane is in-flight and no zoom is pending; up/down moves selection and Enter zooms the highlighted session (arrows primary per keymap conventions)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "new picker body case in compose_body (agent_watch.py:1748) lists state.agent_sessions newest-first with the _SESSION_SIGIL status glyphs when no lane is in-flight and no zoom is pending; up/down moves selection and Enter zooms the highlighted session (arrows primary per keymap conventions)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "action_cancel_session (agent_watch.py:2157) and action_pause_session check target.status and no-op with an information toast for non-ACTIVE sessions; the idle cancel prompt (CANCEL_IDLE at agent_watch.py:155) is hidden for terminal sessions",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "action_cancel_session (agent_watch.py:2157) and action_pause_session check target.status and no-op with an information toast for non-ACTIVE sessions; the idle cancel prompt (CANCEL_IDLE at agent_watch.py:155) is hidden for terminal sessions",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "footer hints render per body case (picker vs zoom vs grid) so up/down never advertises select while it scrolls",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "footer hints render per body case (picker vs zoom vs grid) so up/down never advertises select while it scrolls",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "Pilot tests cover picker navigation + zoom + cancel-on-closed no-op; existing agent_watch suite green",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Pilot tests cover picker navigation + zoom + cancel-on-closed no-op; existing agent_watch suite green",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add watch-mode session picker and status-gate the cancel affordance",
+      "token_budget": null,
+      "tokens_consumed": 0,
       "worktree_id": null
     }
   },
