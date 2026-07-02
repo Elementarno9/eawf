@@ -170,6 +170,10 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
     "dispatch": {
         "session_policy_default": "hybrid",
         "session_handle_ttl_seconds": 86400,
+        # Per-block token ceiling for injected role-tier dispatch blocks.
+        # The renderer raises (never truncates) over the cap; the code
+        # fallback is DEFAULT_ROLE_TIER_TOKEN_CAP when the leaf is unset.
+        "role_tier_token_cap": 2400,
     },
     # Language-fit knobs. ``runtime`` is locked at ``python`` for
     # v0.3-v0.5 (D6); ``fast_extras`` opts in to PyO3 hot paths.

@@ -166,6 +166,7 @@ def _emit_review_request(
         _resolve_repo_root_for_drift,
     )
     from eawf.workflow.dispatch import render_wave_prompt
+    from eawf.workflow.dispatch.renderer import resolve_role_blocks
 
     loaded = _load_state_readonly(ctx)
     if loaded is None:
@@ -179,7 +180,14 @@ def _emit_review_request(
         return
 
     repo_root = _resolve_repo_root_for_drift(flags.workspace)
-    base_prompt = render_wave_prompt(state, wave_id, repo_root=repo_root)
+    role_tier = resolve_role_blocks(repo_root)
+    base_prompt = render_wave_prompt(
+        state,
+        wave_id,
+        repo_root=repo_root,
+        role_blocks=role_tier.role_blocks,
+        role_tier_token_cap=role_tier.token_cap,
+    )
     review_section = _render_review_prompt_section(diff_path=diff_path)
     review_request = base_prompt.rstrip() + "\n\n" + review_section + "\n"
 

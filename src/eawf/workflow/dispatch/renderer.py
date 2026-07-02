@@ -93,6 +93,67 @@ from eawf.workflow.lifecycle.ceremony import compute_ceremony
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class ResolvedRoleBlocks:
+    """The composed profiles' role-tier dispatch inputs, resolved once.
+
+    Attributes:
+        role_blocks: ``agent_role -> body`` map from
+            :meth:`~eawf.platform.profiles.models.ComposedProfile.role_tier_blocks`.
+            Empty when no enabled profile contributes one.
+        token_cap: The effective per-block token cap — the
+            ``dispatch.role_tier_token_cap`` config leaf when set, else
+            :data:`~eawf.platform.render_block.DEFAULT_ROLE_TIER_TOKEN_CAP`.
+    """
+
+    role_blocks: dict[str, str]
+    token_cap: int
+
+
+def resolve_role_blocks(repo_root: Path | None) -> ResolvedRoleBlocks:
+    """Resolve the role-tier dispatch blocks + token cap for *repo_root*.
+
+    The one production seam every dispatch render site calls before
+    rendering: it reads ``profiles.enabled`` + the
+    ``dispatch.role_tier_token_cap`` leaf from layered config, composes
+    the enabled profiles, and returns their role-tier blocks with the
+    effective cap. Resolution failures (broken profile YAML, unreadable
+    config) degrade to an empty map + the code-default cap with a logged
+    warning — a profile problem must not take the dispatch surface down;
+    the profile lints own that failure.
+
+    Args:
+        repo_root: Repository root anchoring layered config + profile
+            discovery. ``None`` returns the empty resolution.
+    """
+    if repo_root is None:
+        return ResolvedRoleBlocks(role_blocks={}, token_cap=DEFAULT_ROLE_TIER_TOKEN_CAP)
+    from eawf.kernel.config.layered import merge_config
+    from eawf.platform.profiles.loader import load_composed_profile
+
+    try:
+        merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
+    except (OSError, ValueError, KeyError) as exc:
+        logger.warning(f"resolve_role_blocks status=skip err={exc!s}")
+        return ResolvedRoleBlocks(role_blocks={}, token_cap=DEFAULT_ROLE_TIER_TOKEN_CAP)
+    cap_raw = (merged.get("dispatch") or {}).get("role_tier_token_cap")
+    token_cap = (
+        int(cap_raw)
+        if isinstance(cap_raw, (int, float)) and int(cap_raw) > 0
+        else DEFAULT_ROLE_TIER_TOKEN_CAP
+    )
+    enabled = (merged.get("profiles") or {}).get("enabled") or []
+    profile_ids = [pid for pid in enabled if isinstance(pid, str)]
+    if not profile_ids:
+        return ResolvedRoleBlocks(role_blocks={}, token_cap=token_cap)
+    try:
+        composed = load_composed_profile(profile_ids, workspace=repo_root)
+    except (OSError, ValueError, KeyError) as exc:
+        logger.warning(f"resolve_role_blocks status=skip-compose err={exc!s}")
+        return ResolvedRoleBlocks(role_blocks={}, token_cap=token_cap)
+    return ResolvedRoleBlocks(role_blocks=composed.role_tier_blocks(), token_cap=token_cap)
+
+
 # CLI-facing runtime names. The installer's ``_SUPPORTED_RUNTIMES`` uses
 # the internal canonical name ``"claude"`` for back-compat with v0.1
 # settings.json writes; the dispatch adapter exposes ``"claude-code"``
@@ -657,6 +718,8 @@ def render_wave_prompt(
     wave_id: str,
     *,
     repo_root: Path | None = None,
+    role_blocks: Mapping[str, str] | None = None,
+    role_tier_token_cap: int = DEFAULT_ROLE_TIER_TOKEN_CAP,
 ) -> str:
     """Return the Markdown prompt for *wave_id*.
 
@@ -680,6 +743,12 @@ def render_wave_prompt(
             Memory recall uses the same root for full-body lookup when
             supplied; without it, dispatch still renders cache summaries
             from ``state.memory_index`` and treats missing bodies as empty.
+        role_blocks: Optional ``agent_role -> body`` map of per-role
+            dispatch render blocks (see :func:`resolve_role_blocks`);
+            forwarded to :func:`build_subagent_spec`. ``None`` keeps the
+            prompt byte-equivalent to the pre-W41 renderer.
+        role_tier_token_cap: Maximum token weight one injected role-tier
+            block may carry; forwarded to :func:`build_subagent_spec`.
 
     Returns:
         A single string containing the full Markdown prompt. The
@@ -689,8 +758,17 @@ def render_wave_prompt(
     Raises:
         KeyError: When the wave id is missing or the
             wave → iter → phase → scope chain has a broken link.
+        RoleTierBudgetError: When *role_blocks* carries a body for the
+            wave's ``agent_role`` whose token weight exceeds
+            *role_tier_token_cap* (raise-never-truncate).
     """
-    spec = build_subagent_spec(state, wave_id, repo_root=repo_root)
+    spec = build_subagent_spec(
+        state,
+        wave_id,
+        repo_root=repo_root,
+        role_blocks=role_blocks,
+        role_tier_token_cap=role_tier_token_cap,
+    )
     return _render_spec_prompt(state, spec, wave_id=wave_id, repo_root=repo_root)
 
 

@@ -354,6 +354,7 @@ def wave_dispatch_cmd(
     render-only.
     """
     from eawf.workflow.dispatch import DISPATCH_RUNTIMES, render_dispatch_envelope
+    from eawf.workflow.dispatch.renderer import resolve_role_blocks
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
@@ -383,7 +384,15 @@ def wave_dispatch_cmd(
         return
     repo_root = _resolve_repo_root_for_drift(flags.workspace)
     try:
-        dispatch_envelope = render_dispatch_envelope(state, wave_id, runtime, repo_root=repo_root)
+        role_tier = resolve_role_blocks(repo_root)
+        dispatch_envelope = render_dispatch_envelope(
+            state,
+            wave_id,
+            runtime,
+            repo_root=repo_root,
+            role_blocks=role_tier.role_blocks,
+            role_tier_token_cap=role_tier.token_cap,
+        )
     except KeyError as exc:
         cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
@@ -474,6 +483,7 @@ def wave_dispatch_batch_cmd(
     failed-dep blockers) are rendered.
     """
     from eawf.workflow.dispatch import render_wave_prompt
+    from eawf.workflow.dispatch.renderer import resolve_role_blocks
 
     loaded = _load_state_readonly(ctx)
     if loaded is None:
@@ -493,7 +503,14 @@ def wave_dispatch_batch_cmd(
     text_chunks: list[str] = []
     for wid in wave_ids:
         try:
-            prompt = render_wave_prompt(state, wid, repo_root=repo_root)
+            role_tier = resolve_role_blocks(repo_root)
+            prompt = render_wave_prompt(
+                state,
+                wid,
+                repo_root=repo_root,
+                role_blocks=role_tier.role_blocks,
+                role_tier_token_cap=role_tier.token_cap,
+            )
         except KeyError as exc:
             cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
             return
@@ -995,3 +1012,94 @@ def wave_budget_show_cmd(
         f"remaining={remaining_display} status={classification or 'ok'}"
     )
     emit_json_or_text(envelope, text, flags=flags)
+
+
+@wave_app.command("show")
+def wave_show_cmd(
+    ctx: typer.Context,
+    wave_id: Annotated[str, typer.Argument(help="Wave ID to inspect.")],
+    show_commit: Annotated[
+        bool,
+        typer.Option(
+            "--commit",
+            help=(
+                "Print the wave's commit SHA. Prefers ``Wave.commit`` set "
+                "by ``wave close --commit``; falls back to deriving via "
+                "git log --grep '[P##-W##]'."
+            ),
+        ),
+    ] = False,
+    show_dispatch_prompt: Annotated[
+        bool,
+        typer.Option(
+            "--dispatch-prompt",
+            help="Print the rendered dispatch prompt for the wave.",
+        ),
+    ] = False,
+) -> None:
+    """Inspect a wave. ``--commit`` prints SHA; ``--dispatch-prompt`` prints prompt."""
+    from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
+
+    flags: GlobalFlags = ctx.obj
+    if not is_wave_id(wave_id):
+        cli_errors.emit_error(
+            cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+    if show_commit and show_dispatch_prompt:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                "choose only one of --commit or --dispatch-prompt",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+        return
+    if not show_commit and not show_dispatch_prompt:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                "wave show requires --commit or --dispatch-prompt",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+        return
+    if show_dispatch_prompt:
+        from eawf.workflow.dispatch import render_wave_prompt
+        from eawf.workflow.dispatch.renderer import resolve_role_blocks
+
+        loaded = _load_state_readonly(ctx)
+        if loaded is None:
+            return
+        state, _ = loaded
+        repo_root = _resolve_repo_root_for_drift(flags.workspace)
+        try:
+            role_tier = resolve_role_blocks(repo_root)
+            prompt = render_wave_prompt(
+                state,
+                wave_id,
+                repo_root=repo_root,
+                role_blocks=role_tier.role_blocks,
+                role_tier_token_cap=role_tier.token_cap,
+            )
+        except KeyError as exc:
+            cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
+            return
+        typer.echo(prompt)
+        return
+    # Prefer the pinned SHA (set by ``wave close --commit``) over the
+    # derive-from-git-log fallback so closed waves round-trip the value
+    # the operator provided rather than re-querying git on every read.
+    loaded = _load_state_readonly(ctx)
+    pinned_sha: str | None = None
+    if loaded is not None:
+        state, _ = loaded
+        wave = state.waves.get(wave_id)
+        if wave is not None:
+            pinned_sha = wave.commit
+    sha = pinned_sha if pinned_sha is not None else derive_wave_sha(wave_id)
+    if sha is None:
+        typer.echo("")
+        return
+    typer.echo(sha)

@@ -112,7 +112,7 @@ from eawf.runtime.runtimes.selector import select_adapter
 from eawf.runtime.sandbox.policy import resolve_denied_tools
 from eawf.runtime.session.store import SessionConflict, start_session
 from eawf.workflow.dispatch.llm_assist import LLMAssistError, assist_with_schema
-from eawf.workflow.dispatch.renderer import render_dispatch_envelope
+from eawf.workflow.dispatch.renderer import render_dispatch_envelope, resolve_role_blocks
 from eawf.workflow.dispatch.retry import spawn_with_retry
 from eawf.workflow.dispatch.routing import resolve_routing, runtime_model_for_decision
 from eawf.workflow.evidence._io import load_state
@@ -1190,8 +1190,15 @@ async def _spawn_and_dispatch(
     # ExecutorReportBody, so render the headless prompt: it pins the report
     # schema + an output-only-JSON instruction so the model emits a parseable
     # body on the first try rather than answering in prose.
+    role_tier = resolve_role_blocks(state_path.parent.parent)
     envelope = render_dispatch_envelope(
-        state, wave_id, runtime, repo_root=state_path.parent.parent, headless=True
+        state,
+        wave_id,
+        runtime,
+        repo_root=state_path.parent.parent,
+        role_blocks=role_tier.role_blocks,
+        role_tier_token_cap=role_tier.token_cap,
+        headless=True,
     )
 
     # 3. Resolve the per-wave sandbox deny-list (wave-scoped + global

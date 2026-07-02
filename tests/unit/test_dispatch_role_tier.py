@@ -472,3 +472,150 @@ def test_under_cap_block_passes_but_over_lower_override_raises() -> None:
     message = str(excinfo.value)
     assert repr("executor") in message
     assert str(block_tokens - 1) in message
+
+
+# ---- W41: resolve_role_blocks + live production wiring ----------------------
+
+
+def _sized_body(tokens: int) -> str:
+    """Return a role-tier body weighing roughly *tokens* tokens."""
+    return "## House rules\n\n" + " ".join(f"word{n}" for n in range(tokens))
+
+
+def test_resolve_role_blocks_none_root_is_empty_default() -> None:
+    from eawf.workflow.dispatch.renderer import resolve_role_blocks
+
+    resolved = resolve_role_blocks(None)
+    assert resolved.role_blocks == {}
+    assert resolved.token_cap == DEFAULT_ROLE_TIER_TOKEN_CAP
+
+
+def test_resolve_role_blocks_reads_leaf_and_composed_blocks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """CR-01/CR-03: the resolver folds the config leaf + composed blocks."""
+    from eawf.kernel.config import layered
+    from eawf.platform.profiles import loader as profile_loader
+    from eawf.workflow.dispatch.renderer import resolve_role_blocks
+
+    composed = _composed_with_role_blocks(
+        _role_tier_block(role="executor", body=_EXECUTOR_BLOCK_BODY)
+    )
+    monkeypatch.setattr(
+        layered,
+        "merge_config",
+        lambda **_kw: (
+            {
+                "dispatch": {"role_tier_token_cap": 1200},
+                "profiles": {"enabled": ["quality"]},
+            },
+            {},
+        ),
+    )
+    monkeypatch.setattr(profile_loader, "load_composed_profile", lambda *a, **k: composed)
+    resolved = resolve_role_blocks(tmp_path)
+    assert resolved.token_cap == 1200
+    assert resolved.role_blocks == {"executor": _EXECUTOR_BLOCK_BODY}
+
+
+def test_resolve_role_blocks_degrades_on_compose_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """A broken profile never takes the dispatch surface down."""
+    from eawf.kernel.config import layered
+    from eawf.platform.profiles import loader as profile_loader
+    from eawf.workflow.dispatch.renderer import resolve_role_blocks
+
+    monkeypatch.setattr(
+        layered,
+        "merge_config",
+        lambda **_kw: ({"profiles": {"enabled": ["broken"]}}, {}),
+    )
+
+    def _boom(*_a: object, **_k: object) -> object:
+        raise ValueError("profile yaml exploded")
+
+    monkeypatch.setattr(profile_loader, "load_composed_profile", _boom)
+    resolved = resolve_role_blocks(tmp_path)
+    assert resolved.role_blocks == {}
+    assert resolved.token_cap == DEFAULT_ROLE_TIER_TOKEN_CAP
+
+
+def test_render_wave_prompt_forwards_role_blocks() -> None:
+    """CR-02: render_wave_prompt no longer drops role_blocks."""
+    from eawf.workflow.dispatch import render_wave_prompt
+
+    state = _empty_state()
+    wave_id = _seed_wave_with_role(state, role=AgentSessionRole.EXECUTOR)
+    with_block = render_wave_prompt(state, wave_id, role_blocks={"executor": _EXECUTOR_BLOCK_BODY})
+    assert _EXECUTOR_BLOCK_BODY in with_block
+    without_block = render_wave_prompt(state, wave_id)
+    assert _EXECUTOR_BLOCK_BODY not in without_block
+
+
+def test_boundary_falsifier_cap_2400_injects_and_1200_raises() -> None:
+    """CR-03: a ~2000-token block passes cap=2400, raises at cap=1200."""
+    from eawf.workflow.dispatch import render_wave_prompt
+
+    state = _empty_state()
+    wave_id = _seed_wave_with_role(state, role=AgentSessionRole.EXECUTOR)
+    body = _sized_body(2000)
+    weight = count_tokens(body)
+    assert 1200 < weight <= 2400, f"falsifier body weighs {weight} tokens"
+
+    injected = render_wave_prompt(
+        state,
+        wave_id,
+        role_blocks={"executor": body},
+        role_tier_token_cap=2400,
+    )
+    assert body in injected
+
+    with pytest.raises(RoleTierBudgetError):
+        render_wave_prompt(
+            state,
+            wave_id,
+            role_blocks={"executor": body},
+            role_tier_token_cap=1200,
+        )
+
+
+def test_role_tier_token_cap_leaf_registered() -> None:
+    """CR-03: the leaf ships in defaults + the leaf catalog, default 2400."""
+    from eawf.kernel.config.defaults import _BUILT_IN_DEFAULTS
+    from eawf.kernel.config.registry.leaf_catalog import LEAF_KEY_REGISTRY
+
+    assert _BUILT_IN_DEFAULTS["dispatch"]["role_tier_token_cap"] == 2400
+    row = LEAF_KEY_REGISTRY["dispatch.role_tier_token_cap"]
+    assert row.default == 2400
+    assert row.type == "int"
+
+
+def test_all_six_production_render_sites_pass_role_blocks() -> None:
+    """CR-01: resolve_role_blocks output reaches all six render sites."""
+    import inspect
+
+    from eawf.runtime.daemon.methods import agent as daemon_agent
+    from eawf.runtime.daemon.methods import fleet as daemon_fleet
+    from eawf.surfaces.cli.commands import lifecycle_wave, lifecycle_wave_read, pr_review
+
+    del lifecycle_wave  # wave show moved to the read module (EAWF010 split)
+    sources = {
+        "daemon.agent": inspect.getsource(daemon_agent),
+        "daemon.fleet": inspect.getsource(daemon_fleet),
+        "cli.lifecycle_wave_read": inspect.getsource(lifecycle_wave_read),
+        "cli.pr_review": inspect.getsource(pr_review),
+    }
+    for name, source in sources.items():
+        assert "resolve_role_blocks(" in source, f"{name} never resolves role blocks"
+        assert "role_blocks=role_tier.role_blocks" in source, (
+            f"{name} resolves but drops role_blocks"
+        )
+        assert "role_tier_token_cap=role_tier.token_cap" in source, (
+            f"{name} resolves but drops the token cap"
+        )
+    # lifecycle_wave_read hosts THREE of the six sites: the dispatch
+    # envelope, the batch prompt render, and the moved wave-show prompt.
+    site_count = sum(source.count("resolve_role_blocks(") for source in sources.values())
+    assert sources["cli.lifecycle_wave_read"].count("resolve_role_blocks(") >= 3
+    assert site_count >= 6, f"only {site_count} production render sites resolve role blocks"

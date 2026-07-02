@@ -439,6 +439,14 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=("global",),
     ),
     LeafKey(
+        key="dispatch.role_tier_token_cap",
+        domain="dispatch",
+        type="int",
+        default=2400,
+        writable_layers=_WRITABLE_GWR,
+        description="Token ceiling per injected role-tier dispatch block (raise, never truncate).",
+    ),
+    LeafKey(
         key="dispatch.routing",
         domain="dispatch",
         type="mapping",

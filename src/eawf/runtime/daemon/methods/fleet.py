@@ -783,7 +783,7 @@ async def _live_repair_lane(ctx: MethodContext, lane: FleetLane) -> LaneRepairOu
     from eawf.kernel.state.enums import AgentSessionRole as _Role
     from eawf.kernel.state.enums import EffortBucket as _Effort
     from eawf.runtime.sandbox.policy import resolve_denied_tools
-    from eawf.workflow.dispatch.renderer import render_dispatch_envelope
+    from eawf.workflow.dispatch.renderer import render_dispatch_envelope, resolve_role_blocks
     from eawf.workflow.dispatch.routing import model_for_runtime
     from eawf.workflow.verify.oracle import run_oracle
 
@@ -812,7 +812,15 @@ async def _live_repair_lane(ctx: MethodContext, lane: FleetLane) -> LaneRepairOu
     runtime = wave.runtime_preference[0] if wave.runtime_preference else "claude-code"
     role = wave.agent_role if wave.agent_role is not None else _Role.EXECUTOR
     effort = wave.effort_bucket if wave.effort_bucket is not None else _Effort.M
-    base_prompt = render_dispatch_envelope(state, wave_id, runtime, repo_root=repo_root).prompt
+    role_tier = resolve_role_blocks(repo_root)
+    base_prompt = render_dispatch_envelope(
+        state,
+        wave_id,
+        runtime,
+        repo_root=repo_root,
+        role_blocks=role_tier.role_blocks,
+        role_tier_token_cap=role_tier.token_cap,
+    ).prompt
     denied = sorted(resolve_denied_tools(state.sandbox_policies, wave_id=wave_id))
     cwd = str(repo_root)
     runtime_models = resolve_runtime_tier_models(repo_root)
