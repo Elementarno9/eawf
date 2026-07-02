@@ -44,9 +44,10 @@ from eawf.surfaces.render.manifest import Manifest
 from eawf.surfaces.render.manifest import load as load_manifest
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     from eawf.kernel.state.models import State
+    from eawf.runtime.daemon.service_install import SupervisedAgentReport
 
 logger = logging.getLogger(__name__)
 
@@ -575,6 +576,144 @@ def check_state_scale_ceiling(*, workspace: Path | None) -> CheckResult:
     )
 
 
+# ``eawf daemon reclaim`` trims runtime-dir bloat; doctor warns once the
+# runtime dir (WAL records plus the never-auto-GC'd ``eawfd.log``) crosses this
+# size, or the ``.ea/`` migration backups pile up past this count, so the
+# operator knows to run it. Both are advisory (``warn`` only, never ``fail``)
+# -- disk pressure is a capacity signal, not a broken install.
+RUNTIME_DIR_WARN_BYTES = 100 * 1024 * 1024
+STATE_BACKUP_WARN_COUNT = 10
+
+
+def check_launchd_agent(
+    *, detector: Callable[..., SupervisedAgentReport] | None = None
+) -> CheckResult:
+    """Report the OS-supervised eawfd agent (launchd / systemd) state.
+
+    A daemon under a launchd LaunchAgent (macOS) or a systemd user unit
+    (Linux) auto-restarts on exit, which silently defeats a manual
+    ``eawf daemon stop`` and can leave a manually spawned daemon racing the
+    supervised one. This row surfaces three operability signals the operator
+    cannot otherwise see without shelling into launchctl / systemctl by hand:
+
+    - ``loaded`` -- the agent is registered and will respawn the daemon;
+    - drift -- the plist / unit points at a STALE binary (a pre-upgrade
+      ``service-enable`` that never re-ran);
+    - a RIVAL daemon PID coexisting with the supervised one (multi-daemon).
+
+    Returns ``ok`` when there is no supervised agent, or a loaded agent with
+    neither drift nor a rival; ``warn`` on drift or a detected rival. It never
+    returns ``fail`` -- a loaded agent is a normal, healthy install.
+
+    Args:
+        detector: Injected detection callable; defaults to
+            :func:`eawf.runtime.daemon.service_install.detect_supervised_agent`.
+            The doctor suite passes a stub so the check never shells out.
+    """
+    name = "launchd_agent"
+    if detector is None:
+        from eawf.runtime.daemon.service_install import detect_supervised_agent
+
+        detector = detect_supervised_agent
+    report = detector()
+    if report.supervisor == "none" or not (report.installed or report.loaded):
+        return CheckResult(name=name, status="ok", detail="no supervised eawfd agent")
+    loaded_note = "loaded" if report.loaded else "installed (not loaded)"
+    issues: list[str] = []
+    if report.drift:
+        issues.append(f"unit points at stale binary program={report.program!r}")
+    if report.rival_pid is not None:
+        issues.append(f"rival daemon pid={report.rival_pid} alongside the supervised agent")
+    if issues:
+        return CheckResult(
+            name=name,
+            status="warn",
+            detail=f"{report.supervisor} agent {loaded_note}; " + "; ".join(issues),
+        )
+    return CheckResult(
+        name=name,
+        status="ok",
+        detail=f"{report.supervisor} agent {loaded_note}; no drift or rival",
+    )
+
+
+def _dir_size_bytes(path: Path) -> int:
+    """Return the total size in bytes of the files under *path* (0 if absent)."""
+    if not path.exists():
+        return 0
+    total = 0
+    for entry in path.rglob("*"):
+        try:
+            if entry.is_file():
+                total += entry.stat().st_size
+        except OSError:
+            continue
+    return total
+
+
+def _state_backup_census(workspace: Path | None) -> tuple[int, int]:
+    """Return ``(count, total_bytes)`` of ``.ea/state.json.bak.*`` backups."""
+    anchor = _resolve_anchor(workspace)
+    if anchor is None:
+        return 0, 0
+    backups = list((anchor / ".ea").glob("state.json.bak.*"))
+    total = 0
+    for path in backups:
+        try:
+            total += path.stat().st_size
+        except OSError:
+            continue
+    return len(backups), total
+
+
+def check_runtime_dir_size(*, workspace: Path | None) -> CheckResult:
+    """Advise when the daemon runtime dir or the .ea backup census grows large.
+
+    Covers two disk-pressure sources a long-lived install accumulates and
+    ``eawf daemon reclaim`` trims: the daemon runtime directory (``~/.eawfd``
+    -- WAL records plus the never-auto-GC'd ``eawfd.log``) and the
+    ``.ea/state.json.bak.*`` migration backups (each schema bump writes one,
+    and they are gitignored, so they never leave the working tree on their
+    own).
+
+    Returns ``warn`` -- never ``fail`` -- when the runtime dir crosses
+    :data:`RUNTIME_DIR_WARN_BYTES` or the backup count reaches
+    :data:`STATE_BACKUP_WARN_COUNT`, pointing the operator at
+    ``eawf daemon reclaim``; ``ok`` otherwise.
+
+    Args:
+        workspace: Workspace anchor for the ``.ea`` backup census; ``None``
+            defers to the pwd-upward ``.ea/`` walk.
+    """
+    from eawf.runtime.daemon.runtime_dir import runtime_dir
+
+    name = "runtime_dir_size"
+    rt_dir = runtime_dir()
+    rt_bytes = _dir_size_bytes(rt_dir)
+    backup_count, backup_bytes = _state_backup_census(workspace)
+    rt_mib = rt_bytes / (1024 * 1024)
+    backup_mib = backup_bytes / (1024 * 1024)
+    issues: list[str] = []
+    if rt_bytes >= RUNTIME_DIR_WARN_BYTES:
+        ceiling_mib = RUNTIME_DIR_WARN_BYTES // (1024 * 1024)
+        issues.append(f"runtime dir {rt_dir} is {rt_mib:.1f} MiB (>= {ceiling_mib} MiB)")
+    if backup_count >= STATE_BACKUP_WARN_COUNT:
+        issues.append(f"{backup_count} state.json.bak.* backups ({backup_mib:.1f} MiB)")
+    if issues:
+        return CheckResult(
+            name=name,
+            status="warn",
+            detail="; ".join(issues) + "; run `eawf daemon reclaim`",
+        )
+    return CheckResult(
+        name=name,
+        status="ok",
+        detail=(
+            f"runtime dir {rt_mib:.1f} MiB; {backup_count} state backup(s) {backup_mib:.1f} MiB"
+        ),
+    )
+
+
 def check_render_output_roundtrip() -> CheckResult:
     """Round-trip a synthetic :class:`OutputEnvelope` to confirm the wire-form holds.
 
@@ -706,6 +845,8 @@ def run_all(
         check_manifest_in_sync(workspace=anchor),
         check_mcp_drift(workspace=anchor),
         check_state_scale_ceiling(workspace=anchor),
+        check_launchd_agent(),
+        check_runtime_dir_size(workspace=anchor),
         check_render_output_roundtrip(),
     ]
     return results

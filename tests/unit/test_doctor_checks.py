@@ -190,6 +190,29 @@ def test_state_wave_warn_threshold_derives_from_ceiling_and_fraction() -> None:
     )
 
 
+def _stub_supervised_agent_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force ``detect_supervised_agent`` to report no supervised agent.
+
+    ``check_launchd_agent`` shells out to launchctl / systemctl by default;
+    stubbing the detector keeps ``run_all`` hermetic (no host interaction).
+    """
+    from eawf.runtime.daemon.service_install import SupervisedAgentReport
+
+    report = SupervisedAgentReport(
+        supervisor="none",
+        label="",
+        installed=False,
+        loaded=False,
+        program=None,
+        drift=False,
+        rival_pid=None,
+    )
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.service_install.detect_supervised_agent",
+        lambda *_a, **_k: report,
+    )
+
+
 def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``run_all`` returns the canonical install-readiness check set."""
     from eawf.platform.install.instrument_probe import ProbeResult
@@ -198,9 +221,11 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
         monkeypatch,
         [ProbeResult(name="git", kind="hard", status="ok", path="/x/git")],
     )
+    _stub_supervised_agent_none(monkeypatch)
+    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(tmp_path / "eawfd"))
     monkeypatch.chdir(tmp_path)
     results = checks.run_all(workspace=tmp_path)
-    assert len(results) == 7
+    assert len(results) == 9
     assert {r.name for r in results} == {
         "tools_available",
         "state_present",
@@ -208,6 +233,8 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
         "manifest_in_sync",
         "mcp_drift",
         "state_scale_ceiling",
+        "launchd_agent",
+        "runtime_dir_size",
         "render_output_roundtrip",
     }
 
@@ -358,6 +385,7 @@ def test_run_all_does_not_write_probe_into_anchor_dot_ea(
     from eawf.platform.install import instrument_probe as _ip
 
     monkeypatch.delenv("EA_INSTRUMENT_PROBE", raising=False)
+    _stub_supervised_agent_none(monkeypatch)
     # Every tool resolves so the real probe writes a green cache without a
     # version shell-out reaching the host. Force the cheap ``which`` probe so
     # no ``--version`` subprocess runs.
@@ -378,3 +406,138 @@ def test_run_all_does_not_write_probe_into_anchor_dot_ea(
     assert not (tmp_path / ".ea" / "instrument-probe.json").exists()
     # The cache landed in the per-user home instead.
     assert (fake_home / ".eawf" / "cache" / "instrument-probe.json").exists()
+
+
+# ---- P30-I23-W15: launchd/systemd supervised-agent doctor row --------------
+
+
+def _agent_report(**overrides: object) -> object:
+    """Build a :class:`SupervisedAgentReport` with sensible defaults."""
+    from eawf.runtime.daemon.service_install import SupervisedAgentReport
+
+    base: dict[str, object] = {
+        "supervisor": "launchd",
+        "label": "dev.eawf.eawfd",
+        "installed": True,
+        "loaded": True,
+        "program": "/usr/local/bin/eawfd",
+        "drift": False,
+        "rival_pid": None,
+    }
+    base.update(overrides)
+    return SupervisedAgentReport(**base)  # type: ignore[arg-type]
+
+
+def test_check_launchd_agent_no_agent_ok() -> None:
+    """No supervised agent on this host is ``ok`` (nothing to manage)."""
+    result = checks.check_launchd_agent(
+        detector=lambda: _agent_report(supervisor="none", installed=False, loaded=False)
+    )
+    assert result.status == "ok"
+    assert result.name == "launchd_agent"
+    assert "no supervised" in (result.detail or "")
+
+
+def test_check_launchd_agent_loaded_clean_ok() -> None:
+    """A loaded agent with no drift and no rival is a healthy install (``ok``)."""
+    result = checks.check_launchd_agent(detector=lambda: _agent_report())
+    assert result.status == "ok"
+    assert "loaded" in (result.detail or "")
+
+
+def test_check_launchd_agent_drift_warns() -> None:
+    """A plist pointing at a stale binary flips the row to ``warn``."""
+    result = checks.check_launchd_agent(detector=lambda: _agent_report(drift=True))
+    assert result.status == "warn"
+    assert "stale binary" in (result.detail or "")
+
+
+def test_check_launchd_agent_rival_warns() -> None:
+    """A rival daemon PID alongside the supervised agent flips to ``warn``."""
+    result = checks.check_launchd_agent(detector=lambda: _agent_report(rival_pid=4242))
+    assert result.status == "warn"
+    assert "rival daemon pid=4242" in (result.detail or "")
+
+
+def test_check_launchd_agent_default_detector_never_shells_on_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The default detector path returns a row even with no runner injected.
+
+    Forces the detector to the ``none`` (Windows-style) branch so the check
+    exercises its lazy ``detect_supervised_agent`` import without touching a
+    launchctl / systemctl subprocess.
+    """
+    monkeypatch.setattr("eawf.runtime.daemon.service_install._current_platform", lambda: "win32")
+    result = checks.check_launchd_agent()
+    assert result.status == "ok"
+    assert result.name == "launchd_agent"
+
+
+# ---- P30-I23-W15: runtime-dir-size doctor row ------------------------------
+
+
+def _seed_backups(ea_dir: Path, count: int) -> None:
+    """Write *count* ``state.json.bak.*`` files under *ea_dir*."""
+    ea_dir.mkdir(parents=True, exist_ok=True)
+    for index in range(count):
+        (ea_dir / f"state.json.bak.v1.{index}.v1.{index + 1}").write_bytes(b"{}\n")
+
+
+def test_check_runtime_dir_size_small_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A small runtime dir and no backups report ``ok`` with both figures."""
+    runtime = tmp_path / "eawfd"
+    runtime.mkdir()
+    (runtime / "eawfd.log").write_bytes(b"small\n")
+    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(runtime))
+    (tmp_path / ".ea").mkdir()
+    result = checks.check_runtime_dir_size(workspace=tmp_path)
+    assert result.status == "ok"
+    assert result.name == "runtime_dir_size"
+    assert "state backup(s)" in (result.detail or "")
+
+
+def test_check_runtime_dir_size_backup_census_warns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A pile of ``.ea/state.json.bak.*`` backups flips the row to ``warn``."""
+    runtime = tmp_path / "eawfd"
+    runtime.mkdir()
+    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(runtime))
+    _seed_backups(tmp_path / ".ea", checks.STATE_BACKUP_WARN_COUNT)
+    result = checks.check_runtime_dir_size(workspace=tmp_path)
+    assert result.status == "warn"
+    assert "state.json.bak.* backups" in (result.detail or "")
+    assert "eawf daemon reclaim" in (result.detail or "")
+
+
+def test_check_runtime_dir_size_large_runtime_dir_warns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A runtime dir past the size ceiling flips the row to ``warn``.
+
+    Lowers the byte ceiling rather than materialising a 100 MiB file so the
+    boundary is exercised cheaply.
+    """
+    runtime = tmp_path / "eawfd"
+    runtime.mkdir()
+    (runtime / "eawfd.log").write_bytes(b"x" * 4096)
+    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(runtime))
+    monkeypatch.setattr(checks, "RUNTIME_DIR_WARN_BYTES", 1024)
+    (tmp_path / ".ea").mkdir()
+    result = checks.check_runtime_dir_size(workspace=tmp_path)
+    assert result.status == "warn"
+    assert "runtime dir" in (result.detail or "")
+
+
+def test_check_runtime_dir_size_no_anchor_ok(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No ``.ea`` anchor means the backup census is empty (still ``ok``)."""
+    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(tmp_path / "nonexistent-eawfd"))
+    # Resolve from a tree with no ``.ea/`` ancestor so the pwd-upward walk
+    # finds no anchor (and never censuses the repo's own backups).
+    monkeypatch.chdir(tmp_path)
+    result = checks.check_runtime_dir_size(workspace=None)
+    assert result.status == "ok"
+    assert "0 state backup(s)" in (result.detail or "")

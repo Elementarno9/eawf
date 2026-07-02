@@ -192,6 +192,7 @@ def run_cmd(
             + service-style boot path.
     """
     from eawf.runtime.daemon.main import run as run_daemon
+    from eawf.runtime.daemon.service_install import detect_supervised_agent
 
     flags: GlobalFlags = ctx.obj
     if flags.json_output:
@@ -203,6 +204,21 @@ def run_cmd(
             err=True,
         )
         raise typer.Exit(code=2)
+    # A loaded launchd/systemd agent already owns the daemon lifecycle;
+    # booting a second one here would fork a rival that fights for the
+    # singleton lock. Defer to the supervisor instead. The supervised
+    # process itself execs ``eawfd`` directly (never `eawf daemon run`), so
+    # this defer can never deadlock the supervisor's own start.
+    report = detect_supervised_agent()
+    if report.loaded:
+        typer.echo(
+            f"deferring to loaded {report.supervisor} agent {report.label!r}; "
+            "not forking a rival daemon (stop it with "
+            "`eawf daemon stop --evict-service` or remove it with "
+            "`eawf daemon service-disable`)",
+            err=True,
+        )
+        raise typer.Exit(code=0)
     rc = run_daemon(foreground=foreground)
     raise typer.Exit(code=rc)
 
@@ -267,6 +283,43 @@ def status_cmd(ctx: typer.Context) -> None:
     )
 
 
+def _handle_supervised_agent_on_stop(*, evict_service: bool) -> None:
+    """Detect a supervised eawfd agent and evict-or-warn before the stop RPC.
+
+    A launchd LaunchAgent (macOS) or systemd user unit (Linux) restarts the
+    daemon on exit, so a plain ``daemon.shutdown`` is undone the moment it
+    lands. When ``--evict-service`` is set we boot the agent out FIRST -- so
+    the eviction precedes the shutdown RPC and no KeepAlive / Restart can race
+    the stop -- otherwise we warn loudly that the stop will be reversed. A
+    daemon that is not under a loaded supervisor is a no-op.
+
+    Args:
+        evict_service: When True, boot the loaded agent out before the RPC;
+            when False, emit a loud warning and leave the agent loaded.
+    """
+    from eawf.runtime.daemon.service_install import (
+        detect_supervised_agent,
+        evict_supervised_agent,
+    )
+
+    report = detect_supervised_agent()
+    if not report.loaded:
+        return
+    if evict_service:
+        target = evict_supervised_agent()
+        typer.echo(
+            f"evicted {report.supervisor} agent {target!r} before shutdown",
+            err=True,
+        )
+        return
+    typer.echo(
+        f"WARNING: {report.supervisor} agent {report.label!r} is loaded and will "
+        "restart the daemon after shutdown; pass --evict-service to boot it out "
+        "for the stop window",
+        err=True,
+    )
+
+
 @daemon_app.command("stop")
 def stop_cmd(
     ctx: typer.Context,
@@ -281,9 +334,20 @@ def stop_cmd(
         int,
         typer.Option("--timeout", help="Drain window in seconds (1-600)."),
     ] = 30,
+    evict_service: Annotated[
+        bool,
+        typer.Option(
+            "--evict-service",
+            help=(
+                "Boot out a loaded launchd/systemd agent before the shutdown "
+                "RPC so a KeepAlive/Restart cannot immediately undo the stop."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Request graceful daemon shutdown."""
     flags: GlobalFlags = ctx.obj
+    _handle_supervised_agent_on_stop(evict_service=evict_service)
     params: dict[str, Any] = {"drain": not no_drain, "timeout_seconds": timeout}
     try:
         response = _run_rpc("daemon.shutdown", params)
@@ -597,17 +661,35 @@ def service_disable_cmd(ctx: typer.Context) -> None:
 
 @daemon_app.command("service-status")
 def service_status_cmd(ctx: typer.Context) -> None:
-    """Report the supervisor-level service state (no daemon RPC).
+    """Report the supervisor-level service state plus daemon-health advisories.
 
     Distinct from ``eawf daemon status``, which issues the W01
-    ``daemon.status`` RPC against the running socket. This verb asks
-    the native supervisor for its view of the unit; ``running`` here
-    requires both registration AND an active PID.
+    ``daemon.status`` RPC against the running socket. This verb asks the native
+    supervisor for its view of the unit (``running`` here requires both
+    registration AND an active PID) and folds in the two daemon-service
+    advisories the doctor surface also carries: the launchd/systemd agent
+    health (loaded / plist-vs-binary drift / a rival daemon) and the
+    runtime-dir + ``.ea`` backup footprint that ``eawf daemon reclaim`` trims.
     """
+    from eawf.observability.doctor.checks import (
+        check_launchd_agent,
+        check_runtime_dir_size,
+    )
     from eawf.runtime.daemon.service_install import service_status
 
     flags: GlobalFlags = ctx.obj
     status = service_status()
-    payload = {"platform": sys.platform, "status": status.value}
-    text = f"daemon service platform={sys.platform} status={status.value}"
+    agent_row = check_launchd_agent()
+    size_row = check_runtime_dir_size(workspace=flags.workspace)
+    payload = {
+        "platform": sys.platform,
+        "status": status.value,
+        "launchd_agent": {"status": agent_row.status, "detail": agent_row.detail},
+        "runtime_dir_size": {"status": size_row.status, "detail": size_row.detail},
+    }
+    text = (
+        f"daemon service platform={sys.platform} status={status.value}\n"
+        f"  launchd-agent [{agent_row.status}] {agent_row.detail}\n"
+        f"  runtime-dir-size [{size_row.status}] {size_row.detail}"
+    )
     emit_json_or_text(payload, text, flags=flags)

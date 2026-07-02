@@ -26,14 +26,17 @@ from __future__ import annotations
 import importlib
 import logging
 import os
+import plistlib
 import shutil
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
+from xml.parsers.expat import ExpatError
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
@@ -647,3 +650,321 @@ def service_status() -> ServiceStatus:
     if sys.platform == "win32":
         return _status_windows()
     return ServiceStatus.UNSUPPORTED
+
+
+# --- Supervised-agent management (launchd / systemd) ------------------
+#
+# A daemon under a launchd LaunchAgent (macOS, KeepAlive) or a systemd user
+# unit (Linux, Restart=) auto-restarts on exit, so a plain ``daemon.shutdown``
+# RPC is undone the moment it lands. The ``daemon stop --evict-service`` verb
+# boots the agent out first; ``daemon run`` defers to a loaded agent instead of
+# forking a rival; and the doctor surface reports the agent state. All three
+# route through the injectable :data:`_service_runner` seam so the lifecycle
+# suite captures + orders every supervisor call without touching the host.
+
+
+#: Runner seam: a callable that runs an argv and returns the completed process.
+_ServiceRunner = Callable[[list[str]], subprocess.CompletedProcess[str]]
+
+
+def _default_service_runner(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run *cmd* capturing output; never raise on non-zero or missing binary.
+
+    Unlike :func:`_run`, this never raises. A non-zero exit is a signal the
+    caller interprets (an unloaded agent, an inactive unit) rather than a
+    failure, and a missing supervisor binary (``launchctl`` absent on Linux,
+    ``systemctl`` absent in a minimal container) collapses to a synthetic
+    ``rc=127`` so detection degrades to "no supervised agent" instead of
+    crashing the doctor surface.
+
+    Args:
+        cmd: Argv to execute.
+
+    Returns:
+        The completed process, or a synthetic ``rc=127`` result when the
+        binary is not on ``PATH``.
+    """
+    logger.info(f"_default_service_runner cmd={cmd!r}")
+    try:
+        return subprocess.run(cmd, check=False, capture_output=True, text=True)
+    except FileNotFoundError:
+        return subprocess.CompletedProcess(args=cmd, returncode=127, stdout="", stderr="")
+
+
+#: Injectable subprocess runner for the supervised-agent management calls
+#: (``launchctl print`` / ``bootout``, ``systemctl is-active`` / ``show`` /
+#: ``stop``). The default shells out; the lifecycle suite swaps this for a
+#: recording stub so no launchctl / systemctl call ever touches the host under
+#: test. Keeping the seam at module scope lets the parameter-free Typer daemon
+#: verbs still route through an injectable point.
+_service_runner: _ServiceRunner = _default_service_runner
+
+
+def _current_platform() -> str:
+    """Return the running platform id.
+
+    A one-line seam so the lifecycle + doctor suites can force ``darwin`` /
+    ``linux`` regardless of the host they run on, without mutating the global
+    :mod:`sys` module.
+    """
+    return sys.platform
+
+
+@dataclass(frozen=True)
+class SupervisedAgentReport:
+    """Detection snapshot for the OS-supervised eawfd agent.
+
+    Attributes:
+        supervisor: ``launchd`` (macOS), ``systemd`` (Linux user session), or
+            ``none`` (Windows / unsupported / no install recipe).
+        label: launchd label or systemd unit name; empty when ``supervisor``
+            is ``none``.
+        installed: A plist / unit file is present on disk.
+        loaded: The supervisor reports the agent loaded (launchd) or active
+            (systemd) -- i.e. it will (re)start the daemon on exit.
+        program: The program the unit is configured to exec (launchd
+            ``ProgramArguments[0]`` / systemd ``ExecStart[0]``); ``None`` when
+            the unit file is absent or unparseable.
+        drift: ``installed`` and ``program`` differs from the currently
+            resolved eawfd binary -- the unit points at a stale binary from a
+            pre-upgrade ``service-enable`` that never re-ran.
+        rival_pid: A live daemon PID recorded in the PID file that the
+            supervisor did NOT report (a manually spawned rival alongside the
+            supervised daemon); ``None`` when no rival is detected.
+    """
+
+    supervisor: str
+    label: str
+    installed: bool
+    loaded: bool
+    program: str | None
+    drift: bool
+    rival_pid: int | None
+
+
+def _pid_is_alive(pid: int) -> bool:
+    """Return True when *pid* refers to a live process (POSIX ``kill(0)``)."""
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _read_recorded_daemon_pid() -> int | None:
+    """Return the PID recorded in ``<runtime_dir>/eawfd.pid``, or ``None``."""
+    try:
+        head = pid_path().read_text(encoding="utf-8").splitlines()[0]
+        return int(head.strip())
+    except OSError, ValueError, IndexError:
+        return None
+
+
+def _detect_rival_pid(supervised_pid: int | None) -> int | None:
+    """Return a live rival daemon PID distinct from *supervised_pid*.
+
+    The supervised daemon writes its own PID into ``eawfd.pid``; a PID-file
+    entry that differs from the supervisor-reported PID and is still alive
+    means a second (manually spawned) daemon is running alongside the
+    supervised one. Any parse / liveness failure yields ``None`` -- the signal
+    is advisory and must never crash detection.
+    """
+    if supervised_pid is None:
+        return None
+    recorded = _read_recorded_daemon_pid()
+    if recorded is None or recorded == supervised_pid:
+        return None
+    return recorded if _pid_is_alive(recorded) else None
+
+
+def _parse_launchctl_pid(stdout: str) -> int | None:
+    """Return the ``pid = N`` value from ``launchctl print`` output, or None."""
+    for line in stdout.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("pid ="):
+            _key, _sep, value = stripped.partition("=")
+            try:
+                pid = int(value.strip())
+            except ValueError:
+                return None
+            return pid if pid > 0 else None
+    return None
+
+
+def _plist_program(path: Path) -> str | None:
+    """Return ``ProgramArguments[0]`` from the launchd plist at *path*."""
+    try:
+        with path.open("rb") as handle:
+            data = plistlib.load(handle)
+    except OSError, ValueError, ExpatError:
+        return None
+    argv = data.get("ProgramArguments") if isinstance(data, dict) else None
+    if isinstance(argv, list) and argv:
+        return str(argv[0])
+    return None
+
+
+def _systemd_program(path: Path) -> str | None:
+    """Return the ``ExecStart=`` program token from the systemd unit at *path*."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("ExecStart="):
+            _key, _sep, rhs = stripped.partition("=")
+            tokens = rhs.split()
+            return tokens[0] if tokens else None
+    return None
+
+
+def _detect_launchd(runner: _ServiceRunner) -> SupervisedAgentReport:
+    """Build the launchd :class:`SupervisedAgentReport` (macOS)."""
+    label = _LAUNCHD_LABEL
+    try:
+        target = f"{_launchd_uid_target()}/{label}"
+    except ServiceInstallError:
+        # Running as root with no SUDO_UID: the gui/<uid> domain is
+        # unresolvable, so report the agent absent rather than raise.
+        return SupervisedAgentReport(
+            supervisor="launchd",
+            label=label,
+            installed=False,
+            loaded=False,
+            program=None,
+            drift=False,
+            rival_pid=None,
+        )
+    installed = False
+    program: str | None = None
+    try:
+        plist_path = _launchd_plist_path()
+        installed = plist_path.exists()
+        if installed:
+            program = _plist_program(plist_path)
+    except ServiceInstallError, KeyError, OSError:
+        installed = False
+    printed = runner(["launchctl", "print", target])
+    loaded = printed.returncode == 0
+    supervised_pid = _parse_launchctl_pid(printed.stdout) if loaded else None
+    drift = installed and program is not None and program != _resolve_eawfd_binary()[0]
+    return SupervisedAgentReport(
+        supervisor="launchd",
+        label=label,
+        installed=installed,
+        loaded=loaded,
+        program=program,
+        drift=drift,
+        rival_pid=_detect_rival_pid(supervised_pid),
+    )
+
+
+def _detect_systemd(runner: _ServiceRunner) -> SupervisedAgentReport:
+    """Build the systemd :class:`SupervisedAgentReport` (Linux user session)."""
+    unit = _SYSTEMD_UNIT_NAME
+    unit_path = _systemd_unit_path()
+    installed = unit_path.exists()
+    program = _systemd_program(unit_path) if installed else None
+    active = runner(["systemctl", "--user", "is-active", unit])
+    loaded = active.stdout.strip() == "active"
+    supervised_pid: int | None = None
+    if loaded:
+        shown = runner(["systemctl", "--user", "show", "--property=MainPID", "--value", unit])
+        try:
+            main_pid = int(shown.stdout.strip())
+        except ValueError:
+            main_pid = 0
+        supervised_pid = main_pid if main_pid > 0 else None
+    drift = installed and program is not None and program != _resolve_eawfd_binary()[0]
+    return SupervisedAgentReport(
+        supervisor="systemd",
+        label=unit,
+        installed=installed,
+        loaded=loaded,
+        program=program,
+        drift=drift,
+        rival_pid=_detect_rival_pid(supervised_pid),
+    )
+
+
+def detect_supervised_agent(
+    *,
+    platform: str | None = None,
+    runner: _ServiceRunner | None = None,
+) -> SupervisedAgentReport:
+    """Detect the OS-supervised eawfd agent (launchd / systemd).
+
+    Never raises and never mutates: it reads the plist / unit file and asks the
+    supervisor whether the agent is loaded. Windows and unsupported hosts
+    report ``supervisor="none"`` without shelling out.
+
+    Args:
+        platform: Platform id override; defaults to :func:`_current_platform`.
+            The suites force ``darwin`` / ``linux`` regardless of host.
+        runner: Injected subprocess runner; defaults to the module seam
+            (:data:`_service_runner`). Tests pass a recording stub.
+
+    Returns:
+        The :class:`SupervisedAgentReport` snapshot.
+    """
+    plat = platform if platform is not None else _current_platform()
+    run = runner if runner is not None else _service_runner
+    if plat == "darwin":
+        return _detect_launchd(run)
+    if plat.startswith("linux"):
+        return _detect_systemd(run)
+    return SupervisedAgentReport(
+        supervisor="none",
+        label="",
+        installed=False,
+        loaded=False,
+        program=None,
+        drift=False,
+        rival_pid=None,
+    )
+
+
+def evict_supervised_agent(
+    *,
+    platform: str | None = None,
+    runner: _ServiceRunner | None = None,
+) -> str:
+    """Boot out / stop the supervised eawfd agent for the current stop window.
+
+    Unloads the launchd agent (``launchctl bootout``) or stops the systemd unit
+    (``systemctl --user stop``) so a KeepAlive / Restart directive cannot
+    immediately respawn the daemon the operator just asked to stop. The plist /
+    unit file is LEFT IN PLACE -- this evicts for the stop window only, unlike
+    :func:`disable_service`, which uninstalls.
+
+    Args:
+        platform: Platform id override; defaults to :func:`_current_platform`.
+        runner: Injected subprocess runner; defaults to the module seam.
+
+    Returns:
+        The evicted target (launchd ``gui/<uid>/<label>`` or the systemd unit
+        name); empty string on Windows / unsupported hosts.
+
+    Raises:
+        ServiceInstallError: When the launchd ``gui/<uid>`` domain cannot be
+            resolved (running as root with no ``SUDO_UID``).
+    """
+    plat = platform if platform is not None else _current_platform()
+    run = runner if runner is not None else _service_runner
+    if plat == "darwin":
+        target = f"{_launchd_uid_target()}/{_LAUNCHD_LABEL}"
+        run(["launchctl", "bootout", target])
+        logger.info(f"evict_supervised_agent booted-out target={target!r}")
+        return target
+    if plat.startswith("linux"):
+        run(["systemctl", "--user", "stop", _SYSTEMD_UNIT_NAME])
+        logger.info(f"evict_supervised_agent stopped unit={_SYSTEMD_UNIT_NAME!r}")
+        return _SYSTEMD_UNIT_NAME
+    return ""
