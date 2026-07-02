@@ -9505,6 +9505,20 @@
       "scope_id": "P30-I22-W07",
       "status": "done",
       "updated_at": "2026-07-02T05:41:25.008134Z"
+    },
+    "P30-I23-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W01",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W01",
+      "model": null,
+      "scope_id": "P30-I23-W01",
+      "status": "done",
+      "updated_at": "2026-07-02T14:18:35.360942Z"
     }
   },
   "agent_sessions": {
@@ -12871,8 +12885,11 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
-    "iter_id": "P30-I22",
+    "active_wave_ids": [
+      "P30-I22-W08",
+      "P30-I22-W10"
+    ],
+    "iter_id": "P30-I23",
     "phase_id": "P30",
     "project_code": "EAWF",
     "track_id": null
@@ -13545,7 +13562,7 @@
       "title": "Downscope telemetry and bucket recalibration backlog"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -24284,6 +24301,45 @@
       "reference_class": "bucket:L",
       "scope_id": "P30-I22-W07",
       "updated_at": "2026-07-02T05:15:28.783726Z"
+    },
+    "P30-I22-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I22-W08-bucket-20260702T141114Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I22-W08",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I22-W08",
+      "updated_at": "2026-07-02T14:11:14.372383Z"
+    },
+    "P30-I22-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I22-W10-bucket-20260702T141115Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I22-W10",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I22-W10",
+      "updated_at": "2026-07-02T14:11:15.009276Z"
+    },
+    "P30-I23-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W01-bucket-20260702T141115Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I23-W01",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I23-W01",
+      "updated_at": "2026-07-02T14:11:15.648718Z"
     }
   },
   "fleet_run": null,
@@ -26583,7 +26639,7 @@
       "intent": null,
       "opened_at": "2026-07-02T13:37:56.390789Z",
       "phase_id": "P30",
-      "status": "planned",
+      "status": "active",
       "title": "Max-hardening before ship",
       "trigger": "none",
       "wave_ids": [
@@ -27727,7 +27783,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T13:57:31.932886Z",
+  "updated_at": "2026-07-02T14:18:35.363055Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -103113,8 +103169,8 @@
     "P30-I22-W08": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T14:11:14.362840Z",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -103175,7 +103231,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -103358,8 +103414,8 @@
     "P30-I22-W10": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T14:11:15.009159Z",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -103420,7 +103476,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -103482,10 +103538,10 @@
       "blocks": [
         "P30-I23-W02"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T14:11:15.648594Z",
+      "closed_at": "2026-07-02T14:18:35.360942Z",
+      "commit": "7a43c0b43d8371454ecaa7cbabb490c49d5210be",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -103546,12 +103602,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:37:57.108510Z",
-      "outcome": null,
+      "outcome": "CHANGELOG I21 fixed block committed; tests/lint/test_branch_backup.py added; phase branch pushed to origin with upstream (origin head == local HEAD 7a43c0b4); local main fast-forwarded to origin/main",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
