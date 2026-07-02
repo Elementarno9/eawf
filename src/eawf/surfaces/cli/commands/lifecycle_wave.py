@@ -1084,8 +1084,9 @@ def wave_show_cmd(
         if loaded is None:
             return
         state, _ = loaded
+        repo_root = _resolve_repo_root_for_drift(flags.workspace)
         try:
-            prompt = render_wave_prompt(state, wave_id)
+            prompt = render_wave_prompt(state, wave_id, repo_root=repo_root)
         except KeyError as exc:
             cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
             return

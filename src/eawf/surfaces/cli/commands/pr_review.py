@@ -161,7 +161,10 @@ def _emit_review_request(
     caller is responsible for materialising it before handing the
     rendered prompt to the agent.
     """
-    from eawf.surfaces.cli.commands.lifecycle import _load_state_readonly
+    from eawf.surfaces.cli.commands.lifecycle import (
+        _load_state_readonly,
+        _resolve_repo_root_for_drift,
+    )
     from eawf.workflow.dispatch import render_wave_prompt
 
     loaded = _load_state_readonly(ctx)
@@ -175,7 +178,8 @@ def _emit_review_request(
         )
         return
 
-    base_prompt = render_wave_prompt(state, wave_id)
+    repo_root = _resolve_repo_root_for_drift(flags.workspace)
+    base_prompt = render_wave_prompt(state, wave_id, repo_root=repo_root)
     review_section = _render_review_prompt_section(diff_path=diff_path)
     review_request = base_prompt.rstrip() + "\n\n" + review_section + "\n"
 

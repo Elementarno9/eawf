@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
 from eawf.kernel.state.enums import (
     AgentSessionRole,
@@ -39,6 +40,7 @@ from eawf.kernel.state.models import (
     State,
     WorktreeRecord,
 )
+from eawf.surfaces.cli.app import app as cli_app
 from eawf.workflow.agents.specs.models import SubagentSpec
 from eawf.workflow.dispatch import build_subagent_spec, render_wave_prompt
 from eawf.workflow.lifecycle.transitions import (
@@ -659,3 +661,121 @@ def test_render_spike_briefs_section_lands_before_working_tree(tmp_path: Path) -
     refs_idx = out.index("## References")
     working_idx = out.index("## Working tree")
     assert audits_idx < refs_idx < working_idx
+
+
+# ---- CLI call-site plumbing (P30-I23-W40) ----------------------------------
+#
+# The renderer surfaces spike briefs only when a caller threads ``repo_root``
+# through. These tests drive the four interactive-prompt CLI verbs end-to-end
+# so the ``## References`` section is proof that ``repo_root`` reaches each
+# call site (unlike the pure-renderer tests above, they touch disk + state).
+
+_CLI_RUNNER = CliRunner()
+
+_SPIKE_BRIEF_NAME = "2026-06-15-P21-spike-plumb.md"
+_SPIKE_BRIEF_REL = f".ea/local/research/{_SPIKE_BRIEF_NAME}"
+
+
+def _cli_workspace_with_wave(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Init a CLI workspace at *tmp_path* holding a PLANNED P21-I01-W01 wave.
+
+    Points ``EA_STATE`` inside *tmp_path* and marks it a repo root (an empty
+    ``.git`` directory is enough for ``Path.exists``) so
+    ``_resolve_repo_root_for_drift`` resolves the workspace itself -- the
+    anchor the dispatch renderer scans for spike briefs. Returns the root.
+    """
+    state_path = tmp_path / ".ea" / "state.json"
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    (tmp_path / ".git").mkdir(parents=True, exist_ok=True)
+    init_res = _CLI_RUNNER.invoke(
+        cli_app,
+        ["project", "init", "QR", "--title", "Quant Research", "--domains", "quant"],
+    )
+    assert init_res.exit_code == 0, init_res.output
+    propose_res = _CLI_RUNNER.invoke(
+        cli_app, ["roadmap", "propose", "--phase", "P21", "--title", "X"]
+    )
+    assert propose_res.exit_code == 0, propose_res.output
+    revise_res = _CLI_RUNNER.invoke(
+        cli_app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "Foo handling",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
+            "--intent-priority-rationale",
+            "auto intent rationale",
+        ],
+    )
+    assert revise_res.exit_code == 0, revise_res.output
+    return tmp_path
+
+
+def test_wave_show_dispatch_prompt_cli_surfaces_references(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``wave show --dispatch-prompt`` threads repo_root -> References renders."""
+    workspace = _cli_workspace_with_wave(tmp_path, monkeypatch)
+    _seed_spike_brief(workspace, name=_SPIKE_BRIEF_NAME)
+    res = _CLI_RUNNER.invoke(cli_app, ["wave", "show", "P21-I01-W01", "--dispatch-prompt"])
+    assert res.exit_code == 0, res.output
+    assert "## References" in res.stdout
+    assert _SPIKE_BRIEF_REL in res.stdout
+
+
+def test_wave_show_dispatch_prompt_cli_omits_references_without_brief(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No matching brief -> the plumbed repo_root yields no References section."""
+    _cli_workspace_with_wave(tmp_path, monkeypatch)
+    res = _CLI_RUNNER.invoke(cli_app, ["wave", "show", "P21-I01-W01", "--dispatch-prompt"])
+    assert res.exit_code == 0, res.output
+    assert "## References" not in res.stdout
+
+
+def test_wave_dispatch_cli_surfaces_references(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``wave dispatch`` threads repo_root through render_dispatch_envelope."""
+    workspace = _cli_workspace_with_wave(tmp_path, monkeypatch)
+    _seed_spike_brief(workspace, name=_SPIKE_BRIEF_NAME)
+    res = _CLI_RUNNER.invoke(cli_app, ["wave", "dispatch", "P21-I01-W01"])
+    assert res.exit_code == 0, res.output
+    assert "## References" in res.stdout
+    assert _SPIKE_BRIEF_REL in res.stdout
+
+
+def test_wave_dispatch_batch_cli_surfaces_references(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``wave dispatch-batch`` threads repo_root through every rendered prompt."""
+    workspace = _cli_workspace_with_wave(tmp_path, monkeypatch)
+    _seed_spike_brief(workspace, name=_SPIKE_BRIEF_NAME)
+    res = _CLI_RUNNER.invoke(cli_app, ["wave", "dispatch-batch", "--iter", "P21-I01"])
+    assert res.exit_code == 0, res.output
+    assert "## References" in res.stdout
+    assert _SPIKE_BRIEF_REL in res.stdout
+
+
+def test_wave_review_diff_cli_surfaces_references(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``wave review --diff`` threads repo_root into the reviewer base prompt."""
+    workspace = _cli_workspace_with_wave(tmp_path, monkeypatch)
+    _seed_spike_brief(workspace, name=_SPIKE_BRIEF_NAME)
+    diff_path = workspace / "wave.diff"
+    res = _CLI_RUNNER.invoke(cli_app, ["wave", "review", "P21-I01-W01", "--diff", str(diff_path)])
+    assert res.exit_code == 0, res.output
+    assert "## References" in res.stdout
+    assert _SPIKE_BRIEF_REL in res.stdout

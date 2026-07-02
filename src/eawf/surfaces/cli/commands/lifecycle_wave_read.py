@@ -381,8 +381,9 @@ def wave_dispatch_cmd(
             flags=flags,
         )
         return
+    repo_root = _resolve_repo_root_for_drift(flags.workspace)
     try:
-        dispatch_envelope = render_dispatch_envelope(state, wave_id, runtime)
+        dispatch_envelope = render_dispatch_envelope(state, wave_id, runtime, repo_root=repo_root)
     except KeyError as exc:
         cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
@@ -487,11 +488,12 @@ def wave_dispatch_batch_cmd(
         wave_ids = [
             wid for wid, w in _waves_in_iter(state, target_iter) if w.status == WaveStatus.PENDING
         ]
+    repo_root = _resolve_repo_root_for_drift(flags.workspace)
     prompts: list[dict[str, Any]] = []
     text_chunks: list[str] = []
     for wid in wave_ids:
         try:
-            prompt = render_wave_prompt(state, wid)
+            prompt = render_wave_prompt(state, wid, repo_root=repo_root)
         except KeyError as exc:
             cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
             return
