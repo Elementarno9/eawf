@@ -417,7 +417,7 @@ def test_render_headless_executor_emits_report_output_schema() -> None:
     assert '"files_changed": []' in out
     assert '"tests_run": []' in out
     assert '"commit_sha": null' in out
-    assert '"evidence_refs": []' in out
+    assert '"evidence_refs": [{"kind": "artifact"' in out
     assert '"followups": []' in out
     # The dispatched wave id is injected into the schema, not a placeholder.
     assert '"wave_id": "P01-I01-W01"' in out
@@ -426,7 +426,7 @@ def test_render_headless_executor_emits_report_output_schema() -> None:
     # wrong entry shape (the live e2e showed codex populating evidence_refs
     # with {evidence_kind, notes}, which fails AgentReportEvidenceRef and
     # forces the slow re-ask loop). evidence_refs + followups must stay [].
-    assert "Leave `evidence_refs` and `followups` as empty arrays" in out
+    assert "`evidence_refs` is REQUIRED: exactly one object per success criterion" in out
 
 
 def test_render_interactive_executor_omits_report_output_schema() -> None:

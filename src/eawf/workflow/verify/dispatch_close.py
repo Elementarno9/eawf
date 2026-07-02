@@ -95,10 +95,54 @@ class DispatchCloseBlockedError(RuntimeError):
         )
 
 
-def verify_close_readiness(wave_id: str, report: AgentReportBody) -> VerifyResult:
+def evidence_rung_inputs(state: object, wave_id: str, *, repo_root: Path) -> tuple[int, bool]:
+    """Resolve rung-4 inputs for *wave_id*: (typed_criteria_count, teeth bit).
+
+    The shared seam both production callers (the dispatch runner's
+    post-execution gate and the fleet clean-close probe) thread through
+    :func:`verify_close_readiness`, so the evidence-refs rung reads one
+    definition of "typed criterion" (``kind != legacy``) and one teeth
+    bit (the resolved verify block's ``enforce``). Resolution failures
+    degrade to ``(0, False)`` — rung 4 stays dormant rather than
+    inventing enforcement the profile did not grant.
+    """
+    waves = getattr(state, "waves", {}) or {}
+    wave = waves.get(wave_id)
+    if wave is None:
+        return 0, False
+    typed = sum(
+        1
+        for criterion in (wave.success_criteria or [])
+        if getattr(criterion, "kind", "legacy") != "legacy"
+    )
+    if typed == 0:
+        return 0, False
+    try:
+        from eawf.workflow.verify.readiness import (
+            load_active_verify_block,
+            resolve_wave_verify_block,
+        )
+
+        block = resolve_wave_verify_block(
+            load_active_verify_block(wave_id, state, repo_root=repo_root),  # type: ignore[arg-type]
+            wave,
+        )
+    except (OSError, ValueError, KeyError) as exc:
+        logger.warning(f"evidence_rung_inputs status=skip wave={wave_id} err={exc!s}")
+        return typed, False
+    return typed, bool(block is not None and block.enforce)
+
+
+def verify_close_readiness(
+    wave_id: str,
+    report: AgentReportBody,
+    *,
+    typed_criteria_count: int = 0,
+    require_evidence_refs: bool = False,
+) -> VerifyResult:
     """Return a :class:`VerifyResult` for *report* against *wave_id*.
 
-    The deterministic check has three rungs, evaluated in order:
+    The deterministic check has four rungs, evaluated in order:
 
     1. The report verdict MUST be a member of
        :data:`_CLOSE_READY_VERDICTS` (``PASS`` or
@@ -120,10 +164,22 @@ def verify_close_readiness(wave_id: str, report: AgentReportBody) -> VerifyResul
     omits one (see
     :func:`eawf.runtime.daemon.dispatch_runner.run_dispatch`).
 
+    4. When *require_evidence_refs* is set (the teeth-wave profile bit)
+       and the wave carries at least one typed criterion, the report's
+       ``evidence_refs`` MUST be non-empty — one entry per criterion is
+       the contract the executor DoD demands; an empty list on a
+       criteria-bearing wave refuses close-ready (W49).
+
     Args:
         wave_id: The wave the runner served. Compared against
             :attr:`ExecutorReportBody.wave_id` for the executor path.
         report: The typed ``AgentReportBody`` the runner persisted.
+        typed_criteria_count: Number of typed (``kind != legacy``)
+            success criteria on the dispatched wave; ``0`` (the
+            default) keeps rung 4 dormant for zero-criteria waves.
+        require_evidence_refs: The teeth-wave profile bit (the resolved
+            verify block's ``enforce``); ``False`` keeps rung 4 off so
+            advisory repos and legacy callers are unchanged.
 
     Returns:
         :class:`VerifyResult` with ``passed`` reflecting every check.
@@ -142,6 +198,18 @@ def verify_close_readiness(wave_id: str, report: AgentReportBody) -> VerifyResul
     if isinstance(report, ExecutorReportBody) and report.wave_id != wave_id:
         reasons.append(
             f"executor body wave_id={report.wave_id!r} disagrees with dispatched wave={wave_id!r}"
+        )
+
+    # Rung 4 (W49): a criteria-bearing wave must carry per-criterion
+    # evidence_refs once the teeth bit (verify.enforce) is on. A wave with
+    # zero typed criteria stays exempt — there is nothing to evidence.
+    if (
+        require_evidence_refs
+        and typed_criteria_count >= 1
+        and not getattr(report, "evidence_refs", None)
+    ):
+        reasons.append(
+            f"evidence_refs is empty for a wave with {typed_criteria_count} typed criteria"
         )
 
     passed = not reasons

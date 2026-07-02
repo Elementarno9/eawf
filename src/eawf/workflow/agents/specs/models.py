@@ -505,7 +505,8 @@ class SubagentSpec(_SpecModel):
             '"files_changed": [], '
             '"tests_run": [], '
             '"commit_sha": null, '
-            '"evidence_refs": [], '
+            '"evidence_refs": [{"kind": "artifact", "ref": "<file:line or gate cmd>", '
+            '"note": "<criterion id>"}], '
             '"followups": []}'
         )
         return (
@@ -521,8 +522,14 @@ class SubagentSpec(_SpecModel):
             "`pass`, `pass-with-followups`, `fail`, `blocked`; `confidence` "
             "is one of `high`, `medium`, `low`. `summary` and `outcome` are "
             "required non-empty strings. `files_changed` and `tests_run` are "
-            "arrays of plain strings. Leave `evidence_refs` and `followups` as "
-            "empty arrays `[]` -- do not add entries to them."
+            "arrays of plain strings. `evidence_refs` is REQUIRED: exactly one "
+            "object per success criterion, each `{kind, ref, note}` where "
+            "`kind` is one of `audit`, `artifact`, `decision`, `store_record`, "
+            "`external_url`; `ref` is the evidence itself (a gate command plus "
+            "its exit code, a file:line where the behaviour is wired, or a "
+            "store URN); `note` names the criterion id it evidences. "
+            "`followups` stays an empty array unless you carry named "
+            "follow-ups."
         )
 
     def _render_stop_conditions(self) -> str | None:

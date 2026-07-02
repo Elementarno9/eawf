@@ -191,3 +191,62 @@ def test_verify_result_is_immutable() -> None:
     )
     with pytest.raises(AttributeError):
         result.passed = False  # type: ignore[misc]
+
+
+# ---- W49: rung 4 — evidence_refs required on criteria-bearing waves ---------
+
+
+def test_rung4_zero_criteria_wave_passes_with_empty_refs() -> None:
+    """Boundary: nothing to evidence — rung 4 stays dormant."""
+    result = verify_close_readiness(
+        "P28-I03-W57",
+        _executor_body(),
+        typed_criteria_count=0,
+        require_evidence_refs=True,
+    )
+    assert result.passed is True
+
+
+def test_rung4_criteria_bearing_wave_with_refs_passes() -> None:
+    from eawf.kernel.store.kinds.agent_report import AgentReportEvidenceRef
+
+    body = _executor_body().model_copy(
+        update={
+            "evidence_refs": [
+                AgentReportEvidenceRef(
+                    kind="artifact",
+                    ref="uv run pytest tests/x -q -> exit 0",
+                    note="CR-01",
+                )
+            ]
+        }
+    )
+    result = verify_close_readiness(
+        "P28-I03-W57",
+        body,
+        typed_criteria_count=2,
+        require_evidence_refs=True,
+    )
+    assert result.passed is True
+
+
+def test_rung4_criteria_bearing_wave_without_refs_refuses() -> None:
+    result = verify_close_readiness(
+        "P28-I03-W57",
+        _executor_body(),
+        typed_criteria_count=2,
+        require_evidence_refs=True,
+    )
+    assert result.passed is False
+    assert any("evidence_refs" in reason for reason in result.reasons)
+
+
+def test_rung4_off_without_teeth_bit() -> None:
+    """Advisory repos and legacy callers are unchanged."""
+    result = verify_close_readiness(
+        "P28-I03-W57",
+        _executor_body(),
+        typed_criteria_count=2,
+        require_evidence_refs=False,
+    )
+    assert result.passed is True

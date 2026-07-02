@@ -112,6 +112,7 @@ from eawf.workflow.lifecycle.wave import (
 )
 from eawf.workflow.verify.dispatch_close import (
     CloseGateResult,
+    evidence_rung_inputs,
     run_close_gates,
     verify_close_readiness,
 )
@@ -1042,7 +1043,21 @@ def _wave_has_close_ready_report(state_path: Path, wave_id: str) -> bool:
         return False
     if latest is None:
         return False
-    return verify_close_readiness(wave_id, latest).passed
+    try:
+        from eawf.workflow.evidence._io import load_state
+
+        typed_count, teeth_bit = evidence_rung_inputs(
+            load_state(state_path), wave_id, repo_root=state_path.parent.parent
+        )
+    except (OSError, ValueError, KeyError) as exc:
+        logger.debug(f"_wave_has_close_ready_report wave={wave_id} rung4_skip cause={exc!r}")
+        typed_count, teeth_bit = 0, False
+    return verify_close_readiness(
+        wave_id,
+        latest,
+        typed_criteria_count=typed_count,
+        require_evidence_refs=teeth_bit,
+    ).passed
 
 
 def build_liveness_watcher(

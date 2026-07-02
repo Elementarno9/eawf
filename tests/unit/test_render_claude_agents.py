@@ -187,9 +187,10 @@ def test_five_bodies_carry_their_dor_dod_contract_blocks() -> None:
     # must not be walled with blocked verdicts.
     assert "grandfathered kind=legacy rows" in _EXECUTOR_BODY
     assert "do not refuse those" in _EXECUTOR_BODY
-    # The evidence_refs-required DoD bullet is W49's, NOT this wave's —
-    # shipping it early would contradict the pinned report schema.
-    assert "evidence_refs is REQUIRED" not in _EXECUTOR_BODY
+    # The evidence_refs-required DoD bullet was deferred out of W43 and
+    # landed with W49 together with the report-schema rewrite, so the
+    # role contract and the pinned schema demand the same thing.
+    assert "evidence_refs is REQUIRED" in _EXECUTOR_BODY
 
     assert "## Dispatch-loop discipline (every iteration)" in _OPERATOR_BODY
     # 8 numbered items including the schema-bump daemon-stop rule.

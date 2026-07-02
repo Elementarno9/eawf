@@ -99,6 +99,7 @@ from eawf.workflow.evidence._io import load_state
 from eawf.workflow.lifecycle.wave import start_wave
 from eawf.workflow.verify.dispatch_close import (
     DispatchCloseBlockedError,
+    evidence_rung_inputs,
     verify_close_readiness,
 )
 
@@ -1159,7 +1160,15 @@ def emit_agent_end_report(
     # attempt is recorded on disk), then the runner refuses to advance
     # the close path when the gate fires. A clean pass returns the
     # report id; a blocked close raises with the structured reasons.
-    verify_result = verify_close_readiness(wave_id, body)
+    typed_count, teeth_bit = evidence_rung_inputs(
+        state, wave_id, repo_root=state_path.parent.parent
+    )
+    verify_result = verify_close_readiness(
+        wave_id,
+        body,
+        typed_criteria_count=typed_count,
+        require_evidence_refs=teeth_bit,
+    )
     if not verify_result.passed:
         raise DispatchCloseBlockedError(wave_id=wave_id, result=verify_result)
     return result.envelope.id

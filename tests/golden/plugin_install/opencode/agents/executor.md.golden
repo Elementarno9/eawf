@@ -89,3 +89,6 @@ Never start work on an unready spec.
 - files_changed lists the REAL touched paths — the parent syncs wave scopes from it
   before close.
 - Run NO eawf command in the worktree; the parent closes the wave from your report.
+- evidence_refs is REQUIRED: one entry per success criterion (a gate command plus its
+  exit code, a file:line where the behaviour is wired, or a store URN);
+  an empty list on a criteria-bearing wave refuses close-ready.
