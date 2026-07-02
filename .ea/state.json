@@ -9782,6 +9782,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-13-A-P30-I20-W21-repair.md",
       "urn": "urn:eawf:v1:artifact:P30-I20-W21/ART-A-P30-I20-W21-repair"
     },
+    "ART-A-P30-i20": {
+      "created_at": "2026-07-02T14:24:46.869817Z",
+      "id": "ART-A-P30-i20",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-07-02-A-P30-I20-iter-close.md",
+      "urn": "urn:eawf:v1:artifact:P30-I20/ART-A-P30-i20"
+    },
     "ART-A09-P08": {
       "created_at": "2026-05-10T23:05:27.654670Z",
       "id": "ART-A09-P08",
@@ -10477,6 +10487,17 @@
       "scope_id": "P30-I18",
       "status": "complete",
       "verdict": "minor"
+    },
+    "A-P30-i20": {
+      "check_results": [],
+      "created_at": "2026-07-02T14:24:47.669884Z",
+      "id": "A-P30-i20",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A-P30-i20",
+      "scope_id": "P30-I20",
+      "status": "complete",
+      "verdict": "pass"
     },
     "A01-P00": {
       "check_results": [],
@@ -12887,7 +12908,8 @@
     ],
     "active_wave_ids": [
       "P30-I22-W08",
-      "P30-I22-W10"
+      "P30-I22-W10",
+      "P30-I23-W02"
     ],
     "iter_id": "P30-I23",
     "phase_id": "P30",
@@ -12910,6 +12932,21 @@
       "superseded_by": null,
       "title": "Fleet high-risk waves keep verify enforce after band merge"
     },
+    "D-BRANCH-GC": {
+      "alternatives": [
+        "gc without pinning (rejected: destroys the only recoverable evidence of the Jun 12 premature-close chain)"
+      ],
+      "consequences": [],
+      "created_at": "2026-07-02T14:24:35.729652Z",
+      "description": null,
+      "id": "D-BRANCH-GC",
+      "obsoleted_at": null,
+      "rationale": "Before any git gc/prune: pin a backup ref over the reflog-only premature-close chain (d122b9fb + its 376 twins) so the Jun 12 reset stays audit-reconstructible, then delete the 44 stale local worktree-agent branches. The bookkeeping decision rides this wave; the mechanical branch deletion is an operator chore after the phase PR opens.",
+      "scope_id": "P30-I23-W02",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Pin a backup ref before any gc; then delete stale agent branches"
+    },
     "D-BRAND-MARK": {
       "alternatives": [
         "Reintroduce an optional config knob (rejected: contradicts mockups + zero-new-config)",
@@ -12926,6 +12963,21 @@
       "superseded_by": null,
       "title": "Brand mark is mandatory header chrome; 2026-06-08 dropped only the knob"
     },
+    "D-EU-CAPTURE": {
+      "alternatives": [
+        "Statusline wrapper as the primary capture path (rejected: optional install, not guaranteed present on every operator machine)"
+      ],
+      "consequences": [],
+      "created_at": "2026-07-02T14:24:07.650853Z",
+      "description": null,
+      "id": "D-EU-CAPTURE",
+      "obsoleted_at": null,
+      "rationale": "EU capture reads zero because eawf does not instrument the outer Claude Code harness. The Stop/subagent-stop hook stdin JSON already carries the session usage totals needed to derive elapsed_eu, so hook capture binds the existing seam; the statusline wrapper install stays an optional secondary.",
+      "scope_id": "P30-I23-W02",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Stop-hook stdin capture is the primary inline EU path"
+    },
     "D-FIDELITY-SPINE": {
       "alternatives": [
         "Keep prose success_criteria with the verifier idle (status quo that produced the drift)",
@@ -12941,6 +12993,66 @@
       "status": "active",
       "superseded_by": null,
       "title": "Adopt the Fidelity Spine: typed criteria + layered oracle + verifier-on"
+    },
+    "D-HISTORY-ACCEPT": {
+      "alternatives": [
+        "History rewrite before first push (rejected: force-push blast radius, SHA churn across 376 twin commits)"
+      ],
+      "consequences": [],
+      "created_at": "2026-07-02T14:24:34.914443Z",
+      "description": null,
+      "id": "D-HISTORY-ACCEPT",
+      "obsoleted_at": null,
+      "rationale": "The phase ships its history as-is, forward-fix only: no rebase before the W01 first push, the W22 prefix-rider commits are reconciled by annotation (this wave), and the 3 stray agent-authored committer identities in pre-Jun-10 history are accepted into the phase PR rather than scrubbed. A second 376-twin-class rewrite costs more than the hygiene buys; the Jun 12 rewrite is the blast-radius precedent. Operator confirmed at W01 pre-push (AUQ 2026-07-02).",
+      "scope_id": "P30-I23-W02",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Ship phase history as-is: no pre-push rebase, annotate riders"
+    },
+    "D-I21-RATIFY": {
+      "alternatives": [
+        "Retroactively re-attribute the rider commits via history rewrite (rejected: forward-fix only per D-HISTORY-ACCEPT)"
+      ],
+      "consequences": [],
+      "created_at": "2026-07-02T14:24:33.276174Z",
+      "description": null,
+      "id": "D-I21-RATIFY",
+      "obsoleted_at": null,
+      "rationale": "Ratifies the 2026-07-01 I21 validation-repair burst (23 fixes, zero Decision rows at the time — harm-register A9) and the daemonless/waiver operating mode it ran under as a bounded exception now being retired by the I23 verifier-teeth waves. The three test: commits riding the [P30-I21-W22] prefix unpinned (e77834ee, 46149415, fcc2bdad) are reconciled by annotation on the P30-I21-W22 wave description so the wave ledger matches the commit ledger.",
+      "scope_id": "P30-I23-W02",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Ratify the I21 burst and retire the daemonless waiver mode"
+    },
+    "D-LOCK-SPLIT": {
+      "alternatives": [
+        "Pre-flight the jury/LLM tier outside the lock too (rejected: requires state re-apply machinery, deferred to P31)"
+      ],
+      "consequences": [],
+      "created_at": "2026-07-02T14:24:05.047206Z",
+      "description": null,
+      "id": "D-LOCK-SPLIT",
+      "obsoleted_at": null,
+      "rationale": "Verify-then-commit split: the deterministic tier + floor pack pre-flight run OUTSIDE the state lock; the jury/LLM tier stays UNDER the lock but wall-clock-bounded. The jury tier mutates state in-memory and appends session events, so pre-flighting it needs re-apply machinery deferred to P31 verifier maturation. Splitting only the deterministic tier removes the long-hold close deadlock class (5 wedge episodes on 2026-07-01).",
+      "scope_id": "P30-I23-W02",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Split wave close: deterministic pre-flight outside the state lock"
+    },
+    "D-RPC-TERMINAL": {
+      "alternatives": [
+        "Treat timeout like transport failure and fall back (rejected: dual-writer race while the daemon holds the lock)"
+      ],
+      "consequences": [],
+      "created_at": "2026-07-02T14:24:05.881070Z",
+      "description": null,
+      "id": "D-RPC-TERMINAL",
+      "obsoleted_at": null,
+      "rationale": "On close-RPC TimeoutError the CLI exits non-zero with a typed terminal error; the daemon may still be mid-close under the state lock, so falling back creates the dual-writer + ungated-close compound (harm-register A3 / ZD-R5). RuntimeError/OSError transport failures may still fall back, but the fallback close is stamped with a distinct close_mechanism value (daemon-fallback) so audits can tell the paths apart.",
+      "scope_id": "P30-I23-W02",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Close-RPC timeout is terminal, never a fallback-close trigger"
     },
     "D-SUP-01": {
       "alternatives": [],
@@ -13020,6 +13132,21 @@
       "superseded_by": null,
       "title": "C06 Q6 supersedes P14 rich pick with Textual"
     },
+    "D-TEETH": {
+      "alternatives": [
+        "Flip the jury to blocking immediately (rejected: uncalibrated blocker = false-positive wedges or a rubber stamp)"
+      ],
+      "consequences": [],
+      "created_at": "2026-07-02T14:24:06.748607Z",
+      "description": null,
+      "id": "D-TEETH",
+      "obsoleted_at": null,
+      "rationale": "The jury replaces the blocking single-auditor only once block authority is EARNED via gold-label cohort calibration, and band narrowing never de-scopes verdict-always waves. The verifier self-attests 93.4% MECH, which is structurally toothless; granting the jury blocking authority before calibration against known-bad waves would swap one rubber stamp for another.",
+      "scope_id": "P30-I23-W02",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Jury earns block authority; verdict-always waves never narrowed"
+    },
     "D-TUI-MODES": {
       "alternatives": [
         "Keep push_screen/switch_screen scope-as-screen (rejected: conflates scope+mode axes, forces new surfaces into modal-soup)",
@@ -13035,6 +13162,21 @@
       "status": "active",
       "superseded_by": null,
       "title": "TUI adopts Textual MODES chassis (digit-keyed full-screen modes)"
+    },
+    "D-WINDOWS-DESCOPE": {
+      "alternatives": [
+        "Ship Windows as supported on CI evidence alone (rejected: windows-latest CI never exercised a real interactive win32 round-trip)"
+      ],
+      "consequences": [],
+      "created_at": "2026-07-02T14:24:34.093973Z",
+      "description": null,
+      "id": "D-WINDOWS-DESCOPE",
+      "obsoleted_at": null,
+      "rationale": "The win32 SID-verify path has never run a real win32 round-trip (ZD-R10 / harm-register H12: validate on real win32 or explicitly de-scope). The v0.6.0 release notes mark Windows support experimental/de-scoped; real-host validation moves to the P31 daemon re-architecture remainder. The W36 re-close runbook carries the release-notes line-item.",
+      "scope_id": "P30-I23-W02",
+      "status": "active",
+      "superseded_by": null,
+      "title": "De-scope Windows in v0.6.0 notes; real win32 validation in P31"
     },
     "D-WINPIPE-01": {
       "alternatives": [
@@ -13562,7 +13704,7 @@
       "title": "Downscope telemetry and bucket recalibration backlog"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -24340,6 +24482,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I23-W01",
       "updated_at": "2026-07-02T14:11:15.648718Z"
+    },
+    "P30-I23-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W02-bucket-20260702T141928Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I23-W02",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I23-W02",
+      "updated_at": "2026-07-02T14:19:28.557375Z"
     }
   },
   "fleet_run": null,
@@ -26495,16 +26650,16 @@
       ]
     },
     "P30-I20": {
-      "audit_id": null,
+      "audit_id": "A-P30-i20",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-07-02T14:24:48.361199Z",
       "description": "Polish/repair iteration from the 2026-06-12 global review (.ea/local/review/2026-06-12-p30-global-review.md): 5 ship blockers (release annotation; just-test red; campaign producer stub; win pipe accept-loop; import pwd) plus gate/runtime/UI/state-honesty fixes ratified by operator AUQ; ends with validated re-close and PR.",
       "estimate_id": null,
       "id": "P30-I20",
       "intent": null,
       "opened_at": "2026-06-12T17:57:41.834527Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Honest close: fix global-review blockers and re-close v0.6.0",
       "trigger": "none",
       "wave_ids": [
@@ -27070,6 +27225,17 @@
       "status": "active",
       "store_record_id": "MEM-P30-I19-close-A-P30-ship-gate",
       "summary": "iter P30-I19 closed with audit A-P30-ship-gate; waves closed=15; outcomes P30-I19-W01: WIN-P1: guarded every POSIX-only os/signal/socket attr behind the daemon import graph (new fs... | P30-I19-W02: WIN-P2: named-pipe RPC client (pipe_client_call/PipeReader) + ERROR_MORE_DATA large-frame rea... | P30-I19-W03: WIN-P3: pipe subscription streaming (subscribe_router + bus bridge + PeekNamedPipe idle reap)...",
+      "tier": "working"
+    },
+    "MEM-P30-I20-close-A-P30-i20": {
+      "confidence": "high",
+      "id": "MEM-P30-I20-close-A-P30-i20",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-07-02T14:24:48.361199Z",
+      "scope_id": "P30-I20",
+      "status": "active",
+      "store_record_id": "MEM-P30-I20-close-A-P30-i20",
+      "summary": "iter P30-I20 closed with audit A-P30-i20; waves closed=54; outcomes P30-I20-W01: reserved EAWF_SKIP_PERF and validated config escape-hatch env handling | P30-I20-W02: repaired git-state drift pins and honored drift acknowledgements | P30-I20-W03: accepted JSONL store-fragment artifact URIs and strict doc verify passes",
       "tier": "working"
     }
   },
@@ -27783,7 +27949,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T14:18:35.363055Z",
+  "updated_at": "2026-07-02T14:27:17.027541Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -102429,7 +102595,7 @@
         "P30-I21-W20",
         "P30-I21-W21"
       ],
-      "description": null,
+      "description": "Phase re-close vehicle: executes the v0.6.0 re-close with the (release=v0.6.0) annotation after I23 max-hardening lands. Prefix-rider reconciliation (D-I21-RATIFY): three test: commits ride the [P30-I21-W22] prefix ahead of the wave itself — e77834ee, 46149415, fcc2bdad — annotated here so the wave ledger matches the commit ledger.",
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
@@ -103688,8 +103854,8 @@
         "P30-I23-W40",
         "P30-I23-W42"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T14:19:28.557016Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -103742,7 +103908,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
