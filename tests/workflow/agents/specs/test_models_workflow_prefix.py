@@ -82,11 +82,20 @@ def test_commit_prefix_table(wave_id: str, iter_id: str, expected: str) -> None:
     assert expected in workflow
 
 
-def test_close_command_still_uses_full_wave_id() -> None:
-    """The interactive ``wave close`` command at step 5 uses the full ``Pxx-Iyy-Wzz``."""
+def test_interactive_render_reports_then_stops() -> None:
+    """The interactive render ends report-then-stop with the parent-owned tally.
+
+    P30-I23-W38: the interactive self-close step is removed — the
+    dispatching parent supplies ``--tokens-consumed`` and runs the close
+    itself, so no ``eawf wave close`` instruction survives on either shape.
+    """
     spec = _spec(wave_id="P28-I03-W57", iter_id="P28-I03")
     workflow = _workflow_block(spec)
-    assert "uv run eawf wave close P28-I03-W57" in workflow
+    assert "eawf wave close" not in workflow
+    assert "5. Emit the typed executor report" in workflow
+    assert "6. Stop after the report" in workflow
+    assert "dispatching parent session" in workflow
+    assert "--tokens-consumed" in workflow
 
 
 def test_headless_render_omits_self_close_step() -> None:
@@ -99,9 +108,11 @@ def test_headless_render_omits_self_close_step() -> None:
     """
     spec = _spec(wave_id="P28-I03-W57", iter_id="P28-I03")
     workflow = _workflow_block(spec, headless=True)
-    assert "uv run eawf wave close" not in workflow
-    assert "Do **not** run `eawf wave close`" in workflow
-    assert "closes this wave on your behalf" in workflow
+    assert "eawf wave close" not in workflow
+    assert "5. Emit the typed executor report" in workflow
+    assert "6. Stop after the report" in workflow
+    assert "closes the wave on your behalf" in workflow
+    assert "captured runtime delta" in workflow
 
 
 def test_interactive_and_headless_share_steps_1_through_4() -> None:

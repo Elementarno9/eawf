@@ -389,25 +389,25 @@ class SubagentSpec(_SpecModel):
 
     def _render_workflow(self, *, headless: bool = False) -> str:
         commit_prefix = _commit_prefix_for_wave(self.wave_id, self.iter_id)
-        # The headless (daemon live-spawn) path closes the wave on the agent's
-        # behalf: the daemon reads the emitted report body and drives the close
-        # (DL-5). A sandboxed agent cannot self-close anyway — its jailed
-        # `uv run eawf` resolves whatever eawf is installed, not the daemon's,
-        # and a self-close attempt only risks a spurious blocked verdict. So the
-        # headless render tells the agent to emit its report and stop, while the
-        # interactive render keeps the operator-run self-close step.
+        # Both dispatch shapes end report-then-stop: the worktree agent never
+        # runs an eawf command (a shared daemon + checkout make any invocation
+        # a cross-tree hazard), so the close is never the agent's to run. The
+        # step-5 text names who owns the token tally on each path so
+        # Wave.tokens_consumed never goes dark by prompt design: the
+        # dispatching parent supplies --tokens-consumed on the interactive
+        # path; the daemon converts the captured runtime delta on the
+        # headless close-on-behalf path.
         if headless:
-            close_step = (
-                "5. Do **not** run `eawf wave close` yourself. Emit your final "
-                "report as your last message; the daemon binds it and closes "
-                "this wave on your behalf once the report is recorded."
+            tally_owner = (
+                "the daemon converts your session's captured runtime delta "
+                "into the wave's token tally when it closes the wave on your "
+                "behalf once the report binds"
             )
         else:
-            close_step = (
-                "5. Close the wave through the CLI with the final token tally:\n"
-                "   - `uv run eawf wave close "
-                + self.wave_id
-                + ' --outcome "<summary>" --tokens-consumed <tokens>`'
+            tally_owner = (
+                "the dispatching parent session verifies your work, supplies "
+                "`--tokens-consumed` from your report, and runs the close "
+                "itself"
             )
         return (
             "## Workflow\n"
@@ -418,9 +418,15 @@ class SubagentSpec(_SpecModel):
             "   - `uv run pre-commit run --all-files`\n"
             "   - `uv run mypy src/`\n"
             "   - `uv run pytest tests/ -q`\n"
+            "   A schema or persisted-model wave never narrows this run: keep "
+            "the full-tree `tests/` sweep (a scoped gauntlet hides fixture "
+            "fallout in sibling suites).\n"
             f"4. Commit with prefix `{commit_prefix} <type>: <summary>` "
             "(3-6 bullet body) and the recognized Claude or Codex "
-            "`Co-Authored-By` trailer.\n" + close_step
+            "`Co-Authored-By` trailer.\n"
+            "5. Emit the typed executor report as your final message; " + tally_owner + ".\n"
+            "6. Stop after the report. Take no further action — the close "
+            "is run for you, never by you."
         )
 
     def _render_out_of_scope(self) -> str:
@@ -429,8 +435,11 @@ class SubagentSpec(_SpecModel):
             "\n"
             "- Do **not** push the branch.\n"
             "- Do **not** open a PR.\n"
-            "- Do **not** edit `.ea/state.json` or `.ea/store/event.jsonl` "
-            "directly — every mutation goes through `uv run eawf state ...`.\n"
+            "- Run NO `eawf` command inside this worktree — no state reads, "
+            "no mutations, no closes: the shared daemon and checkout make "
+            "any `eawf` invocation a cross-tree hazard. If you believe a "
+            "state mutation is required, STOP and name it in your report "
+            "instead of running it.\n"
             "- Never `git commit --no-verify`; root-cause the hook instead."
         )
 
@@ -542,11 +551,13 @@ class SubagentSpec(_SpecModel):
         ``agent_role`` is ``executor``, a trailing ``## Report output``
         section pins the ``ExecutorReportBody`` JSON schema so the spawned
         model emits a parseable report body (the live-spawn path
-        ``json.loads``-es the final message and schema-validates it). The
-        ``## Workflow`` close step also differs: the headless render tells the
-        agent NOT to self-close (the daemon closes the wave on its behalf once
-        the report binds), while the interactive render keeps the operator-run
-        ``uv run eawf wave close`` step.
+        ``json.loads``-es the final message and schema-validates it). Both
+        shapes share the report-then-stop ``## Workflow`` tail (step 5 emits
+        the typed report, step 6 stops): the agent never self-closes. The
+        step-5 text names the token-tally owner per path -- the dispatching
+        parent supplies ``--tokens-consumed`` on the interactive path, and
+        the daemon converts the captured runtime delta when it closes the
+        wave on the agent's behalf on the headless path.
 
         Args:
             headless: ``True`` for the live-spawn (daemon) dispatch path,

@@ -125,12 +125,47 @@ def test_render_estimate_lands_after_out_of_scope() -> None:
     assert out.index("## Out of scope") < out.index("## Estimate")
 
 
-def test_render_workflow_includes_wave_close_instruction() -> None:
-    """The workflow tells subagents how to close with a final token tally."""
+def test_render_workflow_report_then_stop_on_both_shapes() -> None:
+    """CR-01: step 5 reports and step 6 stops on BOTH shapes; no self-close.
+
+    The interactive self-close branch is removed: no `eawf wave close`
+    instruction survives in the section on either render shape, and the
+    never-narrow schema-wave clause rides step 3.
+    """
+    for headless in (False, True):
+        out = _minimal_spec().render(headless=headless)
+        workflow = out.split("## Workflow", 1)[1].split("## Out of scope", 1)[0]
+        assert "5. Emit the typed executor report" in workflow
+        assert "6. Stop after the report" in workflow
+        assert "eawf wave close" not in workflow
+        # Never-narrow clause on the step-3 full-tree run.
+        assert "never narrows this run" in workflow
+        assert "full-tree `tests/` sweep" in workflow
+
+
+def test_render_workflow_names_token_tally_owner_per_path() -> None:
+    """CR-03: step 5 names who owns the token tally on each dispatch path."""
+    interactive = _minimal_spec().render(headless=False)
+    interactive_workflow = interactive.split("## Workflow", 1)[1].split("## Out of scope", 1)[0]
+    assert "--tokens-consumed" in interactive_workflow
+    assert "dispatching parent session" in interactive_workflow
+
+    headless = _minimal_spec().render(headless=True)
+    headless_workflow = headless.split("## Workflow", 1)[1].split("## Out of scope", 1)[0]
+    assert "daemon converts your session's captured runtime delta" in headless_workflow
+    assert "closes the wave on your behalf" in headless_workflow
+
+
+def test_render_out_of_scope_bans_all_eawf_commands() -> None:
+    """CR-02: the out-of-scope section bans every eawf command with the
+    STOP-and-report escape hatch; the old `uv run eawf state` directive is
+    gone."""
     out = _minimal_spec().render()
-    workflow = out.split("## Workflow", 1)[1].split("## Out of scope", 1)[0]
-    assert "uv run eawf wave close P01-I01-W01" in workflow
-    assert "--tokens-consumed <tokens>" in workflow
+    section = out.split("## Out of scope", 1)[1].split("## Estimate", 1)[0]
+    assert "Run NO `eawf` command inside this worktree" in section
+    assert "STOP and name it in your report" in section
+    assert "uv run eawf state" not in section
+    assert "eawf wave close" not in section
 
 
 def test_render_empty_file_scopes_shows_none_placeholder() -> None:
