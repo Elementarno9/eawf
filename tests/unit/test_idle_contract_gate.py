@@ -681,3 +681,111 @@ def test_main_returns_zero_when_no_orphan_contract(mod, monkeypatch) -> None:
     monkeypatch.setattr(mod, "_default_read", lambda _p: "")
     code = mod.main(["idle_contract_gate.py"])
     assert code == 0
+
+
+# --------------------------------------------------------------------------- #
+# CR-01: AST-based call-site probe -- a docstring mention no longer discharges.
+# --------------------------------------------------------------------------- #
+
+# The named counterexample fixture: ``convert_legacy_criterion`` mentioned only
+# inside a docstring cross-reference in a non-test source file (its live A4
+# shape). The old word-boundary regex matched this token and falsely reported
+# the call-site contract discharged; the AST probe treats a docstring as a
+# string literal and correctly does not.
+_DOCSTRING_ONLY_CALLER = '''"""Daemon spec-convert method.
+
+Wraps :func:`eawf.kernel.spec.common.convert_legacy_criterion` with the EAWF021
+gate. See that converter for the criterion assembly.
+"""
+
+
+def convert_spec(text):
+    return None
+'''
+
+_REAL_CALLER = (
+    "from eawf.kernel.spec.common import convert_legacy_criterion\n"
+    "def convert_spec(text):\n"
+    "    return convert_legacy_criterion(text)\n"
+)
+
+
+def test_has_call_site_ignores_docstring_only_reference(mod) -> None:
+    # A symbol whose only non-test reference is a docstring is NOT a call-site
+    # under the AST probe -- the core CR-01 behaviour change.
+    defining = "src/eawf/kernel/spec/common.py"
+    tree_fn, read_fn = _tree_from(
+        {
+            defining: "def convert_legacy_criterion(text):\n    return text\n",
+            "src/eawf/runtime/daemon/methods/spec_convert.py": _DOCSTRING_ONLY_CALLER,
+        }
+    )
+    assert mod._has_call_site("convert_legacy_criterion", defining, tree_fn(), read_fn) is False
+
+
+def test_has_call_site_counts_a_real_import_and_call(mod) -> None:
+    # The contrast: a genuine import + call of the same symbol in a non-test
+    # source file IS a call-site under the AST probe (parity with real code).
+    defining = "src/eawf/kernel/spec/common.py"
+    tree_fn, read_fn = _tree_from(
+        {
+            defining: "def convert_legacy_criterion(text):\n    return text\n",
+            "src/eawf/runtime/daemon/methods/spec_convert.py": _REAL_CALLER,
+        }
+    )
+    assert mod._has_call_site("convert_legacy_criterion", defining, tree_fn(), read_fn) is True
+
+
+def test_detect_idle_contracts_docstring_only_reference_flags_no_call_site(mod) -> None:
+    # End-to-end through the meta-gate: a newly-defined contract whose only
+    # non-test reference is a docstring mention (plus a real asserting test) is
+    # flagged NO_CALL_SITE, not discharged. The old regex saw the docstring token
+    # and reported the contract clean; the AST probe correctly does not.
+    defining = "src/eawf/platform/lint/foo.py"
+    diff = _diff_adding(defining, ["def check_widget_parity(node):", "    return True"])
+    docstring_only = '''"""Runner module.
+
+Delegates to :func:`check_widget_parity` for each node.
+"""
+
+
+def run(node):
+    return None
+'''
+    tree_fn, read_fn = _tree_from(
+        {
+            defining: "def check_widget_parity(node):\n    return True\n",
+            "src/eawf/platform/lint/runner.py": docstring_only,
+            "tests/unit/test_foo.py": (
+                "from eawf.platform.lint.foo import check_widget_parity\n"
+                "def test_it():\n    assert check_widget_parity(None) is True\n"
+            ),
+        }
+    )
+    findings = mod.detect_idle_contracts(
+        "HEAD~1..HEAD",
+        diff_fn=lambda _r: diff,
+        tree_fn=tree_fn,
+        read_fn=read_fn,
+    )
+    assert len(findings) == 1
+    assert findings[0].symbol == "check_widget_parity"
+    assert findings[0].missing is mod.MissingDischarge.NO_CALL_SITE
+
+
+def test_ast_references_symbol_skips_comment_and_string(mod) -> None:
+    # A mention in a comment or a plain string literal is not a code reference;
+    # only an actual name / call / import counts.
+    source = (
+        "# check_widget_parity is mentioned in this comment\n"
+        'NOTE = "see check_widget_parity for details"\n'
+        "def run():\n    return 1\n"
+    )
+    assert mod._ast_references_symbol(source, "check_widget_parity") is False
+    assert mod._ast_references_symbol(source + "run()\n", "run") is True
+
+
+def test_ast_references_symbol_tolerates_unparseable_source(mod) -> None:
+    # A file that does not parse cannot be shown to reference the symbol, so the
+    # probe returns False rather than raising and crashing the gate.
+    assert mod._ast_references_symbol("def broken(:\n", "anything") is False

@@ -83,10 +83,18 @@ exits non-zero:
   flags any newly-defined contract (a ``check_*`` / ``*_gate`` / ``*_lint``
   function, a ``CheckKind`` runner registration, an ``OracleTier`` dispatch
   arm, or an ``eawf0##_*.py`` lint module) that ships idle: no call-site
-  outside its own module AND no asserting test references it. The meta-gate
-  generalizes the B091 lesson from one hardcoded contract to *every* future
-  contract a diff introduces, so a fresh dead verifier is caught the same
-  commit it lands.
+  outside its own module AND no asserting test references it. The call-site
+  probe is AST-based (call / import / name detection), so a comment or docstring
+  mention no longer discharges the call-site contract the way the prior
+  word-boundary regex did. The meta-gate generalizes the B091 lesson from one
+  hardcoded contract to *every* future contract a diff introduces, so a fresh
+  dead verifier is caught the same commit it lands.
+- :func:`check_contract_exercised` -- a *dynamic* leg (armed under
+  ``--phase-close``) that proves a bound contract actually RAN, not just that it
+  is called + tested. It reads the stores each bound contract writes and reds the
+  phase close on a contract that captured zero runtime output -- the exact blind
+  spot behind EU capture passing while writing no rows. A jury-gated contract
+  (the ballot) is skipped until the jury has convened at least once.
 
 Three independent contracts are asserted, in precedence order:
 
@@ -132,6 +140,8 @@ Exit codes:
 
 from __future__ import annotations
 
+import ast
+import json
 import re
 import subprocess
 import sys
@@ -141,7 +151,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import get_args
+from typing import Any, get_args
 
 import pydantic
 
@@ -1265,6 +1275,15 @@ def check_coverage_gate_helpers_wired() -> GateResult:
         A :class:`GateResult` that passes only when the helper selects exactly
         the matching class and the top-level runner is callable.
     """
+    # ``coverage_gate`` is a sibling ``tools/`` module, importable by name only
+    # when ``tools/`` is on ``sys.path``. The pre-commit invocation and this
+    # module's importlib loaders put it there, but a caller that imports the gate
+    # by path without adjusting ``sys.path`` (e.g. an out-of-tree unit test) would
+    # otherwise hit ``ModuleNotFoundError``. Guard the path so the import is
+    # robust to invocation context.
+    _tools_dir = str(Path(__file__).resolve().parent)
+    if _tools_dir not in sys.path:
+        sys.path.insert(0, _tools_dir)
     from coverage_gate import _classes_for_gate, run_gate
 
     cls = ET.Element("class", {"filename": "src/eawf/runtime/daemon/methods/agent.py"})
@@ -1739,11 +1758,18 @@ class MissingDischarge(StrEnum):
     A contract is discharged only when it is both *called* (a call-site outside
     its defining module proves it runs in production) AND *asserted* (a test
     references it so a regression is caught). The order is informational only.
+
+    :attr:`NO_RUNTIME_OUTPUT` is a distinct, *dynamic* discharge asserted by the
+    phase-close leg :func:`check_contract_exercised`: a contract may be statically
+    called + tested yet still capture nothing at runtime (the exact blind spot
+    behind EU-capture passing while writing zero rows). A bound contract that
+    produced no row in its store during the phase reports this discharge missing.
     """
 
     NO_CALL_SITE = "no_call_site"
     NO_ASSERTING_TEST = "no_asserting_test"
     BOTH = "both"
+    NO_RUNTIME_OUTPUT = "no_runtime_output"
 
 
 @dataclass(frozen=True, slots=True)
@@ -2006,6 +2032,67 @@ def _wired_through_own_main(symbol: str, defining_module: str, read_fn: ReadFn) 
     return needle.search(body_after_signature) is not None
 
 
+def _node_references_symbol(node: ast.AST, symbol: str) -> bool:
+    """Return whether a single AST *node* references *symbol* in code.
+
+    A ``Name`` load, an attribute access, or an import (``from x import symbol``,
+    ``import x as symbol``, ``import symbol...``) is a real code reference; every
+    other node is not. Split out of :func:`_ast_references_symbol` so the walk
+    stays a flat ``any(...)`` and the per-node branching stays readable.
+
+    Args:
+        node: One node from an :func:`ast.walk` traversal.
+        symbol: The symbol name to chase.
+
+    Returns:
+        ``True`` when *node* references *symbol* by name in code.
+    """
+    if isinstance(node, ast.Name):
+        return node.id == symbol
+    if isinstance(node, ast.Attribute):
+        return node.attr == symbol
+    if isinstance(node, ast.ImportFrom):
+        return any(symbol in (alias.name, alias.asname) for alias in node.names)
+    if isinstance(node, ast.Import):
+        # ``import x as symbol`` binds *symbol*; ``import a.b.c`` binds the
+        # top-level ``a``, so match the first dotted segment too.
+        return any(
+            alias.asname == symbol or alias.name.split(".", 1)[0] == symbol for alias in node.names
+        )
+    return False
+
+
+def _ast_references_symbol(source: str, symbol: str) -> bool:
+    """Return whether *symbol* appears as a real code reference in *source*.
+
+    Parses *source* to an AST and reports a hit when *symbol* appears as an
+    imported name, a ``Name`` load, or an attribute access -- references that
+    prove the symbol is USED in code. A mention inside a docstring or a comment
+    is a string literal (or stripped entirely by the tokenizer), so it never
+    becomes an AST name node and is correctly ignored. This is the whole point
+    of the AST probe over the prior word-boundary regex: a ``:func:`symbol```
+    cross-reference in a docstring used to match the regex and falsely discharge
+    the call-site contract, so a symbol whose only non-test reference was
+    documentation looked "called" when nothing ran it.
+
+    Args:
+        source: Python source text.
+        symbol: The symbol name to chase.
+
+    Returns:
+        ``True`` when *symbol* is imported, called, or otherwise referenced by
+        name in code; ``False`` when it is absent, appears only in a string /
+        comment, or *source* does not parse.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        # An unparseable file cannot be shown to reference the symbol; treat it
+        # as no reference rather than crashing the gate on one bad file.
+        return False
+    return any(_node_references_symbol(node, symbol) for node in ast.walk(tree))
+
+
 def _has_call_site(symbol: str, defining_module: str, tree: Iterable[str], read_fn: ReadFn) -> bool:
     """Return whether *symbol* is referenced in a non-test file other than its module.
 
@@ -2016,6 +2103,10 @@ def _has_call_site(symbol: str, defining_module: str, tree: Iterable[str], read_
     wires the check through its own ``main`` -- that IS the production caller for
     a gate script (see :func:`_wired_through_own_main`).
 
+    Detection is AST-based (:func:`_ast_references_symbol`): only a call, import,
+    or name reference in code counts, so a comment or a docstring mention no
+    longer discharges the contract the way the prior word-boundary regex did.
+
     Args:
         symbol: The contract symbol to chase.
         defining_module: The repo-relative path of the file that defines it.
@@ -2023,18 +2114,17 @@ def _has_call_site(symbol: str, defining_module: str, tree: Iterable[str], read_
         read_fn: Reader for a repo-relative path.
 
     Returns:
-        ``True`` when some non-test, non-defining file references *symbol*, or
-        when a ``tools/`` gate script wires it through its own ``main``.
+        ``True`` when some non-test, non-defining file references *symbol* in
+        code, or when a ``tools/`` gate script wires it through its own ``main``.
     """
     if _wired_through_own_main(symbol, defining_module, read_fn):
         return True
-    needle = re.compile(rf"\b{re.escape(symbol)}\b")
     for path in tree:
         if path == defining_module:
             continue
         if path.startswith("tests/") or "/tests/" in path:
             continue
-        if needle.search(read_fn(path)):
+        if _ast_references_symbol(read_fn(path), symbol):
             return True
     return False
 
@@ -2124,6 +2214,206 @@ def detect_idle_contracts(
     return findings
 
 
+# =========================================================================== #
+# Dynamic-exercise leg: a bound contract must produce runtime output per phase.
+# =========================================================================== #
+
+#: A store-row reader: returns the parsed records of ``.ea/store/<stem>.jsonl``
+#: for a store *stem*. Enveloped stores are unwrapped to their ``payload`` so a
+#: predicate reads record fields directly; plain (non-enveloped) stores are
+#: returned as parsed. Injected so a test feeds synthetic rows without a real
+#: store.
+type StoreRowsFn = Callable[[str], list[dict[str, Any]]]
+
+#: A jury-convened predicate: ``True`` once the cross-vendor jury has convened at
+#: least once (read from the event store). Injected so a test drives both the
+#: gated-off and gated-on ballot outcomes.
+type JuryConvenedFn = Callable[[], bool]
+
+
+@dataclass(frozen=True, slots=True)
+class _BoundContract:
+    """A contract whose runtime exercise is proved by a row in a store.
+
+    Attributes:
+        name: The contract name a finding reports. This is a bound-contract
+            label, not a source symbol -- the dynamic leg proves runtime output,
+            not a static call-site.
+        store_stem: The ``.ea/store/<stem>.jsonl`` store file the contract writes.
+        counts_row: Predicate deciding whether one store record proves exercise
+            (e.g. an actuals row counts only when ``elapsed_eu > 0``).
+        gated_by_jury: When ``True`` the contract is SKIPPED until the jury has
+            convened at least once, so an un-exercised-by-design contract cannot
+            wedge a phase close (the ballot contract, reserved for P31).
+    """
+
+    name: str
+    store_stem: str
+    counts_row: Callable[[Mapping[str, Any]], bool]
+    gated_by_jury: bool = False
+
+
+def _row_counts_always(_record: Mapping[str, Any]) -> bool:
+    """A row predicate that counts any store record as runtime output."""
+    return True
+
+
+def _row_has_positive_elapsed_eu(record: Mapping[str, Any]) -> bool:
+    """Count an actuals record only when it captured a positive ``elapsed_eu``.
+
+    EU capture is the canonical "wired but writes nothing" blind spot: a row
+    could exist with ``elapsed_eu == 0`` and still have measured nothing, so the
+    contract is exercised only by a strictly-positive elapsed-EU row.
+
+    Args:
+        record: A parsed store record (the unwrapped actuals payload).
+
+    Returns:
+        ``True`` when the record carries a numeric ``elapsed_eu`` greater than 0.
+    """
+    value = record.get("elapsed_eu", 0.0)
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0.0
+
+
+#: The three I22 bound contracts the dynamic leg enforces at phase close: the
+#: verdict producer (an ``auditor_report`` row), EU capture (an ``actual`` row
+#: with a positive ``elapsed_eu``), and calibration (a ``gold_label`` row). The
+#: juror-ballot contract is deliberately absent -- see :data:`_BALLOT_CONTRACT`.
+_I22_BOUND_CONTRACTS: tuple[_BoundContract, ...] = (
+    _BoundContract(
+        name="verdict_producer",
+        store_stem="auditor_report",
+        counts_row=_row_counts_always,
+    ),
+    _BoundContract(
+        name="eu_capture",
+        store_stem="actual",
+        counts_row=_row_has_positive_elapsed_eu,
+    ),
+    _BoundContract(
+        name="calibration",
+        store_stem="gold_label",
+        counts_row=_row_counts_always,
+    ),
+)
+
+#: The juror-ballot contract, EXCLUDED from the I22 enforced set. The
+#: cross-vendor jury has never convened in repo history, so enforcing a
+#: ballot-output contract now would wedge the phase re-close on a row nothing in
+#: I22 produces. It is gated behind the "jury convened >= 1" predicate and earns
+#: its contract in P31 calibration -- adding it to the enforced set stays inert
+#: until a real jury run records its event.
+_BALLOT_CONTRACT = _BoundContract(
+    name="juror_ballot",
+    store_stem="ballot",
+    counts_row=_row_counts_always,
+    gated_by_jury=True,
+)
+
+
+def _default_store_rows(store_stem: str) -> list[dict[str, Any]]:
+    """Read parsed records from ``.ea/store/<store_stem>.jsonl``, honest-empty when absent.
+
+    Enveloped stores (:class:`eawf.kernel.store.envelope.Envelope`) wrap the
+    kind-specific record in a ``payload`` dict; this reader unwraps it so a
+    predicate reads record fields directly. Plain stores (e.g. the gold-label
+    store, which carries no envelope) are returned as parsed. A missing file, a
+    blank line, or a malformed line is skipped rather than raising, so the leg is
+    honest-empty on a store no wave has written yet.
+
+    Args:
+        store_stem: The store file stem under ``.ea/store/`` (``auditor_report``,
+            ``actual``, ``gold_label``, ...).
+
+    Returns:
+        The parsed records, oldest-first; ``[]`` when the store file is absent.
+    """
+    path = _REPO_ROOT / ".ea" / "store" / f"{store_stem}.jsonl"
+    if not path.is_file():
+        return []
+    records: list[dict[str, Any]] = []
+    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(record, dict):
+            continue
+        payload = record.get("payload")
+        records.append(payload if isinstance(payload, dict) else record)
+    return records
+
+
+def _default_jury_convened() -> bool:
+    """Return whether the cross-vendor jury has convened at least once.
+
+    Reads the event store and reports a hit on any event whose ``event_type``
+    names the jury. The jury has never convened in repo history, so this is
+    ``False`` on the current tree (the ballot contract stays gated off) and flips
+    ``True`` the first time a real jury run records its event.
+
+    Returns:
+        ``True`` when a jury event exists in the event store; ``False`` otherwise.
+    """
+    for record in _default_store_rows("event"):
+        event_type = str(record.get("event_type", ""))
+        if "jury" in event_type.lower():
+            return True
+    return False
+
+
+def check_contract_exercised(
+    *,
+    store_rows_fn: StoreRowsFn = _default_store_rows,
+    jury_convened_fn: JuryConvenedFn = _default_jury_convened,
+    contracts: Sequence[_BoundContract] = _I22_BOUND_CONTRACTS,
+) -> list[IdleContractFinding]:
+    """Flag every bound contract that produced NO runtime output this phase.
+
+    The static meta-gate (:func:`detect_idle_contracts`) proves a contract is
+    *called* and *tested*; this dynamic leg proves it actually *ran*, closing the
+    blind spot where a contract is wired + tested yet captures zero data. For each
+    bound contract it reads the contract's store and flags a
+    :attr:`MissingDischarge.NO_RUNTIME_OUTPUT` finding when no record counts as
+    exercise. A jury-gated contract (the ballot) is SKIPPED entirely while the
+    jury-convened predicate is ``False`` so an un-exercised-by-design contract
+    cannot wedge a phase close.
+
+    The leg reads stores only -- it never mutates state, writes a file, or runs a
+    mutating ``eawf`` command. The store reader, jury predicate, and contract set
+    are injected (each defaulting to the live production value) so a test drives
+    the zero-output, has-output, and jury-gated outcomes without a real store.
+
+    Args:
+        store_rows_fn: Reader returning the parsed records for a store stem.
+        jury_convened_fn: Predicate gating the ballot contract.
+        contracts: The bound contracts to check; defaults to the I22 three.
+
+    Returns:
+        One :class:`IdleContractFinding` per bound contract with no exercising
+        row, in contract order. Empty when every non-skipped contract has at
+        least one exercising row.
+    """
+    findings: list[IdleContractFinding] = []
+    for contract in contracts:
+        if contract.gated_by_jury and not jury_convened_fn():
+            continue
+        rows = store_rows_fn(contract.store_stem)
+        if any(contract.counts_row(row) for row in rows):
+            continue
+        findings.append(
+            IdleContractFinding(
+                symbol=contract.name,
+                module=f".ea/store/{contract.store_stem}.jsonl",
+                missing=MissingDischarge.NO_RUNTIME_OUTPUT,
+            )
+        )
+    return findings
+
+
 def _render_findings(findings: Sequence[IdleContractFinding]) -> str:
     """Render *findings* as a human-readable multi-line failure message.
 
@@ -2132,13 +2422,21 @@ def _render_findings(findings: Sequence[IdleContractFinding]) -> str:
 
     Returns:
         One line per finding, each naming the symbol, its module, and the
-        missing discharge.
+        missing discharge, with advice specific to the discharge kind.
     """
-    lines = [f"idle-contract meta-gate: {len(findings)} new contract(s) ship idle:"]
+    lines = [f"idle-contract gate: {len(findings)} contract(s) ship idle:"]
     for finding in findings:
+        if finding.missing is MissingDischarge.NO_RUNTIME_OUTPUT:
+            advice = (
+                "a bound contract must produce at least one row in its store "
+                "during the phase -- a wired-but-never-exercised contract captures "
+                "nothing"
+            )
+        else:
+            advice = "a new contract needs a call-site outside its module AND an asserting test"
         lines.append(
-            f"  - {finding.symbol} (in {finding.module}) is missing {finding.missing.value}; "
-            "a new contract needs a call-site outside its module AND an asserting test"
+            f"  - {finding.symbol} (in {finding.module}) is missing "
+            f"{finding.missing.value}; {advice}"
         )
     return "\n".join(lines)
 
@@ -2213,15 +2511,25 @@ def main(argv: list[str]) -> int:
     (:func:`detect_idle_contracts`) over the staged diff. All must pass; the
     exit code is non-zero when any fails.
 
+    Under ``--phase-close`` one further leg runs after the static gates: the
+    dynamic-exercise leg (:func:`check_contract_exercised`) reads the stores each
+    bound contract writes and reds the close on a contract that captured no
+    runtime output this phase. It is flag-gated because runtime output accrues
+    across a whole phase, not on any single staged commit, so it must not fire on
+    every pre-commit run.
+
     Args:
         argv: Process argv (with or without the script path). The first
             non-script argument overrides the default ``--cached`` diff range
-            fed to the meta-gate (e.g. ``HEAD~1..HEAD`` for a CI range check).
+            fed to the meta-gate (e.g. ``HEAD~1..HEAD`` for a CI range check);
+            the ``--phase-close`` flag additionally arms the dynamic-exercise
+            leg and is stripped before the diff range is resolved.
 
     Returns:
         ``0`` when all gates pass; ``1`` when any fails.
     """
-    diff_range = _resolve_diff_range(argv)
+    phase_close = "--phase-close" in argv
+    diff_range = _resolve_diff_range([arg for arg in argv if arg != "--phase-close"])
 
     failed = False
     failed |= _report_result(check_idle_contract())
@@ -2310,6 +2618,26 @@ def main(argv: list[str]) -> int:
         failed = True
     else:
         print("idle-contract meta-gate: ok (no new contract ships idle)")
+
+    # Dynamic-exercise leg (per-phase, not per-commit): a bound contract can be
+    # statically called + tested yet still capture nothing at runtime. Under
+    # --phase-close this reads the stores each bound contract writes and reds the
+    # close on a zero-output contract. It is gated behind the flag because runtime
+    # output accrues across a whole phase, not on any single staged commit, so
+    # firing it on every pre-commit would red on stores no commit has written yet.
+    if phase_close:
+        # Pass the module-level sources explicitly (same reason as the checks
+        # above): a default-bound parameter would snapshot the unpatched function
+        # at def time, so a test could not redirect the store reader.
+        runtime_findings = check_contract_exercised(
+            store_rows_fn=_default_store_rows,
+            jury_convened_fn=_default_jury_convened,
+        )
+        if runtime_findings:
+            print(_render_findings(runtime_findings), file=sys.stderr)
+            failed = True
+        else:
+            print("idle-contract dynamic leg: ok (every bound contract has runtime output)")
 
     return 1 if failed else 0
 
