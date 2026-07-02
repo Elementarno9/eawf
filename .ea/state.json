@@ -13562,7 +13562,8 @@
     ],
     "active_wave_ids": [
       "P30-I23-W45",
-      "P30-I23-W46"
+      "P30-I23-W46",
+      "P30-I23-W31"
     ],
     "iter_id": "P30-I23",
     "phase_id": "P30",
@@ -25513,6 +25514,19 @@
       "scope_id": "P30-I23-W30",
       "updated_at": "2026-07-02T17:34:36.211094Z"
     },
+    "P30-I23-W31": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W31-bucket-20260702T222221Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I23-W31",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I23-W31",
+      "updated_at": "2026-07-02T22:22:21.995579Z"
+    },
     "P30-I23-W32": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I23-W32-bucket-20260702T173436Z",
@@ -25785,16 +25799,19 @@
     },
     "INC-P30-08": {
       "cause": "unknown",
-      "closed_at": null,
-      "corrective_action_ids": [],
+      "closed_at": "2026-07-02T22:22:22.594459Z",
+      "corrective_action_ids": [
+        "P30-I23-W30",
+        "P30-I23-W31"
+      ],
       "description": null,
       "id": "INC-P30-08",
       "opened_at": "2026-06-13T22:26:05.281778Z",
       "report_artifact_id": null,
-      "root_cause": null,
+      "root_cause": "the coarse full-screen image oracle could not falsify per-element layout claims; fixed by the W30 broadened live-render oracle (contrast-on-selection + live-capture mode) plus the W31 standing mockup_golden_diff and tui_flow gates that now block UI-wave closes",
       "scope_id": "EAWF",
       "severity": "low",
-      "status": "open",
+      "status": "resolved",
       "title": "Coarse image oracle too blunt for full-screen mode validation"
     },
     "INC-P30-09": {
@@ -29274,7 +29291,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T22:14:00.868007Z",
+  "updated_at": "2026-07-02T22:22:22.594459Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -113956,8 +113973,8 @@
       "blocks": [
         "P30-I23-W34"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-i23",
+      "claimed_at": "2026-07-02T22:15:08.524488Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -114030,6 +114047,85 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "golden_path": "tests/fixtures/mockup_image_diff/roadmap_board_reference.png",
+            "mockup_png": "tests/fixtures/mockup_image_diff/roadmap_board_reference.png",
+            "scope": "repo",
+            "size": [
+              120,
+              40
+            ],
+            "state_path": "tests/fixtures/states/valid/03-phase-iter-wave-active.json",
+            "tui_png": "<live>"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-04",
+          "kind": "mockup_golden_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "golden_path": "tests/fixtures/mockup_image_diff/evidence_mode_reference.png",
+            "mockup_png": "tests/fixtures/mockup_image_diff/evidence_mode_reference.png",
+            "mode": "evidence",
+            "scope": "repo",
+            "size": [
+              120,
+              40
+            ],
+            "state_path": "tests/fixtures/states/valid/03-phase-iter-wave-active.json",
+            "tui_png": "<live>"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-05",
+          "kind": "mockup_golden_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "golden_path": "tests/fixtures/mockup_image_diff/init_wizard_j1_actual_tui_screenshot.png",
+            "mockup_png": "tests/fixtures/mockup_image_diff/init_wizard_j1_redesign_mockup.png",
+            "tui_png": "tests/fixtures/mockup_image_diff/init_wizard_j1_actual_tui_screenshot.png"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-06",
+          "kind": "mockup_golden_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "flow": "open-evidence-mode",
+            "key_sequence": [
+              "6"
+            ],
+            "scope": "repo",
+            "size": [
+              120,
+              40
+            ],
+            "state_path": "tests/fixtures/states/valid/03-phase-iter-wave-active.json",
+            "terminal_state": {
+              "current_mode": "evidence"
+            }
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-07",
+          "kind": "tui_flow",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P30-I23-W31",
@@ -114049,13 +114145,14 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-01",
+            "G-07"
           ],
           "id": "CR-01",
           "kind": "deterministic",
@@ -114079,7 +114176,10 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-02"
+            "G-02",
+            "G-04",
+            "G-05",
+            "G-06"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -114096,7 +114196,7 @@
             "observe": "exits",
             "quantifier": "single"
           },
-          "text": "Both TUI surfaces' live renders pass their mockup_golden_diff at close (init-wizard, fixtures under tests/fixtures/mockup_image_diff/, plus the status/roadmap board), and the fixture pairs stay the standing template future UI waves copy; this wave re-syncs its spec to bind those live-mode gate rows once the fixtures exist.",
+          "text": "Both hermetic TUI surfaces' live renders pass their mockup_golden_diff at close: the Home roadmap board and Evidence mode, bound to the committed fixture state (machine-independent); init-wizard keeps its fixture-pair gate row (a live wizard capture reads the real user registry, not hermetic). The pairs under tests/fixtures/mockup_image_diff/ are the standing template future UI waves copy.",
           "waiver_reason": null
         },
         {
