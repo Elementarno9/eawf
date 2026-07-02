@@ -685,7 +685,12 @@ def _fork_badge(run: FleetRun, *, mode: RenderMode) -> str:
     return f" [$err]{glyph} {forked} fork{'' if forked == 1 else 's'}[/]"
 
 
-def render_cockpit_vitals(run: FleetRun | None, *, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
+def render_cockpit_vitals(
+    run: FleetRun | None,
+    *,
+    mode: RenderMode = DEFAULT_RENDER_MODE,
+    mount_stale: bool = False,
+) -> str:
     """Render the fleet-cockpit vitals header off the persisted *run*.
 
     Reads the persisted :class:`~eawf.kernel.state.models.FleetRun` (its
@@ -696,18 +701,24 @@ def render_cockpit_vitals(run: FleetRun | None, *, mode: RenderMode = DEFAULT_RE
     *run* so the cockpit never recomputes a tally in the UI (the FA7 contract:
     surface what the daemon stored). Before the fleet is armed (*run* is ``None``
     or its run-state is ``IDLE``) the honest-empty cockpit hero
-    (:data:`COCKPIT_IDLE`) renders instead of a fabricated zeroed vitals row.
+    (:data:`COCKPIT_IDLE`) renders instead of a fabricated zeroed vitals row. A
+    *mount_stale* run -- one already terminal when the cockpit mounted, with no
+    live drain observed by this screen instance -- renders the same idle hero so
+    a stop from a prior session does not resurface as a frozen vitals row.
 
     Args:
         run: The persisted fleet run, or ``None`` when no run is armed.
         mode: The App's resolved render-mode label -- selects the glyph column
             for the run-state sigil, the EU bar, and the fork badge.
+        mount_stale: Whether *run* was already terminal at mount (a pre-existing
+            stop this screen instance never saw drain live); when set the idle
+            hero renders instead of the terminal run's vitals row.
 
     Returns:
         A content-markup vitals header string, or the honest-empty cockpit hero
-        when no run is armed.
+        when no run is armed or the run is a mount-stale terminal stop.
     """
-    if run is None or run.run_state.value == "idle":
+    if run is None or run.run_state.value == "idle" or mount_stale:
         return f"[$muted]{COCKPIT_IDLE}[/]"
     sigil = escape_markup(sigils.glyph(_RUN_STATE_SIGILS[run.run_state.value], mode=mode))
     lanes = f"{len(run.lanes)}/{run.concurrency} {COCKPIT_LANES_LABEL}"
@@ -1029,8 +1040,16 @@ class AutopilotModeScreen(ScopeScreen):
         #: The run-state string of the last fleet run the pane observed, so a
         #: transition INTO the terminal ``done`` state opens the FA7 run-summary
         #: card exactly once (a re-push of an already-DONE run does not reopen it).
-        #: ``None`` until the first state seed.
+        #: Seeded from the mounted state in :meth:`on_mount` so a run already
+        #: terminal at mount is NOT misread as a live None->done transition.
         self._last_run_state: str | None = None
+        #: Whether the fleet run was already terminal when this screen instance
+        #: mounted (a pre-existing stop this instance never saw drain live). A
+        #: mount-stale terminal run renders the idle-hero cockpit instead of the
+        #: frozen vitals row; the flag clears the moment a live non-terminal
+        #: run-state is observed so a genuine drain->done transition still shows
+        #: vitals and opens the run-summary card.
+        self._mount_terminal: bool = False
         #: The queued-fork count of the last fleet run the pane observed, so a
         #: RISE in the count (a lane newly forked) auto-raises the FA5 fork inbox
         #: exactly once -- a re-push at the same depth (a live poll re-delivering
@@ -1073,6 +1092,13 @@ class AutopilotModeScreen(ScopeScreen):
             self.watch(self.app, "state", self._on_app_state)
         if hasattr(self.app, "render_mode"):
             self.watch(self.app, "render_mode", self._on_render_mode)
+        # Seed the run-summary + vitals guards off the mounted state BEFORE the
+        # first rebuild: a run already terminal at mount is a pre-existing stop,
+        # not a live None->done transition, so the run-summary card stays shut
+        # and the cockpit renders the idle hero instead of the stale vitals row.
+        seeded_run = self._current_fleet_run()
+        self._last_run_state = seeded_run.run_state.value if seeded_run is not None else None
+        self._mount_terminal = self._last_run_state == _TERMINAL_RUN_STATE
         self._rebuild()
         # W07: a cockpit mounted with a persisted DRAINING run re-binds that run's
         # live lanes + resumes draining via fleet.reattach, so reopening the
@@ -1806,9 +1832,17 @@ class AutopilotModeScreen(ScopeScreen):
         self._render_rows()
         mode = self._render_mode()
         run = self._current_fleet_run()
+        # A live non-terminal run-state clears the mount-stale flag so a genuine
+        # drain->done transition renders the vitals row (and opens the card)
+        # rather than the idle hero the mount-stale guard forces for a stop that
+        # was already terminal when this instance mounted.
+        if run is not None and run.run_state.value != _TERMINAL_RUN_STATE:
+            self._mount_terminal = False
         cockpit = self.query(f"#{COCKPIT_VITALS_ID}")
         if cockpit:
-            cockpit.first(Static).update(render_cockpit_vitals(run, mode=mode))
+            cockpit.first(Static).update(
+                render_cockpit_vitals(run, mode=mode, mount_stale=self._mount_terminal)
+            )
         header = self.query(f"#{FRONTIER_HEADER_ID}")
         if header:
             header.first(Static).update(
@@ -1830,8 +1864,11 @@ class AutopilotModeScreen(ScopeScreen):
         :class:`~eawf.surfaces.tui.screens.overlays.run_summary.RunSummaryModal`
         over the cockpit exactly once. A re-push of an already-DONE run (the
         last-seen state was already terminal) does NOT reopen the card, so a live
-        state poll that re-delivers the terminal run is idempotent. The card is
-        passed the persisted run so every figure is read off the terminal record.
+        state poll that re-delivers the terminal run is idempotent. Because
+        :meth:`on_mount` seeds the last-seen state off the mounted run, a run
+        already terminal at mount reads as ``done -> done`` (not a live
+        ``None -> done`` transition) and the card stays shut. The card is passed
+        the persisted run so every figure is read off the terminal record.
 
         Args:
             run: The persisted fleet run for this rebuild, or ``None`` when no

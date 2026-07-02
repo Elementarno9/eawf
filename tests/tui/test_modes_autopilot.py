@@ -1080,6 +1080,36 @@ def test_autopilot_run_summary_card_reads_terminal_record(tmp_path: Path) -> Non
     asyncio.run(body())
 
 
+def test_autopilot_mount_stale_done_run_no_card_and_idle_hero(tmp_path: Path) -> None:
+    """A run already DONE at mount opens no card and renders the idle hero (W06).
+
+    The mount-stale guard: a terminal ``done`` fleet run persisted before a TUI
+    restart is a pre-existing stop, not a live ``None -> done`` transition. On a
+    fresh mount the run-summary card must stay shut and the cockpit must render
+    the honest-empty idle hero rather than resurfacing the stale terminal vitals
+    row, so the finished run does not re-pop its "closed=N" card on every restart.
+    """
+    state_path = _write_state(tmp_path, _state(fleet_run=_done_run()))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            # No run-summary card auto-opened for the mount-stale terminal run.
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            assert not isinstance(pane, RunSummaryModal)
+            # The cockpit renders the idle hero, not the frozen terminal vitals.
+            vitals = pane.query_one(f"#{COCKPIT_VITALS_ID}")
+            body_text = str(vitals.render())  # type: ignore[attr-defined]
+            assert COCKPIT_IDLE in body_text
+            assert "done" not in body_text
+
+    asyncio.run(body())
+
+
 # --------------------------------------------------------------------------
 # Fork inbox -- f key + auto-raise on a new fork (W05)
 # --------------------------------------------------------------------------
