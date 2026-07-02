@@ -22,10 +22,11 @@ from eawf.surfaces.tui.screens.overlays.init_wizard import (
     InitWizardContext,
     InitWizardModal,
 )
-from eawf.surfaces.tui.snapshot import settle_screen
+from eawf.surfaces.tui.snapshot import pilot_harness, settle_screen
 from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
 from eawf.workflow.audit_dsl import CHECK_REGISTRY, CheckResult, CheckSpec
+from eawf.workflow.audit_dsl.kinds.mockup_image_diff import LIVE_CAPTURE_SENTINEL
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _THEME = _REPO_ROOT / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
@@ -33,6 +34,14 @@ _FIXTURES_REL = "tests/fixtures/mockup_image_diff"
 _MOCKUP_REL = f"{_FIXTURES_REL}/init_wizard_j1_redesign_mockup.png"
 _MOCKUP_SVG_REL = f"{_FIXTURES_REL}/init_wizard_j1_redesign_mockup.svg"
 _COMMITTED_SCREENSHOT_REL = f"{_FIXTURES_REL}/init_wizard_j1_actual_tui_screenshot.png"
+#: Small committed fixture pair reused by the live-mode wiring tests: a round
+#: single-column mockup and two committed renders (faithful + square-drift)
+#: standing in for the live capture the monkeypatch returns.
+_ROUND_MOCKUP_REL = f"{_FIXTURES_REL}/mockup_round_1col.png"
+_FAITHFUL_TUI_REL = f"{_FIXTURES_REL}/tui_round_1col_faithful.png"
+_SQUARE_TUI_REL = f"{_FIXTURES_REL}/tui_square_1col_divergent.png"
+#: Dotted path to the live PNG capture the image gate calls in live mode.
+_CAPTURE_PNG_SYNC = "eawf.surfaces.tui.snapshot.pilot_harness.capture_mockup_golden_screen_png_sync"
 _SPEC = _REPO_ROOT / ".ea" / "specs" / "P30" / "P30-I20" / "P30-I20-W17.md"
 _SIZE = (120, 44)
 _RESVG = "resvg"
@@ -197,3 +206,138 @@ def test_wave_spec_carries_structured_real_mockup_gate_row() -> None:
     assert gate.args["mockup_png"] == _MOCKUP_REL
     assert gate.args["tui_png"] == _COMMITTED_SCREENSHOT_REL
     assert "mockup_round_1col" not in str(gate.args)
+
+
+# --- W30 (CR-01): live-render mode captures a Pilot render, not a frozen PNG ---
+
+
+def _run_live_gate(args: dict[str, object]) -> CheckResult:
+    spec = CheckSpec(kind="mockup_golden_diff", name="G-01-live", args=args)
+    return CHECK_REGISTRY["mockup_golden_diff"](spec, _REPO_ROOT)
+
+
+def test_live_mode_captures_pilot_render_not_committed_tui_png(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: dict[str, object] = {}
+
+    def _fake_capture(**kwargs: object) -> bytes:
+        calls.update(kwargs)
+        # Stand-in "live render": a square-corner frame that diverges from the
+        # round mockup, so the gate must fail on the CAPTURED bytes.
+        return (_REPO_ROOT / _SQUARE_TUI_REL).read_bytes()
+
+    monkeypatch.setattr(_CAPTURE_PNG_SYNC, _fake_capture)
+
+    result = _run_live_gate(
+        {
+            "golden_path": _ROUND_MOCKUP_REL,
+            "mockup_png": _ROUND_MOCKUP_REL,
+            "tui_png": LIVE_CAPTURE_SENTINEL,
+            "scope": "repo",
+            "mode": "home",
+            "key_sequence": ["down"],
+            "size": [100, 30],
+        }
+    )
+
+    # The live-capture path was taken (the committed tui_png was NOT read):
+    # the reused text-mode selectors are forwarded to the capture.
+    assert calls["scope"] == "repo"
+    assert calls["mode"] == "home"
+    assert calls["key_sequence"] == ["down"]
+    assert calls["size"] == (100, 30)
+    # And the gate fails because the live render diverges from the mockup golden.
+    assert result.status == "fail"
+    assert result.passed is False
+    assert result.details is not None
+    assert "tui=<live>" in result.details
+    assert "border_shape_mismatch=True" in result.details
+    assert "square-vs-round" in result.details
+
+
+def test_live_mode_faithful_render_passes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        _CAPTURE_PNG_SYNC,
+        lambda **_kwargs: (_REPO_ROOT / _FAITHFUL_TUI_REL).read_bytes(),
+    )
+    result = _run_live_gate(
+        {
+            "golden_path": _ROUND_MOCKUP_REL,
+            "mockup_png": _ROUND_MOCKUP_REL,
+            "tui_png": LIVE_CAPTURE_SENTINEL,
+            "scope": "repo",
+            "size": [100, 30],
+        }
+    )
+    assert result.status == "pass"
+    assert result.passed is True
+    assert result.details is not None
+    assert "tui=<live>" in result.details
+    assert "border_shape_mismatch=False" in result.details
+
+
+def test_live_mode_blocks_cleanly_when_resvg_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _no_resvg(**_kwargs: object) -> bytes:
+        raise FileNotFoundError("resvg")
+
+    monkeypatch.setattr(_CAPTURE_PNG_SYNC, _no_resvg)
+    result = _run_live_gate(
+        {
+            "golden_path": _ROUND_MOCKUP_REL,
+            "mockup_png": _ROUND_MOCKUP_REL,
+            "tui_png": LIVE_CAPTURE_SENTINEL,
+            "scope": "repo",
+        }
+    )
+    assert result.status == "blocked"
+    assert result.passed is False
+    assert "resvg not installed" in (result.details or "")
+
+
+def test_live_capture_bad_state_path_fails_not_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A missing state_path in live mode degrades to a failed check; the capture
+    # is never reached.
+    monkeypatch.setattr(
+        _CAPTURE_PNG_SYNC,
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("capture must not run")),
+    )
+    result = _run_live_gate(
+        {
+            "golden_path": _ROUND_MOCKUP_REL,
+            "mockup_png": _ROUND_MOCKUP_REL,
+            "tui_png": LIVE_CAPTURE_SENTINEL,
+            "state_path": f"{_FIXTURES_REL}/does_not_exist_state.json",
+            "scope": "repo",
+        }
+    )
+    assert result.status == "fail"
+    assert "state_path" in (result.details or "")
+
+
+@pytest.mark.skipif(not _HAS_RESVG, reason="resvg not installed")
+def test_live_capture_real_resvg_render_runs_end_to_end() -> None:
+    # Exercise the true capture -> export_screenshot -> resvg -> decode chain.
+    png = pilot_harness.capture_mockup_golden_screen_png_sync(
+        scope="user",
+        state_path=None,
+        mode=None,
+        key_sequence=[],
+        size=(100, 30),
+    )
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    assert len(png) > 1000
+
+    result = _run_live_gate(
+        {
+            "golden_path": _MOCKUP_REL,
+            "mockup_png": _MOCKUP_REL,
+            "tui_png": LIVE_CAPTURE_SENTINEL,
+            "scope": "user",
+            "size": [100, 30],
+        }
+    )
+    # A live render was captured + diffed (not blocked, not an error path).
+    assert result.status in {"pass", "fail"}
+    assert result.details is not None
+    assert "tui=<live>" in result.details

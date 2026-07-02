@@ -31,20 +31,35 @@ import asyncio
 import difflib
 import itertools
 import os
+import shutil
+import subprocess
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
 from eawf.surfaces.render.snapshot_normalize import normalize_snapshot
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-    from pathlib import Path
 
     from textual.app import App
     from textual.dom import DOMNode
     from textual.pilot import Pilot
 
     from eawf.kernel.state.models import State
+
+#: The pinned SVG rasterizer CLI, mirroring the ``svg_pixel_diff`` /
+#: ``tools/rasterize_svg.py`` discipline. The live-render visual oracle
+#: exports the TUI screen as an SVG (``App.export_screenshot``) and hands it
+#: here to become the PNG the layout-shape rubric scores. System fonts are
+#: LEFT ON: the layout-shape oracle tolerates host font variation (it reads
+#: border corners, column count, alignment, and highlight contrast, not glyph
+#: bytes), and the vendored test font omits box-drawing + sigil glyphs, so
+#: pinning it would render the frame chrome as tofu and hide the very layout
+#: the oracle inspects. ``resvg`` is absent on most developer machines;
+#: callers that need a clean skip check :func:`resvg_available` first.
+_RESVG: str = "resvg"
 
 #: Env var that, when set to ``"1"``, makes :func:`assert_screen_snapshot`
 #: (re)write the golden fixture from the live capture instead of
@@ -367,6 +382,123 @@ def capture_mockup_golden_screen_text_sync(
         return pool.submit(_run).result()
 
 
+def resvg_available() -> bool:
+    """Whether the pinned ``resvg`` rasterizer CLI is on PATH."""
+    return shutil.which(_RESVG) is not None
+
+
+def _rasterize_svg_to_png(svg: str) -> bytes:
+    """Rasterize an SVG string to PNG bytes via the pinned ``resvg`` CLI.
+
+    Args:
+        svg: The SVG document (a Textual ``App.export_screenshot`` capture).
+
+    Returns:
+        The rendered 8-bit RGBA PNG bytes.
+
+    Raises:
+        FileNotFoundError: When ``resvg`` is not installed.
+        RuntimeError: When the render exits non-zero or produces no file.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "screen.svg"
+        out = Path(tmp) / "screen.png"
+        src.write_text(svg, encoding="utf-8")
+        completed = subprocess.run(
+            [_RESVG, str(src), str(out)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if completed.returncode != 0 or not out.is_file():
+            diagnostic = completed.stderr.strip() or completed.stdout.strip() or "render failed"
+            raise RuntimeError(f"resvg render failed: {diagnostic}")
+        return out.read_bytes()
+
+
+async def capture_mockup_golden_screen_png(
+    *,
+    scope: Literal["repo", "workspace", "user"],
+    state_path: Path | None,
+    mode: str | None,
+    key_sequence: list[str],
+    size: tuple[int, int],
+) -> bytes:
+    """Mount the TUI through Pilot and capture the target screen as PNG bytes.
+
+    The image sibling of :func:`capture_mockup_golden_screen_text`: it reaches
+    the same target screen through the same selectors (``scope`` /
+    ``state_path`` / ``mode`` / ``key_sequence`` / ``size``), but instead of
+    dumping normalised ASCII it exports the settled screen as an SVG
+    (:meth:`~textual.app.App.export_screenshot`) and rasterises that through
+    the pinned ``resvg`` chain -- the live-render side of the VIS-1 image
+    oracle.
+
+    Args:
+        scope: Launch nav scope (``repo`` / ``workspace`` / ``user``).
+        state_path: Fixture or live ``state.json`` path to bind, or ``None``.
+        mode: Optional TUI mode to switch to before pressing keys.
+        key_sequence: Textual key strings to press after mode switch.
+        size: Pilot terminal size as ``(cols, rows)``.
+
+    Returns:
+        The rendered 8-bit RGBA PNG bytes of the settled screen.
+
+    Raises:
+        FileNotFoundError: When ``resvg`` is not installed.
+        RuntimeError: When the render exits non-zero or produces no file.
+    """
+    from eawf.surfaces.tui.app import EaApp
+
+    app = EaApp(scope=scope, state_path=state_path)
+    async with app.run_test(size=size) as raw_pilot:
+        pilot = cast("Pilot[object]", raw_pilot)
+        await settle_screen(pilot)
+        if mode is not None:
+            await app.switch_mode(mode)
+            await settle_screen(pilot)
+        for key in key_sequence:
+            await pilot.press(key)
+            await settle_screen(pilot)
+        await settle_screen(pilot)
+        svg = app.export_screenshot(title="mockup golden", simplify=True)
+    return _rasterize_svg_to_png(svg)
+
+
+def capture_mockup_golden_screen_png_sync(
+    *,
+    scope: Literal["repo", "workspace", "user"],
+    state_path: Path | None,
+    mode: str | None,
+    key_sequence: list[str],
+    size: tuple[int, int],
+) -> bytes:
+    """Run :func:`capture_mockup_golden_screen_png` from a sync caller.
+
+    Mirrors :func:`capture_mockup_golden_screen_text_sync`: run inline when no
+    event loop is active, otherwise offload to a worker thread with its own
+    loop so a daemon close-gate call already inside a loop still resolves.
+    """
+
+    def _run() -> bytes:
+        return asyncio.run(
+            capture_mockup_golden_screen_png(
+                scope=scope,
+                state_path=state_path,
+                mode=mode,
+                key_sequence=key_sequence,
+                size=size,
+            )
+        )
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return _run()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(_run).result()
+
+
 def mockup_golden_diff_detail(golden_path: Path, expected: str, captured: str) -> str:
     """Return a capped unified diff detail for a mockup golden mismatch.
 
@@ -435,6 +567,8 @@ def _drift_message(golden_path: Path, expected: str, captured: str) -> str:
 __all__ = [
     "SNAPSHOT_REGEN_ENV",
     "assert_screen_snapshot",
+    "capture_mockup_golden_screen_png",
+    "capture_mockup_golden_screen_png_sync",
     "capture_mockup_golden_screen_text",
     "capture_mockup_golden_screen_text_sync",
     "capture_screen_text",
@@ -442,6 +576,7 @@ __all__ = [
     "mutating_action_keys_resolve",
     "normalize_snapshot",
     "push_state_revision",
+    "resvg_available",
     "settle_screen",
     "tick_poll_backstop",
     "toast_messages",

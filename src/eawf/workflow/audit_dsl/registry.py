@@ -405,6 +405,63 @@ def _resolve_optional_file(
     return target, None
 
 
+def _live_capture_tui_png(
+    spec: CheckSpec,
+    cwd: Path,
+    args: MockupGoldenDiffArgs,
+) -> tuple[bytes | None, CheckResult | None]:
+    """Capture a live Pilot render as PNG bytes for image-mode live diffing.
+
+    Mounts the surface named by the reused text-mode selectors (``scope`` /
+    ``state_path`` / ``mode`` / ``key_sequence`` / ``size``) under Pilot,
+    exports the screen SVG, and rasterises it through the pinned ``resvg``
+    chain. Returns ``(png_bytes, None)`` on success, or ``(None, result)``
+    with an early ``CheckResult`` -- ``status="blocked"`` when ``resvg`` is
+    absent (CI portability) and ``status="fail"`` on a bad state path or a
+    capture/render error. Never raises.
+    """
+    from eawf.surfaces.tui.snapshot import pilot_harness
+
+    state_path_abs: Path | None = None
+    if args.state_path is not None:
+        resolved, state_err = _resolve_optional_file(
+            args.state_path, cwd=cwd, arg_name="state_path"
+        )
+        if state_err is not None:
+            return None, CheckResult(
+                name=spec.name, kind=spec.kind, passed=False, status="fail", details=state_err
+            )
+        state_path_abs = resolved
+
+    try:
+        png = pilot_harness.capture_mockup_golden_screen_png_sync(
+            scope=args.scope,
+            state_path=state_path_abs,
+            mode=args.mode,
+            key_sequence=list(args.key_sequence),
+            size=(args.size[0], args.size[1]),
+        )
+    except FileNotFoundError:
+        logger.info(f"_live_capture_tui_png blocked name={spec.name!r} reason=no-resvg")
+        return None, CheckResult(
+            name=spec.name,
+            kind=spec.kind,
+            passed=False,
+            status="blocked",
+            details="resvg not installed",
+        )
+    except Exception as exc:  # capture/render failure degrades, never raises
+        logger.debug(f"_live_capture_tui_png capture-fail name={spec.name!r} reason={exc!r}")
+        return None, CheckResult(
+            name=spec.name,
+            kind=spec.kind,
+            passed=False,
+            status="fail",
+            details=f"live capture failed: {exc}",
+        )
+    return png, None
+
+
 def _check_mockup_image_diff(
     spec: CheckSpec,
     cwd: Path,
@@ -412,13 +469,17 @@ def _check_mockup_image_diff(
 ) -> CheckResult:
     """VIS-1 image mode: layout-shape-weighted diff of mockup PNG vs TUI PNG.
 
-    Decodes the committed reference mockup PNG and the live-TUI render PNG to
-    coarse ink grids and scores their divergence weighting layout shape
-    (border-corner round-vs-square, body column count) above token fidelity.
-    A layout-shape mismatch FAILS the gate; a faithful pair PASSES. Never
-    raises -- a malformed fixture degrades to ``status="fail"``.
+    Decodes the committed reference mockup PNG and the TUI-render PNG to coarse
+    ink grids and scores their divergence weighting layout shape (border-corner
+    round-vs-square, body column count) above the broadened secondary
+    falsifiers (right-edge alignment, selected-row contrast) and token
+    fidelity. A layout-shape mismatch FAILS the gate; a faithful pair PASSES.
+    When ``tui_png`` is the :data:`LIVE_CAPTURE_SENTINEL` the TUI side is a
+    fresh Pilot render captured + rasterised on the spot instead of a committed
+    PNG. Never raises -- a malformed fixture degrades to ``status="fail"``.
     """
     from eawf.workflow.audit_dsl.kinds.mockup_image_diff import (
+        LIVE_CAPTURE_SENTINEL,
         compare_mockup_png_to_tui_png,
         layout_diff_fails,
     )
@@ -435,21 +496,32 @@ def _check_mockup_image_diff(
             status="fail",
             details=mockup_err or "mockup_png not found",
         )
-    # In image mode ``tui_png`` is the live-render side; the fixture-pair tests
-    # pass it directly, falling back to ``golden_path`` as the reference TUI render.
-    tui_arg = args.tui_png if args.tui_png is not None else args.golden_path
-    tui_path, tui_err = _resolve_optional_file(tui_arg, cwd=cwd, arg_name="tui_png")
-    if tui_err is not None or tui_path is None:
-        return CheckResult(
-            name=spec.name,
-            kind=spec.kind,
-            passed=False,
-            status="fail",
-            details=tui_err or "tui_png not found",
-        )
+
+    if args.tui_png == LIVE_CAPTURE_SENTINEL:
+        # Live mode: capture a fresh Pilot render instead of a committed PNG.
+        tui_bytes, early = _live_capture_tui_png(spec, cwd, args)
+        if early is not None:
+            return early
+        assert tui_bytes is not None
+        tui_label = LIVE_CAPTURE_SENTINEL
+    else:
+        # In image mode ``tui_png`` is the render side; the fixture-pair tests
+        # pass it directly, falling back to ``golden_path`` as the reference TUI render.
+        tui_arg = args.tui_png if args.tui_png is not None else args.golden_path
+        tui_path, tui_err = _resolve_optional_file(tui_arg, cwd=cwd, arg_name="tui_png")
+        if tui_err is not None or tui_path is None:
+            return CheckResult(
+                name=spec.name,
+                kind=spec.kind,
+                passed=False,
+                status="fail",
+                details=tui_err or "tui_png not found",
+            )
+        tui_bytes = tui_path.read_bytes()
+        tui_label = str(tui_arg)
 
     try:
-        diff = compare_mockup_png_to_tui_png(mockup_path.read_bytes(), tui_path.read_bytes())
+        diff = compare_mockup_png_to_tui_png(mockup_path.read_bytes(), tui_bytes)
     except ValueError as exc:
         logger.debug(f"_check_mockup_image_diff decode-fail name={spec.name!r} reason={exc!r}")
         return CheckResult(
@@ -464,8 +536,10 @@ def _check_mockup_image_diff(
     summary = (
         f"score={diff.score:.3f} border_shape_mismatch={diff.border_shape_mismatch} "
         f"column_count_mismatch={diff.column_count_mismatch} "
+        f"alignment_mismatch={diff.alignment_mismatch} "
+        f"contrast_regression={diff.contrast_regression} "
         f"token_divergence={diff.token_divergence:.4f} "
-        f"mockup={args.mockup_png} tui={tui_arg} :: {'; '.join(diff.reasons)}"
+        f"mockup={args.mockup_png} tui={tui_label} :: {'; '.join(diff.reasons)}"
     )
     if failed:
         logger.debug(f"_check_mockup_image_diff fail name={spec.name!r} score={diff.score:.3f}")
