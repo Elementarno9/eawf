@@ -10094,6 +10094,20 @@
       "status": "done",
       "updated_at": "2026-07-02T21:27:04.949338Z"
     },
+    "P30-I23-W49": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W49",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W49",
+      "model": null,
+      "scope_id": "P30-I23-W49",
+      "status": "done",
+      "updated_at": "2026-07-02T22:34:05.730921Z"
+    },
     "P30-I23-W50": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -25683,6 +25697,19 @@
       "scope_id": "P30-I23-W46",
       "updated_at": "2026-07-02T22:14:00.867788Z"
     },
+    "P30-I23-W49": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W49-bucket-20260702T222515Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I23-W49",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I23-W49",
+      "updated_at": "2026-07-02T22:25:15.549975Z"
+    },
     "P30-I23-W50": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I23-W50-bucket-20260702T144929Z",
@@ -29304,7 +29331,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T22:24:38.376530Z",
+  "updated_at": "2026-07-02T22:34:05.731168Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -116713,10 +116740,10 @@
       "blocks": [
         "P30-I23-W34"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-i23",
+      "claimed_at": "2026-07-02T22:25:15.549845Z",
+      "closed_at": "2026-07-02T22:34:05.730921Z",
+      "commit": "80b7d743ad5de136c533c085e9621748547b0c06",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W38",
@@ -116802,12 +116829,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:39:44.063249Z",
-      "outcome": null,
+      "outcome": "Headless report schema demands one typed evidence_refs object per criterion ({kind, ref, note}); executor DoD bullet landed with it; verify_close_readiness rung 4 refuses close-ready on refs-less criteria-bearing waves behind the enforce bit, threaded through both production callers via evidence_rung_inputs; boundary suite green.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
