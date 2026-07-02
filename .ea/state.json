@@ -10108,6 +10108,20 @@
       "status": "done",
       "updated_at": "2026-07-02T21:27:04.949338Z"
     },
+    "P30-I23-W45": {
+      "actual_cost_usd": 14.849999999999994,
+      "actual_tokens": 140750000,
+      "agent_runtime_eu": 2.5,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W45",
+      "elapsed_eu": 2.5,
+      "harness": "claude-code",
+      "id": "ACT-P30-I23-W45",
+      "model": "claude-fable-5",
+      "scope_id": "P30-I23-W45",
+      "status": "done",
+      "updated_at": "2026-07-02T23:29:36.385725Z"
+    },
     "P30-I23-W46": {
       "actual_cost_usd": 5.349999999999994,
       "actual_tokens": 60335000,
@@ -10330,6 +10344,20 @@
       "runtime": "claude-code",
       "scope_id": "P30-I23-W46::audit",
       "started_at": "2026-07-02T23:05:18.358218Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260702T232502Z-auditor-claude-code": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260702T232502Z-auditor-claude-code",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "scope_id": "P30-I23-W45::audit",
+      "started_at": "2026-07-02T23:25:02.161693Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -13643,11 +13671,10 @@
       "SES-20260702T190717Z-auditor-claude-code",
       "SES-20260702T214847Z-auditor-claude-code",
       "SES-20260702T220628Z-auditor-claude-code",
-      "SES-20260702T230518Z-auditor-claude-code"
+      "SES-20260702T230518Z-auditor-claude-code",
+      "SES-20260702T232502Z-auditor-claude-code"
     ],
-    "active_wave_ids": [
-      "P30-I23-W45"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I23",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -29413,7 +29440,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T23:16:36.318063Z",
+  "updated_at": "2026-07-02T23:29:36.385938Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -116272,8 +116299,8 @@
       ],
       "claim_session_id": "exec-w45",
       "claimed_at": "2026-07-02T22:14:00.348481Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T23:29:36.385725Z",
+      "commit": "249547d47b44c3c64fd5dbf7165c8748fe1a49c6",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W44"
@@ -116365,7 +116392,7 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:39:41.342575Z",
-      "outcome": null,
+      "outcome": "Core-loop skill engines wired: prep auto_resume/out_of_order/ceremony/runtime, audit enforce/level, ship gauntlet/release/skip_pr_pass with the release-subject validator closing the fused-annotation blind spot (rejects release= outside a standalone group; the W32 subject validates), flow caps/max_repair_cycles; four config rows across all three registries; 209 gate tests green on integrated HEAD; goldens re-pinned; followups: autogen config-reference regen rides W48.",
       "runtime_baseline": {
         "api_duration_ms": 14900000,
         "cache_creation_input_tokens": 930000,
@@ -116379,20 +116406,20 @@
         "total_duration_ms": 31200000
       },
       "runtime_latest": {
-        "api_duration_ms": 16800000,
-        "cache_creation_input_tokens": 980000,
-        "cache_read_input_tokens": 700000000,
-        "captured_at": "2026-07-02T22:47:23.693403Z",
-        "cost_usd": 219.1,
+        "api_duration_ms": 19400000,
+        "cache_creation_input_tokens": 1050000,
+        "cache_read_input_tokens": 780000000,
+        "captured_at": "2026-07-02T23:24:02.902152Z",
+        "cost_usd": 228.6,
         "harness": "claude-code",
-        "input_tokens": 5600000,
+        "input_tokens": 5900000,
         "model": "claude-fable-5",
-        "output_tokens": 460000,
-        "total_duration_ms": 33400000
+        "output_tokens": 505000,
+        "total_duration_ms": 35600000
       },
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -116469,7 +116496,7 @@
       ],
       "title": "Add runtime options to core-loop skill engines",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 140750000,
       "worktree_id": null
     },
     "P30-I23-W46": {
