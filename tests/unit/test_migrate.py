@@ -754,7 +754,7 @@ class _IdentityStepV10:
 
 def test_model_supported_max_version_derives_from_live_model() -> None:
     """The supported max is read from the live ``State`` Literal, not hard-coded."""
-    assert model_supported_max_version() == "1.12"
+    assert model_supported_max_version() == "1.13"
 
 
 def test_guard_target_supported_allows_target_equal_to_max() -> None:

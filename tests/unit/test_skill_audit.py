@@ -33,7 +33,7 @@ from eawf.workflow.skills.audit import AuditSkill
 from eawf.workflow.skills.bodies.audit import AuditBody
 from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
 from tests._criteria_helpers import legacy_criteria
-from tests.conftest import make_intent
+from tests.conftest import make_floor_waiver, make_intent
 
 
 @pytest.fixture
@@ -245,6 +245,7 @@ def _seed_state_with_wave(
         title="Wave under audit",
         file_scopes=file_scopes,
         success_criteria=legacy_criteria(*success_criteria),
+        criteria_floor_waiver=make_floor_waiver(),
         effort_bucket="M",
         intent=make_intent(),
     )
