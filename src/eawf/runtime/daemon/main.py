@@ -319,7 +319,14 @@ _MUTATION_ALARM_SECONDS: float = 120.0
 #: Hard abort limit (seconds). Past it the watchdog cancels the mutation
 #: task so the daemon recovers WITHOUT the manual pkill + rm ceremony
 #: (ZD-R6). Overridable via ``EAWF_MUTATION_HARD_LIMIT_SECONDS``.
-_MUTATION_HARD_LIMIT_SECONDS: float = 300.0
+#:
+#: MUST exceed the verdict-tier bound: a verdict-always wave close spawns
+#: a real fresh-context auditor whose wall clock is bounded by
+#: ``VerifyBlock.juror_wall_clock_seconds`` (default 600s) INSIDE the
+#: watched mutation, so a limit below that bound hard-aborts every
+#: legitimate verdict close (the W41 close-loop incident). 900 = the
+#: 600s juror bound + a 300s commit/routing margin.
+_MUTATION_HARD_LIMIT_SECONDS: float = 900.0
 
 
 def _resolve_mutation_hard_limit() -> float:

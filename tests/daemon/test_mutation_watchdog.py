@@ -185,3 +185,14 @@ def test_watchdog_heartbeats_registered_lock_handle() -> None:
         assert handle.beats >= 1
 
     _run(body)
+
+
+def test_default_hard_limit_exceeds_verdict_tier_bound() -> None:
+    """The W41 close-loop regression: a verdict-always close runs a real
+    fresh-context auditor (bounded by juror_wall_clock_seconds) inside the
+    watched mutation, so a hard limit at or below that bound aborts every
+    legitimate verdict close."""
+    from eawf.platform.profiles.models import VerifyBlock
+    from eawf.runtime.daemon.main import _MUTATION_HARD_LIMIT_SECONDS
+
+    assert VerifyBlock().juror_wall_clock_seconds < _MUTATION_HARD_LIMIT_SECONDS
