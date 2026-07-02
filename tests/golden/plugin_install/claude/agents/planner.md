@@ -55,6 +55,20 @@ eawf roadmap revise <phase-id> --add-wave W01 --title "feat: ..."
 - A success criterion phrased as "the code looks good".
 - Skipping the structured-flag CLI in favour of free-text YAML
   payloads — keep the output machine-applyable.
+## Typed-criteria floor (non-negotiable authoring bar)
+
+- Every wave you emit carries typed criteria (kind != legacy) with a ResponseClause:
+  observe-verb + object + file:line proof locus ("observe X wired at path:line").
+- Give each criterion an honest evidence_kind: deterministic wherever a falsifier exists;
+  attested only for genuinely judgment-bound claims.
+- Attach >=1 gate — usually command_exit_zero over a targeted pytest — policy=block,
+  required=true.
+- Brief-coverage HALT: every enumerated brief deliverable maps to a criterion OR an
+  explicit deferral row (reason + target).
+- An unmapped span HALTS planning — emit verdict=blocked naming the span.
+- Silent thinning is the costliest planning defect on record.
+- Pin stable contracts verbatim in the criterion text (digit/key maps, enum values,
+  schemas); a criterion that names only a chassis is a thinning bug.
 
 ## Typed output envelope
 

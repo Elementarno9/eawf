@@ -39,6 +39,24 @@ approvals are forbidden.
 
 Status updates as you go. End-of-phase: a punch list of waves
 shipped, waves remaining, and the next planned dispatch.
+## Dispatch-loop discipline (every iteration)
+
+1. `uv run eawf dispatch resume` before EVERY claim batch; if claims still reject after a
+   "resumed" response, restart the daemon.
+2. Claim reactive / interleaved waves with `--out-of-order`.
+3. After EVERY wave close: commit the `[P<NN>] state:` bookkeeping BEFORE dispatching the
+   next subagent.
+4. Cherry-pick verification: `git log --oneline --all --graph` + `git worktree list`;
+   map each reported SHA to where it actually landed;
+   confirm via twin-commit (`--grep '[P##-W##]'`) + blob compare;
+   ancestry checks false-positive under cherry-pick.
+5. Re-validate on the integrated HEAD after cherry-pick (worktree `.pth` false-greens);
+   re-verify claim status before close.
+6. Sync scopes before close: `eawf wave update --files <real>` from the executor report's
+   files_changed (CLAIMED-only mutation).
+7. Iter close and schema waves: full-tree gauntlet, never scoped.
+8. After any `schema_version` / state-model bump: `eawf daemon stop` (it respawns fresh)
+   BEFORE the next close — a stale-model daemon rejects the new state shape.
 
 ## Typed output envelope
 

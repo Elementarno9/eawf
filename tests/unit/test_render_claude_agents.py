@@ -166,3 +166,54 @@ def test_render_agent_md_empty_tools_renders_empty_list() -> None:
     )
     output = render_agent_md(ctx)
     assert "\ntools: []\n" in output
+
+
+# ---- W43: DoR/DoD contract blocks in the five core bodies -------------------
+
+
+def test_five_bodies_carry_their_dor_dod_contract_blocks() -> None:
+    """CR-01: the section-5 blocks land verbatim-anchored in each body."""
+    from eawf.surfaces.render.agents import (
+        _AUDITOR_BODY,
+        _EXECUTOR_BODY,
+        _OPERATOR_BODY,
+        _PLANNER_BODY,
+        _RESEARCHER_BODY,
+    )
+
+    assert "## DoR — refuse the dispatch unless ALL hold" in _EXECUTOR_BODY
+    assert "## DoD — before you emit the close-ready report" in _EXECUTOR_BODY
+    # The grandfathered-legacy carve-out is load-bearing: pre-drain waves
+    # must not be walled with blocked verdicts.
+    assert "grandfathered kind=legacy rows" in _EXECUTOR_BODY
+    assert "do not refuse those" in _EXECUTOR_BODY
+    # The evidence_refs-required DoD bullet is W49's, NOT this wave's —
+    # shipping it early would contradict the pinned report schema.
+    assert "evidence_refs is REQUIRED" not in _EXECUTOR_BODY
+
+    assert "## Dispatch-loop discipline (every iteration)" in _OPERATOR_BODY
+    # 8 numbered items including the schema-bump daemon-stop rule.
+    for item in range(1, 9):
+        assert f"\n{item}. " in _OPERATOR_BODY
+    assert "`eawf daemon stop`" in _OPERATOR_BODY
+
+    assert "## Refuse-broken-artifact self-test" in _AUDITOR_BODY
+    assert "UNVERIFIED, never passed" in _AUDITOR_BODY
+
+    assert "## Typed-criteria floor (non-negotiable authoring bar)" in _PLANNER_BODY
+    assert "Brief-coverage HALT" in _PLANNER_BODY
+
+    assert "## Verify-before-claim ladder" in _RESEARCHER_BODY
+    assert "dense [N] markers" in _RESEARCHER_BODY
+
+
+def test_contract_blocks_reach_the_rendered_role_contract() -> None:
+    """CR-01: the blocks propagate into a dispatch prompt's role contract
+    via ROLE_REGISTRY -> RoleSpec.system_prompt."""
+    from eawf.kernel.state.enums import AgentSessionRole
+    from eawf.workflow.agents.specs.roles import get_role_spec
+
+    executor = get_role_spec(AgentSessionRole.EXECUTOR)
+    assert "## DoR — refuse the dispatch unless ALL hold" in executor.system_prompt
+    auditor = get_role_spec(AgentSessionRole.AUDITOR)
+    assert "## Refuse-broken-artifact self-test" in auditor.system_prompt

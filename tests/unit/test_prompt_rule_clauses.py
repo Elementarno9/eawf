@@ -235,3 +235,36 @@ def test_command_bearing_gotchas_absent_from_executor_body() -> None:
         _GOTCHA_DAEMON_RESTART,
     ):
         assert clause not in _EXECUTOR_BODY
+
+
+# ---- W43: registry-body token accounting ------------------------------------
+
+#: Pinned per-body count_tokens budgets (spec section-6 table). The
+#: role-tier cap cannot police registry bodies — _enforce_role_tier_budget
+#: measures only injected profile blocks — so growth past these pins must
+#: be deliberate: re-pin in the same commit that grows the body.
+_BODY_TOKEN_BUDGETS = {
+    "_RESEARCHER_BODY": 320,
+    "_PLANNER_BODY": 430,
+    # Headroom for W49's evidence_refs DoD bullet.
+    "_EXECUTOR_BODY": 500,
+    "_AUDITOR_BODY": 330,
+    "_OPERATOR_BODY": 360,
+}
+
+
+def test_enlarged_agent_bodies_stay_within_pinned_token_budgets() -> None:
+    """CR-02: registry-body growth is deliberate and reviewed."""
+    import eawf.surfaces.render.agents as agents_module
+    from eawf.platform.lint.tools.agents_md_budget import count_tokens
+
+    for body_name, budget in _BODY_TOKEN_BUDGETS.items():
+        body = getattr(agents_module, body_name)
+        weight = count_tokens(body)
+        assert weight <= budget, (
+            f"{body_name} weighs {weight} tokens, over its pinned budget "
+            f"{budget}; growth must be deliberate — re-pin with rationale"
+        )
+        # The pin is honest: a body that shrank far below its budget means
+        # the pin no longer documents real weight; keep them within 2x.
+        assert weight * 2 >= budget, f"{body_name} budget {budget} is stale vs {weight}"

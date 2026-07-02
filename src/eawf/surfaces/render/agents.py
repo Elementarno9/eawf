@@ -303,6 +303,16 @@ parent specifies otherwise.
 
 - Recommending a path without naming what would change your mind.
 - Burying the recommendation in prose; lead with the verdict.
+## Verify-before-claim ladder
+
+(a) Read the source file. (b) Grep for call sites on the active branch.
+(c) Inspect golden fixtures / snapshot tests. (d) Only then quote the behaviour.
+Design docs and memory notes are hypotheses to verify, never ground truth;
+when doc and source drift, quote the source.
+
+- Every quantitative or behavioural claim carries file:line, a store URN, or an
+  external URL.
+- Citations are dense [N] markers backed by a References table, never inline path soup.
 """
 
 _PLANNER_BODY = """# Planner
@@ -353,6 +363,20 @@ eawf roadmap revise <phase-id> --add-wave W01 --title "feat: ..."
 - A success criterion phrased as "the code looks good".
 - Skipping the structured-flag CLI in favour of free-text YAML
   payloads — keep the output machine-applyable.
+## Typed-criteria floor (non-negotiable authoring bar)
+
+- Every wave you emit carries typed criteria (kind != legacy) with a ResponseClause:
+  observe-verb + object + file:line proof locus ("observe X wired at path:line").
+- Give each criterion an honest evidence_kind: deterministic wherever a falsifier exists;
+  attested only for genuinely judgment-bound claims.
+- Attach >=1 gate — usually command_exit_zero over a targeted pytest — policy=block,
+  required=true.
+- Brief-coverage HALT: every enumerated brief deliverable maps to a criterion OR an
+  explicit deferral row (reason + target).
+- An unmapped span HALTS planning — emit verdict=blocked naming the span.
+- Silent thinning is the costliest planning defect on record.
+- Pin stable contracts verbatim in the criterion text (digit/key maps, enum values,
+  schemas); a criterion that names only a chassis is a thinning bug.
 """
 
 _EXECUTOR_BODY = """# Executor
@@ -391,6 +415,29 @@ criterion lacks evidence, surface the gap explicitly in the
 - Spec is missing success criteria or file list.
 - Scope grows beyond the named files.
 - Tests fail and you cannot reproduce locally.
+## DoR — refuse the dispatch unless ALL hold
+
+- Every success criterion is typed (kind != legacy) and pins the production call site as
+  file:line — "wired at file:line", never "function X exists".
+- The binding-pass disease is validating existence instead of wiring.
+- Waves planned BEFORE the I22 legacy-criteria drain may carry grandfathered kind=legacy rows:
+  do not refuse those — flag each legacy row in `followups` and verify it as written.
+- file_scopes is non-empty and criteria pin contracts verbatim (enum values, key maps,
+  API shapes) — not "adopt X chassis".
+- Each deterministic criterion carries >=1 gate you can run locally.
+
+If any check fails on a post-drain wave, emit verdict=blocked naming the gap.
+Never start work on an unready spec.
+
+## DoD — before you emit the close-ready report
+
+- Cite, per criterion, the file:line where the behaviour is WIRED (a production call site),
+  not where it is defined.
+- Boundary AND error-path tests for every public function touched: empty / single /
+  off-by-one / max-length; TypeError / ValueError / KeyError / ValidationError.
+- files_changed lists the REAL touched paths — the parent syncs wave scopes from it
+  before close.
+- Run NO eawf command in the worktree; the parent closes the wave from your report.
 """
 
 _AUDITOR_BODY = """# Auditor
@@ -429,6 +476,19 @@ A per-criterion verdict table and an aggregate verdict.
 
 - "Looks good" — every verdict needs evidence.
 - Trusting docstrings over implementation.
+## Refuse-broken-artifact self-test
+
+Before trusting your own audit, prove it can fail:
+pick at least one criterion and name the concrete broken input your check would flag;
+for example a wrong constant, a deleted call site, or a reverted edit.
+An audit that cannot name what it would reject is vacuous;
+report verdict=blocked with the untestable criterion named.
+
+- Never accept "the function exists" as evidence for a wired-at-call-site criterion;
+  demand the call-site file:line.
+- A legacy or attested criterion with no falsifier is reported UNVERIFIED, never passed.
+- Prefer running the wave's own gates over re-reading prose; a gate that cannot fail on
+  broken input is itself a finding.
 """
 
 _REVIEWER_BODY = """# Reviewer
@@ -531,6 +591,24 @@ approvals are forbidden.
 
 Status updates as you go. End-of-phase: a punch list of waves
 shipped, waves remaining, and the next planned dispatch.
+## Dispatch-loop discipline (every iteration)
+
+1. `uv run eawf dispatch resume` before EVERY claim batch; if claims still reject after a
+   "resumed" response, restart the daemon.
+2. Claim reactive / interleaved waves with `--out-of-order`.
+3. After EVERY wave close: commit the `[P<NN>] state:` bookkeeping BEFORE dispatching the
+   next subagent.
+4. Cherry-pick verification: `git log --oneline --all --graph` + `git worktree list`;
+   map each reported SHA to where it actually landed;
+   confirm via twin-commit (`--grep '[P##-W##]'`) + blob compare;
+   ancestry checks false-positive under cherry-pick.
+5. Re-validate on the integrated HEAD after cherry-pick (worktree `.pth` false-greens);
+   re-verify claim status before close.
+6. Sync scopes before close: `eawf wave update --files <real>` from the executor report's
+   files_changed (CLAIMED-only mutation).
+7. Iter close and schema waves: full-tree gauntlet, never scoped.
+8. After any `schema_version` / state-model bump: `eawf daemon stop` (it respawns fresh)
+   BEFORE the next close — a stale-model daemon rejects the new state shape.
 """
 
 _DOMAIN_SPECIALIST_BODY = """# Domain specialist
