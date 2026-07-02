@@ -97,15 +97,16 @@ Your `agent_end` report carries an `EvidenceRecord` per success criterion (`evid
    - `uv run pre-commit run --all-files`
    - `uv run mypy src/`
    - `uv run pytest tests/ -q`
+   A schema or persisted-model wave never narrows this run: keep the full-tree `tests/` sweep (a scoped gauntlet hides fixture fallout in sibling suites).
 4. Commit with prefix `[P27-I03-W14] <type>: <summary>` (3-6 bullet body) and the recognized Claude or Codex `Co-Authored-By` trailer.
-5. Close the wave through the CLI with the final token tally:
-   - `uv run eawf wave close P27-I03-W14 --outcome "<summary>" --tokens-consumed <tokens>`
+5. Emit the typed executor report as your final message; the dispatching parent session verifies your work, supplies `--tokens-consumed` from your report, and runs the close itself.
+6. Stop after the report. Take no further action — the close is run for you, never by you.
 
 ## Out of scope
 
 - Do **not** push the branch.
 - Do **not** open a PR.
-- Do **not** edit `.ea/state.json` or `.ea/store/event.jsonl` directly — every mutation goes through `uv run eawf state ...`.
+- Run NO `eawf` command inside this worktree — no state reads, no mutations, no closes: the shared daemon and checkout make any `eawf` invocation a cross-tree hazard. If you believe a state mutation is required, STOP and name it in your report instead of running it.
 - Never `git commit --no-verify`; root-cause the hook instead.
 
 ## Estimate
