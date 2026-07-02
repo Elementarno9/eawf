@@ -61,6 +61,7 @@ from eawf.surfaces.tui.snapshot import (
     capture_screen_text,
     normalize_snapshot,
     settle_screen,
+    toast_messages,
 )
 from eawf.surfaces.tui.widgets import sigils
 
@@ -432,18 +433,18 @@ def test_autopilot_dispatch_key_press_fires_action(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Pressing ``d`` fires the dispatch action -- the result line moves off idle.
+    """Pressing ``d`` fires the dispatch action -- the verdict surfaces as a toast.
 
     The affordance-parity FIRES half: driving the REAL key-press path (not the
     action string) must run ``action_dispatch_selected``, observable as the
-    result line moving off its idle surface. The daemon probe is forced
-    unavailable so no real RPC is issued, yet the action still fires and
-    surfaces the honest unavailable verdict -- proving the key resolves AND the
-    bound method ran.
+    dispatch verdict landing on the toast rack while the result line keeps its
+    idle hint. The daemon probe is forced unavailable so no real RPC is issued,
+    yet the action still fires and surfaces the honest unavailable verdict --
+    proving the key resolves AND the bound method ran.
     """
     state_path = _write_state(tmp_path, _split_state())
 
-    async def body() -> str:
+    async def body() -> tuple[str, str]:
         app = EaApp(scope="repo", state_path=state_path)
         monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
         async with app.run_test(size=_SIZE) as pilot:
@@ -458,10 +459,12 @@ def test_autopilot_dispatch_key_press_fires_action(
             assert DISPATCH_IDLE in before  # idle before the press
             await pilot.press(_DISPATCH_KEY)  # drive the real key->Binding path
             await settle_screen(pilot)
-            return str(screen.query_one(f"#{DISPATCH_RESULT_ID}", Static).render())
+            after = str(screen.query_one(f"#{DISPATCH_RESULT_ID}", Static).render())
+            return after, "\n".join(toast_messages(app))
 
-    after = asyncio.run(body())
-    # The action fired: the result line moved off its idle surface to the
-    # honest dispatch verdict (here, daemon-unavailable -- never faked).
-    assert DISPATCH_IDLE not in after
-    assert "dispatch:" in after
+    after, toasts = asyncio.run(body())
+    # The action fired: the honest dispatch verdict (here, daemon-unavailable
+    # -- never faked) surfaced as a toast; the result line stays on its idle
+    # hint rather than pinning a stale outcome.
+    assert DISPATCH_IDLE in after
+    assert "dispatch:" in toasts

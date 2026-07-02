@@ -53,7 +53,6 @@ from eawf.surfaces.tui.screens.overlays.fork_inbox import (
     FORK_INBOX_HEADER_ID,
     FORK_INBOX_OPTIONS_ID,
     FORK_INBOX_REASON_ID,
-    FORK_INBOX_RESULT_ID,
     FORK_INBOX_TITLE,
     FORK_INBOX_WAVE_ID,
     RESOLVE_NO_DAEMON,
@@ -64,7 +63,7 @@ from eawf.surfaces.tui.screens.overlays.fork_inbox import (
     render_options_row,
     tier_badge,
 )
-from eawf.surfaces.tui.snapshot import assert_screen_snapshot, settle_screen
+from eawf.surfaces.tui.snapshot import assert_screen_snapshot, settle_screen, toast_messages
 
 _T0 = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
 
@@ -426,7 +425,7 @@ def test_fork_inbox_tab_cycles_between_queued_forks(tmp_path: Path) -> None:
 def test_fork_inbox_no_daemon_keeps_card_visible(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A failed resolve does not drop the card from the local queue."""
+    """A failed resolve surfaces the honest toast and keeps the card visible."""
     state_path = _write_state(tmp_path, _state())
 
     async def body() -> None:
@@ -442,9 +441,9 @@ def test_fork_inbox_no_daemon_keeps_card_visible(
             modal = app.screen
             assert isinstance(modal, ForkInboxModal)
             wave = str(modal.query_one(f"#{FORK_INBOX_WAVE_ID}").render())  # type: ignore[attr-defined]
-            result = str(modal.query_one(f"#{FORK_INBOX_RESULT_ID}").render())  # type: ignore[attr-defined]
             assert "P30-I13-W05" in wave
-            assert RESOLVE_NO_DAEMON in result
+            toasts = "\n".join(toast_messages(app))
+            assert RESOLVE_NO_DAEMON in toasts
 
     asyncio.run(body())
 

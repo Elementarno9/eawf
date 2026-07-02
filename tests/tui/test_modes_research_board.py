@@ -74,7 +74,6 @@ from eawf.surfaces.tui.modes.brief_viewer import (
     build_brief_preview_markdown,
 )
 from eawf.surfaces.tui.modes.research_board import (
-    ACTION_RESULT_ID,
     APPROVE_NO_CHECKPOINT,
     CENTER_PANE_ID,
     CENTER_TABS,
@@ -85,7 +84,6 @@ from eawf.surfaces.tui.modes.research_board import (
     NEW_NO_DAEMON,
     NONE_YET,
     PARK_NO_CHECKPOINT,
-    PEEK_RESULT_ID,
     PROGRESS_PANE_ID,
     TREE_PANE_ID,
     CampaignDraft,
@@ -117,6 +115,7 @@ from eawf.surfaces.tui.snapshot import (
     capture_screen_text,
     normalize_snapshot,
     settle_screen,
+    toast_messages,
 )
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
 from eawf.surfaces.tui.widgets.sigils import status_sigil
@@ -1268,10 +1267,9 @@ def test_research_board_enter_peeks_selected_node(tmp_path: Path) -> None:
             assert isinstance(pane, ResearchBoardModeScreen)
             await pilot.press("enter")  # peek the first (campaign) node
             await settle_screen(pilot)
-            result = pane.query_one(f"#{PEEK_RESULT_ID}")
-            rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "peek" in rendered
-            assert "campaign" in rendered
+            toasts = "\n".join(toast_messages(app))
+            assert "peek" in toasts
+            assert "campaign" in toasts
 
     asyncio.run(body())
 
@@ -1295,8 +1293,8 @@ def test_research_board_approve_no_checkpoint_surfaces_honest_line(tmp_path: Pat
             assert isinstance(pane, ResearchBoardModeScreen)
             await pilot.press("a")  # approve with no checkpoint
             await settle_screen(pilot)
-            result = pane.query_one(f"#{ACTION_RESULT_ID}")
-            assert APPROVE_NO_CHECKPOINT in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert APPROVE_NO_CHECKPOINT in toasts
 
     asyncio.run(body())
 
@@ -1315,8 +1313,8 @@ def test_research_board_park_no_checkpoint_surfaces_honest_line(tmp_path: Path) 
             assert isinstance(pane, ResearchBoardModeScreen)
             await pilot.press("p")  # park with no checkpoint
             await settle_screen(pilot)
-            result = pane.query_one(f"#{ACTION_RESULT_ID}")
-            assert PARK_NO_CHECKPOINT in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert PARK_NO_CHECKPOINT in toasts
 
     asyncio.run(body())
 
@@ -1362,8 +1360,8 @@ def test_research_board_approve_issues_needs_user_resolve_rpc(
             assert isinstance(pane, ResearchBoardModeScreen)
             await pilot.press("a")  # approve the open checkpoint
             await settle_screen(pilot)
-            result = pane.query_one(f"#{ACTION_RESULT_ID}")
-            assert "resolved" in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert "resolved" in toasts
 
     asyncio.run(body())
     assert calls and calls[0][0] == "needs_user.resolve"
@@ -1413,8 +1411,8 @@ def test_research_board_park_issues_needs_user_park_rpc(
             assert isinstance(pane, ResearchBoardModeScreen)
             await pilot.press("p")  # park the open checkpoint
             await settle_screen(pilot)
-            result = pane.query_one(f"#{ACTION_RESULT_ID}")
-            assert "left open" in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert "left open" in toasts
 
     asyncio.run(body())
     assert calls and calls[0][0] == "needs_user.park"
@@ -1474,10 +1472,9 @@ def test_research_board_run_query_keys_surface_live_result(
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, ResearchBoardModeScreen)
-            result = pane.query_one(f"#{ACTION_RESULT_ID}")
-            rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "not yet wired" not in rendered
-            assert verb in rendered
+            toasts = "\n".join(toast_messages(app))
+            assert "not yet wired" not in toasts
+            assert verb in toasts
 
     asyncio.run(body())
     assert len(calls) == 1
@@ -1506,8 +1503,8 @@ def test_research_board_run_query_keys_no_daemon_surface_unavailable(
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, ResearchBoardModeScreen)
-            result = pane.query_one(f"#{ACTION_RESULT_ID}")
-            assert "daemon unavailable" in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert "daemon unavailable" in toasts
 
     asyncio.run(body())
 
@@ -1693,8 +1690,8 @@ def test_research_board_n_commit_stages_campaign_and_renders_node(
             assert isinstance(board, ResearchBoardModeScreen)
             tree_body = str(board.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
             assert staged_topic in tree_body
-            result = board.query_one(f"#{ACTION_RESULT_ID}")
-            assert "staged" in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert "staged" in toasts
 
     asyncio.run(body())
     assert len(calls) == 1
@@ -1800,11 +1797,10 @@ def test_research_board_n_commit_empty_topic_surfaces_daemon_rejection(
             await settle_screen(pilot)  # drains the staging worker
             board = app.screen
             assert isinstance(board, ResearchBoardModeScreen)
-            result = board.query_one(f"#{ACTION_RESULT_ID}")
-            rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "daemon rejected request" in rendered
-            assert "non-empty" in rendered
-            assert "staged" not in rendered
+            toasts = "\n".join(toast_messages(app))
+            assert "daemon rejected request" in toasts
+            assert "non-empty" in toasts
+            assert "staged" not in toasts
             # No campaign node was fabricated -- the board carries no topic node.
             tree_body = str(board.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
             assert "pricing" not in tree_body
@@ -1840,8 +1836,8 @@ def test_research_board_n_commit_no_daemon_surfaces_unavailable(
             await settle_screen(pilot)
             board = app.screen
             assert isinstance(board, ResearchBoardModeScreen)
-            result = board.query_one(f"#{ACTION_RESULT_ID}")
-            assert NEW_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert NEW_NO_DAEMON in toasts
 
     asyncio.run(body())
 
@@ -2158,9 +2154,8 @@ def test_research_board_o_commit_routes_add_question_rpc_honestly(
             await settle_screen(pilot)  # drains the channel worker
             board = app.screen
             assert isinstance(board, ResearchBoardModeScreen)
-            result = board.query_one(f"#{ACTION_RESULT_ID}")
-            rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "ask: sent" in rendered
+            toasts = "\n".join(toast_messages(app))
+            assert "ask: sent" in toasts
 
     asyncio.run(body())
     assert len(calls) == 1
@@ -2223,9 +2218,8 @@ def test_research_board_t_commit_routes_steer_rpc_honestly(
             await settle_screen(pilot)  # drains the channel worker
             board = app.screen
             assert isinstance(board, ResearchBoardModeScreen)
-            result = board.query_one(f"#{ACTION_RESULT_ID}")
-            rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "steer: sent" in rendered
+            toasts = "\n".join(toast_messages(app))
+            assert "steer: sent" in toasts
 
     asyncio.run(body())
     assert len(calls) == 1
@@ -2581,8 +2575,8 @@ def test_campaign_fork_operator_input(
             await settle_screen(pilot)  # drains the channel worker
             board = app.screen
             assert isinstance(board, ResearchBoardModeScreen)
-            rendered = str(board.query_one(f"#{ACTION_RESULT_ID}").render())  # type: ignore[attr-defined]
-            assert f"{verb}: sent" in rendered
+            toasts = "\n".join(toast_messages(app))
+            assert f"{verb}: sent" in toasts
 
     asyncio.run(body())
     assert len(calls) == 1
@@ -2715,8 +2709,8 @@ def test_research_board_g_issues_research_run_rpc(
             assert isinstance(pane, ResearchBoardModeScreen)
             await pilot.press("g")
             await settle_screen(pilot)
-            result = pane.query_one(f"#{ACTION_RESULT_ID}")
-            assert "launched" in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert "launched" in toasts
 
     asyncio.run(body())
     assert calls and calls[0][0] == "research.run"

@@ -47,6 +47,7 @@ from eawf.surfaces.tui.snapshot.pilot_harness import (
     capture_screen_text,
     normalize_snapshot,
     settle_screen,
+    toast_messages,
 )
 
 __all__ = [
@@ -56,5 +57,6 @@ __all__ = [
     "normalize_snapshot",
     "record_cast",
     "settle_screen",
+    "toast_messages",
     "write_cast",
 ]

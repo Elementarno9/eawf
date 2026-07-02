@@ -95,6 +95,7 @@ from eawf.kernel.state.ids import natural_key
 from eawf.observability.eval.reputation import FleetVerdictRow, fleet_verdict_rollup
 from eawf.surfaces.tui.modes.feed import FEED_ROW_CLASS, format_event_row
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.toast_emitter import ToastSeverity, notify_result
 from eawf.surfaces.tui.widgets.empty_state import (
     HONEST_EMPTY_CSS,
     SEAL_HERO_ID,
@@ -1718,10 +1719,6 @@ class AgentWatchModeScreen(ScopeScreen):
     #: grid path it stays ``None`` (the grid streams every ACTIVE executor).
     target: reactive[WatchTarget | None] = reactive(None, init=False)
 
-    #: Whether a cancel has been issued, so a render-mode flip repaints the
-    #: still-idle cancel line but never clobbers an issued cancel's result.
-    _cancel_issued: bool = False
-
     #: The fleet parity grid, mounted in place of the single-session zoom when
     #: two or more ACTIVE executor sessions are dispatched; ``None`` in the
     #: single-session / honest-empty / lane-grid path.
@@ -2057,8 +2054,8 @@ class AgentWatchModeScreen(ScopeScreen):
         Swaps the header's session sigil and the idle cancel-look mark between
         their unicode and ASCII columns; the streamed event rows are not
         mode-sensitive (the Feed row formatter owns their glyphs), so only the
-        header + the still-idle result line repaint. A no-op once a cancel has
-        been issued (the result line is no longer the idle cancel-look line).
+        header + the always-idle result line repaint (outcomes surface as
+        toasts, never on the line).
         """
         if not self.is_mounted:
             return
@@ -2072,10 +2069,9 @@ class AgentWatchModeScreen(ScopeScreen):
         header = self.query(f"#{WATCH_HEADER_ID}")
         if header:
             header.first(Static).update(render_watch_header(self.target, mode=mode))
-        if not self._cancel_issued:
-            result = self.query(f"#{WATCH_RESULT_ID}")
-            if result:
-                result.first(Static).update(self._cancel_idle_line())
+        result = self.query(f"#{WATCH_RESULT_ID}")
+        if result:
+            result.first(Static).update(self._cancel_idle_line())
 
     def on_unmount(self) -> None:
         """Unregister from the App fan-out so a torn-down pane gets no pushes."""
@@ -2171,7 +2167,7 @@ class AgentWatchModeScreen(ScopeScreen):
         """
         target = self.target
         if target is None:
-            self._set_result(CANCEL_NO_TARGET)
+            self._set_result(f"[$warn]{CANCEL_NO_TARGET}[/]")
             return
         from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
 
@@ -2384,11 +2380,15 @@ class AgentWatchModeScreen(ScopeScreen):
         logger.debug(f"_render_event id={envelope.id!r} kind={envelope.kind.value!r}")
 
     def _set_result(self, line: str) -> None:
-        """Update the cancel-result line, if mounted, marking a cancel issued."""
-        self._cancel_issued = True
-        result = self.query(f"#{WATCH_RESULT_ID}")
-        if result:
-            result.first(Static).update(line)
+        """Surface an action outcome as a fading bottom-right toast.
+
+        The ``#watch-result`` line keeps its idle cancel hint; outcomes no
+        longer pin there. A daemon-unreachable denial (the ``daemon
+        unavailable`` phrase on the ``*_NO_DAEMON`` constants) escalates to
+        ``error``; every other severity derives from the outcome markup.
+        """
+        severity: ToastSeverity | None = "error" if "daemon unavailable" in line else None
+        notify_result(self.app, line, severity=severity)
 
     def _empty_notice(self) -> str:
         """Return the stream's empty-notice text for the current target + state.

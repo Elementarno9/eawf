@@ -64,7 +64,6 @@ from eawf.surfaces.tui.modes.autopilot import (
     COCKPIT_VITALS_ID,
     DISPATCH_IDLE,
     DISPATCH_NO_DAEMON,
-    DISPATCH_RESULT_ID,
     EMPTY_NOTICE,
     FORK_ESCALATION_LABEL,
     FORK_INBOX_NO_TARGET,
@@ -100,6 +99,7 @@ from eawf.surfaces.tui.snapshot import (
     capture_screen_text,
     normalize_snapshot,
     settle_screen,
+    toast_messages,
 )
 from eawf.surfaces.tui.widgets.sigils import chrome
 
@@ -770,8 +770,8 @@ def test_autopilot_dispatch_action_no_daemon_surfaces_honest_result(
             assert isinstance(pane, AutopilotModeScreen)
             await pilot.press("d")  # dispatch
             await settle_screen(pilot)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert DISPATCH_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert DISPATCH_NO_DAEMON in toasts
 
     asyncio.run(body())
 
@@ -820,11 +820,10 @@ def test_autopilot_dispatch_action_issues_request_and_surfaces_result(
             assert isinstance(pane, AutopilotModeScreen)
             await pilot.press("d")  # dispatch the selected (first) ready wave
             await settle_screen(pilot)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "spawned" in rendered
-            assert "4321" in rendered  # captured pid surfaced
-            assert DISPATCH_IDLE not in rendered
+            toasts = "\n".join(toast_messages(app))
+            assert "spawned" in toasts
+            assert "4321" in toasts  # captured pid surfaced
+            assert DISPATCH_IDLE not in toasts
 
     asyncio.run(body())
     # The dispatch action reached the daemon with the first ready wave + spawn.
@@ -1137,8 +1136,8 @@ def test_autopilot_f_key_no_fork_surfaces_honest_no_target(tmp_path: Path) -> No
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AutopilotModeScreen)  # no overlay opened
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert FORK_INBOX_NO_TARGET in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert FORK_INBOX_NO_TARGET in toasts
 
     asyncio.run(body())
 
@@ -1427,10 +1426,9 @@ def test_autopilot_kill_confirmed_issues_kill_rpc_with_kill_signal(
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AutopilotModeScreen)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "not killed" in rendered  # honest placeholder verdict
-            assert "kill" in rendered
+            toasts = "\n".join(toast_messages(app))
+            assert "not killed" in toasts  # honest placeholder verdict
+            assert "kill" in toasts
 
     asyncio.run(body())
     # The confirmed kill reached the daemon with the first ready wave + SIGKILL.
@@ -1501,8 +1499,8 @@ def test_autopilot_kill_no_daemon_surfaces_honest_unavailable(
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AutopilotModeScreen)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert KILL_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert KILL_NO_DAEMON in toasts
 
     asyncio.run(body())
 
@@ -1529,8 +1527,8 @@ def test_autopilot_halt_no_daemon_surfaces_honest_unavailable(
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AutopilotModeScreen)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert HALT_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert HALT_NO_DAEMON in toasts
 
     asyncio.run(body())
 
@@ -1553,8 +1551,8 @@ def test_autopilot_kill_no_target_surfaces_honest_line(tmp_path: Path) -> None:
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AutopilotModeScreen)  # no modal opened
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert KILL_NO_TARGET in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert KILL_NO_TARGET in toasts
 
     asyncio.run(body())
 
@@ -1573,8 +1571,8 @@ def test_autopilot_halt_no_target_surfaces_honest_line(tmp_path: Path) -> None:
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AutopilotModeScreen)  # no modal opened
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert HALT_NO_TARGET in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert HALT_NO_TARGET in toasts
 
     asyncio.run(body())
 
@@ -1613,10 +1611,9 @@ def test_autopilot_skip_advances_selection_to_next_ready_wave(tmp_path: Path) ->
             await pilot.press("S")  # skip -> advance to the next ready wave
             await settle_screen(pilot)
             assert pane.selected == 1  # the selection genuinely moved (real effect)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "skip: now on" in rendered
-            assert "P01-I02-W05" in rendered  # the wave it stepped to
+            toasts = "\n".join(toast_messages(app))
+            assert "skip: now on" in toasts
+            assert "P01-I02-W05" in toasts  # the wave it stepped to
 
     asyncio.run(body())
 
@@ -1644,8 +1641,8 @@ def test_autopilot_skip_no_next_surfaces_honest_line(tmp_path: Path) -> None:
             await pilot.press("S")  # nothing further to skip to
             await settle_screen(pilot)
             assert pane.selected == 1  # cursor unmoved (honest no-op)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert SKIP_NO_NEXT in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert SKIP_NO_NEXT in toasts
 
     asyncio.run(body())
 
@@ -1668,8 +1665,8 @@ def test_autopilot_skip_no_target_surfaces_honest_line(tmp_path: Path) -> None:
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AutopilotModeScreen)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert SKIP_NO_TARGET in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert SKIP_NO_TARGET in toasts
 
     asyncio.run(body())
 
@@ -1763,10 +1760,9 @@ def test_autopilot_pause_issues_pause_rpc_when_not_paused(
             await app.workers.wait_for_complete()
             pane = app.screen
             assert isinstance(pane, AutopilotModeScreen)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "pause: paused" in rendered
-            assert "not yet wired" not in rendered
+            toasts = "\n".join(toast_messages(app))
+            assert "pause: paused" in toasts
+            assert "not yet wired" not in toasts
 
     asyncio.run(body())
     # The toggle reached the daemon with the real pause RPC + empty params.
@@ -1814,9 +1810,8 @@ def test_autopilot_pause_issues_resume_rpc_when_paused(
             await app.workers.wait_for_complete()
             pane = app.screen
             assert isinstance(pane, AutopilotModeScreen)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "pause: resumed" in rendered
+            toasts = "\n".join(toast_messages(app))
+            assert "pause: resumed" in toasts
 
     asyncio.run(body())
     assert calls and calls[0] == ("agent.resume", {})
@@ -1845,8 +1840,8 @@ def test_autopilot_pause_no_daemon_surfaces_honest_unavailable(
             await app.workers.wait_for_complete()
             pane = app.screen
             assert isinstance(pane, AutopilotModeScreen)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert PAUSE_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert PAUSE_NO_DAEMON in toasts
 
     asyncio.run(body())
 
@@ -2017,9 +2012,8 @@ def test_autopilot_multi_select_commit_stages_batch_and_tears_down(tmp_path: Pat
             # The checklist tore down on commit + the batch was staged.
             assert not pane.query(f"#{MULTI_SELECT_ID}")
             assert pane._claim_batch == ("P01-I01-W02", "P01-I03-W04")
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            rendered = str(result.render())  # type: ignore[attr-defined]
-            assert BATCH_NO_DAEMON in rendered
+            toasts = "\n".join(toast_messages(app))
+            assert BATCH_NO_DAEMON in toasts
 
     asyncio.run(body())
 
@@ -2044,8 +2038,8 @@ def test_autopilot_multi_select_empty_frontier_surfaces_no_target(tmp_path: Path
             pane = app.screen
             assert isinstance(pane, AutopilotModeScreen)
             assert not pane.query(f"#{MULTI_SELECT_ID}")  # no checklist mounted
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert MULTI_SELECT_NO_TARGET in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert MULTI_SELECT_NO_TARGET in toasts
 
     asyncio.run(body())
 
@@ -2150,14 +2144,13 @@ def test_autopilot_batch_dispatch_calls_agent_dispatch_once_per_wave(
         monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
         monkeypatch.setattr(dc, "DaemonClient", _FakeClient)
         async with app.run_test(size=(120, 40)) as pilot:
-            pane = await _commit_two_wave_batch(app, pilot)
+            await _commit_two_wave_batch(app, pilot)
             # The dispatch RPCs run on a worker -- drain before asserting.
             await app.workers.wait_for_complete()
             await settle_screen(pilot)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "P01-I01-W02" in rendered
-            assert "P01-I03-W04" in rendered
+            toasts = "\n".join(toast_messages(app))
+            assert "P01-I01-W02" in toasts
+            assert "P01-I03-W04" in toasts
 
     asyncio.run(body())
     # Exactly one agent.dispatch (spawn) call per selected wave, in claim order.
@@ -2200,11 +2193,11 @@ def test_autopilot_batch_dispatch_no_daemon_issues_zero_rpcs(
         monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
         monkeypatch.setattr(dc, "DaemonClient", _ExplodingClient)
         async with app.run_test(size=(120, 40)) as pilot:
-            pane = await _commit_two_wave_batch(app, pilot)
+            await _commit_two_wave_batch(app, pilot)
             await app.workers.wait_for_complete()
             await settle_screen(pilot)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert BATCH_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert BATCH_NO_DAEMON in toasts
 
     asyncio.run(body())
     # Zero RPCs were issued (no client was even constructed).
@@ -2248,14 +2241,13 @@ def test_autopilot_batch_dispatch_one_rejected_others_proceed(
         monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
         monkeypatch.setattr(dc, "DaemonClient", _RejectingClient)
         async with app.run_test(size=(120, 40)) as pilot:
-            pane = await _commit_two_wave_batch(app, pilot)
+            await _commit_two_wave_batch(app, pilot)
             await app.workers.wait_for_complete()
             await settle_screen(pilot)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            rendered = str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
             # The rejected wave reads rejected; the accepted wave reads spawned.
-            assert "P01-I01-W02 rejected" in rendered
-            assert "P01-I03-W04 spawned" in rendered
+            assert "P01-I01-W02 rejected" in toasts
+            assert "P01-I03-W04 spawned" in toasts
 
     asyncio.run(body())
     # Both waves were still dispatched -- one rejection never aborts the fleet.

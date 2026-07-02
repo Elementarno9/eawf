@@ -12,7 +12,7 @@ Every mutating cockpit key issues its daemon round-trip on a Textual worker, so
 a Pilot that ``await``\\s worker completion (:func:`settle_screen` drains the
 worker pool) shows the cockpit never BLOCKS on a sync daemon call: the dispatch /
 pause / kill keys press, the worker round-trips off the UI thread, and the
-result line repaints -- the cockpit stays responsive throughout. Every footer
+outcome surfaces as a toast -- the cockpit stays responsive throughout. Every footer
 action also resolves to a real ``action_*`` handler (a bound key whose handler is
 missing is a silent no-op), and a fork -> resolve -> close cycle pushed through
 the live state seam re-renders the cockpit (the lane band + vitals follow the
@@ -58,12 +58,11 @@ from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.modes.autopilot import (
     COCKPIT_IDLE,
     COCKPIT_VITALS_ID,
-    DISPATCH_RESULT_ID,
     LANE_CELL_CLASS,
     AutopilotModeScreen,
 )
 from eawf.surfaces.tui.screens.overlays.fork_inbox import ForkInboxModal
-from eawf.surfaces.tui.snapshot import settle_screen
+from eawf.surfaces.tui.snapshot import settle_screen, toast_messages
 from eawf.surfaces.tui.snapshot.pilot_harness import (
     mutating_action_keys_resolve,
     push_state_revision,
@@ -289,8 +288,8 @@ def test_cockpit_dispatch_offloads_to_worker_never_blocks(
     The daemon ``agent.dispatch`` call is wrapped in a SLOW fake client: a sync
     call on the UI thread would block the event loop (and hang the cockpit), but
     because the call is offloaded to a Textual worker the Pilot's
-    :func:`settle_screen` (which drains the worker pool) returns and the result
-    line repaints. The fake's blocking sleep runs ON A WORKER THREAD, proving the
+    :func:`settle_screen` (which drains the worker pool) returns and the outcome
+    toast surfaces. The fake's blocking sleep runs ON A WORKER THREAD, proving the
     offload: a UI-thread call could not be drained by ``wait_for_complete``.
     """
     state_path = _write_state(tmp_path, _state(waves=_frontier_waves(), fleet_run=_draining_run()))
@@ -320,13 +319,12 @@ def test_cockpit_dispatch_offloads_to_worker_never_blocks(
         monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
         monkeypatch.setattr(dc, "DaemonClient", _SlowClient)
         async with app.run_test(size=(120, 40)) as pilot:
-            screen = await _enter_cockpit(pilot, app)
+            await _enter_cockpit(pilot, app)
             await pilot.press("d")  # dispatch the selected ready wave (worker-offloaded)
             await settle_screen(pilot)  # drains the worker pool -- never hangs
-            result = screen.query_one(f"#{DISPATCH_RESULT_ID}")
-            rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "spawned" in rendered  # the worker's result repainted the line
-            assert "4321" in rendered
+            toasts = "\n".join(toast_messages(app))
+            assert "spawned" in toasts  # the worker's result surfaced as a toast
+            assert "4321" in toasts
 
     asyncio.run(body())
     # The RPC ran on a worker thread, not the Textual main thread -- the offload.
@@ -343,7 +341,8 @@ def test_cockpit_pause_offloads_to_worker(
     With a DRAINING fleet run bound, ``space`` drives the FLEET pause
     (``fleet.pause`` -- it holds the running drive loop without aborting it)
     rather than the global ``agent.pause`` dispatch-pause toggle. The RPC
-    round-trips on a worker so the cockpit never blocks, then repaints honestly.
+    round-trips on a worker so the cockpit never blocks, then surfaces the
+    outcome honestly as a toast.
     """
     state_path = _write_state(tmp_path, _state(waves=_frontier_waves(), fleet_run=_draining_run()))
     calls: list[str] = []
@@ -369,11 +368,11 @@ def test_cockpit_pause_offloads_to_worker(
         monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
         monkeypatch.setattr(dc, "DaemonClient", _PauseClient)
         async with app.run_test(size=(120, 40)) as pilot:
-            screen = await _enter_cockpit(pilot, app)
+            await _enter_cockpit(pilot, app)
             await pilot.press("space")  # pause (worker-offloaded)
             await settle_screen(pilot)
-            result = screen.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert "paused" in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert "paused" in toasts
 
     asyncio.run(body())
     # A live fleet run routes space -> fleet.pause (W06), not the global toggle.
@@ -389,7 +388,7 @@ def test_cockpit_kill_offloads_to_worker_after_confirm(
 
     The destructive kill is confirm-gated; confirming kicks the RPC onto a worker
     so the cockpit never blocks, and the honest (placeholder ``killed=false``)
-    verdict repaints after the worker drains.
+    verdict surfaces as a toast after the worker drains.
     """
     state_path = _write_state(tmp_path, _state(waves=_frontier_waves(), fleet_run=_draining_run()))
     calls: list[tuple[str, dict[str, object]]] = []
@@ -425,8 +424,8 @@ def test_cockpit_kill_offloads_to_worker_after_confirm(
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AutopilotModeScreen)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert "not killed" in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert "not killed" in toasts
 
     asyncio.run(body())
     # Filter the on-mount fleet.reattach (W07): the confirmed kill is agent.kill.
@@ -570,11 +569,11 @@ def test_cockpit_resume_over_paused_run_drives_fleet_resume(
         monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
         monkeypatch.setattr(dc, "DaemonClient", _ResumeClient)
         async with app.run_test(size=(120, 40)) as pilot:
-            screen = await _enter_cockpit(pilot, app)
+            await _enter_cockpit(pilot, app)
             await pilot.press("space")  # resume the held run
             await settle_screen(pilot)
-            result = screen.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert "resumed" in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert "resumed" in toasts
 
     asyncio.run(body())
     assert calls == ["fleet.resume"]
@@ -615,11 +614,11 @@ def test_cockpit_halt_over_live_run_drives_fleet_halt(
         monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
         monkeypatch.setattr(dc, "DaemonClient", _HaltClient)
         async with app.run_test(size=(120, 40)) as pilot:
-            screen = await _enter_cockpit(pilot, app)
+            await _enter_cockpit(pilot, app)
             await pilot.press("H")  # fleet halt -> drains to summary
             await settle_screen(pilot)
-            result = screen.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert "draining to summary" in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert "draining to summary" in toasts
 
     asyncio.run(body())
     # Filter the on-mount fleet.reattach (W07): H over a live run drives fleet.halt.

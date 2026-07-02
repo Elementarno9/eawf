@@ -242,6 +242,23 @@ def capture_screen_text(app: App[object]) -> str:
     return "\n".join(rows)
 
 
+def toast_messages(app: App[object]) -> tuple[str, ...]:
+    """Return the message text of every toast currently on *app*'s rack.
+
+    Reads Textual's notification rack (there is no public accessor) so a
+    Pilot test can assert an action outcome surfaced as a fading toast via
+    :func:`~eawf.surfaces.tui.toast_emitter.notify_result` rather than as a
+    persistent result line. Order follows the rack's insertion order.
+
+    Args:
+        app: The live :class:`~textual.app.App` under a Pilot harness.
+
+    Returns:
+        Each queued toast's message markup, oldest first.
+    """
+    return tuple(note.message for note in app._notifications)
+
+
 def assert_screen_snapshot(app: App[object], golden_path: Path) -> None:
     """Compare the app's active screen against a golden ASCII fixture.
 
@@ -427,4 +444,5 @@ __all__ = [
     "push_state_revision",
     "settle_screen",
     "tick_poll_backstop",
+    "toast_messages",
 ]

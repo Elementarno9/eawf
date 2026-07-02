@@ -125,6 +125,7 @@ from eawf.kernel.spec.auq_bridge import (
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.ids import natural_key
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.toast_emitter import ToastSeverity, notify_result
 from eawf.surfaces.tui.widgets import sigils
 from eawf.surfaces.tui.widgets.empty_state import (
     HONEST_EMPTY_CSS,
@@ -2045,10 +2046,17 @@ class AutopilotModeScreen(ScopeScreen):
         return self._rows[self.selected]
 
     def _set_result(self, line: str) -> None:
-        """Update the dispatch-result line, if mounted."""
-        result = self.query(f"#{DISPATCH_RESULT_ID}")
-        if result:
-            result.first(Static).update(line)
+        """Surface an action outcome as a fading bottom-right toast.
+
+        The ``#autopilot-result`` line keeps its idle dispatch hint; outcomes
+        no longer pin there (a stale result otherwise reads as current after
+        every state poll). Severity derives from the outcome markup, except a
+        daemon-unreachable denial — every ``*_NO_DAEMON`` constant carries the
+        ``daemon unavailable`` phrase — which escalates to ``error`` so a dead
+        mutation path stands out from an ordinary warning.
+        """
+        severity: ToastSeverity | None = "error" if "daemon unavailable" in line else None
+        notify_result(self.app, line, severity=severity)
 
     def _current_rows(self) -> tuple[ReadyWaveRow, ...]:
         """Compute the ready-wave display rows for the active scope.

@@ -73,6 +73,7 @@ from eawf.surfaces.tui.snapshot import (
     assert_screen_snapshot,
     capture_screen_text,
     settle_screen,
+    toast_messages,
 )
 from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.empty_state import SEAL_HERO_ID
@@ -356,19 +357,19 @@ def test_agent_watch_cancel_key_resolves_to_live_binding(tmp_path: Path) -> None
 
 
 def test_agent_watch_cancel_key_fires_and_moves_the_result(tmp_path: Path) -> None:
-    """Pressing the cancel key FIRES the action and moves the result off idle.
+    """Pressing the cancel key FIRES the action and surfaces the verdict toast.
 
     The ``affordance_parity`` firing half: a real ``k`` keypress (the genuine
     key->Binding path, not a direct action call) opens the FA4 confirm gate;
-    confirming ``Yes`` drives ``action_cancel_session`` and the result line
-    moves off its idle cancel-look copy to the honest "daemon unavailable"
-    line (the bare host exposes no daemon socket, so the cancel surfaces the
-    honest result rather than a faked kill).
+    confirming ``Yes`` drives ``action_cancel_session`` and the honest "daemon
+    unavailable" verdict lands on the toast rack (the bare host exposes no
+    daemon socket, so the cancel surfaces the honest result rather than a
+    faked kill) while the result line keeps its idle cancel-look copy.
     """
     state = _state(sessions={"S-1": _session("S-1")})
     state_path = _write_state(tmp_path, state)
 
-    async def body() -> str:
+    async def body() -> tuple[str, str]:
         app = _HostApp(state=state, state_path=state_path)
         async with app.run_test(size=_SIZE) as pilot:
             await settle_screen(pilot)
@@ -380,12 +381,14 @@ def test_agent_watch_cancel_key_fires_and_moves_the_result(tmp_path: Path) -> No
             await pilot.press("right")  # highlight Yes
             await pilot.press("enter")  # confirm
             await settle_screen(pilot)
-            return str(screen.query_one(f"#{WATCH_RESULT_ID}", Static).render())
+            rendered = str(screen.query_one(f"#{WATCH_RESULT_ID}", Static).render())
+            return rendered, "\n".join(toast_messages(app))
 
-    rendered = asyncio.run(body())
-    # The press fired: the result moved off the idle line to the honest result.
-    assert CANCEL_NO_DAEMON in rendered
-    assert CANCEL_IDLE not in rendered
+    rendered, toasts = asyncio.run(body())
+    # The press fired: the honest verdict surfaced as a toast; the result line
+    # never pins the outcome and stays on its idle cancel hint.
+    assert CANCEL_NO_DAEMON in toasts
+    assert CANCEL_IDLE in rendered
 
 
 @pytest.fixture(autouse=True)

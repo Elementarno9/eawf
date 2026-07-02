@@ -59,7 +59,6 @@ from eawf.surfaces.tui.modes.agent_watch import (
     PAUSE_NO_TARGET,
     WATCH_EMPTY_ID,
     WATCH_OUTPUT_ID,
-    WATCH_RESULT_ID,
     WATCH_ROW_CLASS,
     WATCH_TILE_CLASS,
     WATCH_TILE_ROW_CLASS,
@@ -78,6 +77,7 @@ from eawf.surfaces.tui.snapshot import (
     capture_screen_text,
     normalize_snapshot,
     settle_screen,
+    toast_messages,
 )
 from eawf.surfaces.tui.widgets.output_tail import (
     OUTPUT_TAIL_ROW_CLASS,
@@ -834,7 +834,7 @@ def test_agent_watch_cancel_action_no_daemon_surfaces_honest_result(
     """With no reachable daemon the confirmed kill reports the request was not issued.
 
     The cancel action must never fake a kill: when the daemon socket is
-    unavailable the confirmed kill surfaces the honest "daemon unavailable" line
+    unavailable the confirmed kill surfaces the honest "daemon unavailable" toast
     rather than a success.
     """
     state = _state(sessions={"S-1": _session("S-1")})
@@ -856,8 +856,8 @@ def test_agent_watch_cancel_action_no_daemon_surfaces_honest_result(
             await pilot.press("right")  # highlight Yes
             await pilot.press("enter")  # confirm
             await settle_screen(pilot)
-            result = pane.query_one(f"#{WATCH_RESULT_ID}")
-            assert CANCEL_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert CANCEL_NO_DAEMON in toasts
 
     asyncio.run(body())
 
@@ -895,10 +895,9 @@ def test_agent_watch_cancel_action_surfaces_placeholder_kill_result(
             await pilot.press("right")  # highlight Yes
             await pilot.press("enter")  # confirm
             await settle_screen(pilot)
-            result = pane.query_one(f"#{WATCH_RESULT_ID}")
-            rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "not killed" in rendered
-            assert CANCEL_IDLE not in rendered
+            toasts = "\n".join(toast_messages(app))
+            assert "not killed" in toasts
+            assert CANCEL_IDLE not in toasts
 
     asyncio.run(body())
     # The confirmed cancel reached the daemon with the watched wave + attempt + term.
@@ -1009,7 +1008,7 @@ def test_agent_watch_pause_no_target_surfaces_honest_line(tmp_path: Path) -> Non
     """``space`` on an honest-empty scope (no session) says there is nothing to pause.
 
     With no dispatched session the pause key has no lane to act on, so it
-    surfaces the honest "no session to pause" line without reaching the daemon.
+    surfaces the honest "no session to pause" toast without reaching the daemon.
     """
     state_path = _write_state(tmp_path, _state())
 
@@ -1024,8 +1023,8 @@ def test_agent_watch_pause_no_target_surfaces_honest_line(tmp_path: Path) -> Non
             assert pane.target is None
             await pilot.press("space")  # pause this lane (none)
             await settle_screen(pilot)
-            result = pane.query_one(f"#{WATCH_RESULT_ID}")
-            assert PAUSE_NO_TARGET in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert PAUSE_NO_TARGET in toasts
 
     asyncio.run(body())
 
@@ -1037,7 +1036,7 @@ def test_agent_watch_pause_no_daemon_surfaces_honest_result(
     """With no reachable daemon ``space`` reports the pause was not issued.
 
     Pause is non-destructive (no confirm gate), but an unreachable daemon must
-    still surface the honest unavailable line rather than faking a toggle.
+    still surface the honest unavailable toast rather than faking a toggle.
     """
     state_path = _write_state(tmp_path, _state(sessions={"S-1": _session("S-1")}))
 
@@ -1052,8 +1051,8 @@ def test_agent_watch_pause_no_daemon_surfaces_honest_result(
             assert isinstance(pane, AgentWatchModeScreen)
             await pilot.press("space")  # pause this lane
             await settle_screen(pilot)
-            result = pane.query_one(f"#{WATCH_RESULT_ID}")
-            assert PAUSE_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert PAUSE_NO_DAEMON in toasts
 
     asyncio.run(body())
 
@@ -1084,8 +1083,8 @@ def test_agent_watch_pause_issues_pause_rpc(
             assert isinstance(pane, AgentWatchModeScreen)
             await pilot.press("space")  # pause this lane
             await settle_screen(pilot)
-            result = pane.query_one(f"#{WATCH_RESULT_ID}")
-            assert "paused" in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert "paused" in toasts
 
     asyncio.run(body())
     # The pause toggle reached the daemon with agent.pause (not-paused -> pause).
@@ -1097,7 +1096,7 @@ def test_agent_watch_view_log_no_handle_surfaces_honest_line(tmp_path: Path) -> 
 
     The seeded scope has an ACTIVE executor session but no wave session table,
     so no log handle is recorded; the view-log key surfaces the honest
-    "no session log recorded yet" line rather than pointing at a missing log.
+    "no session log recorded yet" toast rather than pointing at a missing log.
     """
     state_path = _write_state(tmp_path, _state(sessions={"S-1": _session("S-1")}))
 
@@ -1111,8 +1110,8 @@ def test_agent_watch_view_log_no_handle_surfaces_honest_line(tmp_path: Path) -> 
             assert isinstance(pane, AgentWatchModeScreen)
             await pilot.press("l")  # view log
             await settle_screen(pilot)
-            result = pane.query_one(f"#{WATCH_RESULT_ID}")
-            assert LOG_NO_HANDLE in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert LOG_NO_HANDLE in toasts
 
     asyncio.run(body())
 
@@ -1138,8 +1137,8 @@ def test_agent_watch_view_log_surfaces_recorded_handle(tmp_path: Path) -> None:
             assert pane.target.log_handle == handle
             await pilot.press("l")  # view log
             await settle_screen(pilot)
-            result = pane.query_one(f"#{WATCH_RESULT_ID}")
-            assert handle in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert handle in toasts
 
     asyncio.run(body())
 

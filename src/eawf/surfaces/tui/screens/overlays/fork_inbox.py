@@ -60,6 +60,7 @@ from textual.widgets import Static
 
 from eawf.kernel.state.enums import RiskTier
 from eawf.kernel.state.models import FleetForkResolution
+from eawf.surfaces.tui.toast_emitter import notify_result
 from eawf.surfaces.tui.widgets.markup import escape_markup
 from eawf.surfaces.tui.widgets.sigils import chrome
 
@@ -508,7 +509,11 @@ class ForkInboxModal(ModalScreen[None]):
             return
         resolution = _RESOLUTION_BY_KEY[key]
         result = _issue_resolve(fork, resolution, daemon_available=self._daemon_available())
-        self._set_result(result.line)
+        notify_result(
+            self.app,
+            result.line,
+            severity="error" if "daemon unavailable" in result.line else None,
+        )
         logger.info(
             f"fork_inbox resolved wave={fork.wave_id} attempt={fork.attempt} "
             f"resolution={resolution.value} accepted={result.accepted} result={result.line!r}"
@@ -543,7 +548,12 @@ class ForkInboxModal(ModalScreen[None]):
         self.dismiss(None)
 
     def _set_result(self, line: str) -> None:
-        """Update the resolution-result line, if mounted."""
+        """Update the resolution line, if mounted (idle-hint resets only).
+
+        Resolution outcomes surface as fading toasts via
+        :func:`~eawf.surfaces.tui.toast_emitter.notify_result`; this line only
+        ever renders the idle resolve hint between cards.
+        """
         result = self.query(f"#{FORK_INBOX_RESULT_ID}")
         if result:
             result.first(Static).update(line)

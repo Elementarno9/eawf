@@ -34,10 +34,7 @@ from pydantic import ValidationError
 from eawf.kernel.state.enums import ProjectStatus, ScopeKind, WaveStatus
 from eawf.kernel.state.models import CurrentPointers, Project, State, Wave
 from eawf.surfaces.tui.app import EaApp
-from eawf.surfaces.tui.modes.autopilot import (
-    DISPATCH_RESULT_ID,
-    AutopilotModeScreen,
-)
+from eawf.surfaces.tui.modes.autopilot import AutopilotModeScreen
 from eawf.surfaces.tui.screens.overlays.arm import (
     ARM_CANCELLED,
     ARM_DRAINING,
@@ -58,7 +55,7 @@ from eawf.surfaces.tui.screens.overlays.arm import (
     render_halt_row,
     render_risk_matrix_rows,
 )
-from eawf.surfaces.tui.snapshot import settle_screen
+from eawf.surfaces.tui.snapshot import settle_screen, toast_messages
 
 _T0 = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
 _AUTOPILOT_DIGIT = "2"
@@ -348,7 +345,7 @@ def test_arm_enter_submits_drive_and_flips_to_draining(
     The load-bearing C1 success criterion: with a reachable daemon stubbed by a
     fake client, arming the form reaches the daemon with a ``fleet.drive`` call
     carrying the ready frontier + the spec's concurrency + convergence, and the
-    cockpit result line reads the DRAINING flip.
+    cockpit surfaces the DRAINING flip as a toast.
     """
     state_path = _write_state(tmp_path, _frontier_state())
     calls: list[tuple[str, dict[str, object]]] = []
@@ -384,8 +381,8 @@ def test_arm_enter_submits_drive_and_flips_to_draining(
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AutopilotModeScreen)  # overlay dismissed
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert ARM_DRAINING in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert ARM_DRAINING in toasts
 
     asyncio.run(body())
     # The arm reached the daemon with fleet.drive carrying the ready frontier.
@@ -402,7 +399,7 @@ def test_arm_esc_cancels_without_arming(
     """``Esc`` on the arm form cancels without firing a ``fleet.drive`` RPC.
 
     The C1 cancel half: backing out of the launch form must not arm -- the
-    daemon is never reached and the result line reads the cancel honestly.
+    daemon is never reached and the cancel surfaces as a toast honestly.
     """
     state_path = _write_state(tmp_path, _frontier_state())
     calls: list[tuple[str, dict[str, object]]] = []
@@ -438,8 +435,8 @@ def test_arm_esc_cancels_without_arming(
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AutopilotModeScreen)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert ARM_CANCELLED in str(result.render())  # type: ignore[attr-defined]
+            toasts = "\n".join(toast_messages(app))
+            assert ARM_CANCELLED in toasts
 
     asyncio.run(body())
     assert calls == []  # cancel never reached the daemon

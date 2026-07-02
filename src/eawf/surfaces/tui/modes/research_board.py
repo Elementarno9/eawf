@@ -78,6 +78,7 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.toast_emitter import notify_result
 from eawf.surfaces.tui.widgets import sigils
 from eawf.surfaces.tui.widgets.empty_state import render_empty_state
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
@@ -2278,7 +2279,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         """
         if draft is None:
             return
-        self._set_action(f"[$muted]{NEW_PENDING}[/]")
+        self._set_action(f"[$muted]{NEW_PENDING}[/]", pending=True)
         self.run_worker(self._stage_campaign_worker(draft), group="research-stage", exclusive=True)
 
     async def _stage_campaign_worker(self, draft: CampaignDraft) -> None:
@@ -2504,7 +2505,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         """
         if note is None:
             return
-        self._set_action(f"[$muted]{_CHANNEL_PENDING_TEMPLATE.format(verb=verb)}[/]")
+        self._set_action(f"[$muted]{_CHANNEL_PENDING_TEMPLATE.format(verb=verb)}[/]", pending=True)
         self.run_worker(
             self._channel_worker(
                 note=note,
@@ -2962,12 +2963,28 @@ class ResearchBoardModeScreen(ScopeScreen):
         return campaigns[0].campaign_id if campaigns else None
 
     def _set_peek(self, line: str) -> None:
-        """Update the peek-result line under the tree, if mounted."""
-        self._update_one(PEEK_RESULT_ID, line)
+        """Surface a peek result as a fading toast; the peek line stays idle.
 
-    def _set_action(self, line: str) -> None:
-        """Update the action-result line under the drawer, if mounted."""
-        self._update_one(ACTION_RESULT_ID, line)
+        A pinned peek otherwise reads as current long after the cursor moved
+        on — the ``#research-peek`` line keeps its idle hint instead.
+        """
+        notify_result(self.app, line)
+        self._update_one(PEEK_RESULT_ID, self._peek_idle())
+
+    def _set_action(self, line: str, *, pending: bool = False) -> None:
+        """Surface an action outcome as a fading toast; reset the line to idle.
+
+        In-flight progress (*pending* — a worker round-trip the operator
+        should see is still running) stays on the persistent
+        ``#research-action`` line; the terminal outcome that follows surfaces
+        as a toast and flips the line back to :data:`ACTION_IDLE` so a stale
+        outcome never reads as current.
+        """
+        if pending:
+            self._update_one(ACTION_RESULT_ID, line)
+            return
+        notify_result(self.app, line)
+        self._update_one(ACTION_RESULT_ID, ACTION_IDLE)
 
     def _peek_idle(self) -> str:
         """Return the idle peek line (before any node is peeked)."""

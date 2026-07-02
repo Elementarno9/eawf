@@ -426,6 +426,41 @@ class ToastEmitter:
         return notifications
 
 
+def notify_result(
+    app: App[object],
+    markup: str,
+    *,
+    severity: ToastSeverity | None = None,
+) -> None:
+    """Surface a synchronous action outcome as a bottom-right fading toast.
+
+    The keypress-outcome counterpart to :meth:`ToastEmitter.emit`: where the
+    emitter diffs state snapshots, this surfaces the outcome of an action the
+    operator just triggered (dispatch, halt, campaign run, fork resolution)
+    without pinning it in a persistent result line. When *severity* is not
+    given it derives from the outcome's leading markup token — a ``[$warn]``
+    outcome reads as ``warning``, everything else as ``information``; a caller
+    that knows better (a daemon-unreachable denial) passes ``severity``
+    explicitly. Follows the toast_rack liveness contract: a render failure
+    drops the toast (logged at debug) and never crashes the app.
+
+    Args:
+        app: The Textual app whose ``notify`` surfaces the toast.
+        markup: The outcome line, Textual content markup allowed.
+        severity: Explicit severity override; derived from *markup* when
+            ``None``.
+    """
+    resolved: ToastSeverity = (
+        severity
+        if severity is not None
+        else ("warning" if markup.startswith("[$warn]") else "information")
+    )
+    try:
+        app.notify(markup, severity=resolved)
+    except Exception as exc:
+        logger.debug(f"notify_result dropped toast severity={resolved} cause={exc!r}")
+
+
 __all__ = [
     "DEFAULT_VERBOSITY",
     "FLOOD_THRESHOLD",
@@ -435,4 +470,5 @@ __all__ = [
     "ToastNotification",
     "ToastSeverity",
     "ToastVerbosity",
+    "notify_result",
 ]
