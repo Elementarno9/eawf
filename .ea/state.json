@@ -9926,6 +9926,20 @@
       "status": "done",
       "updated_at": "2026-07-02T17:31:04.409841Z"
     },
+    "P30-I23-W28": {
+      "actual_cost_usd": 10.079999999999984,
+      "actual_tokens": 84530000,
+      "agent_runtime_eu": 1.5555555555555556,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W28",
+      "elapsed_eu": 1.5555555555555556,
+      "harness": "claude-code",
+      "id": "ACT-P30-I23-W28",
+      "model": "claude-fable-5",
+      "scope_id": "P30-I23-W28",
+      "status": "done",
+      "updated_at": "2026-07-02T23:11:12.615897Z"
+    },
     "P30-I23-W29": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13618,7 +13632,6 @@
       "SES-20260702T230518Z-auditor-claude-code"
     ],
     "active_wave_ids": [
-      "P30-I23-W28",
       "P30-I23-W45"
     ],
     "iter_id": "P30-I23",
@@ -29373,7 +29386,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T23:10:03.612103Z",
+  "updated_at": "2026-07-02T23:11:12.616455Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -113635,8 +113648,8 @@
       ],
       "claim_session_id": "flow-i23",
       "claimed_at": "2026-07-02T22:37:12.046946Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T23:11:12.615897Z",
+      "commit": "720591f9160e6f93fd7a001ea4a1607c81db333f",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W27"
@@ -113700,7 +113713,7 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:38:15.373781Z",
-      "outcome": null,
+      "outcome": "First captured actual on record: W46 closed with elapsed_eu=1.056 + harness/model provenance through the live chain (sidecar baseline -> SessionEnd hook -> runtime.capture -> close delta), no hand-edited state; standing suite pins the invariant forever after; operator confirmation = hook log 'runtime.capture ok' + daemon envelope EV-1a78302d0241 in the executor report.",
       "runtime_baseline": {
         "api_duration_ms": 14000000,
         "cache_creation_input_tokens": 900000,
@@ -113727,7 +113740,7 @@
       },
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -113780,7 +113793,7 @@
       ],
       "title": "Record the first inline close with captured elapsed_eu above zero",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 84530000,
       "worktree_id": null
     },
     "P30-I23-W29": {
