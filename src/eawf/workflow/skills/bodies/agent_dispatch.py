@@ -24,6 +24,11 @@ class AgentDispatchBody(BaseModel):
     runtime_preference: list[str] = Field(default_factory=list)
     resolved_runtime: str | None = None
     reason: str | None = None
+    # W46 runtime options: ``headless`` routes the suggested next action to
+    # the daemon live-spawn verb; ``model`` is the spawn-model override that
+    # rides it. Both default so pre-W46 envelopes re-validate unchanged.
+    headless: bool = False
+    model: str | None = None
 
 
 __all__ = ["AgentDispatchBody"]

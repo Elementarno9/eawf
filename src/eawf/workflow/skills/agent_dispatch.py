@@ -80,6 +80,9 @@ class AgentDispatchSkill(Skill):
         ladder = _coerce_ladder(args.get("runtime_preference"))
         explicit = args.get("runtime")
         explicit_runtime = str(explicit) if explicit else None
+        headless = bool(args.get("headless"))
+        model_raw = args.get("model")
+        model = str(model_raw) if model_raw else None
 
         if not wave_id:
             return SkillResult(
@@ -105,8 +108,21 @@ class AgentDispatchSkill(Skill):
                 "wave_id": wave_id,
                 "runtime_preference": ladder,
                 "resolved_runtime": resolved_runtime,
+                "headless": headless,
+                "model": model,
             },
         )
+
+        # ``--headless`` routes the next action to the daemon's live spawn
+        # (``eawf dispatch wave`` -> agent.dispatch spawn=True) instead of
+        # the interactive prompt render; a ``--model`` override only exists
+        # on that spawn path, so its presence implies the headless command.
+        if headless or model is not None:
+            action = f"eawf dispatch wave {wave_id}"
+            if model is not None:
+                action += f" --model {model}"
+        else:
+            action = f"eawf wave dispatch {wave_id}"
 
         # No resolvable runtime is a soft outcome: the dispatch can still
         # proceed against the daemon's default, but we flag it so the
@@ -119,9 +135,11 @@ class AgentDispatchSkill(Skill):
                 "wave_id": wave_id,
                 "runtime_preference": ladder,
                 "resolved_runtime": resolved_runtime,
+                "headless": headless,
+                "model": model,
             },
             persisted_store_records=[evt_id],
-            next_valid_actions=[f"eawf wave dispatch {wave_id}"],
+            next_valid_actions=[action],
         )
 
 

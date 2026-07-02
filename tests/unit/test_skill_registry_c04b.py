@@ -155,6 +155,33 @@ def test_agent_dispatch_no_ladder_is_partial(state_dir: Path) -> None:
     assert cast(dict, env.body)["resolved_runtime"] is None
 
 
+def test_agent_dispatch_headless_routes_to_daemon_spawn(state_dir: Path) -> None:
+    """W46: --headless shapes next_valid_actions onto the live-spawn verb."""
+    ctx = _ctx()
+    ctx.args = {"wave_id": "P26-I01-W11", "runtime_preference": ["codex"], "headless": True}
+    env = run_skill(AgentDispatchSkill(), ctx)
+    assert env.header.status == "ok"
+    assert env.footer.next_valid_actions == ["eawf dispatch wave P26-I01-W11"]
+    assert cast(dict, env.body)["headless"] is True
+
+
+def test_agent_dispatch_model_threads_into_spawn_command(state_dir: Path) -> None:
+    """W46: --model implies the spawn path and rides its command."""
+    ctx = _ctx()
+    ctx.args = {"wave_id": "P26-I01-W11", "runtime_preference": ["codex"], "model": "gpt-5.5"}
+    env = run_skill(AgentDispatchSkill(), ctx)
+    assert env.footer.next_valid_actions == ["eawf dispatch wave P26-I01-W11 --model gpt-5.5"]
+    assert cast(dict, env.body)["model"] == "gpt-5.5"
+
+
+def test_agent_dispatch_interactive_default_unchanged(state_dir: Path) -> None:
+    ctx = _ctx()
+    ctx.args = {"wave_id": "P26-I01-W11", "runtime_preference": ["codex"]}
+    env = run_skill(AgentDispatchSkill(), ctx)
+    assert env.footer.next_valid_actions == ["eawf wave dispatch P26-I01-W11"]
+    assert cast(dict, env.body)["headless"] is False
+
+
 def test_compress_records_token_ratio(state_dir: Path) -> None:
     ctx = _ctx()
     ctx.args = {"tokens_before": 1000, "tokens_after": 250}

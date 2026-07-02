@@ -158,7 +158,7 @@ def dispatch_pause(ctx: typer.Context) -> None:
     )
 
 
-def _spawn_wave(*, wave_id: str, flags: GlobalFlags) -> dict[str, Any]:
+def _spawn_wave(*, wave_id: str, flags: GlobalFlags, model: str | None = None) -> dict[str, Any]:
     """Ask the daemon to spawn + dispatch *wave_id* and return the plan dict.
 
     Mirrors the daemon-calling convention of :func:`_toggle_dispatch`: apply
@@ -178,6 +178,9 @@ def _spawn_wave(*, wave_id: str, flags: GlobalFlags) -> dict[str, Any]:
         wave_id: ``W<NN>`` wave to spawn + dispatch against; forwarded as the
             ``agent.dispatch`` ``wave_id`` param.
         flags: Resolved global flags (``--daemonless`` source).
+        model: Optional model-id override forwarded as the
+            ``agent.dispatch`` ``model`` param (the daemon's spawn-model
+            override); ``None`` keeps the routing-table selection.
 
     Returns:
         The daemon's ``agent.dispatch`` result dict (a JSON-mode
@@ -198,6 +201,8 @@ def _spawn_wave(*, wave_id: str, flags: GlobalFlags) -> dict[str, Any]:
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
     params: dict[str, Any] = {"wave_id": wave_id, "spawn": True}
+    if model is not None:
+        params["model"] = model
     try:
         _dispatch.escalate_mutation("dispatch wave", flags=flags)
         with DaemonClient() as client:
@@ -220,6 +225,11 @@ def _spawn_wave(*, wave_id: str, flags: GlobalFlags) -> dict[str, Any]:
 def dispatch_wave(
     ctx: typer.Context,
     wave_id: str = typer.Argument(..., help="Wave id to spawn + dispatch (e.g. P30-I06-W02)."),
+    model: str = typer.Option(
+        "",
+        "--model",
+        help="Model-id override for the live spawn (daemon routing-table default when omitted).",
+    ),
 ) -> None:
     """Spawn + dispatch a wave headlessly via the daemon's ``agent.dispatch``.
 
@@ -235,7 +245,7 @@ def dispatch_wave(
     """
     flags: GlobalFlags = ctx.obj
     try:
-        result = _spawn_wave(wave_id=wave_id, flags=flags)
+        result = _spawn_wave(wave_id=wave_id, flags=flags, model=model or None)
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return  # pragma: no cover  emit_error raises Exit

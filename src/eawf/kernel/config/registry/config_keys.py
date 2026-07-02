@@ -343,6 +343,22 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         default=True,
     ),
     ConfigKey(
+        tab="flow",
+        key="polish.auto_apply_safe",
+        label="Auto-apply safe polish groups",
+        type="bool",
+        default=False,
+        description="When True, /polish applies safe finding groups without the report-only pause.",
+    ),
+    ConfigKey(
+        tab="flow",
+        key="polish.deletion_policy",
+        label="Polish deletion policy",
+        type="str",
+        default="recoverable_with_reason",
+        description="How /polish treats deletions; policy changes surface via AskUserQuestion.",
+    ),
+    ConfigKey(
         tab="preferences",
         key="preferences.auto_choose",
         label="AskUserQuestion auto-pick policy",
