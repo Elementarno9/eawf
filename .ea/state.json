@@ -9674,6 +9674,20 @@
       "status": "done",
       "updated_at": "2026-07-02T19:21:31.519116Z"
     },
+    "P30-I23-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W10",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W10",
+      "model": null,
+      "scope_id": "P30-I23-W10",
+      "status": "done",
+      "updated_at": "2026-07-02T19:33:20.258007Z"
+    },
     "P30-I23-W12": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -25038,6 +25052,19 @@
       "scope_id": "P30-I23-W09",
       "updated_at": "2026-07-02T18:55:00.955253Z"
     },
+    "P30-I23-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W10-bucket-20260702T192230Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I23-W10",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I23-W10",
+      "updated_at": "2026-07-02T19:22:30.955282Z"
+    },
     "P30-I23-W12": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I23-W12-bucket-20260702T170345Z",
@@ -28737,7 +28764,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T19:21:31.520586Z",
+  "updated_at": "2026-07-02T19:33:20.260244Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -106893,10 +106920,10 @@
         "P30-I23-W11",
         "P30-I23-W33"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T19:22:30.949353Z",
+      "closed_at": "2026-07-02T19:33:20.258007Z",
+      "commit": "38860dbebf6171fca8d01bc1f5f0a7b199430aca",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W04",
@@ -106963,12 +106990,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:38:03.143834Z",
-      "outcome": null,
+      "outcome": "Per-mutation in-flight telemetry on MethodContext (kind + started_at + owning task; daemon.status projects rows with duration_s; completion logs duration_ms); self-deadlock watchdog sweeps beside the daemon sweeps (120s structured alarm, 300s hard-abort cancelling the mutation task + typed mutation_watchdog_abort incident event, W04 belt-and-braces heartbeat) — retires the manual pkill+rm ceremony; 5-test gate + full daemon dirs green (769); daemon restarted",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
