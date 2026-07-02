@@ -10024,6 +10024,20 @@
       "status": "done",
       "updated_at": "2026-07-02T17:54:19.463274Z"
     },
+    "P30-I23-W41": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W41",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W41",
+      "model": null,
+      "scope_id": "P30-I23-W41",
+      "status": "done",
+      "updated_at": "2026-07-02T21:53:11.844750Z"
+    },
     "P30-I23-W42": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -10065,6 +10079,20 @@
       "scope_id": "P30-I23-W50",
       "status": "done",
       "updated_at": "2026-07-02T14:54:33.920662Z"
+    },
+    "P30-I23-W51": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W51",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W51",
+      "model": null,
+      "scope_id": "P30-I23-W51",
+      "status": "done",
+      "updated_at": "2026-07-02T21:57:36.930745Z"
     }
   },
   "agent_sessions": {
@@ -10176,6 +10204,20 @@
       "runtime": "claude-code",
       "scope_id": "P30-I23-W09::audit",
       "started_at": "2026-07-02T19:07:17.168252Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260702T214847Z-auditor-claude-code": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260702T214847Z-auditor-claude-code",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "scope_id": "P30-I23-W41::audit",
+      "started_at": "2026-07-02T21:48:47.089452Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -13486,11 +13528,10 @@
   "current": {
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude",
-      "SES-20260702T190717Z-auditor-claude-code"
+      "SES-20260702T190717Z-auditor-claude-code",
+      "SES-20260702T214847Z-auditor-claude-code"
     ],
-    "active_wave_ids": [
-      "P30-I23-W41"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I23",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -25556,6 +25597,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I23-W50",
       "updated_at": "2026-07-02T14:49:29.319377Z"
+    },
+    "P30-I23-W51": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W51-bucket-20260702T215601Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I23-W51",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I23-W51",
+      "updated_at": "2026-07-02T21:56:01.155988Z"
     }
   },
   "fleet_run": null,
@@ -28034,7 +28088,8 @@
         "P30-I23-W47",
         "P30-I23-W48",
         "P30-I23-W49",
-        "P30-I23-W50"
+        "P30-I23-W50",
+        "P30-I23-W51"
       ]
     }
   },
@@ -29148,7 +29203,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T21:29:16.733754Z",
+  "updated_at": "2026-07-02T21:57:36.931360Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -115312,8 +115367,8 @@
       ],
       "claim_session_id": "flow-i23",
       "claimed_at": "2026-07-02T19:43:42.570114Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T21:53:11.844750Z",
+      "commit": "db22db8afe6584eb7570755d19c3c3e56717fa1f",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W40",
@@ -115403,12 +115458,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:39:38.167643Z",
-      "outcome": null,
+      "outcome": "resolve_role_blocks resolver + all six production render sites pass role_blocks/token cap (daemon spawn, fleet repair, dispatch envelope, batch prompt, wave-show prompt, pr-review); render_wave_prompt forwards instead of dropping; dispatch.role_tier_token_cap leaf (default 2400) consumed with pass/raise boundary falsifier; wave show extracted to the read module for the EAWF010 cap.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -116711,6 +116766,52 @@
         }
       ],
       "title": "Close-gate jury authority survives ballotless labelled cohort",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I23-W51": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": "flow-i23",
+      "claimed_at": "2026-07-02T21:56:01.152174Z",
+      "closed_at": "2026-07-02T21:57:36.930745Z",
+      "commit": "0426fe18aadff7cc944fd82cfbd126eddfe06999",
+      "criteria_floor_waiver": {
+        "reason": "reactive incident fix: the invariant regression test in tests/daemon/test_mutation_watchdog.py is the gate; corpus is a one-line constant change",
+        "waived_at": "2026-07-02T21:56:00.596677Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/daemon/test_mutation_watchdog.py"
+      ],
+      "gates": [],
+      "id": "P30-I23-W51",
+      "intent": {
+        "desired_outcome": "The default hard limit exceeds the juror wall-clock bound with margin (900s), pinned by a regression test relating the two constants.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "bump _MUTATION_HARD_LIMIT_SECONDS to 900 with rationale comment; add the invariant regression test"
+        ],
+        "priority_rationale": "Blocks every remaining verdict-always close this iter; found live on the W41 close.",
+        "problem": "The watchdog hard-aborts at 300s while a verdict-always close runs a real auditor bounded at 600s inside the watched mutation, so every verdict close loops abort-retry-abort.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I23",
+      "opened_at": "2026-07-02T21:56:00.628986Z",
+      "outcome": "Watchdog hard-abort default raised 300s -> 900s (juror wall-clock 600s + margin); regression test relates the two constants so a juror-bound bump cannot silently re-open the verdict-close abort loop found live on the W41 close.",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [],
+      "title": "Raise the watchdog hard limit above the verdict-tier bound",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
