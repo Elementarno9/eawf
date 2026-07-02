@@ -51,7 +51,6 @@ effect is the canonical event row the mutator always appends.
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import logging
 import time
@@ -137,6 +136,7 @@ from eawf.workflow.lifecycle.transitions import (
 from eawf.workflow.lifecycle.wave import RuntimeDelta, compute_runtime_delta
 from eawf.workflow.skills.needs_user import retract_wave_pauses
 from eawf.workflow.verify.models import CloseReadiness
+from eawf.workflow.verify.preflight import run_close_preflight
 
 if TYPE_CHECKING:
     from eawf.observability.eval.jury import JurorBallot
@@ -2911,41 +2911,28 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
             try:
                 if mutation.kind == MutationKind.WAVE_CLOSE:
-                    # Structural criterion/gate referential integrity is
-                    # checked first, regardless of verify.enforce: an orphan
-                    # gate ref or an author-set oracle_tier is a malformed
-                    # spec that must never reach apply. This is a no-op for the
-                    # grandfathered common case (empty gate_ids + no gates).
-                    _validate_wave_close_gate_refs(state, mutation)
-                    # The enforcing close gate runs the ordered oracle BEFORE
-                    # any apply so a blocked close aborts the whole mutation.
-                    # Advisory close paths are unaffected -- the gate returns
-                    # early when no profile enforces verify. The returned
+                    # The shared pre-flight bundle runs the three pre-apply
+                    # checks in their canonical order: structural gate-ref
+                    # validation (regardless of verify.enforce), the enforcing
+                    # ordered-oracle gate (a refusal aborts the whole
+                    # mutation), and the floor-pack readiness compute
+                    # (offloaded to a worker thread so the minutes-long
+                    # pytest / pre-commit / mypy shell-outs do not starve the
+                    # event loop while the state lock is held). The returned
                     # deterministic-pass rows are persisted only AFTER the
                     # state write commits (below), so a wave whose close is
                     # later refused never leaves a stray pass row behind.
-                    wave_close_evidence = await _enforce_wave_close_gate(
+                    preflight = await run_close_preflight(
                         state,
                         mutation,
                         state_path=state_path,
                         repo_root=repo_anchor,
+                        validate_gate_refs=_validate_wave_close_gate_refs,
+                        enforce_close_gate=_enforce_wave_close_gate,
+                        compute_readiness=_compute_wave_close_readiness,
                     )
-                    # Offload the (potentially minutes-long) floor-pack
-                    # readiness compute to a worker thread. It shells out to
-                    # pytest / pre-commit / mypy; running those inline would
-                    # block the daemon's asyncio event loop while the state
-                    # lock is held, wedging every other RPC (the close-path
-                    # daemon-hang root cause). The compute reads ``state`` and
-                    # the evidence store read-only; the apply step below stays
-                    # on the loop. A LifecycleError raised in the thread
-                    # propagates through ``await`` to the same handler below.
-                    wave_close_readiness = await asyncio.to_thread(
-                        _compute_wave_close_readiness,
-                        state,
-                        mutation,
-                        state_path=state_path,
-                        repo_root=repo_anchor,
-                    )
+                    wave_close_evidence = preflight.evidence
+                    wave_close_readiness = preflight.readiness
                     wave_id = str(mutation.params.get("wave_id", ""))
                     actual_written_auto = bool(wave_id and wave_id not in (state.actuals or {}))
                     _, _close_eu_minutes, _close_eu_basis = _wave_close_rollup_config(repo_anchor)
