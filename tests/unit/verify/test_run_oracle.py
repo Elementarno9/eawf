@@ -31,6 +31,7 @@ and no network.
 from __future__ import annotations
 
 import asyncio
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -200,6 +201,80 @@ def test_run_oracle_failing_required_gate_returns_fail_without_jury(
     assert result.status == "fail"
     assert result.gate_id == "G-1"
     assert result.detail == "check fail"
+
+
+# --------------------------------------------------------------------------- #
+# W05 (CR-01): the deterministic tier runs off the daemon event loop. A slow
+# deterministic gate is offloaded via asyncio.to_thread, so a concurrent task
+# on the same loop makes progress WHILE the gate runs -- the runner never
+# starves the loop with an inline subprocess call.
+# --------------------------------------------------------------------------- #
+
+
+def test_run_oracle_slow_deterministic_gate_does_not_starve_loop(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """CR-01: run_checks runs via asyncio.to_thread, keeping the loop responsive.
+
+    ``run_checks`` is monkeypatched to a synchronous blocker that parks its
+    caller until a concurrent driver releases it. If ``run_oracle`` called it
+    inline on the event loop, the blocking call would freeze the loop and the
+    concurrent driver could not advance until the gate returned. Because the
+    call is offloaded to a worker thread, the driver records its own progress
+    (``ticker_run``) BEFORE the gate returns (``gate_return``). The ordering
+    assertion is the load-bearing off-loop signal; the bounded ``release`` wait
+    keeps a regression (an inline call) from hanging CI -- it deadlocks the loop
+    until the timeout, then the ordering assertion fails.
+    """
+    order: list[str] = []
+    gate_entered = threading.Event()
+    release = threading.Event()
+
+    def _blocking_run(specs: list[CheckSpec], *, cwd: Path | None = None) -> list[CheckResult]:
+        order.append("gate_enter")
+        gate_entered.set()
+        # Parks the CALLER: a worker thread when offloaded (loop stays free), the
+        # loop thread itself when run inline (loop frozen). Bounded so a
+        # regression fails the ordering assertion instead of hanging forever.
+        release.wait(timeout=2.0)
+        order.append("gate_return")
+        return [_check_result(status="pass")]
+
+    monkeypatch.setattr(
+        oracle,
+        "compile_gate",
+        lambda gate, *, criterion: CheckSpec(kind="file_exists", name=gate.id),
+    )
+    monkeypatch.setattr(oracle, "run_checks", _blocking_run)
+    monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _forbidden_jury)
+
+    async def _drive() -> OracleResult:
+        task = asyncio.create_task(
+            run_oracle(
+                _criterion(),
+                [_gate("G-1", "file_exists")],
+                wave=_wave(),
+                state=object(),  # type: ignore[arg-type] - jury seam is mocked; state is unused
+                state_path=tmp_path / "state.json",
+                events_path=tmp_path / "event.jsonl",
+                repo_root=tmp_path,
+                spawn_factory=_spawn_factory_stub,
+            )
+        )
+        # Reaching this poll loop while the gate is running proves the event loop
+        # is not frozen -- the gate blocks its worker thread, not the loop.
+        while not gate_entered.is_set():
+            await asyncio.sleep(0.001)
+        order.append("ticker_run")
+        release.set()
+        return await task
+
+    result = asyncio.run(_drive())
+
+    assert order.index("ticker_run") < order.index("gate_return")
+    assert result.tier is OracleTier.T1_STATIC
+    assert result.status == "pass"
+    assert result.gate_id == "G-1"
 
 
 # --------------------------------------------------------------------------- #

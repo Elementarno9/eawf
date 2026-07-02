@@ -25,6 +25,7 @@ The runner is a thin orchestrator over three pre-existing seams:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Annotated, Literal
@@ -149,7 +150,9 @@ async def run_oracle(
        deterministic gate.
     2. For each gate, when ``criterion.evidence_kind == "deterministic"``,
        compile it (:func:`compile_gate`) and run it
-       (:func:`run_checks`). The FIRST required/blocking deterministic gate
+       (:func:`run_checks`, offloaded to a worker thread via
+       :func:`asyncio.to_thread` so the subprocess-bearing gate never starves
+       the daemon event loop). The FIRST required/blocking deterministic gate
        that yields ``status in {"fail", "blocked"}`` returns a non-pass
        result at that gate's tier; the first deterministic ``pass`` returns a
        pass at that tier. A gate that raises is caught and recorded as a
@@ -217,7 +220,13 @@ async def run_oracle(
                 spec = compile_gate(gate, criterion=criterion)
                 if spec is None:
                     continue
-                result = run_checks([spec], cwd=repo_root)[0]
+                # run_checks shells out to per-check subprocesses (pytest, mypy,
+                # pre-commit) with multi-minute budgets; run_oracle is awaited
+                # on the daemon event loop, so the synchronous call is offloaded
+                # to a worker thread to keep the loop responsive under a slow
+                # gate. Result handling stays on-loop.
+                results = await asyncio.to_thread(run_checks, [spec], cwd=repo_root)
+                result = results[0]
             except Exception as exc:
                 logger.warning(
                     f"run_oracle gate_blocked criterion={criterion.id!r} gate={gate.id!r} "
