@@ -385,3 +385,82 @@ def test_prep_plan_text_none_when_no_state(state_dir: Path) -> None:
     env = run_skill(skill, _ctx())
     body = PrepBody.model_validate(cast(dict, env.body))
     assert body.plan_text is None
+
+
+# ---- P30-I23-W45: /prep runtime options -----------------------------------
+
+
+def _ctx_args(args: dict[str, Any]) -> SkillContext:
+    ctx = _ctx()
+    ctx.args = args
+    return ctx
+
+
+def _claim_action(env: object) -> str:
+    """Return the emitted ``eawf wave claim`` action from the envelope footer."""
+    actions = env.footer.next_valid_actions  # type: ignore[attr-defined]
+    return next(a for a in actions if a.startswith("eawf wave claim"))
+
+
+def test_prep_auto_resume_default_leads_with_dispatch_resume(state_dir: Path) -> None:
+    """Default (``prep.auto_resume`` built-in True) leads with dispatch resume."""
+    _write_state(state_dir)
+    env = run_skill(PrepSkill(), _ctx_args({"iter_id": "P03-I02"}))
+    actions = list(env.footer.next_valid_actions)
+    assert actions[0] == "eawf dispatch resume"
+    assert any(a.startswith("eawf wave claim P03-I02") for a in actions)
+
+
+def test_prep_auto_resume_false_omits_dispatch_resume(state_dir: Path) -> None:
+    """``--auto-resume=false`` drops the leading dispatch-resume action."""
+    _write_state(state_dir)
+    env = run_skill(PrepSkill(), _ctx_args({"iter_id": "P03-I02", "auto_resume": False}))
+    actions = list(env.footer.next_valid_actions)
+    assert "eawf dispatch resume" not in actions
+    assert actions[0].startswith("eawf wave claim P03-I02")
+
+
+def test_prep_out_of_order_flag_rides_the_claim_command(state_dir: Path) -> None:
+    """``--out-of-order`` makes the emitted claim command carry the flag."""
+    _write_state(state_dir)
+    env = run_skill(PrepSkill(), _ctx_args({"iter_id": "P03-I02", "out_of_order": True}))
+    assert "--out-of-order" in _claim_action(env)
+
+
+def test_prep_out_of_order_default_omits_flag(state_dir: Path) -> None:
+    """Default (no ``--out-of-order``) leaves the claim command flag-free."""
+    _write_state(state_dir)
+    env = run_skill(PrepSkill(), _ctx_args({"iter_id": "P03-I02"}))
+    assert "--out-of-order" not in _claim_action(env)
+
+
+def test_prep_runtime_override_rides_the_claim_command(state_dir: Path) -> None:
+    """``--runtime`` threads the ladder override onto the emitted claim command."""
+    _write_state(state_dir)
+    env = run_skill(PrepSkill(), _ctx_args({"iter_id": "P03-I02", "runtime": "codex"}))
+    assert "--runtime codex" in _claim_action(env)
+
+
+def test_prep_ceremony_valid_recorded_no_warning(state_dir: Path) -> None:
+    """A valid ``--ceremony`` lands in the resolve_mode event with no warning."""
+    _write_state(state_dir)
+    env = run_skill(PrepSkill(), _ctx_args({"iter_id": "P03-I02", "ceremony": "lite"}))
+    assert not [w for w in env.footer.warnings if w.code == "unknown_ceremony"]
+    resolve = next(
+        e for e in _read_events(state_dir) if e["payload"].get("event_type") == "prep.resolve_mode"
+    )
+    assert resolve["payload"]["ceremony"] == "lite"
+
+
+def test_prep_unknown_ceremony_records_advisory_warning(state_dir: Path) -> None:
+    """An out-of-set ``--ceremony`` records a warning and keeps the recommendation."""
+    _write_state(state_dir)
+    env = run_skill(PrepSkill(), _ctx_args({"iter_id": "P03-I02", "ceremony": "bogus"}))
+    codes = {w.code for w in env.footer.warnings}
+    assert "unknown_ceremony" in codes
+    # The status is untouched (advisory, not a gate) and ceremony falls back.
+    assert env.header.status == "ok"
+    resolve = next(
+        e for e in _read_events(state_dir) if e["payload"].get("event_type") == "prep.resolve_mode"
+    )
+    assert resolve["payload"]["ceremony"] is None

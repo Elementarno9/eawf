@@ -80,7 +80,7 @@ from pydantic import ValidationError
 from eawf.kernel.state.enums import FlowStatus
 from eawf.kernel.store.kinds.flow import FlowCheckpointPayload
 from eawf.surfaces.cli import errors as cli_errors
-from eawf.surfaces.render.envelope import OutputEnvelope, SkillName
+from eawf.surfaces.render.envelope import EnvelopeWarning, OutputEnvelope, SkillName
 from eawf.workflow.skills.audit import AuditSkill
 from eawf.workflow.skills.bodies.flow import FlowBody
 from eawf.workflow.skills.engine import (
@@ -127,6 +127,141 @@ _CORE_FLOW_ORDER: tuple[tuple[SkillName, type[Skill]], ...] = (
 # Hard cap per git invocation. ``flow`` is operator-driven so a 5 s
 # budget is well above the happy path while still bounding a hung daemon.
 _GIT_TIMEOUT_SECONDS: float = 5.0
+
+
+# ---- Runtime-option resolution (P30-I23-W45) --------------------------------
+
+#: Recognised ``--caps`` axes. A cap ceiling on any other axis records an
+#: advisory warning and is dropped (an idle knob is worse than an honest gap).
+_CAP_KEYS: frozenset[str] = frozenset({"eu", "usd", "tokens"})
+
+#: Built-in default for ``--max-repair-cycles`` when neither the flag nor the
+#: ``flow.max_repair_cycles`` config leaf resolves.
+_DEFAULT_MAX_REPAIR_CYCLES: int = 3
+
+
+def _parse_caps(raw: Any, warnings: list[EnvelopeWarning]) -> dict[str, float]:
+    """Parse ``--caps eu=<f>,usd=<f>,tokens=<n>`` into a ceiling map.
+
+    Accepts the comma-separated string form or an already-parsed dict. An
+    out-of-set axis records an advisory ``unknown_cap`` warning; a malformed
+    number records ``invalid_cap`` — both are dropped rather than aborting so
+    one bad token cannot fail the pipeline. Enforcement stays honest-empty
+    until EU-capture spend rows land; the parsed ceilings are recorded so the
+    contract is visible, not idle.
+
+    Args:
+        raw: The ``ctx.args["caps"]`` value (string, dict, or ``None``).
+        warnings: Accumulator for advisory parse warnings.
+
+    Returns:
+        The ceiling map keyed by axis (empty when uncapped).
+    """
+    if raw is None:
+        return {}
+    pairs: list[tuple[str, Any]] = []
+    if isinstance(raw, dict):
+        pairs = list(raw.items())
+    elif isinstance(raw, str):
+        for part in raw.split(","):
+            token = part.strip()
+            if not token:
+                continue
+            if "=" not in token:
+                warnings.append(
+                    EnvelopeWarning(
+                        code="invalid_cap",
+                        detail=f"ignored --caps segment {token!r}: expected axis=value",
+                    )
+                )
+                continue
+            axis, _, value = token.partition("=")
+            pairs.append((axis, value))
+    else:
+        return {}
+    caps: dict[str, float] = {}
+    for axis, value in pairs:
+        key = str(axis).strip().lower()
+        if key not in _CAP_KEYS:
+            warnings.append(
+                EnvelopeWarning(
+                    code="unknown_cap",
+                    detail=f"ignored --caps axis {key!r}: expected one of {sorted(_CAP_KEYS)}",
+                )
+            )
+            continue
+        try:
+            caps[key] = float(value)
+        except TypeError, ValueError:
+            warnings.append(
+                EnvelopeWarning(
+                    code="invalid_cap",
+                    detail=f"ignored --caps {key}={value!r}: not a number",
+                )
+            )
+    return caps
+
+
+def _config_max_repair_cycles(state_path: Path) -> int:
+    """Read the ``flow.max_repair_cycles`` leaf (default 3) from layered config."""
+    from eawf.kernel.config.layered import merge_config
+
+    workspace_root = _workspace_root_for_state(state_path)
+    try:
+        merged, _sources = merge_config(repo=workspace_root, workspace=workspace_root)
+    except Exception as exc:  # pragma: no cover - defensive only
+        logger.debug(f"_config_max_repair_cycles merge_error={exc!r}")
+        return _DEFAULT_MAX_REPAIR_CYCLES
+    flow_cfg = merged.get("flow") if isinstance(merged, dict) else None
+    if isinstance(flow_cfg, dict):
+        raw = flow_cfg.get("max_repair_cycles")
+        if isinstance(raw, bool):
+            # bool is an int subclass; a stray True/False is not a valid count.
+            return _DEFAULT_MAX_REPAIR_CYCLES
+        if isinstance(raw, int) and raw >= 0:
+            return raw
+    return _DEFAULT_MAX_REPAIR_CYCLES
+
+
+def _resolve_max_repair_cycles(
+    args: dict[str, Any], state_path: Path, warnings: list[EnvelopeWarning]
+) -> int:
+    """Resolve ``--max-repair-cycles`` (default from ``flow.max_repair_cycles``).
+
+    An explicit flag wins; a non-integer or negative value records an advisory
+    ``invalid_max_repair_cycles`` warning and falls back to the config leaf
+    (built-in default 3) rather than aborting.
+    """
+    raw = args.get("max_repair_cycles")
+    if raw is None:
+        return _config_max_repair_cycles(state_path)
+    if isinstance(raw, bool):
+        warnings.append(
+            EnvelopeWarning(
+                code="invalid_max_repair_cycles",
+                detail=f"ignored --max-repair-cycles {raw!r}: expected a non-negative int",
+            )
+        )
+        return _config_max_repair_cycles(state_path)
+    try:
+        value = int(raw)
+    except TypeError, ValueError:
+        warnings.append(
+            EnvelopeWarning(
+                code="invalid_max_repair_cycles",
+                detail=f"ignored --max-repair-cycles {raw!r}: not an integer",
+            )
+        )
+        return _config_max_repair_cycles(state_path)
+    if value < 0:
+        warnings.append(
+            EnvelopeWarning(
+                code="invalid_max_repair_cycles",
+                detail=f"ignored --max-repair-cycles {value}: must be >= 0",
+            )
+        )
+        return _config_max_repair_cycles(state_path)
+    return value
 
 
 def _stop_after_short_name(skill_name: SkillName) -> str:
@@ -443,6 +578,11 @@ class _FlowInputs:
         resume_from_id: The resumed checkpoint's envelope id, or ``None``.
         flow_id: The flow id (caller-supplied or freshly minted).
         start_index: The first step index to run (resume tail offset).
+        caps: The parsed ``--caps`` spend ceilings keyed by axis (empty when
+            uncapped); enforcement stays honest-empty until EU-capture lands.
+        max_repair_cycles: The resolved ``--max-repair-cycles`` ceiling
+            (default 3 via ``flow.max_repair_cycles``).
+        warnings: Advisory warnings folded into the envelope footer.
     """
 
     topic: Any
@@ -452,6 +592,9 @@ class _FlowInputs:
     resume_from_id: str | None
     flow_id: str
     start_index: int
+    caps: dict[str, float] = field(default_factory=dict)
+    max_repair_cycles: int = _DEFAULT_MAX_REPAIR_CYCLES
+    warnings: list[EnvelopeWarning] = field(default_factory=list)
 
 
 @dataclass
@@ -519,6 +662,7 @@ class FlowSkill(SkillAction):
             if isinstance(flow_id_raw, str) and flow_id_raw
             else f"FL-{uuid.uuid4().hex[:12]}"
         )
+        warnings: list[EnvelopeWarning] = []
         return _FlowInputs(
             topic=args.get("topic"),
             stop_after=_resolve_stop_after(args.get("stop_after")),
@@ -527,7 +671,25 @@ class FlowSkill(SkillAction):
             resume_from_id=resume_from_id,
             flow_id=flow_id,
             start_index=0 if resume_from is None else resume_from.step_index + 1,
+            caps=_parse_caps(args.get("caps"), warnings),
+            max_repair_cycles=_resolve_max_repair_cycles(args, run.state_path, warnings),
+            warnings=warnings,
         )
+
+    def _flow_policy(self, inputs: _FlowInputs) -> dict[str, Any]:
+        """Build the run-level policy dict recorded on every ``flow_record``.
+
+        Surfaces the resolved runtime options (``stop_after`` +
+        ``max_repair_cycles`` always, ``caps`` when set) so the flow record is
+        an honest, queryable ledger of what the run was told to do.
+        """
+        policy: dict[str, Any] = {}
+        if inputs.stop_after is not None:
+            policy["stop_after"] = inputs.stop_after
+        if inputs.caps:
+            policy["caps"] = dict(inputs.caps)
+        policy["max_repair_cycles"] = inputs.max_repair_cycles
+        return policy
 
     def _parse_resume_from(
         self, resume_from_raw: Any
@@ -576,13 +738,13 @@ class FlowSkill(SkillAction):
                 "stop_after": inputs.stop_after,
                 "step_count": len(self.flow_order),
                 "flow_id": inputs.flow_id,
+                "caps": inputs.caps,
+                "max_repair_cycles": inputs.max_repair_cycles,
             },
         )
         # Record the in-progress run summary so a kill leaves a trail for
         # ``--resume`` to find.
-        policy: dict[str, Any] = {}
-        if inputs.stop_after is not None:
-            policy["stop_after"] = inputs.stop_after
+        policy = self._flow_policy(inputs)
         record_id = _emit_flow_record(
             state_path=run.state_path,
             scope_id=run.scope_id,
@@ -747,7 +909,7 @@ class FlowSkill(SkillAction):
             scope_id=run.scope_id,
             flow_id=inputs.flow_id,
             goal=str(inputs.topic) if inputs.topic is not None else "",
-            policy={"stop_after": inputs.stop_after} if inputs.stop_after is not None else {},
+            policy=self._flow_policy(inputs),
             status=_terminal_flow_status(terminal_status),
             last_safe_checkpoint=outcome.last_safe_checkpoint_id,
             next_action=None,
@@ -768,6 +930,7 @@ class FlowSkill(SkillAction):
             state_mutations=run.mutations,
             evidence_refs=run.evidence,
             next_valid_actions=list(_FLOW_NEXT_ACTIONS),
+            warnings=inputs.warnings,
             repair_commands=outcome.repair_commands,
         )
 

@@ -63,7 +63,7 @@ from typing import Any
 import orjson
 
 from eawf.kernel.state.models import State, Wave
-from eawf.surfaces.render.envelope import EnvelopeStatus, SkillName
+from eawf.surfaces.render.envelope import EnvelopeStatus, EnvelopeWarning, SkillName
 from eawf.workflow.audit_dsl.models import CheckSpec
 from eawf.workflow.audit_dsl.runner import run_checks
 from eawf.workflow.skills._common import (
@@ -101,6 +101,96 @@ _DEFAULT_EVALUATION_CHECKS: tuple[str, ...] = (
     "hypothesis_verdict",
 )
 _DEFAULT_DIFF_BASE: str = "main"
+
+#: Closed set of ``--level`` values (default ``standard``). ``quick`` narrows
+#: the default check-name breadth to a smoke subset; ``standard`` / ``deep``
+#: run the full default set (there is no wider registered check set today).
+_AUDIT_LEVELS: frozenset[str] = frozenset({"quick", "standard", "deep"})
+
+#: Number of default checks the ``quick`` level surfaces (the cheapest broad
+#: smoke subset). ``standard`` / ``deep`` surface every default check.
+_QUICK_CHECK_COUNT: int = 2
+
+
+def _coerce_bool(value: Any, *, default: bool) -> bool:
+    """Best-effort string->bool coercion for stdin-piped JSON args."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _merged_config(state_path: Any) -> dict[str, Any]:
+    """Compose the layered config anchored at the active repo (read-only).
+
+    Mirrors the research / prep engines: the anchor is the state file's
+    grandparent (``.ea`` is the parent). A merge failure degrades to an
+    empty mapping so callers fall back to the built-in default.
+    """
+    from pathlib import Path
+
+    from eawf.kernel.config.layered import merge_config
+
+    anchor = Path(state_path).parent.parent
+    try:
+        merged, _sources = merge_config(repo=anchor, workspace=anchor)
+    except Exception as exc:  # pragma: no cover - defensive only
+        logger.debug(f"_merged_config merge_error={exc!r}")
+        return {}
+    return merged
+
+
+def _resolve_level(args: dict[str, Any], state_path: Any, warnings: list[EnvelopeWarning]) -> str:
+    """Resolve the ``--level`` check-plan breadth (default ``standard``).
+
+    An explicit ``--level`` wins; an out-of-set token records an advisory
+    ``unknown_audit_level`` warning and falls back to ``standard`` rather
+    than aborting. With no flag the ``audit.default_level`` layered leaf
+    (built-in default ``standard``) decides.
+
+    Args:
+        args: The skill's parsed arg dict.
+        state_path: Resolved path of the active ``state.json``.
+        warnings: Accumulator for the advisory out-of-set warning.
+
+    Returns:
+        The resolved level literal (``quick`` / ``standard`` / ``deep``).
+    """
+    raw = args.get("level")
+    if raw is not None:
+        candidate = str(raw).strip().lower()
+        if candidate in _AUDIT_LEVELS:
+            return candidate
+        warnings.append(
+            EnvelopeWarning(
+                code="unknown_audit_level",
+                detail=(
+                    f"ignored --level {raw!r}: expected one of "
+                    f"{sorted(_AUDIT_LEVELS)}; fell back to standard"
+                ),
+            )
+        )
+        return "standard"
+    audit_cfg = _merged_config(state_path).get("audit")
+    if isinstance(audit_cfg, dict):
+        cfg_level = audit_cfg.get("default_level")
+        if isinstance(cfg_level, str) and cfg_level.strip().lower() in _AUDIT_LEVELS:
+            return cfg_level.strip().lower()
+    return "standard"
+
+
+def _apply_level(default_checks: tuple[str, ...], level: str) -> tuple[str, ...]:
+    """Narrow the default check-name set for the resolved ``--level``.
+
+    ``quick`` returns the cheapest smoke subset (:data:`_QUICK_CHECK_COUNT`
+    checks); ``standard`` and ``deep`` return the full default set.
+    """
+    if level == "quick":
+        return default_checks[:_QUICK_CHECK_COUNT]
+    return default_checks
 
 
 def _normalise_checks(raw: Any, default: tuple[str, ...]) -> list[str]:
@@ -261,11 +351,17 @@ class AuditSkill(Skill):
         scope_id = ctx.scope
         args: dict[str, Any] = dict(ctx.args)
 
+        warnings: list[EnvelopeWarning] = []
+        enforce = _coerce_bool(args.get("enforce"), default=False)
+        level = _resolve_level(args, state_path, warnings)
+
         kind: AuditKind = _resolve_kind(args, state_path)
         default_checks = (
             _DEFAULT_EVALUATION_CHECKS if kind == "evaluation" else _DEFAULT_SHIP_GATE_CHECKS
         )
-        default_check_names = _normalise_checks(args.get("checks"), default_checks)
+        default_check_names = _normalise_checks(
+            args.get("checks"), _apply_level(default_checks, level)
+        )
 
         wave_arg = args.get("wave_id")
         wave_id = str(wave_arg) if wave_arg else scope_id
@@ -283,7 +379,13 @@ class AuditSkill(Skill):
             scope_id=scope_id,
             event_type="audit.resolve_scope",
             summary=f"audit: scope={scope_id} kind={kind}",
-            payload={"kind": kind, "scope_id": scope_id, "wave_id": wave_id},
+            payload={
+                "kind": kind,
+                "scope_id": scope_id,
+                "wave_id": wave_id,
+                "level": level,
+                "enforce": enforce,
+            },
         )
         persisted_records.append(evt_id)
 
@@ -310,6 +412,7 @@ class AuditSkill(Skill):
             payload={
                 "criterion_check_count": len(criterion_specs),
                 "default_checks": default_check_names,
+                "level": level,
             },
         )
         persisted_records.append(evt_id)
@@ -429,12 +532,21 @@ class AuditSkill(Skill):
             auditor_dispatch=auditor_dispatch,
         )
 
-        # A failing check is a soft outcome: the checks ran and produced
-        # a verdict, but the gate did not pass. ``partial`` is the
-        # envelope status for "ran fine, result is not all-green".
-        status: EnvelopeStatus = "partial" if findings else "ok"
+        # A failing check is a soft outcome: the checks ran and produced a
+        # verdict, but the gate did not pass. ``partial`` is the envelope
+        # status for "ran fine, result is not all-green". Under ``--enforce``
+        # the audit's OWN aggregate verdict treats those advisory-fail
+        # findings as a hard fail (no daemon coupling) so a caller that opts
+        # in gets a non-degradable red.
+        fix_actions = [f"fix unmet criterion: {f.location}" for f in findings]
+        repair_commands: list[str] | None = None
         if findings:
-            next_actions = [f"fix unmet criterion: {f.location}" for f in findings] + next_actions
+            status: EnvelopeStatus = "failed" if enforce else "partial"
+            next_actions = fix_actions + next_actions
+            if enforce:
+                repair_commands = fix_actions
+        else:
+            status = "ok"
 
         return SkillResult(
             status=status,
@@ -443,6 +555,8 @@ class AuditSkill(Skill):
             state_mutations=state_mutations,
             evidence_refs=evidence_refs,
             next_valid_actions=next_actions,
+            warnings=warnings,
+            repair_commands=repair_commands,
         )
 
 

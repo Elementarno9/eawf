@@ -102,6 +102,15 @@ class ConfigKey(BaseModel):
 CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
     ConfigKey(
         tab="audit",
+        key="audit.default_level",
+        label="Default /audit check-plan breadth",
+        type="choice",
+        default="standard",
+        description="quick = narrow smoke set; standard = the full default set; deep = widest.",
+        choices=("quick", "standard", "deep"),
+    ),
+    ConfigKey(
+        tab="audit",
         key="audit.fix_safe",
         label="Apply safe fixes automatically during audit",
         type="bool",
@@ -309,6 +318,15 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         min_value=1.0,
     ),
     ConfigKey(
+        tab="flow",
+        key="flow.max_repair_cycles",
+        label="Max repair cycles per flow stage",
+        type="int",
+        default=3,
+        description="Stop re-entering a failing stage past this many repair cycles.",
+        min_value=0,
+    ),
+    ConfigKey(
         tab="planning",
         key="planning.approval",
         label="Approval mode for plan apply",
@@ -389,6 +407,14 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         choices=("simple", "balanced", "thorough"),
     ),
     ConfigKey(
+        tab="planning",
+        key="prep.auto_resume",
+        label="Emit `eawf dispatch resume` before each claim batch",
+        type="bool",
+        default=True,
+        description="When True, /prep leads its claim actions with a dispatch-resume command.",
+    ),
+    ConfigKey(
         tab="prose",
         key="prose.level",
         label="Doc-clarity prose-lint strictness",
@@ -465,6 +491,16 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         default="claude",
         description="Selected when no per-command override is supplied.",
         choices=("claude", "codex", "opencode"),
+    ),
+    ConfigKey(
+        tab="ship",
+        key="ship.gauntlet",
+        label="Ship gauntlet breadth",
+        type="choice",
+        default="full",
+        description="full (default, mandatory for migration/iter-close) runs all gates; "
+        "scoped is for re-runs only.",
+        choices=("full", "scoped"),
     ),
     ConfigKey(
         tab="ship",

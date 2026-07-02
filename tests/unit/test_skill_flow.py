@@ -253,3 +253,81 @@ def test_short_circuit_terminal_status_first_non_ok_wins() -> None:
 
 def test_short_circuit_terminal_status_first_step_fails() -> None:
     assert short_circuit_terminal_status(["needs_user", "ok"]) == "needs_user"
+
+
+# ---- P30-I23-W45: /flow --caps + --max-repair-cycles ----------------------
+
+
+def _flow_start_payload(state_dir: Path) -> dict:
+    import orjson
+
+    events_path = state_dir / "store" / "event.jsonl"
+    records = [orjson.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines()]
+    return next(r["payload"] for r in records if r["payload"].get("event_type") == "flow.start")
+
+
+def test_flow_caps_parsed_and_recorded(state_dir: Path) -> None:
+    """``--caps eu=..,usd=..,tokens=..`` parses into a ceiling map on the start event."""
+    env = run_skill(
+        FlowSkill(),
+        _ctx({"topic": "demo", "caps": "eu=1.5,usd=2,tokens=1000", "stop_after": "research"}),
+    )
+    assert env.header.status == "ok"
+    assert _flow_start_payload(state_dir)["caps"] == {"eu": 1.5, "usd": 2.0, "tokens": 1000.0}
+
+
+def test_flow_caps_default_uncapped(state_dir: Path) -> None:
+    """No ``--caps`` → the recorded ceiling map is empty (uncapped)."""
+    run_skill(FlowSkill(), _ctx({"topic": "demo", "stop_after": "research"}))
+    assert _flow_start_payload(state_dir)["caps"] == {}
+
+
+def test_flow_caps_unknown_axis_records_warning(state_dir: Path) -> None:
+    """An out-of-set cap axis records an advisory ``unknown_cap`` warning and is dropped."""
+    env = run_skill(FlowSkill(), _ctx({"topic": "demo", "caps": "gpu=4", "stop_after": "research"}))
+    assert "unknown_cap" in {w.code for w in env.footer.warnings}
+    assert _flow_start_payload(state_dir)["caps"] == {}
+
+
+def test_flow_caps_malformed_number_records_warning(state_dir: Path) -> None:
+    """A non-numeric cap value records an advisory ``invalid_cap`` warning and is dropped."""
+    env = run_skill(
+        FlowSkill(), _ctx({"topic": "demo", "caps": "eu=lots", "stop_after": "research"})
+    )
+    assert "invalid_cap" in {w.code for w in env.footer.warnings}
+    assert _flow_start_payload(state_dir)["caps"] == {}
+
+
+def test_flow_max_repair_cycles_default_three(state_dir: Path) -> None:
+    """No flag → the ``flow.max_repair_cycles`` built-in default (3) is recorded."""
+    run_skill(FlowSkill(), _ctx({"topic": "demo", "stop_after": "research"}))
+    assert _flow_start_payload(state_dir)["max_repair_cycles"] == 3
+
+
+def test_flow_max_repair_cycles_explicit_honoured(state_dir: Path) -> None:
+    """``--max-repair-cycles`` overrides the config default."""
+    run_skill(
+        FlowSkill(),
+        _ctx({"topic": "demo", "max_repair_cycles": 5, "stop_after": "research"}),
+    )
+    assert _flow_start_payload(state_dir)["max_repair_cycles"] == 5
+
+
+def test_flow_max_repair_cycles_invalid_records_warning_and_falls_back(state_dir: Path) -> None:
+    """A non-integer ``--max-repair-cycles`` warns and falls back to the config default."""
+    env = run_skill(
+        FlowSkill(),
+        _ctx({"topic": "demo", "max_repair_cycles": "many", "stop_after": "research"}),
+    )
+    assert "invalid_max_repair_cycles" in {w.code for w in env.footer.warnings}
+    assert _flow_start_payload(state_dir)["max_repair_cycles"] == 3
+
+
+def test_flow_max_repair_cycles_negative_records_warning(state_dir: Path) -> None:
+    """A negative ``--max-repair-cycles`` is refused (warning) and falls back."""
+    env = run_skill(
+        FlowSkill(),
+        _ctx({"topic": "demo", "max_repair_cycles": -1, "stop_after": "research"}),
+    )
+    assert "invalid_max_repair_cycles" in {w.code for w in env.footer.warnings}
+    assert _flow_start_payload(state_dir)["max_repair_cycles"] == 3

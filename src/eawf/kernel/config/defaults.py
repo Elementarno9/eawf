@@ -260,10 +260,22 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
     },
     "audit": {
         "default_checks": ["state", "tests", "lint", "typecheck", "docs"],
+        # Default /audit check-plan breadth: quick narrows to a smoke set,
+        # standard is the full default set, deep is the widest.
+        "default_level": "standard",
         "fix_safe": False,
         "flaky_retry_count": 1,
     },
+    # ``/prep`` runtime knobs. ``auto_resume`` leads /prep's emitted claim
+    # actions with an ``eawf dispatch resume`` so a leaked ``dispatch_paused``
+    # flag does not silently reject the claim batch.
+    "prep": {
+        "auto_resume": True,
+    },
     "ship": {
+        # Ship gauntlet breadth: full (default, mandatory for migration waves
+        # + iter close) runs every gate; scoped is legal only for re-runs.
+        "gauntlet": "full",
         "require_audit_pass": True,
         "require_memory_review": True,
         "use_vcs_policy": True,
@@ -303,6 +315,8 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
             "enforce": "soft",
             "multiplier": 1.5,
         },
+        # Stop re-entering a failing flow stage past this many repair cycles.
+        "max_repair_cycles": 3,
     },
     "memory": {
         "stores": ["project", "track", "agent", "user"],

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import shlex
 import subprocess
 from dataclasses import dataclass, field
@@ -42,7 +43,7 @@ from eawf.platform.artifacts.validation import validate_markdown_artifact, valid
 from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, validate_gate_argv
 from eawf.runtime.sandbox.cwd_guard import CwdGuardError, assert_cwd_inside
 from eawf.runtime.vcs.coauthor import CoauthorPolicyError, VcsConfig, resolve_coauthor_trailer
-from eawf.surfaces.render.envelope import SkillName
+from eawf.surfaces.render.envelope import EnvelopeWarning, SkillName
 from eawf.workflow.lifecycle.transitions import (
     phase_close_readiness,
     phase_close_readiness_blockers,
@@ -65,6 +66,136 @@ _ZERO_ESTIMATE: dict[str, float] = {"estimated_eu": 0.0, "actual_eu": 0.0}
 
 
 _VALID_PR_ACTIONS: tuple[str, ...] = ("open", "ready", "draft", "close", "none")
+
+#: Closed set of ``--gauntlet`` breadth modes (default ``full``). ``full`` is
+#: mandatory for migration waves + iter close; ``scoped`` is legal only for
+#: re-runs after a green pass.
+_GAUNTLET_MODES: frozenset[str] = frozenset({"full", "scoped"})
+
+#: The ``.github/workflows/phase-release.yaml:46`` extraction regex, mirrored
+#: verbatim: the tag workflow reads the release version out of a phase-close
+#: commit subject via this pattern. A ``(release=...)`` group must match it as
+#: a standalone group for the post-merge tag step to fire.
+_RELEASE_ANNOTATION_RE: re.Pattern[str] = re.compile(
+    r"\(release=(v\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?)\)"
+)
+
+#: Bare ``release=`` token finder used to catch a version fused into another
+#: annotation group (``(audit=..., release=v0.6.0)``) — the exact shape
+#: ``tools/commit_prefix_lint.py`` passes unflagged today.
+_RELEASE_TOKEN_RE: re.Pattern[str] = re.compile(r"release=")
+
+
+def validate_release_subject(subject: str) -> None:
+    """Reject any ``release=`` token not inside a standalone ``(release=vX.Y.Z)``.
+
+    The ``.github/workflows/phase-release.yaml`` tag step extracts the
+    release version with :data:`_RELEASE_ANNOTATION_RE`, which only matches a
+    ``(release=vX.Y.Z)`` group whose content begins right after the ``(``.
+    ``tools/commit_prefix_lint.py``'s ``_check_release_annotation`` fires only
+    on the literal ``(release=`` prefix, so it silently PASSES the fused
+    ``(audit=..., release=v0.6.0)`` shape (A10-H7). This validator closes that
+    blind spot: every ``release=`` token in *subject* must be immediately
+    preceded by ``(`` AND fall inside a standalone group the extraction regex
+    accepts.
+
+    Args:
+        subject: The emitted phase-close commit subject to validate.
+
+    Raises:
+        ValueError: A ``release=`` token is bare, fused into another
+            annotation group, or its version does not match the extraction
+            regex.
+    """
+    standalone = [m.span() for m in _RELEASE_ANNOTATION_RE.finditer(subject)]
+    for match in _RELEASE_TOKEN_RE.finditer(subject):
+        idx = match.start()
+        preceded_by_open_paren = idx > 0 and subject[idx - 1] == "("
+        inside_standalone = any(start <= idx < end for start, end in standalone)
+        if not (preceded_by_open_paren and inside_standalone):
+            raise ValueError(
+                "release annotation must be a standalone (release=vX.Y.Z) group, never "
+                f"bare or fused with another annotation: {subject!r}"
+            )
+
+
+def _resolve_release(value: Any) -> str | None:
+    """Normalise the ``--release`` argument; ``None`` when unset/empty."""
+    if value is None:
+        return None
+    candidate = str(value).strip()
+    return candidate or None
+
+
+def _emitted_phase_close_subject(phase_id: str | None, audit_id: str | None, release: str) -> str:
+    """Build the phase-close commit subject carrying a standalone release group.
+
+    An existing ``(audit=<id>)`` annotation (phase-close commits ride the
+    co-closing audit) is kept as its OWN group so the release version lands in
+    a separate ``(release=<version>)`` group — never fused, which
+    :func:`validate_release_subject` would then reject.
+
+    Args:
+        phase_id: The resolved phase id, or ``None`` (rendered as ``phase``).
+        audit_id: The co-closing audit id to annotate, or ``None`` to omit.
+        release: The resolved release token (e.g. ``v0.6.0``).
+
+    Returns:
+        The emitted phase-close commit subject.
+    """
+    label = phase_id if phase_id is not None else "phase"
+    audit_group = f" (audit={audit_id})" if audit_id else ""
+    return f"[{label}] state: close iter + phase{audit_group} (release={release})"
+
+
+def _merged_config(state_path: Path) -> dict[str, Any]:
+    """Compose the layered config anchored at the repo root (read-only).
+
+    Mirrors :func:`_load_vcs_config`: the anchor is the state file's
+    grandparent. A merge failure degrades to an empty mapping so callers
+    fall back to the built-in default.
+    """
+    anchor = state_path.parent.parent
+    try:
+        merged, _sources = merge_config(repo=anchor, workspace=anchor)
+    except Exception as exc:  # pragma: no cover - defensive only
+        logger.debug(f"_merged_config merge_error={exc!r}")
+        return {}
+    return merged
+
+
+def _resolve_gauntlet(
+    state_path: Path, args: dict[str, Any], warnings: list[EnvelopeWarning]
+) -> str:
+    """Resolve ``--gauntlet`` breadth (default ``full`` via ``ship.gauntlet``).
+
+    An explicit flag wins; an out-of-set token records an advisory
+    ``unknown_gauntlet`` warning and falls back to ``full`` (the safe,
+    mandatory-for-migration default) rather than aborting. With no flag the
+    ``ship.gauntlet`` layered leaf (built-in default ``full``) decides.
+    """
+    raw = args.get("gauntlet")
+    if raw is not None:
+        candidate = str(raw).strip().lower()
+        if candidate in _GAUNTLET_MODES:
+            return candidate
+        warnings.append(
+            EnvelopeWarning(
+                code="unknown_gauntlet",
+                detail=(
+                    f"ignored --gauntlet {raw!r}: expected one of "
+                    f"{sorted(_GAUNTLET_MODES)}; fell back to full"
+                ),
+            )
+        )
+        return "full"
+    ship_cfg = _merged_config(state_path).get("ship")
+    if isinstance(ship_cfg, dict):
+        cfg = ship_cfg.get("gauntlet")
+        if isinstance(cfg, str) and cfg.strip().lower() in _GAUNTLET_MODES:
+            return cfg.strip().lower()
+    return "full"
+
 
 #: Audit verdicts that clear the ship gate. ``pass`` is clean; ``minor``
 #: carries triage-later findings but does not block ship (mirrors the
@@ -548,6 +679,13 @@ class _ShipInputs:
         phase_id: The phase id resolved from the scope, or ``None``.
         vcs_config: The validated ``vcs`` config surface.
         acceptance: The validated ``acceptance`` config surface.
+        gauntlet: The resolved ``--gauntlet`` breadth (``full`` / ``scoped``).
+        release: The resolved ``--release`` token, or ``None``.
+        release_subject: The emitted phase-close commit subject carrying the
+            standalone ``(release=...)`` group, or ``None`` without a release.
+        skip_pr_pass: Whether ``--skip-pr-pass`` skips the ship review pass on
+            a re-run after a green pass.
+        warnings: Advisory warnings folded into the envelope footer.
     """
 
     do_commit: bool
@@ -560,6 +698,11 @@ class _ShipInputs:
     phase_id: str | None
     vcs_config: VcsConfig
     acceptance: AcceptanceConfig
+    gauntlet: str = "full"
+    release: str | None = None
+    release_subject: str | None = None
+    skip_pr_pass: bool = False
+    warnings: list[EnvelopeWarning] = field(default_factory=list)
 
 
 @dataclass
@@ -584,6 +727,15 @@ class ShipSkill(SkillAction):
     name: SkillName = "/ship"
 
     def _gather(self, run: ActionRun) -> _ShipInputs:
+        warnings: list[EnvelopeWarning] = []
+        state = _load_state(run.state_path)
+        phase_id = _phase_id_from_scope(run.scope_id)
+        release = _resolve_release(run.args.get("release"))
+        release_subject = (
+            _emitted_phase_close_subject(phase_id, self._resolve_audit_id(state, phase_id), release)
+            if release is not None
+            else None
+        )
         return _ShipInputs(
             do_commit=_coerce_bool(run.args.get("commit", False)),
             do_push=_coerce_bool(run.args.get("push", False)),
@@ -593,16 +745,35 @@ class ShipSkill(SkillAction):
             ),
             pr_body=run.args.get("pr_body"),
             project_root=run.state_path.parent.parent,
-            state=_load_state(run.state_path),
-            phase_id=_phase_id_from_scope(run.scope_id),
+            state=state,
+            phase_id=phase_id,
             vcs_config=_load_vcs_config(run.state_path),
             acceptance=_load_acceptance_config(run.state_path),
+            gauntlet=_resolve_gauntlet(run.state_path, run.args, warnings),
+            release=release,
+            release_subject=release_subject,
+            skip_pr_pass=_coerce_bool(run.args.get("skip_pr_pass", False)),
+            warnings=warnings,
         )
+
+    @staticmethod
+    def _resolve_audit_id(state: State | None, phase_id: str | None) -> str | None:
+        """Return the latest audit id gating the phase, or ``None``.
+
+        Reuses :func:`_latest_audit_for_phase` so the release annotation's
+        sibling ``(audit=<id>)`` group names the same co-closing audit the
+        ship gate consults.
+        """
+        if state is None or phase_id is None:
+            return None
+        audit = _latest_audit_for_phase(state, phase_id)
+        return audit.id if audit is not None else None
 
     def _validate(self, run: ActionRun, inputs: _ShipInputs) -> SkillResult | None:
         # Each gate emits its own event (pass and fail) and short-circuits on
         # failure; the gates run in the documented pipeline order.
         for gate in (
+            self._gate_release,
             self._gate_artifacts,
             self._gate_audit,
             self._gate_merge_method,
@@ -611,6 +782,34 @@ class ShipSkill(SkillAction):
             failure = gate(run, inputs)
             if failure is not None:
                 return failure
+        return None
+
+    def _gate_release(self, run: ActionRun, inputs: _ShipInputs) -> SkillResult | None:
+        # When ``--release`` is set, the emitted phase-close subject must
+        # carry the version in a STANDALONE ``(release=vX.Y.Z)`` group. A bare
+        # or fused ``release=`` token (the shape the commit-prefix lint passes
+        # unflagged) is a typed refusal so the skill cannot inherit the lint's
+        # blind spot and emit a subject the tag workflow silently ignores.
+        if inputs.release is None or inputs.release_subject is None:
+            return None
+        try:
+            validate_release_subject(inputs.release_subject)
+        except ValueError as exc:
+            self._trace(
+                run,
+                "ship.release_gate",
+                "ship: release annotation rejected",
+                {
+                    "release": inputs.release,
+                    "subject": inputs.release_subject,
+                    "reason": str(exc),
+                },
+            )
+            return self._ship_failure(
+                run,
+                rollback_notes=f"release annotation rejected: {exc}",
+                repair_commands=["pass --release v<X.Y.Z> as a standalone (release=...) group"],
+            )
         return None
 
     def _gate_artifacts(self, run: ActionRun, inputs: _ShipInputs) -> SkillResult | None:
@@ -860,6 +1059,9 @@ class ShipSkill(SkillAction):
                 "commit": inputs.do_commit,
                 "push": inputs.do_push,
                 "pr": inputs.pr_action or "none",
+                "gauntlet": inputs.gauntlet,
+                "release": inputs.release or "none",
+                "skip_pr_pass": inputs.skip_pr_pass,
             },
         )
         # Step 11 — worktree cleanup (v0.1: skipped; the `eawf worktree`
@@ -869,9 +1071,15 @@ class ShipSkill(SkillAction):
     def _build_commit_groups(
         self, run: ActionRun, inputs: _ShipInputs, coauthor_trailer: str | None
     ) -> list[ShipCommitGroup]:
-        if not inputs.do_commit:
+        # A ``--release`` emits the validated phase-close subject (carrying the
+        # standalone ``(release=...)`` group); otherwise ``--commit`` emits the
+        # generic pending-ship subject. Neither flag -> no commit group.
+        if inputs.release_subject is not None:
+            message = inputs.release_subject
+        elif inputs.do_commit:
+            message = f"[{run.scope_id}] feat: pending ship"
+        else:
             return []
-        message = f"[{run.scope_id}] feat: pending ship"
         if coauthor_trailer is not None:
             message = f"{message}\n\n{coauthor_trailer}"
         return [ShipCommitGroup(message=message, files=[], evidence_refs=[])]
@@ -884,11 +1092,15 @@ class ShipSkill(SkillAction):
             estimate_vs_actual=dict(_ZERO_ESTIMATE),
             rollback_notes=None,
         )
-        return self._ok(
-            run,
-            body.model_dump(mode="json"),
+        return SkillResult(
+            status="ok",
+            body=body.model_dump(mode="json"),
+            persisted_store_records=run.records,
+            state_mutations=run.mutations,
+            evidence_refs=run.evidence,
             next_valid_actions=list(_SHIP_NEXT_ACTIONS),
+            warnings=inputs.warnings,
         )
 
 
-__all__ = ["ShipSkill"]
+__all__ = ["ShipSkill", "validate_release_subject"]

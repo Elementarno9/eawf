@@ -32,7 +32,7 @@ from eawf.kernel.config import layered
 from eawf.surfaces.render.envelope import EnvelopeWarning
 from eawf.workflow.skills.bodies.ship import ShipBody
 from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
-from eawf.workflow.skills.ship import ShipSkill
+from eawf.workflow.skills.ship import ShipSkill, validate_release_subject
 
 if TYPE_CHECKING:
     from eawf.workflow.skills.ship import _GateResult
@@ -903,3 +903,116 @@ def test_run_gate_command_zero_exit_is_green(tmp_path: Path) -> None:
     result = _run_gate_command("tests", "pytest --version", tmp_path)
     assert result.passed is True
     assert result.returncode == 0
+
+
+# ---- P30-I23-W45: --release subject validation ----------------------------
+
+
+def test_validate_release_subject_accepts_standalone_group() -> None:
+    """A standalone ``(release=vX.Y.Z)`` group matches the extraction regex."""
+    validate_release_subject("[P30] state: close iter + phase (release=v0.6.0)")
+
+
+def test_validate_release_subject_accepts_separate_audit_and_release_groups() -> None:
+    """An audit group and a release group side-by-side each stand alone → accepted."""
+    validate_release_subject("[P30] state: close iter + phase (audit=A10) (release=v0.6.0)")
+
+
+def test_validate_release_subject_accepts_prerelease_suffix() -> None:
+    """The extraction regex admits an ``rc``/``a``/``b`` pre-release suffix."""
+    validate_release_subject("[P30] state: close iter + phase (release=v1.0.0rc1)")
+
+
+def test_validate_release_subject_rejects_fused_annotation() -> None:
+    """The fused ``(audit=..., release=v0.6.0)`` shape is refused (A10-H7 blind spot)."""
+    with pytest.raises(ValueError, match="standalone"):
+        validate_release_subject("[P30] state: close iter + phase (audit=A10-H7, release=v0.6.0)")
+
+
+def test_validate_release_subject_rejects_bare_release_token() -> None:
+    """A bare ``release=vX.Y.Z`` not inside any paren group is refused."""
+    with pytest.raises(ValueError):
+        validate_release_subject("[P30] state: close release=v0.6.0")
+
+
+def test_validate_release_subject_rejects_malformed_version() -> None:
+    """A ``(release=...)`` group whose version fails the regex is refused."""
+    with pytest.raises(ValueError):
+        validate_release_subject("[P30] state: close iter + phase (release=v0.6)")
+
+
+# ---- P30-I23-W45: /ship --gauntlet + --release + --skip-pr-pass -----------
+
+
+def _ship_record_payload(state_dir: Path) -> dict:
+    events_path = state_dir / "store" / "event.jsonl"
+    records = [json.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines()]
+    return next(r["payload"] for r in records if r["payload"].get("event_type") == "ship.record")
+
+
+def test_ship_release_valid_version_carries_standalone_annotation(state_dir: Path) -> None:
+    """``--release v0.6.0`` emits a phase-close commit group with a standalone group."""
+    ctx = _ctx()
+    ctx.args = {"release": "v0.6.0"}
+    env = run_skill(ShipSkill(), ctx)
+    assert env.header.status == "ok"
+    body = ShipBody.model_validate(cast(dict, env.body))
+    assert len(body.commit_groups) == 1
+    assert "(release=v0.6.0)" in body.commit_groups[0].message
+
+
+def test_ship_release_invalid_version_refused(state_dir: Path) -> None:
+    """``--release`` with a non-version token is a typed refusal (status=failed)."""
+    ctx = _ctx()
+    ctx.args = {"release": "banana"}
+    env = run_skill(ShipSkill(), ctx)
+    assert env.header.status == "failed"
+    assert env.footer.repair_commands
+
+
+def test_ship_gauntlet_default_full_recorded(state_dir: Path) -> None:
+    """No ``--gauntlet`` → the built-in ``ship.gauntlet`` default (full) is recorded."""
+    run_skill(ShipSkill(), _ctx())
+    assert _ship_record_payload(state_dir)["gauntlet"] == "full"
+
+
+def test_ship_gauntlet_scoped_flag_honoured(state_dir: Path) -> None:
+    """``--gauntlet scoped`` is recorded on the ship-record event."""
+    ctx = _ctx()
+    ctx.args = {"gauntlet": "scoped"}
+    run_skill(ShipSkill(), ctx)
+    assert _ship_record_payload(state_dir)["gauntlet"] == "scoped"
+
+
+def test_ship_gauntlet_from_config_leaf(state_dir: Path) -> None:
+    """The ``ship.gauntlet`` config leaf drives the mode when no flag is set."""
+    import yaml
+
+    (state_dir / "config.yaml").write_text(
+        yaml.safe_dump({"ship": {"gauntlet": "scoped"}}), encoding="utf-8"
+    )
+    run_skill(ShipSkill(), _ctx())
+    assert _ship_record_payload(state_dir)["gauntlet"] == "scoped"
+
+
+def test_ship_gauntlet_unknown_records_warning_and_falls_back(state_dir: Path) -> None:
+    """An out-of-set ``--gauntlet`` records an advisory warning and falls back to full."""
+    ctx = _ctx()
+    ctx.args = {"gauntlet": "turbo"}
+    env = run_skill(ShipSkill(), ctx)
+    assert "unknown_gauntlet" in {w.code for w in env.footer.warnings}
+    assert _ship_record_payload(state_dir)["gauntlet"] == "full"
+
+
+def test_ship_skip_pr_pass_default_false(state_dir: Path) -> None:
+    """Default (no ``--skip-pr-pass``) records ``skip_pr_pass=False``."""
+    run_skill(ShipSkill(), _ctx())
+    assert _ship_record_payload(state_dir)["skip_pr_pass"] is False
+
+
+def test_ship_skip_pr_pass_flag_recorded(state_dir: Path) -> None:
+    """``--skip-pr-pass`` is coerced and recorded on the ship-record event."""
+    ctx = _ctx()
+    ctx.args = {"skip_pr_pass": True}
+    run_skill(ShipSkill(), ctx)
+    assert _ship_record_payload(state_dir)["skip_pr_pass"] is True

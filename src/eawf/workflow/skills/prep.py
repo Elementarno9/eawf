@@ -46,7 +46,7 @@ from pydantic import ValidationError
 from eawf.kernel.state.enums import PhaseStatus, WaveStatus
 from eawf.kernel.state.ids import parents_of
 from eawf.kernel.state.models import Phase, State
-from eawf.surfaces.render.envelope import SkillName
+from eawf.surfaces.render.envelope import EnvelopeWarning, SkillName
 from eawf.workflow.skills.bodies.prep import (
     PrepAcceptance,
     PrepBody,
@@ -61,6 +61,55 @@ logger = logging.getLogger(__name__)
 
 
 _DEFAULT_ITER_ID: str = "P00-I01"
+
+#: Closed set of ``--ceremony`` values. An out-of-set token records an
+#: advisory warning and falls back to the compute_ceremony recommendation
+#: rather than aborting the plan (the flag is an override, not a gate).
+_CEREMONY_VALUES: frozenset[str] = frozenset({"lite", "full"})
+
+
+def _coerce_bool(value: Any, *, default: bool) -> bool:
+    """Best-effort string->bool coercion for stdin-piped JSON args.
+
+    Args:
+        value: The raw arg value (``None`` when the flag is absent).
+        default: Returned verbatim when *value* is ``None``.
+
+    Returns:
+        The coerced boolean; ``default`` when *value* is ``None``.
+    """
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _merged_config(state_path: Path) -> dict[str, Any]:
+    """Compose the layered config anchored at the active repo (read-only).
+
+    Mirrors :meth:`eawf.workflow.skills.research.ResearchSkill._merged_config`:
+    the anchor is the state file's grandparent (``.ea`` is the parent). A
+    merge failure degrades to an empty mapping so callers fall back to the
+    built-in default rather than crashing the run.
+
+    Args:
+        state_path: Resolved path of the active ``state.json``.
+
+    Returns:
+        The merged config mapping, or ``{}`` on any merge failure.
+    """
+    from eawf.kernel.config.layered import merge_config
+
+    anchor = state_path.parent.parent
+    try:
+        merged, _sources = merge_config(repo=anchor, workspace=anchor)
+    except Exception as exc:  # pragma: no cover - defensive only
+        logger.debug(f"_merged_config merge_error={exc!r}")
+        return {}
+    return merged
 
 
 def _load_state(state_path: Path) -> State | None:
@@ -215,6 +264,16 @@ class _PrepInputs:
         state: The loaded state document, or ``None`` when unreadable.
         phase_id: The resolved target phase id, or ``None``.
         phase: The resolved :class:`Phase` record, or ``None``.
+        auto_resume: When ``True`` (``prep.auto_resume`` default), the emitted
+            claim actions lead with ``eawf dispatch resume`` (SKH-8a gotcha i).
+        out_of_order: When ``True`` (``--out-of-order``), the emitted claim
+            command carries ``--out-of-order`` (gotcha ii).
+        ceremony: The ``--ceremony`` override (``lite`` / ``full``), or ``None``
+            to keep the compute_ceremony recommendation.
+        runtime: The ``--runtime`` batch-ladder override id, or ``None`` for
+            the ladder head.
+        warnings: Advisory warnings folded into the envelope footer (e.g. an
+            out-of-set ``--ceremony`` token).
     """
 
     iter_id: str
@@ -223,6 +282,11 @@ class _PrepInputs:
     state: State | None
     phase_id: str | None
     phase: Phase | None
+    auto_resume: bool = True
+    out_of_order: bool = False
+    ceremony: str | None = None
+    runtime: str | None = None
+    warnings: list[EnvelopeWarning] = field(default_factory=list)
 
 
 @dataclass
@@ -253,6 +317,7 @@ class PrepSkill(SkillAction):
         state = _load_state(run.state_path)
         phase_id = _resolve_phase_id(run.args, iter_id, state)
         phase = state.phases.get(phase_id) if (state is not None and phase_id) else None
+        warnings: list[EnvelopeWarning] = []
         return _PrepInputs(
             iter_id=iter_id,
             approval=str(run.args.get("approval", "auto")).lower(),
@@ -260,7 +325,79 @@ class PrepSkill(SkillAction):
             state=state,
             phase_id=phase_id,
             phase=phase,
+            auto_resume=self._resolve_auto_resume(run),
+            out_of_order=_coerce_bool(run.args.get("out_of_order"), default=False),
+            ceremony=self._resolve_ceremony(run, warnings),
+            runtime=self._resolve_runtime(run),
+            warnings=warnings,
         )
+
+    def _resolve_auto_resume(self, run: ActionRun) -> bool:
+        """Resolve ``--auto-resume`` (default from the ``prep.auto_resume`` leaf).
+
+        An explicit flag wins; with no flag the ``prep.auto_resume`` layered
+        leaf (built-in default ``True``) decides whether the emitted claim
+        actions lead with ``eawf dispatch resume``.
+        """
+        raw = run.args.get("auto_resume")
+        if raw is not None:
+            return _coerce_bool(raw, default=True)
+        prep_cfg = _merged_config(run.state_path).get("prep")
+        if isinstance(prep_cfg, dict) and "auto_resume" in prep_cfg:
+            return _coerce_bool(prep_cfg.get("auto_resume"), default=True)
+        return True
+
+    def _resolve_ceremony(self, run: ActionRun, warnings: list[EnvelopeWarning]) -> str | None:
+        """Resolve ``--ceremony`` (``lite`` / ``full``); default keeps the recommendation.
+
+        An out-of-set token records an advisory ``unknown_ceremony`` warning
+        and falls back to ``None`` (keep the compute_ceremony recommendation)
+        rather than aborting — the flag is an override, not a gate.
+        """
+        raw = run.args.get("ceremony")
+        if raw is None:
+            return None
+        candidate = str(raw).strip().lower()
+        if candidate in _CEREMONY_VALUES:
+            return candidate
+        warnings.append(
+            EnvelopeWarning(
+                code="unknown_ceremony",
+                detail=(
+                    f"ignored --ceremony {raw!r}: expected one of "
+                    f"{sorted(_CEREMONY_VALUES)}; kept the recommendation"
+                ),
+            )
+        )
+        return None
+
+    def _resolve_runtime(self, run: ActionRun) -> str | None:
+        """Resolve ``--runtime`` batch-ladder override; ``None`` keeps the ladder head."""
+        raw = run.args.get("runtime")
+        if raw is None:
+            return None
+        candidate = str(raw).strip()
+        return candidate or None
+
+    def _next_actions(self, inputs: _PrepInputs) -> list[str]:
+        """Build the emitted ``next_valid_actions`` reflecting the claim options.
+
+        ``auto_resume`` leads with ``eawf dispatch resume`` (gotcha i); the
+        claim command carries ``--out-of-order`` (gotcha ii) and ``--runtime``
+        when those overrides are set. The canonical plan / audit follow-ups
+        trail the claim row.
+        """
+        actions: list[str] = []
+        if inputs.auto_resume:
+            actions.append("eawf dispatch resume")
+        claim = f"eawf wave claim {inputs.iter_id}"
+        if inputs.out_of_order:
+            claim = f"{claim} --out-of-order"
+        if inputs.runtime is not None:
+            claim = f"{claim} --runtime {inputs.runtime}"
+        actions.append(claim)
+        actions.extend(_PREP_NEXT_ACTIONS)
+        return actions
 
     def _validate(self, run: ActionRun, inputs: _PrepInputs) -> SkillResult | None:
         phase = inputs.phase
@@ -320,7 +457,14 @@ class PrepSkill(SkillAction):
             run,
             "prep.resolve_mode",
             f"prep: resolve mode iter={inputs.iter_id} fix={inputs.fix_mode}",
-            {"iter_id": inputs.iter_id, "fix_mode": inputs.fix_mode},
+            {
+                "iter_id": inputs.iter_id,
+                "fix_mode": inputs.fix_mode,
+                "auto_resume": inputs.auto_resume,
+                "out_of_order": inputs.out_of_order,
+                "ceremony": inputs.ceremony,
+                "runtime": inputs.runtime,
+            },
         )
         # Step 3 — load state.
         self._trace(
@@ -406,6 +550,7 @@ class PrepSkill(SkillAction):
             no_op=no_op,
             plan_text=plan_text,
         )
+        next_actions = self._next_actions(inputs)
         if inputs.approval == "ask":
             self._trace(
                 run,
@@ -424,15 +569,23 @@ class PrepSkill(SkillAction):
                     UserQuestionOption(label="cancel", description="Discard the plan."),
                 ],
             )
-            return self._needs_user(
-                run,
-                body.model_dump(mode="json"),
-                next_valid_actions=list(_PREP_NEXT_ACTIONS),
+            return SkillResult(
+                status="needs_user",
+                body=body.model_dump(mode="json"),
+                persisted_store_records=run.records,
+                state_mutations=run.mutations,
+                evidence_refs=run.evidence,
+                next_valid_actions=next_actions,
+                warnings=inputs.warnings,
             )
-        return self._ok(
-            run,
-            body.model_dump(mode="json"),
-            next_valid_actions=list(_PREP_NEXT_ACTIONS),
+        return SkillResult(
+            status="ok",
+            body=body.model_dump(mode="json"),
+            persisted_store_records=run.records,
+            state_mutations=run.mutations,
+            evidence_refs=run.evidence,
+            next_valid_actions=next_actions,
+            warnings=inputs.warnings,
         )
 
 

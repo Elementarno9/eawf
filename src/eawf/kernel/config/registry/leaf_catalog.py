@@ -824,6 +824,15 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
+        key="audit.default_level",
+        domain="audit",
+        type="literal",
+        default="standard",
+        writable_layers=_WRITABLE_GWR,
+        description="Default /audit check-plan breadth (quick narrows, deep widens).",
+        choices=("quick", "standard", "deep"),
+    ),
+    LeafKey(
         key="audit.fix_safe",
         domain="audit",
         type="bool",
@@ -838,6 +847,15 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
     ),
     # --- ship --------------------------------------------------------------
+    LeafKey(
+        key="ship.gauntlet",
+        domain="ship",
+        type="literal",
+        default="full",
+        writable_layers=_WRITABLE_GWR,
+        description="Ship gauntlet breadth: full (default) runs all gates; scoped is re-run only.",
+        choices=("full", "scoped"),
+    ),
     LeafKey(
         key="ship.require_audit_pass",
         domain="ship",
@@ -983,6 +1001,23 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
             "Safety multiplier applied to a wave's base budget to derive the "
             "enforced cap (1.5 == 50% headroom)."
         ),
+    ),
+    LeafKey(
+        key="flow.max_repair_cycles",
+        domain="flow",
+        type="int",
+        default=3,
+        writable_layers=_WRITABLE_GWR,
+        description="Stop re-entering a failing flow stage past this many repair cycles.",
+    ),
+    # --- prep --------------------------------------------------------------
+    LeafKey(
+        key="prep.auto_resume",
+        domain="prep",
+        type="bool",
+        default=True,
+        writable_layers=_WRITABLE_GWR,
+        description="When True, /prep leads its claim actions with an `eawf dispatch resume`.",
     ),
     # --- memory ------------------------------------------------------------
     LeafKey(

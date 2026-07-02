@@ -378,3 +378,106 @@ def test_audit_criterion_in_diff_passes_from_wave_state(state_dir: Path) -> None
     body = AuditBody.model_validate(cast(dict, env.body))
     assert body.findings == []
     assert [c.status for c in body.checks_run] == ["pass"]
+
+
+# ---- P30-I23-W45: /audit --level + --enforce ------------------------------
+
+
+def _events(state_dir: Path) -> list[dict]:
+    events_path = state_dir / "store" / "event.jsonl"
+    if not events_path.exists():
+        return []
+    return [json.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines()]
+
+
+def _build_check_plan_default_checks(state_dir: Path) -> list[str]:
+    plan = next(
+        e for e in _events(state_dir) if e["payload"].get("event_type") == "audit.build_check_plan"
+    )
+    return list(plan["payload"]["default_checks"])
+
+
+def test_audit_level_default_standard_surfaces_full_default_set(state_dir: Path) -> None:
+    """No ``--level`` → the built-in ``standard`` surfaces the full default set."""
+    env = run_skill(AuditSkill(), _ctx())
+    assert env.header.status == "ok"
+    # ship-gate default set is 6 checks; standard keeps all of them.
+    assert len(_build_check_plan_default_checks(state_dir)) == 6
+    resolve = next(
+        e for e in _events(state_dir) if e["payload"].get("event_type") == "audit.resolve_scope"
+    )
+    assert resolve["payload"]["level"] == "standard"
+
+
+def test_audit_level_quick_narrows_the_default_breadth(state_dir: Path) -> None:
+    """``--level quick`` narrows the default check-name set to the smoke subset."""
+    ctx = _ctx()
+    ctx.args = {"level": "quick"}
+    run_skill(AuditSkill(), ctx)
+    assert len(_build_check_plan_default_checks(state_dir)) == 2
+
+
+def test_audit_level_from_config_default_level(state_dir: Path) -> None:
+    """The ``audit.default_level`` config leaf drives the breadth when no flag is set."""
+    import yaml
+
+    (state_dir / "config.yaml").write_text(
+        yaml.safe_dump({"audit": {"default_level": "quick"}}), encoding="utf-8"
+    )
+    run_skill(AuditSkill(), _ctx())
+    assert len(_build_check_plan_default_checks(state_dir)) == 2
+
+
+def test_audit_unknown_level_records_warning_and_falls_back(state_dir: Path) -> None:
+    """An out-of-set ``--level`` records an advisory warning and falls back to standard."""
+    ctx = _ctx()
+    ctx.args = {"level": "ultra"}
+    env = run_skill(AuditSkill(), ctx)
+    codes = {w.code for w in env.footer.warnings}
+    assert "unknown_audit_level" in codes
+    # Fell back to standard → full default set, status untouched (advisory).
+    assert len(_build_check_plan_default_checks(state_dir)) == 6
+    assert env.header.status == "ok"
+
+
+def test_audit_enforce_false_findings_stay_partial(state_dir: Path) -> None:
+    """Default (``enforce=false``): a failing check degrades to ``partial``, not ``failed``."""
+    ctx = _ctx()
+    ctx.args = {
+        "wave_id": "P00-I01-W01",
+        "criterion_checks": [
+            {"criterion": "smoke behaves", "argv": [sys.executable, "-c", "raise SystemExit(1)"]},
+        ],
+    }
+    env = run_skill(AuditSkill(), ctx)
+    assert env.header.status == "partial"
+
+
+def test_audit_enforce_true_findings_become_failed(state_dir: Path) -> None:
+    """``--enforce``: the audit's own aggregate verdict treats findings as a hard fail."""
+    ctx = _ctx()
+    ctx.args = {
+        "enforce": True,
+        "wave_id": "P00-I01-W01",
+        "criterion_checks": [
+            {"criterion": "smoke behaves", "argv": [sys.executable, "-c", "raise SystemExit(1)"]},
+        ],
+    }
+    env = run_skill(AuditSkill(), ctx)
+    assert env.header.status == "failed"
+    assert env.footer.repair_commands
+    assert any("smoke behaves" in cmd for cmd in env.footer.repair_commands)
+
+
+def test_audit_enforce_true_all_pass_stays_ok(state_dir: Path) -> None:
+    """``--enforce`` with no findings is still ``ok`` — enforce only bites on findings."""
+    ctx = _ctx()
+    ctx.args = {
+        "enforce": True,
+        "wave_id": "P00-I01-W01",
+        "criterion_checks": [
+            {"criterion": "smoke behaves", "argv": [sys.executable, "-c", "raise SystemExit(0)"]},
+        ],
+    }
+    env = run_skill(AuditSkill(), ctx)
+    assert env.header.status == "ok"
