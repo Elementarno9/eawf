@@ -172,6 +172,47 @@ class MethodContext:
         self.last_activity = time.monotonic()
 
 
+def require_bound_state_root(
+    ctx: MethodContext,
+    *,
+    repo_root: str | None,
+    command: str,
+) -> None:
+    """Refuse a mutation whose intended state root is not the daemon's.
+
+    The EP3 guard (P30-I23-W11): the machine-global daemon accepted a
+    per-request ``repo_root`` with a silent fallback, so a daemon bound to
+    one repo's state served mutations aimed at another and wrote the wrong
+    ``state.json``. A mutation-bearing method calls this first; when the
+    caller's intended root differs from the daemon-bound root the request
+    is REFUSED with a typed error naming BOTH paths. Read-only methods
+    keep the fallback (a mis-anchored read is recoverable; a mis-anchored
+    write is corruption).
+
+    Args:
+        ctx: Server context carrying the daemon-bound ``state_path``.
+        repo_root: The caller's intended repo root, or ``None`` (the
+            legacy omitted-param shape, which resolves to the bound root
+            and passes).
+        command: Operator-facing command name for the error message.
+
+    Raises:
+        DaemonValidationError: When the resolved roots differ.
+    """
+    if not repo_root or ctx.state_path is None:
+        return
+    from pathlib import Path
+
+    intended = (Path(repo_root) / ".ea" / "state.json").resolve()
+    bound = Path(ctx.state_path).resolve()
+    if intended != bound:
+        raise DaemonValidationError(
+            f"validation_failed: wrong-state-root: {command} targets {intended} "
+            f"but this daemon is bound to {bound}; run the command against the "
+            "daemon bound to that repo (or restart the daemon there)"
+        )
+
+
 Handler = Callable[[MethodContext, dict[str, Any]], Awaitable[dict[str, Any]]]
 
 

@@ -33,6 +33,7 @@ verb fails fast rather than printing a faked "spawned ..." line.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 import typer
@@ -98,8 +99,9 @@ def _toggle_dispatch(*, method: str, verb: str, flags: GlobalFlags) -> bool:
 
     try:
         _dispatch.escalate_mutation(verb, flags=flags)
+        repo_root = str((flags.workspace or Path.cwd()).resolve())
         with DaemonClient() as client:
-            result: dict[str, Any] = client.call(method, {})
+            result: dict[str, Any] = client.call(method, {"repo_root": repo_root})
     except DaemonRpcError as exc:
         if exc.code == cli_errors.RPC_VALIDATION_FAILED:
             raise cli_errors.ValidationError(exc.message) from exc

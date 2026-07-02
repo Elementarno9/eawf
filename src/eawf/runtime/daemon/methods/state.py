@@ -110,6 +110,7 @@ from eawf.runtime.daemon.methods import (
     DaemonValidationError,
     MethodContext,
     register,
+    require_bound_state_root,
 )
 from eawf.runtime.daemon.wal import WalRecord
 from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
@@ -493,6 +494,7 @@ def _resolve_mutator_paths(
         RuntimeError: When the state path cannot be resolved or
             ``ctx.wal_dir`` is unset.
     """
+    require_bound_state_root(ctx, repo_root=repo_root, command="state mutation")
     state_path = _resolve_state_path(repo_root=repo_root, ctx=ctx)
     if repo_root:
         event_path = store_path(state_path, StoreKind.EVENT)

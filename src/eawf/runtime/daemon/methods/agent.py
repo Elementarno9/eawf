@@ -100,7 +100,7 @@ from eawf.runtime.daemon.dispatch_runner import (
     emit_agent_output_chunk,
     run_dispatch,
 )
-from eawf.runtime.daemon.methods import MethodContext, register
+from eawf.runtime.daemon.methods import MethodContext, register, require_bound_state_root
 from eawf.runtime.daemon.methods.fleet import kill_lane
 from eawf.runtime.lock import portalock
 from eawf.runtime.runtimes.adapter import ErrorClass, RuntimeSpawnError, SpawnResult
@@ -361,14 +361,16 @@ class KillResult(BaseModel):
 class PauseParams(BaseModel):
     """Params for :func:`pause` / :func:`resume`.
 
-    Both methods are parameterless toggles of the durable
-    :attr:`~eawf.kernel.state.models.State.dispatch_paused` flag, so the
-    model carries no fields; it exists to enforce ``extra="forbid"`` so a
-    caller that ships a stray key is rejected rather than silently
-    ignored.
+    Attributes:
+        repo_root: The caller's intended repo root. The EP3 state-root
+            guard refuses the toggle when it differs from the daemon-bound
+            root — a daemon bound to a fixture state once served
+            ``dispatch resume`` for the real repo and mutated the fixture.
+            ``None`` (the legacy shape) resolves to the bound root.
     """
 
     model_config = ConfigDict(extra="forbid")
+    repo_root: str | None = None
 
 
 class PauseResult(BaseModel):
@@ -1706,15 +1708,18 @@ async def pause(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
     Args:
         ctx: Server context; ``ctx.state_path`` must be configured.
-        params: JSON-RPC params per :class:`PauseParams` (parameterless).
+        params: JSON-RPC params per :class:`PauseParams`.
 
     Returns:
         Dict matching :class:`PauseResult` with ``paused=true``.
 
     Raises:
         RuntimeError: When ``ctx.state_path`` is unset (e.g. tests).
+        DaemonValidationError: When the caller's ``repo_root`` resolves a
+            state root other than the daemon-bound one (the EP3 guard).
     """
-    PauseParams.model_validate(params)
+    args = PauseParams.model_validate(params)
+    require_bound_state_root(ctx, repo_root=args.repo_root, command="dispatch pause")
     paused = _set_dispatch_paused(ctx, paused=True)
     return PauseResult(paused=paused).model_dump(mode="json")
 
@@ -1739,6 +1744,7 @@ async def resume(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     Raises:
         RuntimeError: When ``ctx.state_path`` is unset (e.g. tests).
     """
-    PauseParams.model_validate(params)
+    args = PauseParams.model_validate(params)
+    require_bound_state_root(ctx, repo_root=args.repo_root, command="dispatch resume")
     paused = _set_dispatch_paused(ctx, paused=False)
     return PauseResult(paused=paused).model_dump(mode="json")
