@@ -154,6 +154,24 @@ def test_per_wave_attempt_rollup_counts_retry_blocked_tokens_and_error_kinds() -
     assert [row.tokens for row in rollup.attempts] == ["18", "34"]
 
 
+def test_per_wave_attempt_rollup_renders_compact_utc_timestamps() -> None:
+    """Attempt started / ended cells show compact UTC, never full isoformat.
+
+    The shared compact-UTC formatter renders ``YYYY-MM-DD HH:MM:SS`` -- no
+    microseconds, no ``+00:00`` offset -- so a full attempt row fits the
+    operator-facing tables (P30-I22-W09).
+    """
+    rollup = per_wave_attempt_rollup(_wave())
+
+    for row in rollup.attempts:
+        for cell in (row.started, row.ended):
+            assert "+00:00" not in cell
+            assert "." not in cell
+            assert "T" not in cell
+    assert rollup.attempts[0].started == "2026-05-27 12:01:00"
+    assert rollup.attempts[0].ended == "2026-05-27 12:02:00"
+
+
 def test_per_wave_attempt_rollup_handles_no_attempts() -> None:
     wave = _wave().model_copy(update={"sessions": {}, "dispatch_history": []})
     rollup = per_wave_attempt_rollup(wave)

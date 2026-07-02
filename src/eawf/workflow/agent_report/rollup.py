@@ -23,6 +23,7 @@ from eawf.kernel.store.kinds.agent_report import AgentReportPayload, store_kind_
 from eawf.kernel.store.paths import store_path
 from eawf.observability.telemetry.models import TelemetrySession, TelemetryToolCall
 from eawf.observability.telemetry.store.base import AbstractMetricsStore
+from eawf.surfaces.render.units import format_compact_utc
 
 logger = logging.getLogger(__name__)
 
@@ -541,10 +542,19 @@ def _runtime_label(
 
 
 def _attempt_dt(value: object) -> str:
-    """Return compact datetime string for attempt tables."""
+    """Return compact datetime string for attempt tables.
+
+    Datetimes ride the shared compact-UTC formatter
+    (:func:`~eawf.surfaces.render.units.format_compact_utc`) so attempt
+    ``started`` / ``ended`` columns show ``YYYY-MM-DD HH:MM:SS`` -- no
+    microseconds, no ``+00:00`` offset. A bare ``date`` keeps its ISO form
+    (it carries no time component to trim).
+    """
     if value is None:
         return "-"
-    if isinstance(value, datetime | date):
+    if isinstance(value, datetime):
+        return format_compact_utc(value)
+    if isinstance(value, date):
         return value.isoformat()
     return str(value)
 

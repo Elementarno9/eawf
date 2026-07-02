@@ -32,6 +32,7 @@ from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.incident import IncidentPayload
 from eawf.kernel.store.paths import store_path
+from eawf.surfaces.render.units import format_compact_utc
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,7 @@ def incident_timeline_rows(events: tuple[TimelineEvent, ...]) -> tuple[tuple[str
     """
     if not events:
         return (("timeline", NO_EVENTS_LINE),)
-    return tuple(("event", f"{event.at.isoformat()}  {event.entry}") for event in events)
+    return tuple(("event", f"{format_compact_utc(event.at)}  {event.entry}") for event in events)
 
 
 __all__ = [

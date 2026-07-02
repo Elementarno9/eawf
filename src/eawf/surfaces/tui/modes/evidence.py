@@ -44,6 +44,7 @@ from eawf.kernel.spec.common import OracleTier, tier_label
 from eawf.kernel.state.enums import AgentReportVerdict
 from eawf.kernel.state.ids import natural_key
 from eawf.platform.scrub import scan_text
+from eawf.surfaces.render.units import format_compact_utc
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.empty_state import (
     HONEST_EMPTY_CSS,
@@ -301,7 +302,7 @@ def _row_from_report(
         followups=tuple(followup.title for followup in body.followups),
         eu=eu,
         runtime=header.runtime,
-        generated_at=header.generated_at.isoformat(),
+        generated_at=format_compact_utc(header.generated_at),
         evidence_refs=tuple(f"{ref.kind}: {ref.ref}" for ref in body.evidence_refs),
     )
 

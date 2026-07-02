@@ -49,6 +49,7 @@ from eawf.kernel.store.kinds.agent_report import (
 )
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.render.link_wrap import PreMarkedText
+from eawf.surfaces.render.units import format_compact_utc
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.screens.overlays.detail import (
     _HISTORY_LINK_LINE,
@@ -1149,7 +1150,12 @@ def test_resolve_detail_claimed_wave_renders_claimed_row_and_switch_reason() -> 
     card = resolve_detail(state, wave_id)
     rows = dict(card.evidence)
     # The claimed-at work-start fact renders a real time, not the sentinel.
-    assert rows["claimed"] == str(state.waves[wave_id].claimed_at)
+    claimed_at = state.waves[wave_id].claimed_at
+    assert claimed_at is not None
+    assert rows["claimed"] == format_compact_utc(claimed_at)
+    # Compact UTC form: no microseconds, no +00:00 offset suffix.
+    assert "+00:00" not in rows["claimed"]
+    assert "." not in rows["claimed"]
     assert rows["claimed"] != "—"
     # The runtime-switch annotation's reason is appended to its attempt row.
     switch = state.waves[wave_id].dispatch_history[1]

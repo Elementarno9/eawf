@@ -39,6 +39,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -75,6 +76,7 @@ from eawf.surfaces.render.narrative import (
     build_narrative,
     render_narrative_bundle,
 )
+from eawf.surfaces.render.units import format_compact_utc
 from eawf.surfaces.tui.screens.overlays.detail_attempts import attempt_rollup_rows
 from eawf.surfaces.tui.screens.overlays.detail_cost import (
     wave_cost_rollup_for_wave,
@@ -390,16 +392,23 @@ def _intent_rows(intent: IntentBrief | None) -> list[tuple[str, str]]:
 
 
 def _fmt_dt(value: object) -> str:
-    """Format a datetime-ish *value* as an ISO string, or ``"—"`` when unset.
+    """Format a datetime-ish *value* compactly, or ``"—"`` when unset.
+
+    Datetimes ride the shared compact-UTC formatter
+    (:func:`~eawf.surfaces.render.units.format_compact_utc`) so operator-facing
+    detail rows show ``YYYY-MM-DD HH:MM:SS`` — no microseconds, no ``+00:00``
+    offset.
 
     Args:
         value: A ``datetime`` (or ``None``) read off a state model.
 
     Returns:
-        The ISO-8601 string, or an em dash when *value* is ``None``.
+        The compact UTC string, or an em dash when *value* is ``None``.
     """
     if value is None:
         return "—"
+    if isinstance(value, datetime):
+        return format_compact_utc(value)
     return str(value)
 
 

@@ -9,6 +9,28 @@ for human eyes only.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
+
+def format_compact_utc(value: datetime) -> str:
+    """Return the compact UTC form ``YYYY-MM-DD HH:MM:SS`` of *value*.
+
+    One canonical operator-facing datetime shape: converted to UTC, no
+    microseconds, no ``+00:00`` offset suffix — a full ISO ``isoformat()``
+    render is machine precision that only widens tables and detail rows.
+    A naive *value* is treated as already-UTC (state stamps are stored
+    UTC); an aware one is converted before formatting.
+
+    Args:
+        value: The datetime to format.
+
+    Returns:
+        The compact ``YYYY-MM-DD HH:MM:SS`` display string.
+    """
+    if value.tzinfo is not None:
+        value = value.astimezone(UTC)
+    return value.strftime("%Y-%m-%d %H:%M:%S")
+
 
 def format_tokens(value: int) -> str:
     """Return a compact humanized token count (``340.2k``, ``1.2m``).
@@ -30,4 +52,4 @@ def format_tokens(value: int) -> str:
     return str(value)
 
 
-__all__ = ["format_tokens"]
+__all__ = ["format_compact_utc", "format_tokens"]
