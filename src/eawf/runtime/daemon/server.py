@@ -392,6 +392,59 @@ async def _handle_subscribe(
     return sub
 
 
+async def _peer_credential_ok(writer: asyncio.StreamWriter, *, expected_uid: int | None) -> bool:
+    """Run the peer-cred check; reject + close the connection on mismatch.
+
+    ``asyncio.start_unix_server`` exposes the accepted endpoint as an
+    :class:`asyncio.trsock.TransportSocket` — structurally compatible with
+    :class:`socket.socket` for the ``getsockopt`` + ``fileno`` API the
+    peer-cred check uses. A platform without a peer-cred recipe (Windows
+    pipes ride the dedicated pywin32 listener, not this UDS path) falls
+    through to accept; the upper layer already gates access via DACL / SID.
+    """
+    peer = writer.get_extra_info("socket")
+    if expected_uid is None or peer is None:
+        return True
+    try:
+        verify_peer_credential(cast(socket.socket, peer), expected_uid=expected_uid)
+    except UnauthorizedError as exc:
+        logger.warning(f"handle_connection reject reason={exc!s}")
+        writer.write(_frame(_error(None, UNAUTHORIZED, "unauthorized", data=exc.forensics)))
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
+        return False
+    except NotImplementedError:
+        logger.debug("handle_connection skip peer-cred unsupported-platform")
+    return True
+
+
+async def _write_response(
+    writer: asyncio.StreamWriter,
+    response: dict[str, Any],
+    *,
+    connection_id: str,
+) -> bool:
+    """Write one response frame; log it instead when the peer is gone.
+
+    A client that timed out and closed its socket must not swallow the
+    outcome silently — a refusal the operator never saw is how the W48
+    close loop stayed undiagnosable. Returns ``False`` when the peer had
+    disconnected (the caller ends the connection loop).
+    """
+    try:
+        writer.write(_frame(response))
+        await writer.drain()
+    except ConnectionResetError, BrokenPipeError:
+        summary = orjson.dumps(response).decode("utf-8", "replace")[:400]
+        logger.warning(
+            f"handle_connection undeliverable-response "
+            f"connection={connection_id} response={summary!r}"
+        )
+        return False
+    return True
+
+
 async def handle_connection(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
@@ -409,27 +462,8 @@ async def handle_connection(
             check runs before any frames are read; mismatch closes the
             connection with a ``-32000 unauthorized`` envelope.
     """
-    peer = writer.get_extra_info("socket")
-    # ``asyncio.start_unix_server`` exposes the accepted endpoint as an
-    # :class:`asyncio.trsock.TransportSocket` — structurally compatible
-    # with :class:`socket.socket` for the ``getsockopt`` + ``fileno`` API
-    # the peer-cred check uses.
-    if expected_uid is not None and peer is not None:
-        try:
-            verify_peer_credential(cast(socket.socket, peer), expected_uid=expected_uid)
-        except UnauthorizedError as exc:
-            logger.warning(f"handle_connection reject reason={exc!s}")
-            writer.write(_frame(_error(None, UNAUTHORIZED, "unauthorized", data=exc.forensics)))
-            await writer.drain()
-            writer.close()
-            await writer.wait_closed()
-            return
-        except NotImplementedError:
-            # Platform without a peer-cred recipe (e.g. Windows pipes
-            # come through the dedicated pywin32 listener — not this
-            # UDS path). Fall through to accept; the upper layer must
-            # already gate access via DACL / SID.
-            logger.debug("handle_connection skip peer-cred unsupported-platform")
+    if not await _peer_credential_ok(writer, expected_uid=expected_uid):
+        return
     connection_id = uuid.uuid4().hex
     subscriber: Subscriber | None = None
     try:
@@ -450,9 +484,15 @@ async def handle_connection(
                 # fall through to the cleanup block; further frames on
                 # this connection are not expected.
                 return
-            response = await _process_frame(line.rstrip(b"\n"), ctx)
-            writer.write(_frame(response))
-            await writer.drain()
+            # Shield the dispatch so a peer that gives up (the CLI's RPC
+            # ceiling) cannot cancel an in-flight mutation mid-commit; the
+            # daemon finishes the work and the caller polls state.json for
+            # the outcome (the W03 terminal-timeout contract, W52).
+            response = await asyncio.shield(
+                asyncio.ensure_future(_process_frame(line.rstrip(b"\n"), ctx))
+            )
+            if not await _write_response(writer, response, connection_id=connection_id):
+                return
     except ConnectionResetError, BrokenPipeError:
         logger.debug("handle_connection peer-disconnect")
     finally:
