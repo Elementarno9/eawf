@@ -4,9 +4,9 @@
 # `eawf plugin update claude`; hand-edits are detected by `eawf plugin doctor`).
 set -euo pipefail
 
-# Synthesise a JSON payload from positional args (Claude passes args, not stdin).
-# We escape only the minimum set of characters required for a JSON string body
-# (backslash + double-quote) so the payload is portable across bash versions.
+# Escape the minimum set of characters required for a JSON string body
+# (backslash + double-quote) so the fallback payload is portable across
+# bash versions. Only used for the positional-arg fallback below.
 _eawf_json_escape() {
     local s="${1-}"
     s="${s//\\/\\\\}"
@@ -14,17 +14,30 @@ _eawf_json_escape() {
     printf '%s' "$s"
 }
 
-_eawf_arg1="$(_eawf_json_escape "${1-}")"
-_eawf_arg2="$(_eawf_json_escape "${2-}")"
-_eawf_arg3="$(_eawf_json_escape "${3-}")"
-_eawf_arg4="$(_eawf_json_escape "${4-}")"
+# Claude Code delivers hook input as a JSON document on stdin; SessionEnd,
+# Stop, and SubagentStop carry the session cost + token usage totals that
+# feed EU capture. Read that document verbatim. The read is fail-open: a
+# hook that dies breaks the operator's session, so an interactive TTY or an
+# empty pipe leaves the payload blank and the positional-arg fallback runs.
+_eawf_stdin=""
+if [ ! -t 0 ]; then
+    _eawf_stdin="$(cat)"
+fi
 
-_eawf_payload=$(printf '{"hook_event_name":"%s","claude_event_name":"%s","args":["%s","%s","%s","%s"]}' \
-    "PostToolUse" \
-    "post_commit" \
-    "${_eawf_arg1}" \
-    "${_eawf_arg2}" \
-    "${_eawf_arg3}" \
-    "${_eawf_arg4}")
+if [ -n "${_eawf_stdin}" ]; then
+    _eawf_payload="${_eawf_stdin}"
+else
+    _eawf_arg1="$(_eawf_json_escape "${1-}")"
+    _eawf_arg2="$(_eawf_json_escape "${2-}")"
+    _eawf_arg3="$(_eawf_json_escape "${3-}")"
+    _eawf_arg4="$(_eawf_json_escape "${4-}")"
+    _eawf_payload=$(printf '{"hook_event_name":"%s","claude_event_name":"%s","args":["%s","%s","%s","%s"]}' \
+        "PostToolUse" \
+        "post_commit" \
+        "${_eawf_arg1}" \
+        "${_eawf_arg2}" \
+        "${_eawf_arg3}" \
+        "${_eawf_arg4}")
+fi
 
 printf '%s' "${_eawf_payload}" | exec uv run eawf hook run post_commit --runtime claude
