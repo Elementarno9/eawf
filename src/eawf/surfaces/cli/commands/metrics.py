@@ -236,7 +236,9 @@ def _jury_validation(flags: GlobalFlags) -> None:
     a schema mismatch.
     """
     from eawf.observability.eval.jury_validation import (
+        ValidationCohort,
         build_jury_validation_cohort,
+        read_recorded_ballots,
         validate_jury,
     )
     from eawf.workflow.evidence._io import load_state
@@ -252,14 +254,28 @@ def _jury_validation(flags: GlobalFlags) -> None:
         return
 
     cohort = build_jury_validation_cohort(state, state_path)
-    # The per-juror ballot store is not yet persisted (the live jury is idle),
-    # so the cohort reduces honest-empty today and the reducer reports the
-    # insufficient-signal banner. The moment a ballot store lands, the cohort's
-    # labelled waves resolve their ballots here.
-    report = validate_jury(cohort, ballots_by_wave={})
+    ballots_by_wave = read_recorded_ballots(state_path)
+    # Only cohort rows whose wave has recorded juror ballots can score
+    # juror-level metrics; a labelled wave from before the ballot store
+    # existed is excluded from scoring, never fabricated -- the excluded
+    # count is surfaced so the starvation stays visible.
+    scorable = ValidationCohort(
+        silver=[row for row in cohort.silver if row.outcome.base_id in ballots_by_wave],
+        gold=[row for row in cohort.gold if row.outcome.base_id in ballots_by_wave],
+    )
+    labelled_rows = len(cohort.silver) + len(cohort.gold)
+    ballotless_rows = labelled_rows - (len(scorable.silver) + len(scorable.gold))
+    report = validate_jury(scorable, ballots_by_wave=ballots_by_wave)
     payload = report.model_dump(mode="json")
     payload["block_authority"] = _block_authority(report)
+    payload["labelled_rows"] = labelled_rows
+    payload["ballotless_rows"] = ballotless_rows
     text = _render_jury_validation(report)
+    if ballotless_rows:
+        text += (
+            f"\nlabelled cohort rows: {labelled_rows} "
+            f"({ballotless_rows} without recorded ballots, excluded from scoring)"
+        )
     emit_json_or_text(payload, text, flags=flags)
 
 

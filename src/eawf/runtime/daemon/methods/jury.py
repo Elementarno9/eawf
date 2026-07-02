@@ -112,7 +112,12 @@ async def label(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         )
 
     now = datetime.now(UTC)
-    gold = GoldLabel(wave_id=args.wave_id, ground_truth=args.ground_truth, labeled_at=now)
+    gold = GoldLabel(
+        wave_id=args.wave_id,
+        ground_truth=args.ground_truth,
+        labeled_at=now,
+        note=args.reason,
+    )
     store = state_path.parent / "store" / _GOLD_LABEL_STORE
     store.parent.mkdir(parents=True, exist_ok=True)
     with store.open("a", encoding="utf-8") as fh:
