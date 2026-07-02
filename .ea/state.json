@@ -13208,7 +13208,12 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P30-I23-W14"
+      "P30-I23-W14",
+      "P30-I23-W29",
+      "P30-I23-W30",
+      "P30-I23-W32",
+      "P30-I23-W40",
+      "P30-I23-W42"
     ],
     "iter_id": "P30-I23",
     "phase_id": "P30",
@@ -24977,6 +24982,45 @@
       "scope_id": "P30-I23-W27",
       "updated_at": "2026-07-02T17:30:41.892849Z"
     },
+    "P30-I23-W29": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W29-bucket-20260702T173435Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I23-W29",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I23-W29",
+      "updated_at": "2026-07-02T17:34:35.585259Z"
+    },
+    "P30-I23-W30": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W30-bucket-20260702T173436Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I23-W30",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I23-W30",
+      "updated_at": "2026-07-02T17:34:36.211094Z"
+    },
+    "P30-I23-W32": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W32-bucket-20260702T173436Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I23-W32",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I23-W32",
+      "updated_at": "2026-07-02T17:34:36.864172Z"
+    },
     "P30-I23-W37": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I23-W37-bucket-20260702T142940Z",
@@ -25015,6 +25059,32 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I23-W39",
       "updated_at": "2026-07-02T17:00:46.888555Z"
+    },
+    "P30-I23-W40": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W40-bucket-20260702T173437Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I23-W40",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I23-W40",
+      "updated_at": "2026-07-02T17:34:37.494191Z"
+    },
+    "P30-I23-W42": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W42-bucket-20260702T173438Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I23-W42",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I23-W42",
+      "updated_at": "2026-07-02T17:34:38.161694Z"
     },
     "P30-I23-W50": {
       "confidence": "low",
@@ -28494,7 +28564,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T17:33:56.345989Z",
+  "updated_at": "2026-07-02T17:34:38.161994Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -109266,8 +109336,8 @@
       "blocks": [
         "P30-I23-W33"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T17:34:35.585129Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -109319,7 +109389,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -109356,8 +109426,8 @@
       "blocks": [
         "P30-I23-W31"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T17:34:36.210992Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -109469,7 +109539,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -109733,8 +109803,8 @@
       "blocks": [
         "P30-I23-W34"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T17:34:36.864085Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -109805,7 +109875,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -110894,8 +110964,8 @@
       "blocks": [
         "P30-I23-W41"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T17:34:37.494078Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -110974,7 +111044,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -111216,8 +111286,8 @@
       "blocks": [
         "P30-I23-W44"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T17:34:38.161551Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -111283,7 +111353,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
