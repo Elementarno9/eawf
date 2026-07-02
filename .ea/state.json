@@ -13376,7 +13376,13 @@
       "SES-20260510T214731Z-operator-claude",
       "SES-20260702T190717Z-auditor-claude-code"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I23-W13",
+      "P30-I23-W19",
+      "P30-I23-W20",
+      "P30-I23-W41",
+      "P30-I23-W44"
+    ],
     "iter_id": "P30-I23",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -25105,6 +25111,19 @@
       "scope_id": "P30-I23-W12",
       "updated_at": "2026-07-02T17:03:45.433973Z"
     },
+    "P30-I23-W13": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W13-bucket-20260702T194340Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I23-W13",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I23-W13",
+      "updated_at": "2026-07-02T19:43:40.381328Z"
+    },
     "P30-I23-W14": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I23-W14-bucket-20260702T174256Z",
@@ -25143,6 +25162,32 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I23-W16",
       "updated_at": "2026-07-02T17:03:47.210221Z"
+    },
+    "P30-I23-W19": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W19-bucket-20260702T194341Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I23-W19",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I23-W19",
+      "updated_at": "2026-07-02T19:43:41.142251Z"
+    },
+    "P30-I23-W20": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W20-bucket-20260702T194341Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I23-W20",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I23-W20",
+      "updated_at": "2026-07-02T19:43:41.869430Z"
     },
     "P30-I23-W22": {
       "confidence": "low",
@@ -25300,6 +25345,19 @@
       "scope_id": "P30-I23-W40",
       "updated_at": "2026-07-02T17:34:37.494191Z"
     },
+    "P30-I23-W41": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W41-bucket-20260702T194342Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I23-W41",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I23-W41",
+      "updated_at": "2026-07-02T19:43:42.570255Z"
+    },
     "P30-I23-W42": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I23-W42-bucket-20260702T173438Z",
@@ -25312,6 +25370,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I23-W42",
       "updated_at": "2026-07-02T17:34:38.161694Z"
+    },
+    "P30-I23-W44": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W44-bucket-20260702T194343Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I23-W44",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I23-W44",
+      "updated_at": "2026-07-02T19:43:43.247382Z"
     },
     "P30-I23-W50": {
       "confidence": "low",
@@ -28791,7 +28862,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T19:42:01.306685Z",
+  "updated_at": "2026-07-02T19:43:43.247652Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -107333,8 +107404,8 @@
       "blocks": [
         "P30-I23-W34"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T19:43:40.380700Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -107408,7 +107479,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -108136,8 +108207,8 @@
         "P30-I23-W49",
         "P30-I23-W33"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T19:43:41.142124Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -108213,7 +108284,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -108274,8 +108345,8 @@
       "blocks": [
         "P30-I23-W33"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T19:43:41.869317Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -108370,7 +108441,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -111331,8 +111402,8 @@
       "blocks": [
         "P30-I23-W43"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T19:43:42.570114Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -111427,7 +111498,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -111770,8 +111841,8 @@
         "P30-I23-W45",
         "P30-I23-W46"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T19:43:43.247260Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -111857,7 +111928,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
