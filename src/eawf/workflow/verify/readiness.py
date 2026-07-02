@@ -681,9 +681,18 @@ def resolve_wave_verify_block(
       jury, so narrowing its ``enforce`` to advisory-only would let a
       high-risk close slip the gate. The band narrowing is for low-risk
       non-band waves, never for a wave whose own gate set demands a jury;
-    * a **non-band, non-high-risk** wave resolves to ``enforce=False`` (and,
-      consequently, no jury) -- it closes exactly as it does today,
-      advisory-only.
+    * a **verdict-always** wave (its risk-weighted requirement per
+      :func:`eawf.workflow.dispatch.verdict.verdict_requirement` is
+      ``"always"`` -- a large effort bucket, a judgment-heavy ``agent_role``,
+      or a security-scoped surface) ALSO keeps enforcement on even when it is
+      neither in a UI band nor gate-classified high-risk: a fresh auditor
+      verdict is mandatory for such a wave, so narrowing its ``enforce`` to
+      advisory-only would de-scope the very gate that produces that verdict.
+      This is the third preservation arm -- the band narrowing must never
+      down-grade a wave whose verdict is required unconditionally;
+    * a **non-band, non-high-risk, non-verdict-always** wave resolves to
+      ``enforce=False`` (and, consequently, no jury) -- it closes exactly as
+      it does today, advisory-only.
 
     A block that does NOT declare ``uiux_bands`` is a whole-fleet enforce
     profile (the pre-W06 shape) and is returned untouched: its operator
@@ -707,6 +716,7 @@ def resolve_wave_verify_block(
     """
     from eawf.kernel.state.enums import RiskTier
     from eawf.workflow.dispatch.spec_jury import wave_in_uiux_band
+    from eawf.workflow.dispatch.verdict import verdict_requirement
     from eawf.workflow.verify.oracle import classify_risk_tier
 
     if verify_block is None or not verify_block.enforce:
@@ -726,6 +736,19 @@ def resolve_wave_verify_block(
         logger.debug(
             f"resolve_wave_verify_block wave={wave.id!r} band=False "
             f"risk_tier={risk_tier.value} enforce=True high_risk_keeps_enforce=True"
+        )
+        return verify_block
+    # Band + gate-risk checks both missed -- but a wave whose risk-weighted
+    # verdict requirement is "always" (large effort, judgment-heavy role, or a
+    # security-scoped surface) needs a mandatory fresh auditor verdict, so
+    # narrowing it to advisory would de-scope the gate that produces it. This
+    # third preservation arm holds such a wave un-narrowed; only genuinely
+    # mechanical (sampled / skip) non-band waves fall through to advisory.
+    if verdict_requirement(wave) == "always":
+        logger.debug(
+            f"resolve_wave_verify_block wave={wave.id!r} band=False "
+            f"risk_tier={risk_tier.value} verdict_requirement=always "
+            f"enforce=True verdict_always_keeps_enforce=True"
         )
         return verify_block
     narrowed = verify_block.model_copy(update={"enforce": False, "cross_vendor_jury": False})
