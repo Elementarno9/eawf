@@ -9576,6 +9576,20 @@
       "status": "done",
       "updated_at": "2026-07-02T14:28:56.526285Z"
     },
+    "P30-I23-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W03",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W03",
+      "model": null,
+      "scope_id": "P30-I23-W03",
+      "status": "done",
+      "updated_at": "2026-07-02T17:20:58.171359Z"
+    },
     "P30-I23-W04": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13152,7 +13166,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P30-I23-W03",
       "P30-I23-W14",
       "P30-I23-W15",
       "P30-I23-W22",
@@ -28442,7 +28455,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T17:19:14.988281Z",
+  "updated_at": "2026-07-02T17:20:58.171633Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -105609,8 +105622,8 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T17:03:43.550928Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T17:20:58.171359Z",
+      "commit": "2f6da33d6ff8bd2df09b626e86a6b396b1a19677",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W02"
@@ -105657,12 +105670,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:37:58.540779Z",
-      "outcome": null,
+      "outcome": "Close-RPC TimeoutError is terminal (typed DaemonMutationIndeterminate, exit 4, no in-process fallthrough, wave stays claimed); RuntimeError/OSError transport fallback stamps close_mechanism=daemon-fallback through the extended CloseMechanism Literal + resolve/extras/stamp chain (D-RPC-TERMINAL); 5-test gate + 174-test cli suite green on integrated HEAD",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
