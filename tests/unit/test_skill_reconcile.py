@@ -305,3 +305,55 @@ def test_parse_rendered_flags_rejects_missing_frontmatter(tmp_path: Path) -> Non
     skill_md.write_text("no frontmatter here\n", encoding="utf-8")
     with pytest.raises(SkillFrontmatterError, match="frontmatter"):
         _parse_rendered_flags(skill_md)
+
+
+# --- P30-I23-W44 (SKH-7): argument-hint updates survive the render ----------
+
+#: The runtime-option flag tokens each touched skill's ``argument-hint``
+#: frontmatter line MUST carry once rendered to disk (section 4 of the
+#: skills-agents-hardening spec). Mirrors ``_SECTION4_HINT_OPTIONS`` in
+#: ``test_skill_registry_p11.py`` but is asserted against the RENDERED
+#: ``SKILL.md``, so a hint that never reaches the plugin tree fails here.
+_SECTION4_HINT_OPTIONS: dict[str, tuple[str, ...]] = {
+    "research": ("--depth", "--final", "--rounds", "--agents", "--budget"),
+    "prep": ("--auto-resume", "--out-of-order", "--ceremony", "--runtime"),
+    "audit": ("--kind", "--level", "--enforce"),
+    "ship": ("--dry-run", "--gauntlet", "--release", "--skip-pr-pass"),
+    "review": ("--level", "--criteria"),
+    "polish": ("--scope", "--auto-apply-safe", "--category"),
+    "roadmap": ("--dry-run", "--criteria-from-brief"),
+    "spike": ("--rounds", "--axes-per-round", "--worktree"),
+    "flow": (
+        "--auto-accept",
+        "--stop-after",
+        "--resume",
+        "--args-per-step",
+        "--caps",
+        "--max-repair-cycles",
+    ),
+    "agent-dispatch": ("--runtime", "--headless", "--model"),
+}
+
+
+def _rendered_argument_hint(rendered: str) -> str:
+    """Return the ``argument-hint:`` frontmatter line from a rendered SKILL.md."""
+    for line in rendered.splitlines():
+        if line.startswith("argument-hint:"):
+            return line
+    raise AssertionError("rendered SKILL.md carries no argument-hint frontmatter line")
+
+
+@pytest.mark.parametrize("name", sorted(_SECTION4_HINT_OPTIONS))
+def test_rendered_skill_md_argument_hint_carries_runtime_options(name: str) -> None:
+    """Each section-4 hint update lands in the rendered ``argument-hint`` line."""
+    spec = _registry_by_name()[name]
+    hint_line = _rendered_argument_hint(_render_skill(spec))
+    for opt in _SECTION4_HINT_OPTIONS[name]:
+        assert opt in hint_line, f"{name} rendered SKILL.md dropped {opt!r} from its argument-hint"
+
+
+def test_rendered_agent_dispatch_hint_omits_sandbox_profile() -> None:
+    """``--sandbox-profile`` (P31, no seam) never reaches the rendered hint line."""
+    spec = _registry_by_name()["agent-dispatch"]
+    hint_line = _rendered_argument_hint(_render_skill(spec))
+    assert "--sandbox-profile" not in hint_line

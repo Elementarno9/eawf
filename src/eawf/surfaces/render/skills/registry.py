@@ -122,12 +122,20 @@ emits an optional dispatch-plan when the verdict names a follow-up
 wave the brief informs, so `/prep` and `/roadmap propose` can wire
 the brief into the next wave's References block automatically.
 
-## `--depth` flag
+## Options
 
-`--depth shallow|medium|deep|exhaustive` controls survey budget
-(file reads, external fetches, cross-wave grep sweeps). Default is
-`medium`; pin via `research.default_depth` in the layered config
-(reuses `StageProfile`, no new key).
+- `--depth shallow|medium|deep|exhaustive` — survey budget (file
+  reads, external fetches, cross-wave grep sweeps); read from
+  `ctx.args["depth"]`, then the `research.default_depth` layered-config
+  leaf (reuses `StageProfile`, no new key). Default `medium`.
+- `--final` — persist a research brief with `references` and render it
+  through `eawf research show --md`. Default off.
+- `--rounds <n>` — bound the fan-out iteration count (today the
+  fan-out is depth-derived only). Default `1`.
+- `--agents <n>` — fan-out width; resolves through the
+  `research.agent_count` layered-config leaf. Default `4`.
+- `--budget <tokens>` — recorded on the envelope; enforcement binds
+  once metering rows exist. Default uncapped.
 
 ## Spike convention
 
@@ -223,6 +231,20 @@ PLANNED-queue state:
 6. Validate the rendered plan with `eawf plan show --md`; wave tags
    and bucket roll-ups must match state.
 
+## Options
+
+- `--auto-resume` — emit `eawf dispatch resume` before every claim
+  batch in `next_valid_actions`; config leaf `prep.auto_resume`.
+  Default **true**.
+- `--out-of-order` — emitted `eawf wave claim` commands carry
+  `--out-of-order` so the W## monotonic sibling gate does not reject
+  reactive or parallel-frontier claims. Default false.
+- `--ceremony lite|full` — override the `compute_ceremony`
+  recommendation the plan-mode proposal surfaces. Default is the
+  computed recommendation.
+- `--runtime <id>` — batch runtime-ladder override applied to the
+  emitted dispatch commands. Default is the ladder head.
+
 ## Pre-flight checklist
 
 - [ ] Confirm current branch is the long-running phase branch.
@@ -268,6 +290,17 @@ _AUDIT_BODY = f"""# /audit
 3. Dispatch the auditor subagent with paths, line numbers, criteria.
 4. Parse the verdict; convert refutations into TODOs or new waves.
 5. Render audit evidence through `eawf audit show --md`.
+
+## Options
+
+- `--kind evaluation|ship-gate` — selects the check plan; resolved by
+  `_resolve_kind` from `ctx.args["kind"]`. Default is the
+  profile-driven branch.
+- `--level quick|standard|deep` — maps to check-plan breadth over the
+  default evaluation / ship-gate check sets. Default `standard`; config
+  leaf `audit.default_level`.
+- `--enforce` — the audit's OWN aggregate verdict treats advisory-fail
+  findings as fail; no daemon-gate coupling. Default false.
 
 ## Cross-links
 
@@ -371,6 +404,23 @@ read off real history rather than recomputed.
    phase. This is the final instance of the per-close bookkeeping rule
    the iter followed throughout: {_GOTCHA_STATE_BOOKKEEPING}
 
+## Options
+
+- `--dry-run` — RETAINED. Dry-run is model-executed prose semantics:
+  the ship engine parses only `commit` / `push` / `pr`
+  (`workflow/skills/ship.py`), NOT a `dry_run` arg, so `/ship
+  --dry-run` means YOU (the model) render the plan and skip the
+  irreversible steps — the engine does not gate on it.
+- `--gauntlet full|scoped` — `full` is the default and MANDATORY for a
+  migration wave or the iter-close run; `scoped` is legal only for a
+  re-run. Config leaf `ship.gauntlet`.
+- `--release v<X.Y.Z>` — inject the `(release=vX.Y.Z)` annotation into
+  the phase-close commit subject as a standalone paren group (never
+  fused into another group such as `(audit=..., release=...)`).
+  Default none.
+- `--skip-pr-pass` — skip the step-6 PR-review pass on a re-run after a
+  green pass. Default false.
+
 ## Pre-flight checklist
 
 - [ ] All waves under `<phase-id>` are complete.
@@ -407,6 +457,14 @@ _REVIEW_BODY = """# /review
 5. Check artifact chassis and dense references when reviewing docs or
    promoted artifacts.
 
+## Options
+
+- `--level low|medium|high` — finding-confidence threshold for the
+  pass; higher surfaces fewer, higher-confidence findings. Default
+  `medium`; config leaf `review.default_level`.
+- `--criteria <wave-id>` — pull the named wave's success criteria into
+  the review context so findings are graded against them. Default none.
+
 ## Pre-flight checklist
 
 - [ ] Read the success criteria for the phase/wave the diff belongs to.
@@ -435,6 +493,16 @@ _POLISH_BODY = """# /polish
 2. Sweep checks: naming, docstrings, log fields, error message
    phrasing, dead code, citation density, draft sentinels, scrub status.
 3. Apply fixes inline. If a change touches public API, stop and ask.
+
+## Options
+
+- `--scope=<dir|file>` — narrow the sweep from the default entire
+  `src/eawf/` to one directory or file.
+- `--auto-apply-safe` — auto-apply the small "safe" subset (formatting,
+  comment phrasing) without an `AskUserQuestion` prompt; config leaf
+  `polish.auto_apply_safe`. Default false.
+- `--category naming|docstrings|logs|errors|dead-code` — filter the
+  sweep to one check category. Default is all categories.
 
 ## Pre-flight checklist
 
@@ -524,6 +592,15 @@ _ROADMAP_BODY = """# /roadmap
    the operator rejects the proposed plan.
 5. **`show`** renders the queue: text table (default), markdown
    (`--md`), or JSON envelope (`--json`).
+
+## Options
+
+- `--dry-run` (on `propose`) — render the plan text plus the EAWF022
+  coverage lint WITHOUT the state mutation `propose` normally
+  persists. Default off.
+- `--criteria-from-brief <path>` — surface the EAWF022 propose-coverage
+  lint against the named brief so no brief span lands uncovered by a
+  criterion or an explicit deferral. Default none.
 
 ## Pre-flight checklist
 
@@ -783,6 +860,21 @@ direction is locked and an interactive surface needs a full statechart
    `<!-- eawf-template: spike-brief -->` on line 1. Return the output
    envelope.
 
+## Options
+
+Spike is model-driven, so these are prose parameters the session
+honours, not engine-parsed flags:
+
+- `--rounds <n>` — number of multi-axis AUQ rounds; parameterizes the
+  default "3-6 axes per round" shape. Default is model-judged.
+- `--axes-per-round <m>` — axes batched into each `AskUserQuestion`
+  round. Default `3-6`.
+- `--worktree` — make the execution-spike isolation branch explicit
+  and mandatory: when passed, code that imports `eawf.*` runs in a
+  dedicated worktree branch rather than the local PoC scope.
+- `--final` / `--from-briefs <paths>` / `--postmortem <phase-id>` — see
+  the canonical algorithm above.
+
 ## PoC allowance + execution-spike isolation
 
 A spike MAY produce throwaway runnable artifacts to ground direction
@@ -879,6 +971,27 @@ _FLOW_BODY = f"""# /flow
    {_GOTCHA_STATE_BOOKKEEPING}
 3. On any non-`ok` status (`blocked`, `needs_user`, `failed`,
    `partial`), short-circuit with the failing step's repair commands.
+
+## Options
+
+- `--auto-accept=<stage>[,<stage>...]` — the inter-stage gate is
+  executed by YOU (the model) against `flow.auto_accept.<stage>`; the
+  flow engine reads only `stop_after` / `args_per_step` / `resume_from`
+  and does NOT enforce auto-accept. Listing a stage advances past its
+  gate without the operator prompt.
+- `--stop-after=<stage>` — engine-parsed (`ctx.args["stop_after"]`);
+  halt the pipeline after the named stage. Default none (full run).
+- `--resume` / `--resume-from` — engine-parsed
+  (`ctx.args["resume_from"]`); replay from the recorded checkpoint and
+  refuse on drift. Default off.
+- `--args-per-step=<json>` — engine-parsed
+  (`ctx.args["args_per_step"]`); per-stage argument overrides. Default
+  inherits the flow args.
+- `--caps=eu=<f>,usd=<f>,tokens=<n>` — record a spend ceiling and halt
+  the pipeline when actuals exceed it (honest-empty until EU capture
+  lands); reuses `flow.budget.*`. Default uncapped.
+- `--max-repair-cycles=<n>` — stop re-entering a failing stage past N
+  cycles. Default `3`; config leaf `flow.max_repair_cycles`.
 
 ## Pre-flight checklist
 
@@ -1026,6 +1139,18 @@ next dispatch starts from the operator's pinned ladder.
    daemon default, but the operator can pin a preference).
 4. The daemon's `agent.dispatch` RPC is the canonical mutator; the skill
    routes to `eawf wave dispatch` via `next_valid_actions`.
+
+## Options
+
+- `--runtime <id>` — override the `Wave.runtime_preference` ladder head
+  for this dispatch. Default is the ladder head.
+- `--headless` — route `next_valid_actions` to the daemon headless
+  spawn path instead of the interactive dispatch. Default false.
+- `--model <id>` — thread a spawn-model override into the dispatch
+  command (the daemon spawn path already resolves it via
+  `_resolve_spawn_model`). Default is the ladder-resolved model.
+- `--sandbox-profile` is NOT accepted — there is no receiving seam at
+  HEAD, so the flag would be inert; it is deferred to P31.
 
 ## Pre-flight checklist
 
@@ -1517,7 +1642,10 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
             " brief or surfaces findings inline; no code changes, no state"
             " mutations."
         ),
-        argument_hint="<topic-slug> [--final]",
+        argument_hint=(
+            "<topic-slug> [--depth=shallow|medium|deep|exhaustive] [--final]"
+            " [--rounds=<n>] [--agents=<n>] [--budget=<tokens>]"
+        ),
         user_invocable=True,
         disable_model_invocation=False,
         body=_RESEARCH_BODY,
@@ -1529,7 +1657,9 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
             " approval, then run the activate_phase hard gate and dispatch"
             " subagents per wave."
         ),
-        argument_hint="<phase-id>",
+        argument_hint=(
+            "<phase-id> [--auto-resume] [--out-of-order] [--ceremony=lite|full] [--runtime=<id>]"
+        ),
         user_invocable=True,
         disable_model_invocation=True,
         body=_PREP_BODY,
@@ -1541,7 +1671,10 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
             " outcome. Spawns a fresh auditor subagent that re-reads the diff"
             " against the success criteria."
         ),
-        argument_hint="<phase-id|wave-id|commit-range>",
+        argument_hint=(
+            "<phase-id|wave-id|commit-range> [--kind=evaluation|ship-gate]"
+            " [--level=quick|standard|deep] [--enforce]"
+        ),
         user_invocable=True,
         disable_model_invocation=False,
         body=_AUDIT_BODY,
@@ -1552,7 +1685,9 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
             "Close out a phase by running the full local CI surface, opening"
             " the phase PR, and (after merge) advancing state."
         ),
-        argument_hint="<phase-id> [--dry-run]",
+        argument_hint=(
+            "<phase-id> [--dry-run] [--gauntlet=full|scoped] [--release=v<X.Y.Z>] [--skip-pr-pass]"
+        ),
         user_invocable=True,
         disable_model_invocation=True,
         body=_SHIP_BODY,
@@ -1563,7 +1698,7 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
             "Code review of an open PR or local diff. Surfaces issues with"
             " severity tags; no scope creep, no praise."
         ),
-        argument_hint="[<PR# | commit-range>]",
+        argument_hint="[<PR# | commit-range>] [--level=low|medium|high] [--criteria=<wave-id>]",
         user_invocable=True,
         disable_model_invocation=False,
         body=_REVIEW_BODY,
@@ -1574,7 +1709,10 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
             "Repo-wide consistency sweep. Aligns naming, docstring style, log"
             " fields, error message phrasing, and removes dead code."
         ),
-        argument_hint="[--scope=<dir|file>]",
+        argument_hint=(
+            "[--scope=<dir|file>] [--auto-apply-safe]"
+            " [--category=naming|docstrings|logs|errors|dead-code]"
+        ),
         user_invocable=True,
         disable_model_invocation=True,
         body=_POLISH_BODY,
@@ -1597,7 +1735,10 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
             " the eawf roadmap queue. Mutates state.json via the lifecycle"
             " transitions; one phase at a time."
         ),
-        argument_hint="propose|revise|apply|drop|show <phase-id> [flags]",
+        argument_hint=(
+            "propose|revise|apply|drop|show <phase-id> [--dry-run]"
+            " [--criteria-from-brief=<path>] [flags]"
+        ),
         user_invocable=True,
         disable_model_invocation=True,
         body=_ROADMAP_BODY,
@@ -1644,7 +1785,8 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
             " postmortem + scope deltas. No state mutations."
         ),
         argument_hint=(
-            "<spike-slug> [--final] [--from-briefs <path1,path2,...>] [--postmortem <phase-id>]"
+            "<spike-slug> [--final] [--from-briefs <path1,path2,...>]"
+            " [--postmortem <phase-id>] [--rounds=<n>] [--axes-per-round=<m>] [--worktree]"
         ),
         user_invocable=True,
         disable_model_invocation=False,
@@ -1657,7 +1799,11 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
             " review folds into /ship as the PR-review pass. Short-circuit"
             " on any non-ok status."
         ),
-        argument_hint="<task-slug> [--auto-accept=<stage>[,<stage>...]]",
+        argument_hint=(
+            "<task-slug> [--auto-accept=<stage>[,<stage>...]] [--stop-after=<stage>]"
+            " [--resume] [--args-per-step=<json>] [--caps=eu=..,usd=..]"
+            " [--max-repair-cycles=<n>]"
+        ),
         user_invocable=True,
         disable_model_invocation=True,
         body=_FLOW_BODY,
@@ -1691,7 +1837,7 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
     SkillSpec(
         skill_name="agent-dispatch",
         description="Dispatch a claimed wave to a runtime per the V8 session-reuse ladder.",
-        argument_hint="<wave-id> [--runtime=<id>]",
+        argument_hint="<wave-id> [--runtime=<id>] [--headless] [--model=<id>]",
         user_invocable=True,
         disable_model_invocation=True,
         body=_AGENT_DISPATCH_BODY,
