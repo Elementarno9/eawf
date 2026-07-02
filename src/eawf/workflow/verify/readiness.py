@@ -1,5 +1,10 @@
 """Derived close-readiness view for v0.4 verify spine (W06 + W08).
 
+# noqa: EAWF010 close-readiness projection accreted the W13 floor-scoping seam
+# (per-tool argv narrowing + policy-to-required mapping); the cohesive
+# floor-scope helpers split into a sibling ``floor_scope`` module in a later
+# polish pass, once the P30-I23 close-gate work settles.
+
 The :func:`compute` function returns a :class:`CloseReadiness` projection
 of three inputs:
 
@@ -43,7 +48,7 @@ rejection.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
 import orjson
@@ -53,11 +58,12 @@ from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State, Wave
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
-from eawf.platform.profiles.models import VerifyBlock
+from eawf.platform.profiles.models import FloorCheck, VerifyBlock
 from eawf.workflow.audit_dsl.kinds.backlog_resolution import (
     BACKLOG_RESOLUTION_KIND,
     check_backlog_resolution,
 )
+from eawf.workflow.audit_dsl.models import CheckSpec
 from eawf.workflow.audit_dsl.runner import run_checks
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
@@ -804,9 +810,163 @@ def _floor_check_waived(name: str, fresh_evidence: list[EvidenceRecord]) -> bool
     return bool(relevant) and relevant[-1].status == "waived"
 
 
+def _is_under(path: str, top: str) -> bool:
+    """Return True when *path*'s first path component equals *top*.
+
+    Args:
+        path: A repo-relative POSIX path (a file or directory scope).
+        top: Top-level directory to test membership against (e.g.
+            ``"src"`` or ``"tests"``).
+
+    Returns:
+        True iff *path* lives under *top*.
+    """
+    parts = PurePosixPath(path.rstrip("/")).parts
+    return bool(parts) and parts[0] == top
+
+
+def _mirror_src_to_test_dir(path: str) -> str | None:
+    """Map a ``src/<pkg>/<sub>/<file>`` scope to its ``tests/<sub>/`` dir.
+
+    The mirror stays at *directory* granularity so it never has to guess a
+    ``test_<name>.py`` filename: a ``src`` scope resolves to the test package
+    that mirrors its containing directory. Returns ``None`` when *path* is not
+    a ``src/<pkg>/...`` path carrying at least one component below the package,
+    so the caller skips an unmappable scope rather than fabricating a target.
+
+    Args:
+        path: A repo-relative POSIX ``src`` scope (file or directory).
+
+    Returns:
+        The mirrored ``tests/...`` directory (trailing ``/``), or ``None``
+        when *path* cannot be mirrored.
+    """
+    parts = PurePosixPath(path.rstrip("/")).parts
+    if len(parts) < 3 or parts[0] != "src":
+        return None
+    sub = parts[2:]
+    # Drop a trailing file component (a name carrying a suffix) so the mirror
+    # lands on the containing test package, not a src filename.
+    dir_parts = sub[:-1] if PurePosixPath(sub[-1]).suffix else sub
+    if not dir_parts:
+        return None
+    return str(PurePosixPath("tests", *dir_parts)) + "/"
+
+
+def _pytest_scope_targets(file_scopes: list[str], *, runner_cwd: Path) -> list[str]:
+    """Resolve *file_scopes* to the pytest target set for a scoped floor.
+
+    Prefers the test paths already declared in *file_scopes* (changed-test
+    selection); when none are present, mirrors each ``src`` scope to its test
+    package (:func:`_mirror_src_to_test_dir`) and keeps only the mirrors that
+    exist under *runner_cwd* so a scope with no mirror test package does not
+    turn into a false pytest failure.
+
+    Args:
+        file_scopes: The wave's declared ``file_scopes``.
+        runner_cwd: Repo root the floor subprocess runs in; mirror existence
+            is checked against it.
+
+    Returns:
+        Sorted unique pytest targets, or ``[]`` when nothing maps (the caller
+        then keeps the whole-tree argv).
+    """
+    declared = sorted({p.rstrip("/") for p in file_scopes if _is_under(p, "tests")})
+    if declared:
+        return declared
+    mirrored: set[str] = set()
+    for scope in file_scopes:
+        mirror = _mirror_src_to_test_dir(scope)
+        if mirror is not None and (runner_cwd / mirror).exists():
+            mirrored.add(mirror)
+    return sorted(mirrored)
+
+
+def _scope_floor_argv(
+    argv: list[str],
+    *,
+    scope: str,
+    file_scopes: list[str],
+    runner_cwd: Path,
+) -> list[str]:
+    """Rewrite a whole-tree floor *argv* to carry only *file_scopes* targets.
+
+    Honors the floor row's declared ``scope`` (``python.yaml`` ships the
+    dev-loop floors as ``scope: touched``): a non-``all`` scope narrows the
+    invocation to the wave's ``file_scopes`` per the tool it names, so a
+    module-scoped close never runs the whole tree and no longer rejects on
+    pre-existing whole-tree noise. ``scope: all`` (schema / migration floors)
+    and an empty *file_scopes* fall through unchanged so the full-tree
+    gauntlet -- which belongs at iter close -- stays intact.
+
+    Per-tool narrowing:
+
+    * ``pre-commit`` -- drop ``--all-files`` and pass ``--files`` over the
+      scope set.
+    * ``pytest`` -- append the scoped test targets
+      (:func:`_pytest_scope_targets`); an unmappable scope keeps the
+      whole-tree argv.
+    * ``mypy`` -- replace the whole-tree positional with the ``src`` scopes; a
+      scope set that crosses out of ``src`` keeps the whole-tree argv (the
+      documented escape).
+    * any other file-consuming tool -- append the scope set as trailing
+      positional targets.
+
+    Args:
+        argv: The compiled floor argv in its whole-tree form.
+        scope: The floor row's declared scope literal.
+        file_scopes: The wave's declared ``file_scopes``.
+        runner_cwd: Repo root the floor subprocess runs in.
+
+    Returns:
+        The scoped argv, or *argv* unchanged when the scope is ``all``,
+        *file_scopes* is empty, or the named tool has nothing mappable.
+    """
+    if scope == "all" or not file_scopes:
+        return list(argv)
+    if "pre-commit" in argv:
+        stripped = [token for token in argv if token != "--all-files"]
+        return [*stripped, "--files", *sorted(set(file_scopes))]
+    if "pytest" in argv:
+        targets = _pytest_scope_targets(file_scopes, runner_cwd=runner_cwd)
+        return [*argv, *targets] if targets else list(argv)
+    if "mypy" in argv:
+        src_targets = sorted({p.rstrip("/") for p in file_scopes if _is_under(p, "src")})
+        if not src_targets:
+            return list(argv)
+        head_end = argv.index("mypy") + 1
+        flags = [token for token in argv[head_end:] if token.startswith("-")]
+        return [*argv[:head_end], *flags, *src_targets]
+    return [*argv, *sorted(set(file_scopes))]
+
+
+def _floor_required(check: FloorCheck | None) -> bool:
+    """Return whether a floor row gates the close.
+
+    Mirrors the oracle's deterministic-tier blocking test
+    (:mod:`eawf.workflow.verify.oracle`): a floor row blocks only when it is
+    both ``required`` and ``policy == "block"``. A ``warn`` / ``advisory`` row
+    -- what ``python.yaml`` ships the dev-loop floors as -- is surfaced but
+    never flips ``ready``, so pre-existing whole-tree noise no longer forces a
+    reflexive waiver. An unmatched row (no floor check by that name) defaults
+    to blocking so a compiled spec never silently down-grades.
+
+    Args:
+        check: The floor check the compiled spec was built from, or ``None``
+            when no row matched by name.
+
+    Returns:
+        True when the row gates the close.
+    """
+    if check is None:
+        return True
+    return check.required and check.policy == "block"
+
+
 def _build_floor_views(
     verify_block: VerifyBlock | None,
     *,
+    wave: Wave,
     runner_cwd: Path,
     fresh_evidence: list[EvidenceRecord],
 ) -> list[CriterionView]:
@@ -819,6 +979,19 @@ def _build_floor_views(
     :func:`~eawf.workflow.audit_dsl.runner.run_checks`. One floor
     check yields one ``CriterionView(source="floor")`` whose single
     gate result mirrors the live run.
+
+    Each floor row's declared ``scope`` is honored before the run: a
+    non-``all`` scope narrows the compiled argv to *wave*'s ``file_scopes``
+    via :func:`_scope_floor_argv`, so a module-scoped close carries only the
+    scoped target set instead of the whole tree. A ``scope: all`` row (the
+    schema / migration escape) passes through unchanged. The wave's ``id`` +
+    ``file_scopes`` are also threaded onto the scoped spec so the runner's
+    diff-base + ``touched`` file-union resolution is wave-anchored.
+
+    Each row's ``policy`` sets whether the resulting view is ``required``
+    (:func:`_floor_required`): only a ``policy: block`` row gates the close,
+    so a ``policy: warn`` row is surfaced but never flips ``ready`` -- the
+    end of the reflexive triple-waive on pre-existing whole-tree noise.
 
     An absent ``verify`` block or an empty ``floor_checks`` list
     returns ``[]`` so the caller can continue with the legacy /
@@ -836,6 +1009,8 @@ def _build_floor_views(
     Args:
         verify_block: Active profile's :class:`VerifyBlock`, or
             ``None`` when no profile is attached.
+        wave: The closing wave — read for ``id`` + ``file_scopes`` so the
+            floor invocation can be narrowed to the wave's declared scope.
         runner_cwd: Working directory for the deterministic-floor
             subprocess execution. Threaded from
             :func:`compute`'s ``repo_root``.
@@ -848,11 +1023,13 @@ def _build_floor_views(
     """
     if verify_block is None or not verify_block.floor_checks:
         return []
+    checks_by_name: dict[str, FloorCheck] = {c.name: c for c in verify_block.floor_checks}
     compiled = compile_floor_pack(
         verify_block.floor_checks,
         allowlist=list(verify_block.argv_allowlist),
     )
-    to_run = [c for c in compiled if not _floor_check_waived(c.name, fresh_evidence)]
+    scoped = _scope_compiled_floor_pack(compiled, checks_by_name, wave=wave, runner_cwd=runner_cwd)
+    to_run = [c for c in scoped if not _floor_check_waived(c.name, fresh_evidence)]
     ran_views: dict[str, CriterionView] = {}
     for check_spec, result in zip(to_run, run_checks(to_run, cwd=runner_cwd), strict=True):
         # status literal closed by CheckResult validator: pass / fail / blocked.
@@ -862,9 +1039,10 @@ def _build_floor_views(
             source="floor",
             status=status,
             gate_results=[GateResult(gate_id=check_spec.name, status=status)],
+            required=_floor_required(checks_by_name.get(check_spec.name)),
         )
     views: list[CriterionView] = []
-    for check_spec in compiled:
+    for check_spec in scoped:
         ran = ran_views.get(check_spec.name)
         if ran is not None:
             views.append(ran)
@@ -878,9 +1056,61 @@ def _build_floor_views(
                 source="floor",
                 status="waived",
                 gate_results=[GateResult(gate_id=check_spec.name, status="pass")],
+                required=_floor_required(checks_by_name.get(check_spec.name)),
             )
         )
     return views
+
+
+def _scope_compiled_floor_pack(
+    compiled: list[CheckSpec],
+    checks_by_name: dict[str, FloorCheck],
+    *,
+    wave: Wave,
+    runner_cwd: Path,
+) -> list[CheckSpec]:
+    """Narrow each declared-scope floor spec to *wave*'s ``file_scopes``.
+
+    A ``scope: all`` floor (or a spec with no matching floor row) passes
+    through unchanged so the schema / migration whole-tree gauntlet stays
+    intact. A ``scope: touched`` / ``changed`` floor has its argv rewritten by
+    :func:`_scope_floor_argv` and the wave's ``id`` + ``file_scopes`` threaded
+    onto the spec args so the runner's diff-base + ``touched`` union is
+    wave-anchored.
+
+    Args:
+        compiled: The floor specs from :func:`compile_floor_pack`.
+        checks_by_name: The originating floor rows keyed by name (source of
+            the declared ``scope``).
+        wave: The closing wave read for ``id`` + ``file_scopes``.
+        runner_cwd: Repo root the floor subprocess runs in.
+
+    Returns:
+        One :class:`CheckSpec` per input spec, scoped where the declared
+        scope is not ``all``.
+    """
+    file_scopes = list(wave.file_scopes)
+    scoped: list[CheckSpec] = []
+    for spec in compiled:
+        check = checks_by_name.get(spec.name)
+        if check is None or check.scope == "all":
+            scoped.append(spec)
+            continue
+        argv = [str(token) for token in spec.args.get("argv", [])]
+        new_argv = _scope_floor_argv(
+            argv,
+            scope=check.scope,
+            file_scopes=file_scopes,
+            runner_cwd=runner_cwd,
+        )
+        new_args = {
+            **spec.args,
+            "argv": new_argv,
+            "wave_id": wave.id,
+            "wave_file_scopes": file_scopes,
+        }
+        scoped.append(CheckSpec(kind=spec.kind, name=spec.name, args=new_args))
+    return scoped
 
 
 def _build_backlog_resolution_view(
@@ -1208,7 +1438,7 @@ def compute(
     floor_views: list[CriterionView] = []
     if not spec_views:
         floor_views = _build_floor_views(
-            verify_block, runner_cwd=repo_root, fresh_evidence=fresh_evidence
+            verify_block, wave=wave, runner_cwd=repo_root, fresh_evidence=fresh_evidence
         )
 
     # Backlog-resolution close-gate (P30-I10 QUAL-2). Scores the wave's

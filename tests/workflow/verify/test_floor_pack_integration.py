@@ -16,8 +16,10 @@ Pins the W10 sc:
 
 from __future__ import annotations
 
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 import pytest
 
@@ -27,6 +29,7 @@ from eawf.kernel.state.models import CurrentPointers, Project, State
 from eawf.kernel.store.paths import store_dir as _store_dir
 from eawf.platform.profiles import load_profile
 from eawf.platform.profiles.models import FloorCheck, VerifyBlock
+from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
 from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
     claim_wave,
@@ -39,6 +42,9 @@ from tests._criteria_helpers import legacy_criteria
 from tests.conftest import make_floor_waiver, make_intent
 
 WAVE_ID = "P01-I01-W01"
+
+FloorScope = Literal["changed", "touched", "all"]
+FloorPolicy = Literal["block", "warn", "advisory"]
 
 
 # ---- fixtures ---------------------------------------------------------------
@@ -74,7 +80,12 @@ def _empty_state() -> State:
     )
 
 
-def _seed_wave(state: State, *, success_criteria: list[str] | None = None) -> None:
+def _seed_wave(
+    state: State,
+    *,
+    success_criteria: list[str] | None = None,
+    file_scopes: list[str] | None = None,
+) -> None:
     open_phase(state, phase_id="P01", title="phase")
     open_iter(state, iter_id="P01-I01", phase_id="P01", title="iter")
     plan_wave(
@@ -82,7 +93,7 @@ def _seed_wave(state: State, *, success_criteria: list[str] | None = None) -> No
         wave_id=WAVE_ID,
         iter_id="P01-I01",
         title="wave",
-        file_scopes=["src/"],
+        file_scopes=file_scopes or ["src/"],
         success_criteria=legacy_criteria(*(success_criteria or [])),
         criteria_floor_waiver=make_floor_waiver(),
         effort_bucket="M",
@@ -91,45 +102,49 @@ def _seed_wave(state: State, *, success_criteria: list[str] | None = None) -> No
     claim_wave(state, wave_id=WAVE_ID, session_id="SES-flr")
 
 
+def _git(repo_root: Path, *args: str) -> None:
+    """Run a quiet ``git -C <repo_root>`` command, raising on non-zero exit."""
+    subprocess.run(["git", "-C", str(repo_root), *args], check=True, capture_output=True)
+
+
 def _init_test_repo(repo_root: Path) -> None:
     """Initialise *repo_root* as a minimal git repo with one commit.
 
     The floor-pack live-run path invokes the W15-hardened gate runner
     which expects a real git tree.
     """
-    import subprocess
-
     repo_root.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["git", "-C", str(repo_root), "init", "-q", "-b", "main"], check=True)
-    subprocess.run(
-        ["git", "-C", str(repo_root), "config", "user.email", "test@example.com"],
-        check=True,
-    )
-    subprocess.run(["git", "-C", str(repo_root), "config", "user.name", "test"], check=True)
+    _git(repo_root, "init", "-q", "-b", "main")
+    _git(repo_root, "config", "user.email", "test@example.com")
+    _git(repo_root, "config", "user.name", "test")
     (repo_root / "README.md").write_text("seed\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(repo_root), "add", "."], check=True)
-    subprocess.run(["git", "-C", str(repo_root), "commit", "-q", "-m", "seed"], check=True)
+    _git(repo_root, "add", ".")
+    _git(repo_root, "commit", "-q", "-m", "seed")
 
 
-def _passing_floor_check(name: str) -> FloorCheck:
+def _passing_floor_check(
+    name: str, *, scope: FloorScope = "all", policy: FloorPolicy = "warn"
+) -> FloorCheck:
     """Build a floor check whose argv reliably exits zero in a seeded repo."""
     return FloorCheck(
         name=name,
         cmd=["git", "status", "--porcelain"],
-        scope="all",
+        scope=scope,
         cadence="every-wave",
-        policy="warn",
+        policy=policy,
     )
 
 
-def _failing_floor_check(name: str) -> FloorCheck:
+def _failing_floor_check(
+    name: str, *, scope: FloorScope = "all", policy: FloorPolicy = "warn"
+) -> FloorCheck:
     """Build a floor check whose argv reliably exits non-zero in any repo."""
     return FloorCheck(
         name=name,
         cmd=["git", "show", "no-such-ref-w10-floor"],
-        scope="all",
+        scope=scope,
         cadence="every-wave",
-        policy="warn",
+        policy=policy,
     )
 
 
@@ -161,7 +176,7 @@ def _write_verify_profile(
                 f"      cmd: [{rendered_cmd}]",
                 "      scope: all",
                 "      cadence: every-wave",
-                "      policy: warn",
+                "      policy: block",
                 "",
             ]
         ),
@@ -224,7 +239,7 @@ def test_floor_pack_renders_one_criterion_view_per_check(
 def test_floor_pack_failing_check_flips_ready(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A failing floor check rolls the readiness to ``ready=False``."""
+    """A failing ``policy: block`` floor check rolls the readiness to ``ready=False``."""
     state = _empty_state()
     _seed_wave(state)
     _init_test_repo(tmp_path)
@@ -232,7 +247,7 @@ def test_floor_pack_failing_check_flips_ready(
 
     block = VerifyBlock(
         argv_allowlist=[],
-        floor_checks=[_failing_floor_check("c-fail")],
+        floor_checks=[_failing_floor_check("c-fail", policy="block")],
     )
     monkeypatch.setattr(
         readiness_mod,
@@ -451,3 +466,301 @@ def test_three_profiles_yield_identical_readiness_shape(
     assert len(rendered["python"]["criteria"]) == 3
     assert len(rendered["apps"]["criteria"]) == 4
     assert len(rendered["robotics"]["criteria"]) == 1
+
+
+# ---- W13: scope the floor pack to the wave's file_scopes ------------------
+
+
+def test_mirror_src_to_test_dir_maps_src_scope_to_test_package() -> None:
+    """A ``src/<pkg>/<sub>/<file>`` scope mirrors to its ``tests/<sub>/`` dir."""
+    assert (
+        readiness_mod._mirror_src_to_test_dir("src/eawf/workflow/verify/readiness.py")
+        == "tests/workflow/verify/"
+    )
+    # A directory scope mirrors to the same test package.
+    assert (
+        readiness_mod._mirror_src_to_test_dir("src/eawf/workflow/verify/")
+        == "tests/workflow/verify/"
+    )
+    # A top-level module (no dir below the package) has no test package to map.
+    assert readiness_mod._mirror_src_to_test_dir("src/eawf/foo.py") is None
+    # A non-src scope is not mappable.
+    assert readiness_mod._mirror_src_to_test_dir("docs/guide.md") is None
+
+
+def test_scope_floor_argv_per_tool_narrowing(tmp_path: Path) -> None:
+    """``_scope_floor_argv`` narrows each supported tool to the scope set."""
+    scope_files = ["tests/workflow/verify/"]
+    # pytest -> append the declared test targets.
+    assert readiness_mod._scope_floor_argv(
+        ["uv", "run", "pytest", "-q"],
+        scope="touched",
+        file_scopes=scope_files,
+        runner_cwd=tmp_path,
+    ) == ["uv", "run", "pytest", "-q", "tests/workflow/verify"]
+    # pre-commit -> drop --all-files, pass --files over the scope set.
+    assert readiness_mod._scope_floor_argv(
+        ["uv", "run", "pre-commit", "run", "--all-files"],
+        scope="touched",
+        file_scopes=["a.py", "b.py"],
+        runner_cwd=tmp_path,
+    ) == ["uv", "run", "pre-commit", "run", "--files", "a.py", "b.py"]
+    # mypy -> replace the whole-tree positional with the src scopes.
+    assert readiness_mod._scope_floor_argv(
+        ["uv", "run", "mypy", "src/"],
+        scope="touched",
+        file_scopes=["src/eawf/workflow/verify/readiness.py"],
+        runner_cwd=tmp_path,
+    ) == ["uv", "run", "mypy", "src/eawf/workflow/verify/readiness.py"]
+    # generic file-consuming tool -> append the scope set as positionals.
+    assert readiness_mod._scope_floor_argv(
+        ["git", "diff", "--exit-code"],
+        scope="touched",
+        file_scopes=["pkg/mod.py"],
+        runner_cwd=tmp_path,
+    ) == ["git", "diff", "--exit-code", "pkg/mod.py"]
+
+
+def test_scope_floor_argv_whole_tree_escapes(tmp_path: Path) -> None:
+    """``scope: all``, empty scopes, and unmappable scopes keep the whole tree."""
+    whole_tree = ["uv", "run", "pytest", "-q"]
+    # scope: all keeps the schema / migration whole-tree gauntlet intact.
+    assert (
+        readiness_mod._scope_floor_argv(
+            whole_tree, scope="all", file_scopes=["tests/x/"], runner_cwd=tmp_path
+        )
+        == whole_tree
+    )
+    # No declared file_scopes -> nothing to narrow to.
+    assert (
+        readiness_mod._scope_floor_argv(
+            whole_tree, scope="touched", file_scopes=[], runner_cwd=tmp_path
+        )
+        == whole_tree
+    )
+    # mypy scopes that cross out of src -> the documented whole-tree escape.
+    assert readiness_mod._scope_floor_argv(
+        ["uv", "run", "mypy", "src/"],
+        scope="touched",
+        file_scopes=["docs/guide.md"],
+        runner_cwd=tmp_path,
+    ) == ["uv", "run", "mypy", "src/"]
+    # pytest scope with no mappable / existing test package -> whole-tree escape.
+    assert (
+        readiness_mod._scope_floor_argv(
+            whole_tree,
+            scope="touched",
+            file_scopes=["src/eawf/nowhere/absent.py"],
+            runner_cwd=tmp_path,
+        )
+        == whole_tree
+    )
+
+
+def test_floor_required_only_blocks_on_block_policy() -> None:
+    """A floor row gates the close only when both required AND policy=block."""
+    block_row = FloorCheck(
+        name="f", cmd=["git", "status"], scope="all", cadence="every-wave", policy="block"
+    )
+    warn_row = FloorCheck(
+        name="f", cmd=["git", "status"], scope="all", cadence="every-wave", policy="warn"
+    )
+    not_required_block = FloorCheck(
+        name="f",
+        cmd=["git", "status"],
+        scope="all",
+        cadence="every-wave",
+        policy="block",
+        required=False,
+    )
+    assert readiness_mod._floor_required(block_row) is True
+    assert readiness_mod._floor_required(warn_row) is False
+    assert readiness_mod._floor_required(not_required_block) is False
+    # An unmatched row defaults to blocking so a spec never silently down-grades.
+    assert readiness_mod._floor_required(None) is True
+
+
+def test_scoped_pytest_floor_carries_scoped_targets_not_whole_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CR-01: a scope:touched pytest floor carries the wave's test targets.
+
+    A module-scoped close must NOT invoke the whole-tree ``pytest -q``; the
+    invocation carries only the scoped target set. The wave id + file_scopes
+    are also threaded onto the spec so the runner's diff-base + touched union
+    stay wave-anchored.
+    """
+    state = _empty_state()
+    _seed_wave(state, file_scopes=["tests/workflow/verify/"])
+    store_dir = _store_dir(tmp_path / "state.json")
+
+    captured: list[CheckSpec] = []
+
+    def _fake_run(specs: list[CheckSpec], *, cwd: Path) -> list[CheckResult]:
+        captured.extend(specs)
+        return [CheckResult(name=s.name, kind=s.kind, passed=True) for s in specs]
+
+    monkeypatch.setattr(readiness_mod, "run_checks", _fake_run)
+
+    block = VerifyBlock(
+        argv_allowlist=[],
+        floor_checks=[
+            FloorCheck(
+                name="pytest",
+                cmd=["uv", "run", "pytest", "-q"],
+                scope="touched",
+                cadence="every-wave",
+                policy="warn",
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_active_verify_block",
+        lambda scope_id, state_arg, **kwargs: block,
+    )
+
+    readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
+
+    pytest_spec = next(s for s in captured if s.name == "pytest")
+    assert pytest_spec.args["argv"] == ["uv", "run", "pytest", "-q", "tests/workflow/verify"]
+    assert pytest_spec.args["argv"] != ["uv", "run", "pytest", "-q"]  # not the whole tree
+    assert pytest_spec.args["wave_id"] == WAVE_ID
+    assert pytest_spec.args["wave_file_scopes"] == ["tests/workflow/verify/"]
+
+
+def test_scoped_floor_ignores_out_of_scope_break(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CR-01: a scoped floor passes even when an OUT-of-scope file is broken.
+
+    Proof the narrowing is real, not cosmetic: the repo carries a broken file
+    a whole-tree ``git diff --exit-code`` would fail on, but the floor scoped
+    to the clean in-scope file exits zero.
+    """
+    state = _empty_state()
+    _init_test_repo(tmp_path)
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "in_scope.py").write_text("clean = 1\n", encoding="utf-8")
+    (tmp_path / "pkg" / "out_scope.py").write_text("clean = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "pkg")
+    # Break the OUT-of-scope file (uncommitted diff).
+    (tmp_path / "pkg" / "out_scope.py").write_text("still broken\n", encoding="utf-8")
+
+    _seed_wave(state, file_scopes=["pkg/in_scope.py"])
+    store_dir = _store_dir(tmp_path / "state.json")
+
+    block = VerifyBlock(
+        argv_allowlist=[],
+        floor_checks=[
+            FloorCheck(
+                name="git-diff",
+                cmd=["git", "diff", "--exit-code"],
+                scope="touched",
+                cadence="every-wave",
+                policy="warn",
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_active_verify_block",
+        lambda scope_id, state_arg, **kwargs: block,
+    )
+
+    result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
+
+    view = next(v for v in result.criteria if v.id == "git-diff")
+    assert view.status == "pass"  # scoped to the clean in-scope file
+
+
+def test_broken_file_in_scope_still_fails_floor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CR-02: a break INSIDE file_scopes still fails the floor, warn stays non-blocking.
+
+    The falsifier survives scoping (an in-scope break is still detected) AND a
+    ``policy: warn`` floor row does not flip ``ready`` -- the two halves of the
+    W13 close-floor contract.
+    """
+    state = _empty_state()
+    _init_test_repo(tmp_path)
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "mod.py").write_text("clean = 1\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "pkg")
+    # Break the IN-scope file (uncommitted diff).
+    (tmp_path / "pkg" / "mod.py").write_text("still broken\n", encoding="utf-8")
+
+    _seed_wave(state, file_scopes=["pkg/mod.py"])
+    store_dir = _store_dir(tmp_path / "state.json")
+
+    block = VerifyBlock(
+        argv_allowlist=[],
+        floor_checks=[
+            FloorCheck(
+                name="git-diff",
+                cmd=["git", "diff", "--exit-code"],
+                scope="touched",
+                cadence="every-wave",
+                policy="warn",
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_active_verify_block",
+        lambda scope_id, state_arg, **kwargs: block,
+    )
+
+    result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
+
+    view = next(v for v in result.criteria if v.id == "git-diff")
+    assert view.status == "fail"  # the falsifier survives scoping
+    assert view.required is False  # policy: warn -> non-blocking
+    assert result.ready is True  # a warn fail does not gate the close
+
+
+def test_warn_floor_non_blocking_but_block_floor_gates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CR-02: policy governs gating -- a failing warn floor keeps ready True; block flips it."""
+    state = _empty_state()
+    _seed_wave(state)
+    _init_test_repo(tmp_path)
+    store_dir = _store_dir(tmp_path / "state.json")
+
+    warn_block = VerifyBlock(
+        argv_allowlist=[],
+        floor_checks=[_failing_floor_check("c-warn", policy="warn")],
+    )
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_active_verify_block",
+        lambda scope_id, state_arg, **kwargs: warn_block,
+    )
+    warn_result = readiness_mod.compute(
+        WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path
+    )
+    warn_view = next(v for v in warn_result.criteria if v.id == "c-warn")
+    assert warn_view.status == "fail"
+    assert warn_view.required is False
+    assert warn_result.ready is True  # warn fail is non-blocking
+
+    block_block = VerifyBlock(
+        argv_allowlist=[],
+        floor_checks=[_failing_floor_check("c-block", policy="block")],
+    )
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_active_verify_block",
+        lambda scope_id, state_arg, **kwargs: block_block,
+    )
+    block_result = readiness_mod.compute(
+        WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path
+    )
+    block_view = next(v for v in block_result.criteria if v.id == "c-block")
+    assert block_view.status == "fail"
+    assert block_view.required is True
+    assert block_result.ready is False  # block fail gates the close

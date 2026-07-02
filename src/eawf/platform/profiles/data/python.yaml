@@ -57,11 +57,18 @@ render_blocks:
 skills_referenced: []
 hooks_referenced: []
 
-# P28-I01-W10 — verify spine floor pack (advisory in v0.4.0; W19 flips
-# to gating). Each check runs through the W15-hardened gate runner via
-# :func:`eawf.workflow.verify.compile.compile_floor_pack`. argv heads
-# resolve against the kernel-spec default allowlist + this profile's
+# Verify spine floor pack. Each check runs through the W15-hardened gate
+# runner via :func:`eawf.workflow.verify.compile.compile_floor_pack`; argv
+# heads resolve against the kernel-spec default allowlist + this profile's
 # ``argv_allowlist``.
+#
+# ``scope: touched`` is honored at close time: the readiness compute narrows
+# each floor invocation to the closing wave's ``file_scopes`` (pytest -> test
+# targets, pre-commit -> ``--files``, mypy -> scoped module list), so a
+# module-scoped close never runs the whole tree. ``policy: warn`` keeps these
+# non-blocking -- a floor row gates the close only when ``policy: block``
+# (flip the single ``policy`` lever to gate). The whole-tree gauntlet lives at
+# iter close, not per wave.
 verify:
   argv_allowlist:
     - uv
