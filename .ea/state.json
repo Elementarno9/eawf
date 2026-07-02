@@ -9449,6 +9449,20 @@
       "scope_id": "P30-I22-W03",
       "status": "done",
       "updated_at": "2026-07-01T23:46:23.020440Z"
+    },
+    "P30-I22-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I22-W04",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I22-W04",
+      "model": null,
+      "scope_id": "P30-I22-W04",
+      "status": "done",
+      "updated_at": "2026-07-02T04:45:13.689887Z"
     }
   },
   "agent_sessions": {
@@ -24176,6 +24190,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I22-W03",
       "updated_at": "2026-07-01T23:46:04.136041Z"
+    },
+    "P30-I22-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I22-W04-bucket-20260702T033959Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I22-W04",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I22-W04",
+      "updated_at": "2026-07-02T03:39:59.418936Z"
     }
   },
   "fleet_run": null,
@@ -27550,7 +27577,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T03:13:14.471537Z",
+  "updated_at": "2026-07-02T04:45:13.690136Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -102552,10 +102579,10 @@
         "P30-I22-W06",
         "P30-I22-W07"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-P30-I22-W04",
+      "claimed_at": "2026-07-02T03:39:59.391034Z",
+      "closed_at": "2026-07-02T04:45:13.689887Z",
+      "commit": "2ee7eec5e172e7b05cfe91983574c6c1c038e96c",
       "deps": [],
       "description": "Live review: action outcomes (campaign runs; daemon-denied *_NO_DAEMON lines) stick forever in result Statics. Route them through self.app.notify fading toasts instead. Findings brief: .ea/local/research/2026-07-02-tui-review-followups.md section 1.",
       "dispatch_history": [],
@@ -102582,12 +102609,12 @@
       },
       "iter_id": "P30-I22",
       "opened_at": "2026-07-02T03:12:24.750398Z",
-      "outcome": null,
+      "outcome": "outcomes toast via notify_result; result lines stay idle; 57 Pilot tests reworked; full tui+snapshot suite green (2793 pass)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
