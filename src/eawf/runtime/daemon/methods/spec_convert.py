@@ -166,6 +166,13 @@ def _convert_wave_rows(
         )
         if isinstance(attempt, ConvertRowReport):
             reports.append(attempt)
+            # No silent legacy rows: a refused row STAYS legacy but carries
+            # its named non-convertible reason on waiver_reason so committed
+            # state explains why the row was never retyped.
+            if not criterion.waiver_reason and attempt.reason:
+                new_criteria[position - 1] = criterion.model_copy(
+                    update={"waiver_reason": f"non-convertible: {attempt.reason}"}
+                )
             continue
         converted, gate = attempt
         staged.append((position - 1, converted, gate))
@@ -177,7 +184,7 @@ def _convert_wave_rows(
                 [gate for _, _, gate in staged],
             )
         except ValueError as exc:
-            for _, criterion, _ in staged:
+            for index, criterion, _ in staged:
                 reports.append(
                     ConvertRowReport(
                         wave_id=wave.id,
@@ -186,6 +193,15 @@ def _convert_wave_rows(
                         reason=f"cross-reference validation failed: {exc}",
                     )
                 )
+                original = wave.success_criteria[index]
+                if not original.waiver_reason:
+                    new_criteria[index] = original.model_copy(
+                        update={
+                            "waiver_reason": (
+                                f"non-convertible: cross-reference validation failed: {exc}"
+                            )
+                        }
+                    )
             staged = []
 
     for index, criterion, gate in staged:
@@ -382,13 +398,14 @@ def _apply_convert_legacy_locked(
         wave = state.waves[wave_id]
         criteria, gates, reports = _convert_wave_rows(wave)
         rows.extend(reports)
-        if any(report.disposition == "converted" for report in reports):
+        changed = criteria != list(wave.success_criteria) or gates != list(wave.gates)
+        if changed:
             wave.success_criteria = criteria
             wave.gates = gates
             touched += 1
 
     converted_count = sum(1 for row in rows if row.disposition == "converted")
-    if converted_count == 0:
+    if touched == 0:
         return _convert_result(
             args, rows, before=before_version, after=before_version, envelope=None
         )

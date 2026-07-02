@@ -583,6 +583,15 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         default=4,
         writable_layers=_WRITABLE_GWR,
     ),
+    # --- verify --------------------------------------------------------------
+    LeafKey(
+        key="verify.odr_blocking",
+        domain="verify",
+        type="bool",
+        default=False,
+        writable_layers=_WRITABLE_GWR,
+        description="Repo opt-in: a below-floor Oracle-Determinism-Ratio refuses iter close.",
+    ),
     LeafKey(
         key="planning.require_research_for_unknowns",
         domain="planning",

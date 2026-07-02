@@ -1956,13 +1956,56 @@ def _apply_iter_open(state: State, mutation: Mutation) -> None:
 
 
 def _apply_iter_close(state: State, mutation: Mutation) -> None:
-    """Apply :attr:`MutationKind.ITER_CLOSE` — delegate to ``close_iter``."""
+    """Apply :attr:`MutationKind.ITER_CLOSE` — delegate to ``close_iter``.
+
+    The optional ``odr_floor`` / ``odr_blocking`` params are threaded in
+    daemon-side by :func:`_thread_iter_close_verify_params` from the resolved
+    verify block, so the repo's ``verify.odr_blocking`` opt-in actually
+    reaches the ODR gate instead of dying at the default arguments.
+    """
+    from eawf.observability.metrics.odr import DEFAULT_ODR_FLOOR
+
     params = mutation.params
     close_iter(
         state,
         iter_id=str(params["iter_id"]),
         audit_id=str(params["audit_id"]),
+        odr_floor=float(params.get("odr_floor", DEFAULT_ODR_FLOOR)),
+        odr_blocking=bool(params.get("odr_blocking", False)),
     )
+
+
+def _thread_iter_close_verify_params(
+    state: State,
+    mutation: Mutation,
+    *,
+    state_path: Path,
+    repo_root_override: str | None,
+) -> None:
+    """Thread the resolved verify block's ODR leaves into an ITER_CLOSE.
+
+    Runs under the commit lock with the freshly read state, so the flags
+    the applier consumes reflect the same config the close is about. Params
+    already present on the mutation win (a caller may pin them explicitly);
+    resolution failures leave the advisory defaults in place — threading is
+    an enrichment, never a new failure mode for the close itself.
+    """
+    if "odr_floor" in mutation.params and "odr_blocking" in mutation.params:
+        return
+    from eawf.workflow.verify.readiness import load_active_verify_block
+
+    iter_id = str(mutation.params.get("iter_id", ""))
+    repo_root = Path(repo_root_override) if repo_root_override else state_path.parent.parent
+    verify_block = load_active_verify_block(
+        iter_id,
+        state,
+        repo_root=repo_root,
+        config_root=_config_root_for_state_path(state_path),
+    )
+    if verify_block is None:
+        return
+    mutation.params.setdefault("odr_floor", verify_block.odr_floor)
+    mutation.params.setdefault("odr_blocking", verify_block.odr_blocking)
 
 
 def _apply_track_add(state: State, mutation: Mutation) -> None:
@@ -2991,6 +3034,14 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             ctx.active_lock_handle = generic_lock_handle
             state, payload = _read_state(state_path)
             before_version = _state_version(payload)
+
+            if mutation.kind is MutationKind.ITER_CLOSE:
+                _thread_iter_close_verify_params(
+                    state,
+                    mutation,
+                    state_path=state_path,
+                    repo_root_override=args.repo_root,
+                )
 
             try:
                 apply_func(state, mutation)

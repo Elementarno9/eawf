@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import orjson
 
@@ -635,7 +635,28 @@ def _load_active_verify_block(
             continue
         if body.verify is not None:
             blocks.append(body.verify)
-    return _merge_verify_blocks(blocks)
+    merged_block = _merge_verify_blocks(blocks)
+    return _overlay_repo_verify_leaves(merged_block, merged)
+
+
+def _overlay_repo_verify_leaves(
+    block: VerifyBlock | None, merged_config: dict[str, Any]
+) -> VerifyBlock | None:
+    """OR-fold the repo-layer ``verify.odr_blocking`` opt-in onto *block*.
+
+    Profiles ship the verify spine's defaults; ``.ea/config.yaml`` may opt
+    THIS repo into ODR blocking (``verify: {odr_blocking: true}``) once its
+    new-iter ODR is honest. A layer can only tighten: the overlay ORs onto
+    the profile value, so a repo cannot silently loosen a blocking profile.
+    """
+    if block is None:
+        return None
+    verify_section = merged_config.get("verify")
+    if not isinstance(verify_section, dict):
+        return block
+    if verify_section.get("odr_blocking") is True and not block.odr_blocking:
+        return block.model_copy(update={"odr_blocking": True})
+    return block
 
 
 def load_active_verify_block(

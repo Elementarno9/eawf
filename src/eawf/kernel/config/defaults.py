@@ -220,6 +220,13 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
     # built-in baseline is ``standard``. ``clarity_judge`` / ``block_on_lint``
     # default ``null`` so each defers to the level until a layer opts a single
     # gate on or off within the level's floor.
+    # Verify-spine repo-layer knobs. ``odr_blocking`` lets a repo opt into
+    # the Oracle-Determinism-Ratio floor REFUSING an iter close (the profile
+    # default keeps the floor advisory); a layer can only tighten -- the
+    # overlay ORs onto the profile block, never loosens it.
+    "verify": {
+        "odr_blocking": False,
+    },
     "prose": {
         "level": "standard",
         "clarity_judge": None,

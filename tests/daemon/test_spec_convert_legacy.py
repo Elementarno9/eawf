@@ -278,7 +278,12 @@ def test_convert_legacy_refuses_unmeasurable_row_with_named_reason(tmp_path: Pat
 
 
 def test_convert_legacy_refuses_wave_without_file_scopes(tmp_path: Path) -> None:
-    """A scope-less wave refuses every row: the file-grep gate cannot anchor."""
+    """A scope-less wave refuses every row: the file-grep gate cannot anchor.
+
+    Post-W25 a refusal is not silent: the row STAYS legacy but the named
+    reason is persisted onto ``waiver_reason`` so committed state explains
+    why the row was never retyped.
+    """
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     state_path = repo_root / ".ea" / "state.json"
@@ -286,7 +291,6 @@ def test_convert_legacy_refuses_wave_without_file_scopes(tmp_path: Path) -> None
         state_path,
         _state_payload(criteria=[_legacy_criterion(1, _MEASURABLE_TEXT)], file_scopes=[]),
     )
-    before_bytes = state_path.read_bytes()
     ctx = _build_ctx(tmp_path, state_path)
 
     async def body() -> None:
@@ -299,7 +303,11 @@ def test_convert_legacy_refuses_wave_without_file_scopes(tmp_path: Path) -> None
         assert "file_scopes" in result["rows"][0]["reason"]
 
     _run(body)
-    assert state_path.read_bytes() == before_bytes
+    payload = orjson.loads(state_path.read_bytes())
+    row = payload["waves"][_WAVE_ID]["success_criteria"][0]
+    assert row["kind"] == "legacy"
+    assert row["waiver_reason"].startswith("non-convertible:")
+    assert "file_scopes" in row["waiver_reason"]
 
 
 def test_convert_legacy_unknown_wave_scope_raises(tmp_path: Path) -> None:
