@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from eawf.kernel.state.models import State
 from eawf.observability.eval.jury_validation import BlockAuthority
 from eawf.platform.profiles.models import JuryAuthorityConfig, VerifyBlock
@@ -110,6 +112,53 @@ def test_resolve_authority_advisory_with_custom_floors(tmp_path: Path) -> None:
             unanimous_pass_ceiling=1.0,
         ),
     )
+
+    authority = _resolve_jury_block_authority(
+        state, state_path=tmp_path / "state.json", verify_block=verify_block
+    )
+
+    assert authority is BlockAuthority.ADVISORY
+
+
+def test_resolve_authority_advisory_on_ballotless_labelled_cohort(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A non-empty cohort with no recorded ballots resolves ADVISORY, no raise.
+
+    Regression (P30-I23-W50): the moment the first auditor verdict row settled
+    into the silver cohort, the resolver scored ``validate_jury`` with an empty
+    ballot map and the phantom-jury hard error crashed EVERY enforcing close
+    (``labelled wave has no recorded jury ballots``). A labelled cohort whose
+    ballot substrate is empty means the jury never ran on those waves --
+    uncalibrated, so the resolver must return advisory instead of raising.
+    """
+    from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole
+    from eawf.observability.eval.jury_validation import (
+        LabeledVerdict,
+        LabelSource,
+        ValidationCohort,
+    )
+    from eawf.observability.eval.reputation import VerdictOutcome
+
+    labelled = LabeledVerdict(
+        outcome=VerdictOutcome(
+            base_id="P30-I20-W58",
+            agent_role=AgentSessionRole.AUDITOR,
+            runtime="claude-code",
+            verdict=AgentReportVerdict.PASS,
+            confidence=0.8,
+            held=True,
+            outcome_source="clean-close",
+        ),
+        ground_truth=True,
+        label_source=LabelSource.SILVER,
+    )
+    monkeypatch.setattr(
+        "eawf.observability.eval.jury_validation.build_jury_validation_cohort",
+        lambda state, state_path: ValidationCohort(silver=[labelled], gold=[]),
+    )
+    state = _empty_state()
+    verify_block = VerifyBlock(enforce=True, cross_vendor_jury=True)
 
     authority = _resolve_jury_block_authority(
         state, state_path=tmp_path / "state.json", verify_block=verify_block

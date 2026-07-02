@@ -139,6 +139,7 @@ from eawf.workflow.skills.needs_user import retract_wave_pauses
 from eawf.workflow.verify.models import CloseReadiness
 
 if TYPE_CHECKING:
+    from eawf.observability.eval.jury import JurorBallot
     from eawf.observability.eval.jury_validation import BlockAuthority
     from eawf.platform.profiles.models import VerifyBlock
 
@@ -1433,17 +1434,36 @@ def _resolve_jury_block_authority(
         unanimous_pass_ceiling=leaf.unanimous_pass_ceiling,
     )
     cohort = build_jury_validation_cohort(state, state_path)
-    # The validation substrate is empty today -- no labelled verdict rows and no
-    # recorded per-wave ballots -- so the cohort is honest-empty and the jury
-    # has earned no authority. An empty cohort short-circuits to advisory rather
-    # than scoring (validate_jury would otherwise need the ballot substrate a
-    # later wave builds); this read stays honest-empty until then rather than
-    # fabricating a calibrated jury.
+    # An empty cohort short-circuits to advisory rather than scoring
+    # (validate_jury would otherwise need the ballot substrate a later wave
+    # builds); this read stays honest-empty rather than fabricating a
+    # calibrated jury.
     if not cohort.silver and not cohort.gold:
         return BlockAuthority.ADVISORY
-    report = validate_jury(cohort, ballots_by_wave={})
+    ballots_by_wave = _load_recorded_ballots()
+    # A labelled cohort with NO recorded ballots means the jury has never
+    # actually run on those waves -- uncalibrated, so advisory. Scoring it
+    # instead would trip validate_jury's phantom-jury hard error and crash
+    # every enforcing close the moment the first auditor verdict settles into
+    # the silver cohort; that hard error stays reserved for the calibration
+    # path, where ballots are expected on record.
+    if not ballots_by_wave:
+        return BlockAuthority.ADVISORY
+    report = validate_jury(cohort, ballots_by_wave=ballots_by_wave)
     verbosity = measure_verbosity_bias([])
     return jury_block_authority(report, verbosity, authority_config)
+
+
+def _load_recorded_ballots() -> dict[str, tuple[JurorBallot, ...]]:
+    """Return the persisted per-wave juror ballots -- honest-empty today.
+
+    No ballot store exists yet: juror ballots are not persisted anywhere, so
+    this returns ``{}`` -- the real substrate, not a stub. The jury label
+    writer that persists ballots replaces this body with a store read; the
+    close-path caller already handles the empty map by resolving advisory
+    authority instead of scoring a phantom jury.
+    """
+    return {}
 
 
 async def _enforce_wave_close_gate(
