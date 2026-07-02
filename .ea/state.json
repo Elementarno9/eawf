@@ -9576,6 +9576,20 @@
       "status": "done",
       "updated_at": "2026-07-02T14:28:56.526285Z"
     },
+    "P30-I23-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W04",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W04",
+      "model": null,
+      "scope_id": "P30-I23-W04",
+      "status": "done",
+      "updated_at": "2026-07-02T17:19:11.278334Z"
+    },
     "P30-I23-W05": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -9617,6 +9631,20 @@
       "scope_id": "P30-I23-W12",
       "status": "done",
       "updated_at": "2026-07-02T17:18:07.800674Z"
+    },
+    "P30-I23-W16": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W16",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W16",
+      "model": null,
+      "scope_id": "P30-I23-W16",
+      "status": "done",
+      "updated_at": "2026-07-02T17:19:14.988003Z"
     },
     "P30-I23-W23": {
       "actual_cost_usd": 0.0,
@@ -13125,10 +13153,8 @@
     ],
     "active_wave_ids": [
       "P30-I23-W03",
-      "P30-I23-W04",
       "P30-I23-W14",
       "P30-I23-W15",
-      "P30-I23-W16",
       "P30-I23-W22",
       "P30-I23-W27"
     ],
@@ -28416,7 +28442,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T17:18:07.800932Z",
+  "updated_at": "2026-07-02T17:19:14.988281Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -105699,8 +105725,8 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T17:03:44.158492Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T17:19:11.278334Z",
+      "commit": "3a602fefe5861ba3bb5e4617c8b5ad5b9ad702d2",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W02"
@@ -105748,12 +105774,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:37:59.203999Z",
-      "outcome": null,
+      "outcome": "Held state locks heartbeat every 15s via a joined daemon ticker context manager (live holder never steals as stale, ZD-R4); hold_ceiling_exceeded WARNING with duration_s past 120s ceiling (observability only, escalation is W10); steal path for dead holders untouched; 21 tests green on integrated HEAD",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -107170,8 +107196,8 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T17:03:47.210106Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T17:19:14.988003Z",
+      "commit": "61244f0d719d9c663d0ceb7015cfb85dc8108d9a",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W02"
@@ -107220,12 +107246,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:38:07.295746Z",
-      "outcome": null,
+      "outcome": "_is_security_scoped uses hyphen-aware word-boundary regex (AUTH-3 code tokens no longer classify; bare-substring false hits like egress-in-regression dropped, verified across .ea/specs corpus); auditor report id mint normalizes role-prefixed base_id + append-path fail-fast invariant; 63 tests green on integrated HEAD",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
