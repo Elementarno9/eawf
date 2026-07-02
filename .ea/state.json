@@ -9758,6 +9758,20 @@
       "status": "done",
       "updated_at": "2026-07-02T17:19:14.988003Z"
     },
+    "P30-I23-W17": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W17",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W17",
+      "model": null,
+      "scope_id": "P30-I23-W17",
+      "status": "done",
+      "updated_at": "2026-07-02T20:05:06.366997Z"
+    },
     "P30-I23-W22": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13380,7 +13394,6 @@
       "P30-I23-W13",
       "P30-I23-W19",
       "P30-I23-W20",
-      "P30-I23-W41",
       "P30-I23-W44"
     ],
     "iter_id": "P30-I23",
@@ -25163,6 +25176,19 @@
       "scope_id": "P30-I23-W16",
       "updated_at": "2026-07-02T17:03:47.210221Z"
     },
+    "P30-I23-W17": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W17-bucket-20260702T194512Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I23-W17",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I23-W17",
+      "updated_at": "2026-07-02T19:45:12.326979Z"
+    },
     "P30-I23-W19": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I23-W19-bucket-20260702T194341Z",
@@ -28862,7 +28888,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T19:43:43.247652Z",
+  "updated_at": "2026-07-02T20:05:06.368415Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -107935,10 +107961,10 @@
       "blocks": [
         "P30-I23-W18"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-02T19:45:12.326475Z",
+      "closed_at": "2026-07-02T20:05:06.366997Z",
+      "commit": "69cf5c6c460e392ed662fbe29a29c1768572793b",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W08"
@@ -108007,12 +108033,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:38:07.960574Z",
-      "outcome": null,
+      "outcome": "Juror ballots persisted per convened jury (StoreKind.JURY_BALLOT store, one envelope per juror); read_recorded_ballots rebuilds the per-wave map and un-idles the daemon _load_recorded_ballots seam; eawf jury label gold-label writer ships via the new jury.label RPC; schema 1.13->1.14 marker-only migration; migration-wave full-tree gauntlet green.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -108205,7 +108231,8 @@
       "agent_role": null,
       "blocks": [
         "P30-I23-W49",
-        "P30-I23-W33"
+        "P30-I23-W33",
+        "P30-I23-W41"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T19:43:41.142124Z",
@@ -108343,7 +108370,8 @@
     "P30-I23-W20": {
       "agent_role": null,
       "blocks": [
-        "P30-I23-W33"
+        "P30-I23-W33",
+        "P30-I23-W41"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T19:43:41.869317Z",
@@ -111402,13 +111430,15 @@
       "blocks": [
         "P30-I23-W43"
       ],
-      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claim_session_id": null,
       "claimed_at": "2026-07-02T19:43:42.570114Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
       "deps": [
-        "P30-I23-W40"
+        "P30-I23-W40",
+        "P30-I23-W19",
+        "P30-I23-W20"
       ],
       "description": null,
       "dispatch_history": [],
@@ -111498,7 +111528,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "pending",
       "success_criteria": [
         {
           "acceptance_style": "binary",
