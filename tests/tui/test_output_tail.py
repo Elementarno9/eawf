@@ -97,7 +97,7 @@ def test_format_agent_output_lines_renders_claude_result_readably() -> None:
     )
     out = format_agent_output_lines(chunk)
     assert out[0] == "the deed is done"
-    assert out[-1] == "[result: success · 1234 out-tok · $0.6000 · 3 turns]"
+    assert out[-1] == "[result: success · 1.2k out-tok · $0.6000 · 3 turns]"
     # No raw envelope leaked through.
     assert not any('"type":"result"' in line for line in out)
 

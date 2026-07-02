@@ -31,6 +31,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from rich.markup import escape
+
 from eawf.observability.telemetry.join import (
     DEFAULT_EU_MINUTES,
     WaveAttemptRollup,
@@ -39,6 +41,8 @@ from eawf.observability.telemetry.join import (
 )
 from eawf.observability.telemetry.models import TelemetrySession
 from eawf.observability.telemetry.store import metrics_db_path, open_store
+from eawf.surfaces.render.link_wrap import PreMarkedText
+from eawf.surfaces.render.units import format_tokens
 from eawf.surfaces.tui.widgets.eu_bar import (
     DEFAULT_RENDER_MODE,
     RenderMode,
@@ -170,10 +174,10 @@ def _attempt_cells(attempt: WaveAttemptRollup) -> tuple[str, ...]:
     return (
         str(attempt.attempt),
         _attempt_model(attempt),
-        str(attempt.input_tokens),
-        str(attempt.output_tokens),
-        str(attempt.cache_write_tokens),
-        str(attempt.cache_read_tokens),
+        format_tokens(attempt.input_tokens),
+        format_tokens(attempt.output_tokens),
+        format_tokens(attempt.cache_write_tokens),
+        format_tokens(attempt.cache_read_tokens),
         _attempt_cost_cell(attempt),
         _attempt_eu(attempt),
     )
@@ -231,9 +235,13 @@ def cost_tab_rows(
     widths = [len(col) for col in _COST_COLUMNS]
     for raw in raw_rows:
         widths = [max(width, len(cell)) for width, cell in zip(widths, raw, strict=True)]
-    table = [_format_cost_row(_COST_COLUMNS, widths)]
-    table.extend(_format_cost_row(raw, widths) for raw in raw_rows)
-    rendered = "\n" + "\n".join(f"  {line}" for line in table)
+    # The header rides the metrics-title accent-bold convention; the value
+    # therefore carries its own markup (PreMarkedText opts out of the
+    # detail overlay's escaping) with the data lines escaped here instead.
+    header = f"[$accent][b]{escape(_format_cost_row(_COST_COLUMNS, widths))}[/][/]"
+    table = [header]
+    table.extend(escape(_format_cost_row(raw, widths)) for raw in raw_rows)
+    rendered = PreMarkedText("\n" + "\n".join(f"  {line}" for line in table))
     return (
         ("attempts", rendered),
         ("total", _aggregate_total_cell(rollup)),

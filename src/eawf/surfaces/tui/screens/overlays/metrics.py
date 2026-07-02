@@ -52,6 +52,7 @@ from eawf.observability.telemetry.metrics_projection import (
 from eawf.observability.telemetry.models import TelemetrySession
 from eawf.observability.telemetry.store import metrics_db_path, open_store
 from eawf.observability.telemetry.store.base import AbstractMetricsStore
+from eawf.surfaces.render.units import format_tokens
 from eawf.surfaces.tui.screens.overlays.detail_cost import (
     aggregate_session_cost,
     render_cost_tile,
@@ -181,15 +182,6 @@ def _format_ratio(value: float) -> str:
     return f"{value * 100.0:.0f}%"
 
 
-def _format_tokens(value: int) -> str:
-    """Return a compact token count."""
-    if value >= 1_000_000:
-        return f"{value / 1_000_000:.1f}M"
-    if value >= 1_000:
-        return f"{value / 1_000:.1f}k"
-    return str(value)
-
-
 def render_wave_elapsed_tile(state: State | None) -> str:
     """Render the elapsed-wave tile from :func:`compute_wave_elapsed`."""
     if state is None:
@@ -280,8 +272,8 @@ def _render_cache_projection(projection: MetricsProjection) -> str:
     for row in projection.cache_health[:3]:
         lines.append(
             f"{row.runtime} {_format_ratio(row.hit_ratio)} "
-            f"r:{_format_tokens(row.cache_read_tokens)} "
-            f"c:{_format_tokens(row.cache_create_tokens)}"
+            f"r:{format_tokens(row.cache_read_tokens)} "
+            f"c:{format_tokens(row.cache_create_tokens)}"
         )
     return "\n".join(lines)
 
@@ -300,7 +292,7 @@ def _render_tokens_projection(projection: MetricsProjection) -> str:
         return _NO_DATA
     lines: list[str] = []
     for row in projection.per_runtime_tokens[:3]:
-        lines.append(f"{row.runtime} {_format_tokens(row.total_tokens)} tok")
+        lines.append(f"{row.runtime} {format_tokens(row.total_tokens)} tok")
     return "\n".join(lines)
 
 

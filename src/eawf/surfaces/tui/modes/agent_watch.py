@@ -93,6 +93,7 @@ from eawf.kernel.state.enums import (
 )
 from eawf.kernel.state.ids import natural_key
 from eawf.observability.eval.reputation import FleetVerdictRow, fleet_verdict_rollup
+from eawf.surfaces.render.units import format_tokens
 from eawf.surfaces.tui.modes.feed import FEED_ROW_CLASS, format_event_row
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.toast_emitter import ToastSeverity, notify_result
@@ -1150,7 +1151,7 @@ def _lane_spend_label(wave: Wave | None) -> str:
     if not tokens and cost is None:
         return _LANE_SPEND_UNKNOWN
     cost_part = f"${cost:.2f}" if cost is not None else _LANE_SPEND_UNKNOWN
-    return f"{tokens} tok {cost_part}"
+    return f"{format_tokens(tokens)} tok {cost_part}"
 
 
 def _lane_tier_badge(wave: Wave | None, forked_tier: str | None) -> str:

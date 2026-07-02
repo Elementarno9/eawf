@@ -244,8 +244,25 @@ def action_markup(ref: LinkRef) -> str:
     return f"app.{ref.action_name}({ref.target!r})"
 
 
+class PreMarkedText(str):
+    """A string whose content is already valid Textual content markup.
+
+    :func:`linkify_text` escapes plain values before they reach a
+    markup-enabled widget; a renderer that styles its own value (the
+    cost-tab table header, for example) wraps it in this type so the
+    escaping choke point passes it through verbatim. The producer owns
+    escaping any user-controlled fragments inside.
+    """
+
+
 def linkify_text(text: str) -> str:
-    """Return *text* with recognised refs wrapped in clickable markup."""
+    """Return *text* with recognised refs wrapped in clickable markup.
+
+    A :class:`PreMarkedText` value passes through verbatim — it already
+    carries its own markup and escaping.
+    """
+    if isinstance(text, PreMarkedText):
+        return str(text)
     refs = iter_refs(text)
     if not refs:
         return escape(text)
@@ -304,6 +321,7 @@ __all__ = [
     "REFERENCE_KINDS",
     "LinkPattern",
     "LinkRef",
+    "PreMarkedText",
     "ReferenceKind",
     "action_markup",
     "iter_refs",

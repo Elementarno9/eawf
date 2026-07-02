@@ -349,7 +349,7 @@ def test_lane_grid_closed_lane_elapsed_measures_to_close() -> None:
 def test_lane_grid_running_lane_spend_reads_runtime_counters() -> None:
     """A running lane's tok/$ reads the wave's latest runtime counters."""
     rows = {row.wave_id: row for row in lane_grid_rows(_four_lane_state(), now=_NOW)}
-    assert rows["P01-I01-W01"].spend_label == "4000 tok $1.25"
+    assert rows["P01-I01-W01"].spend_label == "4.0k tok $1.25"
 
 
 def test_lane_grid_lane_without_counters_reads_unknown_spend() -> None:
@@ -462,7 +462,7 @@ def test_render_lane_row_carries_all_columns() -> None:
         wave_id="P01-I01-W01",
         vendor="claude",
         elapsed_label="42m",
-        spend_label="4000 tok $1.25",
+        spend_label="4.0k tok $1.25",
         tier_badge="HIGH",
         sandbox_label="2 denied",
         state=LaneState.RUNNING,
@@ -472,7 +472,7 @@ def test_render_lane_row_carries_all_columns() -> None:
     assert "P01-I01-W01" in rendered  # the wave id
     assert "claude" in rendered  # the vendor
     assert "42m" in rendered  # the elapsed
-    assert "4000 tok $1.25" in rendered  # the tok/$
+    assert "4.0k tok $1.25" in rendered  # the tok/$
     assert "HIGH" in rendered  # the tier badge
     assert "2 denied" in rendered  # the U5 sandbox-parity column
     assert "draining" in rendered  # the state detail

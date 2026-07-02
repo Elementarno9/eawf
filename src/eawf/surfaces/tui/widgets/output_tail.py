@@ -34,6 +34,7 @@ from textual.containers import VerticalScroll
 from textual.widgets import Static
 
 from eawf.runtime.runtimes.stream_json import unwrap_result_envelope
+from eawf.surfaces.render.units import format_tokens
 from eawf.surfaces.tui.widgets.markup import escape_markup
 
 logger = logging.getLogger(__name__)
@@ -172,7 +173,7 @@ def _format_claude_result(event: dict[str, object], raw_line: str) -> list[str]:
         parts.append(subtype)
     usage = event.get("usage")
     if isinstance(usage, dict) and isinstance(usage.get("output_tokens"), int):
-        parts.append(f"{usage['output_tokens']} out-tok")
+        parts.append(f"{format_tokens(usage['output_tokens'])} out-tok")
     cost = event.get("total_cost_usd")
     if isinstance(cost, (int, float)):
         parts.append(f"${float(cost):.4f}")
