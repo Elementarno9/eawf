@@ -13408,7 +13408,8 @@
       "P30-I23-W13",
       "P30-I23-W19",
       "P30-I23-W20",
-      "P30-I23-W44"
+      "P30-I23-W44",
+      "P30-I23-W21"
     ],
     "iter_id": "P30-I23",
     "phase_id": "P30",
@@ -25242,6 +25243,19 @@
       "scope_id": "P30-I23-W20",
       "updated_at": "2026-07-02T19:43:41.869430Z"
     },
+    "P30-I23-W21": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W21-bucket-20260702T202117Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I23-W21",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I23-W21",
+      "updated_at": "2026-07-02T20:21:17.131906Z"
+    },
     "P30-I23-W22": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I23-W22-bucket-20260702T173321Z",
@@ -25467,6 +25481,90 @@
   "health": null,
   "hypotheses": null,
   "incidents": {
+    "INC-P30-01": {
+      "cause": "audit_failed",
+      "closed_at": "2026-07-02T20:23:05.802831Z",
+      "corrective_action_ids": [
+        "P30-I20-W05",
+        "P30-I20-W21"
+      ],
+      "description": null,
+      "id": "INC-P30-01",
+      "opened_at": "2026-07-02T20:23:05.019745Z",
+      "report_artifact_id": null,
+      "root_cause": "binding gates repeatedly proved functions or plan text but missed live call-site proof; reactive waves closed individual escapes and P30-I20-W05/W21 added the live-proof gates",
+      "scope_id": "EAWF",
+      "severity": "high",
+      "status": "resolved",
+      "title": "Recurring idle-contract escapes in P30 binding iters"
+    },
+    "INC-P30-02": {
+      "cause": "unknown",
+      "closed_at": "2026-07-02T20:23:07.366643Z",
+      "corrective_action_ids": [
+        "P30-I18-W11",
+        "P30-I19-W11"
+      ],
+      "description": null,
+      "id": "INC-P30-02",
+      "opened_at": "2026-07-02T20:23:06.578818Z",
+      "report_artifact_id": null,
+      "root_cause": "doctor probes redirected process-global fd 0 (os.dup2), corrupting the live Textual stdin reader; P30-I18-W11 replaced it with per-subprocess DEVNULL stdin",
+      "scope_id": "EAWF",
+      "severity": "high",
+      "status": "resolved",
+      "title": "Doctor fd-0 crash from process-global stdin redirect"
+    },
+    "INC-P30-03": {
+      "cause": "audit_failed",
+      "closed_at": "2026-07-02T20:23:09.020320Z",
+      "corrective_action_ids": [
+        "P30-I15-W17",
+        "P30-I15-W19",
+        "P30-I20-W17"
+      ],
+      "description": null,
+      "id": "INC-P30-03",
+      "opened_at": "2026-07-02T20:23:08.205838Z",
+      "report_artifact_id": null,
+      "root_cause": "the I15 audit compared HTML source and text snapshots instead of rendered images, under-weighting layout shape; visible parity repaired via reopened I15 W17/W19 and P30-I20-W17",
+      "scope_id": "EAWF",
+      "severity": "medium",
+      "status": "resolved",
+      "title": "Rendered-reskin audit false-pass from text-only review"
+    },
+    "INC-P30-06": {
+      "cause": "unknown",
+      "closed_at": "2026-07-02T20:23:10.574988Z",
+      "corrective_action_ids": [
+        "P30-I20-W02"
+      ],
+      "description": null,
+      "id": "INC-P30-06",
+      "opened_at": "2026-07-02T20:23:09.807527Z",
+      "report_artifact_id": null,
+      "root_cause": "the drift acknowledgement writer persisted acks but status and doctor readers never loaded them, so acknowledged drift still rendered as WARN; P30-I20-W02 wired the read path",
+      "scope_id": "EAWF",
+      "severity": "medium",
+      "status": "resolved",
+      "title": "Drift-ack reader ignored acknowledged commit drift"
+    },
+    "INC-P30-07": {
+      "cause": "unknown",
+      "closed_at": "2026-07-02T20:23:12.147666Z",
+      "corrective_action_ids": [
+        "P30-I23-W02"
+      ],
+      "description": null,
+      "id": "INC-P30-07",
+      "opened_at": "2026-07-02T20:23:11.350033Z",
+      "report_artifact_id": null,
+      "root_cause": "P30-I19 closed without its own iter-close audit artifact; the P30-I23-W02 backfill audit A-P30-i20 documents the gap and the audit cadence now rides every iter close",
+      "scope_id": "EAWF",
+      "severity": "medium",
+      "status": "resolved",
+      "title": "P30-I19 lacked standalone iter-close audit artifact"
+    },
     "INC-P30-08": {
       "cause": "unknown",
       "closed_at": null,
@@ -25480,6 +25578,48 @@
       "severity": "low",
       "status": "open",
       "title": "Coarse image oracle too blunt for full-screen mode validation"
+    },
+    "INC-P30-09": {
+      "cause": "unknown",
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "description": null,
+      "id": "INC-P30-09",
+      "opened_at": "2026-07-02T20:23:12.983897Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "EAWF",
+      "severity": "medium",
+      "status": "open",
+      "title": "Launchd agent auto-respawned a stopped daemon"
+    },
+    "INC-P30-10": {
+      "cause": "unknown",
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "description": null,
+      "id": "INC-P30-10",
+      "opened_at": "2026-07-02T20:23:13.869909Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "EAWF",
+      "severity": "high",
+      "status": "open",
+      "title": "Daemon bound to one repo accepted mutations for another"
+    },
+    "INC-P30-11": {
+      "cause": "unknown",
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "description": null,
+      "id": "INC-P30-11",
+      "opened_at": "2026-07-02T20:23:14.603910Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "EAWF",
+      "severity": "medium",
+      "status": "open",
+      "title": "Test suites contaminated live state via the shared daemon"
     }
   },
   "indexes": {},
@@ -28915,7 +29055,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T20:20:01.569276Z",
+  "updated_at": "2026-07-02T20:23:14.603910Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -108582,8 +108722,8 @@
         "P30-I23-W31",
         "P30-I23-W34"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-i23",
+      "claimed_at": "2026-07-02T20:21:17.124577Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -108679,7 +108819,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",

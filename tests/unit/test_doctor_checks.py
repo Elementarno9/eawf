@@ -225,7 +225,7 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.setenv("EAWF_RUNTIME_DIR", str(tmp_path / "eawfd"))
     monkeypatch.chdir(tmp_path)
     results = checks.run_all(workspace=tmp_path)
-    assert len(results) == 9
+    assert len(results) == 11
     assert {r.name for r in results} == {
         "tools_available",
         "state_present",
@@ -233,6 +233,8 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
         "manifest_in_sync",
         "mcp_drift",
         "state_scale_ceiling",
+        "incident_fold_parity",
+        "backlog_fold_parity",
         "launchd_agent",
         "runtime_dir_size",
         "render_output_roundtrip",

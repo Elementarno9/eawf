@@ -33,6 +33,21 @@ from eawf.surfaces.cli.commands.evidence import (
 logger = logging.getLogger(__name__)
 
 
+def _warn_on_incident_fold_parity(flags: object) -> None:
+    """Post-mutation self-verify: the store-to-state fold must stay whole.
+
+    The INC-P30 incident-map wipe happened exactly here — a mutation wrote
+    the store row while the state map lost the fold. A parity break after a
+    successful mutation is surfaced immediately instead of waiting for the
+    next ``eawf doctor`` run.
+    """
+    from eawf.observability.doctor.checks import check_incident_fold_parity
+
+    parity = check_incident_fold_parity(workspace=getattr(flags, "workspace", None))
+    if parity.status != "ok":
+        typer.echo(f"warning: incident fold parity broken: {parity.detail}", err=True)
+
+
 # ---- incident --------------------------------------------------------------
 
 
@@ -84,6 +99,7 @@ def incident_open(
         cli_errors.emit_error(err, flags=flags)
         return
 
+    _warn_on_incident_fold_parity(flags)
     _emit(
         {
             "incident_id": incident_id,
@@ -149,6 +165,7 @@ def incident_close(
         cli_errors.emit_error(err, flags=flags)
         return
 
+    _warn_on_incident_fold_parity(flags)
     _emit(
         {
             "incident_id": incident_id,

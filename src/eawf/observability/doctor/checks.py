@@ -576,6 +576,96 @@ def check_state_scale_ceiling(*, workspace: Path | None) -> CheckResult:
     )
 
 
+def _store_fold_parity(
+    *, workspace: Path, name: str, store_filename: str, state_map: Mapping[str, object]
+) -> CheckResult:
+    """Shared fold-parity core: distinct store base-ids ⊆ state map keys.
+
+    The append-only kind stores and the ``state.json`` entity maps are written
+    by the same mutators, but a stale-cache clobber (the INC-P30 incident-map
+    wipe this check was born from) can drop state rows while the store keeps
+    the append-only history. Parity broken = state lost a fold the store still
+    proves -- a data-loss signal, so the mismatch is ``fail``, not ``warn``.
+
+    A ``-CLOSE``-suffixed record id is the close event for its base id, not a
+    distinct entity, so it folds onto the base id before comparison.
+    """
+    import json as _json
+
+    store_path = workspace / ".ea" / "store" / store_filename
+    if not store_path.is_file():
+        return CheckResult(name=name, status="ok", detail=f"no {store_filename} store")
+    base_ids: set[str] = set()
+    for line in store_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = _json.loads(line)
+        except _json.JSONDecodeError:
+            continue
+        record_id = str(row.get("id") or "")
+        if not record_id:
+            continue
+        base_ids.add(record_id.removesuffix("-CLOSE"))
+    missing = sorted(base_ids - set(state_map))
+    if missing:
+        return CheckResult(
+            name=name,
+            status="fail",
+            detail=(
+                f"{len(missing)} store id(s) missing from state: "
+                f"{', '.join(missing[:5])}{'...' if len(missing) > 5 else ''}"
+            ),
+        )
+    return CheckResult(
+        name=name,
+        status="ok",
+        detail=f"{len(base_ids)} store id(s) all present in state",
+    )
+
+
+def check_incident_fold_parity(*, workspace: Path | None) -> CheckResult:
+    """Verify every distinct incident store base-id has a ``state.incidents`` row.
+
+    Like :func:`check_state_scale_ceiling`, a missing / unparseable state
+    yields ``ok`` (:func:`check_state_present` owns that angle).
+    """
+    name = "incident_fold_parity"
+    if workspace is None:
+        return CheckResult(name=name, status="ok", detail="no workspace anchor")
+    loaded = _load_state_for_check(workspace, name=name)
+    if isinstance(loaded, CheckResult):
+        return loaded
+    state, state_path = loaded
+    return _store_fold_parity(
+        workspace=state_path.parent.parent,
+        name=name,
+        store_filename="incident.jsonl",
+        state_map=state.incidents or {},
+    )
+
+
+def check_backlog_fold_parity(*, workspace: Path | None) -> CheckResult:
+    """Verify every distinct backlog store base-id has a ``state.backlog`` row.
+
+    Like :func:`check_state_scale_ceiling`, a missing / unparseable state
+    yields ``ok`` (:func:`check_state_present` owns that angle).
+    """
+    name = "backlog_fold_parity"
+    if workspace is None:
+        return CheckResult(name=name, status="ok", detail="no workspace anchor")
+    loaded = _load_state_for_check(workspace, name=name)
+    if isinstance(loaded, CheckResult):
+        return loaded
+    state, state_path = loaded
+    return _store_fold_parity(
+        workspace=state_path.parent.parent,
+        name=name,
+        store_filename="backlog.jsonl",
+        state_map=state.backlog or {},
+    )
+
+
 # ``eawf daemon reclaim`` trims runtime-dir bloat; doctor warns once the
 # runtime dir (WAL records plus the never-auto-GC'd ``eawfd.log``) crosses this
 # size, or the ``.ea/`` migration backups pile up past this count, so the
@@ -845,6 +935,8 @@ def run_all(
         check_manifest_in_sync(workspace=anchor),
         check_mcp_drift(workspace=anchor),
         check_state_scale_ceiling(workspace=anchor),
+        check_incident_fold_parity(workspace=anchor),
+        check_backlog_fold_parity(workspace=anchor),
         check_launchd_agent(),
         check_runtime_dir_size(workspace=anchor),
         check_render_output_roundtrip(),

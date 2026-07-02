@@ -25,6 +25,26 @@ from eawf.surfaces.cli.app import app
 runner = CliRunner()
 
 
+@pytest.fixture(autouse=True)
+def _no_supervised_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stub the launchd/systemd detector so the host's real agent never leaks in."""
+    from eawf.runtime.daemon.service_install import SupervisedAgentReport
+
+    report = SupervisedAgentReport(
+        supervisor="none",
+        label="",
+        installed=False,
+        loaded=False,
+        program=None,
+        drift=False,
+        rival_pid=None,
+    )
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.service_install.detect_supervised_agent",
+        lambda *_a, **_k: report,
+    )
+
+
 def _green_probe(*_args: object, **_kwargs: object) -> ProbeReport:
     return ProbeReport(
         probe_version=PROBE_VERSION,
@@ -72,6 +92,10 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "manifest_in_sync",
         "mcp_drift",
         "state_scale_ceiling",
+        "incident_fold_parity",
+        "backlog_fold_parity",
+        "launchd_agent",
+        "runtime_dir_size",
         "render_output_roundtrip",
         "project_record_present",
         "plugin_cross_scope_dup",

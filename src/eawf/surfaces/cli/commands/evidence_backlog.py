@@ -365,6 +365,20 @@ def audit_list(
 # ---- backlog ---------------------------------------------------------------
 
 
+def _warn_on_backlog_fold_parity(flags: object) -> None:
+    """Post-mutation self-verify: the backlog store-to-state fold stays whole.
+
+    Sibling of the incident-fold warn (the INC-P30 incident-map wipe class):
+    a parity break after a successful mutation is surfaced immediately
+    instead of waiting for the next ``eawf doctor`` run.
+    """
+    from eawf.observability.doctor.checks import check_backlog_fold_parity
+
+    parity = check_backlog_fold_parity(workspace=getattr(flags, "workspace", None))
+    if parity.status != "ok":
+        typer.echo(f"warning: backlog fold parity broken: {parity.detail}", err=True)
+
+
 @backlog_app.command("add")
 def backlog_add(
     ctx: typer.Context,
@@ -416,6 +430,7 @@ def backlog_add(
         cli_errors.emit_error(err, flags=flags)
         return
 
+    _warn_on_backlog_fold_parity(flags)
     _emit(
         {
             "item_id": item_id,
@@ -718,6 +733,7 @@ def backlog_close(
         cli_errors.emit_error(err, flags=flags)
         return
 
+    _warn_on_backlog_fold_parity(flags)
     _emit(
         {
             "item_id": item_id,
