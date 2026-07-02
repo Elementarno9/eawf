@@ -28,12 +28,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING, NoReturn
 
 from eawf.kernel.state.enums import AgentReportVerdict
 from eawf.kernel.store.kinds.agent_report import (
     AgentReportBody,
     ExecutorReportBody,
 )
+
+if TYPE_CHECKING:
+    from eawf.kernel.state.models import State, Wave
+    from eawf.kernel.store.kinds.evidence import EvidenceRecord
 
 logger = logging.getLogger(__name__)
 
@@ -151,8 +157,187 @@ def verify_close_readiness(wave_id: str, report: AgentReportBody) -> VerifyResul
     return result
 
 
+@dataclass(frozen=True)
+class CloseGateResult:
+    """Outcome of running a wave's deterministic close gates -- P30-I23-W19.
+
+    :func:`verify_close_readiness` decides whether an executor report is
+    close-ready from the report alone; it never runs the wave's own gates.
+    On the fleet clean-close path that let a wave carrying a
+    ``command_exit_zero`` gate flip to CLOSED on the agent's self-report
+    without the command ever running (the A5 critical). This result carries
+    the verdict of actually running those deterministic gates so the caller
+    can decide between closing the lane and routing it to the repair/fork
+    ladder.
+
+    Attributes:
+        passed: ``True`` iff every required deterministic-gated criterion
+            passed its deterministic gate (or the wave carries no
+            deterministic gate at all). ``False`` routes the lane to the
+            repair/fork ladder instead of closing.
+        evidence: The ``deterministic`` / ``pass`` :class:`EvidenceRecord`
+            rows minted on a clean pass, each bound to the wave. Empty on a
+            gate refusal and on a gateless wave.
+        failing_criterion_id: The criterion whose deterministic gate
+            refused, or ``None`` on a pass.
+        failing_detail: The grounded falsifier the refusing gate produced,
+            fed to the repair ladder so a re-dispatch is grounded in the
+            concrete check output. Empty string on a pass.
+    """
+
+    passed: bool
+    evidence: list[EvidenceRecord] = field(default_factory=list)
+    failing_criterion_id: str | None = None
+    failing_detail: str = ""
+
+
+class _JuryUnreachableError(RuntimeError):
+    """Signal that the deterministic-only clean-close runner reached the jury tier.
+
+    :func:`run_close_gates` scores only the deterministic oracle tier; a
+    criterion that escalates past it has no deterministic falsifier, so the
+    runner must NOT spawn a jury on the fleet drain path. The injected spawn
+    factory raises this so the runner catches the escalation and defers to
+    the DL-5 risk gate rather than convening a jury off the drain loop.
+    """
+
+
+def _no_jury_spawn_factory(_runtime: str) -> NoReturn:
+    """A jury spawn factory that refuses to spawn -- the clean-close gate is deterministic-only.
+
+    Args:
+        _runtime: The runtime family the jury tier would bind. Unused -- the
+            deterministic-only clean-close gate never convenes a jury.
+
+    Raises:
+        _JuryUnreachableError: Always -- reaching the jury tier from the
+            deterministic-only clean-close runner is a defer signal, not a
+            spawn request.
+    """
+    raise _JuryUnreachableError(
+        "fleet clean-close gate runs the deterministic tier only; jury escalation is not permitted"
+    )
+
+
+async def run_close_gates(
+    wave: Wave,
+    *,
+    state: State,
+    state_path: Path,
+    events_path: Path,
+    repo_root: Path,
+) -> CloseGateResult:
+    """Run *wave*'s DETERMINISTIC close gates before a fleet clean-close -- W19.
+
+    The fleet clean-close path flips a wave to CLOSED on the agent's own
+    close-ready report (:func:`verify_close_readiness` checks only the report
+    verdict + summary + wave-id). That trusts the self-report without ever
+    running the wave's deterministic gates, so a wave carrying a
+    ``command_exit_zero`` gate auto-closes without the command running. This
+    runner closes that seam: it scores each REQUIRED deterministic-gated
+    criterion through the shared ordered oracle
+    (:func:`eawf.workflow.verify.oracle.run_oracle`), which the daemon close
+    gate delegates to as well, so gate execution is reused rather than
+    re-implemented.
+
+    The runner is UNCONDITIONAL -- it does not consult ``verify.enforce``. A
+    lane only reaches the clean-close branch after the DL-5 auto-close gate
+    cleared it (a MECH / MED wave), and for such a wave a deterministic pass
+    is the complete ground truth (DL-5), so its deterministic gates always
+    run. Criteria with no deterministic gate are skipped: a MECH gateless
+    wave keeps the status-flip close, and a MED wave's auditor verdict (the
+    human sign-off the lane already carries) is not re-run here. A criterion
+    that escalates past the deterministic tier (its gates yield no pass and
+    no required-block failure) is deferred to the DL-5 risk gate -- the
+    deterministic-only runner never convenes a jury on the drain path.
+
+    Args:
+        wave: The wave whose clean close is gated. Read-only here.
+        state: Loaded, validated state forwarded to the oracle. The
+            deterministic-only path never reaches the jury tier that would
+            mutate it.
+        state_path: Path to ``state.json``; stores resolve under its sibling
+            ``store/`` directory.
+        events_path: Path to ``event.jsonl``, forwarded to the oracle.
+        repo_root: Repository root the deterministic checks run against.
+
+    Returns:
+        A :class:`CloseGateResult`: ``passed=True`` with the minted
+        deterministic-pass evidence rows on a clean pass (empty for a
+        gateless wave), or ``passed=False`` with the refusing criterion id +
+        grounded falsifier on a deterministic gate refusal.
+    """
+    from eawf.kernel.store.kinds.evidence import deterministic_pass_record
+    from eawf.workflow.verify.oracle import run_oracle
+    from eawf.workflow.verify.readiness import _load_gate_specs
+
+    gate_specs = _load_gate_specs(wave.id, state)
+    evidence: list[EvidenceRecord] = []
+    for criterion in wave.success_criteria:
+        if not criterion.required or criterion.evidence_kind != "deterministic":
+            continue
+        gates = [g for g in gate_specs if g.criterion_id == criterion.id]
+        if not gates:
+            continue
+        try:
+            result = await run_oracle(
+                criterion,
+                gates,
+                wave=wave,
+                state=state,
+                state_path=state_path,
+                events_path=events_path,
+                repo_root=repo_root,
+                spawn_factory=_no_jury_spawn_factory,
+            )
+        except _JuryUnreachableError:
+            # The deterministic tier did not resolve this criterion and it
+            # escalated to the jury tier. The DL-5 risk gate governs jury
+            # waves on the clean-close path, so defer rather than spawn.
+            logger.debug(
+                f"run_close_gates wave={wave.id} criterion={criterion.id!r} "
+                "jury_escalation_deferred"
+            )
+            continue
+        if result.status != "pass":
+            if result.gate_id is None:
+                # A non-deterministic (verdict / jury) tier refusal is not
+                # this runner's concern -- the DL-5 risk gate already governs
+                # jury / auditor waves on the clean-close path. Defer.
+                logger.debug(
+                    f"run_close_gates wave={wave.id} criterion={criterion.id!r} "
+                    f"nondeterministic_refusal_deferred tier={int(result.tier)}"
+                )
+                continue
+            logger.warning(
+                f"run_close_gates wave={wave.id} criterion={criterion.id!r} "
+                f"gate={result.gate_id!r} tier={int(result.tier)} status={result.status} blocked"
+            )
+            return CloseGateResult(
+                passed=False,
+                failing_criterion_id=result.criterion_id,
+                failing_detail=result.failing_detail(),
+            )
+        if result.gate_id is not None:
+            evidence.append(
+                deterministic_pass_record(
+                    scope_id=wave.id,
+                    criterion_id=result.criterion_id,
+                    gate_id=result.gate_id,
+                    tier=int(result.tier),
+                    detail=result.detail,
+                )
+            )
+    logger.info(
+        f"run_close_gates wave={wave.id} passed=True deterministic_evidence={len(evidence)}"
+    )
+    return CloseGateResult(passed=True, evidence=evidence)
+
+
 __all__ = [
+    "CloseGateResult",
     "DispatchCloseBlockedError",
     "VerifyResult",
+    "run_close_gates",
     "verify_close_readiness",
 ]

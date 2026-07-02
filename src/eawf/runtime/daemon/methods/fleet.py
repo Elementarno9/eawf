@@ -110,11 +110,16 @@ from eawf.workflow.lifecycle.wave import (
     compute_runtime_delta,
     fail_wave,
 )
-from eawf.workflow.verify.dispatch_close import verify_close_readiness
+from eawf.workflow.verify.dispatch_close import (
+    CloseGateResult,
+    run_close_gates,
+    verify_close_readiness,
+)
 from eawf.workflow.verify.oracle import classify_risk_tier, risk_tier_auto_closes
 
 if TYPE_CHECKING:
     from eawf.kernel.spec.common import CriterionSpec
+    from eawf.kernel.store.kinds.evidence import EvidenceRecord
     from eawf.runtime.daemon.methods import MethodContext
     from eawf.runtime.runtimes.adapter import SpawnResult
 
@@ -2380,6 +2385,56 @@ class _Loop:
             f"_close_wave_on_disk wave={wave_id} status=closed sessions_closed={closed_sessions}"
         )
 
+    def _run_close_gates(self, wave_id: str) -> CloseGateResult | None:
+        """Run *wave_id*'s deterministic close gates before a clean close -- W19.
+
+        A lane the watcher resolved ``"closed"`` from the agent's self-report is
+        about to flip to CLOSED via :meth:`_close_wave_on_disk` -- a pure status
+        flip that never runs the wave's own gates. This scores the wave's
+        required deterministic-gated criteria through the shared ordered oracle
+        (:func:`eawf.workflow.verify.dispatch_close.run_close_gates`), so a wave
+        carrying a ``command_exit_zero`` gate has that command RUN before the
+        close. A failing gate yields ``passed=False`` (the caller routes the lane
+        to the repair/fork ladder); a passing gate yields the minted
+        deterministic-pass evidence rows the caller appends after the close
+        commits. A stateless context or a vanished wave returns ``None`` (nothing
+        to gate -- the close proceeds unchanged).
+
+        The oracle is async; the synchronous drain drives it through
+        :func:`_drive_coro`, the same bridge the spawn / repair ladders use.
+
+        Args:
+            wave_id: ``W<NN>`` wave whose clean close is gated.
+
+        Returns:
+            The :class:`~eawf.workflow.verify.dispatch_close.CloseGateResult`, or
+            ``None`` when there is no state / wave to gate.
+        """
+        from eawf.runtime.daemon.methods.state import _config_root_for_state_path
+
+        if self.ctx.state_path is None:
+            return None
+        state_path = Path(self.ctx.state_path)
+        state = load_state(state_path)
+        wave = state.waves.get(wave_id)
+        if wave is None:
+            return None
+        events_path = (
+            Path(self.ctx.event_path)
+            if self.ctx.event_path is not None
+            else store_path(state_path, StoreKind.EVENT)
+        )
+        result: CloseGateResult = _drive_coro(
+            run_close_gates(
+                wave,
+                state=state,
+                state_path=state_path,
+                events_path=events_path,
+                repo_root=_config_root_for_state_path(state_path),
+            )
+        )
+        return result
+
     def _finalize_wave_sessions(self, state: State, *, wave_id: str, now: datetime) -> int:
         """Close the wave's still-ACTIVE executor session(s) on behalf of the agent.
 
@@ -2518,6 +2573,28 @@ class _Loop:
         watched = self.watch(self.ctx, lane)
         risk_tier = self.risk_tiers.pop(wave_id, RiskTier.MECH)
         outcome = gate_lane_outcome(watched, risk_tier, block_authority=self.block_authority)
+        # W19: a lane DL-5 would clean-close on the agent's self-report must first
+        # pass the wave's DETERMINISTIC gates -- a failing command_exit_zero gate
+        # never flips status on a clean report; it routes to the repair/fork ladder
+        # below. The gate runs only on the clean-close branch, so a genuine watcher
+        # fork / needs-user pause is unaffected. A passing gate mints
+        # deterministic-pass evidence appended after the close commits.
+        close_gate_evidence: list[EvidenceRecord] = []
+        if outcome == "closed":
+            gate_result = self._run_close_gates(wave_id)
+            if gate_result is not None and not gate_result.passed:
+                logger.warning(
+                    f"_finish_lane wave={wave_id} close_gate=blocked "
+                    f"criterion={gate_result.failing_criterion_id!r} routes_to=repair_fork"
+                )
+                # A deterministic gate refusal is a genuine failing check, not a
+                # DL-6 operator pause: route it through the existing failing-check
+                # ladder below. classify_fork_reason(watched="closed", MECH/MED) is
+                # already None, so overriding the gated outcome to "forked" reuses
+                # the repair (or terminal-fork) arm without a spurious pause.
+                outcome = "forked"
+            elif gate_result is not None:
+                close_gate_evidence = gate_result.evidence
         del self.run.lanes[wave_id]
         fork_reason = classify_fork_reason(watched, risk_tier, block_authority=self.block_authority)
         if fork_reason is not None:
@@ -2572,6 +2649,15 @@ class _Loop:
             # ran above (a high-risk close was downgraded to "forked"), so only an
             # auto-closeable tier reaches here; a self-closed wave is a no-op.
             self._close_wave_on_disk(wave_id)
+            if close_gate_evidence and self.ctx.state_path is not None:
+                # W19: the deterministic gates passed -- append their
+                # deterministic-pass evidence rows (bound to the wave) AFTER the
+                # close flip commits, so a refused close never leaves a stray pass
+                # row. The evidence append acquires the sibling evidence.jsonl
+                # lock, distinct from the state lock the close flip held.
+                from eawf.runtime.daemon.methods.state import _append_close_evidence
+
+                _append_close_evidence(close_gate_evidence, state_path=Path(self.ctx.state_path))
             self.run.counters.closed += 1
         lane_spend = self.spend(self.ctx, wave_id)
         self.run.counters.spent_eu += lane_spend.eu
