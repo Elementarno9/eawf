@@ -303,6 +303,15 @@ class VerifyBlock(BaseModel):
             oracle (T6/T7); when the computed ratio falls below this
             floor the close seam surfaces an ADVISORY finding (log only)
             but never blocks. Defaults to ``0.80``.
+        odr_blocking: When ``True``, a below-:attr:`odr_floor` ODR at iter
+            close is a HARD gate:
+            :func:`eawf.workflow.lifecycle.iter_.close_iter` raises
+            :class:`~eawf.workflow.lifecycle._errors.LifecycleError`
+            instead of surfacing the sub-floor ratio as an advisory
+            (log-only) finding. Defaults ``False`` so every existing
+            profile keeps the advisory-only ODR behaviour; a profile opts
+            in only after its legacy sub-floor criteria have been drained,
+            otherwise every iter close would block on the un-drained floor.
         jury_authority: The trust floors a cross-vendor jury must clear to
             earn BLOCKING authority at the close gate (a
             :class:`JuryAuthorityConfig`). Until the jury's validation report
@@ -332,6 +341,7 @@ class VerifyBlock(BaseModel):
     uiux_bands: list[str] = Field(default_factory=list)
     jury_vendors: list[str] = Field(default_factory=lambda: ["claude", "codex", "opencode"])
     odr_floor: float = Field(default=0.80, ge=0.0, le=1.0)
+    odr_blocking: bool = False
     jury_authority: JuryAuthorityConfig = Field(default_factory=JuryAuthorityConfig)
     checkpoint: CheckpointBlock = Field(default_factory=CheckpointBlock)
 

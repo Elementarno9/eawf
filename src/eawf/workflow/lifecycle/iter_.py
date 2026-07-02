@@ -32,6 +32,7 @@ from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import Iter, State, Wave
 from eawf.kernel.state.mutations import Mutation, MutationKind, apply_memory_add
 from eawf.observability.metrics.odr import (
+    DEFAULT_ODR_FLOOR,
     DriftPulseReport,
     WavePlanRow,
     drift_budget_pulse,
@@ -123,6 +124,8 @@ def close_iter(
     iter_id: str,
     audit_id: str,
     checkpoint: CheckpointBlock | None = None,
+    odr_floor: float = DEFAULT_ODR_FLOOR,
+    odr_blocking: bool = False,
 ) -> Iter:
     """Close an active iter. Rejects when child waves are still open.
 
@@ -137,11 +140,21 @@ def close_iter(
             mode a drift pulse that detects a thin wave refuses the close so
             the next dispatch cannot proceed against unreconciled drift; in
             ``optimistic`` mode the pulse is advisory and never stalls.
+        odr_floor: The Oracle-Determinism-Ratio floor read from
+            :attr:`~eawf.platform.profiles.models.VerifyBlock.odr_floor`.
+            Defaults to :data:`~eawf.observability.metrics.odr.DEFAULT_ODR_FLOOR`
+            -- the same no-profile-in-hand fallback the drift pulse uses.
+        odr_blocking: When ``True`` a below-*odr_floor* ODR refuses the close
+            (raises before any state mutation), mirroring the ``barrier``-mode
+            drift pulse; when ``False`` (the default) a sub-floor ratio is
+            advisory only (logged, never blocks). Read from
+            :attr:`~eawf.platform.profiles.models.VerifyBlock.odr_blocking`.
 
     Raises:
         LifecycleError: when the iter is unknown, the close edge is illegal,
-            child waves are still open, or a ``barrier``-mode drift pulse
-            detects criteria-vs-plan drift over the iter's closed waves.
+            child waves are still open, a ``barrier``-mode drift pulse detects
+            criteria-vs-plan drift over the iter's closed waves, or the closed
+            waves' ODR is below *odr_floor* while *odr_blocking* is set.
     """
     it = state.iters.get(iter_id)
     if it is None:
@@ -184,12 +197,12 @@ def close_iter(
             f"iter {iter_id!r} drift pulse refuses next dispatch (barrier mode): "
             f"thin waves {pulse.thin_wave_ids}"
         )
+    _emit_iter_odr_advisory(state, iter_id=iter_id, floor=odr_floor, blocking=odr_blocking)
     closed_at = datetime.now(UTC)
     it.status = IterStatus.CLOSED
     it.closed_at = closed_at
     it.audit_id = audit_id
     _record_iter_close_memory(state, it=it, audit_id=audit_id, closed_at=closed_at)
-    _emit_iter_odr_advisory(state, iter_id=iter_id)
     if state.current.iter_id == iter_id:
         state.current.iter_id = None
         state.current.active_wave_ids = []
@@ -221,31 +234,50 @@ def _aggregate_closed_wave_criteria(state: State, *, iter_id: str) -> list[Crite
     return criteria
 
 
-def _emit_iter_odr_advisory(state: State, *, iter_id: str) -> None:
-    """Score the closing iter's criteria and surface an ODR advisory finding.
+def _emit_iter_odr_advisory(
+    state: State,
+    *,
+    iter_id: str,
+    floor: float = DEFAULT_ODR_FLOOR,
+    blocking: bool = False,
+) -> None:
+    """Score the closing iter's criteria and surface an ODR finding.
 
     Aggregates the iter's CLOSED-wave criteria and delegates the floor
-    decision to :func:`iter_odr_advisory`, which logs the WARNING advisory
-    line when the Oracle-Determinism-Ratio falls below floor. When a finding
-    is returned this also emits a structured advisory finding line on the
-    iter-close result so the bit and ratio surface at close time. The path is
-    advisory only: an empty / all-deterministic criteria set takes the
-    sentinel path (``iter_odr_advisory`` returns ``None``) and nothing is
-    logged, and a sub-floor set never raises or blocks the close.
+    decision to :func:`iter_odr_advisory`, which logs the WARNING line when
+    the Oracle-Determinism-Ratio falls below *floor*. When a finding is
+    returned this emits a structured finding line so the bit and ratio surface
+    at close time, then -- only when *blocking* is set -- raises so the close
+    is refused before any state mutation (mirroring the ``barrier``-mode drift
+    pulse). An empty / all-deterministic criteria set takes the sentinel path
+    (``iter_odr_advisory`` returns ``None``) and nothing is logged or raised;
+    a sub-floor set with *blocking* false logs the advisory but never blocks.
 
     Args:
         state: The state holding the wave rows.
         iter_id: Canonical iter id being closed.
+        floor: The advisory / blocking ODR floor to score against.
+        blocking: When ``True`` a sub-floor ratio raises instead of logging
+            advisory-only.
+
+    Raises:
+        LifecycleError: when the ODR is below *floor* and *blocking* is set.
     """
     criteria = _aggregate_closed_wave_criteria(state, iter_id=iter_id)
-    advisory = iter_odr_advisory(criteria, scope_id=iter_id)
+    advisory = iter_odr_advisory(criteria, scope_id=iter_id, floor=floor)
     if advisory is None:
         return
+    severity = "blocking" if blocking else "advisory"
     logger.warning(
         f"emit_iter_odr_advisory iter={iter_id} odr={advisory.odr:.4f} "
         f"floor={advisory.floor:.4f} required={advisory.required} "
-        f"finding=odr_below_floor severity=advisory"
+        f"finding=odr_below_floor severity={severity}"
     )
+    if blocking:
+        raise LifecycleError(
+            f"iter {iter_id!r} odr {advisory.odr:.4f} below floor "
+            f"{advisory.floor:.4f} and odr_blocking is set; refusing close"
+        )
 
 
 def _closed_wave_plan_rows(state: State, *, iter_id: str) -> list[WavePlanRow]:
