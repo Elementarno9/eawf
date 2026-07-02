@@ -66,7 +66,13 @@ logger = logging.getLogger(__name__)
 #: - ``"daemonless-waiver"`` -- a GATE-BEARING wave force-closed daemonless
 #:   under an explicit per-invocation operator waiver. The bypass-door event
 #:   names the wave + reason so the override is auditable.
-CloseMechanism = Literal["daemon", "daemonless", "daemonless-waiver"]
+#: - ``"daemon-fallback"`` -- proxying was enabled and the daemon reachable, but
+#:   the close RPC failed at the transport layer (RuntimeError / OSError), so the
+#:   in-process WAL-backed writer carried the close. Distinct from ``"daemon"``
+#:   so an audit can see the close skipped the daemon close gate on a fallback
+#:   rather than passing it. (A close-RPC ``TimeoutError`` does NOT fall back --
+#:   it is terminal, since the daemon may still be mid-close under the lock.)
+CloseMechanism = Literal["daemon", "daemonless", "daemonless-waiver", "daemon-fallback"]
 
 #: Event-store ``event_type`` for the daemonless gate-bearing bypass record.
 DAEMONLESS_WAIVER_EVENT_TYPE = "wave.close.daemonless_waiver"
@@ -307,11 +313,18 @@ def wave_is_gate_bearing(wave: Wave) -> bool:
     return bool(wave.gates)
 
 
-def resolve_close_mechanism(*, gate_bearing: bool, waived: bool) -> CloseMechanism:
+def resolve_close_mechanism(
+    *, gate_bearing: bool, waived: bool, transport_fallback: bool = False
+) -> CloseMechanism:
     """Return the :data:`CloseMechanism` to stamp on the close event.
 
-    Pure function of the current invocation's daemonless state + waiver:
+    Pure function of the current invocation's transport-fallback signal +
+    daemonless state + waiver:
 
+    * a transport-fallback close (the daemon was reachable + proxy-enabled but
+      the close RPC failed at the transport layer) -> ``"daemon-fallback"``.
+      Checked first because it can only arise on a daemon-mediated invocation
+      (the env hatch never reaches the proxy), so it is the most specific signal;
     * a daemon-mediated close (the env hatch is NOT set) -> ``"daemon"``;
     * a daemonless close of a GATE-BEARING wave under an operator waiver ->
       ``"daemonless-waiver"`` (the bypass door fired);
@@ -323,10 +336,15 @@ def resolve_close_mechanism(*, gate_bearing: bool, waived: bool) -> CloseMechani
             (:func:`wave_is_gate_bearing`).
         waived: Whether the operator passed the per-invocation daemonless
             close waiver this call.
+        transport_fallback: Whether the close proxied to the daemon and then
+            fell back to the in-process writer on a transport error
+            (RuntimeError / OSError). Defaults to ``False``.
 
     Returns:
         The mechanism literal for the close event's ``close_mechanism`` extra.
     """
+    if transport_fallback:
+        return "daemon-fallback"
     if not _daemonless_env_set():
         return "daemon"
     if gate_bearing and waived:
@@ -339,25 +357,32 @@ def close_event_extras(
     *,
     gate_bearing: bool,
     waived: bool,
+    transport_fallback: bool = False,
 ) -> dict[str, str | int | float | bool]:
     """Return *base_extras* with the ``close_mechanism`` field stamped on.
 
     Every wave-close event carries ``close_mechanism`` so a downstream audit
     can distinguish a daemon-mediated close from a daemonless-with-waiver
-    bypass without re-deriving it. Additive -- existing extras are preserved
-    and the mechanism is folded in (overwriting any stale value).
+    bypass or a transport fallback without re-deriving it. Additive -- existing
+    extras are preserved and the mechanism is folded in (overwriting any stale
+    value).
 
     Args:
         base_extras: The rolled-up advisory extras already destined for the
             close event (e.g. ``readiness_warnings_count``), or ``None``.
         gate_bearing: Whether the closing wave attaches typed gates.
         waived: Whether the per-invocation daemonless close waiver was passed.
+        transport_fallback: Whether the close proxied to the daemon and then
+            fell back to the in-process writer on a transport error. Defaults
+            to ``False``.
 
     Returns:
         A new extras dict carrying ``close_mechanism`` plus every base extra.
     """
     extras: dict[str, str | int | float | bool] = dict(base_extras) if base_extras else {}
-    extras["close_mechanism"] = resolve_close_mechanism(gate_bearing=gate_bearing, waived=waived)
+    extras["close_mechanism"] = resolve_close_mechanism(
+        gate_bearing=gate_bearing, waived=waived, transport_fallback=transport_fallback
+    )
     return extras
 
 

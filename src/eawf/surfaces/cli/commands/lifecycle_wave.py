@@ -392,6 +392,7 @@ def _stamp_close_mechanism(
     wave_id: str,
     state_path: Path,
     waived: bool,
+    transport_fallback: bool,
     holder: list[Any],
 ) -> None:
     """Run the daemonless bypass door for a closing wave and record its mechanism.
@@ -405,11 +406,19 @@ def _stamp_close_mechanism(
     The resolved :class:`~eawf.surfaces.cli._mutation.CloseMechanism` is appended to
     *holder* so the caller can stamp it on the close event's ``extras`` map.
 
+    When *transport_fallback* is set the close reached this in-process path after
+    the daemon close RPC failed at the transport layer; the mechanism is
+    ``"daemon-fallback"`` (distinct from a gate-passed ``"daemon"`` close) and the
+    daemonless bypass door is skipped -- a transport fallback can only arise on a
+    daemon-mediated invocation, which is never under the ``EAWF_DAEMONLESS`` hatch.
+
     Args:
         state: Loaded state -- the closing wave row is read for its gates.
         wave_id: Id of the wave being closed.
         state_path: Path to ``state.json``; anchors the waiver event store.
         waived: Whether the operator passed ``--no-runtime`` this call.
+        transport_fallback: Whether the close fell back to the in-process path
+            after a daemon close-RPC transport error.
         holder: One-element sink the resolved mechanism is appended to. Left
             empty when the wave id is absent (the close path then defaults the
             stamp to ``"daemon"``).
@@ -422,6 +431,9 @@ def _stamp_close_mechanism(
 
     wave = state.waves.get(wave_id)
     if wave is None:
+        return
+    if transport_fallback:
+        holder.append("daemon-fallback")
         return
     holder.append(
         enforce_daemonless_close_waiver(
@@ -868,6 +880,10 @@ def wave_close_cmd(
     # the flag is False (W09 default) or the daemon refuses the kind.
     from eawf.surfaces.cli._mutation import _proxy_enabled
 
+    # One-element sink set by ``_wave_close_via_daemon`` when the close RPC hit
+    # a transport error and fell back to the in-process path; read below so the
+    # fallback close event stamps ``close_mechanism = "daemon-fallback"``.
+    transport_fallback = [False]
     if _proxy_enabled(flags.workspace):
         proxied = _wave_close_via_daemon(
             flags=flags,
@@ -876,6 +892,7 @@ def wave_close_cmd(
             resolved_sha=resolved_sha,
             tokens_consumed=tokens_consumed,
             no_runtime_waiver=no_runtime,
+            transport_fallback=transport_fallback,
         )
         if proxied:
             return
@@ -901,6 +918,7 @@ def wave_close_cmd(
             wave_id=wave_id,
             state_path=state_path,
             waived=no_runtime,
+            transport_fallback=transport_fallback[0],
             holder=close_mechanism_holder,
         )
         # Band-conditional enforcement: the helper loads + band-narrows the

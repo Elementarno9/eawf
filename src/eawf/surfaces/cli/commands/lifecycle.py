@@ -330,14 +330,29 @@ def _wave_close_via_daemon(
     resolved_sha: str | None,
     tokens_consumed: int | None,
     no_runtime_waiver: bool = False,
+    transport_fallback: list[bool] | None = None,
 ) -> bool:
     """Proxy a wave close through the daemon's ``state.mutate`` RPC.
 
     Returns True on a successful daemon-mediated close (caller exits
-    early); False when the daemon refuses the kind (caller falls
-    through to the in-process path). A daemon-required failure or
-    validation rejection emits the error envelope before returning
-    False so the caller does not double-emit.
+    early); False when the daemon refuses the kind or the close RPC hit
+    a transport error (RuntimeError / OSError), in which case the caller
+    falls through to the in-process path. A daemon-required failure or
+    validation rejection emits the error envelope before returning True
+    so the caller does not double-emit.
+
+    A close-RPC ``TimeoutError`` is TERMINAL, not a fallback: the daemon
+    may still be mid-close under the lock, so silently re-running the
+    close in-process could double-apply it. On a timeout the helper emits
+    a typed :class:`~eawf.surfaces.cli.errors.DaemonMutationIndeterminate`
+    envelope and exits non-zero rather than returning False.
+
+    Args:
+        transport_fallback: Optional one-element sink. When the close RPC
+            fails with a RuntimeError / OSError, ``[0]`` is set to ``True``
+            so the caller's in-process close can stamp the event's
+            ``close_mechanism`` as ``"daemon-fallback"`` (distinct from a
+            gate-passed ``"daemon"`` close).
     """
     from eawf.kernel.state.mutations import Mutation, MutationKind
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
@@ -385,8 +400,23 @@ def _wave_close_via_daemon(
             cli_errors.StateConflict(exc.message, kind="IntegrityViolation"), flags=flags
         )
         return True
-    except (RuntimeError, OSError, TimeoutError) as exc:
+    except TimeoutError as exc:
+        # Terminal: the daemon may still be mid-close under the lock, so a
+        # silent in-process retry could double-apply the close. Emit a typed
+        # indeterminate error and exit non-zero rather than fall through.
+        logger.debug(f"_wave_close_via_daemon close_rpc_timeout={exc!s}")
+        cli_errors.emit_error(
+            cli_errors.DaemonMutationIndeterminate(
+                f"close RPC timed out: the close of wave {wave_id!r} may still be "
+                "running in the daemon; re-check with 'eawf wave show' before retrying"
+            ),
+            flags=flags,
+        )
+        return True  # emit_error raised typer.Exit; kept for the return type
+    except (RuntimeError, OSError) as exc:
         logger.debug(f"_wave_close_via_daemon transport_error={exc!s}")
+        if transport_fallback is not None:
+            transport_fallback[0] = True
         return False
 
     text = f"wave close {wave_id} outcome={outcome!r} (via daemon)"
