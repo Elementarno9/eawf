@@ -9660,6 +9660,20 @@
       "status": "done",
       "updated_at": "2026-07-02T18:54:30.212184Z"
     },
+    "P30-I23-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W09",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W09",
+      "model": null,
+      "scope_id": "P30-I23-W09",
+      "status": "done",
+      "updated_at": "2026-07-02T19:21:31.519116Z"
+    },
     "P30-I23-W12": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -10009,6 +10023,20 @@
       "scope_id": "P30-I20-W61",
       "started_at": "2026-07-01T13:48:42.455222Z",
       "status": "closed",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260702T190717Z-auditor-claude-code": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260702T190717Z-auditor-claude-code",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "scope_id": "P30-I23-W09::audit",
+      "started_at": "2026-07-02T19:07:17.168252Z",
+      "status": "active",
       "summary": null,
       "worktree_ids": []
     }
@@ -13317,11 +13345,10 @@
   "claims": null,
   "current": {
     "active_session_ids": [
-      "SES-20260510T214731Z-operator-claude"
+      "SES-20260510T214731Z-operator-claude",
+      "SES-20260702T190717Z-auditor-claude-code"
     ],
-    "active_wave_ids": [
-      "P30-I23-W09"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I23",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -28710,7 +28737,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-02T19:06:32.018903Z",
+  "updated_at": "2026-07-02T19:21:31.520586Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -106618,8 +106645,8 @@
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T18:55:00.949120Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-02T19:21:31.519116Z",
+      "commit": "b9f4e43f481df63dfe7f06d02216d79da39059be",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W05",
@@ -106772,12 +106799,12 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:38:02.491306Z",
-      "outcome": null,
+      "outcome": "D-LOCK-SPLIT live: WAVE_CLOSE runs lock-free pre-flight (deterministic tier + floor pack + rollup reads) then an optimistic ms-scale commit with target-wave-row re-check (typed close_preflight_stale refusal on concurrent wave mutation; unrelated rows tolerated); verdict/jury tier stays under the lock W08-bounded; readiness defers un-gated verdict-kind criteria to the verdict tier; 4 CR tests + full daemon dirs green (764 passed, 34s vs the 800s+ pre-split wedge); daemon restarted on the split",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
