@@ -41,7 +41,7 @@ formats; bodies that omit the key default to ``"1.0"``.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -338,6 +338,12 @@ class VerifyBlock(BaseModel):
     waiver_mode: Literal["A", "B", "C"] = "B"
     enforce: bool = False
     cross_vendor_jury: bool = False
+    #: Wall-clock ceiling (seconds) for every close-time juror / auditor
+    #: spawn. A hung vendor CLI previously awaited forever while the close
+    #: held the state lock (ZD-R3); the ceiling makes the spawn error out
+    #: as a structured juror-error outcome instead. Operator-ratified
+    #: default: 600s.
+    juror_wall_clock_seconds: Annotated[float, Field(gt=0)] = 600.0
     uiux_bands: list[str] = Field(default_factory=list)
     jury_vendors: list[str] = Field(default_factory=lambda: ["claude", "codex", "opencode"])
     odr_floor: float = Field(default=0.80, ge=0.0, le=1.0)

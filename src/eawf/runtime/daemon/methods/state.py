@@ -1023,7 +1023,13 @@ def _cross_vendor_lanes_ready(*, quorum: int) -> bool:
     return ready
 
 
-def _jury_spawn_factory(state: State, wave: Wave, *, repo_root: Path) -> Any:
+def _jury_spawn_factory(
+    state: State,
+    wave: Wave,
+    *,
+    repo_root: Path,
+    timeout_seconds: float = 600.0,
+) -> Any:
     """Return the production per-runtime spawn factory for the jury convener.
 
     Binds, per juror runtime, that vendor's
@@ -1069,6 +1075,7 @@ def _jury_spawn_factory(state: State, wave: Wave, *, repo_root: Path) -> Any:
                 model=model,
                 cwd=cwd,
                 denied_tools=denied,
+                timeout=timeout_seconds,
             )
 
         return _spawn
@@ -1603,7 +1610,12 @@ async def _enforce_wave_close_gate(
     # jury gate so the jury tier (run_oracle's last resort for an un-gated
     # criterion) convenes against the same store + per-runtime spawn map.
     events_path = store_path(state_path, StoreKind.EVENT)
-    spawn_factory = _jury_spawn_factory(state, wave, repo_root=repo_root)
+    spawn_factory = _jury_spawn_factory(
+        state,
+        wave,
+        repo_root=repo_root,
+        timeout_seconds=verify_block.juror_wall_clock_seconds,
+    )
     gate_specs = _load_gate_specs(wave_id, state)
     # The staged advisory-to-block gate (TRUST-4): block_authority (computed
     # once above) is threaded into every per-criterion run_oracle call; with

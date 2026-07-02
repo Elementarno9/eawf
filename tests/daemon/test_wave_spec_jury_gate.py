@@ -152,7 +152,9 @@ def _patch_jury(
         for runtime in JURY_RUNTIME_FAMILIES
     }
 
-    def _fake_factory(state: Any, wave: Any, *, repo_root: Path) -> Callable[[str], SpawnFn]:
+    def _fake_factory(
+        state: Any, wave: Any, *, repo_root: Path, timeout_seconds: float = 600.0
+    ) -> Callable[[str], SpawnFn]:
         def _factory(runtime: str) -> SpawnFn:
             return stubs[runtime]  # type: ignore[return-value]
 

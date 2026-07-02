@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -589,3 +590,80 @@ def test_cross_vendor_jury_result_rejects_extra_keys() -> None:
             abstained_count=0,
             surprise=True,  # type: ignore[call-arg]
         )
+
+
+# --------------------------------------------------------------------------- #
+# P30-I23-W08: jurors convene concurrently; spawns carry a finite ceiling.
+# --------------------------------------------------------------------------- #
+
+
+class _SleepingSpawn:
+    """Spawn stub that sleeps *delay* seconds before answering PASS."""
+
+    def __init__(self, runtime: str, delay: float) -> None:
+        self.runtime = runtime
+        self.delay = delay
+
+    async def __call__(self, prompt: str) -> SpawnResult:
+        await asyncio.sleep(self.delay)
+        return _spawn_result(_auditor_body_json(verdict="pass"), runtime=self.runtime)
+
+
+def test_convene_cross_vendor_jury_runs_jurors_concurrently(tmp_path: Path) -> None:
+    """CR-02: three jurors sleeping t complete in wall time < 2t.
+
+    The juror loop gathers concurrently, so jury wall time is max(juror),
+    not sum(juror) -- three 0.4s jurors must finish well under the 1.2s a
+    sequential loop would take (asserted < 0.8s = 2t).
+    """
+    delay = 0.4
+    factory = _RecordingFactory(
+        {
+            "claude-code": _SleepingSpawn("claude-code", delay),  # type: ignore[dict-item]
+            "codex": _SleepingSpawn("codex", delay),  # type: ignore[dict-item]
+            "opencode": _SleepingSpawn("opencode", delay),  # type: ignore[dict-item]
+        }
+    )
+    started = time.monotonic()
+    result, _state, _path = _convene(tmp_path, factory=factory)
+    wall = time.monotonic() - started
+
+    assert result.outcome.value == "pass"
+    assert wall < 2 * delay, f"jurors ran sequentially: wall={wall:.2f}s"
+
+
+def test_daemon_jury_spawn_factory_passes_finite_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CR-01: every close-time juror/auditor spawn carries a finite ceiling.
+
+    The daemon's ``_jury_spawn_factory`` threads an explicit wall-clock
+    ``timeout`` into ``adapter.spawn_session`` (default 600s; the close
+    gate resolves it from ``verify.juror_wall_clock_seconds``), so a hung
+    vendor CLI errors out instead of holding the state lock forever.
+    """
+    from eawf.runtime.daemon.methods import state as daemon_state
+
+    seen: dict[str, Any] = {}
+
+    class _Adapter:
+        async def spawn_session(self, prompt: str, **kwargs: Any) -> SpawnResult:
+            seen.update(kwargs)
+            return _spawn_result(_auditor_body_json(verdict="pass"), runtime="claude-code")
+
+    monkeypatch.setattr("eawf.runtime.runtimes.selector.select_adapter", lambda runtime: _Adapter())
+    state, _state_path, _events_path = _write_state(tmp_path)
+    wave: Wave = state.waves[_WAVE_ID]
+
+    factory = daemon_state._jury_spawn_factory(
+        state, wave, repo_root=tmp_path, timeout_seconds=123.0
+    )
+    asyncio.run(factory("claude-code")("prompt"))
+
+    assert seen.get("timeout") == 123.0
+
+    # The default ceiling is finite too -- never a wait-forever spawn.
+    seen.clear()
+    default_factory = daemon_state._jury_spawn_factory(state, wave, repo_root=tmp_path)
+    asyncio.run(default_factory("claude-code")("prompt"))
+    assert seen.get("timeout") == 600.0

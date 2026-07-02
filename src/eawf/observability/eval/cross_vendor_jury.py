@@ -59,6 +59,7 @@ for existing callers.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable, Mapping
 from datetime import datetime
@@ -767,21 +768,26 @@ async def convene_cross_vendor_jury(
     logger.info(
         f"convene_cross_vendor_jury wave={wave.id} runtimes={len(runtimes)} quorum={quorum}"
     )
-    jurors: list[JurorOutcome] = []
-    for runtime in runtimes:
-        spawn = spawn_factory(runtime)
-        juror = await _convene_one_juror(
+
+    # Jurors convene CONCURRENTLY so jury wall time is max(juror), not
+    # sum(juror): a slow (or ceiling-bounded hung) vendor no longer serially
+    # extends the close-time hold (ZD-R3). _convene_one_juror degrades a
+    # vendor failure to a structured error outcome, so gather never sees an
+    # exception from an outage.
+    async def _one(runtime: str) -> JurorOutcome:
+        return await _convene_one_juror(
             state=state,
             state_path=state_path,
             events_path=events_path,
             wave=wave,
             runtime=runtime,
-            spawn=spawn,
+            spawn=spawn_factory(runtime),
             repo_root=repo_root,
             max_attempts=max_attempts,
             now=now,
         )
-        jurors.append(juror)
+
+    jurors: list[JurorOutcome] = list(await asyncio.gather(*(_one(r) for r in runtimes)))
 
     return _reduce_jury(
         wave_id=wave.id, jurors=tuple(jurors), quorum=quorum, reliability=reliability

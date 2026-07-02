@@ -43,12 +43,32 @@ from eawf.kernel.store.paths import store_path
 from eawf.observability.eval.cross_vendor_jury import JURY_RUNTIME_FAMILIES
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
-from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.state import mutate
 from eawf.runtime.runtimes.adapter import SpawnResult
 from eawf.workflow.dispatch.llm_assist import SpawnFn
 
 pytestmark = pytest.mark.integration
+
+
+@pytest.fixture(autouse=True)
+def _blocking_jury_authority(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Grant BLOCKING jury authority so the jury tier stays reachable.
+
+    P30-I23-W07 closed the OR-fold bypass: a verdict-always wave reaches
+    the jury tier only when the jury has EARNED blocking authority; under
+    ADVISORY the blocking single-auditor fires instead (pinned by
+    test_close_gate_auditor_jury_routing.py and the flag-off case below).
+    Under BLOCKING authority a non-pass jury outcome now REFUSES the close
+    (D-TEETH), so the former advisory-hold cases pin the refusal instead.
+    """
+    from eawf.observability.eval.jury_validation import BlockAuthority
+
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.state._resolve_jury_block_authority",
+        lambda state, *, state_path, verify_block: BlockAuthority.BLOCKING,
+    )
+
 
 _T0 = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
 _HIGH_RISK_WAVE = "P29-I04-W15"
@@ -141,7 +161,9 @@ def _patch_jury(
                 runtime, [_auditor_body_json(verdict=verdicts.get(runtime, "pass"))]
             )
 
-    def _fake_factory(state: Any, wave: Any, *, repo_root: Path) -> Callable[[str], SpawnFn]:
+    def _fake_factory(
+        state: Any, wave: Any, *, repo_root: Path, timeout_seconds: float = 600.0
+    ) -> Callable[[str], SpawnFn]:
         def _factory(runtime: str) -> SpawnFn:
             return stubs[runtime]  # type: ignore[return-value]
 
@@ -374,13 +396,12 @@ def test_jury_unanimous_pass_closes(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 def test_jury_split_no_veto_held_advisory_close_proceeds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A pass / pass-with-followups split (NEEDS_USER) is held advisory.
+    """A pass / pass-with-followups split (NEEDS_USER) BLOCKS under authority.
 
-    The cross-vendor jury is uncalibrated (``jury_block_authority`` -> advisory),
-    so run_oracle holds ANY non-pass outcome -- including a NEEDS_USER split --
-    advisory: it logs the outcome at WARNING and returns ``status="pass"``, so
-    the high-risk wave CLOSES. TRUST-4 (I09) restores blocking on a calibrated
-    jury.
+    P30-I23-W07: the jury only displaces the single-auditor once it holds
+    BLOCKING authority (the module fixture grants it), and a calibrated
+    jury's non-pass outcome -- including a NEEDS_USER split -- refuses the
+    close. The advisory hold is pinned at the run_oracle surface instead.
     """
     _patch_jury(
         monkeypatch,
@@ -393,14 +414,17 @@ def test_jury_split_no_veto_held_advisory_close_proceeds(
     state_path, ctx, mutation = _setup(tmp_path, cross_vendor_jury=True)
 
     async def body() -> None:
-        with caplog.at_level("WARNING", logger="eawf.workflow.verify.oracle"):
+        with (
+            caplog.at_level("WARNING", logger="eawf.workflow.verify.oracle"),
+            pytest.raises(DaemonValidationError, match="jury vetoed close"),
+        ):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         payload = orjson.loads(state_path.read_bytes())
-        assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "closed"
+        assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "claimed"
 
     _run(body)
     assert any(
-        r.levelname == "WARNING" and "jury_veto_advisory" in r.getMessage() for r in caplog.records
+        r.levelname == "WARNING" and "jury_veto_blocking" in r.getMessage() for r in caplog.records
     )
 
 
@@ -412,13 +436,11 @@ def test_jury_split_no_veto_held_advisory_close_proceeds(
 def test_jury_one_fail_veto_held_advisory_close_proceeds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A single FAIL veto is held advisory (W10): the close proceeds, not blocks.
+    """A single FAIL veto BLOCKS the close under earned authority.
 
-    The cross-vendor jury is uncalibrated on eawf's own distribution, so a
-    minority-veto FAIL is held advisory by
-    :func:`~eawf.workflow.verify.oracle.jury_block_authority` until I07
-    TRUST-4: run_oracle's jury tier logs the veto at WARNING and returns
-    ``status="pass"``, so the high-risk wave CLOSES rather than staying CLAIMED.
+    With BLOCKING authority (module fixture) a minority-veto FAIL refuses
+    the close: the mutate rejects and the wave stays CLAIMED. The advisory
+    hold of the same veto is pinned at the run_oracle surface.
     """
     _patch_jury(
         monkeypatch,
@@ -427,14 +449,17 @@ def test_jury_one_fail_veto_held_advisory_close_proceeds(
     state_path, ctx, mutation = _setup(tmp_path, cross_vendor_jury=True)
 
     async def body() -> None:
-        with caplog.at_level("WARNING", logger="eawf.workflow.verify.oracle"):
+        with (
+            caplog.at_level("WARNING", logger="eawf.workflow.verify.oracle"),
+            pytest.raises(DaemonValidationError, match="jury vetoed close"),
+        ):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         payload = orjson.loads(state_path.read_bytes())
-        assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "closed"
+        assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "claimed"
 
     _run(body)
     assert any(
-        r.levelname == "WARNING" and "jury_veto_advisory" in r.getMessage() for r in caplog.records
+        r.levelname == "WARNING" and "jury_veto_blocking" in r.getMessage() for r in caplog.records
     )
 
 
@@ -457,14 +482,17 @@ def test_jury_sub_quorum_abstentions_held_advisory(
     state_path, ctx, mutation = _setup(tmp_path, cross_vendor_jury=True)
 
     async def body() -> None:
-        with caplog.at_level("WARNING", logger="eawf.workflow.verify.oracle"):
+        with (
+            caplog.at_level("WARNING", logger="eawf.workflow.verify.oracle"),
+            pytest.raises(DaemonValidationError, match="jury vetoed close"),
+        ):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         payload = orjson.loads(state_path.read_bytes())
-        assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "closed"
+        assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "claimed"
 
     _run(body)
     assert any(
-        r.levelname == "WARNING" and "jury_veto_advisory" in r.getMessage() for r in caplog.records
+        r.levelname == "WARNING" and "jury_veto_blocking" in r.getMessage() for r in caplog.records
     )
 
 
@@ -556,14 +584,17 @@ def test_flag_on_lanes_unavailable_held_advisory_via_jury_abstention(
     state_path, ctx, mutation = _setup(tmp_path, cross_vendor_jury=True)
 
     async def body() -> None:
-        with caplog.at_level("WARNING", logger="eawf.workflow.verify.oracle"):
+        with (
+            caplog.at_level("WARNING", logger="eawf.workflow.verify.oracle"),
+            pytest.raises(DaemonValidationError, match="jury vetoed close"),
+        ):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         payload = orjson.loads(state_path.read_bytes())
-        assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "closed"
+        assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "claimed"
 
     _run(body)
     assert any(
-        r.levelname == "WARNING" and "jury_veto_advisory" in r.getMessage() for r in caplog.records
+        r.levelname == "WARNING" and "jury_veto_blocking" in r.getMessage() for r in caplog.records
     )
     for runtime in JURY_RUNTIME_FAMILIES:
         stub = stubs[runtime]
