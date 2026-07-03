@@ -1630,6 +1630,34 @@ def _wrap_tree_label(label: str, *, width: int, prefix_width: int) -> list[str]:
     return wrapped or [label]
 
 
+def _tree_node_line_span(nodes: tuple[TreeNode, ...], index: int, *, width: int) -> tuple[int, int]:
+    """Return the ``(start_line, line_count)`` of node *index* in the rendered tree.
+
+    Mirrors :func:`render_tree`'s line accounting exactly: each node contributes
+    one head line plus one continuation line per wrapped label tail, so the head
+    line of node *index* sits below the summed line spans of every prior node.
+    The caller uses this to scroll the selected node into view within the tree
+    pane without measuring the rendered widget.
+
+    Args:
+        nodes: The flattened tree nodes in render order.
+        index: The selected node's index (assumed in-range for a non-empty tree).
+        width: The tree pane's content width; ``0`` disables wrapping so every
+            node spans exactly one line.
+
+    Returns:
+        A ``(start_line, line_count)`` pair -- the zero-based head-line offset of
+        node *index* and the number of rendered lines it occupies.
+    """
+
+    def _span(node: TreeNode) -> int:
+        prefix_width = _tree_prefix_width(node.depth)
+        return len(_wrap_tree_label(node.label, width=width, prefix_width=prefix_width))
+
+    start = sum(_span(nodes[before]) for before in range(index))
+    return start, _span(nodes[index])
+
+
 def render_center_tabs(active: str) -> str:
     """Render the center-pane tab bar with *active* highlighted.
 
@@ -2212,12 +2240,20 @@ class ResearchBoardModeScreen(ScopeScreen):
             mode = self._render_mode()
             with Horizontal(id="research-panes"):
                 with VerticalScroll(id=TREE_PANE_ID, classes="research-pane") as tree:
+                    # The pane must NOT capture focus: a focusable VerticalScroll
+                    # binds up/down to scroll_up/scroll_down and, being the first
+                    # focusable on mount, swallows the arrows before they reach the
+                    # screen's select_prev/select_next tree-cursor actions. Non-
+                    # focusable, the arrows bubble to the screen and the cursor
+                    # move drives its own scroll-into-view instead.
+                    tree.can_focus = False
                     tree.border_title = "TOPIC TREE"
                     yield Static(
                         render_tree(self._tree, self.selected, mode=mode), id="research-tree-body"
                     )
                     yield Static(self._peek_idle(), id=PEEK_RESULT_ID)
                 with VerticalScroll(id=CENTER_PANE_ID, classes="research-pane") as center:
+                    center.can_focus = False
                     center.border_title = "CLAIMS / EVIDENCE"
                     yield Static(render_center_tabs("Claims"), id="research-center-tabs")
                     yield Static(scope_header, id=CENTER_SCOPE_ID)
@@ -2239,6 +2275,7 @@ class ResearchBoardModeScreen(ScopeScreen):
                     )
                     yield Static(render_unresolved(questions, mode=mode), id=UNRESOLVED_BODY_ID)
                 with VerticalScroll(id=PROGRESS_PANE_ID, classes="research-pane") as progress:
+                    progress.can_focus = False
                     progress.border_title = "PROGRESS / BUDGET"
                     yield Static(
                         render_progress(
@@ -2271,6 +2308,13 @@ class ResearchBoardModeScreen(ScopeScreen):
             self.watch(self.app, "render_mode", self._on_render_mode)
         self.set_interval(RESEARCH_REFRESH_S, self._rebuild)
         self._clamp_selection()
+        # The composed tree body renders at width=0 (single-line, no hanging
+        # indent) because the pane is not laid out yet. Repaint once after the
+        # first refresh -- when the pane HAS been measured -- so the FIRST
+        # visible frame already carries the measured-width hanging indent and a
+        # long topic title never orphans its wrapped tail to column zero until a
+        # later keypress or tick repaints it.
+        self.call_after_refresh(self._repaint_tree)
 
     def _on_app_state(self, new_state: State | None) -> None:
         """Mirror an app-level state change onto this screen's reactive."""
@@ -2300,6 +2344,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         """
         if self.is_mounted:
             self._repaint_tree()
+            self._scroll_selected_into_view()
             self._repaint_claims()
             self._update_one(PEEK_RESULT_ID, self._peek_idle())
 
@@ -3091,6 +3136,32 @@ class ResearchBoardModeScreen(ScopeScreen):
                 self._tree, self.selected, mode=self._render_mode(), width=self._tree_width()
             ),
         )
+
+    def _scroll_selected_into_view(self) -> None:
+        """Scroll the tree pane so the selected node's row is visible.
+
+        A cursor move can leave the selected node's head line above or below the
+        tree pane's scroll window (the pane no longer captures the arrow keys, so
+        its own scroll never follows the cursor). This nudges the pane's vertical
+        scroll the minimum amount to bring the whole node span into view, leaving
+        an already-visible row untouched. A not-yet-laid-out pane (no visible
+        content height) or an empty tree is a no-op.
+        """
+        if self._selected_node() is None:
+            return
+        found = self.query(f"#{TREE_PANE_ID}")
+        if not found:
+            return
+        pane = found.first(VerticalScroll)
+        view_height = pane.scrollable_content_region.height
+        if view_height <= 0:
+            return
+        start, count = _tree_node_line_span(self._tree, self.selected, width=self._tree_width())
+        top = pane.scroll_offset.y
+        if start < top:
+            pane.scroll_to(y=start, animate=False)
+        elif start + count > top + view_height:
+            pane.scroll_to(y=start + count - view_height, animate=False)
 
     def _repaint_claims(self) -> None:
         """Re-scope the Claims pane to the selected node (header + body)."""

@@ -94,6 +94,7 @@ from eawf.surfaces.tui.modes.research_board import (
     ResearchBoardModeScreen,
     RoundProgress,
     RoundState,
+    _tree_node_line_span,
     build_research_block,
     build_tree_nodes,
     claim_sigil_markup,
@@ -478,6 +479,42 @@ def test_render_tree_populated_surfaces_nodes_and_marks_selection() -> None:
     assert "Survey the options-pricing landscape" in body  # campaign node
     assert "market-structure" in body  # topic node
     assert "Which curve model fits the short tenor" in body  # question leaf
+
+
+def test_tree_node_line_span_width_zero_is_one_line_per_node() -> None:
+    """At width 0 every node spans exactly one line and starts at its own index."""
+    nodes = build_tree_nodes((_campaign_row(),), (_question(),))
+    for index in range(len(nodes)):
+        start, count = _tree_node_line_span(nodes, index, width=0)
+        assert start == index
+        assert count == 1
+
+
+def test_tree_node_line_span_matches_render_tree_line_accounting() -> None:
+    """The summed node spans equal render_tree's rendered line count (wrapping on).
+
+    Boundary: the first node starts at line 0 (top of the tree) and the last
+    node's ``start + count`` equals the total rendered line count -- the exact
+    invariant the scroll-into-view math relies on to place the cursor row.
+    """
+    nodes = build_tree_nodes((_campaign_row(),), (_question(),))
+    width = 34  # narrow enough that the long campaign topic hang-wraps
+    body = render_tree(nodes, 0, width=width)
+    total_lines = body.count("\n") + 1
+    spans = [_tree_node_line_span(nodes, index, width=width) for index in range(len(nodes))]
+    assert spans[0][0] == 0
+    assert sum(count for _, count in spans) == total_lines
+    last_start, last_count = spans[-1]
+    assert last_start + last_count == total_lines
+    # The wrapping path is exercised: at least one node spans more than one line.
+    assert any(count > 1 for _, count in spans)
+
+
+def test_tree_node_line_span_index_out_of_range_raises() -> None:
+    """An index past the last node raises IndexError (the caller pins in-range)."""
+    nodes = build_tree_nodes((_campaign_row(),), ())
+    with pytest.raises(IndexError):
+        _tree_node_line_span(nodes, len(nodes), width=0)
 
 
 def test_render_center_tabs_highlights_active_and_lists_all() -> None:
@@ -1276,6 +1313,166 @@ def test_research_board_enter_peeks_selected_node(tmp_path: Path) -> None:
             toasts = "\n".join(toast_messages(app))
             assert "peek" in toasts
             assert "campaign" in toasts
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Tree-interaction spine (W01) -- arrow-select, scroll-into-view, mount-width
+# --------------------------------------------------------------------------
+
+
+def test_research_board_down_advances_selection_not_scroll(tmp_path: Path) -> None:
+    """Arrow ``down`` moves the tree selection cursor, not the pane scroll (W01).
+
+    Regression for the tree-interaction spine defect: the tree pane was a
+    focusable ``VerticalScroll`` that bound up/down to scroll and, auto-focused
+    on mount, swallowed the arrows before they reached the screen's
+    ``select_next`` / ``select_prev`` cursor actions. With the three panes non-
+    focusable the arrows reach the screen, so two ``down`` presses walk the
+    cursor two rows down -- the SELECTION advances (a real cursor move on the
+    ``selected`` reactive), which a mere scroll would leave pinned at ``0``. The
+    pane is deliberately SHORT (height 16) so the tree overflows it: an
+    overflowing focusable ``VerticalScroll`` is exactly where the arrows were
+    swallowed as scroll, so this size is the one that exercises the defect.
+    """
+    state = _project_state(open_questions={"OQ-0001": _question()})
+    state_path = _write_state(tmp_path, state)
+    _append_campaign(state_path, _campaign_payload())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        # A short pane forces the tree taller than the window -- the overflow case
+        # where a focusable scroller would consume the arrows instead of routing
+        # them to the screen's cursor actions.
+        async with app.run_test(size=(120, 16)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")  # -> research_board
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            # Enough nodes to walk two rows down (campaign + round + topics).
+            assert len(pane._tree) >= 3
+            assert pane.selected == 0
+            first_node = pane._selected_node()
+            await pilot.press("down")
+            await pilot.press("down")
+            await settle_screen(pilot)
+            # The SELECTION advanced two rows -- the arrows drove the cursor, not
+            # the pane's scroll offset (a scroll leaves `selected` pinned at 0).
+            assert pane.selected == 2
+            assert pane._selected_node() is pane._tree[2]
+            assert pane._selected_node() is not first_node
+
+    asyncio.run(body())
+
+
+def test_research_board_panes_are_not_focusable(tmp_path: Path) -> None:
+    """The three research panes set ``can_focus=False`` so the arrows bubble (W01).
+
+    Pins the fix's mechanism directly: a focusable pane would re-capture the
+    arrow keys and re-break the tree cursor, so the non-focusable invariant is
+    asserted on the mounted pane widgets themselves rather than only through the
+    behavioural cursor-move test.
+    """
+    from textual.containers import VerticalScroll
+
+    state = _project_state(open_questions={"OQ-0001": _question()})
+    state_path = _write_state(tmp_path, state)
+    _append_campaign(state_path, _campaign_payload())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")  # -> research_board
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            for pane_id in (TREE_PANE_ID, CENTER_PANE_ID, PROGRESS_PANE_ID):
+                scroller = pane.query_one(f"#{pane_id}", VerticalScroll)
+                assert scroller.can_focus is False, f"{pane_id} must not capture focus"
+
+    asyncio.run(body())
+
+
+def test_research_board_selection_scrolls_last_node_into_view(tmp_path: Path) -> None:
+    """Walking the cursor to the last node scrolls the tree pane so it is visible (W01).
+
+    After the panes stopped capturing focus their scroll no longer follows the
+    cursor, so the selection move drives its own scroll-into-view. We stage a
+    campaign whose tree is taller than the pane, walk the cursor to the last
+    node, and assert the tree pane's vertical scroll offset advanced past the top
+    (the off-screen last row was brought into view), which a pinned-at-top pane
+    would leave at zero.
+    """
+    state = _project_state(open_questions={"OQ-0001": _question()})
+    state_path = _write_state(tmp_path, state)
+    _append_campaign(state_path, _campaign_payload())
+
+    async def body() -> None:
+        from textual.containers import VerticalScroll
+
+        app = EaApp(scope="repo", state_path=state_path)
+        # A short pane forces the tree taller than the visible window so the last
+        # node is off-screen at the top scroll offset.
+        async with app.run_test(size=(120, 16)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")  # -> research_board
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            last = len(pane._tree) - 1
+            for _ in range(last):
+                await pilot.press("down")
+            await settle_screen(pilot)
+            assert pane.selected == last
+            scroller = pane.query_one(f"#{TREE_PANE_ID}", VerticalScroll)
+            # The selected last node was scrolled into view: the pane scrolled
+            # down from the top rather than leaving the cursor off-screen.
+            assert scroller.scroll_offset.y > 0
+
+    asyncio.run(body())
+
+
+def test_research_board_first_paint_has_measured_hanging_indent(tmp_path: Path) -> None:
+    """The FIRST settled frame already wraps the long topic with a hanging indent (W01).
+
+    Regression for the mount-width defect: ``compose_body`` renders the tree at
+    ``width=0`` (single-line, no hanging indent) because the pane is not laid out
+    yet, so a long topic title orphaned its wrapped tail to column zero until a
+    later keypress / tick repainted it at the measured width. ``on_mount`` now
+    schedules a measured-width repaint after the first refresh, so the first
+    settled frame already carries the hanging indent -- no keypress needed. We
+    assert the long topic is wrapped on the FIRST settled tree-body render (the
+    unbroken title is not present as one line) and that a subsequent keypress
+    leaves the wrap structure unchanged (the first paint already used the
+    measured width, so the rendered line count is stable).
+    """
+    state = _project_state(open_questions={"OQ-0001": _question()})
+    state_path = _write_state(tmp_path, state)
+    _append_campaign(state_path, _campaign_payload())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")  # -> research_board
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            first_render = str(pane.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
+            # The long topic wrapped on the first settled frame: the unbroken
+            # title is not a single-line substring (it split with a hanging tail).
+            assert "Survey the options-pricing landscape" not in first_render
+            assert "landscape" in first_render  # the wrapped tail still renders
+            first_line_count = first_render.count("\n")
+            # A keypress repaint must not change the wrap structure -- the first
+            # paint already used the measured width, so the line count is stable.
+            await pilot.press("down")
+            await settle_screen(pilot)
+            after_render = str(pane.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
+            assert after_render.count("\n") == first_line_count
 
     asyncio.run(body())
 
