@@ -18,8 +18,8 @@
       │     flow.budget.enforce       [choice]       <soft>                                                      │
       │   ◐ flow.budget.multiplier    [float]        <1.5>                                                       │
       │     flow.max_repair_cycles    [int]          3                                                           │
-      │                                                                                                          │
-      │                                                                                                          │
+      │     polish.auto_apply_safe    [bool]         <false>                                                     │
+      │     polish.deletion_policy    [str]          recoverable_with_reason                                     │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │
