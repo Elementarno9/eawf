@@ -46,3 +46,4 @@ hostnames
 descriptor
 descriptors
 idle-contract
+daemonless
