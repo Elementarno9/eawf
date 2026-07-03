@@ -173,6 +173,16 @@ PAUSE_NOT_ACTIVE_TEMPLATE: str = "pause: session already {status} -- nothing to 
 #: the stream is a recorded replay, so advertising a kill would be dishonest.
 WATCH_REPLAY_TEMPLATE: str = "session {status} -- replaying its recorded stream"
 
+#: Banner prepended to the watch output tail when the watched WAVE is in a
+#: terminal-not-closed status (failed / abandoned). The replayed stdout below
+#: is the agent's own words, which may self-claim a pass; the banner frames it
+#: with the wave's real recorded terminal status so the operator never reads
+#: the self-claim as the verdict. Plain text (the tail escapes each line), so
+#: the bracketed status reads literally.
+WATCH_REPLAY_VERDICT_BANNER: str = (
+    "[wave {status}] the replayed output below is the agent's own words, not the recorded verdict"
+)
+
 #: Id of the session-picker scroll listing browsable executor sessions.
 SESSION_PICKER_ID: str = "watch-session-picker"
 
@@ -425,6 +435,26 @@ def render_verdict_rollup_row(row: FleetVerdictRow, *, mode: RenderMode) -> str:
     )
 
 
+#: Wave statuses that mean the wave has reached a terminal outcome -- the live
+#: stream is a recorded replay, not a flowing session. A watched session whose
+#: wave sits here is never counted as part of the "active" watch pool and its
+#: header status is read from the WAVE (the recorded truth) rather than the
+#: session row, which may still read ACTIVE because the spawn dropped off the
+#: live stream without closing its session record.
+_TERMINAL_WAVE_STATUSES: frozenset[WaveStatus] = frozenset(
+    {WaveStatus.CLOSED, WaveStatus.FAILED, WaveStatus.ABANDONED}
+)
+
+#: Terminal wave statuses that are NOT a clean close (failed / abandoned). The
+#: agent's replayed stdout for such a wave may self-claim a pass, so the watch
+#: tail frames the replay with the wave's real terminal status rather than
+#: echoing the self-claim unqualified. A CLOSED wave carries a recorded verdict
+#: already, so it needs no such banner.
+_TERMINAL_NOT_CLOSED_WAVE_STATUSES: frozenset[WaveStatus] = frozenset(
+    {WaveStatus.FAILED, WaveStatus.ABANDONED}
+)
+
+
 @dataclass(frozen=True)
 class WatchTarget:
     """The single dispatched session the zoom streams + can cancel.
@@ -443,6 +473,11 @@ class WatchTarget:
             (the per-runtime URN the adapter mints), or ``None`` when the
             live spawn has not yet recorded a session-attempt row for the
             wave. The ``l`` view-log key resolves the log surface from it.
+        wave_status: The watched wave's lifecycle status, or ``None`` when the
+            wave is unknown to state. The header reads the status label from
+            this when the wave is terminal so a failed wave is never labelled
+            ``active``, and the output tail frames a terminal-not-closed replay
+            from it.
     """
 
     session_id: str
@@ -451,6 +486,17 @@ class WatchTarget:
     status: AgentSessionStatus
     attempt: int
     log_handle: str | None = None
+    wave_status: WaveStatus | None = None
+
+    @property
+    def wave_is_terminal(self) -> bool:
+        """Return whether the watched wave has reached a terminal status.
+
+        A terminal wave (closed / failed / abandoned) means the stream is a
+        recorded replay, so the header reads its status label from the wave and
+        the cancel affordance stays honest about there being no child to stop.
+        """
+        return self.wave_status in _TERMINAL_WAVE_STATUSES
 
     @property
     def label(self) -> str:
@@ -469,13 +515,17 @@ def pick_watch_target(state: State | None) -> WatchTarget | None:
 
     Selects the most-recent ACTIVE executor
     :class:`~eawf.kernel.state.models.AgentSession` (the live spawn engine
-    registers one EXECUTOR session per dispatch), preferring an ACTIVE
-    session so the zoom defaults to a session that may still be streaming;
-    when none is ACTIVE it falls back to the most-recent executor session of
-    any status so a just-finished dispatch is still inspectable. "Most
-    recent" is by :attr:`~eawf.kernel.state.models.AgentSession.started_at`.
-    Returns ``None`` -- the honest-empty path -- when *state* is unbound or
-    carries no executor session at all.
+    registers one EXECUTOR session per dispatch) whose WAVE is not terminal, so
+    the zoom defaults to a session that may still be streaming. A session that
+    still reads ACTIVE only because the spawn dropped off the live stream
+    without closing its record -- its wave already failed / closed / abandoned
+    -- is kept OUT of the active pool so the default target is never a finished
+    wave masquerading as live. When no such genuinely-active session exists it
+    falls back to the most-recent executor session of any status so a
+    just-finished dispatch is still inspectable. "Most recent" is by
+    :attr:`~eawf.kernel.state.models.AgentSession.started_at`. Returns ``None``
+    -- the honest-empty path -- when *state* is unbound or carries no executor
+    session at all.
 
     Args:
         state: The bound read-only state, or ``None`` (fresh / user scope).
@@ -489,7 +539,12 @@ def pick_watch_target(state: State | None) -> WatchTarget | None:
     executors = _executor_sessions(state)
     if not executors:
         return None
-    active = [sess for sess in executors if sess.status is AgentSessionStatus.ACTIVE]
+    active = [
+        sess
+        for sess in executors
+        if sess.status is AgentSessionStatus.ACTIVE
+        and _wave_status(state, sess.scope_id) not in _TERMINAL_WAVE_STATUSES
+    ]
     pool = active if active else executors
     picked = max(pool, key=lambda sess: sess.started_at)
     target = _session_watch_target(state, picked)
@@ -505,6 +560,26 @@ def _executor_sessions(state: State) -> list[AgentSession]:
     return [
         sess for sess in state.agent_sessions.values() if sess.role is AgentSessionRole.EXECUTOR
     ]
+
+
+def _wave_status(state: State, wave_id: str) -> WaveStatus | None:
+    """Return *wave_id*'s lifecycle status, or ``None`` when unknown to state.
+
+    The watch surface cross-checks the wave's own status against the session
+    record: a session may still read ACTIVE after its wave failed (the spawn
+    dropped off the live stream without closing the session row), so the wave
+    is the recorded truth the header labels from and the pick pool filters on.
+
+    Args:
+        state: The bound read-only state.
+        wave_id: The wave whose status is resolved.
+
+    Returns:
+        The wave's :class:`~eawf.kernel.state.enums.WaveStatus`, or ``None``
+        when the wave is not in state.
+    """
+    wave = state.waves.get(wave_id)
+    return wave.status if wave is not None else None
 
 
 def _session_watch_target(state: State, session: AgentSession) -> WatchTarget:
@@ -529,6 +604,7 @@ def _session_watch_target(state: State, session: AgentSession) -> WatchTarget:
         status=session.status,
         attempt=attempt,
         log_handle=_log_handle(state, wave_id=session.scope_id, attempt=attempt),
+        wave_status=_wave_status(state, session.scope_id),
     )
 
 
@@ -661,8 +737,12 @@ def render_watch_header(
 
     When a session is being watched the header LEADS with the session's
     lifecycle sigil (the RUNNING diamond for an ACTIVE stream) then names the
-    wave, the runtime, and the session status so the operator reads the target
-    at a glance; when there is no target it leads with the honest-empty banner.
+    wave, the runtime, and the status so the operator reads the target at a
+    glance; when there is no target it leads with the honest-empty banner. When
+    the watched WAVE is terminal (failed / closed / abandoned) the sigil and
+    the status word are read from the wave -- the recorded truth -- rather than
+    the session row, so a wave that failed while its session record still reads
+    ACTIVE is never labelled ``active``.
 
     Args:
         target: The watched session, or ``None`` when none is being watched.
@@ -674,12 +754,50 @@ def render_watch_header(
     """
     if target is None:
         return f"[$warn]{EMPTY_NOTICE}[/]\n[$muted]no dispatched executor session to stream[/]"
-    sigil = session_sigil_markup(target.status, mode=mode)
+    header_sigil = _header_status_sigil(target, mode=mode)
+    status_word = escape_markup(_header_status_label(target))
     return (
-        f"{sigil} [$accent]watching[/] {escape_markup(target.wave_id)} "
+        f"{header_sigil} [$accent]watching[/] {escape_markup(target.wave_id)} "
         f"[$muted]{escape_markup(target.runtime)}[/] "
-        f"[$accent]{escape_markup(target.status.value)}[/]"
+        f"[$accent]{status_word}[/]"
     )
+
+
+#: Session-status the header sigil borrows when the watched wave is terminal,
+#: so a failed / abandoned wave draws a terminal shape rather than the RUNNING
+#: diamond its still-ACTIVE session record would otherwise imply. A CLOSED wave
+#: borrows the CLOSED dot; a FAILED wave the failed cross; an ABANDONED wave the
+#: inert STALE dot (no session status spells "abandoned").
+_TERMINAL_WAVE_SIGIL_STATUS: dict[WaveStatus, AgentSessionStatus] = {
+    WaveStatus.CLOSED: AgentSessionStatus.CLOSED,
+    WaveStatus.FAILED: AgentSessionStatus.FAILED,
+    WaveStatus.ABANDONED: AgentSessionStatus.STALE,
+}
+
+
+def _header_status_label(target: WatchTarget) -> str:
+    """Return the header status word for *target*.
+
+    Reads the WAVE status word when the wave is terminal (the recorded truth),
+    otherwise the session lifecycle status word -- so a failed wave reads
+    ``failed`` even while its session record still reads ``active``.
+    """
+    if target.wave_is_terminal and target.wave_status is not None:
+        return target.wave_status.value
+    return target.status.value
+
+
+def _header_status_sigil(target: WatchTarget, *, mode: RenderMode) -> str:
+    """Return the header lifecycle sigil markup for *target*.
+
+    Draws from the WAVE status when the wave is terminal (so a failed wave shows
+    the failed cross, not the RUNNING diamond of a stale-ACTIVE session record),
+    otherwise from the session lifecycle status.
+    """
+    if target.wave_is_terminal and target.wave_status is not None:
+        sigil_status = _TERMINAL_WAVE_SIGIL_STATUS[target.wave_status]
+        return session_sigil_markup(sigil_status, mode=mode)
+    return session_sigil_markup(target.status, mode=mode)
 
 
 def is_watched_event(envelope: Envelope, target: WatchTarget | None) -> bool:
@@ -767,6 +885,33 @@ def load_output_chunk_lines(
     chunks.sort(key=lambda item: item[0])
     lines = [line for _seq, joined in chunks for line in format_agent_output_lines(joined)]
     return lines[-limit:]
+
+
+def frame_replay_lines(lines: list[str], wave_status: WaveStatus | None) -> list[str]:
+    """Prefix a terminal-not-closed wave's replay with its real verdict banner.
+
+    The output tail replays the agent's own streamed stdout, which for a failed
+    or abandoned wave may still self-claim a pass. When *wave_status* is
+    terminal-not-closed (failed / abandoned) this prepends the
+    :data:`WATCH_REPLAY_VERDICT_BANNER` so the operator reads the wave's real
+    recorded terminal status BEFORE the agent's self-claim, rather than taking
+    the self-claim as the verdict. The raw replay is kept below the banner --
+    nothing is censored. A closed wave (which carries a recorded verdict
+    already), a non-terminal wave, or an unknown wave (``None``) returns *lines*
+    unframed.
+
+    Args:
+        lines: The replay tail lines, oldest-first.
+        wave_status: The watched wave's status, or ``None`` when unknown.
+
+    Returns:
+        The lines with the verdict banner prepended when the wave is
+        terminal-not-closed, else a copy of *lines* unchanged.
+    """
+    if wave_status is None or wave_status not in _TERMINAL_NOT_CLOSED_WAVE_STATUSES:
+        return list(lines)
+    banner = WATCH_REPLAY_VERDICT_BANNER.format(status=wave_status.value)
+    return [banner, *lines]
 
 
 def active_executor_sessions(state: State | None) -> list[AgentSession]:
@@ -1437,24 +1582,40 @@ def render_lane_row(row: LaneGridRow, *, selected: bool = False, mode: RenderMod
     posture (the U5 cross-vendor parity column -- ``N denied`` / ``open``), and
     the state-detail word (:data:`_LANE_STATE_DETAIL`) -- so a row reads
     ``<sigil> <wave> <vendor> <elapsed> <tok/$> <tier> <sandbox> <detail>`` at a
-    glance. The selected row leads with the accent hue so the Enter-zoom target
-    reads as highlighted.
+    glance.
+
+    When *selected*, the row is rendered PLAIN (no per-span content-markup
+    colours): the ``.-selected`` rule paints a saturated green selection band
+    behind it, on which the per-span ``$muted`` / ``$accent`` hues fail
+    contrast. Rich content-markup colours override the widget CSS ``color``, so
+    the only way to force a readable foreground is to drop the markup and let
+    the ``.-selected`` ``color: $text`` (bright, bold) paint every cell.
 
     Args:
         row: The lane-grid display row.
         selected: Whether this row is the current Enter-zoom target (drives the
-            row's accent / muted lead).
+            plain vs semantic-coloured render).
         mode: The App's resolved render-mode label -- selects the sigil's glyph
             column.
 
     Returns:
         A content-markup lane-row string.
     """
-    sigil = lane_state_sigil_markup(row.state, mode=mode)
-    wave_hue = "$accent" if selected else "$muted"
     detail = escape_markup(_LANE_STATE_DETAIL[row.state])
+    if selected:
+        sigil = escape_markup(glyph(_LANE_STATE_SIGIL[row.state], mode=mode))
+        return (
+            f"{sigil} {escape_markup(row.wave_id)} "
+            f"{escape_markup(row.vendor)} "
+            f"{escape_markup(row.elapsed_label)} "
+            f"{escape_markup(row.spend_label)} "
+            f"{escape_markup(row.tier_badge)} "
+            f"{escape_markup(row.sandbox_label)} "
+            f"{detail}"
+        )
+    sigil = lane_state_sigil_markup(row.state, mode=mode)
     return (
-        f"{sigil} [{wave_hue}]{escape_markup(row.wave_id)}[/] "
+        f"{sigil} [$muted]{escape_markup(row.wave_id)}[/] "
         f"[$muted]{escape_markup(row.vendor)}[/] "
         f"[$muted]{escape_markup(row.elapsed_label)}[/] "
         f"[$muted]{escape_markup(row.spend_label)}[/] "
@@ -1493,8 +1654,13 @@ class LaneGrid(Widget):
     LaneGrid .watch-lane-row.-selected {
         /* Brand-book accent-dim selection tint (the one focus-ring green,
            mirrored as status_tint.SELECTION_TINT) rather than the leftover
-           teal $accent 20% default. */
+           teal $accent 20% default. The selected row is re-rendered PLAIN (no
+           per-span colours) so this $text foreground actually paints it -- on
+           the saturated green the $muted / $accent spans fail contrast, and
+           content-markup colours would otherwise override the widget colour. */
         background: #0c5a44;
+        color: $text;
+        text-style: bold;
     }
     LaneGrid #watch-lane-grid-empty {
         height: 1fr;
@@ -1655,8 +1821,14 @@ def render_picker_row(row: SessionPickerRow, *, selected: bool = False, mode: Re
     """Render one session-picker row: ``<sigil> <wave> <runtime> <status> <start>``.
 
     Leads with the session's lifecycle sigil so running / closed / failed
-    sessions read apart at a glance; the selected row leads with the accent
-    hue so the Enter-zoom target reads as highlighted.
+    sessions read apart at a glance.
+
+    When *selected*, the row is rendered PLAIN (no per-span content-markup
+    colours): the ``.-selected`` rule paints a saturated green selection band
+    behind it, on which the per-span ``$muted`` hues fail contrast. Rich
+    content-markup colours override the widget CSS ``color``, so dropping the
+    markup lets the ``.-selected`` ``color: $text`` (bright, bold) paint every
+    cell readably.
 
     Args:
         row: The picker display row.
@@ -1667,10 +1839,17 @@ def render_picker_row(row: SessionPickerRow, *, selected: bool = False, mode: Re
     Returns:
         A content-markup picker-row string.
     """
-    wave_tint = "$accent" if selected else "$text"
+    if selected:
+        sigil = escape_markup(glyph(_SESSION_SIGIL[row.status], mode=mode))
+        return (
+            f"{sigil} {escape_markup(row.wave_id)} "
+            f"{escape_markup(row.runtime)} "
+            f"{escape_markup(row.status.value)} "
+            f"{escape_markup(row.started_label)}"
+        )
     return (
         f"{session_sigil_markup(row.status, mode=mode)} "
-        f"[{wave_tint}]{escape_markup(row.wave_id)}[/] "
+        f"[$text]{escape_markup(row.wave_id)}[/] "
         f"[$muted]{escape_markup(row.runtime)}[/] "
         f"[$muted]{escape_markup(row.status.value)}[/] "
         f"[$muted]{escape_markup(row.started_label)}[/]"
@@ -1702,7 +1881,13 @@ class SessionPicker(Widget):
         padding: 0 1;
     }
     SessionPicker .watch-picker-row.-selected {
+        /* SELECTION_TINT band; the row is re-rendered PLAIN so this $text
+           foreground paints it -- the per-span $muted hues fail contrast on
+           the saturated green, and content-markup colours would otherwise
+           override the widget colour. */
         background: #0c5a44;
+        color: $text;
+        text-style: bold;
     }
     """
 
@@ -2072,9 +2257,16 @@ class AgentWatchModeScreen(ScopeScreen):
             return
         # With nothing live to stream but several finished sessions on record,
         # surface the browsable picker — the lanes are deleted on completion,
-        # so this is the only path back into a finished session's replay.
+        # so this is the only path back into a finished session's replay. A
+        # single finished session auto-zooms on mount (a one-row picker is
+        # pointless), but ``Esc`` out of that zoom returns here with
+        # ``_return_to_picker`` set, so a lone browsable session still gets a
+        # picker to step back to rather than re-zooming or falling to the feed.
         picker_rows = session_picker_rows(state)
-        if not sessions and len(picker_rows) >= 2:
+        return_to_picker = self._return_to_picker
+        self._return_to_picker = False
+        picker_threshold = 1 if return_to_picker else 2
+        if not sessions and len(picker_rows) >= picker_threshold:
             self._body_case = "picker"
             self._picker = SessionPicker(picker_rows, mode=mode)
             yield self._picker
@@ -2185,8 +2377,14 @@ class AgentWatchModeScreen(ScopeScreen):
     #: recompose lands on the single-session zoom for the pinned target rather
     #: than the parallel lane grid (the operator chose to watch ONE lane). Left
     #: set for the screen's lifetime: the operator leaves the zoom via ``Esc``
-    #: (back to the broad feed), not back to the grid.
+    #: (back to the picker, else the broad feed), not back to the grid.
     _zoom_pending: bool = False
+
+    #: Set for one recompose when ``Esc`` steps out of a finished-session zoom
+    #: back to the browsable picker. Forces the next compose onto the picker
+    #: even with a single browsable session (the auto-mount picker needs two);
+    #: read-and-reset in the compose so a later poll recompose does not stick.
+    _return_to_picker: bool = False
 
     def on_mount(self) -> None:
         """Register on the live-event seam and seed the watched session's stream.
@@ -2300,7 +2498,12 @@ class AgentWatchModeScreen(ScopeScreen):
         if not lines:
             return False
         if self._output_store_cursor == 0:
-            self._output_tail().replace(lines)
+            # The first sync REPLACES the tail; frame a terminal-not-closed
+            # wave's replay with the wave's real verdict banner so the agent's
+            # self-claimed pass never reads as the recorded outcome. The banner
+            # is not a store line, so the cursor still tracks the raw line count
+            # and later appends stay unbannered.
+            self._output_tail().replace(frame_replay_lines(lines, self.target.wave_status))
         elif len(lines) > self._output_store_cursor:
             self._output_tail().extend(lines[self._output_store_cursor :])
         self._output_store_cursor = len(lines)
@@ -2577,31 +2780,34 @@ class AgentWatchModeScreen(ScopeScreen):
         self._set_result(result_line)
         logger.info(f"action_view_log wave={target.wave_id} handle={target.log_handle!r}")
 
-    #: The mode ``Esc`` steps the FA4 zoom out to -- the broad live-stream Feed
-    #: the zoom drills one session out of, mirroring the crash-frame's
-    #: feed-return. Switching back to the whole-fleet feed is the natural "leave
-    #: this one session" gesture.
+    #: The mode ``Esc`` falls back to when there is no picker to step out to --
+    #: the broad live-stream Feed the zoom drills one session out of. This is
+    #: the FINAL fallback (truly nothing to browse), not the primary Esc target:
+    #: whenever any finished session is on record ``Esc`` returns to the picker.
     _LEAVE_MODE: ClassVar[str] = "feed"
 
     def action_leave_zoom(self) -> None:
         """Leave the session zoom (``Esc``) — back to the picker, else Feed.
 
-        A zoom entered while the browsable picker is available (nothing live,
-        two or more executor sessions on record) steps back OUT to the picker
-        so the operator can open the next session; every other case switches
-        back to the whole-fleet :data:`_LEAVE_MODE` (the live-stream Feed the
-        zoom drills one session out of) via the App's ``switch_mode`` seam.
-        Degrades to a quiet no-op under a bare harness whose App exposes no
-        ``switch_mode`` (the binding stays live for affordance parity).
+        A zoom over a finished replay (nothing live) steps back OUT to the
+        browsable picker whenever at least ONE executor session is on record, so
+        even a single finished session returns to a picker to step through
+        rather than falling straight to another mode. Only when there is truly
+        nothing to browse -- no finished session, or a live stream is in flight
+        -- does it fall back to the whole-fleet :data:`_LEAVE_MODE` via the
+        App's ``switch_mode`` seam. Degrades to a quiet no-op under a bare
+        harness whose App exposes no ``switch_mode`` (the binding stays live for
+        affordance parity).
         """
         state = self._current_state()
         if (
             self._body_case == "zoom"
             and not active_executor_sessions(state)
             and not lane_grid_rows(state)
-            and len(session_picker_rows(state)) >= 2
+            and len(session_picker_rows(state)) >= 1
         ):
             self._zoom_pending = False
+            self._return_to_picker = True
             self.target = None
             logger.info("action_leave_zoom to=picker")
             self.call_after_refresh(self._recompose_and_reseed)
@@ -2872,6 +3078,7 @@ class AgentWatchModeScreen(ScopeScreen):
             status=_wave_session_status(state, wave_id),
             attempt=attempt,
             log_handle=_log_handle(state, wave_id=wave_id, attempt=attempt),
+            wave_status=_wave_status(state, wave_id),
         )
 
     def _current_state(self) -> State | None:
