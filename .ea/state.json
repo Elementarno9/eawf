@@ -11296,6 +11296,16 @@
       "uri": "repo:.ea/artifacts/research/long-term/c04d-runtime.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-research-long-term-c04d-runtime"
     },
+    "ART-review-2026-07-03-i22-preship": {
+      "created_at": "2026-07-03T01:56:50.730547Z",
+      "id": "ART-review-2026-07-03-i22-preship",
+      "kind": "review",
+      "metadata": {},
+      "sha256": "f0fb8f2734ce522d59f0f0990d3ee443f6d316edbe2736ef04e7b68ab1f806a6",
+      "size_bytes": 5312,
+      "uri": ".ea/artifacts/reviews/2026-07-03-i22-preship-review.md",
+      "urn": "urn:eawf:v1:artifact:P30-I23/ART-review-2026-07-03-i22-preship"
+    },
     "ART-v0.1-closeout": {
       "created_at": "2026-05-10T21:16:39.800737Z",
       "id": "ART-v0.1-closeout",
@@ -11373,6 +11383,17 @@
       "scope_id": "P30-I22",
       "status": "complete",
       "verdict": "pass"
+    },
+    "A-P30-i23": {
+      "check_results": [],
+      "created_at": "2026-07-03T01:56:51.348794Z",
+      "id": "A-P30-i23",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-review-2026-07-03-i22-preship",
+      "scope_id": "P30-I23",
+      "status": "complete",
+      "verdict": "minor"
     },
     "A01-P00": {
       "check_results": [],
@@ -13789,7 +13810,7 @@
       "SES-20260703T013552Z-auditor-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P30-I23",
+    "iter_id": null,
     "phase_id": "P30",
     "project_code": "EAWF",
     "track_id": null
@@ -28455,16 +28476,16 @@
       ]
     },
     "P30-I23": {
-      "audit_id": null,
+      "audit_id": "A-P30-i23",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-07-03T01:57:07.844335Z",
       "description": "Zero-deadlock close path, verifier teeth, instrumentation + visual oracle, ship integrity, skills/agents prompt hardening, and the recorded-validation tail gating the v0.6.0 re-close. First corpus authored to the typed-criteria DoR.",
       "estimate_id": null,
       "id": "P30-I23",
       "intent": null,
       "opened_at": "2026-07-02T13:37:56.390789Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Max-hardening before ship",
       "trigger": "none",
       "wave_ids": [
@@ -28920,6 +28941,17 @@
       "status": "active",
       "store_record_id": "MEM-P30-I22-close-A-P30-i22",
       "summary": "iter P30-I22 closed with audit A-P30-i22; waves closed=10; outcomes P30-I22-W01: headless dispatch prompt no longer instructs self-close; daemon closes on behalf | P30-I22-W02: researcher path hardened to executor parity; campaign converges live | P30-I22-W03: blocked verdict maps to typed DISPATCH_CLOSE_BLOCKED (-32011), not -32603",
+      "tier": "working"
+    },
+    "MEM-P30-I23-close-A-P30-i23": {
+      "confidence": "high",
+      "id": "MEM-P30-I23-close-A-P30-i23",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-07-03T01:57:07.844335Z",
+      "scope_id": "P30-I23",
+      "status": "active",
+      "store_record_id": "MEM-P30-I23-close-A-P30-i23",
+      "summary": "iter P30-I23 closed with audit A-P30-i23; waves closed=52; outcomes P30-I23-W01: CHANGELOG I21 fixed block committed; tests/lint/test_branch_backup.py added; phase branch pus... | P30-I23-W02: 8 Decision rows ratified (D-LOCK-SPLIT, D-RPC-TERMINAL, D-TEETH, D-EU-CAPTURE, D-I21-RATIFY, ... | P30-I23-W03: Close-RPC TimeoutError is terminal (typed DaemonMutationIndeterminate, exit 4, no in-process ...",
       "tier": "working"
     }
   },
@@ -29633,7 +29665,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-03T01:43:42.389077Z",
+  "updated_at": "2026-07-03T01:57:07.844872Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
