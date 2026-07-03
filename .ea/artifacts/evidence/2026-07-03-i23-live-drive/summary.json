@@ -1,0 +1,46 @@
+{
+  "date": "2026-07-03",
+  "fixture": "<smoke-repo> (external smoke fixture, dedicated <smoke-runtime> daemon)",
+  "caps": {
+    "eu_cap": 3.0,
+    "usd_cap": 5.0,
+    "waves_cap_run1": 3,
+    "waves_cap_run2": 1,
+    "concurrency": 1
+  },
+  "total_cost_usd": 1.217,
+  "models": [
+    "claude-haiku-4-5"
+  ],
+  "runtime_labels": [
+    "claude"
+  ],
+  "campaign_terminal_status": "converged",
+  "waves": {
+    "P01-I01-W02": "failed",
+    "P01-I01-W03": "closed",
+    "P01-I01-W04": "closed"
+  },
+  "gate_executing_closes": [
+    "P01-I01-W03",
+    "P01-I01-W04"
+  ],
+  "actuals": {
+    "P01-I01-W01": {
+      "elapsed_eu": 0.013196666666666667,
+      "harness": "claude-code",
+      "model": "claude-haiku-4-5"
+    },
+    "P01-I01-W03": {
+      "elapsed_eu": 0.020196111111111113,
+      "harness": "claude-code",
+      "model": "claude-haiku-4-5"
+    },
+    "P01-I01-W04": {
+      "elapsed_eu": 0.01758222222222222,
+      "harness": "claude-code",
+      "model": "claude-haiku-4-5"
+    }
+  },
+  "honest_refusal": "P01-I01-W02 FAILED via verify rung 3: the spawned agent reported wave_id='W02' (short form); the close-ready gate refused and the lane failed terminally - the teeth catching a malformed report live."
+}

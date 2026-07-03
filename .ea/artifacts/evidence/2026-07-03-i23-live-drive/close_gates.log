@@ -1,0 +1,5 @@
+2026-07-03 02:19:28,938 INFO eawf.runtime.daemon.methods.fleet _fail_wave_on_disk wave=P01-I01-W02 status=failed reason="fleet dispatch error: DispatchCloseBlockedError: verify gate blocked dispatch close for wave 'P01-I01-W02': verdict=pass reasons=[executor body wave_id='W02' disagrees with dispatched wave='P01-I01-W02']"
+2026-07-03 02:21:06,764 INFO eawf.workflow.verify.oracle run_oracle pass criterion='CR-01' gate='G-01' tier=4
+2026-07-03 02:21:06,765 INFO eawf.workflow.verify.dispatch_close run_close_gates wave=P01-I01-W03 passed=True deterministic_evidence=1
+2026-07-03 02:25:40,606 INFO eawf.workflow.verify.oracle run_oracle pass criterion='CR-01' gate='G-01' tier=4
+2026-07-03 02:25:40,606 INFO eawf.workflow.verify.dispatch_close run_close_gates wave=P01-I01-W04 passed=True deterministic_evidence=1

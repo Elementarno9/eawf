@@ -1,0 +1,15 @@
+agent_output wave=campaign-f0216ea4b7f54956843e1b222fb03e95 lines=25
+agent_output wave=campaign-f0216ea4b7f54956843e1b222fb03e95 lines=22
+agent_output wave=campaign-f0216ea4b7f54956843e1b222fb03e95 lines=26
+agent_output wave=campaign-f0216ea4b7f54956843e1b222fb03e95 lines=25
+agent_output wave=P01-I01-W02 lines=12
+agent_output wave=campaign-f0216ea4b7f54956843e1b222fb03e95 lines=26
+agent_output wave=campaign-f0216ea4b7f54956843e1b222fb03e95 lines=26
+agent_output wave=P01-I01-W03 lines=17
+agent_output wave=campaign-f0216ea4b7f54956843e1b222fb03e95 lines=26
+agent_output wave=campaign-f0216ea4b7f54956843e1b222fb03e95 lines=22
+agent_output wave=campaign-f0216ea4b7f54956843e1b222fb03e95 lines=32
+agent_output wave=campaign-f0216ea4b7f54956843e1b222fb03e95 lines=22
+agent_output wave=campaign-f0216ea4b7f54956843e1b222fb03e95 lines=26
+agent_output wave=campaign-f0216ea4b7f54956843e1b222fb03e95 lines=19
+agent_output wave=P01-I01-W04 lines=17
