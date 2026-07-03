@@ -10038,6 +10038,20 @@
       "status": "done",
       "updated_at": "2026-07-03T01:42:16.537426Z"
     },
+    "P30-I23-W36": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W36",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W36",
+      "model": null,
+      "scope_id": "P30-I23-W36",
+      "status": "done",
+      "updated_at": "2026-07-03T01:43:42.388881Z"
+    },
     "P30-I23-W37": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13774,9 +13788,7 @@
       "SES-20260703T003403Z-auditor-claude-code",
       "SES-20260703T013552Z-auditor-claude"
     ],
-    "active_wave_ids": [
-      "P30-I23-W36"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I23",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -29621,7 +29633,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-03T01:42:35.099839Z",
+  "updated_at": "2026-07-03T01:43:42.389077Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -115337,8 +115349,8 @@
       "blocks": [],
       "claim_session_id": "flow-i23",
       "claimed_at": "2026-07-03T01:42:35.096083Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-03T01:43:42.388881Z",
+      "commit": "616ba9bbf81c62c39a7481c0d803372df810e3f8",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W35"
@@ -115422,7 +115434,7 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:39:34.666329Z",
-      "outcome": null,
+      "outcome": "Re-close staged: P30-I21-W22 retyped while PENDING with the W32 release-annotation dry-run + CHANGELOG structural gates; the runbook drafts the exact subject with the standalone annotation group, the ordering, and the Windows de-scope; the staging suite pins the one-PENDING-wave census, the extraction-regex match, and the live teeth metric.",
       "runtime_baseline": {
         "api_duration_ms": 14000000,
         "cache_creation_input_tokens": 900000,
@@ -115438,7 +115450,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
