@@ -10024,6 +10024,20 @@
       "status": "done",
       "updated_at": "2026-07-03T01:13:46.383892Z"
     },
+    "P30-I23-W35": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W35",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W35",
+      "model": null,
+      "scope_id": "P30-I23-W35",
+      "status": "done",
+      "updated_at": "2026-07-03T01:42:16.537426Z"
+    },
     "P30-I23-W37": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13761,7 +13775,7 @@
       "SES-20260703T013552Z-auditor-claude"
     ],
     "active_wave_ids": [
-      "P30-I23-W35"
+      "P30-I23-W36"
     ],
     "iter_id": "P30-I23",
     "phase_id": "P30",
@@ -25790,6 +25804,19 @@
       "scope_id": "P30-I23-W35",
       "updated_at": "2026-07-03T01:22:17.306778Z"
     },
+    "P30-I23-W36": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W36-bucket-20260703T014235Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I23-W36",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I23-W36",
+      "updated_at": "2026-07-03T01:42:35.099635Z"
+    },
     "P30-I23-W37": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I23-W37-bucket-20260702T142940Z",
@@ -29594,7 +29621,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-03T01:26:20.635306Z",
+  "updated_at": "2026-07-03T01:42:35.099839Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -115168,8 +115195,8 @@
       ],
       "claim_session_id": "flow-i23",
       "claimed_at": "2026-07-03T01:22:17.301033Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-03T01:42:16.537426Z",
+      "commit": "a2009a2d57f2ce700a7ac60f944a1873d3a19d97",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W34"
@@ -115233,7 +115260,7 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:39:33.998658Z",
-      "outcome": null,
+      "outcome": "Three-lens fresh-context pre-ship review synthesized (artifact + typed auditor report AR-auditor-P30-I23-W35-01); verdict pass-with-followups with ALL blockers resolved on-iter: the dangling-lock-handle/watchdog-death chain fixed with regression tests, rung-4 per-criterion refs, machine-verified gate-executing claim, migrate default 1.14 + guard + live state migrated, three artifacts scrubbed; remaining majors carried as named P31 followups in the disposition table.",
       "runtime_baseline": {
         "api_duration_ms": 14000000,
         "cache_creation_input_tokens": 900000,
@@ -115249,7 +115276,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -115308,8 +115335,8 @@
     "P30-I23-W36": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-i23",
+      "claimed_at": "2026-07-03T01:42:35.096083Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -115396,11 +115423,22 @@
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:39:34.666329Z",
       "outcome": null,
-      "runtime_baseline": null,
+      "runtime_baseline": {
+        "api_duration_ms": 14000000,
+        "cache_creation_input_tokens": 900000,
+        "cache_read_input_tokens": 616000000,
+        "captured_at": "2026-07-03T01:42:35.099613Z",
+        "cost_usd": 209.02,
+        "harness": null,
+        "input_tokens": 5200000,
+        "model": null,
+        "output_tokens": 410000,
+        "total_duration_ms": 30000000
+      },
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
