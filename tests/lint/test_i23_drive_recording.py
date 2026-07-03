@@ -25,7 +25,7 @@ _RECORDING = _REPO_ROOT / ".ea" / "artifacts" / "evidence" / "2026-07-03-i23-liv
 def test_recording_passes_all_seven_assertions() -> None:
     """CR-01: the committed recording validates end to end."""
     confirmations = validate_recording(_RECORDING)
-    assert len(confirmations) == 7
+    assert len(confirmations) == 8
 
 
 def test_gate_executing_clean_close_fired_at_least_twice() -> None:

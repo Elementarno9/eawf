@@ -196,3 +196,31 @@ def test_default_hard_limit_exceeds_verdict_tier_bound() -> None:
     from eawf.runtime.daemon.main import _MUTATION_HARD_LIMIT_SECONDS
 
     assert VerifyBlock().juror_wall_clock_seconds < _MUTATION_HARD_LIMIT_SECONDS
+
+
+def test_watchdog_survives_a_stale_closed_lock_handle() -> None:
+    """W35 review blocker chain: a heartbeat on a closed handle raises
+    ValueError; the suppress must be broad enough that the watchdog task
+    survives (a dead watchdog disarms the hard-abort net permanently)."""
+    import asyncio
+
+    from eawf.runtime.daemon.main import run_mutation_watchdog_loop
+
+    class _ClosedHandle:
+        def heartbeat(self) -> None:
+            raise ValueError("I/O operation on closed file")
+
+    ctx = _ctx()
+    ctx.active_lock_handle = _ClosedHandle()
+    stop = asyncio.Event()
+
+    async def body() -> None:
+        task = asyncio.create_task(
+            run_mutation_watchdog_loop(ctx, stop_event=stop, tick_seconds=0.05)
+        )
+        await asyncio.sleep(0.2)
+        assert not task.done(), "the watchdog died on a stale handle heartbeat"
+        stop.set()
+        await asyncio.wait_for(task, timeout=2)
+
+    asyncio.run(body())

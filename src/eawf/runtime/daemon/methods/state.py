@@ -3292,115 +3292,120 @@ async def _mutate_wave_close(
     )
 
     # ---- Phase 2: commit under the lock (ms-scale + bounded verdict tier) --
-    with portalock.acquire(state_path, timeout=5.0) as lock_handle:
-        ctx.active_lock_handle = lock_handle
-        state, payload = _read_state(state_path)
-        before_version = _state_version(payload)
-        if before_version != preflight_version:
-            # The optimistic re-check: another writer moved state during
-            # pre-flight. Only a change to the TARGET WAVE ROW invalidates
-            # the pre-flight verdicts; unrelated rows moving is fine.
-            commit_wave_row = (payload.get("waves") or {}).get(wave_id)
-            if commit_wave_row != preflight_wave_row:
-                raise DaemonValidationError(
-                    f"validation_failed: close_preflight_stale: wave {wave_id!r} "
-                    "changed during the lock-free pre-flight; retry the close "
-                    "(the retry re-runs pre-flight off-lock)"
+    # The handle reset MUST ride a finally: a refused close (stale row,
+    # gate refusal, post-validate reject) raises out of the with-block
+    # after the handle is already released, and a dangling closed handle
+    # kills the watchdog's next heartbeat (W35 review blocker).
+    try:
+        with portalock.acquire(state_path, timeout=5.0) as lock_handle:
+            ctx.active_lock_handle = lock_handle
+            state, payload = _read_state(state_path)
+            before_version = _state_version(payload)
+            if before_version != preflight_version:
+                # The optimistic re-check: another writer moved state during
+                # pre-flight. Only a change to the TARGET WAVE ROW invalidates
+                # the pre-flight verdicts; unrelated rows moving is fine.
+                commit_wave_row = (payload.get("waves") or {}).get(wave_id)
+                if commit_wave_row != preflight_wave_row:
+                    raise DaemonValidationError(
+                        f"validation_failed: close_preflight_stale: wave {wave_id!r} "
+                        "changed during the lock-free pre-flight; retry the close "
+                        "(the retry re-runs pre-flight off-lock)"
+                    )
+            wave_close_evidence = list(preflight.evidence)
+            actual_written_auto = bool(wave_id and wave_id not in (state.actuals or {}))
+            try:
+                # The verdict / jury tier is the one deliberately lock-scoped
+                # long step (it mutates state in-memory and appends session
+                # events; W08 bounds every spawn), per D-LOCK-SPLIT.
+                wave_close_evidence.extend(
+                    await _enforce_wave_close_gate(
+                        state,
+                        mutation,
+                        state_path=state_path,
+                        repo_root=repo_anchor,
+                        tier="verdict",
+                    )
                 )
-        wave_close_evidence = list(preflight.evidence)
-        actual_written_auto = bool(wave_id and wave_id not in (state.actuals or {}))
-        try:
-            # The verdict / jury tier is the one deliberately lock-scoped
-            # long step (it mutates state in-memory and appends session
-            # events; W08 bounds every spawn), per D-LOCK-SPLIT.
-            wave_close_evidence.extend(
-                await _enforce_wave_close_gate(
+                _enforce_nonzero_runtime_close(
                     state,
                     mutation,
+                    elapsed_eu=wave_close_elapsed_eu,
                     state_path=state_path,
                     repo_root=repo_anchor,
-                    tier="verdict",
                 )
-            )
-            _enforce_nonzero_runtime_close(
+                _apply_wave_close(
+                    state,
+                    mutation,
+                    wave_session_rollup=wave_close_rollup,
+                    elapsed_eu=wave_close_elapsed_eu,
+                    runtime_delta=runtime_delta,
+                )
+                _sync_wave_close_track(state, mutation)
+            except LifecycleError as exc:
+                raise DaemonValidationError(f"validation_failed: {exc}") from exc
+            except ValidationError as exc:
+                raise DaemonValidationError(f"validation_failed: {exc}") from exc
+            except KeyError as exc:
+                raise DaemonValidationError(f"validation_failed: missing param {exc!s}") from exc
+
+            state.updated_at = datetime.now(UTC)
+            new_payload = state.model_dump(mode="json")
+            post = validate_state(new_payload, strict_optional=False)
+            if post.state is None:
+                raise DaemonValidationError(
+                    "validation_failed: post-mutation schema invalid: "
+                    + "; ".join(post.schema_errors[:3])
+                )
+            if post.violations:
+                violation_codes = ",".join(v.code for v in post.violations)
+                raise DaemonValidationError(
+                    f"validation_failed: post-mutation invariants violated: {violation_codes}"
+                )
+            after_version = _state_version(new_payload)
+
+            extras = _compute_wave_close_extras(
                 state,
                 mutation,
-                elapsed_eu=wave_close_elapsed_eu,
                 state_path=state_path,
                 repo_root=repo_anchor,
+                readiness=wave_close_readiness,
+                actual_written_auto=actual_written_auto,
             )
-            _apply_wave_close(
-                state,
-                mutation,
-                wave_session_rollup=wave_close_rollup,
-                elapsed_eu=wave_close_elapsed_eu,
-                runtime_delta=runtime_delta,
-            )
-            _sync_wave_close_track(state, mutation)
-        except LifecycleError as exc:
-            raise DaemonValidationError(f"validation_failed: {exc}") from exc
-        except ValidationError as exc:
-            raise DaemonValidationError(f"validation_failed: {exc}") from exc
-        except KeyError as exc:
-            raise DaemonValidationError(f"validation_failed: missing param {exc!s}") from exc
-
-        state.updated_at = datetime.now(UTC)
-        new_payload = state.model_dump(mode="json")
-        post = validate_state(new_payload, strict_optional=False)
-        if post.state is None:
-            raise DaemonValidationError(
-                "validation_failed: post-mutation schema invalid: "
-                + "; ".join(post.schema_errors[:3])
-            )
-        if post.violations:
-            violation_codes = ",".join(v.code for v in post.violations)
-            raise DaemonValidationError(
-                f"validation_failed: post-mutation invariants violated: {violation_codes}"
-            )
-        after_version = _state_version(new_payload)
-
-        extras = _compute_wave_close_extras(
-            state,
-            mutation,
-            state_path=state_path,
-            repo_root=repo_anchor,
-            readiness=wave_close_readiness,
-            actual_written_auto=actual_written_auto,
-        )
-        drift_extras = _bucket_drift_extras(state)
-        envelope = _build_event_envelope(
-            mutation=mutation,
-            before_version=before_version,
-            after_version=after_version,
-            extras=extras,
-        )
-        drift_envelope = (
-            _build_bucket_drift_envelope(
+            drift_extras = _bucket_drift_extras(state)
+            envelope = _build_event_envelope(
                 mutation=mutation,
                 before_version=before_version,
                 after_version=after_version,
-                extras=drift_extras,
+                extras=extras,
             )
-            if drift_extras
-            else None
-        )
-        record = WalRecord(
-            record_id=mutation.mutation_id,
-            envelope=envelope,
-            idempotency_key=idempotency_key,
-            written_at=datetime.now(UTC),
-            before_state_version=before_version,
-            after_state_version=after_version,
-        )
-        wal.write_pending(wal_path, record)
-        atomic_write_json_locked(state_path, new_payload)
-        wal.mark_applied(wal_path, mutation.mutation_id)
-        append_envelope(event_path, envelope)
-        if drift_envelope is not None:
-            append_envelope(event_path, drift_envelope)
-        wal.mark_fsynced(wal_path, mutation.mutation_id)
-
-    ctx.active_lock_handle = None
+            drift_envelope = (
+                _build_bucket_drift_envelope(
+                    mutation=mutation,
+                    before_version=before_version,
+                    after_version=after_version,
+                    extras=drift_extras,
+                )
+                if drift_extras
+                else None
+            )
+            record = WalRecord(
+                record_id=mutation.mutation_id,
+                envelope=envelope,
+                idempotency_key=idempotency_key,
+                written_at=datetime.now(UTC),
+                before_state_version=before_version,
+                after_state_version=after_version,
+            )
+            wal.write_pending(wal_path, record)
+            atomic_write_json_locked(state_path, new_payload)
+            wal.mark_applied(wal_path, mutation.mutation_id)
+            append_envelope(event_path, envelope)
+            if drift_envelope is not None:
+                append_envelope(event_path, drift_envelope)
+            wal.mark_fsynced(wal_path, mutation.mutation_id)
+    finally:
+        ctx.active_lock_handle = None
 
     # ---- Phase 3: post-lock tail --------------------------------------------
     if wave_close_evidence:

@@ -46,6 +46,8 @@ ARTIFACT_KIND_SUBDIRS: frozenset[str] = frozenset(
         # Recorded validation-run evidence (live-drive recordings etc.,
         # P30-I23-W33) — machine-checked excerpt bundles, not prose briefs.
         "evidence",
+        # Multi-agent review artifacts (pre-ship reviews, P30-I23-W35).
+        "reviews",
     }
 )
 

@@ -25,7 +25,7 @@ Two commits, plus a follow-up:
 
 | # | Criterion | Verdict | Evidence |
 |---|---|---|---|
-| 1 | Codex doctor user-scope folder display correct (B1) | pass | `DoctorReport.plugin_root` carries the scope-correct dir; `_codex_doctor_text` reads it directly. Regression test `test_doctor_report_plugin_root_points_at_scope_dir` covers both project and user scopes. Live verify: `eawf plugin doctor codex --scope user → /Users/user/.codex/plugins/eawf`. |
+| 1 | Codex doctor user-scope folder display correct (B1) | pass | `DoctorReport.plugin_root` carries the scope-correct dir; `_codex_doctor_text` reads it directly. Regression test `test_doctor_report_plugin_root_points_at_scope_dir` covers both project and user scopes. Live verify: `eawf plugin doctor codex --scope user → <home>/.codex/plugins/eawf`. |
 | 2 | Codex marketplace manifest at `.agents/plugins/marketplace.json` (B3) | pass | `_MARKETPLACE_SUBDIR=(".agents","plugins")`; root `marketplace.json` no longer emitted, and legacy root file is stripped on rerun. Live verify: `codex plugin marketplace add ./build/eawf-codex-marketplace/` returned `Added marketplace eawf-local-codex`. |
 | 3 | OpenCode install emits 8 agents + 10 commands (B4) | pass | `install_plugin` loops AGENT_REGISTRY and `user_invocable=True` skills. Sidecar records the rendered lists. Live verify: `doctor opencode --scope user → ok=21 drifted=0 missing=0` (plugin.js + sidecar + config + 8 agents + 10 commands). |
 | 4 | OpenCode doctor classifies agents/commands as ok/drifted/missing | pass | `doctor_plugin` adds parallel hash-compare loops emitting `kind="agent"` / `kind="command"` entries; covered by `test_doctor_flags_missing_agent_files` and `test_doctor_flags_drifted_command_files`. |

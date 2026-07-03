@@ -7,11 +7,7 @@ all other A16 verdicts stand.
 
 ## Defects addressed
 
-1. **Display showed workspace pwd for user scope.** `plugin install
-   codex --scope user (dry-run) → /Users/user/Workspace/TM/eawf` — the
-   target_dir is workspace-anchored but writes land under
-   `<home>/.codex/...`. Fixed by deriving plugin root from the result's
-   file paths (`manifest.parents[1]` for codex,
+1. **Display showed workspace pwd for user scope.** `plugin install codex --scope user (dry-run) → <repo>` — the target_dir is workspace-anchored but writes land under `<home>/.codex/...`. Fixed by deriving plugin root from the result's file paths (`manifest.parents[1]` for codex,
    `plugin_js.parent` for opencode); applied to install + doctor text
    formatters and the scope-tip banner.
 2. **Codex did not see the installed plugin.** Per the Codex

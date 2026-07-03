@@ -200,17 +200,17 @@ def verify_close_readiness(
             f"executor body wave_id={report.wave_id!r} disagrees with dispatched wave={wave_id!r}"
         )
 
-    # Rung 4 (W49): a criteria-bearing wave must carry per-criterion
-    # evidence_refs once the teeth bit (verify.enforce) is on. A wave with
-    # zero typed criteria stays exempt — there is nothing to evidence.
-    if (
-        require_evidence_refs
-        and typed_criteria_count >= 1
-        and not getattr(report, "evidence_refs", None)
-    ):
-        reasons.append(
-            f"evidence_refs is empty for a wave with {typed_criteria_count} typed criteria"
-        )
+    # Rung 4 (W49, tightened per the W35 review): a criteria-bearing wave
+    # must carry ONE evidence_ref per typed criterion once the teeth bit
+    # (verify.enforce) is on — the same contract the executor DoD states.
+    # A wave with zero typed criteria stays exempt.
+    if require_evidence_refs and typed_criteria_count >= 1:
+        refs = list(getattr(report, "evidence_refs", None) or [])
+        if len(refs) < typed_criteria_count:
+            reasons.append(
+                f"evidence_refs carries {len(refs)} entr(y/ies) for a wave "
+                f"with {typed_criteria_count} typed criteria (one per criterion required)"
+            )
 
     passed = not reasons
     result = VerifyResult(

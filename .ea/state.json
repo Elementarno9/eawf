@@ -10010,6 +10010,20 @@
       "status": "done",
       "updated_at": "2026-07-03T00:47:12.493916Z"
     },
+    "P30-I23-W34": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I23-W34",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I23-W34",
+      "model": null,
+      "scope_id": "P30-I23-W34",
+      "status": "done",
+      "updated_at": "2026-07-03T01:13:46.383892Z"
+    },
     "P30-I23-W37": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -10414,6 +10428,20 @@
       "runtime": "claude-code",
       "scope_id": "P30-I23-W33::audit",
       "started_at": "2026-07-03T00:34:03.408773Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260703T013552Z-auditor-claude": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260703T013552Z-auditor-claude",
+      "role": "auditor",
+      "runtime": "claude",
+      "scope_id": "P30-I23-W35",
+      "started_at": "2026-07-03T01:35:52.373234Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -13729,9 +13757,12 @@
       "SES-20260702T220628Z-auditor-claude-code",
       "SES-20260702T230518Z-auditor-claude-code",
       "SES-20260702T232502Z-auditor-claude-code",
-      "SES-20260703T003403Z-auditor-claude-code"
+      "SES-20260703T003403Z-auditor-claude-code",
+      "SES-20260703T013552Z-auditor-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I23-W35"
+    ],
     "iter_id": "P30-I23",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -25733,6 +25764,32 @@
       "scope_id": "P30-I23-W33",
       "updated_at": "2026-07-03T00:03:16.560587Z"
     },
+    "P30-I23-W34": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W34-bucket-20260703T004756Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I23-W34",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I23-W34",
+      "updated_at": "2026-07-03T00:47:56.068985Z"
+    },
+    "P30-I23-W35": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I23-W35-bucket-20260703T012217Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I23-W35",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I23-W35",
+      "updated_at": "2026-07-03T01:22:17.306778Z"
+    },
     "P30-I23-W37": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I23-W37-bucket-20260702T142940Z",
@@ -29534,10 +29591,10 @@
       "scope_kind": "wave"
     }
   },
-  "schema_version": "1.12",
+  "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-03T00:47:12.494106Z",
+  "updated_at": "2026-07-03T01:26:20.635306Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -108890,7 +108947,50 @@
         ".ea/state.json",
         "CHANGELOG.md"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_commit_prefix_lint.py",
+              "-q",
+              "-k",
+              "release"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_reclose_staging.py",
+              "-q",
+              "-k",
+              "changelog"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I21-W22",
       "intent": {
         "desired_outcome": "P30 re-closes with the version bumped and the phase-close commit annotated (release=v0.6.0)",
@@ -108914,16 +109014,50 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "version bumped; phase-close commit annotated (release=v0.6.0); ready to tag",
-          "oracle_tier": null,
+          "kind": "deterministic",
+          "measurable_signal": "the W32 release-annotation suite (commit-prefix lint dry-run of the exact drafted subject) exits zero under pytest",
+          "oracle_tier": 2,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
-          "text": "version bumped; phase-close commit annotated (release=v0.6.0); ready to tag",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the release-annotation suite in tests/unit/test_commit_prefix_lint.py proving the drafted subject parses and the fused shape rejects",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The phase-close commit subject is exactly the runbook draft [P30] state: close iter + phase (audit=A-P30-I22-ship) (release=v0.6.0) with the release annotation as its own paren group; the W32 lint dry-run accepts it and hard-rejects the fused (audit=..., release=...) shape.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "structural",
+          "measurable_signal": "the reclose staging suite asserts the 0.6.0 CHANGELOG heading, a bullet under it, and the 1.13/1.14 migration notes, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from tests/lint/test_reclose_staging.py changelog assertions over the committed CHANGELOG.md",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "CHANGELOG.md carries the released 0.6.0 section heading with at least one bullet and the migration notes for the 1.13 and 1.14 schema bumps; the structural gate reads the committed file, not prose claims.",
           "waiver_reason": null
         }
       ],
@@ -114831,10 +114965,10 @@
       "blocks": [
         "P30-I23-W35"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-i23",
+      "claimed_at": "2026-07-03T00:47:56.068502Z",
+      "closed_at": "2026-07-03T01:13:46.383892Z",
+      "commit": "266b592980d3bfda5940bd1f105554e32302a9c4",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W13",
@@ -114953,12 +115087,23 @@
       },
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:39:33.333703Z",
-      "outcome": null,
-      "runtime_baseline": null,
+      "outcome": "Waiver-free full CI mirror on the integrated HEAD: just test-all green in both halves (12926 + 419 passed, no --waive anywhere), coverage-gate contract + snapshot-pairing gate green over the full merge-base..HEAD phase range, and the fresh-deterministic-evidence suite pins 23 teeth rows minted since the I22 open — the phase teeth metric live for the first time since 2026-06-10.",
+      "runtime_baseline": {
+        "api_duration_ms": 14000000,
+        "cache_creation_input_tokens": 900000,
+        "cache_read_input_tokens": 616000000,
+        "captured_at": "2026-07-03T00:47:56.068968Z",
+        "cost_usd": 209.02,
+        "harness": null,
+        "input_tokens": 5200000,
+        "model": null,
+        "output_tokens": 410000,
+        "total_duration_ms": 30000000
+      },
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -115021,8 +115166,8 @@
       "blocks": [
         "P30-I23-W36"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-i23",
+      "claimed_at": "2026-07-03T01:22:17.301033Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -115089,11 +115234,22 @@
       "iter_id": "P30-I23",
       "opened_at": "2026-07-02T13:39:33.998658Z",
       "outcome": null,
-      "runtime_baseline": null,
+      "runtime_baseline": {
+        "api_duration_ms": 14000000,
+        "cache_creation_input_tokens": 900000,
+        "cache_read_input_tokens": 616000000,
+        "captured_at": "2026-07-03T01:22:17.306744Z",
+        "cost_usd": 209.02,
+        "harness": null,
+        "input_tokens": 5200000,
+        "model": null,
+        "output_tokens": 410000,
+        "total_duration_ms": 30000000
+      },
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",

@@ -888,15 +888,15 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     assert state_path.read_bytes() == before
 
 
-def test_migrate_cmd_default_target_migrates_v1_0_to_v1_12(
+def test_migrate_cmd_default_target_migrates_v1_0_to_model_max(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The bare ``eawf migrate`` default target (1.12) walks the full chain + re-loads.
 
-    The default target advanced to 1.12 with the UserDecisionKind + PauseResolution
-    bump, so a bare migrate on a v1.0 state runs 1.0 -> 1.1 -> 1.2 -> 1.3 -> 1.4 ->
-    1.5 -> 1.6 -> 1.7 -> 1.8 -> 1.9 -> 1.10 -> 1.11 -> 1.12 and lands a re-loadable
-    v1.12 state.
+    The default target tracks the model's supported max (see
+    test_default_target_tracks_model_supported_max), so a bare migrate on a
+    v1.0 state walks every registered edge and lands a re-loadable state at
+    the current maximum — 1.14 as of the P30-I23 bumps.
     """
     from typer.testing import CliRunner
 
@@ -911,7 +911,7 @@ def test_migrate_cmd_default_target_migrates_v1_0_to_v1_12(
 
     assert result.exit_code == 0, result.output
     reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
-    assert reloaded.schema_version == "1.12"
+    assert reloaded.schema_version == "1.14"
 
 
 def test_migrate_cmd_supported_target_noop_keeps_state_reloadable(
@@ -2706,3 +2706,15 @@ def test_run_chain_v1_11_to_v1_12_round_trips_clean(tmp_path: Path) -> None:
     on_disk = json.loads(state_path.read_text(encoding="utf-8"))
     reloaded = State.model_validate(on_disk)
     assert reloaded.schema_version == "1.12"
+
+
+def test_default_target_tracks_model_supported_max() -> None:
+    """The bare ``eawf migrate`` target must never trail the model's max —
+    a trailing default leaves registered migration edges unreachable (the
+    W35 release-review finding on the 1.12 default vs the 1.14 model)."""
+    from eawf.kernel.migrations._base import (
+        _DEFAULT_TARGET_VERSION,
+        model_supported_max_version,
+    )
+
+    assert model_supported_max_version() == _DEFAULT_TARGET_VERSION

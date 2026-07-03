@@ -377,7 +377,10 @@ async def run_mutation_watchdog_loop(
             return
         handle = ctx.active_lock_handle
         if handle is not None and hasattr(handle, "heartbeat"):
-            with contextlib.suppress(OSError):
+            # Suppress broadly: a heartbeat on a stale/closed handle raises
+            # ValueError (closed file), and ANY escape here kills the
+            # watchdog task permanently — the W35 review blocker chain.
+            with contextlib.suppress(Exception):
                 handle.heartbeat()
         now = time.monotonic()
         for mutation_id, entry in list(ctx.in_flight_details.items()):

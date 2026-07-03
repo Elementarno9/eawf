@@ -106,6 +106,21 @@ def validate_recording(recording_dir: Path) -> list[str]:
         raise RecordingInvalidError("assertion 7 failed: jail smoke markers absent")
     confirmations.append("7 jail smoke markers present")
 
+    # Tightened per the W35 review: the gate-executing-close claim is
+    # machine-verified, not attested — one passing run_close_gates line
+    # per claimed close.
+    claimed = list(summary.get("gate_executing_closes") or [])
+    gates_log = (recording_dir / "close_gates.log").read_text(encoding="utf-8")
+    passing = gates_log.count("run_close_gates") and sum(
+        1 for line in gates_log.splitlines() if "run_close_gates" in line and "passed=True" in line
+    )
+    if claimed and (not passing or passing < len(claimed)):
+        raise RecordingInvalidError(
+            f"gate-executing claim unverified: {len(claimed)} close(s) claimed, "
+            f"{passing or 0} passing run_close_gates line(s)"
+        )
+    confirmations.append(f"8 gate-executing closes verified: {len(claimed)}")
+
     return confirmations
 
 
