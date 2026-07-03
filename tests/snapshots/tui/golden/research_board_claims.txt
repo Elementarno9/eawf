@@ -1,31 +1,31 @@
  ◉ Eä  repo ❯ QR ❯ Research                                                                         ≈ idle    HH:MM UTC
 
   ╭─ TOPIC TREE ───────────────────────╮╭─ CLAIMS / EVIDENCE ─────────────────╮╭─ PROGRESS / BUDGET ─────────────────╮
-  │ > ≡ Survey the options-pricing     ││                                     ││ RUN runnable                        │
-  │     landscape · staged             ││ showing all claims -- campaign:     ││ ROUND 0 run                         │
-  │     ◌ round idle                   ││ Survey the options-pricing          ││ ACTIVE 4 claim(s)                   │
+  │ > ≡ Survey the options-pricing     ││ showing campaign: Survey the        ││ RUN runnable                        │
+  │     landscape · staged             ││ options-pricing landscape           ││ ROUND 0 run                         │
+  │     ◌ round idle                   ││ campaign Survey the options-pricing ││ ACTIVE 4 claim(s)                   │
   │       ◌ domain: market-structure   ││ landscape                           ││ WAITING 0 open question(s)          │
-  │       ◌ domain: pricing-models     ││ ● Implied vol surface is downward   ││ PAUSED 0 checkpoint(s)              │
-  │ enter to peek the selected node    ││ sloping in strike …                 ││ BUDGET 2 staged topic(s), 0         │
-  │                                    ││ ● Short-tenor smile is well fit by  ││ answered, 1 pruned                  │
-  │                                    ││ SABR …                              ││ RISKS none                          │
-  │                                    ││ ✕ Term-structure arbitrage is       ││                                     │
-  │                                    ││ exploitable intraday …              ││                                     │
-  │                                    ││ ◌ Overnight gamma decay drives the  ││                                     │
-  │                                    ││ skew                                ││                                     │
+  │       ◌ domain: pricing-models     ││ 2 staged topic(s) · depth medium    ││ PAUSED 0 checkpoint(s)              │
+  │                                    ││                                     ││ BUDGET 2 staged topic(s), 0         │
+  │                                    ││ ROUNDS 0 run · staged               ││ answered, 1 pruned                  │
+  │                                    ││ QUESTIONS 0 open · 0 answered · 0   ││ RISKS none                          │
+  │                                    ││ blocking                            ││                                     │
+  │                                    ││ CLAIMS 4 claim(s) · 1 conflict(s)   ││                                     │
+  │                                    ││ BUDGET 2 staged topic(s) · 0        ││                                     │
+  │                                    ││ answered · 1 pruned                 ││                                     │
+  │                                    ││ CHECKPOINT 0 open                   ││                                     │
+  │                                    ││ LAST ROUND 0 finding(s)             ││                                     │
   │                                    ││                                     ││                                     │
-  │                                    ││ Options (supporting evidence)       ││                                     │
-  │                                    ││ ● 2 ref(s) Implied vol surface is   ││                                     │
-  │                                    ││ downward sloping in strike          ││                                     │
-  │                                    ││ ● 1 ref(s) Short-tenor smile is     ││                                     │
-  │                                    ││ well fit by SABR                    ││                                     │
   │                                    ││                                     ││                                     │
-  │                                    ││ Conflicts (contradicting evidence)  ││                                     │
-  │                                    ││ ✕ 1 ref(s) Term-structure arbitrage ││                                     │
-  │                                    ││ is exploitable intraday             ││                                     │
   │                                    ││                                     ││                                     │
-  │                                    ││ Unresolved                          ││                                     │
-  │                                    ││ none yet                            ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
   ╰────────────────────────────────────╯╰─────────────────────────────────────╯╰─────────────────────────────────────╯
 
   ╭─ CHECKPOINT ─────────────────────────────────────────────────────────────────────────────────────────────────────╮

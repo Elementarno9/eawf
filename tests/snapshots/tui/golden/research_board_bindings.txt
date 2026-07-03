@@ -1,19 +1,19 @@
  ◉ Eä  repo ❯ QR ❯ Research                                                                                                                                                         ≈ idle    HH:MM UTC
 
   ╭─ TOPIC TREE ──────────────────────────────────────────────────╮╭─ CLAIMS / EVIDENCE ───────────────────────────────────────────╮╭─ PROGRESS / BUDGET ────────────────────────────────────────────╮
-  │ > ≡ Survey the options-pricing landscape · running            ││                                                               ││ RUN runnable                                                   │
-  │     ◆ round running                                           ││ showing all claims -- campaign: Survey the options-pricing    ││ ROUND 1 running · 1 claim(s)                                   │
-  │       ◌ domain: market-structure                              ││ landscape                                                     ││ ACTIVE 1 claim(s)                                              │
-  │       ◌ domain: pricing-models                                ││ ◌ Implied vol surface is downward sloping in strike           ││ WAITING 1 open question(s)                                     │
-  │     ◌ Which curve model fits the short tenor                  ││                                                               ││ PAUSED 0 checkpoint(s)                                         │
-  │ enter to peek the selected node                               ││ Options (supporting evidence)                                 ││ BUDGET 2 staged topic(s), 0 answered, 0 pruned                 │
-  │                                                               ││ none yet                                                      ││ RISKS none                                                     │
+  │ > ≡ Survey the options-pricing landscape · running            ││ showing campaign: Survey the options-pricing landscape        ││ RUN runnable                                                   │
+  │     ◆ round running                                           ││ campaign Survey the options-pricing landscape                 ││ ROUND 1 running · 1 claim(s)                                   │
+  │       ◌ domain: market-structure                              ││ 2 staged topic(s) · depth medium                              ││ ACTIVE 1 claim(s)                                              │
+  │       ◌ domain: pricing-models                                ││                                                               ││ WAITING 1 open question(s)                                     │
+  │     ◌ Which curve model fits the short tenor                  ││ ROUNDS 0 run · running                                        ││ PAUSED 0 checkpoint(s)                                         │
+  │                                                               ││ QUESTIONS 1 open · 0 answered · 0 blocking                    ││ BUDGET 2 staged topic(s), 0 answered, 0 pruned                 │
+  │                                                               ││ CLAIMS 1 claim(s) · 0 conflict(s)                             ││ RISKS none                                                     │
+  │                                                               ││ BUDGET 2 staged topic(s) · 0 answered · 0 pruned              ││                                                                │
+  │                                                               ││ CHECKPOINT 0 open                                             ││                                                                │
+  │                                                               ││ LAST ROUND 0 finding(s)                                       ││                                                                │
   │                                                               ││                                                               ││                                                                │
-  │                                                               ││ Conflicts (contradicting evidence)                            ││                                                                │
-  │                                                               ││ none yet                                                      ││                                                                │
   │                                                               ││                                                               ││                                                                │
-  │                                                               ││ Unresolved                                                    ││                                                                │
-  │                                                               ││ open round 1 Which curve model fits the short tenor           ││                                                                │
+  │                                                               ││                                                               ││                                                                │
   │                                                               ││                                                               ││                                                                │
   │                                                               ││                                                               ││                                                                │
   │                                                               ││                                                               ││                                                                │

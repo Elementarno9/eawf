@@ -1,26 +1,26 @@
  ◉ Eä  repo ❯ QR ❯ _default                                                                         ≈ idle    HH:MM UTC
 
   ╭─ TOPIC TREE ───────────────────────╮╭─ CLAIMS / EVIDENCE ─────────────────╮╭─ PROGRESS / BUDGET ─────────────────╮
-  │ > ≡ Survey the options-pricing     ││                                     ││ RUN saturated                       │
-  │     landscape · saturated          ││ showing all claims -- campaign:     ││ ROUND 1 run                         │
-  │     ● round saturated              ││ Survey the options-pricing          ││ ACTIVE 2 claim(s)                   │
+  │ > ≡ Survey the options-pricing     ││ showing campaign: Survey the        ││ RUN saturated                       │
+  │     landscape · saturated          ││ options-pricing landscape           ││ ROUND 1 run                         │
+  │     ● round saturated              ││ campaign Survey the options-pricing ││ ACTIVE 2 claim(s)                   │
   │       ◌ domain: market-structure   ││ landscape                           ││ WAITING 1 open question(s)          │
-  │       ◌ domain: pricing-models     ││ ● Implied vol surface is downward   ││ PAUSED 0 checkpoint(s)              │
-  │     ◌ Which curve model fits the   ││ sloping in strike                   ││ BUDGET 2 staged topic(s), 1         │
-  │       short tenor                  ││ ✕ Term-structure arbitrage is       ││ answered, 2 pruned                  │
-  │     ● Does the smile invert past   ││ exploitable intraday                ││ RISKS none                          │
-  │       the 90 delta wing            ││                                     ││                                     │
-  │     ◌ Is the overnight gamma path  ││ Options (supporting evidence)       ││                                     │
-  │       worth tracking               ││ ● 0 ref(s) Implied vol surface is   ││                                     │
-  │ enter to peek the selected node    ││ downward sloping in strike          ││                                     │
+  │       ◌ domain: pricing-models     ││ 2 staged topic(s) · depth medium    ││ PAUSED 0 checkpoint(s)              │
+  │     ◌ Which curve model fits the   ││                                     ││ BUDGET 2 staged topic(s), 1         │
+  │       short tenor                  ││ ROUNDS 1 run · saturated            ││ answered, 2 pruned                  │
+  │     ● Does the smile invert past   ││ QUESTIONS 1 open · 1 answered · 0   ││ RISKS none                          │
+  │       the 90 delta wing            ││ blocking                            ││                                     │
+  │     ◌ Is the overnight gamma path  ││ CLAIMS 2 claim(s) · 1 conflict(s)   ││                                     │
+  │       worth tracking               ││ BUDGET 2 staged topic(s) · 1        ││                                     │
+  │                                    ││ answered · 2 pruned                 ││                                     │
+  │                                    ││ CHECKPOINT 0 open                   ││                                     │
+  │                                    ││ LAST ROUND 1 finding(s)             ││                                     │
   │                                    ││                                     ││                                     │
-  │                                    ││ Conflicts (contradicting evidence)  ││                                     │
-  │                                    ││ ✕ 0 ref(s) Term-structure arbitrage ││                                     │
-  │                                    ││ is exploitable intraday             ││                                     │
   │                                    ││                                     ││                                     │
-  │                                    ││ Unresolved                          ││                                     │
-  │                                    ││ open round 1 Which curve model fits ││                                     │
-  │                                    ││ the short tenor                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
   │                                    ││                                     ││                                     │
   │                                    ││                                     ││                                     │
   │                                    ││                                     ││                                     │
