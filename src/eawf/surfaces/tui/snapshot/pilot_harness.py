@@ -317,6 +317,49 @@ def _focus_cursor_signature(app: App[object]) -> tuple[str, str, str] | None:
     return (type(focused).__name__, "", "")
 
 
+def _selection_signature(app: App[object]) -> tuple[tuple[str, str, str], ...] | None:
+    """Snapshot the active surface's SELECTION identity for movement checks.
+
+    A frame delta is too weak a liveness signal for a navigation key: a key that
+    only SCROLLS the pane repaints new pixels while the selection cursor stays
+    put -- the pre-W01 arrow-trap, where the roadmap-tree arrows scrolled the
+    pane without advancing its cursor, yet the frame changed. This collects
+    every selection identity the topmost screen exposes so a movement key can be
+    held to actually MOVING it:
+
+    * the focused widget's REAL cursor position (a DataTable row cursor, a Tree
+      branch cursor, an OptionList highlight) via :func:`_focus_cursor_signature`
+      -- included only when the focused widget carries an actual cursor attribute
+      (the degenerate ``(type, "", "")`` fallback is NOT a selection identity, so
+      a focused-but-cursorless widget does not spuriously anchor the signature);
+      and
+    * every screen-or-descendant widget carrying an integer ``selected`` index
+      (the research board's flat tree cursor, the agent-watch lane grid / session
+      picker), paired with its widget identity so two panes' cursors never alias.
+
+    Returns ``None`` when the surface exposes no selection identity at all, so
+    :func:`assert_footer_movement_key_moves_selection` can fall back to the
+    frame-change liveness assertion and keep the gate total.
+
+    Args:
+        app: The live app under a Pilot harness, already settled.
+
+    Returns:
+        A tuple of ``(widget_type, identity, value)`` selection markers, or
+        ``None`` when the surface exposes no selection identity.
+    """
+    signature: list[tuple[str, str, str]] = []
+    cursor = _focus_cursor_signature(app)
+    if cursor is not None and cursor[1]:
+        signature.append(cursor)
+    for node in app.screen.walk_children(with_self=True):
+        selected = getattr(node, "selected", None)
+        if isinstance(selected, bool) or not isinstance(selected, int):
+            continue
+        signature.append((type(node).__name__, node.id or "", repr(selected)))
+    return tuple(signature) if signature else None
+
+
 @dataclass(frozen=True)
 class FooterKeyResponse:
     """The observable response of pressing one advertised footer key.
@@ -426,6 +469,56 @@ async def assert_footer_key_responds(
         raise AssertionError(
             f"advertised footer key {detail} produced no visible response: "
             f"no frame delta, toast, screen change, or cursor move"
+        )
+    return response
+
+
+async def assert_footer_movement_key_moves_selection(
+    pilot: Pilot[object],
+    key: str,
+    *,
+    hint: str | None = None,
+) -> FooterKeyResponse:
+    """Assert an advertised MOVEMENT key moves the selection, not merely repaints.
+
+    Tightens :func:`assert_footer_key_responds` for navigation keys (up / down /
+    left / right). The plain frame-delta channel is too weak for a movement key:
+    a key that only SCROLLS its pane changes the frame while the selection cursor
+    stays put -- the pre-W01 arrow-trap defect, where the roadmap-tree arrows
+    scrolled the pane without advancing its cursor, so the frame-delta gate
+    counted the scroll as a response and passed a DEAD selection key. This helper
+    closes that blind spot: it captures the active surface's selection identity
+    (:func:`_selection_signature`) around the press and asserts it CHANGED. When
+    the surface exposes no selection identity, it defers to
+    :func:`assert_footer_key_responds` so the gate stays total over every mode.
+
+    Args:
+        pilot: The live :class:`~textual.pilot.Pilot` from ``app.run_test()``.
+        key: The Textual pilot key string to press (a movement / navigation key).
+        hint: Optional footer-hint label (e.g. ``"research up-down"``) folded into
+            the failure message so a dead key names the affordance it backs.
+
+    Returns:
+        The :class:`FooterKeyResponse` for the press (for further inspection).
+
+    Raises:
+        AssertionError: When the surface exposes a selection identity and the
+            movement key did NOT move it (a scroll-only or dead navigation key),
+            or -- through the frame-change fallback on a selection-less surface --
+            when the key produced no visible response at all.
+    """
+    before = _selection_signature(pilot.app)
+    if before is None:
+        return await assert_footer_key_responds(pilot, key, hint=hint)
+    response = await probe_footer_key_response(pilot, key)
+    after = _selection_signature(pilot.app)
+    if after == before:
+        detail = f"{key!r}" if hint is None else f"{key!r} ({hint})"
+        raise AssertionError(
+            f"advertised movement key {detail} did not move the selection: "
+            f"selection identity unchanged at {before!r}; a navigation key that "
+            f"only scrolls the pane without advancing the cursor is a dead "
+            f"selection key (the pre-W01 arrow-trap)"
         )
     return response
 
@@ -724,6 +817,7 @@ __all__ = [
     "SNAPSHOT_REGEN_ENV",
     "FooterKeyResponse",
     "assert_footer_key_responds",
+    "assert_footer_movement_key_moves_selection",
     "assert_screen_snapshot",
     "capture_mockup_golden_screen_png",
     "capture_mockup_golden_screen_png_sync",
