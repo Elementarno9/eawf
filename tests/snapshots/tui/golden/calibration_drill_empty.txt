@@ -16,7 +16,7 @@
 
                          ╭────────────────────────────────────────────────────────────────────╮
                          │                                                                    │
-                         │  ⎔ jury calibration: Brier + ECE                                   │
+                         │  ◈ jury calibration: Brier + ECE                                   │
                          │    no calibration set yet                                          │
                          │                                                                    │
                          │                                                                    │

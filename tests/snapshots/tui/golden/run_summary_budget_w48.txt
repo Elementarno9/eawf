@@ -10,7 +10,7 @@
 
   ╭─────────────────────────────────────────╮
   │                                         │
-  │  ⎔ fleet run complete  budget halt --   │
+  │  ◈ fleet run complete  budget halt --   │
   │  a spend cap stopped the run            │
   │                                         │
   │  5 closed / 1 failed / 2 blocked        │
