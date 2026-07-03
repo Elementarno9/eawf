@@ -2098,13 +2098,16 @@ class AgentWatchModeScreen(ScopeScreen):
 
     #: ``up`` / ``down`` scroll the stream; the FA4 session key ``x`` (cancel
     #: this lane, confirm-gated, with ``k`` as a legacy alias), ``space``
-    #: (pause / resume this lane), ``l`` (view this session's log), and ``Esc``
-    #: (leave the zoom) act on the watched session. The chrome bindings (palette
-    #: / help / quit / scope / mode digits) come from the shared chassis +
-    #: app-wide bindings. ``k`` is the kill verb here (not a vim-up alias) --
-    #: this pane keeps arrows primary for scrolling and does not offer the j/k
-    #: vim scroll aliases, so ``k`` remains a legacy kill alias while ``x`` is
-    #: the advertised cancel key matching the failed-look mark.
+    #: (pause / resume this lane), ``l`` (open the browsable session roster so
+    #: the operator can step to a DIFFERENT agent -- never trapped on the
+    #: auto-targeted one), ``v`` (view this session's log), and ``Esc`` (leave
+    #: the zoom -- back to the roster whenever a browsable session remains) act
+    #: on the watched session. The chrome bindings (palette / help / quit /
+    #: scope / mode digits) come from the shared chassis + app-wide bindings.
+    #: ``k`` is the kill verb here (not a vim-up alias) -- this pane keeps
+    #: arrows primary for scrolling and does not offer the j/k vim scroll
+    #: aliases, so ``k`` remains a legacy kill alias while ``x`` is the
+    #: advertised cancel key matching the failed-look mark.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("up", "scroll_up", "up", show=False),
         Binding("down", "scroll_down", "down", show=False),
@@ -2115,7 +2118,8 @@ class AgentWatchModeScreen(ScopeScreen):
         Binding("k", "cancel_session", "kill", show=False),
         Binding("x", "cancel_session", "kill", show=False),
         Binding("space", "pause_session", "pause", show=False),
-        Binding("l", "view_log", "view log", show=False),
+        Binding("l", "open_roster", "list", show=False),
+        Binding("v", "view_log", "view log", show=False),
         Binding("escape", "leave_zoom", "back", show=False),
     ]
 
@@ -2123,13 +2127,16 @@ class AgentWatchModeScreen(ScopeScreen):
     #: The mode digits are surfaced by the always-visible mode row, not
     #: duplicated here. Every label is produced through
     #: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
-    #: tokens stay pinned to the canonical vocabulary. ``l`` (view log) is
-    #: bound (affordance parity) but kept off the strip: it is not a member of
-    #: the footer's frozen token vocabulary, so advertising it there would fail
-    #: the authoring-time guard -- the Binding itself is the affordance. The
-    #: ``↑↓`` token is deliberately absent: its canonical action is ``select``
-    #: and the zoom's arrows SCROLL the stream, so advertising it would lie;
-    #: the scroll bindings stay live unadvertised, the same treatment as ``l``.
+    #: tokens stay pinned to the canonical vocabulary. ``l`` (open the session
+    #: roster) and ``v`` (view log) are bound (affordance parity) but kept off
+    #: the strip: ``l`` is not a member of the footer's frozen token vocabulary,
+    #: so advertising it there would fail the authoring-time guard -- the
+    #: Binding itself is the affordance, and the roster's own ``picker`` footer
+    #: (:data:`_SELECT_HINTS`) advertises its selection cursor once it is open.
+    #: The ``↑↓`` token is deliberately absent: its canonical action is
+    #: ``select`` and the zoom's arrows SCROLL the stream, so advertising it
+    #: would lie; the scroll bindings stay live unadvertised, the same treatment
+    #: as ``l`` / ``v``.
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = (
         render_hint_label("x", "cancel"),
         render_hint_label("space", "pause"),
@@ -2236,6 +2243,21 @@ class AgentWatchModeScreen(ScopeScreen):
         # store + push never double-render a line (W58).
         self._output_store_cursor = 0
         yield VerdictRollupPane(self._fleet_verdict_rollup(), mode=mode)
+        # An explicit roster request (the ``l`` key -> ``action_open_roster``)
+        # surfaces the browsable session picker over WHATEVER the body would
+        # otherwise show -- even while executor sessions are ACTIVE -- so the
+        # operator is never trapped on the auto-targeted agent. Read-and-reset
+        # (a one-shot flag, like ``_return_to_picker``) so a later poll
+        # recompose does not stick on the picker once the operator has moved on.
+        force_roster = self._force_picker
+        self._force_picker = False
+        if force_roster:
+            roster_rows = session_picker_rows(state)
+            if roster_rows:
+                self._body_case = "picker"
+                self._picker = SessionPicker(roster_rows, mode=mode)
+                yield self._picker
+                return
         # A pending FA3 -> FA4 zoom forces the single-session zoom for the pinned
         # target, even while the fleet still reports lanes / multiple sessions
         # (the operator chose to drill ONE lane out of the parallel surface).
@@ -2385,6 +2407,14 @@ class AgentWatchModeScreen(ScopeScreen):
     #: even with a single browsable session (the auto-mount picker needs two);
     #: read-and-reset in the compose so a later poll recompose does not stick.
     _return_to_picker: bool = False
+
+    #: Set for one recompose when the operator explicitly opens the roster (the
+    #: ``l`` key, or ``Esc`` out of a zoom while another agent is still live).
+    #: Forces the next :meth:`compose_body` onto the :class:`SessionPicker` even
+    #: while executor sessions are ACTIVE -- the decoupling that keeps the
+    #: operator from being trapped on the auto-targeted agent. Read-and-reset in
+    #: the compose so a later poll recompose does not stick on the picker.
+    _force_picker: bool = False
 
     def on_mount(self) -> None:
         """Register on the live-event seam and seed the watched session's stream.
@@ -2567,6 +2597,16 @@ class AgentWatchModeScreen(ScopeScreen):
         if not self._sync_output_from_store():
             self._seed_output_from_buffer()
         self._refresh_hints()
+        # A recompose does not restore focus, so when the body lands on the
+        # browsable roster re-focus its scroll container: the picker's Enter
+        # (zoom) / arrow bindings only fire while it is in the focus chain
+        # (screen-level bindings fire without focus, a widget's own do not), so
+        # without this the operator's keys would not reach the freshly-mounted
+        # roster -- the very trap this wave removes.
+        if self._picker is not None:
+            scroller = self._picker.query(f"#{SESSION_PICKER_ID}")
+            if scroller:
+                scroller.first().focus()
 
     def _refresh_hints(self) -> None:
         """Re-pin the footer hints to the current body case.
@@ -2758,8 +2798,32 @@ class AgentWatchModeScreen(ScopeScreen):
         self._set_result(result_line)
         logger.info(f"action_pause_session wave={target.wave_id} result={result_line!r}")
 
+    def action_open_roster(self) -> None:
+        """Open the browsable session roster from any watch view (``l``).
+
+        Surfaces the :class:`SessionPicker` -- one selectable row per executor
+        session, newest first -- over WHATEVER the body currently shows (a
+        single-session zoom, the fleet parity grid, or the FA3 lane grid), so
+        the operator can step to a DIFFERENT agent instead of being trapped on
+        the auto-targeted one. Sets the :attr:`_force_picker` flag the next
+        :meth:`compose_body` consumes (the picker mounts even while executor
+        sessions are ACTIVE, decoupled from the no-active-sessions auto-mount
+        guard) and recomposes. Selecting a row re-targets + zooms that agent via
+        :meth:`on_session_picker_pick`. With no executor session on record there
+        is nothing to browse, so it is a quiet no-op that leaves the body put.
+        """
+        state = self._current_state()
+        if not session_picker_rows(state):
+            logger.debug("action_open_roster no_sessions")
+            return
+        self._force_picker = True
+        self._zoom_pending = False
+        self.target = None
+        logger.info("action_open_roster to=picker")
+        self.call_after_refresh(self._recompose_and_reseed)
+
     def action_view_log(self) -> None:
-        """View the watched session's log, surfacing its handle (``l``).
+        """View the watched session's log, surfacing its handle (``v``).
 
         Resolves the watched attempt's recorded session-log handle (the
         per-runtime URN the adapter mints) and surfaces it as the result line so
@@ -2787,27 +2851,35 @@ class AgentWatchModeScreen(ScopeScreen):
     _LEAVE_MODE: ClassVar[str] = "feed"
 
     def action_leave_zoom(self) -> None:
-        """Leave the session zoom (``Esc``) — back to the picker, else Feed.
+        """Leave the session zoom (``Esc``) — back to the roster, else Feed.
 
-        A zoom over a finished replay (nothing live) steps back OUT to the
-        browsable picker whenever at least ONE executor session is on record, so
-        even a single finished session returns to a picker to step through
-        rather than falling straight to another mode. Only when there is truly
-        nothing to browse -- no finished session, or a live stream is in flight
-        -- does it fall back to the whole-fleet :data:`_LEAVE_MODE` via the
-        App's ``switch_mode`` seam. Degrades to a quiet no-op under a bare
-        harness whose App exposes no ``switch_mode`` (the binding stays live for
-        affordance parity).
+        A zoom steps back OUT to the browsable roster whenever there is one
+        worth stepping to: when nothing is live and at least ONE executor
+        session is on record (even a single finished session returns to a
+        one-row picker rather than falling straight to another mode), OR when
+        two-or-more sessions exist so the operator can pick a DIFFERENT agent
+        even while one is still ACTIVE -- the never-trapped guarantee. Only when
+        there is truly nothing to browse -- a lone live stream in flight, or no
+        session on record at all -- does it fall back to the whole-fleet
+        :data:`_LEAVE_MODE` via the App's ``switch_mode`` seam. Degrades to a
+        quiet no-op under a bare harness whose App exposes no ``switch_mode``
+        (the binding stays live for affordance parity).
         """
         state = self._current_state()
-        if (
-            self._body_case == "zoom"
-            and not active_executor_sessions(state)
-            and not lane_grid_rows(state)
-            and len(session_picker_rows(state)) >= 1
+        picker_rows = session_picker_rows(state)
+        idle = not active_executor_sessions(state) and not lane_grid_rows(state)
+        # Step OUT of a zoom back to the browsable roster whenever there is a
+        # roster worth stepping to: either nothing is live and >=1 session is on
+        # record (the idle replay path), OR two-or-more sessions exist so the
+        # operator can pick a DIFFERENT agent even while one is still ACTIVE
+        # (never trapped). ``_force_picker`` mounts the picker past the
+        # no-active-sessions auto-mount guard for the still-live case.
+        if self._body_case == "zoom" and (
+            (idle and len(picker_rows) >= 1) or len(picker_rows) >= 2
         ):
             self._zoom_pending = False
             self._return_to_picker = True
+            self._force_picker = True
             self.target = None
             logger.info("action_leave_zoom to=picker")
             self.call_after_refresh(self._recompose_and_reseed)

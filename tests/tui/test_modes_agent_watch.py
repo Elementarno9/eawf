@@ -59,6 +59,7 @@ from eawf.surfaces.tui.modes.agent_watch import (
     PAUSE_NO_DAEMON,
     PAUSE_NO_TARGET,
     PAUSE_NOT_ACTIVE_TEMPLATE,
+    SESSION_PICKER_ID,
     SESSION_PICKER_ROW_CLASS,
     WATCH_EMPTY_ID,
     WATCH_HEADER_ID,
@@ -691,10 +692,10 @@ def test_agent_watch_session_keys_resolve_to_live_bindings() -> None:
     """Every advertised FA4 session key resolves to a live Binding (parity).
 
     The affordance-parity contract: each of the advertised session keys --
-    ``k`` (kill), ``x`` (the kill alias), ``space`` (pause), ``l`` (view log),
-    ``Esc`` (back) -- maps to a concrete
-    :class:`~textual.binding.Binding` whose action method exists on the screen,
-    so no advertised key is a dead affordance.
+    ``k`` (kill), ``x`` (the kill alias), ``space`` (pause), ``l`` (open the
+    browsable session roster), ``v`` (view log), ``Esc`` (back) -- maps to a
+    concrete :class:`~textual.binding.Binding` whose action method exists on the
+    screen, so no advertised key is a dead affordance.
     """
     keys = {
         binding.key: binding.action
@@ -705,10 +706,12 @@ def test_agent_watch_session_keys_resolve_to_live_bindings() -> None:
     # ``x`` aliases the kill verb to the SAME confirm-gated cancel action.
     assert keys.get("x") == "cancel_session"
     assert keys.get("space") == "pause_session"
-    assert keys.get("l") == "view_log"
+    # ``l`` opens the roster; ``v`` (relocated off ``l``) views the log.
+    assert keys.get("l") == "open_roster"
+    assert keys.get("v") == "view_log"
     assert keys.get("escape") == "leave_zoom"
     # Each advertised key's action method exists on the screen (no dead binding).
-    for action in ("cancel_session", "pause_session", "view_log", "leave_zoom"):
+    for action in ("cancel_session", "pause_session", "open_roster", "view_log", "leave_zoom"):
         assert callable(getattr(AgentWatchModeScreen, f"action_{action}"))
 
 
@@ -1100,7 +1103,7 @@ def test_agent_watch_pause_issues_pause_rpc(
 
 
 def test_agent_watch_view_log_no_handle_surfaces_honest_line(tmp_path: Path) -> None:
-    """``l`` on a wave with no recorded session-log handle says so honestly.
+    """``v`` on a wave with no recorded session-log handle says so honestly.
 
     The seeded scope has an ACTIVE executor session but no wave session table,
     so no log handle is recorded; the view-log key surfaces the honest
@@ -1116,7 +1119,7 @@ def test_agent_watch_view_log_no_handle_surfaces_honest_line(tmp_path: Path) -> 
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AgentWatchModeScreen)
-            await pilot.press("l")  # view log
+            await pilot.press("v")  # view log
             await settle_screen(pilot)
             toasts = "\n".join(toast_messages(app))
             assert LOG_NO_HANDLE in toasts
@@ -1125,7 +1128,7 @@ def test_agent_watch_view_log_no_handle_surfaces_honest_line(tmp_path: Path) -> 
 
 
 def test_agent_watch_view_log_surfaces_recorded_handle(tmp_path: Path) -> None:
-    """``l`` surfaces the watched attempt's recorded session-log handle.
+    """``v`` surfaces the watched attempt's recorded session-log handle.
 
     A wave carrying a session-attempt row with a recorded log handle resolves
     onto the watch target, so the view-log key surfaces that handle.
@@ -1143,7 +1146,7 @@ def test_agent_watch_view_log_surfaces_recorded_handle(tmp_path: Path) -> None:
             assert isinstance(pane, AgentWatchModeScreen)
             assert pane.target is not None
             assert pane.target.log_handle == handle
-            await pilot.press("l")  # view log
+            await pilot.press("v")  # view log
             await settle_screen(pilot)
             toasts = "\n".join(toast_messages(app))
             assert handle in toasts
@@ -1484,6 +1487,108 @@ def test_watch_picker_enter_zooms_and_esc_returns(
             await pilot.press("escape")  # back out to the picker
             await settle_screen(pilot)
             assert pane.query(SessionPicker), "Esc should return to the picker"
+
+    asyncio.run(body())
+
+
+def _active_plus_closed() -> dict[str, AgentSession]:
+    """One ACTIVE executor session (``S-1`` / W01) plus a newer finished one.
+
+    The ACTIVE session auto-targets the single-session zoom; the newer CLOSED
+    ``S-2`` (W02) gives the roster a DIFFERENT agent to step to.
+    """
+    return {
+        "S-1": _session(
+            "S-1",
+            scope_id="P01-I01-W01",
+            status=AgentSessionStatus.ACTIVE,
+            started_at=_T0,
+        ),
+        "S-2": _session(
+            "S-2",
+            scope_id="P01-I01-W02",
+            status=AgentSessionStatus.CLOSED,
+            started_at=_T0 + timedelta(minutes=5),
+        ),
+    }
+
+
+def test_watch_roster_key_opens_picker_over_active_session(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``l`` mounts the session roster even while an executor session is ACTIVE.
+
+    A single ACTIVE executor session auto-targets the FA4 zoom, which trapped
+    the operator on that one agent (no live picker). The dedicated roster key
+    mounts the browsable :class:`SessionPicker` (scroll id
+    ``watch-session-picker``) OVER the zoom -- decoupled from the
+    no-active-sessions auto-mount guard -- so every executor session (the ACTIVE
+    W01 and the finished W02) is a selectable, visible row.
+    """
+    state_path = _write_state(tmp_path, _state(sessions=_active_plus_closed()))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            # The lone ACTIVE session auto-targets the FA4 zoom -- no picker yet.
+            assert not pane.query(SessionPicker)
+            assert pane.query(f"#{WATCH_HEADER_ID}"), "expected the FA4 zoom pre-roster"
+            await pilot.press("l")  # open the browsable roster
+            await settle_screen(pilot)
+            picker = pane.query(SessionPicker)
+            assert picker, "the roster key must mount the picker over an ACTIVE session"
+            assert pane.query(f"#{SESSION_PICKER_ID}"), "picker scroll id must be present"
+            rows = pane.query(f".{SESSION_PICKER_ROW_CLASS}").results()
+            texts = [str(row.render()) for row in rows]
+            assert len(texts) == 2
+            assert "P01-I01-W02" in texts[0]  # newest first
+            assert "P01-I01-W01" in texts[1]
+
+    asyncio.run(body())
+
+
+def test_watch_roster_pick_zooms_a_different_agent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Selecting a roster row watches THAT agent, escaping the trapped zoom.
+
+    The ACTIVE session auto-targets W01; opening the roster (``l``) and pressing
+    Enter on the preselected newest row (W02) re-targets + zooms that DIFFERENT
+    agent into the FA4 single-session view -- the browse-to-another-agent path
+    the defect blocked. Confirms :meth:`on_session_picker_pick` wiring.
+    """
+    state_path = _write_state(tmp_path, _state(sessions=_active_plus_closed()))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            # Auto-targeted onto the ACTIVE W01 agent before any roster step.
+            assert pane.target is not None
+            assert pane.target.wave_id == "P01-I01-W01"
+            await pilot.press("l")  # open the roster
+            await settle_screen(pilot)
+            assert pane.query(SessionPicker), "expected the roster body case"
+            await pilot.press("enter")  # zoom the preselected newest row (W02)
+            await settle_screen(pilot)
+            header = pane.query(f"#{WATCH_HEADER_ID}")
+            assert header, "expected the FA4 zoom after selecting a roster row"
+            assert "P01-I01-W02" in str(header.first().render())
+            assert pane.target is not None
+            assert pane.target.wave_id == "P01-I01-W02"
 
     asyncio.run(body())
 
