@@ -20,6 +20,7 @@ from eawf.surfaces.tui.snapshot.pilot_harness import (
     assert_screen_snapshot,
     capture_mockup_golden_screen_text,
     capture_screen_text,
+    export_screenshot_svg,
     normalize_snapshot,
     settle_screen,
 )
@@ -242,3 +243,62 @@ def test_assert_screen_snapshot_drift_message_includes_unified_diff(
     assert "repo.txt (actual)" in message
     assert "@@" in message
     assert "-TAMPERED HEADER ROW" in message
+
+
+# --------------------------------------------------------------------------
+# export_screenshot_svg — broad font stack rewrite, otherwise byte-identical
+# --------------------------------------------------------------------------
+
+#: The two Fira Code-only font-family declarations rich's SVG template emits;
+#: the helper must leave NEITHER in the review SVG.
+_BARE_FIRA_DECLS = (
+    'font-family: "Fira Code";',
+    "font-family: Fira Code, monospace;",
+)
+
+
+def test_export_screenshot_svg_rewrites_to_broad_font_stack() -> None:
+    # A review SVG must declare a broad monospace stack so a machine without
+    # Fira Code still renders the box-drawing + reskin sigil glyphs, not tofu.
+    async def body() -> str:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            return export_screenshot_svg(app, title="review")
+
+    svg = asyncio.run(body())
+    # No bare Fira Code-only font-family survives.
+    for bare in _BARE_FIRA_DECLS:
+        assert bare not in svg
+    # The broad stack is present with both a named family and the generic
+    # monospace fallback so a common viewer resolves a glyph-complete font.
+    assert "JetBrains Mono" in svg
+    assert "monospace" in svg
+    broad_stack = 'font-family: "JetBrains Mono", "Fira Code", "DejaVu Sans Mono", monospace;'
+    assert broad_stack in svg
+
+
+def test_export_screenshot_svg_changes_only_font_family_lines() -> None:
+    # The rewrite is surgical: every line that differs from the raw export
+    # carries "font-family"; the rest of the SVG is byte-identical.
+    async def body() -> tuple[str, str]:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            raw = app.export_screenshot(title="review")
+            fixed = export_screenshot_svg(app, title="review")
+            return raw, fixed
+
+    raw, fixed = asyncio.run(body())
+    raw_lines = raw.splitlines()
+    fixed_lines = fixed.splitlines()
+    assert len(raw_lines) == len(fixed_lines)
+    differing = [i for i, (a, b) in enumerate(zip(raw_lines, fixed_lines, strict=True)) if a != b]
+    # At least the two @font-face declarations + the terminal matrix rule move.
+    assert differing
+    for i in differing:
+        assert "font-family" in raw_lines[i]
+    # The non-font-family remainder is identical byte-for-byte.
+    raw_rest = "\n".join(line for line in raw_lines if "font-family" not in line)
+    fixed_rest = "\n".join(line for line in fixed_lines if "font-family" not in line)
+    assert raw_rest == fixed_rest

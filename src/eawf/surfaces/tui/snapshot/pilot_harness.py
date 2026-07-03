@@ -636,6 +636,57 @@ def resvg_available() -> bool:
     return shutil.which(_RESVG) is not None
 
 
+#: The broad monospace font stack a review SVG declares so a machine WITHOUT
+#: Fira Code still renders the frame's box-drawing + reskin sigil glyphs.
+#: Textual's ``App.export_screenshot`` hardcodes rich's SVG template, which
+#: names only ``Fira Code`` (rich's ``Console.export_svg`` exposes no
+#: font-family knob); a viewer lacking that font substitutes one that drops the
+#: box corners + cosmic sigils, so the review SVG renders as tofu. This stack
+#: tries JetBrains Mono first (the project's rendering font), then Fira Code,
+#: then DejaVu Sans Mono, then the generic ``monospace`` -- the first family the
+#: viewer has wins, and every listed family carries the glyphs.
+_REVIEW_FONT_STACK: str = '"JetBrains Mono", "Fira Code", "DejaVu Sans Mono", monospace'
+
+#: The two exact ``font-family`` declarations rich's SVG template emits that
+#: name Fira Code alone: the ``@font-face`` family name and the terminal
+#: ``.matrix`` rule. :func:`export_screenshot_svg` rewrites each to
+#: :data:`_REVIEW_FONT_STACK`; the ``arial`` title rule and every other byte of
+#: the export are left untouched.
+_FIRA_FONT_FAMILY_DECLS: tuple[str, ...] = (
+    'font-family: "Fira Code";',
+    "font-family: Fira Code, monospace;",
+)
+
+
+def export_screenshot_svg(app: App[object], *, title: str | None = None) -> str:
+    """Export the app's active screen as an SVG with a broad monospace font stack.
+
+    Wraps :meth:`~textual.app.App.export_screenshot` and rewrites the Fira
+    Code-only ``font-family`` declarations rich's SVG template hardcodes to the
+    broad :data:`_REVIEW_FONT_STACK`. rich exposes no font-family parameter, so a
+    review SVG shipped as-is declares ``Fira Code`` alone; on a machine without
+    that font a viewer substitutes one lacking the box-drawing + reskin sigil
+    glyphs and the frame renders as tofu. Broadening the stack lets a common
+    machine resolve a family that carries the glyphs. Only the two font-family
+    declarations change -- every other byte of the export is preserved.
+
+    Args:
+        app: The live :class:`~textual.app.App` under a Pilot harness, already
+            settled.
+        title: Optional SVG title, forwarded to
+            :meth:`~textual.app.App.export_screenshot`.
+
+    Returns:
+        The exported SVG string with each Fira Code-only ``font-family``
+        declaration rewritten to the broad monospace stack, otherwise
+        byte-identical to :meth:`~textual.app.App.export_screenshot`.
+    """
+    svg = app.export_screenshot(title=title)
+    for declaration in _FIRA_FONT_FAMILY_DECLS:
+        svg = svg.replace(declaration, f"font-family: {_REVIEW_FONT_STACK};")
+    return svg
+
+
 def _rasterize_svg_to_png(svg: str) -> bytes:
     """Rasterize an SVG string to PNG bytes via the pinned ``resvg`` CLI.
 
@@ -824,6 +875,7 @@ __all__ = [
     "capture_mockup_golden_screen_text",
     "capture_mockup_golden_screen_text_sync",
     "capture_screen_text",
+    "export_screenshot_svg",
     "mockup_golden_diff_detail",
     "mutating_action_keys_resolve",
     "normalize_snapshot",
