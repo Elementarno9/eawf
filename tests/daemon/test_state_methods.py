@@ -258,7 +258,8 @@ def _write_verify_profile(root: Path, *, enforce: bool) -> None:
                 '      cmd: ["git", "show", "no-such-ref-w26-daemon"]',
                 "      scope: all",
                 "      cadence: every-wave",
-                "      policy: warn",
+                # W13: only policy: block floor rows gate the close.
+                "      policy: block",
                 "",
             ]
         ),
