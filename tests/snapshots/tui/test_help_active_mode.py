@@ -23,6 +23,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from textual.containers import VerticalScroll
 
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.screens.help import mode_key_rows_active
@@ -108,6 +109,15 @@ def test_help_active_mode_highlight_snapshot() -> None:
             await pilot.press("4")  # -> trust mode
             await settle_screen(pilot)
             app.action_open_help()
+            await settle_screen(pilot)
+            # Zero the help card's vertical scrollbar width so the capture
+            # asserts the help content, not the overflowing card's sub-cell
+            # scrollbar-thumb glyph -- that eighth-block glyph tracks the help
+            # CONTENT height (not the fixture state), so it would drift this
+            # golden on any unrelated keymap edit. Production keeps its
+            # scrollbar; only the snapshot capture drops it.
+            help_card = app.screen.query_one("#help-container", VerticalScroll)
+            help_card.styles.scrollbar_size_vertical = 0
             await settle_screen(pilot)
             frame = normalize_snapshot(capture_screen_text(app))
             # The active Trust row carries the cursor + active tag; the inactive

@@ -41,6 +41,7 @@ from pathlib import Path
 
 import orjson
 import pytest
+from textual.containers import VerticalScroll
 from textual.widgets import TabbedContent
 
 from eawf.kernel.config.registry import registry_lookup
@@ -410,6 +411,17 @@ def test_help_overlay_snapshot() -> None:
         async with app.run_test(size=_SIZE) as pilot:
             await settle_screen(pilot)
             app.action_open_help()
+            await settle_screen(pilot)
+            # The help card overflows its 90%-tall viewport, so Textual docks
+            # a vertical scrollbar whose thumb is a sub-cell eighth-block glyph
+            # (``▂`` / ``▃`` ...) whose value tracks the help CONTENT height,
+            # not the bound fixture state -- an unrelated keymap / verb edit
+            # that lengthens the help shifts the thumb and drifts this golden
+            # even though every visible help row is unchanged. Zero the
+            # scrollbar width for the capture so the snapshot stays a pure
+            # function of the help content; production keeps its scrollbar.
+            help_card = app.screen.query_one("#help-container", VerticalScroll)
+            help_card.styles.scrollbar_size_vertical = 0
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "help_overlay.txt")
 
