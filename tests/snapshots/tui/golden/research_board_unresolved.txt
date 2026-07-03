@@ -2,17 +2,17 @@
 
   ╭─ TOPIC TREE ───────────────────────╮╭─ CLAIMS / EVIDENCE ─────────────────╮╭─ PROGRESS / BUDGET ─────────────────╮
   │ > ≡ Survey the options-pricing     ││                                     ││ RUN blocked_await_user              │
-  │ landscape                          ││ showing all claims -- campaign:     ││ ROUND 1 running · 0 claim(s)        │
+  │     landscape                      ││ showing all claims -- campaign:     ││ ROUND 1 running · 0 claim(s)        │
   │     ◆ round running                ││ Survey the options-pricing          ││ ACTIVE 0 claim(s)                   │
   │       ◌ domain: market-structure   ││ landscape                           ││ WAITING 2 open question(s)          │
   │       ◌ domain: pricing-models     ││ none yet                            ││ PAUSED 0 checkpoint(s)              │
   │   ◆ scope questions -- running     ││                                     ││ BUDGET 2 staged topic(s), 1         │
   │     ◌ Which curve model fits the   ││ Options (supporting evidence)       ││ answered, 0 pruned                  │
-  │ short tenor                        ││ none yet                            ││ RISKS 1 blocking question(s)        │
+  │       short tenor                  ││ none yet                            ││ RISKS 1 blocking question(s)        │
   │     ● Does the smile invert past   ││                                     ││                                     │
-  │ the 90 delta wing                  ││ Conflicts (contradicting evidence)  ││                                     │
+  │       the 90 delta wing            ││ Conflicts (contradicting evidence)  ││                                     │
   │     ◌ Is the term-structure        ││ none yet                            ││                                     │
-  │ arbitrage real                     ││                                     ││                                     │
+  │       arbitrage real               ││                                     ││                                     │
   │ enter to peek the selected node    ││ Unresolved                          ││                                     │
   │                                    ││ open round 1 Which curve model fits ││                                     │
   │                                    ││ the short tenor                     ││                                     │
