@@ -9408,6 +9408,20 @@
       "status": "done",
       "updated_at": "2026-07-01T21:34:55.555300Z"
     },
+    "P30-I21-W24": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I21-W24",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W24",
+      "model": null,
+      "scope_id": "P30-I21-W24",
+      "status": "done",
+      "updated_at": "2026-07-03T16:16:33.756698Z"
+    },
     "P30-I22-W01": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 12000,
@@ -10470,6 +10484,20 @@
       "runtime": "claude",
       "scope_id": "P30-I23-W35",
       "started_at": "2026-07-03T01:35:52.373234Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260703T161339Z-auditor-claude-code": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260703T161339Z-auditor-claude-code",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "scope_id": "P30-I21-W24::audit",
+      "started_at": "2026-07-03T16:13:39.730746Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -13807,9 +13835,14 @@
       "SES-20260702T230518Z-auditor-claude-code",
       "SES-20260702T232502Z-auditor-claude-code",
       "SES-20260703T003403Z-auditor-claude-code",
-      "SES-20260703T013552Z-auditor-claude"
+      "SES-20260703T013552Z-auditor-claude",
+      "SES-20260703T161339Z-auditor-claude-code"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I21-W25",
+      "P30-I21-W26",
+      "P30-I21-W27"
+    ],
     "iter_id": null,
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -25252,6 +25285,58 @@
       "scope_id": "P30-I21-W23",
       "updated_at": "2026-07-01T21:34:54.000674Z"
     },
+    "P30-I21-W24": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W24-bucket-20260703T161257Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I21-W24",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I21-W24",
+      "updated_at": "2026-07-03T16:12:57.898205Z"
+    },
+    "P30-I21-W25": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W25-bucket-20260703T154811Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I21-W25",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I21-W25",
+      "updated_at": "2026-07-03T15:48:11.889115Z"
+    },
+    "P30-I21-W26": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W26-bucket-20260703T154812Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I21-W26",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I21-W26",
+      "updated_at": "2026-07-03T15:48:12.445755Z"
+    },
+    "P30-I21-W27": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W27-bucket-20260703T154813Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I21-W27",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I21-W27",
+      "updated_at": "2026-07-03T15:48:13.099117Z"
+    },
     "P30-I22-W01": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I22-W01-bucket-20260701T234041Z",
@@ -29670,7 +29755,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-03T15:45:49.647705Z",
+  "updated_at": "2026-07-03T16:16:33.756828Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -109177,10 +109262,10 @@
       "blocks": [
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-tuifix-W24",
+      "claimed_at": "2026-07-03T15:48:11.345695Z",
+      "closed_at": "2026-07-03T16:16:33.756698Z",
+      "commit": "93049f0e2c93d320cd0d81aa8719b666dedfbeb2",
       "criteria_floor_waiver": null,
       "deps": [],
       "description": "Watch mode: selected lane/picker rows readable on the selection tint (adopt the attention_feed plain-render pattern); watch target selection skips sessions whose wave is terminal; failed-wave stdout replay framed against the real wave verdict; Esc returns to previous mode or picker instead of hardcoded feed.",
@@ -109213,11 +109298,49 @@
         },
         {
           "args": {
-            "mode": "watch"
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_watch_correctness_w24.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_watch_correctness_w24.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "agent_watch"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-01",
-          "id": "G-02",
+          "id": "G-04",
           "kind": "affordance_parity",
           "policy": "block",
           "required": true,
@@ -109236,12 +109359,12 @@
       },
       "iter_id": "P30-I21",
       "opened_at": "2026-07-03T15:39:12.884565Z",
-      "outcome": null,
+      "outcome": "watch mode trusts wave status; selected lane/picker rows plain-render readable on selection tint; failed-wave replay framed with real verdict; Esc returns to picker",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -109271,7 +109394,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -109295,7 +109418,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-03"
           ],
           "id": "CR-03",
           "kind": "deterministic",
@@ -109326,8 +109449,8 @@
       "blocks": [
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-tuifix-W25",
+      "claimed_at": "2026-07-03T15:48:11.888819Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -109392,7 +109515,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -109470,7 +109593,7 @@
       "title": "Surface daemonless state and fix feed event delivery",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I21-W25-1783093731"
     },
     "P30-I21-W26": {
       "agent_role": "executor",
@@ -109478,8 +109601,8 @@
         "P30-I21-W28",
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-tuifix-W26",
+      "claimed_at": "2026-07-03T15:48:12.445644Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -109541,7 +109664,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -109619,7 +109742,7 @@
       "title": "Fix research board grouping, status, and scoping",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I21-W26-1783093732"
     },
     "P30-I21-W27": {
       "agent_role": "executor",
@@ -109627,8 +109750,8 @@
         "P30-I21-W28",
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-tuifix-W27",
+      "claimed_at": "2026-07-03T15:48:13.098611Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -109690,7 +109813,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -109768,7 +109891,7 @@
       "title": "Fix evidence pane labels, columns, and dead keys",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I21-W27-1783093733"
     },
     "P30-I21-W28": {
       "agent_role": "executor",
@@ -109813,11 +109936,30 @@
         },
         {
           "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_interaction_liveness_w28.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
             "mode": "home"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-01",
-          "id": "G-02",
+          "id": "G-03",
           "kind": "affordance_parity",
           "policy": "block",
           "required": true,
@@ -109871,7 +110013,7 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-02"
           ],
           "id": "CR-02",
           "kind": "deterministic",
@@ -121847,6 +121989,50 @@
       "path": ".ea/worktrees/p30-i20-w24",
       "status": "merged",
       "wave_id": "P30-I20-W24"
+    },
+    "WT-P30-I21-W24-1783093730": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.1-p30-w24",
+      "created_at": "2026-07-03T15:48:50.741616Z",
+      "id": "WT-P30-I21-W24-1783093730",
+      "merged_commit": null,
+      "owner_session_id": null,
+      "path": ".ea/worktrees/p30-w24",
+      "status": "active",
+      "wave_id": "P30-I21-W24"
+    },
+    "WT-P30-I21-W25-1783093731": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.1-p30-w25",
+      "created_at": "2026-07-03T15:48:51.776137Z",
+      "id": "WT-P30-I21-W25-1783093731",
+      "merged_commit": null,
+      "owner_session_id": null,
+      "path": ".ea/worktrees/p30-w25",
+      "status": "active",
+      "wave_id": "P30-I21-W25"
+    },
+    "WT-P30-I21-W26-1783093732": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.1-p30-w26",
+      "created_at": "2026-07-03T15:48:52.861049Z",
+      "id": "WT-P30-I21-W26-1783093732",
+      "merged_commit": null,
+      "owner_session_id": null,
+      "path": ".ea/worktrees/p30-w26",
+      "status": "active",
+      "wave_id": "P30-I21-W26"
+    },
+    "WT-P30-I21-W27-1783093733": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.1-p30-w27",
+      "created_at": "2026-07-03T15:48:53.943578Z",
+      "id": "WT-P30-I21-W27-1783093733",
+      "merged_commit": null,
+      "owner_session_id": null,
+      "path": ".ea/worktrees/p30-w27",
+      "status": "active",
+      "wave_id": "P30-I21-W27"
     }
   }
 }
