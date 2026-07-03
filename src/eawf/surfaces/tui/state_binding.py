@@ -266,7 +266,6 @@ class StateBinding:
             lambda: DaemonClient(call_timeout_seconds=1.0)
         )
         self._stopping = False
-        self._scope_id: str | None = None
         self._is_degraded = False
         self._consecutive_failures = 0
         # Windows: the live subscription holds a persistent pipe handle the
@@ -314,7 +313,6 @@ class StateBinding:
         """
         initial = load_state(self._state_path)
         if initial is not None:
-            self._scope_id = initial.urn
             await self._callbacks.on_state(initial)
         if self._state_path is not None and self._state_path.is_file():
             with contextlib.suppress(OSError):
@@ -461,16 +459,18 @@ class StateBinding:
                 self._consecutive_failures = 0
 
     def _subscribe_params(self) -> dict[str, object]:
-        """Build the ``state.subscribe`` params with the binding's real scope.
+        """Build the ``state.subscribe`` params for the EVENT push stream.
 
-        The stream filters on the bound scope so the TUI only sees pushes
-        for the scope it is rendering. The scope is set from the loaded
-        state's URN in :meth:`connect`, so it is the binding's REAL
-        ``scope_id`` (never ``None`` once a state file is bound).
+        The subscription is deliberately NOT narrowed to the bound state's
+        URN: fleet lifecycle events are wave- and iter-scoped, so a daemon
+        bus filter keyed on the state URN would drop every one of them and
+        the feed would never see a claim / close / spawn. The App fans each
+        delivered envelope out to the panes, which filter client-side (the
+        agent-watch zoom narrows to one session); the state-refresh leg
+        re-reads ``state.json`` on any push regardless of scope, so it needs
+        no server-side narrowing either.
         """
         params: dict[str, object] = {"kinds": [StoreKind.EVENT.value]}
-        if self._scope_id is not None:
-            params["scope_id"] = self._scope_id
         # Resume from the last delivered event so a reconnect continues the
         # stream instead of re-requesting the full backlog (since=None).
         if self._last_event_id is not None:

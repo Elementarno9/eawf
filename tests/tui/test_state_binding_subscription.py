@@ -32,11 +32,16 @@ def _binding() -> StateBinding:
 
 
 def test_subscribe_params_omit_since_before_first_event() -> None:
-    """Before any event, the subscribe carries no cursor (initial full subscribe)."""
+    """Before any event, the subscribe carries no cursor and no scope narrowing.
+
+    The EVENT subscription is deliberately un-narrowed (W25): fleet lifecycle
+    events are wave-/iter-scoped, so a daemon-side ``scope_id`` filter keyed on
+    the state URN would drop every one of them. The subscribe therefore omits
+    ``scope_id`` and lets the panes filter client-side.
+    """
     binding = _binding()
-    binding._scope_id = "urn:eawf:v1:state:QR"
     params = binding._subscribe_params()
-    assert params["scope_id"] == "urn:eawf:v1:state:QR"
+    assert "scope_id" not in params
     assert "since" not in params
     assert params["kinds"] == [StoreKind.EVENT.value]
 
@@ -44,7 +49,6 @@ def test_subscribe_params_omit_since_before_first_event() -> None:
 def test_subscribe_params_include_since_cursor_after_event() -> None:
     """Once an event id is recorded, the (re)subscribe resumes from it."""
     binding = _binding()
-    binding._scope_id = "urn:eawf:v1:state:QR"
     binding._last_event_id = "EV-abc123"
     assert binding._subscribe_params()["since"] == "EV-abc123"
 

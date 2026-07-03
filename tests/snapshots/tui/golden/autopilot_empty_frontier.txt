@@ -2,8 +2,7 @@
 
   autopilot idle -- press a to arm the fleet drive
 
-  no ready waves
-  no claim-ready wave on the frontier
+  ❯ ready frontier idle
 
   ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
   │                                                                                                                  │
@@ -31,6 +30,7 @@
   │                                       no claim-ready wave on the frontier                                        │
   │                                                                                                                  │
   │                                                 [ a arm fleet ]                                                  │
+  │                                                                                                                  │
   │                                                                                                                  │
   ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 

@@ -378,10 +378,12 @@ def test_state_binding_subscribes_via_daemon_client(
         await binder.disconnect()
 
     asyncio.run(body())
+    # W25: the EVENT subscription is not narrowed by scope_id -- fleet events
+    # are wave-/iter-scoped, so a state-URN filter would drop them all.
     assert calls == [
         (
             "state.subscribe",
-            {"kinds": ["event"], "scope_id": "urn:eawf:v1:state:QR"},
+            {"kinds": ["event"]},
         )
     ]
     assert seen_degraded == []
@@ -444,10 +446,11 @@ def test_state_binding_reconnects_when_push_stream_ends(
     asyncio.run(body())
     # W04: the first subscribe carries no cursor; the reconnect resumes from the
     # last delivered event id (since=EV-live) so it does not re-request backlog.
-    first = ("state.subscribe", {"kinds": ["event"], "scope_id": "urn:eawf:v1:state:QR"})
+    # W25: neither subscribe narrows by scope_id (fleet events are wave-scoped).
+    first = ("state.subscribe", {"kinds": ["event"]})
     reconnect = (
         "state.subscribe",
-        {"kinds": ["event"], "scope_id": "urn:eawf:v1:state:QR", "since": "EV-live"},
+        {"kinds": ["event"], "since": "EV-live"},
     )
     assert calls == [first, reconnect]
     assert seen_events

@@ -52,12 +52,18 @@ thin scrollable view over both.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
+from pathlib import Path
+from typing import ClassVar, Protocol, runtime_checkable
 
+import orjson
+from pydantic import ValidationError
 from textual.app import ComposeResult
 from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static
 
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.paths import store_path
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.empty_state import (
     HONEST_EMPTY_CSS,
@@ -68,10 +74,7 @@ from eawf.surfaces.tui.widgets.empty_state import (
 )
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
-
-if TYPE_CHECKING:
-    from eawf.kernel.store.envelope import Envelope
+from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +129,28 @@ FEED_EMPTY_LIVE: str = "live feed waiting for events"
 #: Voiced to match the global degraded banner's calm "daemon unreachable,
 #: reconnecting" lead, then states the pane-specific consequence.
 FEED_EMPTY_DEGRADED: str = "daemon unreachable · live feed paused until it returns"
+
+#: Id of the persistent connection-state badge at the top of the feed. It is
+#: the connection indicator distinguishing "daemon disconnected" (the daemon
+#: is unreachable, so the rows below are the on-disk log tail, not a live
+#: stream) from "connected" (the badge is hidden and the rows are live pushes).
+FEED_STATUS_ID: str = "feed-status"
+
+#: CSS class that hides the connection badge. Applied while the daemon is
+#: reachable so a healthy live feed carries no persistent chrome; removed the
+#: moment the binding drops into its poll fallback (``app.degraded``).
+FEED_STATUS_HIDDEN_CLASS: str = "feed-status--hidden"
+
+#: The connection-badge text shown when the daemon is unreachable. Names the
+#: consequence -- the rows below are seeded from the on-disk event store, not a
+#: live push stream -- so the operator reads the feed as a recent-history view
+#: rather than a stalled live one.
+FEED_STATUS_DISCONNECTED: str = "daemon disconnected · showing recent events from the log"
+
+#: Cap on the on-disk event-store tail the feed seeds when the App's live ring
+#: is empty (daemonless / pre-push). Mirrors the ``/events`` overlay ring size
+#: so the two on-disk event surfaces show the same depth of recent history.
+FEED_SEED_LIMIT: int = 50
 
 #: Width the kind column is padded to so the trailing summary lines up
 #: across rows. The longest ``StoreKind`` value is ``domain_specialist_report``
@@ -295,6 +320,52 @@ def format_event_markup(envelope: Envelope, *, mode: str) -> str:
     return f"{mark_cell} {escape_markup(tail)}"
 
 
+def load_recent_envelopes(
+    event_path: Path | None, limit: int = FEED_SEED_LIMIT
+) -> tuple[Envelope, ...]:
+    """Read the tail of the event store as validated envelopes, oldest-first.
+
+    The daemonless seed source: the App live ring is fed only by daemon
+    pushes, so with no reachable daemon it stays empty. This reads the same
+    on-disk ``event.jsonl`` store the ``/events`` overlay reads and validates
+    each JSONL line back into an :class:`~eawf.kernel.store.envelope.Envelope`,
+    so the feed can render the real recent activity rather than an
+    unconditional empty notice. The read is total: a missing / unreadable
+    file yields an empty tuple, and a malformed line is skipped rather than
+    aborting the read, so a fresh or partially written store degrades to
+    "no rows" instead of crashing. Never mutates the file.
+
+    Args:
+        event_path: Path to ``<state_dir>/store/event.jsonl``, or ``None``
+            when no scope state is resolved.
+        limit: The most recent *limit* rows to keep.
+
+    Returns:
+        The most recent envelopes in arrival order (oldest first), so the
+        feed's newest-first prepend seed lands the freshest event on top.
+    """
+    if event_path is None or not event_path.is_file():
+        return ()
+    try:
+        raw = event_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        logger.warning(f"load_recent_envelopes path={event_path!s} unreadable cause={exc!r}")
+        return ()
+    envelopes: list[Envelope] = []
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            envelopes.append(Envelope.model_validate(orjson.loads(stripped)))
+        except (orjson.JSONDecodeError, ValidationError, ValueError) as exc:
+            logger.debug(f"load_recent_envelopes skip cause={exc!r}")
+            continue
+    # The store is append-ordered (oldest first, newest last), so the tail is
+    # the most recent `limit`; keep them oldest-first for the prepend seed.
+    return tuple(envelopes[-limit:])
+
+
 class FeedModeScreen(ScopeScreen):
     """Persistent pane showing the live daemon event feed, newest-first.
 
@@ -317,34 +388,46 @@ class FeedModeScreen(ScopeScreen):
     #: research board + sandbox timeline already render.
     DEFAULT_CSS: ClassVar[str] = f"""
     FeedModeScreen #{FEED_EMPTY_ID} {{ {HONEST_EMPTY_CSS} }}
+    FeedModeScreen #{FEED_STATUS_ID} {{ height: 1; padding: 0 1; }}
+    FeedModeScreen #{FEED_STATUS_ID}.{FEED_STATUS_HIDDEN_CLASS} {{ display: none; }}
     {seal_hero_css("FeedModeScreen")}
     """
 
     def compose_body(self) -> ComposeResult:
-        """Yield the scrollable feed body (honest-empty until events arrive).
+        """Yield the connection badge + scrollable feed body.
 
-        The list starts with a single honest-empty / honest-degraded
-        notice; :meth:`on_mount` seeds any already-buffered envelopes and
-        :meth:`append_event` prepends live ones, removing the notice once
-        the first row lands.
+        The body leads with the connection-state badge (hidden while the
+        daemon is reachable, shown as the "daemon disconnected" indicator
+        once the binding drops into its poll fallback), then the scrollable
+        list. The list starts with a single honest-empty / honest-degraded
+        notice; :meth:`on_mount` seeds any already-buffered envelopes (and,
+        when the live ring is empty, the on-disk event-store tail) and
+        :meth:`append_event` prepends live ones, removing the notice once the
+        first row lands.
         """
-        with Vertical(id="body", classes="feed-body"), VerticalScroll(id=FEED_LIST_ID):
-            # The honest-empty hero carries NO ``feed-empty`` class: the
-            # ``theme.tcss`` ``.feed-empty`` rule pins a top-left single line,
-            # and an app-tier rule outranks this screen's ``DEFAULT_CSS`` even
-            # at lower specificity, so the class would shadow the centered-hero
-            # ``#feed-empty`` id rule. The id alone styles + identifies it.
-            mode = self._render_mode()
-            # Unicode path leads the honest-empty feed with the centered
-            # ASCII-art Seal (the research-board brand-mark pattern); the body
-            # drops its glyph sigil so the art is the single brand mark. ASCII
-            # path keeps the small brand glyph (the half-block art needs
-            # block-glyph coverage).
-            body = Static(self._empty_hero(with_sigil=mode != "unicode"), id=FEED_EMPTY_ID)
-            if mode == "unicode":
-                yield seal_empty_hero(body)
-            else:
-                yield body
+        mode = self._render_mode()
+        with Vertical(id="body", classes="feed-body"):
+            # The connection badge starts hidden (the healthy live feed carries
+            # no persistent chrome); :meth:`_sync_connection_badge` reveals it
+            # with the disconnected wording when ``app.degraded`` flips.
+            yield Static("", id=FEED_STATUS_ID, classes=f"feed-status {FEED_STATUS_HIDDEN_CLASS}")
+            with VerticalScroll(id=FEED_LIST_ID):
+                # The honest-empty hero carries NO ``feed-empty`` class: the
+                # ``theme.tcss`` ``.feed-empty`` rule pins a top-left single line,
+                # and an app-tier rule outranks this screen's ``DEFAULT_CSS`` even
+                # at lower specificity, so the class would shadow the centered-hero
+                # ``#feed-empty`` id rule. The id alone styles + identifies it.
+                #
+                # Unicode path leads the honest-empty feed with the centered
+                # ASCII-art Seal (the research-board brand-mark pattern); the body
+                # drops its glyph sigil so the art is the single brand mark. ASCII
+                # path keeps the small brand glyph (the half-block art needs
+                # block-glyph coverage).
+                body = Static(self._empty_hero(with_sigil=mode != "unicode"), id=FEED_EMPTY_ID)
+                if mode == "unicode":
+                    yield seal_empty_hero(body)
+                else:
+                    yield body
 
     def on_mount(self) -> None:
         """Register as a live-feed listener and seed from the App buffer.
@@ -366,9 +449,19 @@ class FeedModeScreen(ScopeScreen):
             register(self)
         if hasattr(self.app, "render_mode"):
             self.watch(self.app, "render_mode", self._on_render_mode)
+        self._sync_connection_badge()
         buffer = getattr(self.app, "live_event_buffer", ())
         for envelope in buffer:
             self._render_event(envelope)
+        if not buffer:
+            # Daemonless / pre-push: the App ring is fed only by daemon pushes,
+            # so with no reachable daemon it stays empty. Seed the newest events
+            # off the on-disk event store tail (the same store the /events
+            # overlay reads) so the feed shows real recent activity instead of
+            # an unconditional empty notice. Only when the ring is empty, so a
+            # live push already in the ring is never double-rendered from disk.
+            for envelope in self._file_tail_envelopes():
+                self._render_event(envelope)
 
     def on_unmount(self) -> None:
         """Unregister from the App fan-out so a torn-down pane gets no pushes."""
@@ -452,21 +545,58 @@ class FeedModeScreen(ScopeScreen):
                 row.update(format_event_markup(envelope, mode=mode))
 
     def refresh_empty_notice(self) -> None:
-        """Update the honest-empty notice text to track the degraded flag.
+        """Sync the connection badge + honest-empty notice on a degraded flip.
 
-        Called by the App when it flips between live and degraded so a pane
-        showing the empty notice swaps between the live-waiting and
-        daemon-unreachable wording. A no-op once events have arrived (the
-        notice is gone) or before mount.
+        Called by the App when it flips between live and degraded. Reveals /
+        hides the connection badge (the disconnected indicator) and, for a
+        pane still showing the empty notice, swaps that notice between the
+        live-waiting and daemon-unreachable wording. A no-op before mount.
         """
         if not self.is_mounted:
             return
+        self._sync_connection_badge()
         notice = self.query(f"#{FEED_EMPTY_ID}")
         if notice:
             # Preserve with_sigil=False when the ASCII-art Seal leads the hero
             # so a live/degraded flip never re-adds the glyph beside the art.
             seal_mounted = bool(self.query(f"#{SEAL_HERO_ID}"))
             notice.first(Static).update(self._empty_hero(with_sigil=not seal_mounted))
+
+    def _file_tail_envelopes(self) -> tuple[Envelope, ...]:
+        """Return the on-disk event-store tail for the daemonless seed.
+
+        Resolves the host App's bound ``state.json`` path to its sibling
+        event store (:func:`~eawf.kernel.store.paths.store_path`) and reads the
+        most recent envelopes (:func:`load_recent_envelopes`). Empty under a
+        bare harness whose host App exposes no ``_state_path`` or when no store
+        exists yet.
+
+        Returns:
+            The recent event envelopes, oldest-first (empty when none readable).
+        """
+        state_path = getattr(self.app, "_state_path", None)
+        if not isinstance(state_path, Path):
+            return ()
+        return load_recent_envelopes(store_path(state_path, StoreKind.EVENT))
+
+    def _sync_connection_badge(self) -> None:
+        """Reveal / hide the connection badge to track the daemon-reachable flag.
+
+        While the daemon is reachable the badge stays hidden (a healthy live
+        feed carries no persistent chrome); once the App reports degraded the
+        badge is revealed with the :data:`FEED_STATUS_DISCONNECTED` indicator
+        so the operator reads the rows below as the on-disk log tail rather
+        than a live stream. A no-op before the badge is mounted.
+        """
+        badge = self.query(f"#{FEED_STATUS_ID}")
+        if not badge:
+            return
+        degraded = bool(getattr(self.app, "degraded", False))
+        widget = badge.first(Static)
+        widget.set_class(not degraded, FEED_STATUS_HIDDEN_CLASS)
+        if degraded:
+            mark = escape_markup(chrome("attention", mode=self._render_mode()))
+            widget.update(f"[$warn]{mark} {FEED_STATUS_DISCONNECTED}[/]")
 
     def _empty_notice(self) -> str:
         """Return the honest-empty notice headline for the current daemon state.
@@ -509,9 +639,14 @@ __all__ = [
     "FEED_EMPTY_LIVE",
     "FEED_LIST_ID",
     "FEED_ROW_CLASS",
+    "FEED_SEED_LIMIT",
+    "FEED_STATUS_DISCONNECTED",
+    "FEED_STATUS_HIDDEN_CLASS",
+    "FEED_STATUS_ID",
     "FeedListener",
     "FeedModeScreen",
     "event_sigil",
     "format_event_markup",
     "format_event_row",
+    "load_recent_envelopes",
 ]

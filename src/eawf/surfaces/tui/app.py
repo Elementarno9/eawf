@@ -615,7 +615,11 @@ class EaApp(App[None]):
         # so a scope-only binding left config unreachable from any mode.
         Binding("c", "open_config", "config", show=False),
         Binding("q", "quit", "quit"),
-        Binding("escape", "quit", "quit", show=False),
+        # Esc is intentionally NOT bound to quit at the app tier. A single
+        # stray Escape (a common "go back" reflex, or a terminal escape-reply
+        # leak) must never silently kill the TUI with no confirm; ``q`` stays
+        # the explicit quit. Overlays / modals still bind their own Escape to
+        # dismiss, so "Esc closes this surface" holds where it is meant to.
         # Vim-key aliases for navigation — secondary to the arrows the
         # individual screens bind; declared here so they resolve app-wide.
         Binding("h", "cursor_left", "left", show=False),

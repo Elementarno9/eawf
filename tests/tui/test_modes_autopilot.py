@@ -366,10 +366,18 @@ def test_ready_rows_enriches_with_wave_title() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_render_frontier_header_empty_shows_honest_empty_banner() -> None:
-    """The empty header leads with the no-ready-waves banner."""
-    body = render_frontier_header(())
-    assert EMPTY_NOTICE in body
+def test_render_frontier_header_empty_reads_as_idle_without_repeating_hero() -> None:
+    """The empty header reads as an idle frontier and does NOT repeat the hero.
+
+    W25 render-once: the honest-empty message ("no ready waves") lives solely
+    in the centered hero the list renders, so the header status line above it
+    reports the frontier as idle (leading with the dispatch chrome arrow)
+    rather than duplicating the banner (status line + hero).
+    """
+    body = render_frontier_header((), mode="unicode")
+    assert EMPTY_NOTICE not in body
+    assert "idle" in body
+    assert chrome("dispatch", mode="unicode") in body
 
 
 def test_render_frontier_header_populated_reports_ready_count() -> None:

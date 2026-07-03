@@ -640,8 +640,11 @@ def render_frontier_header(
 
     Leads with the dispatch chrome arrow (:func:`sigils.chrome` ``"dispatch"``).
     When the frontier has ready waves the header reports the ready count (and
-    the blocked count, when any wave is held); when nothing is ready it leads
-    with the honest-empty banner rather than implying a primed dispatch queue.
+    the blocked count, when any wave is held); when nothing is ready it reads
+    as an idle frontier (with the blocked count when any wave is held) rather
+    than implying a primed dispatch queue. The honest-empty message itself
+    lives in the centered hero the list renders, so the header does not repeat
+    it -- the empty-state message renders once.
 
     Args:
         rows: The ready-wave display rows (empty when nothing is ready).
@@ -653,8 +656,13 @@ def render_frontier_header(
     """
     arrow = escape_markup(sigils.chrome("dispatch", mode=mode))
     if not rows:
+        # Lead with the same dispatch arrow the populated header carries and
+        # report the frontier as idle. The honest-empty message ("no ready
+        # waves" + the framing subline) is owned solely by the centered hero
+        # in the list below, so this status line does NOT repeat it -- the
+        # empty-state message renders once, not twice (status line + hero).
         held = f" [$warn]{len(blocked)} blocked[/]" if blocked else ""
-        return f"[$warn]{EMPTY_NOTICE}[/]{held}\n[$muted]no claim-ready wave on the frontier[/]"
+        return f"[$accent]{arrow} ready frontier[/] [$muted]idle[/]{held}"
     blocked_suffix = f" [$muted]+[/] [$warn]{len(blocked)} blocked[/]" if blocked else ""
     return (
         f"[$accent]{arrow} ready frontier[/] [$ok]{len(rows)}[/] "
