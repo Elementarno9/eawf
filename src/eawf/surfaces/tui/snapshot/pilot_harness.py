@@ -35,6 +35,7 @@ import shutil
 import subprocess
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
@@ -272,6 +273,161 @@ def toast_messages(app: App[object]) -> tuple[str, ...]:
         Each queued toast's message markup, oldest first.
     """
     return tuple(note.message for note in app._notifications)
+
+
+#: The cursor-position attributes the response probe reads off the focused
+#: widget, in resolution order. A row-cursor move (DataTable) / branch-cursor
+#: move (Tree) / option highlight (OptionList / ListView) repaints only the
+#: highlighted row's STYLE, not its text, so :func:`capture_screen_text` (a
+#: plain-text dump) cannot see it. Snapshotting the focused widget's cursor
+#: coordinate closes that blind spot: a selection move IS a visible frame delta
+#: to the operator, so the probe must count it as a response. The first
+#: attribute the focused widget carries wins; a widget with none contributes
+#: only its type name (still enough to notice a focus handoff).
+_CURSOR_ATTRS: tuple[str, ...] = (
+    "cursor_coordinate",
+    "cursor_line",
+    "highlighted",
+    "cursor_node",
+    "cursor_row",
+)
+
+
+def _focus_cursor_signature(app: App[object]) -> tuple[str, str, str] | None:
+    """Snapshot the focused widget's identity + cursor position for delta checks.
+
+    Reads the first of :data:`_CURSOR_ATTRS` the focused widget exposes so a
+    pure selection / scroll-cursor move (which does not change any rendered
+    text) is still observable as a response. Returns ``None`` when nothing is
+    focused.
+
+    Args:
+        app: The live app under a Pilot harness.
+
+    Returns:
+        A ``(widget_type, cursor_attr, cursor_repr)`` triple for the focused
+        widget, or ``None`` when no widget holds focus.
+    """
+    focused = app.focused
+    if focused is None:
+        return None
+    for attr in _CURSOR_ATTRS:
+        if hasattr(focused, attr):
+            return (type(focused).__name__, attr, repr(getattr(focused, attr)))
+    return (type(focused).__name__, "", "")
+
+
+@dataclass(frozen=True)
+class FooterKeyResponse:
+    """The observable response of pressing one advertised footer key.
+
+    A footer key is "live" when its press moves the visible surface in ANY
+    operator-visible way. The four channels below are OR-ed into
+    :attr:`responds`; a key that trips none of them is a silent no-op -- the
+    exact defect the interaction-liveness gate exists to catch.
+
+    Attributes:
+        key: The Textual pilot key string that was pressed.
+        frame_changed: The normalised plain-text frame differs (content
+            appeared / changed / a tree branch expanded).
+        toast_added: A new toast landed on the rack (an action outcome
+            surfaced as a fading notification rather than a frame edit).
+        screen_changed: The active screen identity changed (a modal was
+            pushed, or a mode / scope switch swapped the base screen).
+        cursor_moved: The focused widget's cursor / selection position changed
+            (a row-cursor or tree-cursor move that repaints only a highlight).
+    """
+
+    key: str
+    frame_changed: bool
+    toast_added: bool
+    screen_changed: bool
+    cursor_moved: bool
+
+    @property
+    def responds(self) -> bool:
+        """Whether the key produced any operator-visible response."""
+        return self.frame_changed or self.toast_added or self.screen_changed or self.cursor_moved
+
+
+async def probe_footer_key_response(pilot: Pilot[object], key: str) -> FooterKeyResponse:
+    """Press *key*, settle, and report the composite visible response.
+
+    Captures the four response channels (:class:`FooterKeyResponse`) around a
+    single key press: the normalised text frame, the toast-rack depth, the
+    active-screen identity, and the focused widget's cursor position. The frame
+    is normalised (:func:`normalize_snapshot`) so the volatile header clock does
+    not read as a spurious response, and the settle (:func:`settle_screen`,
+    which drains background workers first) lets any worker-offloaded action land
+    before the after-capture.
+
+    This is the observation primitive :func:`assert_footer_key_responds` builds
+    on; it never raises, so a caller sweeping many keys can inspect the record
+    (e.g. to prove an exempted key is genuinely inert). Modal / mode-switch
+    residue is NOT cleaned up here -- the caller owns teardown so it can inspect
+    the pushed surface first.
+
+    Args:
+        pilot: The live :class:`~textual.pilot.Pilot` from ``app.run_test()``.
+        key: The Textual pilot key string to press (e.g. ``"enter"``,
+            ``"down"``, ``"question_mark"``).
+
+    Returns:
+        The :class:`FooterKeyResponse` describing what moved.
+    """
+    app = pilot.app
+    before_frame = normalize_snapshot(capture_screen_text(app))
+    before_toasts = len(toast_messages(app))
+    before_screen = id(app.screen)
+    before_cursor = _focus_cursor_signature(app)
+    await pilot.press(key)
+    await settle_screen(pilot)
+    return FooterKeyResponse(
+        key=key,
+        frame_changed=normalize_snapshot(capture_screen_text(app)) != before_frame,
+        toast_added=len(toast_messages(app)) > before_toasts,
+        screen_changed=id(app.screen) != before_screen,
+        cursor_moved=_focus_cursor_signature(app) != before_cursor,
+    )
+
+
+async def assert_footer_key_responds(
+    pilot: Pilot[object],
+    key: str,
+    *,
+    hint: str | None = None,
+) -> FooterKeyResponse:
+    """Assert an advertised footer key produces a visible response, else raise.
+
+    The interaction-liveness contract: a key the footer advertises must DO
+    something the operator can see -- a frame delta, a toast, a screen change,
+    or a selection-cursor move. This lifts the older
+    :func:`mutating_action_keys_resolve` check from "an ``action_<name>``
+    handler EXISTS" up to "the key VISIBLY RESPONDS", closing the gap a live
+    Pilot probe found where an advertised key resolved to a handler that
+    silently no-oped.
+
+    Args:
+        pilot: The live :class:`~textual.pilot.Pilot` from ``app.run_test()``.
+        key: The Textual pilot key string to press.
+        hint: Optional footer-hint label (e.g. ``"Enter open"``) folded into
+            the failure message so a dead key names the affordance it backs.
+
+    Returns:
+        The :class:`FooterKeyResponse` on a live key (for further inspection).
+
+    Raises:
+        AssertionError: When the key produced no visible response on any of the
+            four channels (a silently dead advertised key).
+    """
+    response = await probe_footer_key_response(pilot, key)
+    if not response.responds:
+        detail = f"{key!r}" if hint is None else f"{key!r} ({hint})"
+        raise AssertionError(
+            f"advertised footer key {detail} produced no visible response: "
+            f"no frame delta, toast, screen change, or cursor move"
+        )
+    return response
 
 
 def assert_screen_snapshot(app: App[object], golden_path: Path) -> None:
@@ -566,6 +722,8 @@ def _drift_message(golden_path: Path, expected: str, captured: str) -> str:
 
 __all__ = [
     "SNAPSHOT_REGEN_ENV",
+    "FooterKeyResponse",
+    "assert_footer_key_responds",
     "assert_screen_snapshot",
     "capture_mockup_golden_screen_png",
     "capture_mockup_golden_screen_png_sync",
@@ -575,6 +733,7 @@ __all__ = [
     "mockup_golden_diff_detail",
     "mutating_action_keys_resolve",
     "normalize_snapshot",
+    "probe_footer_key_response",
     "push_state_revision",
     "resvg_available",
     "settle_screen",
