@@ -1099,15 +1099,18 @@ class NodeKind(StrEnum):
     can describe the peeked node honestly without re-deriving its level.
 
     Members:
-        CAMPAIGN: A staged-campaign node (the tree root per campaign).
+        CAMPAIGN: A staged-campaign node (a pickable, collapsible tree root
+            per campaign). The campaign row carries its own round-status word
+            and, when collapsed, hides its round / topic / question children.
         ROUND: The synthetic round node under a campaign (round 1 -- the
-            campaign is staged, not yet multi-round-run). The open questions
-            group under this round, so the round is also emitted for a
-            question-only scope that has staged no campaign yet.
+            campaign is staged, not yet multi-round-run). A question-only scope
+            (no campaign staged) also emits a scope-level round to group its
+            open questions under.
         TOPIC: A staged-domain topic node under a round.
         QUESTION: An :class:`~eawf.kernel.state.models.OpenQuestion` node
-            grouped under the round, carrying its open / answered / dropped
-            status as its per-status lifecycle sigil.
+            grouped under its owning campaign (or the scope-level round on a
+            campaign-less scope), carrying its open / answered / dropped /
+            blocked status as its per-status lifecycle sigil.
         CLAIM: A :class:`~eawf.kernel.state.models.Claim` leaf nested under
             the question it answers (the round > questions > claims spine).
     """
@@ -1156,6 +1159,16 @@ class TreeNode:
             a :attr:`NodeKind.QUESTION` node stands for, so selecting it can
             scope the Claims pane to the claims that answer it; ``None`` on
             every other node kind.
+        status_label: The campaign's terse round-status word (``running`` /
+            ``saturated`` / ``pruned`` / ``staged`` / ``converged``) rendered
+            beside a :attr:`NodeKind.CAMPAIGN` node so the round state reads off
+            the campaign row itself -- and stays visible when the campaign is
+            collapsed and its round child is hidden; ``None`` on every other
+            node kind.
+        collapsed: Whether a :attr:`NodeKind.CAMPAIGN` node is collapsed (its
+            round / topic / question children are hidden from the flattened
+            node list). A collapsed campaign renders a ``+`` expand affordance;
+            ``False`` on every other node kind.
     """
 
     kind: NodeKind
@@ -1167,6 +1180,8 @@ class TreeNode:
     claim_status: ClaimStatus | None = None
     round_state: RoundState | None = None
     question_id: str | None = None
+    status_label: str | None = None
+    collapsed: bool = False
 
 
 def read_campaign_rows(state_path: Path | None) -> tuple[CampaignRow, ...]:
@@ -1331,57 +1346,61 @@ def build_tree_nodes(
     *,
     claims: tuple[Claim, ...] = (),
     rounds: tuple[Round, ...] = (),
+    collapsed: frozenset[str] = frozenset(),
 ) -> tuple[TreeNode, ...]:
-    """Flatten the campaign + question + claim rows into the topic-tree node list.
+    """Flatten the campaign + question + claim rows into the campaign-tree node list.
 
-    Builds the campaign > round > topic outline plus the round > questions >
-    claims spine as a flat tuple of :class:`TreeNode` rows in render order:
+    Builds the campaign > {round > topic, questions > claims} outline as a flat
+    tuple of :class:`TreeNode` rows in render order. Each campaign is a pickable,
+    collapsible top-level node that OWNS the research gaps it is chasing:
 
-    * per campaign -- the campaign node (depth 0), then a round node (depth 1)
-      classified off the campaign's OWN status (a CONVERGED campaign reads a
-      terminal ``round converged`` label; an ACTIVE campaign derives its FA8
-      auto-run state from the real run records when present, else the pre-run
-      question-ledger classification), then one topic node per staged domain
-      (depth 2, capped at :data:`_MAX_TOPICS_PER_CAMPAIGN`);
-    * then, when the scope carries open questions, a single scope-level
-      ``scope questions`` round node at depth 0 -- a sibling of the campaigns,
-      NOT a child of the last one -- grouping every
-      :class:`~eawf.kernel.state.models.OpenQuestion` as a question node at
-      depth 1 (each carrying its open / answered / dropped status for the
-      per-status sigil), with the claims that answer a question
-      (:func:`index_claims_by_question`) nested as claim leaves at depth 2.
+    * per campaign -- the campaign node (depth 0), carrying its terse round-status
+      word (:attr:`TreeNode.status_label`) so the state reads off the campaign row
+      even when it is collapsed; then, WHEN the campaign is expanded, a round node
+      (depth 1) classified off the campaign's OWN status (a CONVERGED campaign
+      reads a terminal ``round converged`` label; an ACTIVE campaign derives its
+      FA8 auto-run state from the real run records when present, else the pre-run
+      question-ledger classification), one topic node per staged domain (depth 2,
+      capped at :data:`_MAX_TOPICS_PER_CAMPAIGN`), and the scope's open questions
+      grouped as question nodes (depth 1) with the claims that answer each one
+      (:func:`index_claims_by_question`) nested as claim leaves (depth 2). A
+      COLLAPSED campaign emits only its campaign node -- its round / topic /
+      question children are omitted from the flat list, so the ``up`` / ``down``
+      cursor skips them and the ``left`` / ``right`` collapse / expand keys toggle
+      the whole sub-tree.
 
-    A question is scope-wide (the daemon stamps it with the project code, not a
-    campaign id), so the questions group is emitted once for the scope at depth
-    0 rather than per campaign, and it surfaces even for a question-only scope
-    that has staged no campaign yet. Hoisting it to depth 0 stops the question
-    leaves rendering as children of the last campaign. Empty when the scope has
-    neither a campaign nor an open question.
+    A question is scope-wide (the daemon stamps it with the research scope, not a
+    campaign id), so the scope's questions nest under its PRIMARY campaign -- the
+    first staged campaign row -- rather than duplicating under every campaign or
+    hanging off the LAST one. When the scope has staged NO campaign, the questions
+    fall back to a scope-level ``scope questions`` round node (depth 0) so a
+    question-only scope still renders. Empty when the scope has neither a campaign
+    nor an open question.
 
     Args:
-        campaigns: The staged campaign rows for the scope.
+        campaigns: The staged campaign rows for the scope; the first is the
+            PRIMARY campaign the scope-wide questions nest under.
         questions: The state-resident open-question rows for the scope.
         claims: The state-resident claim rows; the ones that back-link a
             question nest under it (free-standing claims are not tree leaves).
         rounds: The executed round records; when present the round node's FA8
             auto-run state derives from the real run (the W08 live-wire).
+        collapsed: The set of campaign ids whose sub-trees are collapsed; a
+            collapsed campaign contributes only its campaign node.
 
     Returns:
         The flattened tree nodes in render order; empty when nothing to show.
     """
     progress = compute_round_progress(campaigns, claims, questions, rounds)
     round_label, round_detail = _round_label_detail(progress)
+    claims_by_question = index_claims_by_question(claims)
+    # The scope-wide questions nest under the PRIMARY (first) campaign so they
+    # read as a campaign that owns its research gaps, never doubled across
+    # campaigns nor orphaned under the last one.
+    primary_id = campaigns[0].campaign_id if campaigns else None
     nodes: list[TreeNode] = []
     for campaign in campaigns:
-        nodes.append(
-            TreeNode(
-                kind=NodeKind.CAMPAIGN,
-                label=campaign.topic,
-                depth=0,
-                detail=f"{campaign.domain_count} staged topic(s), depth {campaign.default_depth}",
-                campaign_id=campaign.campaign_id,
-            )
-        )
+        is_collapsed = campaign.campaign_id in collapsed
         # Classify each campaign's round INDIVIDUALLY off its own status: a
         # CONVERGED campaign terminated, so it reads a terminal label rather
         # than the scope-wide running/saturated phrase (which lingered
@@ -1391,9 +1410,27 @@ def build_tree_nodes(
         if campaign.status is CampaignStatus.CONVERGED:
             camp_round_state = RoundState.SATURATED
             camp_label, camp_detail = _CONVERGED_ROUND_COPY
+            status_word = "converged"
         else:
             camp_round_state = progress.state
             camp_label, camp_detail = round_label, round_detail
+            status_word = _ROUND_BAND_PHRASE[camp_round_state]
+        nodes.append(
+            TreeNode(
+                kind=NodeKind.CAMPAIGN,
+                label=campaign.topic,
+                depth=0,
+                detail=f"{campaign.domain_count} staged topic(s), depth {campaign.default_depth}",
+                campaign_id=campaign.campaign_id,
+                status_label=status_word,
+                collapsed=is_collapsed,
+            )
+        )
+        if is_collapsed:
+            # The collapsed campaign hides its round / topic / question children
+            # from the flat list -- the cursor skips them and the whole sub-tree
+            # is a single navigable row until it is expanded.
+            continue
         nodes.append(
             TreeNode(
                 kind=NodeKind.ROUND,
@@ -1418,12 +1455,12 @@ def build_tree_nodes(
                     campaign_id=campaign.campaign_id,
                 )
             )
-    if questions:
-        # A question carries the PROJECT code as its scope, not a campaign id
-        # (the daemon stamps it scope-wide), so its grouping node is a scope
-        # root -- a sibling of the campaigns at depth 0 -- not a child nested
-        # under the last campaign. The label reads as scope-level so the group
-        # never masquerades as a campaign round.
+        if campaign.campaign_id == primary_id and questions:
+            _append_question_nodes(nodes, questions, claims_by_question)
+    if not campaigns and questions:
+        # A question-only scope (no campaign staged) still needs its questions on
+        # the board: hang them under a scope-level questions round so the group
+        # renders without a campaign to own it.
         nodes.append(
             TreeNode(
                 kind=NodeKind.ROUND,
@@ -1436,34 +1473,57 @@ def build_tree_nodes(
                 round_state=progress.state,
             )
         )
-        claims_by_question = index_claims_by_question(claims)
-        for question in questions:
-            marker = "blocking" if question.blocking else question.status.value
+        _append_question_nodes(nodes, questions, claims_by_question)
+    return tuple(nodes)
+
+
+def _append_question_nodes(
+    nodes: list[TreeNode],
+    questions: tuple[OpenQuestion, ...],
+    claims_by_question: dict[str, tuple[Claim, ...]],
+) -> None:
+    """Append the open-question nodes (+ their answering-claim leaves) to *nodes*.
+
+    Each question hangs at depth 1 (one indent under its owning campaign, or the
+    scope-level questions round on a campaign-less scope) carrying its lifecycle
+    status for the per-status sigil, with every claim that back-links it
+    (:func:`index_claims_by_question`) nested as a claim leaf at depth 2. A
+    blocking question keeps its status for the sigil and carries the ``blocking``
+    marker in its peek detail. Factored out of :func:`build_tree_nodes` so the
+    two grouping sites (under the primary campaign, and under the scope-level
+    round) share one node-shape definition rather than a divergent copy.
+
+    Args:
+        nodes: The node accumulator, mutated in place.
+        questions: The open-question rows to append, in render order.
+        claims_by_question: Question id -> its answering claim rows.
+    """
+    for question in questions:
+        marker = "blocking" if question.blocking else question.status.value
+        nodes.append(
+            TreeNode(
+                kind=NodeKind.QUESTION,
+                label=question.title,
+                depth=1,
+                detail=f"open question -- {marker}",
+                question_status=question.status,
+                question_id=question.id,
+            )
+        )
+        for claim in claims_by_question.get(question.id, ()):
             nodes.append(
                 TreeNode(
-                    kind=NodeKind.QUESTION,
-                    label=question.title,
-                    depth=1,
-                    detail=f"open question -- {marker}",
-                    question_status=question.status,
-                    question_id=question.id,
+                    kind=NodeKind.CLAIM,
+                    label=claim.title,
+                    depth=2,
+                    # The peek detail carries the untruncated claim body +
+                    # resolving evidence refs (W19 drill-in): the label
+                    # truncates to the title, so a peek is the way to read
+                    # the full claim + its evidence off the navigable tree.
+                    detail=claim_drill_detail(claim),
+                    claim_status=claim.status,
                 )
             )
-            for claim in claims_by_question.get(question.id, ()):
-                nodes.append(
-                    TreeNode(
-                        kind=NodeKind.CLAIM,
-                        label=claim.title,
-                        depth=2,
-                        # The peek detail carries the untruncated claim body +
-                        # resolving evidence refs (W19 drill-in): the label
-                        # truncates to the title, so a peek is the way to read
-                        # the full claim + its evidence off the navigable tree.
-                        detail=claim_drill_detail(claim),
-                        claim_status=claim.status,
-                    )
-                )
-    return tuple(nodes)
 
 
 def claim_drill_detail(claim: Claim) -> str:
@@ -1513,8 +1573,12 @@ def _tree_node_markup(node: TreeNode, *, mode: RenderMode) -> str:
     role for the structural campaign / round nodes, the fixed pending sigil for
     a staged topic, and the per-status lifecycle sigil (open / answered /
     dropped for a question; the claim's own status for a candidate-answer
-    claim) for the shape-bearing leaves. No node kind falls through to a raw
-    glyph or a ``?`` -- every level resolves through the sigils helper.
+    claim) for the shape-bearing leaves. A BLOCKED question -- the balanced-
+    autonomy interrupt status -- has no lifecycle shape in the sigil map, so it
+    renders the pending ring in the ``$warn`` hue to read as an open gap that
+    demands attention rather than crashing the map lookup. No node kind falls
+    through to a raw glyph or a ``?`` -- every level resolves through the sigils
+    helper.
 
     Args:
         node: The tree node whose level sigil to render.
@@ -1524,6 +1588,9 @@ def _tree_node_markup(node: TreeNode, *, mode: RenderMode) -> str:
     Returns:
         A content-markup span: the node's tinted level sigil.
     """
+    if node.kind is NodeKind.QUESTION and node.question_status is OpenQuestionStatus.BLOCKED:
+        glyph = escape_markup(sigils.glyph(Sigil.PENDING, mode=mode))
+        return f"[$warn]{glyph}[/]"
     if node.kind is NodeKind.QUESTION and node.question_status is not None:
         return question_sigil_markup(node.question_status, mode=mode)
     if node.kind is NodeKind.CLAIM and node.claim_status is not None:
@@ -1562,13 +1629,16 @@ def render_tree(
     mode: RenderMode = DEFAULT_RENDER_MODE,
     width: int = 0,
 ) -> str:
-    """Render the topic-tree pane (one indented row per node).
+    """Render the campaign-tree pane (one indented row per node).
 
     Each row carries a sigils-helper level sigil -- the ``overview`` mark for a
     campaign root, the ``dispatch`` arrow for a round, the pending sigil for a
     staged topic, and the per-status open / answered / dropped lifecycle sigil
     for a question leaf (its answering claims nested one indent deeper with
-    their own claim sigil) -- and the node label, indented by depth. The
+    their own claim sigil) -- and the node label, indented by depth. A CAMPAIGN
+    row trails its terse round-status word (:attr:`TreeNode.status_label`) and,
+    when :attr:`TreeNode.collapsed`, a ``+`` expand affordance so the operator
+    reads its state and its hidden-children marker off the one visible row. The
     *selected* row is marked so the peek target is visible. An empty node list
     renders the per-pane :data:`NONE_YET` sentinel.
 
@@ -1598,11 +1668,42 @@ def render_tree(
         marker = "[$accent]>[/] " if index == selected else "  "
         prefix_width = _tree_prefix_width(node.depth)
         label_lines = _wrap_tree_label(node.label, width=width, prefix_width=prefix_width)
-        lines.append(f"{marker}{indent}{sigil} {escape_markup(label_lines[0])}")
+        row_lines = [f"{marker}{indent}{sigil} {escape_markup(label_lines[0])}"]
         hang = " " * prefix_width
         for continuation in label_lines[1:]:
-            lines.append(f"{hang}{escape_markup(continuation)}")
+            row_lines.append(f"{hang}{escape_markup(continuation)}")
+        # A campaign row trails its round-status word + collapse affordance on
+        # the LAST label line so the state (and the "+" hidden-children marker)
+        # sits after the whole -- possibly wrapped -- topic title.
+        if node.kind is NodeKind.CAMPAIGN:
+            row_lines[-1] += _campaign_row_suffix(node)
+        lines.extend(row_lines)
     return "\n".join(lines)
+
+
+def _campaign_row_suffix(node: TreeNode) -> str:
+    """Return the trailing status + collapse-affordance markup for a campaign row.
+
+    The campaign row trails its terse round-status word (``· running`` /
+    ``· converged`` / ...) so the state reads off the campaign node itself, and
+    -- when the campaign is collapsed -- a ``+`` expand affordance signalling the
+    hidden round / topic / question children. An expanded campaign shows its
+    children in the tree, so it carries no affordance (the visible sub-tree IS
+    the signal).
+
+    Args:
+        node: The :attr:`NodeKind.CAMPAIGN` node to build the suffix for.
+
+    Returns:
+        The trailing markup span (empty when the node carries no status word
+        and is expanded).
+    """
+    suffix = ""
+    if node.status_label:
+        suffix += f" [$muted]· {escape_markup(node.status_label)}[/]"
+    if node.collapsed:
+        suffix += " [$muted]+[/]"
+    return suffix
 
 
 def _wrap_tree_label(label: str, *, width: int, prefix_width: int) -> list[str]:
@@ -2166,6 +2267,8 @@ class ResearchBoardModeScreen(ScopeScreen):
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("up", "select_prev", "up", show=False),
         Binding("down", "select_next", "down", show=False),
+        Binding("left", "collapse", "collapse", show=False),
+        Binding("right", "expand", "expand", show=False),
         Binding("enter", "peek_selected", "peek", show=False),
         Binding("d", "open_brief", "brief", show=False),
         Binding("n", "new_campaign", "new", show=False),
@@ -2203,6 +2306,10 @@ class ResearchBoardModeScreen(ScopeScreen):
         # The current claim ledger, cached so a cursor move can re-scope the
         # Claims pane to the selected node without re-reading state each keypress.
         self._claims: tuple[Claim, ...] = ()
+        # The set of campaign ids whose sub-trees are collapsed (left/right toggle);
+        # a collapsed campaign hides its round / topic / question children from the
+        # flat node list, so the up/down cursor and the clamp both skip them.
+        self._collapsed: set[str] = set()
 
     def compose_body(self) -> ComposeResult:
         """Yield the three-pane scaffold + drawer, or the honest-empty notice.
@@ -2217,7 +2324,11 @@ class ResearchBoardModeScreen(ScopeScreen):
         self._claims = claims
         self.empty = not has_research_signal(campaigns, claims, questions)
         self._tree = build_tree_nodes(
-            campaigns, questions, claims=claims, rounds=self._current_round_rows()
+            campaigns,
+            questions,
+            claims=claims,
+            rounds=self._current_round_rows(),
+            collapsed=frozenset(self._collapsed),
         )
         scoped_claims, scope_header = scope_claims_for_node(self._selected_node(), claims)
         with Vertical(id="research-body"):
@@ -2357,6 +2468,87 @@ class ResearchBoardModeScreen(ScopeScreen):
         """Move the tree cursor to the next node (clamped at the bottom)."""
         if self._tree:
             self.selected = min(len(self._tree) - 1, self.selected + 1)
+
+    def action_collapse(self) -> None:
+        """Collapse the campaign owning the selected node (``left`` arrow).
+
+        Adds the selected node's campaign to the collapsed set so its round /
+        topic / question children drop out of the flat node list, then rebuilds
+        the tree and parks the cursor on the campaign node so the selection
+        stays on a visible row. A no-op when no campaign owns the selection (the
+        scope-level questions section) or the campaign is already collapsed.
+        """
+        campaign_id = self._selected_campaign_id()
+        if campaign_id is None or campaign_id in self._collapsed:
+            return
+        self._collapsed.add(campaign_id)
+        self._apply_collapse_change(campaign_id)
+        logger.info(f"action_collapse campaign={campaign_id!r}")
+
+    def action_expand(self) -> None:
+        """Expand the campaign owning the selected node (``right`` arrow).
+
+        Removes the selected node's campaign from the collapsed set so its round
+        / topic / question children reappear in the flat node list, then rebuilds
+        the tree and keeps the cursor on the campaign node. A no-op when no
+        campaign owns the selection or the campaign is already expanded.
+        """
+        campaign_id = self._selected_campaign_id()
+        if campaign_id is None or campaign_id not in self._collapsed:
+            return
+        self._collapsed.discard(campaign_id)
+        self._apply_collapse_change(campaign_id)
+        logger.info(f"action_expand campaign={campaign_id!r}")
+
+    def _apply_collapse_change(self, campaign_id: str) -> None:
+        """Rebuild the tree after a collapse toggle and re-anchor the cursor.
+
+        Recomputes the flat node list against the new collapsed set, parks the
+        cursor on the toggled campaign's node (so a collapse that hid the
+        previously selected child never strands the cursor on a vanished row),
+        then repaints the tree + re-scopes the claims pane. The rest of the
+        board is untouched -- a collapse toggle changes only the tree shape.
+
+        Args:
+            campaign_id: The campaign whose collapse state just toggled.
+        """
+        campaigns, claims, questions = self._current_rows()
+        self._claims = claims
+        self._tree = build_tree_nodes(
+            campaigns,
+            questions,
+            claims=claims,
+            rounds=self._current_round_rows(),
+            collapsed=frozenset(self._collapsed),
+        )
+        target = next(
+            (
+                index
+                for index, node in enumerate(self._tree)
+                if node.kind is NodeKind.CAMPAIGN and node.campaign_id == campaign_id
+            ),
+            self.selected,
+        )
+        self.set_reactive(type(self).selected, target)
+        self._clamp_selection()
+        self._repaint_tree()
+        self._scroll_selected_into_view()
+        self._repaint_claims()
+        self._update_one(PEEK_RESULT_ID, self._peek_idle())
+
+    def _prune_collapsed(self, campaigns: tuple[CampaignRow, ...]) -> None:
+        """Drop collapsed ids for campaigns no longer on the board.
+
+        A campaign that was cancelled (or otherwise dropped from the store read)
+        must not linger in the collapsed set, or a re-staged campaign reusing the
+        id would render collapsed unexpectedly. Intersects the collapsed set with
+        the live campaign ids on every rebuild.
+
+        Args:
+            campaigns: The live campaign rows for the scope.
+        """
+        live = {campaign.campaign_id for campaign in campaigns}
+        self._collapsed &= live
 
     def action_peek_selected(self) -> None:
         """Peek the selected tree node read-only (no mutation).
@@ -3048,8 +3240,13 @@ class ResearchBoardModeScreen(ScopeScreen):
         self._claims = claims
         was_empty = self.empty
         self.empty = not has_research_signal(campaigns, claims, questions)
+        self._prune_collapsed(campaigns)
         self._tree = build_tree_nodes(
-            campaigns, questions, claims=claims, rounds=self._current_round_rows()
+            campaigns,
+            questions,
+            claims=claims,
+            rounds=self._current_round_rows(),
+            collapsed=frozenset(self._collapsed),
         )
         self._clamp_selection()
         if self.empty != was_empty:
