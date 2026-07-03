@@ -27,7 +27,10 @@ _ARTIFACTS_DIR = _REPO_ROOT / ".ea" / "artifacts"
 # Canonical first-path-segment subdirs under ``.ea/artifacts/``: the promotable
 # kind subdirs from the single-source-of-truth map, plus the renderer-owned
 # ``rendered/`` output tree (not a promotable artifact kind, never loose).
-_CANONICAL_SUBDIRS = frozenset(_KIND_SUBDIR.values()) | {"rendered"}
+# ``evidence`` is a recorded-validation-bundle kind (P30-I23-W33), not a
+# draft-promotable prose kind, so it extends the set here alongside the
+# render-only ``rendered`` tree.
+_CANONICAL_SUBDIRS = frozenset(_KIND_SUBDIR.values()) | {"rendered", "evidence"}
 
 
 def _tracked_artifact_markdown() -> list[str]:
