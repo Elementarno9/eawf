@@ -1,6 +1,6 @@
 """Validate a committed live-drive recording (P30-I23-W33).
 
-Seven assertions over a recording directory produced by a capped
+Eight assertions over a recording directory produced by a capped
 ``fleet.drive`` run — the machine-checkable half of the phase's
 "the autopilot ran live and honestly" claim:
 
@@ -13,12 +13,14 @@ Seven assertions over a recording directory produced by a capped
 6. campaign terminal — the recorded research campaign reached a terminal
    status (``converged`` / ``cancelled``), never left mid-flight.
 7. jail smoke — the seatbelt spawn markers are present.
+8. gate-executing closes — one passing ``run_close_gates`` line per
+   claimed close in ``close_gates.log``.
 
 Usage::
 
     uv run python tools/validate_drive_recording.py <recording-dir>
 
-Exits 0 when all seven hold; prints one line per assertion.
+Exits 0 when all eight hold; prints one line per assertion.
 """
 
 from __future__ import annotations
@@ -38,7 +40,7 @@ TERMINAL_CAMPAIGN_STATUSES: frozenset[str] = frozenset({"converged", "cancelled"
 
 
 class RecordingInvalidError(ValueError):
-    """Raised when one of the seven assertions fails."""
+    """Raised when one of the eight assertions fails."""
 
 
 def _load_summary(recording_dir: Path) -> dict:
@@ -56,7 +58,7 @@ def _cost_rows(recording_dir: Path) -> list[dict]:
 
 
 def validate_recording(recording_dir: Path) -> list[str]:
-    """Run the seven assertions; return one confirmation line per check.
+    """Run the eight assertions; return one confirmation line per check.
 
     Raises:
         RecordingInvalidError: On the first failing assertion, naming it.

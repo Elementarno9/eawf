@@ -33,9 +33,10 @@ def test_at_least_one_actual_carries_captured_runtime() -> None:
         for row in _actuals().values()
         if row.get("elapsed_eu", 0) > 0 and row.get("harness") and row.get("model")
     ]
-    assert captured, (
-        "no ActualSummary row carries elapsed_eu > 0 with harness+model "
-        "provenance — the EU capture chain regressed to zero"
+    assert len(captured) >= 3, (
+        f"only {len(captured)} ActualSummary row(s) carry elapsed_eu > 0 with "
+        "harness+model provenance — the I23 capture cohort (W28/W45/W46) "
+        "regressed"
     )
 
 
