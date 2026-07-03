@@ -2,18 +2,18 @@
 
   ╭─ TOPIC TREE ───────────────────────╮╭─ CLAIMS / EVIDENCE ─────────────────╮╭─ PROGRESS / BUDGET ─────────────────╮
   │ > ≡ Survey the options-pricing     ││                                     ││ RUN saturated                       │
-  │     landscape                      ││ showing all claims -- campaign:     ││ ROUND 1 run                         │
+  │     landscape · saturated          ││ showing all claims -- campaign:     ││ ROUND 1 run                         │
   │     ● round saturated              ││ Survey the options-pricing          ││ ACTIVE 2 claim(s)                   │
   │       ◌ domain: market-structure   ││ landscape                           ││ WAITING 1 open question(s)          │
   │       ◌ domain: pricing-models     ││ ● Implied vol surface is downward   ││ PAUSED 0 checkpoint(s)              │
-  │   ● scope questions -- saturated   ││ sloping in strike                   ││ BUDGET 2 staged topic(s), 1         │
-  │     ◌ Which curve model fits the   ││ ✕ Term-structure arbitrage is       ││ answered, 2 pruned                  │
-  │       short tenor                  ││ exploitable intraday                ││ RISKS none                          │
-  │     ● Does the smile invert past   ││                                     ││                                     │
-  │       the 90 delta wing            ││ Options (supporting evidence)       ││                                     │
-  │     ◌ Is the overnight gamma path  ││ ● 0 ref(s) Implied vol surface is   ││                                     │
-  │       worth tracking               ││ downward sloping in strike          ││                                     │
-  │ enter to peek the selected node    ││                                     ││                                     │
+  │     ◌ Which curve model fits the   ││ sloping in strike                   ││ BUDGET 2 staged topic(s), 1         │
+  │       short tenor                  ││ ✕ Term-structure arbitrage is       ││ answered, 2 pruned                  │
+  │     ● Does the smile invert past   ││ exploitable intraday                ││ RISKS none                          │
+  │       the 90 delta wing            ││                                     ││                                     │
+  │     ◌ Is the overnight gamma path  ││ Options (supporting evidence)       ││                                     │
+  │       worth tracking               ││ ● 0 ref(s) Implied vol surface is   ││                                     │
+  │ enter to peek the selected node    ││ downward sloping in strike          ││                                     │
+  │                                    ││                                     ││                                     │
   │                                    ││ Conflicts (contradicting evidence)  ││                                     │
   │                                    ││ ✕ 0 ref(s) Term-structure arbitrage ││                                     │
   │                                    ││ is exploitable intraday             ││                                     │

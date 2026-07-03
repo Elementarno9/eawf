@@ -2,7 +2,7 @@
 
   ╭─ TOPIC TREE ───────────────────────╮╭─ CLAIMS / EVIDENCE ─────────────────╮╭─ PROGRESS / BUDGET ─────────────────╮
   │ > ≡ Survey the options-pricing     ││                                     ││ RUN runnable                        │
-  │     landscape                      ││ showing all claims -- campaign:     ││ ROUND 0 run                         │
+  │     landscape · staged             ││ showing all claims -- campaign:     ││ ROUND 0 run                         │
   │     ◌ round idle                   ││ Survey the options-pricing          ││ ACTIVE 4 claim(s)                   │
   │       ◌ domain: market-structure   ││ landscape                           ││ WAITING 0 open question(s)          │
   │       ◌ domain: pricing-models     ││ ● Implied vol surface is downward   ││ PAUSED 0 checkpoint(s)              │

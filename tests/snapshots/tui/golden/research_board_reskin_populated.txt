@@ -2,18 +2,18 @@
 
   ╭─ TOPIC TREE ───────────────────────╮╭─ CLAIMS / EVIDENCE ─────────────────╮╭─ PROGRESS / BUDGET ─────────────────╮
   │ > ≡ Survey the options-pricing     ││                                     ││ RUN blocked_await_user              │
-  │     landscape                      ││ showing all claims -- campaign:     ││ ROUND 1 running · 4 claim(s)        │
+  │     landscape · running            ││ showing all claims -- campaign:     ││ ROUND 1 running · 4 claim(s)        │
   │     ◆ round running                ││ Survey the options-pricing          ││ ACTIVE 4 claim(s)                   │
   │       ◌ domain: market-structure   ││ landscape                           ││ WAITING 2 open question(s)          │
   │       ◌ domain: pricing-models     ││ ● Implied vol surface is downward   ││ PAUSED 0 checkpoint(s)              │
-  │   ◆ scope questions -- running     ││ sloping in strike …                 ││ BUDGET 2 staged topic(s), 1         │
-  │     ◌ Which curve model fits the   ││ ✕ Term-structure arbitrage is       ││ answered, 2 pruned                  │
-  │       short tenor                  ││ exploitable intraday …              ││ RISKS 1 blocking question(s)        │
-  │     ● Does the smile invert past   ││ ◌ Overnight gamma decay drives      ││                                     │
-  │       the 90 delta wing            ││ the skew                            ││                                     │
-  │     ◌ Is the term-structure        ││ ◌ Earlier vol-cluster claim         ││                                     │
-  │       arbitrage real               ││ subsumed by CL-0001                 ││                                     │
-  │ enter to peek the selected node    ││                                     ││                                     │
+  │     ◌ Which curve model fits the   ││ sloping in strike …                 ││ BUDGET 2 staged topic(s), 1         │
+  │       short tenor                  ││ ✕ Term-structure arbitrage is       ││ answered, 2 pruned                  │
+  │     ● Does the smile invert past   ││ exploitable intraday …              ││ RISKS 1 blocking question(s)        │
+  │       the 90 delta wing            ││ ◌ Overnight gamma decay drives      ││                                     │
+  │     ◌ Is the term-structure        ││ the skew                            ││                                     │
+  │       arbitrage real               ││ ◌ Earlier vol-cluster claim         ││                                     │
+  │ enter to peek the selected node    ││ subsumed by CL-0001                 ││                                     │
+  │                                    ││                                     ││                                     │
   │                                    ││ Options (supporting evidence)       ││                                     │
   │                                    ││ ● 2 ref(s) Implied vol surface is   ││                                     │
   │                                    ││ downward sloping in strike          ││                                     │

@@ -1,13 +1,13 @@
  ◉ Eä  repo ❯ QR ❯ Research                                                                                                                                                         ≈ idle    HH:MM UTC
 
   ╭─ TOPIC TREE ──────────────────────────────────────────────────╮╭─ CLAIMS / EVIDENCE ───────────────────────────────────────────╮╭─ PROGRESS / BUDGET ────────────────────────────────────────────╮
-  │ > ≡ Survey the options-pricing landscape                      ││                                                               ││ RUN runnable                                                   │
+  │ > ≡ Survey the options-pricing landscape · running            ││                                                               ││ RUN runnable                                                   │
   │     ◆ round running                                           ││ showing all claims -- campaign: Survey the options-pricing    ││ ROUND 1 running · 1 claim(s)                                   │
   │       ◌ domain: market-structure                              ││ landscape                                                     ││ ACTIVE 1 claim(s)                                              │
   │       ◌ domain: pricing-models                                ││ ◌ Implied vol surface is downward sloping in strike           ││ WAITING 1 open question(s)                                     │
-  │   ◆ scope questions -- running                                ││                                                               ││ PAUSED 0 checkpoint(s)                                         │
-  │     ◌ Which curve model fits the short tenor                  ││ Options (supporting evidence)                                 ││ BUDGET 2 staged topic(s), 0 answered, 0 pruned                 │
-  │ enter to peek the selected node                               ││ none yet                                                      ││ RISKS none                                                     │
+  │     ◌ Which curve model fits the short tenor                  ││                                                               ││ PAUSED 0 checkpoint(s)                                         │
+  │ enter to peek the selected node                               ││ Options (supporting evidence)                                 ││ BUDGET 2 staged topic(s), 0 answered, 0 pruned                 │
+  │                                                               ││ none yet                                                      ││ RISKS none                                                     │
   │                                                               ││                                                               ││                                                                │
   │                                                               ││ Conflicts (contradicting evidence)                            ││                                                                │
   │                                                               ││ none yet                                                      ││                                                                │
