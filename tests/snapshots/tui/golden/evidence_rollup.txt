@@ -2,10 +2,10 @@
  criteria: none
  no close-readiness criteria
  2 reports - 0 followup(s)
+ ● pass  ●⁺ pass+followups  ✕ fail  ⊘ blocked   +✕ = wave FAILED (self-claimed pass)
   report                       role      verdict  eu
   P30-I02-W15 Reskin Evidence  executor  ●        1.00
   P30-I02-W15 Reskin Evidence  reviewer  ⊘        1.00
-
 
 
 
