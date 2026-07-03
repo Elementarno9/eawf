@@ -13895,7 +13895,7 @@
       "SES-20260703T161339Z-auditor-claude-code"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P30-I24",
     "phase_id": "P30",
     "project_code": "EAWF",
     "track_id": null
@@ -28697,6 +28697,29 @@
         "P30-I23-W51",
         "P30-I23-W52"
       ]
+    },
+    "P30-I24": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": null,
+      "estimate_id": null,
+      "id": "P30-I24",
+      "intent": null,
+      "opened_at": "2026-07-03T19:04:03.991814Z",
+      "phase_id": "P30",
+      "status": "active",
+      "title": "Redesign research board and fix evidence and watch TUI UX",
+      "trigger": "none",
+      "wave_ids": [
+        "P30-I24-W01",
+        "P30-I24-W02",
+        "P30-I24-W03",
+        "P30-I24-W04",
+        "P30-I24-W05",
+        "P30-I24-W06",
+        "P30-I24-W07"
+      ]
     }
   },
   "mcp_grants": null,
@@ -29769,7 +29792,8 @@
         "P30-I20",
         "P30-I21",
         "P30-I22",
-        "P30-I23"
+        "P30-I23",
+        "P30-I24"
       ],
       "opened_at": "2026-06-09T12:29:17.752919Z",
       "outcome_ids": [],
@@ -29820,7 +29844,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-03T17:08:42.899135Z",
+  "updated_at": "2026-07-03T19:17:06.458047Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -109110,7 +109134,14 @@
         "P30-I21-W25",
         "P30-I21-W26",
         "P30-I21-W27",
-        "P30-I21-W28"
+        "P30-I21-W28",
+        "P30-I24-W01",
+        "P30-I24-W02",
+        "P30-I24-W03",
+        "P30-I24-W04",
+        "P30-I24-W05",
+        "P30-I24-W06",
+        "P30-I24-W07"
       ],
       "description": "Phase re-close vehicle: executes the v0.6.0 re-close with the (release=v0.6.0) annotation after I23 max-hardening lands. Prefix-rider reconciliation (D-I21-RATIFY): three test: commits ride the [P30-I21-W22] prefix ahead of the wave itself — e77834ee, 46149415, fcc2bdad — annotated here so the wave ledger matches the commit ledger.",
       "dispatch_history": [],
@@ -118631,6 +118662,461 @@
       "status": "closed",
       "success_criteria": [],
       "title": "Shield in-flight mutations from client-disconnect cancellation",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I24-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I24-W02",
+        "P30-I24-W07",
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "reactive TUI UX fix iter using string criteria verified by Pilot snapshot and affordance-parity gates at wave close",
+        "waived_at": "2026-07-03T19:17:02.470384Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/research_board.py"
+      ],
+      "gates": [],
+      "id": "P30-I24-W01",
+      "intent": {
+        "desired_outcome": "Arrows move the tree selection natively and wrapped titles indent correctly on first paint",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Pass measured tree width to render_tree on mount via call_after_refresh"
+        ],
+        "priority_rationale": null,
+        "problem": "Research board tree traps arrow keys in the pane scroller so selection cannot move between questions and long titles indent wrong until a keypress",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I24",
+      "opened_at": "2026-07-03T19:17:02.519239Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "On first paint a long wrapping topic title renders with its hanging indent already applied because render_tree receives the measured tree width on mount so no keypress is needed",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "On first paint a long wrapping topic title renders with its hanging indent already applied because render_tree receives the measured tree width on mount so no keypress is needed",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Tree interaction spine: arrow-select + scroll-into-view + mount-width",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I24-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I24-W03",
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "reactive TUI UX fix iter using string criteria verified by Pilot snapshot and affordance-parity gates at wave close",
+        "waived_at": "2026-07-03T19:17:03.047850Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I24-W01"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/research_board.py"
+      ],
+      "gates": [],
+      "id": "P30-I24-W02",
+      "intent": {
+        "desired_outcome": "Campaigns are pickable collapsible top-level nodes and each question shows its status marker before the title",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Group questions under their owning campaign"
+        ],
+        "priority_rationale": null,
+        "problem": "The board buries campaign selection and questions render title-first with no status so the operator cannot pick a campaign or scan open versus answered questions",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I24",
+      "opened_at": "2026-07-03T19:17:03.082590Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "A Pilot snapshot shows questions grouped under their owning campaign not visually nested under the last campaign",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A Pilot snapshot shows questions grouped under their owning campaign not visually nested under the last campaign",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Campaign tree: pickable campaigns + status-before-title questions",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I24-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I24-W04",
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "reactive TUI UX fix iter using string criteria verified by Pilot snapshot and affordance-parity gates at wave close",
+        "waived_at": "2026-07-03T19:17:03.613261Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I24-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/research_board.py"
+      ],
+      "gates": [],
+      "id": "P30-I24-W03",
+      "intent": {
+        "desired_outcome": "The right pane morphs by selected node kind showing campaign stats question answer or claim summary with no peek written into the tree",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Remove the in-tree research-peek Static and scope claims to the selected node"
+        ],
+        "priority_rationale": null,
+        "problem": "The center pane shows a global claim soup and the peek dump lands inside the tree pane so evidence is never scoped to the selected node",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I24",
+      "opened_at": "2026-07-03T19:17:03.645887Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The research-peek Static is removed from the tree pane so pressing Enter no longer appends a block inside the topic tree",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The research-peek Static is removed from the tree pane so pressing Enter no longer appends a block inside the topic tree",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Polymorphic detail pane: campaign stats, question answer, claim summary",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I24-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "reactive TUI UX fix iter using string criteria verified by Pilot snapshot and affordance-parity gates at wave close",
+        "waived_at": "2026-07-03T19:17:04.171835Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I24-W03"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/research_board.py",
+        "src/eawf/surfaces/tui/modals/evidence_reader.py"
+      ],
+      "gates": [],
+      "id": "P30-I24-W04",
+      "intent": {
+        "desired_outcome": "Enter opens a full-screen evidence reader modal for the selected claim with the full body sources conflicts and provenance",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Render supporting sources conflicts and provenance with Esc to close"
+        ],
+        "priority_rationale": null,
+        "problem": "There is no way to read a claim full evidence from research mode so the operator must switch to Evidence mode to understand a claim",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I24",
+      "opened_at": "2026-07-03T19:17:04.208210Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "A Pilot test opens the modal on a claim and asserts the evidence source lines and conflicts are visible",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A Pilot test opens the modal on a claim and asserts the evidence source lines and conflicts are visible",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Evidence zoom modal: full-screen claim + sources + conflicts reader",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I24-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "reactive TUI UX fix iter using string criteria verified by Pilot snapshot and affordance-parity gates at wave close",
+        "waived_at": "2026-07-03T19:17:04.740905Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/evidence.py",
+        "src/eawf/surfaces/tui/modals/report_detail.py"
+      ],
+      "gates": [],
+      "id": "P30-I24-W05",
+      "intent": {
+        "desired_outcome": "A legend explains the verdict sigils a failed-wave row is legible and researcher rows and their drill surface the question findings and recommendation",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Project researcher question findings and recommendation onto the row and drill"
+        ],
+        "priority_rationale": null,
+        "problem": "The verdict cross has no legend and researcher rows show only the repeated campaign topic with no way to see what the report found even in the drill",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I24",
+      "opened_at": "2026-07-03T19:17:04.775041Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "A researcher row drill shows the report question findings and recommendation not just the repeated campaign topic",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A researcher row drill shows the report question findings and recommendation not just the repeated campaign topic",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Evidence-mode clarity: verdict legend + researcher row and drill detail",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I24-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "reactive TUI UX fix iter using string criteria verified by Pilot snapshot and affordance-parity gates at wave close",
+        "waived_at": "2026-07-03T19:17:05.316730Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/agent_watch.py"
+      ],
+      "gates": [],
+      "id": "P30-I24-W06",
+      "intent": {
+        "desired_outcome": "An explicit binding opens the watch roster and the picker is reachable regardless of whether a session is currently active",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Make Esc from a zoom return to the roster when more than one session exists"
+        ],
+        "priority_rationale": null,
+        "problem": "Watch mode auto-attaches to one agent and offers no key to reach the session picker so the operator cannot browse other agents while any is live",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I24",
+      "opened_at": "2026-07-03T19:17:05.352066Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "A Pilot test presses the roster key and asserts the picker rows are visible",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A Pilot test presses the roster key and asserts the picker rows are visible",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Watch roster: list binding + decouple picker from active-sessions guard",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I24-W07": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "reactive TUI UX fix iter using string criteria verified by Pilot snapshot and affordance-parity gates at wave close",
+        "waived_at": "2026-07-03T19:17:05.904323Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I24-W01"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/snapshot/pilot_harness.py"
+      ],
+      "gates": [],
+      "id": "P30-I24-W07",
+      "intent": {
+        "desired_outcome": "The gate asserts the selection or target actually moved on a navigation key not merely that some pixels repainted",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Wire the extended assertion into the TUI suite"
+        ],
+        "priority_rationale": null,
+        "problem": "The W28 liveness gate asserts a frame changed on an advertised key but a pane scroll counts as a change so a dead selection key still passes",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I24",
+      "opened_at": "2026-07-03T19:17:05.937319Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The extended gate runs green across research evidence and watch modes in the TUI suite",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The extended gate runs green across research evidence and watch modes in the TUI suite",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Interaction-liveness gate: assert selection moved not just repaint",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
