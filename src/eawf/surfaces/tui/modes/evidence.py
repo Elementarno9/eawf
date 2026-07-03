@@ -44,6 +44,7 @@ from eawf.kernel.spec.common import OracleTier, tier_label
 from eawf.kernel.state.enums import AgentReportVerdict, StoreKind, WaveStatus
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.agent_report import ResearcherReportBody
 from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.paths import store_path
 from eawf.platform.scrub import scan_text
@@ -214,6 +215,53 @@ def verdict_cell(
     return cell
 
 
+#: The ordered ``(verdict, label)`` pairs the verdict-sigil legend maps, one
+#: per :class:`~eawf.kernel.state.enums.AgentReportVerdict` value in the order
+#: the verdict column renders them: a clean pass, a pass trailing its follow-up
+#: badge, a hard fail, and a withheld blocked. The trailing failed-wave cross
+#: (:func:`verdict_cell` appends it when the joined wave terminal-failed) is
+#: mapped separately in :func:`evidence_legend` so ``+x`` reads as a qualifier,
+#: not a verdict of its own.
+_LEGEND_VERDICTS: tuple[tuple[str, str], ...] = (
+    ("pass", "pass"),
+    ("pass-with-followups", "pass+followups"),
+    ("fail", "fail"),
+    ("blocked", "blocked"),
+)
+
+
+def evidence_legend(*, mode: RenderMode = DEFAULT_RENDER_MODE) -> Text:
+    """Return the compact one-line verdict-sigil legend as a tinted Text.
+
+    Maps every verdict sigil the verdict column renders -- pass, pass-with-
+    followups (the follow-up badge trails), fail, blocked -- to its short label,
+    then the trailing failed-wave cross :func:`verdict_cell` appends when the
+    joined wave terminal-failed, so an operator can read a ``@ x`` row without
+    memorising the sigil alphabet. Every glyph routes through the same render-
+    mode-aware helpers the column uses (:func:`verdict_sigil` for the verdict
+    sigils, :func:`~eawf.surfaces.tui.widgets.sigils.glyph` for the failed
+    cross), so the legend's ascii / unicode column always matches the table's.
+
+    Args:
+        mode: The App's resolved render-mode label threaded into the sigil
+            helpers; defaults to the ASCII column for a bare standalone render.
+
+    Returns:
+        The tinted one-line legend :class:`~rich.text.Text` -- each verdict
+        sigil beside its label, then the failed-wave cross qualifier.
+    """
+    legend = Text()
+    for verdict, label in _LEGEND_VERDICTS:
+        if len(legend):
+            legend.append("  ")
+        legend.append_text(verdict_sigil(verdict, mode=mode))
+        legend.append(f" {label}")
+    legend.append("   +")
+    legend.append(glyph(Sigil.FAILED, mode=mode), style=tint(Sigil.FAILED) or "")
+    legend.append(" = wave FAILED (self-claimed pass)")
+    return legend
+
+
 #: Footer hints for the Evidence mode (arrows primary). The mode digits are
 #: surfaced by the always-visible mode row, not duplicated in the hint strip.
 #: Every label is produced through
@@ -266,6 +314,20 @@ class EvidenceRow:
             (:data:`_FAILED_WAVE_STATUSES`); drives the failed cross-mark on
             the verdict cell so a self-claimed pass on a failed wave is
             visibly qualified. ``False`` when the ``base_id`` joins no wave.
+        wave_status: The joined wave's :class:`~eawf.kernel.state.enums.WaveStatus`
+            value (e.g. ``failed`` / ``closed``), or ``""`` when the ``base_id``
+            joins no wave in state. Threaded through so a terminal-failed
+            report drill names the wave's REAL status alongside the agent's
+            self-claimed verdict.
+        question: The researcher report's question, or ``""`` for a non-
+            researcher role. Projected so a campaign researcher row drills to
+            what it studied, not the repeated campaign topic.
+        findings: The researcher report's findings, in report order; empty for
+            a non-researcher role.
+        alternatives: The researcher report's considered alternatives, in
+            report order; empty for a non-researcher role.
+        recommendation: The researcher report's recommendation, or ``""`` for a
+            non-researcher role.
     """
 
     report_id: str
@@ -282,6 +344,11 @@ class EvidenceRow:
     evidence_refs: tuple[str, ...] = ()
     campaign_topic: str | None = None
     wave_failed: bool = False
+    wave_status: str = ""
+    question: str = ""
+    findings: tuple[str, ...] = ()
+    alternatives: tuple[str, ...] = ()
+    recommendation: str = ""
 
     @property
     def followup_count(self) -> int:
@@ -327,19 +394,21 @@ class EvidenceRow:
         return f"{self.eu:.2f}"
 
 
-def _wave_joins(state: State | None) -> dict[str, tuple[str, float, bool]]:
-    """Return a ``{wave_id: (title, eu, failed)}`` join map from *state*.
+def _wave_joins(state: State | None) -> dict[str, tuple[str, float, bool, str]]:
+    """Return a ``{wave_id: (title, eu, failed, status)}`` join map from *state*.
 
     Args:
         state: The loaded state, or ``None`` (fresh / user scope) -- the
             latter yields an empty map so every row renders with no title
-            join, a dashed EU, and no failed mark rather than raising.
+            join, a dashed EU, no failed mark, and no status rather than
+            raising.
 
     Returns:
-        A wave-id to ``(title, eu, failed)`` map, where ``eu`` is the
+        A wave-id to ``(title, eu, failed, status)`` map, where ``eu`` is the
         bucket-derived effort-unit estimate for the wave (``0.0`` when the
-        wave has no effort bucket) and ``failed`` is whether the wave's status
-        is terminal-failed (:data:`_FAILED_WAVE_STATUSES`).
+        wave has no effort bucket), ``failed`` is whether the wave's status is
+        terminal-failed (:data:`_FAILED_WAVE_STATUSES`), and ``status`` is the
+        wave's :class:`~eawf.kernel.state.enums.WaveStatus` value string.
     """
     if state is None:
         return {}
@@ -348,6 +417,7 @@ def _wave_joins(state: State | None) -> dict[str, tuple[str, float, bool]]:
             wave.title,
             wave_estimate_eu(wave),
             wave.status in _FAILED_WAVE_STATUSES,
+            wave.status.value,
         )
         for wave_id, wave in state.waves.items()
     }
@@ -385,14 +455,14 @@ def _campaign_topics(state_path: Path) -> dict[str, str]:
 
 def _row_from_report(
     report: AgentReportRow,
-    wave_joins: dict[str, tuple[str, float, bool]],
+    wave_joins: dict[str, tuple[str, float, bool, str]],
     campaign_topics: dict[str, str],
 ) -> EvidenceRow:
     """Join one report row to its wave / campaign and project the fields.
 
     Args:
         report: The loaded report row.
-        wave_joins: The ``{wave_id: (title, eu, failed)}`` join map.
+        wave_joins: The ``{wave_id: (title, eu, failed, status)}`` join map.
         campaign_topics: The ``{campaign_id: topic}`` map for labelling a
             campaign-scoped report by its topic.
 
@@ -402,8 +472,17 @@ def _row_from_report(
     header = report.payload.header
     body = report.payload.body
     base_id = header.base_id
-    title, eu, failed = wave_joins.get(base_id, (None, 0.0, False))
+    title, eu, failed, status = wave_joins.get(base_id, (None, 0.0, False, ""))
     topic = campaign_topics.get(base_id) if base_id.startswith(_CAMPAIGN_PREFIX) else None
+    question = ""
+    findings: tuple[str, ...] = ()
+    alternatives: tuple[str, ...] = ()
+    recommendation = ""
+    if isinstance(body, ResearcherReportBody):
+        question = body.question
+        findings = tuple(body.findings)
+        alternatives = tuple(body.alternatives)
+        recommendation = body.recommendation
     return EvidenceRow(
         report_id=header.report_id,
         role=header.role.value,
@@ -419,6 +498,11 @@ def _row_from_report(
         evidence_refs=tuple(f"{ref.kind}: {ref.ref}" for ref in body.evidence_refs),
         campaign_topic=topic,
         wave_failed=failed,
+        wave_status=status,
+        question=question,
+        findings=findings,
+        alternatives=alternatives,
+        recommendation=recommendation,
     )
 
 
@@ -1194,6 +1278,10 @@ class EvidenceModeScreen(ScopeScreen):
         color: $accent;
         text-style: bold;
     }
+    EvidenceModeScreen .evidence-legend {
+        height: 1;
+        color: $text-muted;
+    }
     EvidenceModeScreen #evidence-table {
         height: 1fr;
         overflow-x: hidden;
@@ -1275,6 +1363,15 @@ class EvidenceModeScreen(ScopeScreen):
             )
             yield DataTable(id="evidence-ledger", cursor_type="row", zebra_stripes=True)
             yield Static(EMPTY_NOTICE, id="evidence-summary", classes="evidence-summary")
+            # The verdict-sigil legend sits directly above the rollup table so
+            # an operator reads the tinted verdict column (and the trailing
+            # failed-wave cross) without memorising the sigil alphabet. Gated to
+            # the populated pane in :meth:`_rebuild` -- an empty rollup has no
+            # verdict column to read, so the legend hides on the honest-empty
+            # path and the seal hero keeps its centered layout.
+            yield Static(
+                evidence_legend(mode=mode), id="evidence-legend", classes="evidence-legend"
+            )
             # Unicode path leads the no-reports rollup with the centered ASCII
             # Seal (the research-board brand mark) over the notice, wrapped in a
             # full-height ``align: center middle`` hero so the seal + copy block
@@ -1384,9 +1481,11 @@ class EvidenceModeScreen(ScopeScreen):
         rows = sort_evidence_rows(build_evidence_rows(self._state_path(), self.state))
         mode = self._render_mode()
         summary = self.query_one("#evidence-summary", Static)
+        legend = self.query_one("#evidence-legend", Static)
         empty = self.query_one("#evidence-empty", Static)
         followups = self.query_one("#evidence-followups", Static)
         summary.update(evidence_summary_line(rows))
+        legend.update(evidence_legend(mode=mode))
         followups.update(render_followups_block(rows))
         table.clear()
         self._rows_by_id = {row.report_id: row for row in rows}
@@ -1400,6 +1499,7 @@ class EvidenceModeScreen(ScopeScreen):
             )
         has_rows = bool(rows)
         table.display = has_rows
+        legend.display = has_rows
         empty.display = not has_rows
         self._toggle_seal_art(has_rows=has_rows, mode=mode)
         self._paint_readiness()
@@ -1732,6 +1832,7 @@ __all__ = [
     "build_evidence_rows",
     "close_readiness_header",
     "criterion_ready_count",
+    "evidence_legend",
     "evidence_summary_line",
     "export_evidence_manifest",
     "frame_empty_notice",

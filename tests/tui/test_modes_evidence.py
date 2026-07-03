@@ -23,6 +23,7 @@ asserting.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -47,6 +48,7 @@ from eawf.kernel.store.kinds.agent_report import (
     AgentReportHeader,
     AgentReportPayload,
     ExecutorReportBody,
+    ResearcherReportBody,
     ReviewerReportBody,
     store_kind_for_role,
 )
@@ -61,6 +63,8 @@ from eawf.surfaces.tui.modals.report_detail import (
     report_followup_lines,
     report_provenance_line,
     report_ref_lines,
+    report_researcher_lines,
+    report_wave_status_line,
 )
 from eawf.surfaces.tui.modes.evidence import (
     _EVIDENCE_HINTS,
@@ -75,6 +79,7 @@ from eawf.surfaces.tui.modes.evidence import (
     EvidenceRow,
     build_ballot_grid,
     build_evidence_rows,
+    evidence_legend,
     evidence_summary_line,
     render_ballot_grid,
     render_followups_block,
@@ -154,12 +159,18 @@ def _empty_state() -> State:
     )
 
 
-def _state_with_wave(wave_id: str = "P29-I02-W22", title: str = "Add Evidence pane") -> State:
-    """Build a state carrying one CLOSED wave for the title join.
+def _state_with_wave(
+    wave_id: str = "P29-I02-W22",
+    title: str = "Add Evidence pane",
+    status: WaveStatus = WaveStatus.CLOSED,
+) -> State:
+    """Build a state carrying one wave (CLOSED by default) for the title join.
 
     Uses the lifecycle transition helpers so every phase/iter/wave model
     carries its required fields (e.g. the derived ``scope_id``) without a
-    hand-built dict that drifts as the schema grows.
+    hand-built dict that drifts as the schema grows. *status* drives the
+    joined wave status -- pass :data:`WaveStatus.FAILED` for the failed-wave
+    drill path.
     """
     state = _empty_state()
     open_phase(state, phase_id="P29", title="phase")
@@ -174,8 +185,9 @@ def _state_with_wave(wave_id: str = "P29-I02-W22", title: str = "Add Evidence pa
         intent=make_intent(),
     )
     wave = state.waves[wave_id]
-    wave.status = WaveStatus.CLOSED
-    wave.closed_at = NOW
+    wave.status = status
+    if status is WaveStatus.CLOSED:
+        wave.closed_at = NOW
     return state
 
 
@@ -253,12 +265,48 @@ def _write_reviewer_report(
     _append_report(state_path, AgentSessionRole.REVIEWER, report_id, base_id, body, header)
 
 
+def _write_researcher_report(
+    state_path: Path,
+    *,
+    base_id: str,
+    question: str = "which sigil legend do operators need?",
+    findings: tuple[str, ...] = ("operators cannot read the bare verdict column",),
+    recommendation: str = "render a one-line verdict-sigil legend",
+    attempt: int = 1,
+) -> None:
+    """Append one researcher report envelope keyed by ``base_id`` to the store."""
+    body = ResearcherReportBody(
+        role="researcher",
+        verdict=AgentReportVerdict.PASS,
+        confidence=Confidence.HIGH,
+        summary="research complete",
+        question=question,
+        findings=list(findings),
+        alternatives=["defer to a help modal"],
+        recommendation=recommendation,
+        evidence_refs=[AgentReportEvidenceRef(kind="artifact", ref="brief.md")],
+    )
+    report_id = f"AR-researcher-{base_id}-{attempt:02d}"
+    header = AgentReportHeader(
+        report_id=report_id,
+        role=AgentSessionRole.RESEARCHER,
+        session_id=f"RES-{attempt}",
+        scope_id=base_id,
+        base_id=base_id,
+        attempt=attempt,
+        runtime="claude",
+        generated_at=NOW,
+        summary="research complete",
+    )
+    _append_report(state_path, AgentSessionRole.RESEARCHER, report_id, base_id, body, header)
+
+
 def _append_report(
     state_path: Path,
     role: AgentSessionRole,
     report_id: str,
     base_id: str,
-    body: ExecutorReportBody | ReviewerReportBody,
+    body: ExecutorReportBody | ReviewerReportBody | ResearcherReportBody,
     header: AgentReportHeader,
 ) -> None:
     """Write one report envelope to the role store under *state_path*."""
@@ -523,6 +571,105 @@ def test_render_report_detail_empty_refs_and_followups_show_notices() -> None:
     block = render_report_detail(_report_row(followups=(), evidence_refs=()))
     assert NO_EVIDENCE_REFS_NOTICE in block
     assert NO_FOLLOWUPS_NOTICE in block
+
+
+# --------------------------------------------------------------------------
+# Verdict-sigil legend (W05 defect 1) -- pure render
+# --------------------------------------------------------------------------
+
+
+def test_evidence_legend_maps_each_verdict_sigil() -> None:
+    """The legend maps every verdict sigil + the failed-wave cross to its label."""
+    legend = evidence_legend(mode="unicode").plain
+    # Each verdict sigil renders beside its label, in column order.
+    assert f"{glyph(Sigil.CLOSED, mode='unicode')} pass" in legend
+    assert "pass+followups" in legend
+    assert f"{glyph(Sigil.FAILED, mode='unicode')} fail" in legend
+    assert "blocked" in legend
+    # The trailing failed-wave cross qualifier names the wave-FAILED meaning.
+    assert glyph(Sigil.FAILED, mode="unicode") in legend
+    assert "wave FAILED (self-claimed pass)" in legend
+
+
+def test_evidence_legend_ascii_mode_uses_ascii_column() -> None:
+    """The ASCII render mode threads the ASCII sigil column into the legend."""
+    legend = evidence_legend(mode="ascii").plain
+    assert f"{glyph(Sigil.CLOSED, mode='ascii')} pass" in legend
+    assert f"{glyph(Sigil.FAILED, mode='ascii')} fail" in legend
+
+
+# --------------------------------------------------------------------------
+# Failed-wave status line + researcher detail (W05 defects 2 + 3) -- pure
+# --------------------------------------------------------------------------
+
+
+def _researcher_row(
+    *,
+    question: str = "which legend do operators need?",
+    findings: tuple[str, ...] = ("the verdict column is unreadable bare",),
+    alternatives: tuple[str, ...] = ("defer to a help modal",),
+    recommendation: str = "ship a one-line verdict legend",
+) -> EvidenceRow:
+    """Build a researcher evidence row carrying its body fields."""
+    return EvidenceRow(
+        report_id="AR-researcher-campaign-abcd-01",
+        role="researcher",
+        verdict="pass",
+        wave_id="campaign-abcd",
+        wave_title=None,
+        attempt=1,
+        summary="research complete",
+        followups=(),
+        campaign_topic="verdict legend study",
+        question=question,
+        findings=findings,
+        alternatives=alternatives,
+        recommendation=recommendation,
+    )
+
+
+def test_report_wave_status_line_names_status_and_self_claim() -> None:
+    """A failed-wave row names the real WaveStatus beside the self-claimed verdict."""
+    row = replace(_report_row(verdict="pass"), wave_failed=True, wave_status="failed")
+    line = report_wave_status_line(row)
+    assert line is not None
+    assert "wave status: FAILED" in line
+    assert "agent self-claimed pass" in line
+
+
+def test_report_wave_status_line_none_when_wave_not_failed() -> None:
+    """A row whose wave did not fail yields no status line."""
+    assert report_wave_status_line(_report_row()) is None
+
+
+def test_report_researcher_lines_show_question_finding_recommendation() -> None:
+    """A researcher row projects question / findings / recommendation lines."""
+    lines = report_researcher_lines(_researcher_row())
+    assert "question: which legend do operators need?" in lines
+    assert "  - the verdict column is unreadable bare" in lines
+    assert "recommendation: ship a one-line verdict legend" in lines
+
+
+def test_report_researcher_lines_empty_for_non_researcher_row() -> None:
+    """A non-researcher row (no question) yields no research section."""
+    assert report_researcher_lines(_report_row()) == ()
+
+
+def test_render_report_detail_failed_wave_shows_status_line() -> None:
+    """The full detail block names the failed wave status beside the self-claim."""
+    row = replace(_report_row(verdict="pass"), wave_failed=True, wave_status="failed")
+    block = render_report_detail(row)
+    assert "wave status: FAILED" in block
+    assert "agent self-claimed pass" in block
+
+
+def test_render_report_detail_researcher_shows_research_section() -> None:
+    """The full detail block carries the researcher question / finding / recommendation."""
+    block = render_report_detail(_researcher_row())
+    assert "research:" in block
+    assert "question: which legend do operators need?" in block
+    assert "the verdict column is unreadable bare" in block
+    assert "recommendation: ship a one-line verdict legend" in block
 
 
 # --------------------------------------------------------------------------
@@ -875,5 +1022,113 @@ def test_evidence_enter_empty_table_is_safe_noop() -> None:
             await settle_screen(pilot)
             assert app.modal_depth() == 0
             assert isinstance(app.screen, EvidenceModeScreen)
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Verdict-sigil legend + failed-wave / researcher drill (W05) -- Pilot-driven
+# --------------------------------------------------------------------------
+
+
+def test_evidence_pane_renders_verdict_legend(tmp_path: Path) -> None:
+    """With reports on disk the pane renders the verdict-sigil legend line."""
+
+    async def body() -> None:
+        state = _state_with_wave(wave_id="P29-I02-W22", title="Add Evidence pane")
+        state_path = _write_state(state, tmp_path)
+        _write_executor_report(state_path, base_id="P29-I02-W22", verdict=AgentReportVerdict.PASS)
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("6")
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, EvidenceModeScreen)
+            legend = screen.query_one("#evidence-legend", Static)
+            assert legend.display is True
+            frame = normalize_snapshot(capture_screen_text(app))
+            # The legend maps each verdict sigil to its label + the failed cross.
+            assert f"{glyph(Sigil.CLOSED, mode=app.render_mode)} pass" in frame
+            assert "pass+followups" in frame
+            assert "wave FAILED (self-claimed pass)" in frame
+
+    asyncio.run(body())
+
+
+def test_evidence_pane_legend_hidden_on_honest_empty() -> None:
+    """The honest-empty pane hides the legend (no verdict column to read)."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("6")
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, EvidenceModeScreen)
+            assert screen.query_one("#evidence-legend", Static).display is False
+
+    asyncio.run(body())
+
+
+def test_evidence_failed_wave_drill_shows_wave_status(tmp_path: Path) -> None:
+    """A failed-wave report drill names the real wave status + the self-claim."""
+
+    async def body() -> None:
+        state = _state_with_wave(
+            wave_id="P29-I02-W22", title="Add Evidence pane", status=WaveStatus.FAILED
+        )
+        state_path = _write_state(state, tmp_path)
+        # The agent self-claimed pass while the wave itself terminal-failed.
+        _write_executor_report(state_path, base_id="P29-I02-W22", verdict=AgentReportVerdict.PASS)
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("6")
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, EvidenceModeScreen)
+            screen.query_one("#evidence-table", DataTable).focus()
+            await settle_screen(pilot)
+            await pilot.press("enter")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ReportDetailModal)
+            frame = normalize_snapshot(capture_screen_text(app))
+            assert "wave status: FAILED" in frame
+            assert "agent self-claimed pass" in frame
+
+    asyncio.run(body())
+
+
+def test_evidence_researcher_drill_shows_question_and_recommendation(tmp_path: Path) -> None:
+    """A researcher report drill shows its question, a finding, and recommendation."""
+
+    async def body() -> None:
+        state = _state_with_wave(wave_id="P29-I02-W22", title="Add Evidence pane")
+        state_path = _write_state(state, tmp_path)
+        _write_researcher_report(
+            state_path,
+            base_id="P29-I02-W22",
+            question="which sigil legend do operators need?",
+            findings=("operators cannot read the bare verdict column",),
+            recommendation="render a one-line verdict-sigil legend",
+        )
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("6")
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, EvidenceModeScreen)
+            screen.query_one("#evidence-table", DataTable).focus()
+            await settle_screen(pilot)
+            await pilot.press("enter")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ReportDetailModal)
+            frame = normalize_snapshot(capture_screen_text(app))
+            assert "which sigil legend do operators need?" in frame
+            assert "operators cannot read the bare verdict column" in frame
+            assert "render a one-line verdict-sigil legend" in frame
 
     asyncio.run(body())

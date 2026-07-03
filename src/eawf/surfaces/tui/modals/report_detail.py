@@ -2,7 +2,10 @@
 
 Opens one agent report from the Evidence mode's report rollup: a small
 centred :class:`~textual.screen.ModalScreen` that renders the report's
-**verdict**, its **summary**, the **evidence refs** it cited, the
+**verdict**, a **wave-status** line when the joined wave terminal-failed
+(so a self-claimed pass on a failed wave is self-explanatory), its
+**summary**, a **research** section for a researcher report (question ->
+findings -> recommendation), the **evidence refs** it cited, the
 **followups** it emitted, and its **attempt provenance** (which role
 produced which attempt, on which runtime, when). ``Esc`` closes.
 
@@ -109,15 +112,72 @@ def report_provenance_line(row: EvidenceRow) -> str:
     return " ".join(parts)
 
 
+def report_wave_status_line(row: EvidenceRow) -> str | None:
+    """Return the failed-wave status line, or ``None`` when the wave did not fail.
+
+    When the joined wave terminal-failed
+    (:attr:`~eawf.surfaces.tui.modes.evidence.EvidenceRow.wave_failed`), a
+    report claiming ``pass`` is only a SELF-claim -- the wave's own
+    :class:`~eawf.kernel.state.enums.WaveStatus` says otherwise. This names the
+    wave's real status beside the self-claimed verdict so a ``@ x`` row is
+    self-explanatory in the drill. A non-failed wave (or a report joining no
+    wave) yields ``None`` so the caller renders no status line.
+
+    Args:
+        row: The evidence row whose wave status to render.
+
+    Returns:
+        The failed-wave status line, or ``None`` when the wave did not fail.
+    """
+    if not row.wave_failed:
+        return None
+    status = row.wave_status.upper() if row.wave_status else "FAILED"
+    return (
+        f"wave status: {status} - wave terminal-failed at verify; agent self-claimed {row.verdict}"
+    )
+
+
+def report_researcher_lines(row: EvidenceRow) -> tuple[str, ...]:
+    """Return the researcher-body detail lines for *row*, or empty when not one.
+
+    A researcher report carries a question, findings, considered alternatives,
+    and a recommendation the common header fields drop -- so a campaign
+    researcher row would otherwise drill to only the repeated campaign topic.
+    This projects those fields to 2-space-indented display lines
+    (``question`` -> ``findings`` -> ``alternatives`` -> ``recommendation``) so
+    the drill shows what the report actually found. A non-researcher row (no
+    question) yields an empty tuple so the caller renders no research section.
+
+    Args:
+        row: The evidence row whose researcher body to render.
+
+    Returns:
+        The researcher detail lines, or an empty tuple for a non-researcher row.
+    """
+    if not row.question:
+        return ()
+    lines = [f"question: {row.question}"]
+    if row.findings:
+        lines.append("findings:")
+        lines.extend(f"  - {finding}" for finding in row.findings)
+    if row.alternatives:
+        lines.append("alternatives:")
+        lines.extend(f"  - {alternative}" for alternative in row.alternatives)
+    lines.append(f"recommendation: {row.recommendation}")
+    return tuple(lines)
+
+
 def render_report_detail(row: EvidenceRow) -> str:
     """Render the full agent-report detail for *row* as one text block.
 
-    Lays out the report header (``<wave-label> :: <role>``), the verdict, the
-    summary, the evidence-refs section (:func:`report_ref_lines`), the
-    followups section (:func:`report_followup_lines`), and the attempt
-    provenance (:func:`report_provenance_line`) so the whole report reads
-    top-to-bottom in one block -- the same content the modal paints, exposed
-    pure for tests.
+    Lays out the report header (``<wave-label> :: <role>``), the verdict, a
+    wave-status line when the joined wave terminal-failed
+    (:func:`report_wave_status_line`), the summary, a researcher section when
+    the row carries a researcher body (:func:`report_researcher_lines`), the
+    evidence-refs section (:func:`report_ref_lines`), the followups section
+    (:func:`report_followup_lines`), and the attempt provenance
+    (:func:`report_provenance_line`) so the whole report reads top-to-bottom in
+    one block -- the same content the modal paints, exposed pure for tests.
 
     Args:
         row: The evidence row whose report to render.
@@ -125,8 +185,16 @@ def render_report_detail(row: EvidenceRow) -> str:
     Returns:
         The newline-joined report-detail block (no trailing newline).
     """
-    lines = [f"{row.wave_label} :: {row.role}", f"verdict: {row.verdict}", "summary:"]
+    lines = [f"{row.wave_label} :: {row.role}", f"verdict: {row.verdict}"]
+    wave_status = report_wave_status_line(row)
+    if wave_status is not None:
+        lines.append(wave_status)
+    lines.append("summary:")
     lines.append(f"  {row.summary}")
+    research = report_researcher_lines(row)
+    if research:
+        lines.append("research:")
+        lines.extend(f"  {line}" for line in research)
     lines.append("evidence refs:")
     lines.extend(f"  {line}" for line in report_ref_lines(row.evidence_refs))
     lines.append("followups:")
@@ -139,7 +207,9 @@ def render_report_detail(row: EvidenceRow) -> str:
 class ReportDetailModal(ModalScreen[None]):
     """Report-open overlay rendering one agent report's fields (Esc closes).
 
-    Renders the report's verdict, summary, cited evidence refs, emitted
+    Renders the report's verdict, a failed-wave status line when the joined
+    wave terminal-failed, summary, a researcher section (question / findings /
+    recommendation) for a researcher report, cited evidence refs, emitted
     followups, and attempt provenance in a scrollable card. Built thin over
     the pure render helpers so the content is testable without Textual; the
     modal owns no mutation -- it presents a pre-resolved
@@ -173,6 +243,11 @@ class ReportDetailModal(ModalScreen[None]):
     ReportDetailModal .report-verdict {
         color: $text;
         height: 1;
+    }
+    ReportDetailModal .report-wave-failed {
+        color: $error;
+        text-style: bold;
+        height: auto;
     }
     ReportDetailModal .report-section {
         text-style: bold;
@@ -219,8 +294,16 @@ class ReportDetailModal(ModalScreen[None]):
         with VerticalScroll(id="report-box"):
             yield Static(f"[$accent]{gate}[/] report: {title}", classes="report-title")
             yield Static(f"verdict: {escape_markup(self._row.verdict)}", classes="report-verdict")
+            wave_status = report_wave_status_line(self._row)
+            if wave_status is not None:
+                yield Static(f"{escape_markup(wave_status)}", classes="report-wave-failed")
             yield Static("Summary", classes="report-section")
             yield Static(f"  {escape_markup(self._row.summary)}", classes="report-row")
+            research = report_researcher_lines(self._row)
+            if research:
+                yield Static("Research", classes="report-section")
+                for line in research:
+                    yield Static(f"  {escape_markup(line)}", classes="report-row")
             yield Static("Evidence refs", classes="report-section")
             for line in report_ref_lines(self._row.evidence_refs):
                 yield Static(f"  {escape_markup(line)}", classes="report-row")
@@ -247,4 +330,6 @@ __all__ = [
     "report_followup_lines",
     "report_provenance_line",
     "report_ref_lines",
+    "report_researcher_lines",
+    "report_wave_status_line",
 ]
