@@ -2,13 +2,16 @@
 
   ╭─ TOPIC TREE ───────────────────────╮╭─ CLAIMS / EVIDENCE ─────────────────╮╭─ PROGRESS / BUDGET ─────────────────╮
   │ > ≡ Survey the options-pricing     ││                                     ││ RUN runnable                        │
-  │ landscape                          ││ ● Implied vol surface is downward   ││ ROUND 0 run                         │
-  │     ◌ round idle                   ││ sloping in strike …                 ││ ACTIVE 4 claim(s)                   │
-  │       ◌ domain: market-structure   ││ ● Short-tenor smile is well fit by  ││ WAITING 0 open question(s)          │
-  │       ◌ domain: pricing-models     ││ SABR …                              ││ PAUSED 0 checkpoint(s)              │
-  │ enter to peek the selected node    ││ ✕ Term-structure arbitrage is       ││ BUDGET 2 staged topic(s), 0         │
-  │                                    ││ exploitable intraday …              ││ answered, 1 pruned                  │
-  │                                    ││ ◌ Overnight gamma decay drives the  ││ RISKS none                          │
+  │ landscape                          ││ showing all claims -- campaign:     ││ ROUND 0 run                         │
+  │     ◌ round idle                   ││ Survey the options-pricing          ││ ACTIVE 4 claim(s)                   │
+  │       ◌ domain: market-structure   ││ landscape                           ││ WAITING 0 open question(s)          │
+  │       ◌ domain: pricing-models     ││ ● Implied vol surface is downward   ││ PAUSED 0 checkpoint(s)              │
+  │ enter to peek the selected node    ││ sloping in strike …                 ││ BUDGET 2 staged topic(s), 0         │
+  │                                    ││ ● Short-tenor smile is well fit by  ││ answered, 1 pruned                  │
+  │                                    ││ SABR …                              ││ RISKS none                          │
+  │                                    ││ ✕ Term-structure arbitrage is       ││                                     │
+  │                                    ││ exploitable intraday …              ││                                     │
+  │                                    ││ ◌ Overnight gamma decay drives the  ││                                     │
   │                                    ││ skew                                ││                                     │
   │                                    ││                                     ││                                     │
   │                                    ││ Options (supporting evidence)       ││                                     │
@@ -23,9 +26,6 @@
   │                                    ││                                     ││                                     │
   │                                    ││ Unresolved                          ││                                     │
   │                                    ││ none yet                            ││                                     │
-  │                                    ││                                     ││                                     │
-  │                                    ││                                     ││                                     │
-  │                                    ││                                     ││                                     │
   ╰────────────────────────────────────╯╰─────────────────────────────────────╯╰─────────────────────────────────────╯
 
   ╭─ CHECKPOINT ─────────────────────────────────────────────────────────────────────────────────────────────────────╮

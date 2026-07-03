@@ -195,10 +195,11 @@ def test_render_unresolved_empty_is_none_yet() -> None:
     assert render_unresolved(()) == f"[$muted]{NONE_YET}[/]"
 
 
-def test_render_unresolved_one_row_per_question() -> None:
-    """Each question renders exactly one row (no merge, no drop)."""
+def test_render_unresolved_one_row_per_open_question() -> None:
+    """Each OPEN question renders one row; the answered one leaves the section."""
     rendered = render_unresolved(_three_questions())
-    assert len(rendered.splitlines()) == 3
+    assert len(rendered.splitlines()) == 2
+    assert "Does the smile invert" not in rendered
 
 
 def test_render_unresolved_row_carries_status_and_round() -> None:
@@ -222,12 +223,13 @@ def test_render_unresolved_honours_round_number_override() -> None:
     assert "round 3" in rendered
 
 
-def test_render_unresolved_answered_status_renders() -> None:
-    """An answered question renders its answered status."""
+def test_render_unresolved_answered_question_leaves_section() -> None:
+    """An answered question no longer renders under Unresolved (none-yet sentinel)."""
     rendered = render_unresolved(
         (_question("OQ-A", "resolved question", status=OpenQuestionStatus.ANSWERED),)
     )
-    assert "answered" in rendered
+    assert "resolved question" not in rendered
+    assert NONE_YET in rendered
 
 
 # --------------------------------------------------------------------------
@@ -250,12 +252,14 @@ def test_research_board_unresolved_snapshot(tmp_path: Path) -> None:
 
             unresolved_body = app.screen.query_one(f"#{UNRESOLVED_BODY_ID}", Static)
             rendered = str(unresolved_body.render())
-            # One row per open question, each carrying its round number.
-            assert len(rendered.splitlines()) == len(questions)
-            assert rendered.count(f"round {STAGED_ROUND}") == len(questions)
-            # The blocking question reads ``blocking``; the answered one ``answered``.
+            # One row per OPEN question (the answered one leaves the section),
+            # each carrying its round number.
+            open_count = len(questions) - 1
+            assert len(rendered.splitlines()) == open_count
+            assert rendered.count(f"round {STAGED_ROUND}") == open_count
+            # The blocking question reads ``blocking``; the answered one is absent.
             assert "blocking" in rendered
-            assert "answered" in rendered
+            assert "answered" not in rendered
             assert_screen_snapshot(app, _GOLDEN / "research_board_unresolved.txt")
 
     asyncio.run(body())
