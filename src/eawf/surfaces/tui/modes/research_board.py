@@ -11,12 +11,15 @@ scope as the ratified three-pane orchestrator over the campaign engine:
   leaf per staged domain the topic is fanned across) plus the
   state-resident :class:`~eawf.kernel.state.models.OpenQuestion` rows (the
   unresolved-question leaves). ``up`` / ``down`` move a flat selection cursor
-  over the tree nodes; ``enter`` peeks the selected node's findings read-only.
-* **Center pane -- claims / evidence.** A tab bar
-  (``[Claims][Options][Conflicts][Unresolved][Reports][Brief-preview]``) over
-  the claim ledger, leading with the live Claims tab: one row per
-  :class:`~eawf.kernel.state.models.Claim` with its
-  :class:`~eawf.kernel.state.enums.ClaimStatus`.
+  over the tree nodes; the selection drives the center detail (there is no
+  in-tree peek).
+* **Center pane -- the polymorphic detail.** A context-sensitive detail that
+  MORPHS by the selected node kind: a campaign (or campaign-owned round / topic)
+  selection renders that campaign's stats (rounds, questions, claims +
+  conflicts, budget, checkpoint, last-round findings); a question selection
+  renders its best candidate-answer claim + an evidence summary SCOPED to that
+  question; a claim selection renders that claim's candidate-answer summary. The
+  detail is always scoped to the selection, never the global claim ledger.
 * **Right pane -- progress / budget.** The run bands RUN / ROUND / ACTIVE /
   WAITING / PAUSED / BUDGET / RISKS, derived from the staged campaign + the
   open-question ledger + the open ``needs_user`` checkpoints.
@@ -29,7 +32,7 @@ P30-I18 binding pass wired the campaign run, the operator channels, and the
 follow-up / snapshot queries), so each surfaces the daemon's honest result and
 never fakes an outcome:
 
-* **Checkpoint resolution.** ``enter`` peeks the selected node read-only. ``a``
+* **Checkpoint resolution.** ``a``
   (approve) routes through the real ``needs_user.resolve`` RPC and ``p`` (park)
   through the real ``needs_user.park`` RPC when a checkpoint maps to an open
   pause -- the daemon is the canonical mutator for the pause store -- surfacing
@@ -144,31 +147,19 @@ DRAWER_ID: str = "research-drawer"
 #: signal (rendered instead of the three-pane scaffold).
 EMPTY_ID: str = "research-empty"
 
-#: Id of the peek-result line under the tree (honest read-only drill output).
-PEEK_RESULT_ID: str = "research-peek"
-
 #: Id of the action-result line under the drawer (approve / park / follow-up /
 #: snapshot outcome -- honest about whether the request was issued).
 ACTION_RESULT_ID: str = "research-action"
 
-#: Id of the center-pane scope header (names the selection driving the Claims
-#: tab, so the ledger reads as "showing X" rather than one un-scoped soup).
+#: Id of the center-pane scope header. The center pane is a polymorphic detail
+#: that MORPHS by the selected tree node (campaign stats / question answer /
+#: claim summary), and this header names the selection driving it so the detail
+#: reads as "showing campaign: X" rather than one un-scoped soup.
 CENTER_SCOPE_ID: str = "research-center-scope"
 
-#: Id of the Unresolved-tab section header in the center pane (one row per
-#: open question with its status + round number).
-UNRESOLVED_HEADER_ID: str = "research-unresolved-header"
-
-#: Id of the Unresolved-tab body in the center pane (the rendered question rows).
-UNRESOLVED_BODY_ID: str = "research-unresolved-body"
-
-#: Id of the Options-tab body in the center pane (claims grouped by supporting
-#: evidence -- the live candidate answers).
-OPTIONS_BODY_ID: str = "research-options-body"
-
-#: Id of the Conflicts-tab body in the center pane (claims grouped by
-#: contradicting evidence -- the surfaced conflicts).
-CONFLICTS_BODY_ID: str = "research-conflicts-body"
+#: Id of the center-pane polymorphic detail body -- the context-sensitive block
+#: rendered by :func:`render_center_detail` for the selected node.
+CENTER_BODY_ID: str = "research-center-body"
 
 #: CSS class on each rendered topic-tree node row.
 TREE_NODE_CLASS: str = "research-tree-node"
@@ -1127,8 +1118,8 @@ class TreeNode:
     """One flattened node in the campaign topic tree.
 
     The tree is rendered as an indented flat list (one :class:`TreeNode` per
-    row) so a single selection cursor walks it with ``up`` / ``down`` and
-    ``enter`` peeks the selected node -- no nested-widget focus juggling. The
+    row) so a single selection cursor walks it with ``up`` / ``down`` -- the
+    selection morphs the center detail, no nested-widget focus juggling. The
     glyph / indent encode the node's level visually.
 
     Attributes:
@@ -1157,8 +1148,12 @@ class TreeNode:
             other node kind.
         question_id: The id of the :class:`~eawf.kernel.state.models.OpenQuestion`
             a :attr:`NodeKind.QUESTION` node stands for, so selecting it can
-            scope the Claims pane to the claims that answer it; ``None`` on
-            every other node kind.
+            morph the center detail into that question's answer + scoped
+            evidence summary; ``None`` on every other node kind.
+        claim_id: The id of the :class:`~eawf.kernel.state.models.Claim` a
+            :attr:`NodeKind.CLAIM` node stands for, so selecting it can morph
+            the center detail into that claim's candidate-answer summary;
+            ``None`` on every other node kind.
         status_label: The campaign's terse round-status word (``running`` /
             ``saturated`` / ``pruned`` / ``staged`` / ``converged``) rendered
             beside a :attr:`NodeKind.CAMPAIGN` node so the round state reads off
@@ -1180,6 +1175,7 @@ class TreeNode:
     claim_status: ClaimStatus | None = None
     round_state: RoundState | None = None
     question_id: str | None = None
+    claim_id: str | None = None
     status_label: str | None = None
     collapsed: bool = False
 
@@ -1516,12 +1512,14 @@ def _append_question_nodes(
                     kind=NodeKind.CLAIM,
                     label=claim.title,
                     depth=2,
-                    # The peek detail carries the untruncated claim body +
-                    # resolving evidence refs (W19 drill-in): the label
-                    # truncates to the title, so a peek is the way to read
-                    # the full claim + its evidence off the navigable tree.
+                    # The detail carries the untruncated claim body + resolving
+                    # evidence refs (W19 drill-in): the label truncates to the
+                    # title, so the detail is the full claim + its evidence. The
+                    # claim id lets a selection morph the center detail into this
+                    # claim's candidate-answer summary.
                     detail=claim_drill_detail(claim),
                     claim_status=claim.status,
+                    claim_id=claim.id,
                 )
             )
 
@@ -2113,6 +2111,349 @@ def render_checkpoint(pause: OpenPause | None) -> str:
     )
 
 
+def center_scope_header(node: TreeNode | None) -> str:
+    """Return the center-pane header naming the selection driving the detail.
+
+    The center pane is a polymorphic detail that morphs by the selected node
+    kind, so the header names WHAT the detail is showing -- ``showing campaign:
+    <topic>`` / ``showing question: <title>`` / ``showing claim: <title>`` --
+    rather than leaving the operator to guess which selection drives the block.
+    With no selection it names the scope-wide fallback.
+
+    Args:
+        node: The selected tree node, or ``None`` when nothing is selected.
+
+    Returns:
+        A muted ``showing <what>`` header markup string.
+    """
+    if node is None:
+        return _scope_header("all research (scope-wide)")
+    if node.kind is NodeKind.QUESTION:
+        return _scope_header(f"question: {node.label}")
+    if node.kind is NodeKind.CLAIM:
+        return _scope_header(f"claim: {node.label}")
+    if node.kind is NodeKind.CAMPAIGN:
+        return _scope_header(f"campaign: {node.label}")
+    if node.kind is NodeKind.ROUND:
+        return _scope_header(f"round: {node.label}")
+    return _scope_header(f"topic: {node.label}")
+
+
+def _campaign_round_phrase(
+    campaign: CampaignRow | None,
+    progress: RoundProgress,
+) -> str:
+    """Return the terse round phrase for a campaign's stats detail.
+
+    A CONVERGED campaign has terminated, so it reads the terminal ``converged``
+    word rather than the scope-wide running / saturated phrase (the same
+    per-campaign distinction :func:`build_tree_nodes` draws on the tree). Any
+    other campaign -- or the scope-wide fallback -- reads the derived round
+    state's band phrase.
+
+    Args:
+        campaign: The campaign the detail is scoped to, or ``None`` for the
+            scope-wide fallback.
+        progress: The derived round progress for the scope.
+
+    Returns:
+        The terse round phrase (``running`` / ``saturated`` / ``pruned`` /
+        ``staged`` / ``converged``).
+    """
+    if campaign is not None and campaign.status is CampaignStatus.CONVERGED:
+        return "converged"
+    return _ROUND_BAND_PHRASE[progress.state]
+
+
+def render_campaign_stats(
+    campaign: CampaignRow | None,
+    campaigns: tuple[CampaignRow, ...],
+    claims: tuple[Claim, ...],
+    questions: tuple[OpenQuestion, ...],
+    rounds: tuple[Round, ...],
+    *,
+    checkpoints: int,
+    mode: RenderMode = DEFAULT_RENDER_MODE,
+) -> str:
+    """Render the campaign-stats center detail for a selected campaign node.
+
+    The context-sensitive detail a CAMPAIGN (or campaign-owned round / topic)
+    selection morphs the center pane into: the campaign's rounds (+ derived
+    round phrase), questions (open / answered / blocking), claims (+ conflict
+    count), budget (staged topics / answered / pruned), open checkpoints, and
+    the last round's finding count. The counts read off the SAME campaign /
+    round / claim / question data the PROGRESS pane bands read
+    (:func:`compute_round_progress` + :func:`group_claims_by_evidence`), so the
+    two never diverge. A ``None`` *campaign* renders the scope-wide header for a
+    campaign-less scope.
+
+    Args:
+        campaign: The campaign the detail is scoped to, or ``None`` for the
+            scope-wide (campaign-less) fallback.
+        campaigns: The staged campaign rows for the scope (the budget spend).
+        claims: The state-resident claim ledger rows.
+        questions: The state-resident open-question rows.
+        rounds: The executed round records; empty pre-run.
+        checkpoints: The count of open ``needs_user`` checkpoints for the scope.
+        mode: The App's resolved render-mode label (unused today; carried so the
+            signature matches the sibling detail renderers).
+
+    Returns:
+        A content-markup string of one stat band per line.
+    """
+    progress = compute_round_progress(campaigns, claims, questions, rounds)
+    _supporting, contradicting = group_claims_by_evidence(claims)
+    blocking = sum(1 for question in questions if question.blocking)
+    round_phrase = _campaign_round_phrase(campaign, progress)
+    if campaign is not None:
+        camp_rounds = [rnd for rnd in rounds if rnd.campaign_id == campaign.campaign_id]
+    else:
+        camp_rounds = list(rounds)
+    rounds_run = max((rnd.round_number for rnd in camp_rounds), default=0)
+    last_findings = (
+        max(camp_rounds, key=lambda rnd: rnd.round_number).finding_count if camp_rounds else 0
+    )
+    if campaign is not None:
+        head = (
+            f"[$accent]campaign[/] {escape_markup(campaign.topic)}\n"
+            f"[$muted]{campaign.domain_count} staged topic(s) · depth "
+            f"{escape_markup(campaign.default_depth)}[/]"
+        )
+    else:
+        head = "[$accent]scope research[/] [$muted]no campaign staged[/]"
+    lines = [
+        head,
+        "",
+        f"[$accent]ROUNDS[/] [$muted]{rounds_run} run · {round_phrase}[/]",
+        (
+            f"[$accent]QUESTIONS[/] [$muted]{progress.open_count} open · "
+            f"{progress.answered_count} answered · {blocking} blocking[/]"
+        ),
+        f"[$accent]CLAIMS[/] [$muted]{len(claims)} claim(s) · {len(contradicting)} conflict(s)[/]",
+        (
+            f"[$accent]BUDGET[/] [$muted]{progress.spent_topics} staged topic(s) · "
+            f"{progress.answered_count} answered · {progress.pruned_count} pruned[/]"
+        ),
+        f"[$accent]CHECKPOINT[/] [$muted]{checkpoints} open[/]",
+        f"[$accent]LAST ROUND[/] [$muted]{last_findings} finding(s)[/]",
+    ]
+    return "\n".join(lines)
+
+
+def question_candidate_claims(
+    question: OpenQuestion,
+    claims: tuple[Claim, ...],
+) -> tuple[Claim, ...]:
+    """Return the candidate-answer claims scoped to *question*.
+
+    A claim answers *question* when it back-links it via
+    :attr:`~eawf.kernel.state.models.Claim.answers_question_id`, or when the
+    question names it via
+    :attr:`~eawf.kernel.state.models.OpenQuestion.answered_by_claim_id`. The
+    union covers the two link directions so a resolving claim recorded on the
+    question side (but not yet back-linked) still scopes in. Order preserves the
+    input (the natural-id sort the caller supplies); the answer-linked claim is
+    appended last only when it is not already among the back-linked ones.
+
+    Args:
+        question: The open question to scope candidate claims to.
+        claims: The state-resident claim rows for the scope.
+
+    Returns:
+        The candidate-answer claims for the question, in input order; empty when
+        no claim answers it.
+    """
+    by_link = [claim for claim in claims if claim.answers_question_id == question.id]
+    seen = {claim.id for claim in by_link}
+    if question.answered_by_claim_id is not None and question.answered_by_claim_id not in seen:
+        for claim in claims:
+            if claim.id == question.answered_by_claim_id:
+                by_link.append(claim)
+                break
+    return tuple(by_link)
+
+
+def _best_answer_claim(
+    question: OpenQuestion,
+    candidates: tuple[Claim, ...],
+) -> Claim | None:
+    """Return the best candidate answer for *question*, or ``None``.
+
+    Prefers the claim the question names as its answer
+    (:attr:`~eawf.kernel.state.models.OpenQuestion.answered_by_claim_id`), then
+    the first ``SUPPORTED`` candidate (a claim backed by supporting evidence),
+    then the first candidate; ``None`` when nothing answers the question.
+
+    Args:
+        question: The open question being answered.
+        candidates: The candidate-answer claims scoped to the question.
+
+    Returns:
+        The best candidate answer, or ``None`` on an empty candidate set.
+    """
+    if question.answered_by_claim_id is not None:
+        for claim in candidates:
+            if claim.id == question.answered_by_claim_id:
+                return claim
+    for claim in candidates:
+        if claim.status is ClaimStatus.SUPPORTED:
+            return claim
+    return candidates[0] if candidates else None
+
+
+def render_question_detail(
+    question: OpenQuestion,
+    claims: tuple[Claim, ...],
+    *,
+    mode: RenderMode = DEFAULT_RENDER_MODE,
+) -> str:
+    """Render the answer + scoped evidence summary for a selected question node.
+
+    The context-sensitive detail a QUESTION selection morphs the center pane
+    into: the question itself, then its best candidate-answer claim's body (the
+    sigil-led title + any long-form description), then an EVIDENCE summary
+    SCOPED to THIS question -- the supporting-source count on the answer, the
+    conflict count (refuted candidates), and the alternative count (other
+    candidate answers). It is deliberately NOT the global claim ledger: the
+    summary reads only off the claims that answer this question, fixing the
+    global-soup defect. A question with no candidate answer renders the honest
+    :data:`NONE_YET` answer line and a zeroed evidence summary.
+
+    Args:
+        question: The selected open question.
+        claims: The state-resident claim rows for the scope.
+        mode: The App's resolved render-mode label -- selects the answer sigil's
+            ASCII / unicode column.
+
+    Returns:
+        A content-markup string: the question, its answer, and the scoped
+        evidence summary.
+    """
+    candidates = question_candidate_claims(question, claims)
+    best = _best_answer_claim(question, candidates)
+    status_marker = "blocking" if question.blocking else question.status.value
+    lines = [
+        f"[$accent]question[/] {escape_markup(question.title)}",
+        f"[$muted]{escape_markup(status_marker)}[/]",
+        "",
+        "[$accent]ANSWER[/]",
+    ]
+    if best is None:
+        lines.append(f"[$muted]{NONE_YET}[/]")
+    else:
+        sigil = claim_sigil_markup(best.status, mode=mode)
+        lines.append(f"{sigil} {escape_markup(best.title)}")
+        if best.description is not None:
+            lines.append(f"[$muted]{escape_markup(best.description)}[/]")
+    supporting_sources = len(best.evidence_refs) if best is not None else 0
+    conflicts = sum(1 for claim in candidates if claim.status is ClaimStatus.REFUTED)
+    alternatives = max(0, len(candidates) - 1)
+    lines.extend(
+        [
+            "",
+            "[$accent]EVIDENCE[/]",
+            (
+                f"[$muted]{supporting_sources} supporting source(s) · "
+                f"{conflicts} conflict(s) · {alternatives} alternative(s)[/]"
+            ),
+        ]
+    )
+    return "\n".join(lines)
+
+
+def render_claim_detail(
+    claim: Claim,
+    questions: tuple[OpenQuestion, ...],
+    *,
+    mode: RenderMode = DEFAULT_RENDER_MODE,
+) -> str:
+    """Render the candidate-answer summary for a selected claim node.
+
+    The context-sensitive detail a CLAIM selection morphs the center pane into:
+    the claim's sigil-led title + any long-form body, its lifecycle status, the
+    question it answers (or the honest no-link line), and its evidence-ref
+    count. A compact summary of the one candidate answer, not the global ledger.
+
+    Args:
+        claim: The selected claim.
+        questions: The state-resident open-question rows (to name the answered
+            question).
+        mode: The App's resolved render-mode label -- selects the claim sigil's
+            ASCII / unicode column.
+
+    Returns:
+        A content-markup string summarising the candidate answer.
+    """
+    sigil = claim_sigil_markup(claim.status, mode=mode)
+    lines = [f"[$accent]candidate answer[/] {sigil} {escape_markup(claim.title)}"]
+    if claim.description is not None:
+        lines.append(f"[$muted]{escape_markup(claim.description)}[/]")
+    lines.append("")
+    lines.append(f"[$accent]STATUS[/] {sigil} [$muted]{escape_markup(claim.status.value)}[/]")
+    answered = None
+    if claim.answers_question_id is not None:
+        answered = next((q for q in questions if q.id == claim.answers_question_id), None)
+    if answered is not None:
+        lines.append(f"[$accent]ANSWERS[/] [$muted]{escape_markup(answered.title)}[/]")
+    else:
+        lines.append("[$accent]ANSWERS[/] [$muted](no linked question)[/]")
+    lines.append(f"[$accent]EVIDENCE[/] [$muted]{len(claim.evidence_refs)} ref(s)[/]")
+    return "\n".join(lines)
+
+
+def render_center_detail(
+    node: TreeNode | None,
+    campaigns: tuple[CampaignRow, ...],
+    claims: tuple[Claim, ...],
+    questions: tuple[OpenQuestion, ...],
+    rounds: tuple[Round, ...],
+    *,
+    checkpoints: int,
+    mode: RenderMode = DEFAULT_RENDER_MODE,
+) -> str:
+    """Render the polymorphic center detail for the selected tree *node*.
+
+    The center pane MORPHS by the selected node kind, so this dispatcher routes
+    the selection to the matching detail renderer -- a QUESTION node to its
+    answer + scoped evidence summary (:func:`render_question_detail`), a CLAIM
+    node to its candidate-answer summary (:func:`render_claim_detail`), and a
+    CAMPAIGN (or campaign-owned round / topic) node to that campaign's stats
+    (:func:`render_campaign_stats`). No selection, or a scope-level questions
+    round on a campaign-less scope, falls back to the campaign stats of the
+    primary campaign (or the scope-wide stats when no campaign is staged), so
+    the pane always reflects real signal rather than an empty block.
+
+    Args:
+        node: The selected tree node, or ``None`` when nothing is selected.
+        campaigns: The staged campaign rows for the scope.
+        claims: The state-resident claim ledger rows.
+        questions: The state-resident open-question rows.
+        rounds: The executed round records; empty pre-run.
+        checkpoints: The count of open ``needs_user`` checkpoints for the scope.
+        mode: The App's resolved render-mode label -- selects each detail's
+            sigil column.
+
+    Returns:
+        A content-markup string of the detail for the selected node.
+    """
+    if node is not None and node.kind is NodeKind.QUESTION and node.question_id is not None:
+        question = next((q for q in questions if q.id == node.question_id), None)
+        if question is not None:
+            return render_question_detail(question, claims, mode=mode)
+    if node is not None and node.kind is NodeKind.CLAIM and node.claim_id is not None:
+        claim = next((c for c in claims if c.id == node.claim_id), None)
+        if claim is not None:
+            return render_claim_detail(claim, questions, mode=mode)
+    campaign: CampaignRow | None = None
+    if node is not None and node.campaign_id is not None:
+        campaign = next((c for c in campaigns if c.campaign_id == node.campaign_id), None)
+    if campaign is None and campaigns:
+        campaign = campaigns[0]
+    return render_campaign_stats(
+        campaign, campaigns, claims, questions, rounds, checkpoints=checkpoints, mode=mode
+    )
+
+
 def _sorted_claims(state: State | None) -> tuple[Claim, ...]:
     """Return the scope's claims sorted by natural id, empty when unbound.
 
@@ -2147,16 +2488,17 @@ class ResearchBoardModeScreen(ScopeScreen):
     """Research mode 3-pane orchestrator over the campaign engine.
 
     Composes the ratified three panes -- the campaign topic tree (left), the
-    claims / evidence tabs (center), and the progress / budget bands (right) --
-    above a bottom checkpoint drawer, inside the shared :class:`ScopeScreen`
+    polymorphic center detail (center), and the progress / budget bands (right)
+    -- above a bottom checkpoint drawer, inside the shared :class:`ScopeScreen`
     chassis. Reads the host app's read-only ``state`` (for claims + open
     questions), ``_state_path`` (for the append-only ``research_campaign``
     store + the ``needs_user`` pause store). When the scope carries no research
     signal the pane renders the honest-empty :data:`EMPTY_NOTICE` banner rather
     than a fabricated three-pane board.
 
-    ``up`` / ``down`` move the tree cursor; ``enter`` peeks the selected node
-    read-only. ``a`` (approve) routes through the real ``needs_user.resolve``
+    ``up`` / ``down`` move the tree cursor, which morphs the center pane into the
+    selected node's detail (campaign stats / question answer / claim summary --
+    no in-tree peek). ``a`` (approve) routes through the real ``needs_user.resolve``
     RPC and ``p`` (park) through ``needs_user.park`` when a checkpoint maps to
     an open pause, surfacing the honest result; ``r`` (follow-up) / ``s``
     (snapshot) route through the daemon-client seam to the live
@@ -2198,10 +2540,6 @@ class ResearchBoardModeScreen(ScopeScreen):
     ResearchBoardModeScreen #research-progress {
         width: 1fr;
     }
-    ResearchBoardModeScreen #research-peek {
-        height: auto;
-        color: $muted;
-    }
     ResearchBoardModeScreen #research-center-scope {
         height: auto;
         color: $muted;
@@ -2241,18 +2579,17 @@ class ResearchBoardModeScreen(ScopeScreen):
         text-align: center;
         color: $accent;
     }
-    ResearchBoardModeScreen .research-center-section {
+    ResearchBoardModeScreen #research-center-body {
         height: auto;
-        text-style: bold;
-        margin-top: 1;
     }
     ResearchBoardModeScreen .research-tree-node {
         height: auto;
     }
     """
 
-    #: ``up`` / ``down`` move the tree cursor; ``enter`` peeks the selected
-    #: node read-only. ``a`` approve / ``p`` park route checkpoint resolution
+    #: ``up`` / ``down`` move the tree cursor (morphing the center detail);
+    #: ``enter`` is the retired-peek seam (a later wave opens the evidence modal
+    #: for a claim). ``a`` approve / ``p`` park route checkpoint resolution
     #: through the real needs_user RPCs; ``r`` follow-up / ``s`` snapshot are
     #: the honest-unavailable idle-contract keys. ``o`` (add-question), ``t``
     #: (steer), ``b`` (broadcast), and ``v`` (override) are the four FA8
@@ -2269,7 +2606,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         Binding("down", "select_next", "down", show=False),
         Binding("left", "collapse", "collapse", show=False),
         Binding("right", "expand", "expand", show=False),
-        Binding("enter", "peek_selected", "peek", show=False),
+        Binding("enter", "peek_selected", "open", show=False),
         Binding("d", "open_brief", "brief", show=False),
         Binding("n", "new_campaign", "new", show=False),
         Binding("o", "add_question", "ask", show=False),
@@ -2295,44 +2632,89 @@ class ResearchBoardModeScreen(ScopeScreen):
     #: campaign pane re-reads the store on the same tick).
     state: reactive[State | None] = reactive(None)
 
-    #: Index of the selected tree node (the peek target); clamped to the node
-    #: list, ``0`` when non-empty, ``-1`` when empty.
+    #: Index of the selected tree node (drives the polymorphic center detail);
+    #: clamped to the node list, ``0`` when non-empty, ``-1`` when empty.
     selected: reactive[int] = reactive(0, init=False)
 
     def __init__(self) -> None:
         """Initialise the pane with an empty node list until first compute."""
         super().__init__()
         self._tree: tuple[TreeNode, ...] = ()
-        # The current claim ledger, cached so a cursor move can re-scope the
-        # Claims pane to the selected node without re-reading state each keypress.
+        # The current row bundle, cached so a cursor move can morph the center
+        # detail to the selected node without re-reading state / stores each
+        # keypress. Seeded on every compose / rebuild / collapse via _cache_rows.
+        self._campaigns: tuple[CampaignRow, ...] = ()
         self._claims: tuple[Claim, ...] = ()
+        self._questions: tuple[OpenQuestion, ...] = ()
+        self._rounds: tuple[Round, ...] = ()
+        self._checkpoints: int = 0
         # The set of campaign ids whose sub-trees are collapsed (left/right toggle);
         # a collapsed campaign hides its round / topic / question children from the
         # flat node list, so the up/down cursor and the clamp both skip them.
         self._collapsed: set[str] = set()
+
+    def _cache_rows(
+        self,
+        campaigns: tuple[CampaignRow, ...],
+        claims: tuple[Claim, ...],
+        questions: tuple[OpenQuestion, ...],
+        rounds: tuple[Round, ...],
+        *,
+        checkpoints: int,
+    ) -> None:
+        """Cache the row bundle a cursor move re-reads to morph the center detail.
+
+        Args:
+            campaigns: The staged campaign rows for the scope.
+            claims: The state-resident claim ledger rows.
+            questions: The state-resident open-question rows.
+            rounds: The executed round records.
+            checkpoints: The count of open ``needs_user`` checkpoints.
+        """
+        self._campaigns = campaigns
+        self._claims = claims
+        self._questions = questions
+        self._rounds = rounds
+        self._checkpoints = checkpoints
+
+    def _center_header(self) -> str:
+        """Return the center-pane header naming the current selection."""
+        return center_scope_header(self._selected_node())
+
+    def _center_body(self) -> str:
+        """Return the polymorphic center detail for the current selection."""
+        return render_center_detail(
+            self._selected_node(),
+            self._campaigns,
+            self._claims,
+            self._questions,
+            self._rounds,
+            checkpoints=self._checkpoints,
+            mode=self._render_mode(),
+        )
 
     def compose_body(self) -> ComposeResult:
         """Yield the three-pane scaffold + drawer, or the honest-empty notice.
 
         When the scope carries no research signal the body is a single honest-
         empty notice (the common path); otherwise it is the three panes (tree /
-        center / progress) above the checkpoint drawer + the action-result line.
-        The panes start with their composed bodies and :meth:`_rebuild` keeps
-        them in sync on every tick / revision.
+        polymorphic center detail / progress) above the checkpoint drawer + the
+        action-result line. The panes start with their composed bodies and
+        :meth:`_rebuild` keeps them in sync on every tick / revision.
         """
         campaigns, claims, questions = self._current_rows()
-        self._claims = claims
+        rounds = self._current_round_rows()
         self.empty = not has_research_signal(campaigns, claims, questions)
         self._tree = build_tree_nodes(
             campaigns,
             questions,
             claims=claims,
-            rounds=self._current_round_rows(),
+            rounds=rounds,
             collapsed=frozenset(self._collapsed),
         )
-        scoped_claims, scope_header = scope_claims_for_node(self._selected_node(), claims)
         with Vertical(id="research-body"):
             if self.empty:
+                self._cache_rows(campaigns, claims, questions, rounds, checkpoints=0)
                 if self._render_mode() == "unicode":
                     # Unicode path: the hand-tuned ASCII-art Seal (deterministic
                     # accent-on-surface TEXT, no graphics protocol) is the
@@ -2348,6 +2730,7 @@ class ResearchBoardModeScreen(ScopeScreen):
                     yield Static(self._empty_body(), id=EMPTY_ID)
                 return
             pause = self._current_checkpoint()
+            self._cache_rows(campaigns, claims, questions, rounds, checkpoints=1 if pause else 0)
             mode = self._render_mode()
             with Horizontal(id="research-panes"):
                 with VerticalScroll(id=TREE_PANE_ID, classes="research-pane") as tree:
@@ -2362,29 +2745,14 @@ class ResearchBoardModeScreen(ScopeScreen):
                     yield Static(
                         render_tree(self._tree, self.selected, mode=mode), id="research-tree-body"
                     )
-                    yield Static(self._peek_idle(), id=PEEK_RESULT_ID)
                 with VerticalScroll(id=CENTER_PANE_ID, classes="research-pane") as center:
                     center.can_focus = False
                     center.border_title = "CLAIMS / EVIDENCE"
-                    yield Static(render_center_tabs("Claims"), id="research-center-tabs")
-                    yield Static(scope_header, id=CENTER_SCOPE_ID)
-                    yield Static(render_claims(scoped_claims, mode=mode), id="research-center-body")
-                    yield Static(
-                        "[$accent]Options[/] [$muted](supporting evidence)[/]",
-                        classes="research-center-section",
-                    )
-                    yield Static(render_options(claims, mode=mode), id=OPTIONS_BODY_ID)
-                    yield Static(
-                        "[$accent]Conflicts[/] [$muted](contradicting evidence)[/]",
-                        classes="research-center-section",
-                    )
-                    yield Static(render_conflicts(claims, mode=mode), id=CONFLICTS_BODY_ID)
-                    yield Static(
-                        "[$accent]Unresolved[/]",
-                        id=UNRESOLVED_HEADER_ID,
-                        classes="research-center-section",
-                    )
-                    yield Static(render_unresolved(questions, mode=mode), id=UNRESOLVED_BODY_ID)
+                    # The center pane is a polymorphic detail that morphs by the
+                    # selected node kind (campaign stats / question answer / claim
+                    # summary); the header names the selection driving it.
+                    yield Static(self._center_header(), id=CENTER_SCOPE_ID)
+                    yield Static(self._center_body(), id=CENTER_BODY_ID)
                 with VerticalScroll(id=PROGRESS_PANE_ID, classes="research-pane") as progress:
                     progress.can_focus = False
                     progress.border_title = "PROGRESS / BUDGET"
@@ -2394,7 +2762,7 @@ class ResearchBoardModeScreen(ScopeScreen):
                             claims,
                             questions,
                             checkpoints=1 if pause else 0,
-                            rounds=self._current_round_rows(),
+                            rounds=rounds,
                         ),
                         id="research-progress-body",
                     )
@@ -2447,17 +2815,17 @@ class ResearchBoardModeScreen(ScopeScreen):
             self._rebuild()
 
     def watch_selected(self) -> None:
-        """Repaint on cursor move: tree highlight, re-scoped claims, idle peek.
+        """Repaint on cursor move: tree highlight + morph the center detail.
 
-        Moving the cursor re-scopes the Claims pane to the newly selected node
-        and resets the peek line to its idle hint, so a peek surfaced for the
-        prior node never lingers reading as current for the new one.
+        Moving the cursor re-highlights the tree row, scrolls it into view, and
+        morphs the center pane into the newly selected node's detail (campaign
+        stats / question answer / claim summary), so the detail always reflects
+        the selection with no in-tree peek to reset.
         """
         if self.is_mounted:
             self._repaint_tree()
             self._scroll_selected_into_view()
-            self._repaint_claims()
-            self._update_one(PEEK_RESULT_ID, self._peek_idle())
+            self._repaint_center()
 
     def action_select_prev(self) -> None:
         """Move the tree cursor to the previous node (clamped at the top)."""
@@ -2506,19 +2874,20 @@ class ResearchBoardModeScreen(ScopeScreen):
         Recomputes the flat node list against the new collapsed set, parks the
         cursor on the toggled campaign's node (so a collapse that hid the
         previously selected child never strands the cursor on a vanished row),
-        then repaints the tree + re-scopes the claims pane. The rest of the
+        then repaints the tree + morphs the center detail. The rest of the
         board is untouched -- a collapse toggle changes only the tree shape.
 
         Args:
             campaign_id: The campaign whose collapse state just toggled.
         """
         campaigns, claims, questions = self._current_rows()
-        self._claims = claims
+        rounds = self._current_round_rows()
+        self._cache_rows(campaigns, claims, questions, rounds, checkpoints=self._checkpoints)
         self._tree = build_tree_nodes(
             campaigns,
             questions,
             claims=claims,
-            rounds=self._current_round_rows(),
+            rounds=rounds,
             collapsed=frozenset(self._collapsed),
         )
         target = next(
@@ -2533,8 +2902,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         self._clamp_selection()
         self._repaint_tree()
         self._scroll_selected_into_view()
-        self._repaint_claims()
-        self._update_one(PEEK_RESULT_ID, self._peek_idle())
+        self._repaint_center()
 
     def _prune_collapsed(self, campaigns: tuple[CampaignRow, ...]) -> None:
         """Drop collapsed ids for campaigns no longer on the board.
@@ -2551,23 +2919,18 @@ class ResearchBoardModeScreen(ScopeScreen):
         self._collapsed &= live
 
     def action_peek_selected(self) -> None:
-        """Peek the selected tree node read-only (no mutation).
+        """No-op seam for ``Enter`` on the selected node (the retired peek).
 
-        Surfaces the selected node's honest detail line on the persistent
-        ``#research-peek`` line under the tree -- a visible read-only drill into
-        the node's findings that stays until the cursor moves (it also flashes
-        as a toast). With no node selected (an honest-empty tree) there is
-        nothing to peek, surfaced honestly.
+        The in-tree peek line was retired: selection alone now morphs the center
+        pane into the selected node's detail (campaign stats / question answer /
+        claim summary), so ``Enter`` no longer accretes a peek block inside the
+        tree. The binding is kept as the seam a later wave wires to open the
+        evidence modal for a selected claim; for now it only logs the selection.
         """
         node = self._selected_node()
         if node is None:
-            self._set_peek("[$muted]nothing to peek[/]")
             return
-        line = (
-            f"[$accent]peek[/] [$muted]{escape_markup(node.kind.value)}:[/] "
-            f"{escape_markup(node.label)} [$muted]-- {escape_markup(node.detail)}[/]"
-        )
-        self._set_peek(line)
+        # Seam only: the evidence modal for a CLAIM selection lands in a later wave.
         logger.info(f"action_peek_selected kind={node.kind.value} label={node.label!r}")
 
     def action_open_brief(self) -> None:
@@ -3237,7 +3600,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         (when the empty verdict flips) or updates each pane in place.
         """
         campaigns, claims, questions = self._current_rows()
-        self._claims = claims
+        rounds = self._current_round_rows()
         was_empty = self.empty
         self.empty = not has_research_signal(campaigns, claims, questions)
         self._prune_collapsed(campaigns)
@@ -3245,14 +3608,16 @@ class ResearchBoardModeScreen(ScopeScreen):
             campaigns,
             questions,
             claims=claims,
-            rounds=self._current_round_rows(),
+            rounds=rounds,
             collapsed=frozenset(self._collapsed),
         )
         self._clamp_selection()
         if self.empty != was_empty:
+            self._cache_rows(campaigns, claims, questions, rounds, checkpoints=0)
             self._recompose_body()
             return
         if self.empty:
+            self._cache_rows(campaigns, claims, questions, rounds, checkpoints=0)
             # When the ASCII-art Seal leads the hero (the unicode path composed
             # the #research-empty-hero wrapper), the steady empty-tick update
             # MUST preserve with_sigil=False so the glyph is not re-added beside
@@ -3263,17 +3628,14 @@ class ResearchBoardModeScreen(ScopeScreen):
             logger.info(f"research_rebuild empty=True seal_mounted={seal_mounted}")
             return
         pause = self._current_checkpoint()
+        self._cache_rows(campaigns, claims, questions, rounds, checkpoints=1 if pause else 0)
         mode = self._render_mode()
         self._update_one(
             "research-tree-body",
             render_tree(self._tree, self.selected, mode=mode, width=self._tree_width()),
         )
-        scoped_claims, scope_header = scope_claims_for_node(self._selected_node(), claims)
-        self._update_one(CENTER_SCOPE_ID, scope_header)
-        self._update_one("research-center-body", render_claims(scoped_claims, mode=mode))
-        self._update_one(OPTIONS_BODY_ID, render_options(claims, mode=mode))
-        self._update_one(CONFLICTS_BODY_ID, render_conflicts(claims, mode=mode))
-        self._update_one(UNRESOLVED_BODY_ID, render_unresolved(questions, mode=mode))
+        self._update_one(CENTER_SCOPE_ID, self._center_header())
+        self._update_one(CENTER_BODY_ID, self._center_body())
         self._update_one(
             "research-progress-body",
             render_progress(
@@ -3281,7 +3643,7 @@ class ResearchBoardModeScreen(ScopeScreen):
                 claims,
                 questions,
                 checkpoints=1 if pause else 0,
-                rounds=self._current_round_rows(),
+                rounds=rounds,
             ),
         )
         self._update_one(DRAWER_ID, render_checkpoint(pause))
@@ -3360,13 +3722,10 @@ class ResearchBoardModeScreen(ScopeScreen):
         elif start + count > top + view_height:
             pane.scroll_to(y=start + count - view_height, animate=False)
 
-    def _repaint_claims(self) -> None:
-        """Re-scope the Claims pane to the selected node (header + body)."""
-        scoped_claims, scope_header = scope_claims_for_node(self._selected_node(), self._claims)
-        self._update_one(CENTER_SCOPE_ID, scope_header)
-        self._update_one(
-            "research-center-body", render_claims(scoped_claims, mode=self._render_mode())
-        )
+    def _repaint_center(self) -> None:
+        """Morph the center pane into the selected node's detail (header + body)."""
+        self._update_one(CENTER_SCOPE_ID, self._center_header())
+        self._update_one(CENTER_BODY_ID, self._center_body())
 
     def _tree_width(self) -> int:
         """Return the tree body's content width, or ``0`` before it is laid out.
@@ -3434,18 +3793,6 @@ class ResearchBoardModeScreen(ScopeScreen):
         campaigns, _claims, _questions = self._current_rows()
         return campaigns[0].campaign_id if campaigns else None
 
-    def _set_peek(self, line: str) -> None:
-        """Surface a peek result on the persistent peek line + a fading toast.
-
-        The peek detail renders on the ``#research-peek`` line so the drill is
-        visible in the frame (an operator can read it), and also flashes as a
-        toast. A cursor move resets the line to its idle hint (see
-        :meth:`watch_selected`), so a stale peek never reads as current after
-        the selection moves on.
-        """
-        self._update_one(PEEK_RESULT_ID, line)
-        notify_result(self.app, line)
-
     def _set_action(self, line: str, *, pending: bool = False) -> None:
         """Surface an action outcome as a fading toast; reset the line to idle.
 
@@ -3460,10 +3807,6 @@ class ResearchBoardModeScreen(ScopeScreen):
             return
         notify_result(self.app, line)
         self._update_one(ACTION_RESULT_ID, ACTION_IDLE)
-
-    def _peek_idle(self) -> str:
-        """Return the idle peek line (before any node is peeked)."""
-        return "[$muted]enter to peek the selected node[/]"
 
     def _empty_body(self, *, with_sigil: bool = True) -> str:
         """Return the honest-empty hero body: brand sigil + copy + action chips.
@@ -3607,10 +3950,10 @@ __all__ = [
     "APPROVE_NO_DAEMON",
     "CANCEL_NO_CAMPAIGN",
     "CANCEL_NO_DAEMON",
+    "CENTER_BODY_ID",
     "CENTER_SCOPE_ID",
     "CENTER_TABS",
     "CHECKPOINT_IDLE",
-    "CONFLICTS_BODY_ID",
     "DRAWER_ID",
     "EMPTY_NOTICE",
     "EMPTY_SUBLINE",
@@ -3619,15 +3962,12 @@ __all__ = [
     "NEW_NO_DAEMON",
     "NEW_PENDING",
     "NONE_YET",
-    "OPTIONS_BODY_ID",
     "PARK_NO_CHECKPOINT",
     "PARK_NO_DAEMON",
     "RESEARCH_REFRESH_S",
     "RUN_NO_CAMPAIGN",
     "RUN_NO_DAEMON",
     "STAGED_ROUND",
-    "UNRESOLVED_BODY_ID",
-    "UNRESOLVED_HEADER_ID",
     "CampaignDraft",
     "CampaignRow",
     "ComposeCampaignModal",
@@ -3639,6 +3979,7 @@ __all__ = [
     "TreeNode",
     "build_research_block",
     "build_tree_nodes",
+    "center_scope_header",
     "claim_drill_detail",
     "claim_sigil_markup",
     "classify_round_state",
@@ -3649,15 +3990,20 @@ __all__ = [
     "index_claims_by_question",
     "parse_domains",
     "project_campaign_progress",
+    "question_candidate_claims",
     "question_sigil_markup",
     "read_campaign_rows",
     "read_round_rows",
+    "render_campaign_stats",
+    "render_center_detail",
     "render_center_tabs",
     "render_checkpoint",
+    "render_claim_detail",
     "render_claims",
     "render_conflicts",
     "render_options",
     "render_progress",
+    "render_question_detail",
     "render_tree",
     "render_unresolved",
     "round_sigil_markup",

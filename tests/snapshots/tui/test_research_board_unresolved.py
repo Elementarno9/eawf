@@ -54,9 +54,9 @@ from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.modes.research_board import (
+    CENTER_BODY_ID,
     NONE_YET,
     STAGED_ROUND,
-    UNRESOLVED_BODY_ID,
     render_unresolved,
 )
 from eawf.surfaces.tui.snapshot import (
@@ -233,12 +233,18 @@ def test_render_unresolved_answered_question_leaves_section() -> None:
 
 
 # --------------------------------------------------------------------------
-# Snapshot: the mounted Unresolved tab lists one row per open question
+# Snapshot: the campaign-stats center detail counts the open questions
 # --------------------------------------------------------------------------
 
 
 def test_research_board_unresolved_snapshot(tmp_path: Path) -> None:
-    """The mounted Unresolved tab lists one row per question with status + round."""
+    """The mounted campaign-stats center detail counts the scope's open questions.
+
+    W03 retired the always-global Unresolved tab: the center pane now morphs by
+    selection. The default campaign selection renders the campaign stats, whose
+    QUESTIONS band counts the still-open + answered + blocking questions -- the
+    scoped question figures, not one un-scoped question list.
+    """
     questions = _three_questions()
     state_path = _write_seeded_scope(tmp_path, questions)
 
@@ -250,16 +256,14 @@ def test_research_board_unresolved_snapshot(tmp_path: Path) -> None:
             await settle_screen(pilot)
             from textual.widgets import Static
 
-            unresolved_body = app.screen.query_one(f"#{UNRESOLVED_BODY_ID}", Static)
-            rendered = str(unresolved_body.render())
-            # One row per OPEN question (the answered one leaves the section),
-            # each carrying its round number.
-            open_count = len(questions) - 1
-            assert len(rendered.splitlines()) == open_count
-            assert rendered.count(f"round {STAGED_ROUND}") == open_count
-            # The blocking question reads ``blocking``; the answered one is absent.
-            assert "blocking" in rendered
-            assert "answered" not in rendered
+            detail = str(app.screen.query_one(f"#{CENTER_BODY_ID}", Static).render())
+            # Three questions: two OPEN (one of them blocking), one ANSWERED.
+            assert "2 open" in detail
+            assert "1 answered" in detail
+            assert "1 blocking" in detail
+            # The stat bands render (a campaign-stats detail, not a question list).
+            for band in ("ROUNDS", "QUESTIONS", "CLAIMS", "BUDGET"):
+                assert band in detail
             assert_screen_snapshot(app, _GOLDEN / "research_board_unresolved.txt")
 
     asyncio.run(body())

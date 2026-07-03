@@ -361,7 +361,14 @@ def test_question_sigil_maps_shape_bearing_statuses() -> None:
 
 
 def test_research_board_reskin_populated_snapshot(tmp_path: Path) -> None:
-    """The mounted board renders the lifecycle layout with a sigil per claim."""
+    """The mounted board renders the campaign-stats center detail for the default node.
+
+    W03 made the center pane a polymorphic detail that morphs by selection. The
+    default campaign selection renders the campaign stats -- the ROUNDS /
+    QUESTIONS / CLAIMS / BUDGET bands with the scoped claim + conflict counts --
+    so the populated golden pins the stats layout. (The per-claim lifecycle sigil
+    mapping is pinned by the pure ``claim_sigil_markup`` tests above.)
+    """
     claims = _mixed_claims()
     questions = _mixed_questions()
     state = _seeded_state(claims, questions)
@@ -374,15 +381,13 @@ def test_research_board_reskin_populated_snapshot(tmp_path: Path) -> None:
             from textual.widgets import Static
 
             screen = app.screen
-            claims_body = str(screen.query_one("#research-center-body", Static).render())
-            # One row per claim, each leading with a lifecycle sigil (not a word).
-            assert len(claims_body.splitlines()) == len(claims)
-            for status in ClaimStatus:
-                assert status.value not in claims_body
-            # The supported / refuted / open shapes are all present.
-            assert glyph(Sigil.CLOSED, mode=app.render_mode) in claims_body
-            assert glyph(Sigil.FAILED, mode=app.render_mode) in claims_body
-            assert glyph(Sigil.PENDING, mode=app.render_mode) in claims_body
+            detail = str(screen.query_one("#research-center-body", Static).render())
+            # The campaign-stats bands render with the scoped ledger counts.
+            for band in ("ROUNDS", "QUESTIONS", "CLAIMS", "BUDGET", "CHECKPOINT"):
+                assert band in detail
+            # Four claims, one refuted -> the CLAIMS band counts them + the conflict.
+            assert f"{len(claims)} claim(s)" in detail
+            assert "1 conflict(s)" in detail  # the one REFUTED claim
             assert_screen_snapshot(app, _GOLDEN / "research_board_reskin_populated.txt")
 
     asyncio.run(body())

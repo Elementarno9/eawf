@@ -52,9 +52,8 @@ from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.modes.research_board import (
-    CONFLICTS_BODY_ID,
+    CENTER_BODY_ID,
     NONE_YET,
-    OPTIONS_BODY_ID,
     claim_sigil_markup,
     group_claims_by_evidence,
     render_conflicts,
@@ -66,7 +65,6 @@ from eawf.surfaces.tui.snapshot import (
 )
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
 from eawf.surfaces.tui.widgets.git_pane import GitFields
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 _SIZE = (120, 40)
 _GOLDEN = Path(__file__).resolve().parent / "golden"
@@ -272,12 +270,19 @@ def test_render_conflicts_empty_is_none_yet() -> None:
 
 
 # --------------------------------------------------------------------------
-# Snapshot: the Options + Conflicts tabs render the grouped claims
+# Snapshot: the campaign-stats center detail counts claims + conflicts
 # --------------------------------------------------------------------------
 
 
 def test_research_board_claims_snapshot(tmp_path: Path) -> None:
-    """The mounted Options + Conflicts tabs render claims grouped by evidence."""
+    """The mounted campaign-stats center detail counts the ledger's claims + conflicts.
+
+    W03 retired the always-global Options / Conflicts tabs: the center pane now
+    morphs by selection. The default campaign selection renders the campaign
+    stats, whose CLAIMS band counts the scope's claims + the refuted-claim
+    conflicts (the same evidence split :func:`group_claims_by_evidence` computes),
+    scoped to the selection rather than one un-scoped soup.
+    """
     claims = _mixed_claims()
     state_path = _write_seeded_scope(tmp_path, claims)
 
@@ -289,16 +294,16 @@ def test_research_board_claims_snapshot(tmp_path: Path) -> None:
             await settle_screen(pilot)
             from textual.widgets import Static
 
-            options = str(app.screen.query_one(f"#{OPTIONS_BODY_ID}", Static).render())
-            conflicts = str(app.screen.query_one(f"#{CONFLICTS_BODY_ID}", Static).render())
-            # Options groups the two supported claims; Conflicts the one refuted.
-            assert len(options.splitlines()) == 2
-            assert len(conflicts.splitlines()) == 1
-            # The refuted claim leads with its lifecycle sigil, never the raw word.
-            assert "refuted" not in conflicts
-            refuted_glyph = glyph(Sigil.FAILED, mode=app.render_mode)
-            assert refuted_glyph in conflicts
-            assert "Term-structure arbitrage is exploitable intraday" in conflicts
+            detail = str(app.screen.query_one(f"#{CENTER_BODY_ID}", Static).render())
+            # Four claims, one refuted -> "4 claim(s) . 1 conflict(s)".
+            supporting, contradicting = group_claims_by_evidence(claims)
+            assert len(supporting) == 2
+            assert len(contradicting) == 1
+            assert f"{len(claims)} claim(s)" in detail
+            assert f"{len(contradicting)} conflict(s)" in detail
+            # The stat bands render (a campaign-stats detail, not a claim soup).
+            for band in ("ROUNDS", "QUESTIONS", "CLAIMS", "BUDGET"):
+                assert band in detail
             assert_screen_snapshot(app, _GOLDEN / "research_board_claims.txt")
 
     asyncio.run(body())

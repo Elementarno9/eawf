@@ -75,6 +75,7 @@ from eawf.surfaces.tui.modes.brief_viewer import (
 )
 from eawf.surfaces.tui.modes.research_board import (
     APPROVE_NO_CHECKPOINT,
+    CENTER_BODY_ID,
     CENTER_PANE_ID,
     CENTER_TABS,
     CHECKPOINT_IDLE,
@@ -103,12 +104,17 @@ from eawf.surfaces.tui.modes.research_board import (
     has_research_signal,
     index_claims_by_question,
     parse_domains,
+    question_candidate_claims,
     question_sigil_markup,
     read_campaign_rows,
+    render_campaign_stats,
+    render_center_detail,
     render_center_tabs,
     render_checkpoint,
+    render_claim_detail,
     render_claims,
     render_progress,
+    render_question_detail,
     render_tree,
     round_sigil_markup,
 )
@@ -591,6 +597,194 @@ def test_build_tree_nodes_claim_leaf_detail_is_drill_in() -> None:
     claim_nodes = [n for n in nodes if n.kind is NodeKind.CLAIM]
     assert claim_nodes
     assert "src/vol/sabr.py:42" in claim_nodes[0].detail
+
+
+# --------------------------------------------------------------------------
+# W03: the polymorphic center detail -- campaign stats / question answer /
+# claim summary + the scope header (pure helpers)
+# --------------------------------------------------------------------------
+
+
+def test_center_scope_header_names_each_selection() -> None:
+    """The center header names the selection kind, always leading with "showing"."""
+    from eawf.surfaces.tui.modes.research_board import center_scope_header
+
+    assert "all research" in center_scope_header(None)
+    campaign_node = build_tree_nodes((_campaign_row(),), ())[0]
+    assert campaign_node.kind is NodeKind.CAMPAIGN
+    header = center_scope_header(campaign_node)
+    assert header.startswith("[$muted]showing")
+    assert "campaign:" in header
+
+
+def test_question_candidate_claims_empty_when_none_answer() -> None:
+    """A question with no answering claim yields no candidates (boundary)."""
+    assert question_candidate_claims(_question("OQ-1"), ()) == ()
+    # A free-standing claim (answers no question) is not a candidate.
+    assert question_candidate_claims(_question("OQ-1"), (_claim("CL-1"),)) == ()
+
+
+def test_question_candidate_claims_unions_both_link_directions() -> None:
+    """Candidates union the claim back-link and the question's answered_by pointer."""
+    linked = _claim("CL-1", status=ClaimStatus.SUPPORTED, answers_question_id="OQ-1")
+    named_only = _claim("CL-2", status=ClaimStatus.OPEN)  # answers no question by link
+    question = OpenQuestion(
+        id="OQ-1",
+        scope_id="QR",
+        title="which model",
+        status=OpenQuestionStatus.ANSWERED,
+        answered_by_claim_id="CL-2",
+        created_at=_T0,
+    )
+    candidates = question_candidate_claims(question, (linked, named_only))
+    # Both link directions resolve; the named-only claim is not double-counted.
+    assert {c.id for c in candidates} == {"CL-1", "CL-2"}
+    assert len(candidates) == 2
+
+
+def test_render_question_detail_no_candidate_is_honest_empty() -> None:
+    """A question with no candidate answer renders none-yet + a zeroed summary."""
+    detail = render_question_detail(_question("OQ-1"), ())
+    assert "ANSWER" in detail
+    assert NONE_YET in detail
+    assert "0 supporting source(s)" in detail
+    assert "0 conflict(s)" in detail
+    assert "0 alternative(s)" in detail
+
+
+def test_render_question_detail_scopes_evidence_to_the_question() -> None:
+    """The evidence summary counts ONLY the claims answering THIS question."""
+    best = Claim(
+        id="CL-1",
+        scope_id="QR",
+        title="the best answer",
+        status=ClaimStatus.SUPPORTED,
+        evidence_refs=["a", "b"],
+        answers_question_id="OQ-1",
+        created_at=_T0,
+    )
+    conflict = Claim(
+        id="CL-2",
+        scope_id="QR",
+        title="the conflicting candidate",
+        status=ClaimStatus.REFUTED,
+        answers_question_id="OQ-1",
+        created_at=_T0,
+    )
+    other = _claim("CL-3", status=ClaimStatus.SUPPORTED)  # unrelated -- answers no question
+    detail = render_question_detail(_question("OQ-1"), (best, conflict, other))
+    assert "the best answer" in detail
+    assert "2 supporting source(s)" in detail  # best's two refs, scoped
+    assert "1 conflict(s)" in detail  # the one refuted candidate
+    assert "1 alternative(s)" in detail  # the conflict is the alternative
+    # The global-soup defect is fixed: the unrelated claim is NOT counted / shown.
+    assert "Implied vol surface" not in detail
+
+
+def test_render_claim_detail_names_answered_question() -> None:
+    """A claim detail names the question it answers + its evidence-ref count."""
+    claim = Claim(
+        id="CL-1",
+        scope_id="QR",
+        title="the candidate claim",
+        status=ClaimStatus.SUPPORTED,
+        evidence_refs=["a"],
+        answers_question_id="OQ-1",
+        created_at=_T0,
+    )
+    question = _question("OQ-1")
+    detail = render_claim_detail(claim, (question,))
+    assert "candidate answer" in detail
+    assert "the candidate claim" in detail
+    assert "ANSWERS" in detail
+    assert question.title in detail
+    assert "1 ref(s)" in detail
+
+
+def test_render_claim_detail_no_linked_question_is_honest() -> None:
+    """A free-standing claim reads the honest no-linked-question line."""
+    detail = render_claim_detail(_claim("CL-1", status=ClaimStatus.OPEN), ())
+    assert "(no linked question)" in detail
+    assert "0 ref(s)" in detail
+
+
+def test_render_campaign_stats_scope_wide_when_no_campaign() -> None:
+    """A ``None`` campaign renders the scope-wide header + the stat bands (boundary)."""
+    detail = render_campaign_stats(None, (), (_claim(),), (_question(),), (), checkpoints=0)
+    assert "no campaign staged" in detail
+    for band in ("ROUNDS", "QUESTIONS", "CLAIMS", "BUDGET", "CHECKPOINT", "LAST ROUND"):
+        assert band in detail
+
+
+def test_render_campaign_stats_counts_claims_conflicts_and_questions() -> None:
+    """The campaign stats read the claim / conflict / question counts off the ledger."""
+    claims = (
+        _claim("CL-1", status=ClaimStatus.SUPPORTED),
+        _claim("CL-2", status=ClaimStatus.REFUTED),
+    )
+    detail = render_campaign_stats(
+        _campaign_row(),
+        (_campaign_row(),),
+        claims,
+        (_question(blocking=True),),
+        (),
+        checkpoints=2,
+    )
+    assert "2 claim(s) · 1 conflict(s)" in detail
+    assert "QUESTIONS[/] [$muted]1 open · 0 answered · 1 blocking" in detail
+    assert "CHECKPOINT[/] [$muted]2 open" in detail
+
+
+def test_render_center_detail_dispatches_by_node_kind() -> None:
+    """The dispatcher routes each node kind to its own detail renderer."""
+    campaign = _campaign_row()
+    question = _question("OQ-1")
+    answer = Claim(
+        id="CL-1",
+        scope_id="QR",
+        title="the answer claim",
+        status=ClaimStatus.SUPPORTED,
+        answers_question_id="OQ-1",
+        created_at=_T0,
+    )
+    nodes = build_tree_nodes((campaign,), (question,), claims=(answer,))
+    by_kind = {node.kind: node for node in nodes}
+    campaigns, claims, questions = (campaign,), (answer,), (question,)
+    camp_detail = render_center_detail(
+        by_kind[NodeKind.CAMPAIGN], campaigns, claims, questions, (), checkpoints=0
+    )
+    assert "ROUNDS" in camp_detail
+    q_detail = render_center_detail(
+        by_kind[NodeKind.QUESTION], campaigns, claims, questions, (), checkpoints=0
+    )
+    assert "ANSWER" in q_detail
+    assert "the answer claim" in q_detail
+    c_detail = render_center_detail(
+        by_kind[NodeKind.CLAIM], campaigns, claims, questions, (), checkpoints=0
+    )
+    assert "candidate answer" in c_detail
+    # No selection falls back to the primary-campaign stats (never a blank pane).
+    none_detail = render_center_detail(None, campaigns, claims, questions, (), checkpoints=0)
+    assert "ROUNDS" in none_detail
+
+
+def test_render_center_detail_missing_question_falls_back_to_stats() -> None:
+    """A question node whose id resolves to no row falls back to campaign stats.
+
+    Defensive path: the dispatcher never crashes on a dangling question id -- it
+    degrades to the owning-campaign stats rather than raising a lookup error.
+    """
+    from eawf.surfaces.tui.modes.research_board import TreeNode
+
+    dangling = TreeNode(
+        kind=NodeKind.QUESTION,
+        label="ghost question",
+        depth=1,
+        detail="",
+        question_id="OQ-missing",
+    )
+    detail = render_center_detail(dangling, (_campaign_row(),), (), (), (), checkpoints=0)
+    assert "ROUNDS" in detail
 
 
 def test_render_progress_surfaces_run_round_and_budget_bands() -> None:
@@ -1190,11 +1384,12 @@ def test_research_board_pane_mounts_three_panes_and_drawer(tmp_path: Path) -> No
 
 
 def test_research_board_pane_renders_seeded_campaign(tmp_path: Path) -> None:
-    """The mounted pane surfaces a seeded campaign + claims + progress bands.
+    """The mounted pane surfaces a seeded campaign + campaign stats + progress bands.
 
     Builds a scope with a persisted campaign record plus a claim and an open
     question in state, then asserts the rendered frame carries the campaign
-    topic (tree), the claim title (center), the progress bands (right), and
+    topic (tree), the campaign-stats center detail (the default campaign
+    selection morphs the center into stats), the progress bands (right), and
     that the honest-empty banner is absent on the populated path.
     """
     state = _project_state(
@@ -1218,7 +1413,6 @@ def test_research_board_pane_renders_seeded_campaign(tmp_path: Path) -> None:
             assert "CLAIMS / EVIDENCE" in frame
             assert "PROGRESS / BUDGET" in frame
             assert "market-structure" in frame  # staged topic node (tree)
-            assert "Implied vol surface" in frame  # claim title (center)
             assert "RUN" in frame  # progress band (right)
             # Honest-empty banner is absent on the populated path.
             assert EMPTY_NOTICE not in frame
@@ -1231,6 +1425,14 @@ def test_research_board_pane_renders_seeded_campaign(tmp_path: Path) -> None:
             tree_render = str(tree_body.render())  # type: ignore[attr-defined]
             assert "Survey the" in tree_render
             assert "landscape" in tree_render
+            # The default campaign selection morphs the center into campaign
+            # stats: the stat bands + the scoped claim / question counts.
+            center_render = str(pane.query_one(f"#{CENTER_BODY_ID}").render())  # type: ignore[attr-defined]
+            assert "ROUNDS" in center_render
+            assert "QUESTIONS" in center_render
+            assert "CLAIMS" in center_render
+            assert "1 claim(s)" in center_render  # the one seeded claim
+            assert "1 blocking" in center_render  # the blocking open question
             progress_body = pane.query_one("#research-progress-body")
             assert "BUDGET" in str(progress_body.render())  # type: ignore[attr-defined]
 
@@ -1294,8 +1496,14 @@ def test_research_board_action_keys_on_mode_key_line() -> None:
         assert chip not in hints  # de-duped off the footer
 
 
-def test_research_board_enter_peeks_selected_node(tmp_path: Path) -> None:
-    """Pressing ``enter`` peeks the selected tree node read-only (no mutation)."""
+def test_research_board_enter_no_longer_accretes_in_tree_peek(tmp_path: Path) -> None:
+    """The in-tree peek is retired: no ``#research-peek`` node + Enter adds no block.
+
+    W03 replaced the in-tree peek with the polymorphic center detail, so the
+    tree pane no longer carries a ``#research-peek`` Static and pressing Enter
+    neither flashes a peek toast nor mutates the tree body. The tree-body render
+    is byte-identical before and after Enter (no peek block accreted).
+    """
     state = _project_state(open_questions={"OQ-0001": _question()})
     state_path = _write_state(tmp_path, state)
     _append_campaign(state_path, _campaign_payload())
@@ -1308,11 +1516,153 @@ def test_research_board_enter_peeks_selected_node(tmp_path: Path) -> None:
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, ResearchBoardModeScreen)
-            await pilot.press("enter")  # peek the first (campaign) node
+            # No peek Static lives in the tree pane any longer.
+            assert not pane.query("#research-peek")
+            tree_before = str(pane.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
+            await pilot.press("enter")  # the retired-peek seam -- a no-op for W03
             await settle_screen(pilot)
-            toasts = "\n".join(toast_messages(app))
-            assert "peek" in toasts
-            assert "campaign" in toasts
+            tree_after = str(pane.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
+            # Enter accreted no block inside the tree, and flashed no peek toast.
+            assert tree_after == tree_before
+            assert "peek" not in "\n".join(toast_messages(app))
+
+    asyncio.run(body())
+
+
+def test_research_board_campaign_selection_shows_campaign_stats(tmp_path: Path) -> None:
+    """Selecting a campaign node morphs the center into that campaign's stats.
+
+    The default selection is the campaign root, so the center detail renders the
+    campaign's rounds / questions / claims / budget / checkpoint stat bands
+    drawn from the same campaign / claim / question data the PROGRESS pane reads.
+    """
+    state = _project_state(
+        claims={
+            "CL-0001": _claim("CL-0001", status=ClaimStatus.SUPPORTED),
+            "CL-0002": _claim("CL-0002", status=ClaimStatus.REFUTED),
+        },
+        open_questions={
+            "OQ-0001": _question("OQ-0001"),
+            "OQ-0002": _question("OQ-0002", blocking=True),
+        },
+    )
+    state_path = _write_state(tmp_path, state)
+    _append_campaign(state_path, _campaign_payload())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            assert pane._selected_node().kind is NodeKind.CAMPAIGN
+            header = str(pane.query_one(f"#{CENTER_BODY_ID}").render())  # type: ignore[attr-defined]
+            # The stat bands + the scoped counts read off the campaign.
+            for band in ("ROUNDS", "QUESTIONS", "CLAIMS", "BUDGET", "CHECKPOINT"):
+                assert band in header
+            assert "2 claim(s) · 1 conflict(s)" in header  # 1 refuted claim
+            assert "2 open" in header  # both questions still open
+            assert "1 blocking" in header
+            # The center header names the campaign selection (not a claim soup).
+            scope_header = str(pane.query_one("#research-center-scope").render())  # type: ignore[attr-defined]
+            assert "showing campaign:" in scope_header
+
+    asyncio.run(body())
+
+
+def test_research_board_question_selection_shows_scoped_answer(tmp_path: Path) -> None:
+    """Selecting a question node morphs the center into its scoped answer.
+
+    A claim that answers the selected question is its candidate answer; the
+    detail renders that claim's body plus an evidence summary SCOPED to the
+    question (supporting sources / conflicts / alternatives), never the global
+    claim ledger. We walk the cursor down to the question node and assert its
+    answer + scoped summary surface, and that an unrelated claim does not.
+    """
+    answer = Claim(
+        id="CL-0001",
+        scope_id="QR",
+        title="Short tenor is best fit by SABR",
+        status=ClaimStatus.SUPPORTED,
+        evidence_refs=["docs/sabr.md", "docs/fit.md"],
+        answers_question_id="OQ-0001",
+        created_at=_T0,
+    )
+    unrelated = _claim("CL-0002", status=ClaimStatus.SUPPORTED)  # answers no question
+    state = _project_state(
+        claims={"CL-0001": answer, "CL-0002": unrelated},
+        open_questions={"OQ-0001": _question("OQ-0001")},
+    )
+    state_path = _write_state(tmp_path, state)
+    _append_campaign(state_path, _campaign_payload())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            # Walk the cursor to the question node (campaign > round > topics >
+            # question), asserting on the resolved kind rather than a fixed index.
+            for _ in range(len(pane._tree)):
+                if pane._selected_node().kind is NodeKind.QUESTION:
+                    break
+                await pilot.press("down")
+            await settle_screen(pilot)
+            assert pane._selected_node().kind is NodeKind.QUESTION
+            detail = str(pane.query_one(f"#{CENTER_BODY_ID}").render())  # type: ignore[attr-defined]
+            assert "ANSWER" in detail
+            assert "Short tenor is best fit by SABR" in detail  # the answering claim
+            assert "EVIDENCE" in detail
+            assert "2 supporting source(s)" in detail  # the answer's two refs
+            # The global-soup defect is fixed: the unrelated claim is NOT shown.
+            assert "Implied vol surface" not in detail
+
+    asyncio.run(body())
+
+
+def test_research_board_claim_selection_shows_claim_summary(tmp_path: Path) -> None:
+    """Selecting a claim node morphs the center into its candidate-answer summary."""
+    answer = Claim(
+        id="CL-0001",
+        scope_id="QR",
+        title="Short tenor is best fit by SABR",
+        status=ClaimStatus.SUPPORTED,
+        evidence_refs=["docs/sabr.md"],
+        answers_question_id="OQ-0001",
+        created_at=_T0,
+    )
+    state = _project_state(
+        claims={"CL-0001": answer},
+        open_questions={"OQ-0001": _question("OQ-0001")},
+    )
+    state_path = _write_state(tmp_path, state)
+    _append_campaign(state_path, _campaign_payload())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            # Walk the cursor to the claim leaf (nested under its question).
+            for _ in range(len(pane._tree)):
+                if pane._selected_node().kind is NodeKind.CLAIM:
+                    break
+                await pilot.press("down")
+            await settle_screen(pilot)
+            assert pane._selected_node().kind is NodeKind.CLAIM
+            detail = str(pane.query_one(f"#{CENTER_BODY_ID}").render())  # type: ignore[attr-defined]
+            assert "candidate answer" in detail
+            assert "Short tenor is best fit by SABR" in detail
+            assert "ANSWERS" in detail  # names the question it answers
+            assert "1 ref(s)" in detail  # its evidence-ref count
 
     asyncio.run(body())
 

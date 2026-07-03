@@ -11,10 +11,11 @@ pair of Pilot drives:
   round node reads a terminal label rather than the scope-wide "round running";
   a wrapped long label hangs to the node's own text column
   (:func:`render_tree`).
-* **Scoped claims + honest Unresolved + visible peek.** The Claims pane scopes
-  to (and headers) the selected node (:func:`scope_claims_for_node`), an
-  answered question leaves the Unresolved section (:func:`render_unresolved`),
-  and Enter renders a visible peek detail under the tree.
+* **Scoped detail + honest Unresolved.** The center pane names (and scopes to)
+  the selected node -- the W03 redesign morphs it into the selection's detail,
+  retiring the in-tree peek -- and an answered question leaves the Unresolved
+  list (:func:`render_unresolved`). The pure ``scope_claims_for_node`` scoping
+  helper is still gated here.
 """
 
 from __future__ import annotations
@@ -65,7 +66,6 @@ from eawf.surfaces.tui.modes.research_board import (
     scope_claims_for_node,
 )
 from eawf.surfaces.tui.snapshot import (
-    capture_screen_text,
     settle_screen,
     toast_messages,
 )
@@ -228,13 +228,13 @@ def _strip_markup(text: str) -> str:
 # --------------------------------------------------------------------------
 
 
-def test_build_tree_nodes_hoists_scope_questions_to_depth_zero() -> None:
-    """The scope-wide questions group is a depth-0 sibling of the campaigns.
+def test_build_tree_nodes_nests_scope_questions_under_primary_campaign() -> None:
+    """The scope-wide questions nest under the PRIMARY campaign (W02 campaign tree).
 
-    With two campaigns plus scope-wide questions, the questions grouping node
-    lands at depth 0 (the same indent as the campaign roots) AFTER both
-    campaign sub-trees, so its question leaves no longer render as children of
-    the last campaign.
+    W02 made each campaign a pickable root that owns the research gaps: with two
+    campaigns plus scope-wide questions, the questions hang at depth 1 under the
+    FIRST (primary) campaign's sub-tree -- there is no separate depth-0 scope
+    round when a campaign is staged. (Supersedes the retired W26 depth-0 hoist.)
     """
     campaigns = (
         _campaign_row("RC-0001", topic="Campaign ABC"),
@@ -243,20 +243,20 @@ def test_build_tree_nodes_hoists_scope_questions_to_depth_zero() -> None:
     questions = (_question("OQ-0001"), _question("OQ-0002", title="Second scope question"))
     nodes = build_tree_nodes(campaigns, questions)
 
-    group = next(node for node in nodes if node.kind is NodeKind.ROUND and node.campaign_id is None)
-    # The scope-questions group is a scope root (depth 0), not a campaign child.
-    assert group.depth == 0
-    assert group.label.startswith("scope questions")
-    # It renders after both campaign sub-trees, never nested inside the last one.
-    campaign_nodes = [node for node in nodes if node.kind is NodeKind.CAMPAIGN]
-    assert nodes.index(group) > max(nodes.index(node) for node in campaign_nodes)
-    # Every question leaf hangs one indent under the group (depth 1), and none
-    # inherits a campaign parent.
+    # No scope-level questions round is emitted when a campaign is staged.
+    assert not any(node.kind is NodeKind.ROUND and node.campaign_id is None for node in nodes)
+    # The two questions nest at depth 1, after the primary (first) campaign root
+    # and before the second campaign root.
     question_nodes = [node for node in nodes if node.kind is NodeKind.QUESTION]
     assert len(question_nodes) == 2
     for node in question_nodes:
         assert node.depth == 1
-        assert node.campaign_id is None
+    primary_index = next(i for i, node in enumerate(nodes) if node.kind is NodeKind.CAMPAIGN)
+    second_index = next(
+        i for i, node in enumerate(nodes) if node.kind is NodeKind.CAMPAIGN and i > primary_index
+    )
+    question_indexes = [nodes.index(node) for node in question_nodes]
+    assert all(primary_index < idx < second_index for idx in question_indexes)
 
 
 def test_build_tree_nodes_question_only_scope_roots_the_group_at_depth_zero() -> None:
@@ -420,8 +420,13 @@ def test_render_unresolved_all_resolved_renders_none_yet() -> None:
     assert NONE_YET in render_unresolved(questions)
 
 
-def test_research_board_enter_peek_renders_visible_detail(tmp_path: Path) -> None:
-    """Enter surfaces a visible peek detail line (a frame delta from the idle hint)."""
+def test_research_board_in_tree_peek_is_retired(tmp_path: Path) -> None:
+    """The in-tree peek Static is retired -- selection drives the center detail.
+
+    W03 replaced the ``#research-peek`` line with the polymorphic center detail,
+    so the tree pane carries no peek Static and Enter no longer renders a peek
+    block. The center detail changes as the selection moves instead.
+    """
     state = _project_state(open_questions={"OQ-0001": _question()})
     state_path = _write_state(tmp_path, state)
     _append_campaign(state_path, _campaign_payload())
@@ -434,19 +439,14 @@ def test_research_board_enter_peek_renders_visible_detail(tmp_path: Path) -> Non
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, ResearchBoardModeScreen)
-            peek_before = str(pane.query_one("#research-peek").render())  # type: ignore[attr-defined]
-            assert "enter to peek" in peek_before
-            await pilot.press("enter")  # peek the selected (first) node
+            # No peek Static remains in the tree pane.
+            assert not pane.query("#research-peek")
+            tree_before = str(pane.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
+            await pilot.press("enter")  # the retired-peek seam -- a no-op for W03
             await settle_screen(pilot)
-            peek_after = str(pane.query_one("#research-peek").render())  # type: ignore[attr-defined]
-            # The peek line renders the node detail (a visible change), not the
-            # idle hint any longer.
-            assert peek_after != peek_before
-            assert "peek" in peek_after
-            assert "enter to peek" not in peek_after
-            # The detail is visible in the captured frame (the frame delta).
-            frame = capture_screen_text(app)
-            assert "peek" in frame
+            tree_after = str(pane.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
+            # Enter accreted no block inside the tree.
+            assert tree_after == tree_before
 
     asyncio.run(body())
 
@@ -476,8 +476,14 @@ def test_research_board_center_scope_header_names_selection(tmp_path: Path) -> N
     asyncio.run(body())
 
 
-def test_research_board_enter_peek_flashes_toast(tmp_path: Path) -> None:
-    """Enter also flashes the peek detail as a toast (the secondary surface)."""
+def test_research_board_selection_morphs_center_detail(tmp_path: Path) -> None:
+    """Moving the cursor morphs the center detail (replaces the retired peek).
+
+    Selection now drives the center pane: the campaign root shows campaign
+    stats, and walking the cursor to a question node morphs the detail into that
+    question's answer view -- a visible change in the center-body render, with no
+    peek toast flashed.
+    """
     state = _project_state(open_questions={"OQ-0001": _question()})
     state_path = _write_state(tmp_path, state)
     _append_campaign(state_path, _campaign_payload())
@@ -488,9 +494,20 @@ def test_research_board_enter_peek_flashes_toast(tmp_path: Path) -> None:
             await settle_screen(pilot)
             await pilot.press("3")
             await settle_screen(pilot)
-            await pilot.press("enter")
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            campaign_detail = str(pane.query_one("#research-center-body").render())  # type: ignore[attr-defined]
+            assert "ROUNDS" in campaign_detail  # the campaign-stats view
+            for _ in range(len(pane._tree)):  # type: ignore[attr-defined]
+                if pane._selected_node().kind is NodeKind.QUESTION:  # type: ignore[attr-defined]
+                    break
+                await pilot.press("down")
             await settle_screen(pilot)
-            toasts = "\n".join(toast_messages(app))
-            assert "peek" in toasts
+            question_detail = str(pane.query_one("#research-center-body").render())  # type: ignore[attr-defined]
+            # The center morphed -- a visible change, and the question answer view.
+            assert question_detail != campaign_detail
+            assert "ANSWER" in question_detail
+            # No peek toast flashed (the in-tree peek is retired).
+            assert "peek" not in "\n".join(toast_messages(app))
 
     asyncio.run(body())
