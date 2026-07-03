@@ -82,6 +82,7 @@ from eawf.surfaces.tui.modes.research_board import (
     DRAWER_ID,
     EMPTY_ID,
     EMPTY_NOTICE,
+    ENTER_NOT_A_CLAIM,
     NEW_NO_DAEMON,
     NONE_YET,
     PARK_NO_CHECKPOINT,
@@ -98,6 +99,7 @@ from eawf.surfaces.tui.modes.research_board import (
     _tree_node_line_span,
     build_research_block,
     build_tree_nodes,
+    claim_conflicts,
     claim_sigil_markup,
     classify_round_state,
     compute_round_progress,
@@ -1663,6 +1665,193 @@ def test_research_board_claim_selection_shows_claim_summary(tmp_path: Path) -> N
             assert "Short tenor is best fit by SABR" in detail
             assert "ANSWERS" in detail  # names the question it answers
             assert "1 ref(s)" in detail  # its evidence-ref count
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# claim_conflicts (W04) -- refuted-sibling resolution for the reader
+# --------------------------------------------------------------------------
+
+
+def test_claim_conflicts_free_standing_claim_has_none() -> None:
+    """A claim answering no tracked question has no resolvable conflict."""
+    claim = _claim("CL-0001", status=ClaimStatus.SUPPORTED)  # answers_question_id=None
+    assert claim_conflicts(claim, (), (claim,)) == ()
+
+
+def test_claim_conflicts_all_supported_siblings_has_none() -> None:
+    """Sibling candidates that are all supported yield no conflict (honest empty)."""
+    answer = _claim("CL-0001", status=ClaimStatus.SUPPORTED, answers_question_id="OQ-0001")
+    sibling = _claim("CL-0002", status=ClaimStatus.SUPPORTED, answers_question_id="OQ-0001")
+    question = _question("OQ-0001")
+    assert claim_conflicts(answer, (question,), (answer, sibling)) == ()
+
+
+def test_claim_conflicts_returns_refuted_siblings_excluding_self() -> None:
+    """The refuted candidate answers to the same question are the conflicts."""
+    answer = _claim("CL-0001", status=ClaimStatus.SUPPORTED, answers_question_id="OQ-0001")
+    refuted = _claim("CL-0002", status=ClaimStatus.REFUTED, answers_question_id="OQ-0001")
+    other = _claim("CL-0003", status=ClaimStatus.REFUTED, answers_question_id="OQ-0002")
+    question = _question("OQ-0001")
+    conflicts = claim_conflicts(answer, (question,), (answer, refuted, other))
+    assert [c.id for c in conflicts] == ["CL-0002"]  # same-question refuted only, not self
+
+
+def test_claim_conflicts_missing_question_row_has_none() -> None:
+    """A claim whose question is not on hand has no resolvable conflict."""
+    answer = _claim("CL-0001", status=ClaimStatus.SUPPORTED, answers_question_id="OQ-9999")
+    refuted = _claim("CL-0002", status=ClaimStatus.REFUTED, answers_question_id="OQ-9999")
+    assert claim_conflicts(answer, (_question("OQ-0001"),), (answer, refuted)) == ()
+
+
+# --------------------------------------------------------------------------
+# Evidence reader modal (W04) -- Enter zooms a claim, Esc dismisses
+# --------------------------------------------------------------------------
+
+
+def _reader_state_path(tmp_path: Path) -> Path:
+    """Seed a scope whose claim leaf has evidence + a refuted conflicting sibling.
+
+    The claim ``CL-0001`` answers ``OQ-0001`` with two supporting sources; the
+    refuted sibling ``CL-0002`` answers the same question, so it resolves as the
+    reader's one conflict. The board lifts both under the question node, so the
+    Enter-to-open Pilot can walk the cursor to the supported claim leaf.
+    """
+    answer = Claim(
+        id="CL-0001",
+        scope_id="QR",
+        title="Short tenor is best fit by SABR",
+        description="SABR beats SVI on the front of the curve",
+        status=ClaimStatus.SUPPORTED,
+        evidence_refs=["docs/sabr.md", "docs/fit.md"],
+        answers_question_id="OQ-0001",
+        source_artifact_id="ART-42",
+        created_at=_T0,
+    )
+    conflict = Claim(
+        id="CL-0002",
+        scope_id="QR",
+        title="Short tenor is best fit by SVI",
+        status=ClaimStatus.REFUTED,
+        answers_question_id="OQ-0001",
+        created_at=_T0,
+    )
+    state = _project_state(
+        claims={"CL-0001": answer, "CL-0002": conflict},
+        open_questions={"OQ-0001": _question("OQ-0001")},
+    )
+    state_path = _write_state(tmp_path, state)
+    _append_campaign(state_path, _campaign_payload())
+    return state_path
+
+
+async def _walk_to_supported_claim(pilot: object, pane: ResearchBoardModeScreen) -> None:
+    """Move the tree cursor onto the SUPPORTED claim leaf (``CL-0001``)."""
+    for _ in range(len(pane._tree)):
+        node = pane._selected_node()
+        if node.kind is NodeKind.CLAIM and node.claim_id == "CL-0001":
+            return
+        await pilot.press("down")  # type: ignore[attr-defined]
+    raise AssertionError("supported claim leaf never reached")
+
+
+def test_research_board_enter_opens_evidence_reader_on_claim(tmp_path: Path) -> None:
+    """Enter on a claim leaf pushes the full-screen reader with its sources visible.
+
+    The reader shows the untruncated claim body, its numbered supporting sources
+    ([1] / [2]), the resolved conflicting sibling, and the provenance line -- the
+    zoom surface the W03 pass reserved on ``action_peek_selected``.
+    """
+    from eawf.surfaces.tui.modals.evidence_reader import EvidenceReaderModal
+
+    state_path = _reader_state_path(tmp_path)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            await _walk_to_supported_claim(pilot, pane)
+            await settle_screen(pilot)
+            await pilot.press("enter")
+            await settle_screen(pilot)
+            # The full-screen reader is now on top of the stack.
+            assert isinstance(app.screen, EvidenceReaderModal)
+            frame = capture_screen_text(app)
+            # The numbered supporting-source lines are visible.
+            assert "[1] docs/sabr.md" in frame
+            assert "[2] docs/fit.md" in frame
+            # The conflicts section surfaces the refuted sibling.
+            assert "Conflicts" in frame
+            assert "Short tenor is best fit by SVI" in frame
+            # The provenance line names the answered question + source artifact.
+            assert "answers OQ-0001" in frame
+            assert "ART-42" in frame
+
+    asyncio.run(body())
+
+
+def test_research_board_evidence_reader_esc_dismisses_keeps_selection(tmp_path: Path) -> None:
+    """Esc closes the reader and returns to the board with the prior claim selected."""
+    from eawf.surfaces.tui.modals.evidence_reader import EvidenceReaderModal
+
+    state_path = _reader_state_path(tmp_path)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            await _walk_to_supported_claim(pilot, pane)
+            await settle_screen(pilot)
+            selected_before = pane.selected
+            await pilot.press("enter")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, EvidenceReaderModal)
+            await pilot.press("escape")
+            await settle_screen(pilot)
+            # Back on the board, and the claim cursor is exactly where it was.
+            assert isinstance(app.screen, ResearchBoardModeScreen)
+            assert not app.query(EvidenceReaderModal)
+            assert app.screen.selected == selected_before
+            assert app.screen._selected_node().claim_id == "CL-0001"
+
+    asyncio.run(body())
+
+
+def test_research_board_enter_on_non_claim_surfaces_hint_no_modal(tmp_path: Path) -> None:
+    """Enter on the campaign root opens no reader and surfaces the honest hint.
+
+    The default selection is the campaign node (not a claim), so Enter must not
+    push the reader -- it flashes the ``select a claim`` toast instead, keeping
+    the advertised ``Enter open`` affordance honest rather than dead.
+    """
+    from eawf.surfaces.tui.modals.evidence_reader import EvidenceReaderModal
+
+    state_path = _reader_state_path(tmp_path)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            assert pane._selected_node().kind is NodeKind.CAMPAIGN
+            await pilot.press("enter")
+            await settle_screen(pilot)
+            # No reader pushed; the board is still the active screen.
+            assert isinstance(app.screen, ResearchBoardModeScreen)
+            assert not app.query(EvidenceReaderModal)
+            assert ENTER_NOT_A_CLAIM in "\n".join(toast_messages(app))
 
     asyncio.run(body())
 

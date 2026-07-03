@@ -257,6 +257,12 @@ MODE_KEYS_LINE: str = (
 APPROVE_NO_CHECKPOINT: str = "approve: no checkpoint to approve"
 PARK_NO_CHECKPOINT: str = "park: no checkpoint to park"
 
+#: Action-result line when ``Enter`` fires over a non-claim node (campaign /
+#: round / topic / question). The evidence reader zooms a CLAIM leaf only, so
+#: pressing ``Enter`` elsewhere surfaces this honest hint and opens no modal --
+#: the advertised ``Enter open`` affordance is never a dead key.
+ENTER_NOT_A_CLAIM: str = "select a claim to read its evidence"
+
 #: Action-result line when a checkpoint action could not reach the daemon.
 APPROVE_NO_DAEMON: str = "approve: daemon unavailable -- request not issued"
 PARK_NO_DAEMON: str = "park: daemon unavailable -- request not issued"
@@ -2401,6 +2407,44 @@ def render_claim_detail(
     return "\n".join(lines)
 
 
+def claim_conflicts(
+    claim: Claim,
+    questions: tuple[OpenQuestion, ...],
+    claims: tuple[Claim, ...],
+) -> tuple[Claim, ...]:
+    """Return the claims that contradict *claim* -- its refuted sibling candidates.
+
+    A claim's conflicts are the ``REFUTED`` candidate answers to the SAME
+    question it answers: competing candidates the campaign surveyed and set
+    aside as contradicted. Resolves the claim's tracked question
+    (:attr:`~eawf.kernel.state.models.Claim.answers_question_id`), scopes the
+    candidate answers to it (:func:`question_candidate_claims`), splits them into
+    the supporting / contradicting groups (:func:`group_claims_by_evidence`), and
+    returns the contradicting group minus *claim* itself. A free-standing claim
+    (no answered question), one whose question is not on hand, or one whose
+    sibling candidates are all supported has no resolvable conflict and yields
+    the empty tuple -- the honest no-conflict path the reader renders as
+    ``Conflicts: none`` rather than fabricating one.
+
+    Args:
+        claim: The claim whose contradicting siblings to resolve.
+        questions: The state-resident open-question rows for the scope.
+        claims: The state-resident claim ledger rows for the scope.
+
+    Returns:
+        The contradicting sibling claims, in board order, excluding *claim*;
+        empty when no conflict is resolvable.
+    """
+    if claim.answers_question_id is None:
+        return ()
+    question = next((q for q in questions if q.id == claim.answers_question_id), None)
+    if question is None:
+        return ()
+    candidates = question_candidate_claims(question, claims)
+    _supporting, contradicting = group_claims_by_evidence(candidates)
+    return tuple(c for c in contradicting if c.id != claim.id)
+
+
 def render_center_detail(
     node: TreeNode | None,
     campaigns: tuple[CampaignRow, ...],
@@ -2588,8 +2632,9 @@ class ResearchBoardModeScreen(ScopeScreen):
     """
 
     #: ``up`` / ``down`` move the tree cursor (morphing the center detail);
-    #: ``enter`` is the retired-peek seam (a later wave opens the evidence modal
-    #: for a claim). ``a`` approve / ``p`` park route checkpoint resolution
+    #: ``enter`` zooms a CLAIM leaf into the full-screen evidence reader modal
+    #: (a non-claim node surfaces an honest "select a claim" hint). ``a``
+    #: approve / ``p`` park route checkpoint resolution
     #: through the real needs_user RPCs; ``r`` follow-up / ``s`` snapshot are
     #: the honest-unavailable idle-contract keys. ``o`` (add-question), ``t``
     #: (steer), ``b`` (broadcast), and ``v`` (override) are the four FA8
@@ -2919,19 +2964,47 @@ class ResearchBoardModeScreen(ScopeScreen):
         self._collapsed &= live
 
     def action_peek_selected(self) -> None:
-        """No-op seam for ``Enter`` on the selected node (the retired peek).
+        """Open the full-screen evidence reader for a selected CLAIM node (``Enter``).
 
-        The in-tree peek line was retired: selection alone now morphs the center
-        pane into the selected node's detail (campaign stats / question answer /
-        claim summary), so ``Enter`` no longer accretes a peek block inside the
-        tree. The binding is kept as the seam a later wave wires to open the
-        evidence modal for a selected claim; for now it only logs the selection.
+        Selection alone morphs the center pane into the node's SCOPED detail
+        (campaign stats / question answer / claim summary); ``Enter`` ZOOMS a
+        CLAIM leaf into the full-screen
+        :class:`~eawf.surfaces.tui.modals.evidence_reader.EvidenceReaderModal` --
+        the untruncated claim body, its numbered supporting sources, the refuted
+        sibling claims :func:`claim_conflicts` resolves (or the honest ``none``
+        line), and the claim's provenance. A non-claim node (campaign / round /
+        topic / question) surfaces an honest "select a claim" toast and opens no
+        modal, so the advertised ``Enter open`` affordance is never dead.
         """
+        from eawf.surfaces.tui.modals.evidence_reader import EvidenceReaderModal
+
         node = self._selected_node()
         if node is None:
             return
-        # Seam only: the evidence modal for a CLAIM selection lands in a later wave.
-        logger.info(f"action_peek_selected kind={node.kind.value} label={node.label!r}")
+        if node.kind is not NodeKind.CLAIM or node.claim_id is None:
+            self._set_action(f"[$muted]{ENTER_NOT_A_CLAIM}[/]")
+            logger.info(f"action_peek_selected non_claim kind={node.kind.value}")
+            return
+        claim = next((c for c in self._claims if c.id == node.claim_id), None)
+        if claim is None:
+            self._set_action(f"[$muted]{ENTER_NOT_A_CLAIM}[/]")
+            logger.info(f"action_peek_selected claim_missing claim={node.claim_id!r}")
+            return
+        conflicts = claim_conflicts(claim, self._questions, self._claims)
+        modal = EvidenceReaderModal(
+            claim,
+            self._questions,
+            conflicts,
+            mode=self._render_mode(),
+        )
+        push_modal = getattr(self.app, "push_modal", None)
+        if callable(push_modal):
+            push_modal(modal)
+        else:
+            self.app.push_screen(modal)
+        logger.info(
+            f"action_peek_selected open_reader claim={claim.id!r} conflicts={len(conflicts)}"
+        )
 
     def action_open_brief(self) -> None:
         """Open the scope's brief preview in a MarkdownViewer modal.
@@ -3957,6 +4030,7 @@ __all__ = [
     "DRAWER_ID",
     "EMPTY_NOTICE",
     "EMPTY_SUBLINE",
+    "ENTER_NOT_A_CLAIM",
     "MODE_KEYS_ID",
     "MODE_KEYS_LINE",
     "NEW_NO_DAEMON",
@@ -3980,6 +4054,7 @@ __all__ = [
     "build_research_block",
     "build_tree_nodes",
     "center_scope_header",
+    "claim_conflicts",
     "claim_drill_detail",
     "claim_sigil_markup",
     "classify_round_state",
