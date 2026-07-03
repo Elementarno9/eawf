@@ -657,14 +657,18 @@ def test_render_tier_ladder_uses_real_tier_names_via_tier_label() -> None:
 
 
 def test_render_tier_ladder_marks_the_scoring_tier() -> None:
-    """The scoring tier line is marked; the others are not."""
-    block = render_tier_ladder(OracleTier.T4_CONTRACT)
-    lines = block.splitlines()
+    """The scoring tier is marked inline; the others are not.
 
-    scored = next(line for line in lines if tier_label(OracleTier.T4_CONTRACT) in line)
-    other = next(line for line in lines if tier_label(OracleTier.T1_STATIC) in line)
-    assert scored.startswith(">")
-    assert not other.startswith(">")
+    The ladder now renders every tier on ONE row (a compact strip), so the
+    scored tier carries a leading ``>`` against its own label rather than being
+    the only line to start with the mark.
+    """
+    block = render_tier_ladder(OracleTier.T4_CONTRACT)
+
+    assert "> T4 contract" in block
+    assert f"> {tier_label(OracleTier.T1_STATIC)}" not in block
+    # Exactly one tier is marked -- the scored one.
+    assert block.count(">") == 1
 
 
 def test_render_tier_ladder_none_marks_no_tier() -> None:

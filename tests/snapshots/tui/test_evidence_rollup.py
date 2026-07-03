@@ -2,10 +2,11 @@
 
 The Evidence mode (digit ``6``) renders the typed agent-report rollup as a
 table keyed by the WAVE each report advanced: a ``report`` column carrying the
-wave label joined to the producing role, a ``verdict`` column carrying the
-ratified verdict sigil from the extended ``status_sigil`` home (pass -> filled
-circle, fail -> multiplication cross, blocked -> warn-tinted withheld mark),
-and an ``eu`` column carrying the wave's bucket-derived effort-unit estimate.
+wave label, a ``role`` column carrying the producing agent role in its own
+column, a ``verdict`` column carrying the ratified verdict sigil from the
+extended ``status_sigil`` home (pass -> filled circle, fail -> multiplication
+cross, blocked -> warn-tinted withheld mark), and an ``eu`` column carrying the
+wave's bucket-derived effort-unit estimate.
 
 Two paths are pinned:
 
@@ -384,10 +385,17 @@ def test_evidence_rollup_snapshot(tmp_path: Path) -> None:
             table = screen.query_one("#evidence-table", DataTable)
             assert table.display is True
             assert table.row_count == 2
-            # The wave-keyed columns are exactly report / verdict / eu.
-            assert [str(key.value) for key in table.columns] == ["report", "verdict", "eu"]
+            # The wave-keyed columns split the producing role into its own
+            # column: report / role / verdict / eu (no fused ``:: role`` suffix).
+            assert [str(key.value) for key in table.columns] == [
+                "report",
+                "role",
+                "verdict",
+                "eu",
+            ]
             frame = normalize_snapshot(capture_screen_text(app))
-            # Report column: the wave-keyed identity (wave + title + role).
+            # Report column: the wave label (id + title); the role rides its own
+            # column beside it (no fused ``:: role`` suffix).
             assert "P30-I02-W15" in frame
             assert "Reskin Evidence" in frame
             assert "executor" in frame

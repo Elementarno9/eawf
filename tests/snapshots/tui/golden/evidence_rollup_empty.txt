@@ -3,6 +3,8 @@
  no close-readiness criteria
  no agent reports yet
 
+
+
                                                      ▄▄▄▄██████▄▄▄▄
                                                 ▄▄███▀▀▀▀      ▀▀▀▀███▄▄
                                               ▄██▀▀   ▄▄▄▄████▄▄▄▄   ▀▀██▄
@@ -25,16 +27,14 @@
 
                                                   no agent reports yet
 
+
+
+
+
  Followups
  no followups
  Jury ballots
  no jury ballots yet — jury runs on UI-band high-risk closes
-   T1 static
-   T2 structural
-   T3 snapshot
-   T4 contract
-   T5 golden
-   T6 approval
-   T7 jury
+ T1 static  T2 structural  T3 snapshot  T4 contract  T5 golden  T6 approval  T7 jury
  ↑↓ select  ·  Enter open  ·  …  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit weekly burn: — no data•
  1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch  ·  9 sandbox

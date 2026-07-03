@@ -41,8 +41,11 @@ from textual.reactive import reactive
 from textual.widgets import DataTable, Static
 
 from eawf.kernel.spec.common import OracleTier, tier_label
-from eawf.kernel.state.enums import AgentReportVerdict
+from eawf.kernel.state.enums import AgentReportVerdict, StoreKind, WaveStatus
 from eawf.kernel.state.ids import natural_key
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
+from eawf.kernel.store.paths import store_path
 from eawf.platform.scrub import scan_text
 from eawf.surfaces.render.units import format_compact_utc
 from eawf.surfaces.tui.scopes import ScopeScreen
@@ -125,12 +128,27 @@ _READY_STATUSES: frozenset[str] = frozenset({"pass", "waived"})
 NO_CRITERIA_NOTICE: str = "criteria: none"
 
 #: Column ids for the evidence table, in display order. The table is keyed
-#: by the WAVE the report advanced: ``report`` carries the wave label joined
-#: to the producing role, ``verdict`` carries the tinted lifecycle-shaped
-#: verdict sigil, and ``eu`` carries the wave's effort-unit estimate. The
-#: per-report attempt + the follow-up titles render in the detail block
-#: below the table.
-_COLUMNS: tuple[str, ...] = ("report", "verdict", "eu")
+#: by the WAVE the report advanced: ``report`` carries the wave label (id +
+#: title, or the campaign topic for a campaign-scoped report) WITHOUT the
+#: producing role, ``role`` carries the producing agent role in its own
+#: column so a multi-role wave's rows stay distinguishable, ``verdict``
+#: carries the tinted lifecycle-shaped verdict sigil (cross-qualified when
+#: the wave itself terminal-failed), and ``eu`` carries the wave's
+#: effort-unit estimate. The per-report attempt + the follow-up titles render
+#: in the detail block below the table.
+_COLUMNS: tuple[str, ...] = ("report", "role", "verdict", "eu")
+
+#: The ``base_id`` prefix a campaign-scoped researcher report carries -- a
+#: campaign id is allocated as ``campaign-<hex>``. A report whose ``base_id``
+#: starts with this prefix labels by its campaign topic (joined via the
+#: research-campaign store) instead of the raw campaign id.
+_CAMPAIGN_PREFIX: str = "campaign-"
+
+#: Wave statuses that count as a terminal failure -- a wave that ended without
+#: reaching the clean CLOSED terminal. A report joined to such a wave renders a
+#: failed cross-mark against its self-claimed verdict so a failed wave never
+#: reads as an unqualified pass.
+_FAILED_WAVE_STATUSES: frozenset[WaveStatus] = frozenset({WaveStatus.FAILED, WaveStatus.ABANDONED})
 
 
 def verdict_sigil(verdict: str, *, mode: RenderMode = DEFAULT_RENDER_MODE) -> Text:
@@ -162,6 +180,38 @@ def verdict_sigil(verdict: str, *, mode: RenderMode = DEFAULT_RENDER_MODE) -> Te
     except ValueError:
         return Text(glyph(Sigil.PENDING, mode=mode), style=tint(Sigil.PENDING) or "")
     return Text(resolved.render(mode=mode), style=resolved.tint_hex or "")
+
+
+def verdict_cell(
+    verdict: str, *, wave_failed: bool = False, mode: RenderMode = DEFAULT_RENDER_MODE
+) -> Text:
+    """Return the verdict sigil, cross-qualified when the wave terminal-failed.
+
+    Leads with the self-claimed verdict sigil (:func:`verdict_sigil`). When
+    *wave_failed* the cell trails the failed multiplication cross (tinted the
+    failed band) so a report claiming ``pass`` on a wave whose own
+    :class:`~eawf.kernel.state.enums.WaveStatus` is terminal-failed reads as a
+    qualified pass, never an unquestioned one -- the self-claim and the wave's
+    real outcome are shown side by side rather than letting the rosier of the
+    two stand alone.
+
+    Args:
+        verdict: The report verdict string (an
+            :class:`~eawf.kernel.state.enums.AgentReportVerdict` value).
+        wave_failed: Whether the joined wave's status is terminal-failed
+            (:data:`_FAILED_WAVE_STATUSES`); appends the failed cross when set.
+        mode: The App's resolved render-mode label threaded into the sigil
+            helpers; defaults to the ASCII column for a bare standalone render.
+
+    Returns:
+        A tinted :class:`~rich.text.Text` for the verdict cell.
+    """
+    cell = verdict_sigil(verdict, mode=mode)
+    if not wave_failed:
+        return cell
+    cell.append(" ")
+    cell.append(glyph(Sigil.FAILED, mode=mode), style=tint(Sigil.FAILED) or "")
+    return cell
 
 
 #: Footer hints for the Evidence mode (arrows primary). The mode digits are
@@ -207,6 +257,15 @@ class EvidenceRow:
         evidence_refs: The report's evidence references, each projected to a
             ``<kind>: <ref>`` display string in report order; empty when the
             report carried none.
+        campaign_topic: The research-campaign topic when the ``base_id`` is a
+            campaign id (``campaign-<hex>``) that resolves in the campaign
+            store, else ``None``. When set, the row labels by the topic
+            instead of the raw campaign id -- a campaign researcher report
+            reads by what it studied, not an opaque uuid.
+        wave_failed: Whether the joined wave's status is terminal-failed
+            (:data:`_FAILED_WAVE_STATUSES`); drives the failed cross-mark on
+            the verdict cell so a self-claimed pass on a failed wave is
+            visibly qualified. ``False`` when the ``base_id`` joins no wave.
     """
 
     report_id: str
@@ -221,6 +280,8 @@ class EvidenceRow:
     runtime: str = ""
     generated_at: str = ""
     evidence_refs: tuple[str, ...] = ()
+    campaign_topic: str | None = None
+    wave_failed: bool = False
 
     @property
     def followup_count(self) -> int:
@@ -229,19 +290,27 @@ class EvidenceRow:
 
     @property
     def wave_label(self) -> str:
-        """Return the wave id plus its joined title when one resolved."""
+        """Return the row's subject label -- topic, wave id + title, or id.
+
+        A campaign-scoped report labels by its :attr:`campaign_topic` (what it
+        studied) instead of the opaque ``campaign-<hex>`` id. Otherwise the
+        label is the wave id plus its joined title when one resolved, or the
+        bare wave id when no title join exists.
+        """
+        if self.campaign_topic is not None:
+            return self.campaign_topic
         if self.wave_title is None:
             return self.wave_id
         return f"{self.wave_id} {self.wave_title}"
 
     @property
     def report_label(self) -> str:
-        """Return the report's identity -- the wave it advanced plus the role.
+        """Return the fused report identity -- the subject label plus the role.
 
-        The table is keyed by wave, so the report column leads with the wave
-        label (id + title) and trails the producing role, reading as
-        ``<wave-id> <title> :: <role>`` so a multi-role wave's rows are
-        distinguishable under the shared wave key.
+        Reads as ``<subject-label> :: <role>`` (:attr:`wave_label` joined to
+        the producing role). The rollup table splits the subject and the role
+        into their own columns; this fused accessor stays for the detail
+        surfaces that render the report's identity on one line.
         """
         return f"{self.wave_label} :: {self.role}"
 
@@ -258,44 +327,88 @@ class EvidenceRow:
         return f"{self.eu:.2f}"
 
 
-def _wave_joins(state: State | None) -> dict[str, tuple[str, float]]:
-    """Return a ``{wave_id: (title, eu)}`` join map from *state*.
+def _wave_joins(state: State | None) -> dict[str, tuple[str, float, bool]]:
+    """Return a ``{wave_id: (title, eu, failed)}`` join map from *state*.
 
     Args:
         state: The loaded state, or ``None`` (fresh / user scope) -- the
             latter yields an empty map so every row renders with no title
-            join and a dashed EU rather than raising.
+            join, a dashed EU, and no failed mark rather than raising.
 
     Returns:
-        A wave-id to ``(title, eu)`` map, where ``eu`` is the bucket-derived
-        effort-unit estimate for the wave (``0.0`` when the wave has no
-        effort bucket).
+        A wave-id to ``(title, eu, failed)`` map, where ``eu`` is the
+        bucket-derived effort-unit estimate for the wave (``0.0`` when the
+        wave has no effort bucket) and ``failed`` is whether the wave's status
+        is terminal-failed (:data:`_FAILED_WAVE_STATUSES`).
     """
     if state is None:
         return {}
-    return {wave_id: (wave.title, wave_estimate_eu(wave)) for wave_id, wave in state.waves.items()}
+    return {
+        wave_id: (
+            wave.title,
+            wave_estimate_eu(wave),
+            wave.status in _FAILED_WAVE_STATUSES,
+        )
+        for wave_id, wave in state.waves.items()
+    }
+
+
+def _campaign_topics(state_path: Path) -> dict[str, str]:
+    """Return a ``{campaign_id: topic}`` map from the research-campaign store.
+
+    Reads the append-only ``research_campaign.jsonl`` store under *state_path*
+    directly (no daemon call, like the report reader) and folds each row into
+    its topic, later rows winning so a re-appended campaign resolves to its
+    current topic. Returns an empty map -- the COMMON path -- when the store is
+    absent, so a scope that has staged no campaign labels campaign-scoped
+    reports by their raw id rather than raising.
+
+    Args:
+        state_path: Path to the scope's ``state.json``; the campaign store
+            resolves under its sibling ``store/`` directory.
+
+    Returns:
+        The ``{campaign_id: topic}`` map; empty when the store is absent.
+    """
+    path = store_path(state_path, StoreKind.RESEARCH_CAMPAIGN)
+    if not path.exists():
+        return {}
+    topics: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        if not raw_line.strip():
+            continue
+        envelope = Envelope.model_validate_json(raw_line)
+        payload = ResearchCampaignPayload.model_validate(envelope.payload)
+        topics[payload.campaign_id] = payload.campaign.topic
+    return topics
 
 
 def _row_from_report(
-    report: AgentReportRow, wave_joins: dict[str, tuple[str, float]]
+    report: AgentReportRow,
+    wave_joins: dict[str, tuple[str, float, bool]],
+    campaign_topics: dict[str, str],
 ) -> EvidenceRow:
-    """Join one report row to its wave and project the surfaced fields.
+    """Join one report row to its wave / campaign and project the fields.
 
     Args:
         report: The loaded report row.
-        wave_joins: The ``{wave_id: (title, eu)}`` join map.
+        wave_joins: The ``{wave_id: (title, eu, failed)}`` join map.
+        campaign_topics: The ``{campaign_id: topic}`` map for labelling a
+            campaign-scoped report by its topic.
 
     Returns:
         The projected :class:`EvidenceRow`.
     """
     header = report.payload.header
     body = report.payload.body
-    title, eu = wave_joins.get(header.base_id, (None, 0.0))
+    base_id = header.base_id
+    title, eu, failed = wave_joins.get(base_id, (None, 0.0, False))
+    topic = campaign_topics.get(base_id) if base_id.startswith(_CAMPAIGN_PREFIX) else None
     return EvidenceRow(
         report_id=header.report_id,
         role=header.role.value,
         verdict=body.verdict.value,
-        wave_id=header.base_id,
+        wave_id=base_id,
         wave_title=title,
         attempt=header.attempt,
         summary=header.summary,
@@ -304,6 +417,8 @@ def _row_from_report(
         runtime=header.runtime,
         generated_at=format_compact_utc(header.generated_at),
         evidence_refs=tuple(f"{ref.kind}: {ref.ref}" for ref in body.evidence_refs),
+        campaign_topic=topic,
+        wave_failed=failed,
     )
 
 
@@ -333,8 +448,12 @@ def build_evidence_rows(state_path: Path | None, state: State | None) -> tuple[E
         return ()
     reports = iter_agent_reports(state_path)
     wave_joins = _wave_joins(state)
-    rows = tuple(_row_from_report(report, wave_joins) for report in reports)
-    logger.info(f"build_evidence_rows reports={len(rows)} waves={len(wave_joins)}")
+    campaign_topics = _campaign_topics(state_path)
+    rows = tuple(_row_from_report(report, wave_joins, campaign_topics) for report in reports)
+    logger.info(
+        f"build_evidence_rows reports={len(rows)} waves={len(wave_joins)} "
+        f"campaigns={len(campaign_topics)}"
+    )
     return rows
 
 
@@ -711,10 +830,14 @@ ROW_READY: str = "ready"
 NO_BALLOTS_NOTICE: str = "no jury ballots yet — jury runs on UI-band high-risk closes"
 
 #: Mark prefixing the oracle tier that scored the criterion in the ladder; a
-#: non-scoring tier is prefixed by spaces of equal width so the ladder stays
-#: column-aligned. ASCII per the source-glyph convention.
+#: non-scoring tier carries no prefix. ASCII per the source-glyph convention.
 _TIER_MARK: str = ">"
-_TIER_NOMARK: str = " "
+
+#: Separator between inline oracle-tier cells in the ladder. The ladder renders
+#: the seven tiers on one row (a compact ladder-strip, at most two rows once the
+#: viewer soft-wraps) rather than one tier per line, so it no longer dominates
+#: the pane's vertical budget.
+_TIER_SEP: str = "  "
 
 
 @dataclass(frozen=True)
@@ -855,29 +978,31 @@ def render_ballot_grid(
 
 
 def render_tier_ladder(scored: OracleTier | None) -> str:
-    """Render the T1_STATIC..T7_JURY oracle-tier ladder, marking *scored*.
+    """Render the T1_STATIC..T7_JURY oracle-tier ladder inline, marking *scored*.
 
     Walks every :class:`~eawf.kernel.spec.common.OracleTier` in ascending order
     and renders its human :func:`~eawf.kernel.spec.common.tier_label` (e.g.
-    ``T1 static`` ... ``T7 jury``), prefixing the tier that scored the criterion
-    with :data:`_TIER_MARK` so the operator reads which tier settled it. The
-    label is sourced from :func:`tier_label`, never hardcoded, so a tier rename
-    lands in one place. A ``None`` *scored* marks no tier (the honest-empty
-    path: no oracle result bound).
+    ``T1 static`` ... ``T7 jury``), joining them into ONE row separated by
+    :data:`_TIER_SEP` -- a compact ladder-strip that no longer spends seven of
+    the pane's rows. The scored tier's label is prefixed with :data:`_TIER_MARK`
+    (``> T7 jury``) so the operator still reads which tier settled it. The label
+    is sourced from :func:`tier_label`, never hardcoded, so a tier rename lands
+    in one place. A ``None`` *scored* marks no tier (the honest-empty path: no
+    oracle result bound).
 
     Args:
         scored: The :class:`~eawf.workflow.verify.oracle.OracleResult.tier` that
             scored the criterion, or ``None`` when no result is bound.
 
     Returns:
-        The newline-joined ladder block, one ``<mark> T<n> <flavor>`` line per
-        tier (no trailing newline).
+        The inline ladder-strip -- every tier label joined by :data:`_TIER_SEP`,
+        the scored one carrying its leading mark.
     """
-    lines: list[str] = []
+    cells: list[str] = []
     for tier in OracleTier:
-        mark = _TIER_MARK if tier is scored else _TIER_NOMARK
-        lines.append(f"{mark} {tier_label(tier)}")
-    return "\n".join(lines)
+        label = tier_label(tier)
+        cells.append(f"{_TIER_MARK} {label}" if tier is scored else label)
+    return _TIER_SEP.join(cells)
 
 
 # --------------------------------------------------------------------------
@@ -1079,6 +1204,7 @@ class EvidenceModeScreen(ScopeScreen):
     SEAL_HERO_CSS
     EvidenceModeScreen .evidence-followups-title {
         height: 1;
+        margin-top: 1;
         color: $accent;
         text-style: bold;
     }
@@ -1099,7 +1225,7 @@ class EvidenceModeScreen(ScopeScreen):
     }
     EvidenceModeScreen .evidence-ballot-ladder {
         height: auto;
-        max-height: 8;
+        max-height: 2;
         color: $text;
     }
     """.replace("HONEST_EMPTY_CSS", HONEST_EMPTY_CSS).replace(
@@ -1198,6 +1324,26 @@ class EvidenceModeScreen(ScopeScreen):
         if hasattr(self.app, "render_mode"):
             self.watch(self.app, "render_mode", self._on_render_mode)
         self._rebuild()
+        # Focus the report table AFTER the initial layout settles (deferred past
+        # any framework auto-focus) so arrow keys move the report selection and
+        # Enter opens the highlighted row -- the advertised keys are otherwise
+        # dead until the operator clicks the table. Guarded to the populated
+        # table so a hidden honest-empty table is never focused.
+        self.call_after_refresh(self._focus_report_table)
+
+    def _focus_report_table(self) -> None:
+        """Focus the report table when it carries rows, else leave focus be.
+
+        The honest-empty rollup hides the table (no rows), so focusing it would
+        trap the cursor on an invisible widget; the guard keeps focus on the
+        default target until a report lands.
+        """
+        tables = self.query("#evidence-table")
+        if not tables:
+            return
+        table = tables.first(DataTable)
+        if table.display and table.row_count:
+            table.focus()
 
     def _on_app_state(self, new_state: State | None) -> None:
         """Mirror an app-level state change onto this screen's reactive."""
@@ -1246,8 +1392,9 @@ class EvidenceModeScreen(ScopeScreen):
         self._rows_by_id = {row.report_id: row for row in rows}
         for row in rows:
             table.add_row(
-                row.report_label,
-                verdict_sigil(row.verdict, mode=mode),
+                row.wave_label,
+                row.role,
+                verdict_cell(row.verdict, wave_failed=row.wave_failed, mode=mode),
                 row.eu_label,
                 key=row.report_id,
             )
@@ -1594,6 +1741,7 @@ __all__ = [
     "render_followups_block",
     "render_tier_ladder",
     "sort_evidence_rows",
+    "verdict_cell",
     "verdict_sigil",
     "vote_sigil",
 ]
