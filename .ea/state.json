@@ -28907,7 +28907,10 @@
         "P30-I24-W04",
         "P30-I24-W05",
         "P30-I24-W06",
-        "P30-I24-W07"
+        "P30-I24-W07",
+        "P30-I24-W08",
+        "P30-I24-W09",
+        "P30-I24-W10"
       ]
     }
   },
@@ -30033,7 +30036,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-03T22:56:51.788256Z",
+  "updated_at": "2026-07-03T23:20:59.108256Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -109330,7 +109333,10 @@
         "P30-I24-W04",
         "P30-I24-W05",
         "P30-I24-W06",
-        "P30-I24-W07"
+        "P30-I24-W07",
+        "P30-I24-W08",
+        "P30-I24-W09",
+        "P30-I24-W10"
       ],
       "description": "Phase re-close vehicle: executes the v0.6.0 re-close with the (release=v0.6.0) annotation after I23 max-hardening lands. Prefix-rider reconciliation (D-I21-RATIFY): three test: commits ride the [P30-I21-W22] prefix ahead of the wave itself — e77834ee, 46149415, fcc2bdad — annotated here so the wave ledger matches the commit ledger.",
       "dispatch_history": [],
@@ -119309,6 +119315,196 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P30-I24-W07-1783109573"
+    },
+    "P30-I24-W08": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "reactive ship-prep polish fix; string criteria verified by render/pytest gates at wave close",
+        "waived_at": "2026-07-03T23:20:41.512989Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/sigils.py"
+      ],
+      "gates": [],
+      "id": "P30-I24-W08",
+      "intent": {
+        "desired_outcome": "The gate sigil is a glyph that renders in JetBrainsMono Nerd Font so no modal header shows tofu",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Repin any goldens that carried the old glyph"
+        ],
+        "priority_rationale": null,
+        "problem": "The gate chrome sigil U+2394 renders as a tofu box even in JetBrainsMono Nerd Font so the evidence-modal header shows a missing glyph",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I24",
+      "opened_at": "2026-07-03T23:20:41.560605Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The ascii column for the gate role is unchanged so ascii mode is unaffected",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The ascii column for the gate role is unchanged so ascii mode is unaffected",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Swap the tofu gate sigil for a supported glyph",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I24-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "reactive ship-prep polish fix; string criteria verified by render/pytest gates at wave close",
+        "waived_at": "2026-07-03T23:20:42.084452Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/snapshots/tui/test_screen_snapshots.py",
+        "tests/snapshots/tui/test_help_active_mode.py"
+      ],
+      "gates": [],
+      "id": "P30-I24-W09",
+      "intent": {
+        "desired_outcome": "The help-overlay snapshot is deterministic regardless of the current date so it never reds by date drift",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Repin the help_overlay and help_active_mode goldens to the deterministic frame"
+        ],
+        "priority_rationale": null,
+        "problem": "The help-overlay snapshot golden captures a now-relative weekly-burn sparkline so two snapshot tests red on any day that differs from the capture day",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I24",
+      "opened_at": "2026-07-03T23:20:42.119947Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The two help goldens are repinned in a paired test commit to the deterministic frame",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The two help goldens are repinned in a paired test commit to the deterministic frame",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Make the help-overlay weekly-burn snapshot deterministic",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I24-W10": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "reactive ship-prep polish fix; string criteria verified by render/pytest gates at wave close",
+        "waived_at": "2026-07-03T23:20:42.655450Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/snapshot/pilot_harness.py"
+      ],
+      "gates": [],
+      "id": "P30-I24-W10",
+      "intent": {
+        "desired_outcome": "A screenshot export helper emits SVGs whose font-family is a broad monospace stack so they render on common machines",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Cover it with a unit test asserting the rewritten font-family"
+        ],
+        "priority_rationale": null,
+        "problem": "Textual export_screenshot hardcodes the Fira Code font-family so review SVGs render as tofu on machines without Fira Code installed",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I24",
+      "opened_at": "2026-07-03T23:20:42.689992Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The helper leaves the SVG otherwise byte-identical to the Textual export apart from the font-family rewrite",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The helper leaves the SVG otherwise byte-identical to the Textual export apart from the font-family rewrite",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Export review SVGs with a broad monospace font stack",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     }
   },
   "workspace": null,
