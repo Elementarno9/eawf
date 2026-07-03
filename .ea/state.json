@@ -28446,7 +28446,12 @@
         "P30-I21-W20",
         "P30-I21-W21",
         "P30-I21-W22",
-        "P30-I21-W23"
+        "P30-I21-W23",
+        "P30-I21-W24",
+        "P30-I21-W25",
+        "P30-I21-W26",
+        "P30-I21-W27",
+        "P30-I21-W28"
       ]
     },
     "P30-I22": {
@@ -29665,7 +29670,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-03T01:57:07.844872Z",
+  "updated_at": "2026-07-03T15:45:49.647705Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -107148,9 +107153,7 @@
     },
     "P30-I21-W01": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T15:00:39.833323Z",
       "closed_at": "2026-07-01T15:00:46.388585Z",
@@ -107237,8 +107240,7 @@
     "P30-I21-W02": {
       "agent_role": null,
       "blocks": [
-        "P30-I21-W03",
-        "P30-I21-W22"
+        "P30-I21-W03"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T15:06:19.765026Z",
@@ -107325,9 +107327,7 @@
     },
     "P30-I21-W03": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T15:09:12.714259Z",
       "closed_at": "2026-07-01T15:49:33.917473Z",
@@ -107415,9 +107415,7 @@
     },
     "P30-I21-W04": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T16:07:05.840755Z",
       "closed_at": "2026-07-01T16:07:07.210529Z",
@@ -107503,9 +107501,7 @@
     },
     "P30-I21-W05": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T16:01:22.880786Z",
       "closed_at": "2026-07-01T16:01:24.263654Z",
@@ -107589,9 +107585,7 @@
     },
     "P30-I21-W06": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T15:55:16.301050Z",
       "closed_at": "2026-07-01T15:56:47.203017Z",
@@ -107677,9 +107671,7 @@
     },
     "P30-I21-W07": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T16:34:51.561896Z",
       "closed_at": "2026-07-01T16:34:53.094956Z",
@@ -107765,9 +107757,7 @@
     },
     "P30-I21-W08": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T16:43:40.318167Z",
       "closed_at": "2026-07-01T16:43:43.663519Z",
@@ -107851,9 +107841,7 @@
     },
     "P30-I21-W09": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T16:14:03.118153Z",
       "closed_at": "2026-07-01T16:14:06.776928Z",
@@ -107939,9 +107927,7 @@
     },
     "P30-I21-W10": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T16:30:01.531938Z",
       "closed_at": "2026-07-01T16:30:04.915176Z",
@@ -108025,9 +108011,7 @@
     },
     "P30-I21-W11": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T16:47:39.978866Z",
       "closed_at": "2026-07-01T16:47:43.747893Z",
@@ -108111,9 +108095,7 @@
     },
     "P30-I21-W12": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T16:50:47.791879Z",
       "closed_at": "2026-07-01T16:50:51.155995Z",
@@ -108197,9 +108179,7 @@
     },
     "P30-I21-W13": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T16:55:39.553112Z",
       "closed_at": "2026-07-01T16:55:40.979975Z",
@@ -108284,8 +108264,7 @@
     "P30-I21-W14": {
       "agent_role": null,
       "blocks": [
-        "P30-I21-W15",
-        "P30-I21-W22"
+        "P30-I21-W15"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T17:03:10.685775Z",
@@ -108370,9 +108349,7 @@
     },
     "P30-I21-W15": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T17:06:36.697364Z",
       "closed_at": "2026-07-01T17:06:38.029981Z",
@@ -108458,9 +108435,7 @@
     },
     "P30-I21-W16": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T17:12:24.785413Z",
       "closed_at": "2026-07-01T17:12:26.133211Z",
@@ -108545,8 +108520,7 @@
     "P30-I21-W17": {
       "agent_role": null,
       "blocks": [
-        "P30-I21-W18",
-        "P30-I21-W22"
+        "P30-I21-W18"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T17:17:03.186083Z",
@@ -108631,9 +108605,7 @@
     },
     "P30-I21-W18": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T17:20:08.077899Z",
       "closed_at": "2026-07-01T17:20:09.438719Z",
@@ -108720,8 +108692,7 @@
     "P30-I21-W19": {
       "agent_role": null,
       "blocks": [
-        "P30-I21-W20",
-        "P30-I21-W22"
+        "P30-I21-W20"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T17:25:35.399793Z",
@@ -108806,9 +108777,7 @@
     },
     "P30-I21-W20": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T17:30:47.170263Z",
       "closed_at": "2026-07-01T17:30:48.478718Z",
@@ -108894,9 +108863,7 @@
     },
     "P30-I21-W21": {
       "agent_role": null,
-      "blocks": [
-        "P30-I21-W22"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-01T17:34:14.426341Z",
       "closed_at": "2026-07-01T17:34:15.785604Z",
@@ -108989,27 +108956,11 @@
       "commit": null,
       "criteria_floor_waiver": null,
       "deps": [
-        "P30-I21-W01",
-        "P30-I21-W02",
-        "P30-I21-W03",
-        "P30-I21-W04",
-        "P30-I21-W05",
-        "P30-I21-W06",
-        "P30-I21-W07",
-        "P30-I21-W08",
-        "P30-I21-W09",
-        "P30-I21-W10",
-        "P30-I21-W11",
-        "P30-I21-W12",
-        "P30-I21-W13",
-        "P30-I21-W14",
-        "P30-I21-W15",
-        "P30-I21-W16",
-        "P30-I21-W17",
-        "P30-I21-W18",
-        "P30-I21-W19",
-        "P30-I21-W20",
-        "P30-I21-W21"
+        "P30-I21-W24",
+        "P30-I21-W25",
+        "P30-I21-W26",
+        "P30-I21-W27",
+        "P30-I21-W28"
       ],
       "description": "Phase re-close vehicle: executes the v0.6.0 re-close with the (release=v0.6.0) annotation after I23 max-hardening lands. Prefix-rider reconciliation (D-I21-RATIFY): three test: commits ride the [P30-I21-W22] prefix ahead of the wave itself — e77834ee, 46149415, fcc2bdad — annotated here so the wave ledger matches the commit ledger.",
       "dispatch_history": [],
@@ -109217,6 +109168,731 @@
         }
       ],
       "title": "Allow /dev writes in the seatbelt jail for git",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W24": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "Watch mode: selected lane/picker rows readable on the selection tint (adopt the attention_feed plain-render pattern); watch target selection skips sessions whose wave is terminal; failed-wave stdout replay framed against the real wave verdict; Esc returns to previous mode or picker instead of hardcoded feed.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "src/eawf/surfaces/tui/widgets/output_tail.py",
+        "tests/tui/test_watch_correctness_w24.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_watch_correctness_w24.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "watch"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-02",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W24",
+      "intent": {
+        "desired_outcome": "Fix watch-mode trust and contrast defect cluster",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "staged via wave plan P30-I21-W24",
+        "problem": "plan wave P30-I21-W24",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-03T15:39:12.884565Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/tui/test_watch_correctness_w24.py -q exits zero with tests asserting the plain-render selected variants",
+          "oracle_tier": 2,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the named regression suite over the selected-row render paths",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Selected watch lane and picker rows render without per-span muted colours and the .-selected CSS adds color $text (attention_feed.py:202-212 pattern), so the row is readable on the SELECTION_TINT band; render_lane_row(selected=True) and render_picker_row(selected=True) both covered by unit tests in tests/tui/test_watch_correctness_w24.py.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "the named suite includes a test constructing a FAILED wave with a stale ACTIVE session and asserting it is not picked (or is labelled from wave status)",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the pick_watch_target terminal-wave exclusion tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "pick_watch_target excludes executor sessions whose wave status is terminal (failed/closed/abandoned) from the active pool, and render_watch_header derives its status label from the wave when the wave is terminal, so a failed wave is never labelled active; pinned by tests in the same suite.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "the named suite includes replay-framing and Esc-routing tests that fail on the pre-fix code paths",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the replay-framing and leave_zoom routing tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The watch OutputTail replay for a wave whose status is terminal-not-closed is framed with the real wave verdict (a banner or prefix naming the wave terminal status) instead of echoing the agent self-claimed pass unqualified; Esc from watch returns to the previous mode or the session picker (gate relaxed to >=1 row) and no longer falls through to a hardcoded feed switch; both pinned by tests in the same suite.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fix watch-mode trust and contrast defect cluster",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W25": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "Unpin the EVENT subscription scope so wave-scoped events reach the feed; add event.jsonl tail fallback plus a connection badge when the daemon is absent; remove or confirm the hidden escape-quit binding on top-level modes; derive the autopilot ready frontier from state when the daemon is down and dedupe the empty-state message.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/feed.py",
+        "src/eawf/surfaces/tui/state_binding.py",
+        "src/eawf/surfaces/tui/app.py",
+        "src/eawf/surfaces/tui/modes/autopilot.py",
+        "tests/tui/test_daemonless_ux_w25.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_daemonless_ux_w25.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "feed"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-02",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W25",
+      "intent": {
+        "desired_outcome": "Surface daemonless state and fix feed event delivery",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "staged via wave plan P30-I21-W25",
+        "problem": "plan wave P30-I21-W25",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-03T15:39:31.624300Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/tui/test_daemonless_ux_w25.py -q exits zero including the wave-scoped-event delivery test",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the named regression suite over the subscription scope",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The EVENT-kind daemon subscription no longer pins scope_id to the state URN (state_binding.py _subscribe_params), so wave- and iter-scoped fleet events reach the feed ring buffer; pinned by a test in tests/tui/test_daemonless_ux_w25.py that pushes a wave-scoped envelope through the subscription path and asserts it lands in the app live-event buffer.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "the named suite includes a daemonless mount test asserting file-tail rows render plus a disconnected badge",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the daemonless feed fallback tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "With no reachable daemon the feed seeds from the event.jsonl tail (store_path StoreKind.EVENT, mirroring the /events overlay) and renders a connection indicator that distinguishes daemon-disconnected from connected-but-no-events; the misleading unconditional \"live feed waiting for events\" empty state is gone; pinned by Pilot tests in the same suite.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "the named suite asserts escape does not exit the app from Home and that a state with claim-ready pending waves renders a non-empty autopilot frontier without a daemon",
+          "oracle_tier": 2,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the escape-quit and ready-frontier tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Escape on a top-level mode screen no longer quits the app silently (binding removed or routed through an explicit confirm); the autopilot pane derives its ready frontier from state.json when the daemon is absent so claim-ready waves are not reported as \"no ready waves\", and the duplicated empty-state message renders once; all pinned by tests in the same suite.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Surface daemonless state and fix feed event delivery",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W26": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I21-W28",
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "Topic tree: hoist the scope-wide questions node to depth zero so it stops nesting under the last campaign; carry per-campaign CampaignStatus so converged campaigns stop reading as running; scope the claims pane to the selected node; answered questions leave Unresolved; keep indent on wrapped tree lines; Enter peek visibly responds.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/research_board.py",
+        "tests/tui/test_research_board_ia_w26.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_research_board_ia_w26.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "research"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-02",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W26",
+      "intent": {
+        "desired_outcome": "Fix research board grouping, status, and scoping",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "staged via wave plan P30-I21-W26",
+        "problem": "plan wave P30-I21-W26",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-03T15:39:32.168626Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/tui/test_research_board_ia_w26.py -q exits zero including the questions-parenting tree test",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the named regression suite over the topic-tree build",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The scope-wide questions grouping in build_tree_nodes is hoisted to depth zero (a scope-root sibling of campaigns) so question leaves no longer render as children of the last campaign; pinned by a tree-shape test in tests/tui/test_research_board_ia_w26.py using a two-campaign fixture with questions.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "the named suite asserts a converged campaign's node label differs from a running one and wrapped continuation lines start at the node indent column",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the per-campaign status and wrap-indent tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "CampaignRow carries the campaign's own status and each campaign's round node is classified individually (CONVERGED renders as a terminal label, not \"round running\"); wrapped tree lines keep their node indent; pinned by tests in the same suite with one converged and one running campaign.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "the named suite asserts claims-pane content changes with tree selection, answered questions are absent from Unresolved, and Enter changes the rendered frame",
+          "oracle_tier": 2,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the claims-scoping, unresolved-split, and enter-peek tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The claims pane scopes to the selected tree node (or explicitly headers the selection it is showing) instead of one global claim soup; questions whose row reads answered leave the Unresolved section; Enter on a tree node produces a visible peek response (overlay or detail render) under a Pilot test; all pinned in the same suite.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fix research board grouping, status, and scoping",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W27": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I21-W28",
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "Evidence rows label researcher reports by campaign topic instead of raw UUID; role moves to its own column; followups gain a separator; jury tier ladder renders inline; the reports table takes focus so arrows, peek, and Enter respond; a failed wave's report verdict cell is cross-marked with the wave terminal status.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/evidence.py",
+        "tests/tui/test_evidence_pane_w27.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_evidence_pane_w27.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "evidence"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-02",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W27",
+      "intent": {
+        "desired_outcome": "Fix evidence pane labels, columns, and dead keys",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "staged via wave plan P30-I21-W27",
+        "problem": "plan wave P30-I21-W27",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-03T15:39:32.698609Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/tui/test_evidence_pane_w27.py -q exits zero including the topic-label and role-column tests",
+          "oracle_tier": 2,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the named regression suite over the evidence row build",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Researcher report rows label by campaign topic (joined via the research_campaign store on base_id == campaign_id) instead of the raw campaign UUID, and role moves to its own table column with the label column no longer carrying the fused role suffix; pinned by tests in tests/tui/test_evidence_pane_w27.py.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "the named suite asserts the separator presence and the tier ladder line count",
+          "oracle_tier": 2,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the separator and tier-ladder layout tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The Followups section is visually separated from the reports table (margin or rule) and the jury tier ladder renders inline on at most two rows while preserving the scored-tier marker; pinned by render tests in the same suite.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "the named suite asserts selection movement on down-arrow, frame delta on p and Enter, and a failed-wave verdict cross-mark",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the focus, peek/enter, and verdict cross-mark tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The reports table receives focus on mount so arrow keys move the selection and both p (peek) and Enter (open) produce a visible response under Pilot tests; a report whose wave status is terminal-failed renders a cross-mark against the self-claimed verdict cell so a failed wave cannot read as an unqualified pass; pinned in the same suite.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fix evidence pane labels, columns, and dead keys",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W28": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": null,
+      "deps": [
+        "P30-I21-W26",
+        "P30-I21-W27"
+      ],
+      "description": "Pilot harness helper asserting every footer-advertised key produces a visible frame delta or a toast; suite sweeps all nine modes so silently dead keys fail CI; extends the W23 digit-misroute lesson to the whole keymap.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/snapshot/pilot_harness.py",
+        "tests/tui/test_interaction_liveness_w28.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_interaction_liveness_w28.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "home"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-02",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W28",
+      "intent": {
+        "desired_outcome": "Add interaction-liveness gate over advertised TUI keys",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "staged via wave plan P30-I21-W28",
+        "problem": "plan wave P30-I21-W28",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-03T15:39:33.238031Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/tui/test_interaction_liveness_w28.py -q exits zero including the helper unit tests",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the named regression suite over the liveness helper",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A pilot_harness helper asserts that pressing an advertised footer key on a mode screen produces a visible frame delta or a toast (extending mutating_action_keys_resolve from handler-exists to visibly-responds); exposed for reuse by mode suites; pinned by unit tests in tests/tui/test_interaction_liveness_w28.py.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "the named suite enumerates the nine mode screens and asserts liveness (or a declared exemption) per advertised key",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the nine-mode liveness sweep",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The suite sweeps all nine modes against the footer-advertised key set and fails on a silently dead key, so regressions of the W27/W26 dead-key class are caught in CI; keys whose action is legitimately unavailable in the fixture state are declared with a reason in the test, not skipped silently.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add interaction-liveness gate over advertised TUI keys",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
