@@ -10345,6 +10345,104 @@
       "scope_id": "P30-I23-W52",
       "status": "done",
       "updated_at": "2026-07-03T00:02:10.932940Z"
+    },
+    "P30-I24-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I24-W01",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I24-W01",
+      "model": null,
+      "scope_id": "P30-I24-W01",
+      "status": "done",
+      "updated_at": "2026-07-03T20:12:23.786327Z"
+    },
+    "P30-I24-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I24-W02",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I24-W02",
+      "model": null,
+      "scope_id": "P30-I24-W02",
+      "status": "done",
+      "updated_at": "2026-07-03T21:22:04.701447Z"
+    },
+    "P30-I24-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I24-W03",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I24-W03",
+      "model": null,
+      "scope_id": "P30-I24-W03",
+      "status": "done",
+      "updated_at": "2026-07-03T22:26:16.894759Z"
+    },
+    "P30-I24-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I24-W04",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I24-W04",
+      "model": null,
+      "scope_id": "P30-I24-W04",
+      "status": "done",
+      "updated_at": "2026-07-03T22:56:51.787978Z"
+    },
+    "P30-I24-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I24-W05",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I24-W05",
+      "model": null,
+      "scope_id": "P30-I24-W05",
+      "status": "done",
+      "updated_at": "2026-07-03T20:19:53.684726Z"
+    },
+    "P30-I24-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I24-W06",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I24-W06",
+      "model": null,
+      "scope_id": "P30-I24-W06",
+      "status": "done",
+      "updated_at": "2026-07-03T20:05:23.275116Z"
+    },
+    "P30-I24-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I24-W07",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I24-W07",
+      "model": null,
+      "scope_id": "P30-I24-W07",
+      "status": "done",
+      "updated_at": "2026-07-03T21:12:26.362007Z"
     }
   },
   "agent_sessions": {
@@ -26207,6 +26305,97 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I23-W52",
       "updated_at": "2026-07-02T23:53:10.914923Z"
+    },
+    "P30-I24-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I24-W01-bucket-20260703T191959Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I24-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I24-W01",
+      "updated_at": "2026-07-03T19:19:59.773005Z"
+    },
+    "P30-I24-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I24-W02-bucket-20260703T201250Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I24-W02",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I24-W02",
+      "updated_at": "2026-07-03T20:12:50.857425Z"
+    },
+    "P30-I24-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I24-W03-bucket-20260703T212232Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I24-W03",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I24-W03",
+      "updated_at": "2026-07-03T21:22:32.904513Z"
+    },
+    "P30-I24-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I24-W04-bucket-20260703T222639Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I24-W04",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I24-W04",
+      "updated_at": "2026-07-03T22:26:39.490352Z"
+    },
+    "P30-I24-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I24-W05-bucket-20260703T192000Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I24-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I24-W05",
+      "updated_at": "2026-07-03T19:20:00.325503Z"
+    },
+    "P30-I24-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I24-W06-bucket-20260703T192000Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I24-W06",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I24-W06",
+      "updated_at": "2026-07-03T19:20:00.860331Z"
+    },
+    "P30-I24-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I24-W07-bucket-20260703T201251Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I24-W07",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I24-W07",
+      "updated_at": "2026-07-03T20:12:51.412647Z"
     }
   },
   "fleet_run": null,
@@ -29844,7 +30033,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-03T19:17:06.458047Z",
+  "updated_at": "2026-07-03T22:56:51.788256Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -118673,10 +118862,10 @@
         "P30-I24-W07",
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-03T19:19:59.772863Z",
+      "closed_at": "2026-07-03T20:12:23.786327Z",
+      "commit": "3508bb3afee591ffc93d0b5ce60e12c61f6aaa55",
       "criteria_floor_waiver": {
         "reason": "reactive TUI UX fix iter using string criteria verified by Pilot snapshot and affordance-parity gates at wave close",
         "waived_at": "2026-07-03T19:17:02.470384Z",
@@ -118704,12 +118893,12 @@
       },
       "iter_id": "P30-I24",
       "opened_at": "2026-07-03T19:17:02.519239Z",
-      "outcome": null,
+      "outcome": "Tree interaction spine: panes can_focus=False so arrows drive select_prev/next, selected node scrolls into view, first paint applies measured hanging-indent width. 7 new Pilot+unit tests, 4 goldens repinned; full TUI suite + mypy green; cherry-picked 835fa913+3508bb3a, re-validated in parent (533 passed).",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -118729,7 +118918,7 @@
       "title": "Tree interaction spine: arrow-select + scroll-into-view + mount-width",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I24-W01-1783106411"
     },
     "P30-I24-W02": {
       "agent_role": "executor",
@@ -118737,10 +118926,10 @@
         "P30-I24-W03",
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-03T20:12:50.857289Z",
+      "closed_at": "2026-07-03T21:22:04.701447Z",
+      "commit": "160a696409cbd65e57c4fa2348aed511507ec23b",
       "criteria_floor_waiver": {
         "reason": "reactive TUI UX fix iter using string criteria verified by Pilot snapshot and affordance-parity gates at wave close",
         "waived_at": "2026-07-03T19:17:03.047850Z",
@@ -118770,12 +118959,12 @@
       },
       "iter_id": "P30-I24",
       "opened_at": "2026-07-03T19:17:03.082590Z",
-      "outcome": null,
+      "outcome": "Campaign tree: campaigns are pickable top-level nodes with left/right collapse-expand and a round-status suffix; question rows render their status marker (open/answered/blocked) before the title; questions group under their owning (primary) campaign, no scope-questions root. 125 module + 151 module+snapshot tests green, mypy clean, pairing-gate ok; cherry-picked 4af4f802(feat)+160a6964(test), re-validated in parent (125 passed).",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -118795,7 +118984,7 @@
       "title": "Campaign tree: pickable campaigns + status-before-title questions",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I24-W02-1783109572"
     },
     "P30-I24-W03": {
       "agent_role": "executor",
@@ -118803,10 +118992,10 @@
         "P30-I24-W04",
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-03T21:22:32.904410Z",
+      "closed_at": "2026-07-03T22:26:16.894759Z",
+      "commit": "b0bfb0e356b99d5b2fa2eb4a8a795788f86900e8",
       "criteria_floor_waiver": {
         "reason": "reactive TUI UX fix iter using string criteria verified by Pilot snapshot and affordance-parity gates at wave close",
         "waived_at": "2026-07-03T19:17:03.613261Z",
@@ -118836,12 +119025,12 @@
       },
       "iter_id": "P30-I24",
       "opened_at": "2026-07-03T19:17:03.645887Z",
-      "outcome": null,
+      "outcome": "Polymorphic center detail: campaign->stats, question->scoped best-answer+evidence, claim->summary; in-tree peek retired, Enter is the W04 modal seam. Reuses compute_round_progress/group_claims_by_evidence (DRY). Independent auditor verdict=pass (all 3 criteria verified in-code, no W01/W02 regression). 179 tests green, mypy clean; cherry-picked ed1bc394+b0bfb0e3.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -118861,17 +119050,17 @@
       "title": "Polymorphic detail pane: campaign stats, question answer, claim summary",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I24-W03-1783113754"
     },
     "P30-I24-W04": {
       "agent_role": "executor",
       "blocks": [
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-03T22:26:39.490220Z",
+      "closed_at": "2026-07-03T22:56:51.787978Z",
+      "commit": "77ac5e1ea00a55a60493e6e0e37230c7e3a0a53f",
       "criteria_floor_waiver": {
         "reason": "reactive TUI UX fix iter using string criteria verified by Pilot snapshot and affordance-parity gates at wave close",
         "waived_at": "2026-07-03T19:17:04.171835Z",
@@ -118902,12 +119091,12 @@
       },
       "iter_id": "P30-I24",
       "opened_at": "2026-07-03T19:17:04.208210Z",
-      "outcome": null,
+      "outcome": "Evidence zoom modal: Enter on a claim opens a full-screen EvidenceReaderModal (body + numbered sources + conflicts + provenance); Esc returns with selection intact. New evidence_reader.py + claim_conflicts helper. 20 new tests, pre-commit --all-files + mypy + pairing green; cherry-picked 77ac5e1e, re-validated in parent (159 passed).",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -118927,17 +119116,17 @@
       "title": "Evidence zoom modal: full-screen claim + sources + conflicts reader",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I24-W04-1783117600"
     },
     "P30-I24-W05": {
       "agent_role": "executor",
       "blocks": [
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-03T19:20:00.325393Z",
+      "closed_at": "2026-07-03T20:19:53.684726Z",
+      "commit": "635de8c5a0f37692808f0ed8f3100fb02f40d341",
       "criteria_floor_waiver": {
         "reason": "reactive TUI UX fix iter using string criteria verified by Pilot snapshot and affordance-parity gates at wave close",
         "waived_at": "2026-07-03T19:17:04.740905Z",
@@ -118966,12 +119155,12 @@
       },
       "iter_id": "P30-I24",
       "opened_at": "2026-07-03T19:17:04.775041Z",
-      "outcome": null,
+      "outcome": "Evidence-mode clarity: verdict-sigil legend above the rollup, failed-wave drill names real WaveStatus beside self-claimed verdict, researcher-row drill shows question/findings/recommendation. 58 evidence tests + full TUI suite green, mypy clean; cherry-picked as 13e15e6a(feat)+635de8c5(test).",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -118991,17 +119180,17 @@
       "title": "Evidence-mode clarity: verdict legend + researcher row and drill detail",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I24-W05-1783106413"
     },
     "P30-I24-W06": {
       "agent_role": "executor",
       "blocks": [
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-03T19:20:00.860223Z",
+      "closed_at": "2026-07-03T20:05:23.275116Z",
+      "commit": "204eb7a33f01f6dd64d0e07cd65198986c75f684",
       "criteria_floor_waiver": {
         "reason": "reactive TUI UX fix iter using string criteria verified by Pilot snapshot and affordance-parity gates at wave close",
         "waived_at": "2026-07-03T19:17:05.316730Z",
@@ -119029,12 +119218,12 @@
       },
       "iter_id": "P30-I24",
       "opened_at": "2026-07-03T19:17:05.352066Z",
-      "outcome": null,
+      "outcome": "Watch roster reachable: l opens SessionPicker over active sessions; Esc-from-zoom returns to roster with 2+ sessions; view_log relocated to v. 52 watch tests + full TUI suite green; cherry-picked 204eb7a3, re-validated in parent.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -119054,17 +119243,17 @@
       "title": "Watch roster: list binding + decouple picker from active-sessions guard",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I24-W06-1783106414"
     },
     "P30-I24-W07": {
       "agent_role": "executor",
       "blocks": [
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-03T20:12:51.412535Z",
+      "closed_at": "2026-07-03T21:12:26.362007Z",
+      "commit": "b49f369d229cd0c86aae2e4dce840fff5776a9d8",
       "criteria_floor_waiver": {
         "reason": "reactive TUI UX fix iter using string criteria verified by Pilot snapshot and affordance-parity gates at wave close",
         "waived_at": "2026-07-03T19:17:05.904323Z",
@@ -119094,12 +119283,12 @@
       },
       "iter_id": "P30-I24",
       "opened_at": "2026-07-03T19:17:05.937319Z",
-      "outcome": null,
+      "outcome": "Interaction-liveness gate extended: asserts the selected node/row/target identity CHANGED on advertised movement keys (not just a repaint), with a negative control proving it reds when a nav key only scrolls. 7 new tests + full TUI suite (2498) green, mypy clean; cherry-picked b49f369d, re-validated in parent.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -119119,7 +119308,7 @@
       "title": "Interaction-liveness gate: assert selection moved not just repaint",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I24-W07-1783109573"
     }
   },
   "workspace": null,
@@ -122709,6 +122898,83 @@
       "path": ".ea/worktrees/p30-w28",
       "status": "abandoned",
       "wave_id": "P30-I21-W28"
+    },
+    "WT-P30-I24-W01-1783106411": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-i24-w01",
+      "created_at": "2026-07-03T19:20:11.851790Z",
+      "id": "WT-P30-I24-W01-1783106411",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260510T214731Z-operator-claude",
+      "path": ".ea/worktrees/p30-w01",
+      "status": "active",
+      "wave_id": "P30-I24-W01"
+    },
+    "WT-P30-I24-W02-1783109572": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-i24-w02",
+      "created_at": "2026-07-03T20:12:52.592500Z",
+      "id": "WT-P30-I24-W02-1783109572",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260510T214731Z-operator-claude",
+      "path": ".ea/worktrees/p30-w02",
+      "status": "active",
+      "wave_id": "P30-I24-W02"
+    },
+    "WT-P30-I24-W03-1783113754": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-i24-w03",
+      "created_at": "2026-07-03T21:22:34.106738Z",
+      "id": "WT-P30-I24-W03-1783113754",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260510T214731Z-operator-claude",
+      "path": ".ea/worktrees/p30-w03",
+      "status": "active",
+      "wave_id": "P30-I24-W03"
+    },
+    "WT-P30-I24-W04-1783117600": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-i24-w04",
+      "created_at": "2026-07-03T22:26:40.684530Z",
+      "id": "WT-P30-I24-W04-1783117600",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260510T214731Z-operator-claude",
+      "path": ".ea/worktrees/p30-w04",
+      "status": "active",
+      "wave_id": "P30-I24-W04"
+    },
+    "WT-P30-I24-W05-1783106413": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-i24-w05",
+      "created_at": "2026-07-03T19:20:13.120787Z",
+      "id": "WT-P30-I24-W05-1783106413",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260510T214731Z-operator-claude",
+      "path": ".ea/worktrees/p30-w05",
+      "status": "active",
+      "wave_id": "P30-I24-W05"
+    },
+    "WT-P30-I24-W06-1783106414": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-i24-w06",
+      "created_at": "2026-07-03T19:20:14.345275Z",
+      "id": "WT-P30-I24-W06-1783106414",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260510T214731Z-operator-claude",
+      "path": ".ea/worktrees/p30-w06",
+      "status": "active",
+      "wave_id": "P30-I24-W06"
+    },
+    "WT-P30-I24-W07-1783109573": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-i24-w07",
+      "created_at": "2026-07-03T20:12:53.768410Z",
+      "id": "WT-P30-I24-W07-1783109573",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260510T214731Z-operator-claude",
+      "path": ".ea/worktrees/p30-w07",
+      "status": "active",
+      "wave_id": "P30-I24-W07"
     }
   }
 }
