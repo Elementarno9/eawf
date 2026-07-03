@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import textwrap
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -149,6 +150,10 @@ PEEK_RESULT_ID: str = "research-peek"
 #: Id of the action-result line under the drawer (approve / park / follow-up /
 #: snapshot outcome -- honest about whether the request was issued).
 ACTION_RESULT_ID: str = "research-action"
+
+#: Id of the center-pane scope header (names the selection driving the Claims
+#: tab, so the ledger reads as "showing X" rather than one un-scoped soup).
+CENTER_SCOPE_ID: str = "research-center-scope"
 
 #: Id of the Unresolved-tab section header in the center pane (one row per
 #: open question with its status + round number).
@@ -762,12 +767,17 @@ class CampaignRow:
         topic: The campaign topic fanned out across the staged domains.
         domains: The staged domain names, in staged (sorted) order.
         default_depth: The campaign-wide default survey depth token.
+        status: The campaign's own lifecycle position, so a CONVERGED
+            campaign's round node renders a terminal label rather than the
+            scope-wide running/saturated phrase. Defaults to
+            :attr:`~eawf.kernel.state.enums.CampaignStatus.ACTIVE`.
     """
 
     campaign_id: str
     topic: str
     domains: tuple[str, ...]
     default_depth: str
+    status: CampaignStatus = CampaignStatus.ACTIVE
 
     @property
     def domain_count(self) -> int:
@@ -1142,6 +1152,10 @@ class TreeNode:
             so the round row renders the FA8 auto-run running / saturated /
             pruned sigil rather than a flat dispatch arrow; ``None`` on every
             other node kind.
+        question_id: The id of the :class:`~eawf.kernel.state.models.OpenQuestion`
+            a :attr:`NodeKind.QUESTION` node stands for, so selecting it can
+            scope the Claims pane to the claims that answer it; ``None`` on
+            every other node kind.
     """
 
     kind: NodeKind
@@ -1152,6 +1166,7 @@ class TreeNode:
     question_status: OpenQuestionStatus | None = None
     claim_status: ClaimStatus | None = None
     round_state: RoundState | None = None
+    question_id: str | None = None
 
 
 def read_campaign_rows(state_path: Path | None) -> tuple[CampaignRow, ...]:
@@ -1208,6 +1223,7 @@ def read_campaign_rows(state_path: Path | None) -> tuple[CampaignRow, ...]:
                 topic=campaign.topic,
                 domains=tuple(dispatch.domain for dispatch in campaign.dispatches),
                 default_depth=payload.config.default_depth.value,
+                status=payload.status,
             )
         )
     logger.info(
@@ -1281,6 +1297,17 @@ _ROUND_COPY: dict[RoundState, tuple[str, str]] = {
     RoundState.IDLE: ("round idle", "campaign staged -- no round has run yet"),
 }
 
+#: The round node's label + peek detail for a campaign whose OWN status is
+#: :attr:`~eawf.kernel.state.enums.CampaignStatus.CONVERGED`. A converged
+#: campaign has terminated (the run halted on saturation or the round cap), so
+#: its round node reads a terminal label rather than the scope-wide running /
+#: saturated phrase -- the fix for a CONVERGED campaign that lingered "round
+#: running" because the round state was computed once scope-wide.
+_CONVERGED_ROUND_COPY: tuple[str, str] = (
+    "round converged",
+    "campaign converged -- the run halted on saturation or the round cap",
+)
+
 
 def _round_label_detail(progress: RoundProgress) -> tuple[str, str]:
     """Return the round node's auto-run label + peek detail for *progress*.
@@ -1310,21 +1337,26 @@ def build_tree_nodes(
     Builds the campaign > round > topic outline plus the round > questions >
     claims spine as a flat tuple of :class:`TreeNode` rows in render order:
 
-    * per campaign -- the campaign node, then a round node (its FA8 auto-run
-      state derived from the real run records when present, else the pre-run
+    * per campaign -- the campaign node (depth 0), then a round node (depth 1)
+      classified off the campaign's OWN status (a CONVERGED campaign reads a
+      terminal ``round converged`` label; an ACTIVE campaign derives its FA8
+      auto-run state from the real run records when present, else the pre-run
       question-ledger classification), then one topic node per staged domain
-      (capped at :data:`_MAX_TOPICS_PER_CAMPAIGN`);
-    * then, when the scope carries open questions, a single
-      ``round -- questions`` round node grouping every
-      :class:`~eawf.kernel.state.models.OpenQuestion` as a question node (each
-      carrying its open / answered / dropped status for the per-status sigil),
-      with the claims that answer a question
-      (:func:`index_claims_by_question`) nested as claim leaves beneath it.
+      (depth 2, capped at :data:`_MAX_TOPICS_PER_CAMPAIGN`);
+    * then, when the scope carries open questions, a single scope-level
+      ``scope questions`` round node at depth 0 -- a sibling of the campaigns,
+      NOT a child of the last one -- grouping every
+      :class:`~eawf.kernel.state.models.OpenQuestion` as a question node at
+      depth 1 (each carrying its open / answered / dropped status for the
+      per-status sigil), with the claims that answer a question
+      (:func:`index_claims_by_question`) nested as claim leaves at depth 2.
 
-    A question is scope-wide (not pinned to one campaign's topic), so the
-    questions round is emitted once for the scope rather than per campaign, and
-    it surfaces even for a question-only scope that has staged no campaign yet.
-    Empty when the scope has neither a campaign nor an open question.
+    A question is scope-wide (the daemon stamps it with the project code, not a
+    campaign id), so the questions group is emitted once for the scope at depth
+    0 rather than per campaign, and it surfaces even for a question-only scope
+    that has staged no campaign yet. Hoisting it to depth 0 stops the question
+    leaves rendering as children of the last campaign. Empty when the scope has
+    neither a campaign nor an open question.
 
     Args:
         campaigns: The staged campaign rows for the scope.
@@ -1350,14 +1382,26 @@ def build_tree_nodes(
                 campaign_id=campaign.campaign_id,
             )
         )
+        # Classify each campaign's round INDIVIDUALLY off its own status: a
+        # CONVERGED campaign terminated, so it reads a terminal label rather
+        # than the scope-wide running/saturated phrase (which lingered
+        # "round running" forever because the state was computed once
+        # scope-wide). An ACTIVE campaign still derives from the scope-wide
+        # question-ledger / run-record classification.
+        if campaign.status is CampaignStatus.CONVERGED:
+            camp_round_state = RoundState.SATURATED
+            camp_label, camp_detail = _CONVERGED_ROUND_COPY
+        else:
+            camp_round_state = progress.state
+            camp_label, camp_detail = round_label, round_detail
         nodes.append(
             TreeNode(
                 kind=NodeKind.ROUND,
-                label=round_label,
+                label=camp_label,
                 depth=1,
-                detail=round_detail,
+                detail=camp_detail,
                 campaign_id=campaign.campaign_id,
-                round_state=progress.state,
+                round_state=camp_round_state,
             )
         )
         for domain in campaign.domains[:_MAX_TOPICS_PER_CAMPAIGN]:
@@ -1375,11 +1419,16 @@ def build_tree_nodes(
                 )
             )
     if questions:
+        # A question carries the PROJECT code as its scope, not a campaign id
+        # (the daemon stamps it scope-wide), so its grouping node is a scope
+        # root -- a sibling of the campaigns at depth 0 -- not a child nested
+        # under the last campaign. The label reads as scope-level so the group
+        # never masquerades as a campaign round.
         nodes.append(
             TreeNode(
                 kind=NodeKind.ROUND,
-                label=f"{round_label} -- questions",
-                depth=1,
+                label=f"scope questions -- {_ROUND_BAND_PHRASE[progress.state]}",
+                depth=0,
                 detail=(
                     f"{progress.open_count} open / {progress.answered_count} answered / "
                     f"{progress.pruned_count} pruned"
@@ -1394,9 +1443,10 @@ def build_tree_nodes(
                 TreeNode(
                     kind=NodeKind.QUESTION,
                     label=question.title,
-                    depth=2,
+                    depth=1,
                     detail=f"open question -- {marker}",
                     question_status=question.status,
+                    question_id=question.id,
                 )
             )
             for claim in claims_by_question.get(question.id, ()):
@@ -1404,7 +1454,7 @@ def build_tree_nodes(
                     TreeNode(
                         kind=NodeKind.CLAIM,
                         label=claim.title,
-                        depth=3,
+                        depth=2,
                         # The peek detail carries the untruncated claim body +
                         # resolving evidence refs (W19 drill-in): the label
                         # truncates to the title, so a peek is the way to read
@@ -1488,8 +1538,29 @@ def _tree_node_markup(node: TreeNode, *, mode: RenderMode) -> str:
     return f"[$muted]{glyph}[/]"
 
 
+def _tree_prefix_width(depth: int) -> int:
+    """Return the visible column a tree node's label text starts at.
+
+    The row prefix is a fixed 2-column selection marker, the 2-per-depth
+    indent, and the 1-column level sigil plus its trailing space -- so the
+    label opens at ``4 + 2 * depth``. A wrapped continuation line hangs to this
+    same column so the tail never orphans back to column zero.
+
+    Args:
+        depth: The node's indent depth.
+
+    Returns:
+        The zero-based column where the node's label begins.
+    """
+    return 4 + 2 * depth
+
+
 def render_tree(
-    nodes: tuple[TreeNode, ...], selected: int, *, mode: RenderMode = DEFAULT_RENDER_MODE
+    nodes: tuple[TreeNode, ...],
+    selected: int,
+    *,
+    mode: RenderMode = DEFAULT_RENDER_MODE,
+    width: int = 0,
 ) -> str:
     """Render the topic-tree pane (one indented row per node).
 
@@ -1501,14 +1572,22 @@ def render_tree(
     *selected* row is marked so the peek target is visible. An empty node list
     renders the per-pane :data:`NONE_YET` sentinel.
 
+    A long label soft-wraps with a HANGING indent: when *width* is positive the
+    label is pre-wrapped to the pane width and each continuation line is padded
+    to the node's own label column (:func:`_tree_prefix_width`), so a wrapped
+    topic title never orphans its tail flush to column zero. A non-positive
+    *width* keeps the single-line form (the pure-render default).
+
     Args:
         nodes: The flattened tree nodes in render order.
         selected: Index of the selected node (the peek target), or ``-1``.
         mode: The App's resolved render-mode label -- selects each glyph's
             ASCII / unicode column.
+        width: The pane's content width; ``0`` disables wrapping.
 
     Returns:
-        A content-markup string of one tree row per node.
+        A content-markup string of one tree row per node (a wrapped label
+        contributes one head line plus its hanging continuation lines).
     """
     if not nodes:
         return f"[$muted]{NONE_YET}[/]"
@@ -1517,8 +1596,38 @@ def render_tree(
         indent = "  " * node.depth
         sigil = _tree_node_markup(node, mode=mode)
         marker = "[$accent]>[/] " if index == selected else "  "
-        lines.append(f"{marker}{indent}{sigil} {escape_markup(node.label)}")
+        prefix_width = _tree_prefix_width(node.depth)
+        label_lines = _wrap_tree_label(node.label, width=width, prefix_width=prefix_width)
+        lines.append(f"{marker}{indent}{sigil} {escape_markup(label_lines[0])}")
+        hang = " " * prefix_width
+        for continuation in label_lines[1:]:
+            lines.append(f"{hang}{escape_markup(continuation)}")
     return "\n".join(lines)
+
+
+def _wrap_tree_label(label: str, *, width: int, prefix_width: int) -> list[str]:
+    """Wrap *label* to the pane width, returning the display lines.
+
+    The available label width is the pane *width* minus the node's
+    *prefix_width* (the marker + indent + sigil column). A non-positive width,
+    a prefix that already fills the pane, or a label that fits returns the label
+    unsplit; otherwise the label wraps at word boundaries (breaking a single
+    over-long token) so the caller can hang each continuation to the label
+    column.
+
+    Args:
+        label: The node's raw (unescaped) label text.
+        width: The pane's content width; ``0`` disables wrapping.
+        prefix_width: The column the label text starts at.
+
+    Returns:
+        The label split into one-or-more display lines (never empty).
+    """
+    available = width - prefix_width
+    if width <= 0 or available <= 0 or len(label) <= available:
+        return [label]
+    wrapped = textwrap.wrap(label, width=available, break_long_words=True, break_on_hyphens=False)
+    return wrapped or [label]
 
 
 def render_center_tabs(active: str) -> str:
@@ -1578,6 +1687,50 @@ def render_claims(claims: tuple[Claim, ...], *, mode: RenderMode = DEFAULT_RENDE
     if overflow > 0:
         lines.append(f"[$muted]+{overflow} more[/]")
     return "\n".join(lines)
+
+
+def _scope_header(text: str) -> str:
+    """Return the muted center-pane scope header markup naming *text*."""
+    return f"[$muted]showing {escape_markup(text)}[/]"
+
+
+def scope_claims_for_node(
+    node: TreeNode | None,
+    claims: tuple[Claim, ...],
+) -> tuple[tuple[Claim, ...], str]:
+    """Scope the Claims pane to the selected tree *node*, with a naming header.
+
+    The Claims tab otherwise renders one global claim soup regardless of the
+    tree cursor. This narrows it to the selection driving the pane and always
+    returns a header that NAMES that selection, so the operator reads "showing
+    claims answering: <question>" rather than an un-scoped list:
+
+    * a :attr:`NodeKind.QUESTION` node scopes to the claims that back-link that
+      question (:func:`index_claims_by_question`) -- the real scoping;
+    * a :attr:`NodeKind.CAMPAIGN` / :attr:`NodeKind.CLAIM` node keeps the full
+      ledger (claims are not campaign-linked) but headers the selection so the
+      pane's context is explicit;
+    * any other node (round / topic) or no selection keeps the full ledger under
+      the honest scope-wide header.
+
+    Args:
+        node: The selected tree node, or ``None`` when nothing is selected.
+        claims: The state-resident claim rows for the scope.
+
+    Returns:
+        A ``(scoped_claims, header_markup)`` pair: the claims to render and the
+        muted header that names the selection driving the pane.
+    """
+    if node is None:
+        return claims, _scope_header("all claims (scope-wide)")
+    if node.kind is NodeKind.QUESTION and node.question_id is not None:
+        scoped = index_claims_by_question(claims).get(node.question_id, ())
+        return scoped, _scope_header(f"claims answering: {node.label}")
+    if node.kind is NodeKind.CAMPAIGN:
+        return claims, _scope_header(f"all claims -- campaign: {node.label}")
+    if node.kind is NodeKind.CLAIM:
+        return claims, _scope_header(f"selected claim: {node.label}")
+    return claims, _scope_header("all claims (scope-wide)")
 
 
 def group_claims_by_evidence(
@@ -1680,15 +1833,17 @@ def render_unresolved(
     round_number: int = STAGED_ROUND,
     mode: RenderMode = DEFAULT_RENDER_MODE,
 ) -> str:
-    """Render the Unresolved tab -- one row per open question + status + round.
+    """Render the Unresolved tab -- one row per still-open question.
 
-    Lists one row per :class:`~eawf.kernel.state.models.OpenQuestion`, each
-    naming the question's status (a blocking question reads ``blocking`` in
-    ``$warn``, else its lifecycle status) and the round it belongs to. Every row
-    renders under the same synthetic *round_number* the topic tree labels
+    Lists one row per UNRESOLVED (``OPEN``) question, each naming its status (a
+    blocking question reads ``blocking`` in ``$warn``, else its lifecycle
+    status) and the round it belongs to. A question that has been ANSWERED or
+    DROPPED is resolved, so it LEAVES this section -- Unresolved shows only work
+    that still needs an answer, never a resolved row rendered "answered". Every
+    row renders under the same synthetic *round_number* the topic tree labels
     (:data:`STAGED_ROUND`, the staged round before the live multi-round runner).
-    Rows cap at :data:`_MAX_ROWS` with a ``+N more`` line; an empty ledger
-    renders :data:`NONE_YET`.
+    Rows cap at :data:`_MAX_ROWS` with a ``+N more`` line; an empty (or fully
+    resolved) ledger renders :data:`NONE_YET`.
 
     Args:
         questions: The state-resident open-question rows for the scope.
@@ -1696,12 +1851,13 @@ def render_unresolved(
             :data:`STAGED_ROUND`).
 
     Returns:
-        A content-markup string of one question line per row.
+        A content-markup string of one still-open question line per row.
     """
-    if not questions:
+    unresolved = tuple(q for q in questions if q.status is OpenQuestionStatus.OPEN)
+    if not unresolved:
         return f"[$muted]{NONE_YET}[/]"
     lines: list[str] = []
-    for question in questions[:_MAX_ROWS]:
+    for question in unresolved[:_MAX_ROWS]:
         if question.blocking:
             # A blocking question leads with the attention sigil so the warn
             # signal reads as a glyph (the sigil language), not only a tinted
@@ -1717,7 +1873,7 @@ def render_unresolved(
             f"{marker}[{tint}]{status}[/] [$muted]round {round_number}[/] "
             f"{escape_markup(question.title)}"
         )
-    overflow = len(questions) - _MAX_ROWS
+    overflow = len(unresolved) - _MAX_ROWS
     if overflow > 0:
         lines.append(f"[$muted]+{overflow} more[/]")
     return "\n".join(lines)
@@ -1917,6 +2073,10 @@ class ResearchBoardModeScreen(ScopeScreen):
         height: auto;
         color: $muted;
     }
+    ResearchBoardModeScreen #research-center-scope {
+        height: auto;
+        color: $muted;
+    }
     ResearchBoardModeScreen #research-drawer {
         height: auto;
         border: round $warn;
@@ -2012,6 +2172,9 @@ class ResearchBoardModeScreen(ScopeScreen):
         """Initialise the pane with an empty node list until first compute."""
         super().__init__()
         self._tree: tuple[TreeNode, ...] = ()
+        # The current claim ledger, cached so a cursor move can re-scope the
+        # Claims pane to the selected node without re-reading state each keypress.
+        self._claims: tuple[Claim, ...] = ()
 
     def compose_body(self) -> ComposeResult:
         """Yield the three-pane scaffold + drawer, or the honest-empty notice.
@@ -2023,10 +2186,12 @@ class ResearchBoardModeScreen(ScopeScreen):
         them in sync on every tick / revision.
         """
         campaigns, claims, questions = self._current_rows()
+        self._claims = claims
         self.empty = not has_research_signal(campaigns, claims, questions)
         self._tree = build_tree_nodes(
             campaigns, questions, claims=claims, rounds=self._current_round_rows()
         )
+        scoped_claims, scope_header = scope_claims_for_node(self._selected_node(), claims)
         with Vertical(id="research-body"):
             if self.empty:
                 if self._render_mode() == "unicode":
@@ -2055,7 +2220,8 @@ class ResearchBoardModeScreen(ScopeScreen):
                 with VerticalScroll(id=CENTER_PANE_ID, classes="research-pane") as center:
                     center.border_title = "CLAIMS / EVIDENCE"
                     yield Static(render_center_tabs("Claims"), id="research-center-tabs")
-                    yield Static(render_claims(claims, mode=mode), id="research-center-body")
+                    yield Static(scope_header, id=CENTER_SCOPE_ID)
+                    yield Static(render_claims(scoped_claims, mode=mode), id="research-center-body")
                     yield Static(
                         "[$accent]Options[/] [$muted](supporting evidence)[/]",
                         classes="research-center-section",
@@ -2126,9 +2292,16 @@ class ResearchBoardModeScreen(ScopeScreen):
             self._rebuild()
 
     def watch_selected(self) -> None:
-        """Repaint the tree selection highlight when the cursor moves."""
+        """Repaint on cursor move: tree highlight, re-scoped claims, idle peek.
+
+        Moving the cursor re-scopes the Claims pane to the newly selected node
+        and resets the peek line to its idle hint, so a peek surfaced for the
+        prior node never lingers reading as current for the new one.
+        """
         if self.is_mounted:
             self._repaint_tree()
+            self._repaint_claims()
+            self._update_one(PEEK_RESULT_ID, self._peek_idle())
 
     def action_select_prev(self) -> None:
         """Move the tree cursor to the previous node (clamped at the top)."""
@@ -2143,9 +2316,11 @@ class ResearchBoardModeScreen(ScopeScreen):
     def action_peek_selected(self) -> None:
         """Peek the selected tree node read-only (no mutation).
 
-        Surfaces the selected node's honest detail line under the tree -- a
-        read-only drill into the node's findings. With no node selected (an
-        honest-empty tree) there is nothing to peek, surfaced honestly.
+        Surfaces the selected node's honest detail line on the persistent
+        ``#research-peek`` line under the tree -- a visible read-only drill into
+        the node's findings that stays until the cursor moves (it also flashes
+        as a toast). With no node selected (an honest-empty tree) there is
+        nothing to peek, surfaced honestly.
         """
         node = self._selected_node()
         if node is None:
@@ -2825,6 +3000,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         (when the empty verdict flips) or updates each pane in place.
         """
         campaigns, claims, questions = self._current_rows()
+        self._claims = claims
         was_empty = self.empty
         self.empty = not has_research_signal(campaigns, claims, questions)
         self._tree = build_tree_nodes(
@@ -2846,8 +3022,13 @@ class ResearchBoardModeScreen(ScopeScreen):
             return
         pause = self._current_checkpoint()
         mode = self._render_mode()
-        self._update_one("research-tree-body", render_tree(self._tree, self.selected, mode=mode))
-        self._update_one("research-center-body", render_claims(claims, mode=mode))
+        self._update_one(
+            "research-tree-body",
+            render_tree(self._tree, self.selected, mode=mode, width=self._tree_width()),
+        )
+        scoped_claims, scope_header = scope_claims_for_node(self._selected_node(), claims)
+        self._update_one(CENTER_SCOPE_ID, scope_header)
+        self._update_one("research-center-body", render_claims(scoped_claims, mode=mode))
         self._update_one(OPTIONS_BODY_ID, render_options(claims, mode=mode))
         self._update_one(CONFLICTS_BODY_ID, render_conflicts(claims, mode=mode))
         self._update_one(UNRESOLVED_BODY_ID, render_unresolved(questions, mode=mode))
@@ -2905,8 +3086,31 @@ class ResearchBoardModeScreen(ScopeScreen):
     def _repaint_tree(self) -> None:
         """Repaint the tree body so the selection highlight tracks the cursor."""
         self._update_one(
-            "research-tree-body", render_tree(self._tree, self.selected, mode=self._render_mode())
+            "research-tree-body",
+            render_tree(
+                self._tree, self.selected, mode=self._render_mode(), width=self._tree_width()
+            ),
         )
+
+    def _repaint_claims(self) -> None:
+        """Re-scope the Claims pane to the selected node (header + body)."""
+        scoped_claims, scope_header = scope_claims_for_node(self._selected_node(), self._claims)
+        self._update_one(CENTER_SCOPE_ID, scope_header)
+        self._update_one(
+            "research-center-body", render_claims(scoped_claims, mode=self._render_mode())
+        )
+
+    def _tree_width(self) -> int:
+        """Return the tree body's content width, or ``0`` before it is laid out.
+
+        A positive width drives :func:`render_tree`'s hanging-indent wrap; ``0``
+        (the widget is not yet mounted / measured) keeps the single-line form.
+        """
+        found = self.query("#research-tree-body")
+        if not found:
+            return 0
+        width = found.first(Static).content_size.width
+        return width if width > 0 else 0
 
     def _clamp_selection(self) -> None:
         """Clamp the tree cursor into the current node list.
@@ -2963,13 +3167,16 @@ class ResearchBoardModeScreen(ScopeScreen):
         return campaigns[0].campaign_id if campaigns else None
 
     def _set_peek(self, line: str) -> None:
-        """Surface a peek result as a fading toast; the peek line stays idle.
+        """Surface a peek result on the persistent peek line + a fading toast.
 
-        A pinned peek otherwise reads as current long after the cursor moved
-        on — the ``#research-peek`` line keeps its idle hint instead.
+        The peek detail renders on the ``#research-peek`` line so the drill is
+        visible in the frame (an operator can read it), and also flashes as a
+        toast. A cursor move resets the line to its idle hint (see
+        :meth:`watch_selected`), so a stale peek never reads as current after
+        the selection moves on.
         """
+        self._update_one(PEEK_RESULT_ID, line)
         notify_result(self.app, line)
-        self._update_one(PEEK_RESULT_ID, self._peek_idle())
 
     def _set_action(self, line: str, *, pending: bool = False) -> None:
         """Surface an action outcome as a fading toast; reset the line to idle.
@@ -3132,6 +3339,7 @@ __all__ = [
     "APPROVE_NO_DAEMON",
     "CANCEL_NO_CAMPAIGN",
     "CANCEL_NO_DAEMON",
+    "CENTER_SCOPE_ID",
     "CENTER_TABS",
     "CHECKPOINT_IDLE",
     "CONFLICTS_BODY_ID",
@@ -3185,4 +3393,5 @@ __all__ = [
     "render_tree",
     "render_unresolved",
     "round_sigil_markup",
+    "scope_claims_for_node",
 ]

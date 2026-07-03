@@ -415,20 +415,22 @@ def test_build_tree_nodes_campaign_emits_campaign_round_topic_levels() -> None:
 
 
 def test_build_tree_nodes_open_question_groups_under_a_questions_round() -> None:
-    """An open question hangs as a question node under the synthetic round.
+    """An open question hangs as a question node under the scope-level group.
 
-    The round > questions > claims spine emits the ``questions`` round node
-    even for a question-only scope (no campaign), with the question grouped
-    beneath it carrying its lifecycle status for the per-status sigil.
+    The scope-wide questions group is a depth-0 root (a sibling of any
+    campaigns, not a child of the last one), emitted even for a question-only
+    scope (no campaign), with the question grouped one indent beneath it
+    carrying its lifecycle status for the per-status sigil.
     """
     nodes = build_tree_nodes((), (_question(),))
     assert len(nodes) == 2
     assert nodes[0].kind is NodeKind.ROUND
-    # The default question is OPEN, so the round classifies as running (the FA8
-    # auto-run state infixes the round label).
-    assert nodes[0].label == "round running -- questions"
+    # W26: the questions group is a scope-level root at depth 0 with a
+    # scope-level label; the default OPEN question keeps the aggregate running.
+    assert nodes[0].depth == 0
+    assert nodes[0].label == "scope questions -- running"
     assert nodes[1].kind is NodeKind.QUESTION
-    assert nodes[1].depth == 2
+    assert nodes[1].depth == 1
     assert nodes[1].label == "Which curve model fits the short tenor"
     assert nodes[1].question_status is OpenQuestionStatus.OPEN
 
@@ -1187,7 +1189,11 @@ def test_research_board_pane_renders_seeded_campaign(tmp_path: Path) -> None:
             # soft-wraps the long topic in the frame, so assert on the widget's
             # own renderable rather than the truncated visual frame).
             tree_body = pane.query_one("#research-tree-body")
-            assert "Survey the options-pricing landscape" in str(tree_body.render())  # type: ignore[attr-defined]
+            # The narrow pane may hang-wrap the long topic (W26), so assert the
+            # head + tail tokens both render rather than the unbroken string.
+            tree_render = str(tree_body.render())  # type: ignore[attr-defined]
+            assert "Survey the" in tree_render
+            assert "landscape" in tree_render
             progress_body = pane.query_one("#research-progress-body")
             assert "BUDGET" in str(progress_body.render())  # type: ignore[attr-defined]
 
@@ -1689,7 +1695,10 @@ def test_research_board_n_commit_stages_campaign_and_renders_node(
             board = app.screen
             assert isinstance(board, ResearchBoardModeScreen)
             tree_body = str(board.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
-            assert staged_topic in tree_body
+            # The long topic hang-wraps in the narrow live pane (W26), so assert
+            # the head + tail tokens both render rather than the unbroken string.
+            assert "Survey the" in tree_body
+            assert "landscape" in tree_body
             toasts = "\n".join(toast_messages(app))
             assert "staged" in toasts
 
@@ -1879,7 +1888,9 @@ def test_build_tree_nodes_nests_answering_claims_under_their_question() -> None:
     kinds = [node.kind for node in nodes]
     assert kinds == [NodeKind.ROUND, NodeKind.QUESTION, NodeKind.CLAIM]
     claim_node = nodes[2]
-    assert claim_node.depth == 3  # one indent deeper than the question
+    # W26: the questions group hoisted to depth 0, so the question is depth 1
+    # and the claim leaf one indent deeper at depth 2.
+    assert claim_node.depth == 2
     assert claim_node.claim_status is ClaimStatus.SUPPORTED
     assert claim_node.label == "Implied vol surface is downward sloping in strike"
 
@@ -1888,16 +1899,19 @@ def test_build_tree_nodes_campaign_and_questions_emit_both_rounds() -> None:
     """A campaign plus open questions emit the campaign round AND questions round."""
     nodes = build_tree_nodes((_campaign_row(),), (_question(),))
     rounds = [node for node in nodes if node.kind is NodeKind.ROUND]
-    # The default question is OPEN, so both rounds classify as running.
+    # The ACTIVE campaign's round classifies as running off the OPEN question;
+    # the scope-wide questions group carries the aggregate running phrase.
     assert {node.label for node in rounds} == {
         "round running",
-        "round running -- questions",
+        "scope questions -- running",
     }
-    # The campaign-owned round carries the campaign id; the questions round does not.
+    # The campaign-owned round carries the campaign id; the scope questions
+    # group is a scope root, so it carries none.
     campaign_round = next(node for node in rounds if node.label == "round running")
-    questions_round = next(node for node in rounds if node.label == "round running -- questions")
+    questions_round = next(node for node in rounds if node.label == "scope questions -- running")
     assert campaign_round.campaign_id == "RC-0001"
     assert questions_round.campaign_id is None
+    assert questions_round.depth == 0
 
 
 def test_render_tree_renders_per_status_question_sigils() -> None:
@@ -1962,20 +1976,24 @@ def test_research_board_renders_question_tree_with_nested_claims(tmp_path: Path)
             assert isinstance(pane, ResearchBoardModeScreen)
             tree_body = str(pane.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
             lines = tree_body.splitlines()
-            # The only question is ANSWERED, so the round classifies as saturated.
-            round_label = "round saturated -- questions"
-            question_label = "Which curve model fits the short tenor"
-            claim_label = "Implied vol surface is downward sloping in strike"
-            round_line = next(line for line in lines if round_label in line)
-            question_line = next(line for line in lines if question_label in line)
-            claim_line = next(line for line in lines if claim_label in line)
-            # The claim label is indented deeper than its question label, which is
-            # deeper than the round label -- the round > questions > claims spine.
-            # Compare label column position so the selection marker (a fixed-width
-            # prefix on the cursor row) never skews the measured indent.
-            round_col = round_line.index(round_label)
-            question_col = question_line.index(question_label)
-            claim_col = claim_line.index(claim_label)
+            # The only question is ANSWERED, so the scope group classifies as
+            # saturated (the W26 scope-level questions label). Long titles may
+            # hang-wrap in the narrow live pane, so key each row off a distinctive
+            # LEADING token that stays on the node's own row.
+            round_token = "scope questions"
+            question_token = "Which curve"
+            claim_token = "Implied vol"
+            round_line = next(line for line in lines if round_token in line)
+            question_line = next(line for line in lines if question_token in line)
+            claim_line = next(line for line in lines if claim_token in line)
+            # The claim token is indented deeper than its question token, which is
+            # deeper than the round token -- the scope-questions > question > claim
+            # spine (W26 depths 0 > 1 > 2). Compare token column position so the
+            # selection marker (a fixed-width prefix on the cursor row) never skews
+            # the measured indent.
+            round_col = round_line.index(round_token)
+            question_col = question_line.index(question_token)
+            claim_col = claim_line.index(claim_token)
             assert round_col < question_col < claim_col
 
     asyncio.run(body())
