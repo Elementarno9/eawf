@@ -76,7 +76,7 @@ _LIFECYCLE_ASCII: dict[Sigil, str] = {
 # equal the SOURCE ``_CHROME`` table, so a future role lands red until ratified.
 _CHROME_UNICODE: dict[str, str] = {
     "dispatch": "\u276f",
-    "gate": "\u2394",
+    "gate": "\u25c8",
     "attention": "\u25b3",
     "harmony": "\u2248",
     "overview": "\u2261",

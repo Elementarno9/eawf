@@ -112,7 +112,9 @@ _LIFECYCLE: dict[Sigil, tuple[str, str]] = {
 #: Chrome / action shapes: role string -> ``(unicode, ascii)``. The
 #: unicode column uses ``\uXXXX`` escapes to keep the source ASCII-clean;
 #: the rendered marks are dispatch=heavy-right-angle-quote,
-#: gate=square-with-rounded-corners-lozenge, attention=up-triangle,
+#: gate=white-diamond-containing-black-small-diamond (a framed reader/detail
+#: mark that renders in JetBrainsMono Nerd Font, unlike the former U+2394
+#: software-function lozenge which fell back to tofu), attention=up-triangle,
 #: harmony=almost-equal, overview=identical-to (triple bar),
 #: runtime=dollar, check_on=square-with-fill, check_off=hollow-square,
 #: brand=fisheye (the leading brand mark before the ``E\u00e4`` wordmark, the
@@ -131,7 +133,7 @@ _LIFECYCLE: dict[Sigil, tuple[str, str]] = {
 #: ``<``).
 _CHROME: dict[str, tuple[str, str]] = {
     "dispatch": ("\u276f", ">"),  # heavy right-pointing angle quote
-    "gate": ("\u2394", "[]"),  # software-function / lozenge
+    "gate": ("\u25c8", "[]"),  # white diamond containing small diamond (framed reader mark)
     "attention": ("\u25b3", "!"),  # white up-pointing triangle
     "harmony": ("\u2248", "~"),  # almost equal to
     "overview": ("\u2261", "="),  # identical to (triple bar)
