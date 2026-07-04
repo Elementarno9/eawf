@@ -129,6 +129,11 @@ _EXEMPTIONS: dict[tuple[str, str], str] = {
     ("research_board", _UP_DOWN): (
         "no research-campaign rows in the fixture state to move a selection over"
     ),
+    ("research_board", "Enter"): (
+        "no research-campaign rows in the fixture state; the empty-pane tree has no "
+        "claim node for Enter to zoom into the evidence reader (the populated "
+        "claim-open + non-claim-toast paths stay gated by the W04 modal tests)"
+    ),
     ("trust", _UP_DOWN): ("no trust-scorecard rows in the fixture state to move a selection over"),
     ("feed", _UP_DOWN): ("no live-feed event rows in the fixture state to move a selection over"),
     ("sandbox_events", _UP_DOWN): (
