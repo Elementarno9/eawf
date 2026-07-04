@@ -10874,6 +10874,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-13-A-P30-I20-W21-repair.md",
       "urn": "urn:eawf:v1:artifact:P30-I20-W21/ART-A-P30-I20-W21-repair"
     },
+    "ART-A-P30-I24-eval": {
+      "created_at": "2026-07-04T00:39:37.187395Z",
+      "id": "ART-A-P30-I24-eval",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-07-04-A-P30-I24-iter-close.md",
+      "urn": "urn:eawf:v1:artifact:P30-I24/ART-A-P30-I24-eval"
+    },
     "ART-A-P30-i20": {
       "created_at": "2026-07-02T14:24:46.869817Z",
       "id": "ART-A-P30-i20",
@@ -11564,6 +11574,17 @@
       "kind": "evaluation",
       "report_artifact_id": "ART-A-P30-I20-W21-repair",
       "scope_id": "P30-I20-W21",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A-P30-I24-eval": {
+      "check_results": [],
+      "created_at": "2026-07-04T00:39:37.805240Z",
+      "id": "A-P30-I24-eval",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A-P30-I24-eval",
+      "scope_id": "P30-I24",
       "status": "complete",
       "verdict": "pass"
     },
@@ -14049,7 +14070,7 @@
       "SES-20260703T161339Z-auditor-claude-code"
     ],
     "active_wave_ids": [],
-    "iter_id": "P30-I24",
+    "iter_id": null,
     "phase_id": "P30",
     "project_code": "EAWF",
     "track_id": null
@@ -28996,16 +29017,16 @@
       ]
     },
     "P30-I24": {
-      "audit_id": null,
+      "audit_id": "A-P30-I24-eval",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-07-04T01:00:06.589888Z",
       "description": null,
       "estimate_id": null,
       "id": "P30-I24",
       "intent": null,
       "opened_at": "2026-07-03T19:04:03.991814Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Redesign research board and fix evidence and watch TUI UX",
       "trigger": "none",
       "wave_ids": [
@@ -29431,6 +29452,17 @@
       "status": "active",
       "store_record_id": "MEM-P30-I23-close-A-P30-i23",
       "summary": "iter P30-I23 closed with audit A-P30-i23; waves closed=52; outcomes P30-I23-W01: CHANGELOG I21 fixed block committed; tests/lint/test_branch_backup.py added; phase branch pus... | P30-I23-W02: 8 Decision rows ratified (D-LOCK-SPLIT, D-RPC-TERMINAL, D-TEETH, D-EU-CAPTURE, D-I21-RATIFY, ... | P30-I23-W03: Close-RPC TimeoutError is terminal (typed DaemonMutationIndeterminate, exit 4, no in-process ...",
+      "tier": "working"
+    },
+    "MEM-P30-I24-close-A-P30-I24-eval": {
+      "confidence": "high",
+      "id": "MEM-P30-I24-close-A-P30-I24-eval",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-07-04T01:00:06.589888Z",
+      "scope_id": "P30-I24",
+      "status": "active",
+      "store_record_id": "MEM-P30-I24-close-A-P30-I24-eval",
+      "summary": "iter P30-I24 closed with audit A-P30-I24-eval; waves closed=11; outcomes P30-I24-W01: Tree interaction spine: panes can_focus=False so arrows drive select_prev/next, selected node... | P30-I24-W02: Campaign tree: campaigns are pickable top-level nodes with left/right collapse-expand and a r... | P30-I24-W03: Polymorphic center detail: campaign->stats, question->scoped best-answer+evidence, claim->sum...",
       "tier": "working"
     }
   },
@@ -30145,7 +30177,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-04T00:30:34.348359Z",
+  "updated_at": "2026-07-04T01:00:06.590194Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
