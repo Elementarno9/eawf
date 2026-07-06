@@ -494,6 +494,39 @@ def test_leave_zoom_single_finished_session_returns_to_picker(
     asyncio.run(body())
 
 
+def test_leave_zoom_single_active_session_returns_to_picker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Esc out of a lone LIVE-session zoom steps back to the picker, not Feed.
+
+    A single still-active session auto-zooms on mount; Esc returns to the
+    one-row roster so the operator lands on the mode's own list rather than
+    being thrown to the feed while an agent is still streaming.
+    """
+    state = _state(sessions={"S-1": _session("S-1", status=AgentSessionStatus.ACTIVE)})
+    state_path = _write_state(tmp_path, state)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            assert pane.query(f"#{WATCH_HEADER_ID}"), "expected the auto-zoom on mount"
+            assert not pane.query(SessionPicker)
+            await pilot.press("escape")
+            await settle_screen(pilot)
+            # Live-stream Esc lands on the browsable picker; NOT the feed.
+            assert pane.query(SessionPicker), "Esc should return to the picker"
+            assert app.current_mode != "feed"
+
+    asyncio.run(body())
+
+
 def test_leave_zoom_no_sessions_falls_back_to_feed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

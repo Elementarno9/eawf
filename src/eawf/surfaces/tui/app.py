@@ -194,7 +194,7 @@ def render_pane_crash_frame(widget_name: str, *, mode: str = "unicode") -> str:
     """
     mark = escape_markup(glyph(Sigil.FAILED, mode=mode))
     safe_name = escape_markup(widget_name)
-    reassure = PANE_CRASH_REASSURE.format(widget=safe_name)
+    reassure = f"{safe_name} raised mid-paint. Your work is safe -- the daemon kept running."
     return "\n".join(
         [
             f"[$err]{mark} {PANE_CRASH_HEADLINE}[/]",

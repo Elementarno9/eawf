@@ -1075,9 +1075,7 @@ class OperatorNoteModal(ModalScreen["str | None"]):
         """
         note = self.query_one(f"#{self.NOTE_INPUT_ID}", Input).value.strip()
         if not note:
-            self.query_one(f"#{self.ERROR_ID}", Static).update(
-                self.EMPTY_NOTICE_TEMPLATE.format(noun=self._noun)
-            )
+            self.query_one(f"#{self.ERROR_ID}", Static).update(f"{self._noun} cannot be empty")
             return
         logger.info(f"operator_note commit noun={self._noun!r} chars={len(note)}")
         self.dismiss(note)
@@ -3353,7 +3351,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         """
         if note is None:
             return
-        self._set_action(f"[$muted]{_CHANNEL_PENDING_TEMPLATE.format(verb=verb)}[/]", pending=True)
+        self._set_action(f"[$muted]{verb}: sending...[/]", pending=True)
         self.run_worker(
             self._channel_worker(
                 note=note,
@@ -3432,7 +3430,7 @@ class ResearchBoardModeScreen(ScopeScreen):
             A content-markup result line describing the channel outcome.
         """
         if not self._daemon_available():
-            return f"[$warn]{_CHANNEL_NO_DAEMON_TEMPLATE.format(verb=verb)}[/]"
+            return f"[$warn]{verb}: daemon unavailable -- request not issued[/]"
         from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
         call_params: dict[str, object] = {params_key: note}
@@ -3450,7 +3448,7 @@ class ResearchBoardModeScreen(ScopeScreen):
             )
         except (OSError, RuntimeError, TimeoutError) as exc:
             logger.debug(f"_issue_channel daemon_fallback verb={verb} cause={exc!r}")
-            return f"[$warn]{_CHANNEL_NO_DAEMON_TEMPLATE.format(verb=verb)}[/]"
+            return f"[$warn]{verb}: daemon unavailable -- request not issued[/]"
         return f"[$ok]{verb}: sent[/]"
 
     def action_cancel_campaign(self) -> None:
@@ -3645,7 +3643,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         Returns:
             A content-markup result line describing the query outcome.
         """
-        unavailable = _UNAVAILABLE_TEMPLATE.format(verb=verb)
+        unavailable = f"{verb}: daemon unavailable -- request not issued"
         if not self._daemon_available():
             return f"[$warn]{unavailable}[/]"
         from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError

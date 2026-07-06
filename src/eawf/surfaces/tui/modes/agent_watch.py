@@ -910,7 +910,10 @@ def frame_replay_lines(lines: list[str], wave_status: WaveStatus | None) -> list
     """
     if wave_status is None or wave_status not in _TERMINAL_NOT_CLOSED_WAVE_STATUSES:
         return list(lines)
-    banner = WATCH_REPLAY_VERDICT_BANNER.format(status=wave_status.value)
+    banner = (
+        f"[wave {wave_status.value}] the replayed output below is the agent's own words, "
+        "not the recorded verdict"
+    )
     return [banner, *lines]
 
 
@@ -2751,7 +2754,7 @@ class AgentWatchModeScreen(ScopeScreen):
             self._set_result(f"[$warn]{CANCEL_NO_TARGET}[/]")
             return
         if target.status is not AgentSessionStatus.ACTIVE:
-            line = CANCEL_NOT_ACTIVE_TEMPLATE.format(status=target.status.value)
+            line = f"cancel: session already {target.status.value} -- nothing to stop"
             self._set_result(f"[$muted]{line}[/]")
             logger.info(f"action_cancel_session not_active status={target.status.value}")
             return
@@ -2790,7 +2793,7 @@ class AgentWatchModeScreen(ScopeScreen):
             self._set_result(f"[$warn]{PAUSE_NO_TARGET}[/]")
             return
         if target.status is not AgentSessionStatus.ACTIVE:
-            line = PAUSE_NOT_ACTIVE_TEMPLATE.format(status=target.status.value)
+            line = f"pause: session already {target.status.value} -- nothing to pause"
             self._set_result(f"[$muted]{line}[/]")
             logger.info(f"action_pause_session not_active status={target.status.value}")
             return
@@ -2851,32 +2854,29 @@ class AgentWatchModeScreen(ScopeScreen):
     _LEAVE_MODE: ClassVar[str] = "feed"
 
     def action_leave_zoom(self) -> None:
-        """Leave the session zoom (``Esc``) — back to the roster, else Feed.
+        """Leave the agent view (``Esc``) — back to the roster, else Feed.
 
-        A zoom steps back OUT to the browsable roster whenever there is one
-        worth stepping to: when nothing is live and at least ONE executor
-        session is on record (even a single finished session returns to a
-        one-row picker rather than falling straight to another mode), OR when
-        two-or-more sessions exist so the operator can pick a DIFFERENT agent
-        even while one is still ACTIVE -- the never-trapped guarantee. Only when
-        there is truly nothing to browse -- a lone live stream in flight, or no
-        session on record at all -- does it fall back to the whole-fleet
-        :data:`_LEAVE_MODE` via the App's ``switch_mode`` seam. Degrades to a
-        quiet no-op under a bare harness whose App exposes no ``switch_mode``
-        (the binding stays live for affordance parity).
+        Esc steps OUT of any agent-viewing body -- the single-session zoom, the
+        lane-parity grid, or the watch grid -- back to the browsable session
+        roster whenever at least ONE executor session is on record (even a lone
+        live stream returns to a one-row picker rather than being thrown to
+        another mode). The roster is the mode's own list, so Esc never leaves
+        the operator on a different mode while there is still an agent to browse
+        -- the never-trapped guarantee. Only when the body is already the roster
+        itself, or there is no executor session on record at all, does Esc fall
+        back to the whole-fleet :data:`_LEAVE_MODE` via the App's ``switch_mode``
+        seam. Degrades to a quiet no-op under a bare harness whose App exposes no
+        ``switch_mode`` (the binding stays live for affordance parity).
         """
         state = self._current_state()
         picker_rows = session_picker_rows(state)
-        idle = not active_executor_sessions(state) and not lane_grid_rows(state)
-        # Step OUT of a zoom back to the browsable roster whenever there is a
-        # roster worth stepping to: either nothing is live and >=1 session is on
-        # record (the idle replay path), OR two-or-more sessions exist so the
-        # operator can pick a DIFFERENT agent even while one is still ACTIVE
-        # (never trapped). ``_force_picker`` mounts the picker past the
-        # no-active-sessions auto-mount guard for the still-live case.
-        if self._body_case == "zoom" and (
-            (idle and len(picker_rows) >= 1) or len(picker_rows) >= 2
-        ):
+        # Step back to the roster from ANY agent-viewing body (zoom / lanes /
+        # grid) whenever there is a session to browse -- a lone live stream
+        # returns to a one-row picker, not straight to another mode.
+        # ``_force_picker`` mounts the picker past the no-active-sessions
+        # auto-mount guard for the still-live case. Only the roster itself
+        # (``_body_case == "picker"``) or an empty record falls through to Feed.
+        if self._body_case in ("zoom", "lanes", "grid") and picker_rows:
             self._zoom_pending = False
             self._return_to_picker = True
             self._force_picker = True
@@ -3085,7 +3085,7 @@ class AgentWatchModeScreen(ScopeScreen):
         """
         target = self.target
         if target is not None and target.status is not AgentSessionStatus.ACTIVE:
-            notice = WATCH_REPLAY_TEMPLATE.format(status=target.status.value)
+            notice = f"session {target.status.value} -- replaying its recorded stream"
             return f"[$muted]{notice}[/]"
         return f"{cancel_mark(mode=self._render_mode())} [$muted]{CANCEL_IDLE}[/]"
 
