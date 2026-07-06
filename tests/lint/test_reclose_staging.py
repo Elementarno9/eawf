@@ -64,12 +64,29 @@ def test_runbook_drafts_the_exact_subject_and_descope() -> None:
     assert "de-scoped" in body or "de-scope" in body
 
 
-def test_repo_census_is_exactly_one_pending_wave() -> None:
-    """CR-02: the only PENDING wave left is the re-close wave itself."""
-    pending = [
-        wave_id for wave_id, wave in _state()["waves"].items() if wave.get("status") == "pending"
+def test_repo_census_has_no_stray_pending_waves() -> None:
+    """CR-02: the re-close wave stays PENDING; no stray PENDING wave outside the repair iter.
+
+    The strict pre-I25 form asserted P30-I21-W22 was the *only* PENDING wave --
+    the "staged to ship" precondition. The v0.6.0 live smoke reopened the ship
+    path with the P30-I25 headless-lifecycle repair iter, so its still-open
+    waves are legitimately PENDING too. The invariant that still guards the ship
+    gate: no PENDING wave is *stray* (outside the re-close wave and the ACTIVE
+    iter), and the re-close wave is still on record to carry the phase close.
+    When I25 closes its waves leave the PENDING set and only P30-I21-W22 remains
+    -- the original strict census re-emerges without any edit here.
+    """
+    state = _state()
+    active_iter = state["current"].get("iter_id")
+    waves = state["waves"]
+    pending = [wave_id for wave_id, wave in waves.items() if wave.get("status") == "pending"]
+    assert "P30-I21-W22" in pending, "the re-close wave must stay PENDING until the phase close"
+    stray = [
+        wave_id
+        for wave_id in pending
+        if wave_id != "P30-I21-W22" and waves[wave_id].get("iter_id") != active_iter
     ]
-    assert pending == ["P30-I21-W22"], f"unexpected pending census: {pending}"
+    assert not stray, f"stray PENDING waves outside the ACTIVE repair iter {active_iter!r}: {stray}"
 
 
 def test_changelog_carries_the_release_section() -> None:

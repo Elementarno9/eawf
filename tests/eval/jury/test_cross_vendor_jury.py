@@ -603,33 +603,44 @@ class _SleepingSpawn:
     def __init__(self, runtime: str, delay: float) -> None:
         self.runtime = runtime
         self.delay = delay
+        self.started_at: float | None = None
+        self.ended_at: float | None = None
 
     async def __call__(self, prompt: str) -> SpawnResult:
+        self.started_at = time.monotonic()
         await asyncio.sleep(self.delay)
+        self.ended_at = time.monotonic()
         return _spawn_result(_auditor_body_json(verdict="pass"), runtime=self.runtime)
+
+    def interval(self) -> tuple[float, float]:
+        if self.started_at is None or self.ended_at is None:
+            raise AssertionError(f"spawn for {self.runtime!r} was not called")
+        return self.started_at, self.ended_at
 
 
 def test_convene_cross_vendor_jury_runs_jurors_concurrently(tmp_path: Path) -> None:
-    """CR-02: three jurors sleeping t complete in wall time < 2t.
+    """CR-02: three jurors sleeping t overlap instead of running sequentially.
 
     The juror loop gathers concurrently, so jury wall time is max(juror),
-    not sum(juror) -- three 0.4s jurors must finish well under the 1.2s a
-    sequential loop would take (asserted < 0.8s = 2t).
+    not sum(juror). The assertion uses recorded spawn intervals rather than
+    process wall time, so suite load cannot make a concurrent run look
+    sequential.
     """
     delay = 0.4
-    factory = _RecordingFactory(
-        {
-            "claude-code": _SleepingSpawn("claude-code", delay),  # type: ignore[dict-item]
-            "codex": _SleepingSpawn("codex", delay),  # type: ignore[dict-item]
-            "opencode": _SleepingSpawn("opencode", delay),  # type: ignore[dict-item]
-        }
-    )
-    started = time.monotonic()
+    stubs = {
+        "claude-code": _SleepingSpawn("claude-code", delay),
+        "codex": _SleepingSpawn("codex", delay),
+        "opencode": _SleepingSpawn("opencode", delay),
+    }
+    factory = _RecordingFactory(dict(stubs))  # type: ignore[arg-type]
     result, _state, _path = _convene(tmp_path, factory=factory)
-    wall = time.monotonic() - started
 
     assert result.outcome.value == "pass"
-    assert wall < 2 * delay, f"jurors ran sequentially: wall={wall:.2f}s"
+
+    intervals = [stub.interval() for stub in stubs.values()]
+    latest_start = max(start for start, _end in intervals)
+    earliest_end = min(end for _start, end in intervals)
+    assert latest_start < earliest_end, "juror spawn intervals did not overlap"
 
 
 def test_daemon_jury_spawn_factory_passes_finite_timeout(
