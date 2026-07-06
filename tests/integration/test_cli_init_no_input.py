@@ -20,6 +20,7 @@ from click.testing import Result
 from typer.testing import CliRunner
 
 from eawf.kernel.config.schema import EstimationConfig
+from eawf.kernel.migrations import current_target_version
 from eawf.kernel.state.models import State
 from eawf.surfaces.cli.app import app
 from eawf.workflow.estimation.buckets import BUCKET_EU
@@ -50,7 +51,7 @@ def test_cli_init_no_input_creates_state_and_config(tmp_path: Path) -> None:
 
     state = json.loads(state_path.read_text(encoding="utf-8"))
     State.model_validate(state)
-    assert state["schema_version"] == "1.0"
+    assert state["schema_version"] == current_target_version()
     assert state["scope_kind"] == "repo"
     assert state["current"]["project_code"] == "DEMO"
     assert state["goals"]["G01"]["scope_id"] == "DEMO"

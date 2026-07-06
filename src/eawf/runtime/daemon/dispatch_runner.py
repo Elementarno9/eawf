@@ -214,6 +214,11 @@ class SpawnFailureClass(StrEnum):
     SUBPROCESS_OOM = "subprocess_oom"
 
 
+#: POSIX SIGKILL signum. ``signal.SIGKILL`` is POSIX-only (absent on Windows),
+#: so code paths below use this module constant instead of reading the signal
+#: module directly at classification time.
+_SIGKILL_SIGNUM = int(getattr(signal, "SIGKILL", 9))
+
 #: Exit status of a subprocess reaped by SIGKILL on the POSIX shell convention
 #: (``128 + signal``). The kernel OOM-killer delivers SIGKILL, so a child the
 #: OOM-killer reaped surfaces this exit code when the parent reports the signal
@@ -222,7 +227,7 @@ class SpawnFailureClass(StrEnum):
 #: through ``getattr`` with the fixed POSIX signal number 9 as the fallback --
 #: this keeps the constant identical (137) on every platform while letting the
 #: daemon module graph import on Windows where the OOM-killer convention is moot.
-_SIGKILL_EXIT_STATUS = 128 + int(getattr(signal, "SIGKILL", 9))
+_SIGKILL_EXIT_STATUS = 128 + _SIGKILL_SIGNUM
 
 #: OSError errno values that mark a HARD launch failure -- the agent CLI binary
 #: is missing (``ENOENT``) or not executable / not permitted (``EACCES`` /
@@ -265,7 +270,7 @@ def classify_spawn_failure(exc: RuntimeSpawnError) -> SpawnFailureClass:
     if isinstance(cause, OSError) and cause.errno in _LAUNCH_FAILURE_ERRNOS:
         return SpawnFailureClass.RUNTIME_SPAWN_ERROR
     status = exc.exit_status
-    if status is not None and status in {-int(signal.SIGKILL), _SIGKILL_EXIT_STATUS}:
+    if status is not None and status in {-_SIGKILL_SIGNUM, _SIGKILL_EXIT_STATUS}:
         return SpawnFailureClass.SUBPROCESS_OOM
     return SpawnFailureClass.RECOVERABLE
 

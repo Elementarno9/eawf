@@ -70,6 +70,7 @@ from typing import TYPE_CHECKING, Any
 import orjson
 import typer
 
+from eawf.kernel.migrations import current_target_version
 from eawf.kernel.state.enums import (
     ScopeKind,
 )
@@ -185,7 +186,7 @@ _commit_mutation = commit_mutation
 def _empty_state_dict(*, project_code: str, project_payload: dict[str, Any]) -> dict[str, Any]:
     """Build a minimal-but-valid state.json payload for ``project init``."""
     return {
-        "schema_version": "1.0",
+        "schema_version": current_target_version(),
         "scope_kind": ScopeKind.REPO.value,
         "urn": build_urn("state", owner=project_code),
         "updated_at": datetime.now(UTC).isoformat(),

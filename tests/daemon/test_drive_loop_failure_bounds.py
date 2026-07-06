@@ -285,6 +285,19 @@ def test_classify_spawn_failure_sigkill_exit_is_subprocess_oom() -> None:
     assert classify_spawn_failure(shell) is SpawnFailureClass.SUBPROCESS_OOM
 
 
+def test_classify_spawn_failure_missing_sigkill_attr_uses_posix_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Windows-like absence of signal.SIGKILL still classifies without crashing."""
+    monkeypatch.delattr(signal, "SIGKILL", raising=False)
+
+    negative = RuntimeSpawnError("killed", exit_status=-9)
+    shell = RuntimeSpawnError("killed", exit_status=137)
+
+    assert classify_spawn_failure(negative) is SpawnFailureClass.SUBPROCESS_OOM
+    assert classify_spawn_failure(shell) is SpawnFailureClass.SUBPROCESS_OOM
+
+
 def test_classify_spawn_failure_ordinary_nonzero_exit_is_recoverable() -> None:
     """An ordinary non-zero exit (NOT an errno) classifies RECOVERABLE, not a launch failure.
 

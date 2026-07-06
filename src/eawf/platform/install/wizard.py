@@ -62,6 +62,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from eawf.kernel.config.defaults import CONFIG_SCHEMA_VERSION
 from eawf.kernel.config.profile import _atomic_write_yaml, _materialise_state_keys
 from eawf.kernel.config.schema import BucketEstimateOverride
+from eawf.kernel.migrations import current_target_version
 from eawf.kernel.state.enums import GoalStatus, ProjectStatus, ScopeKind
 from eawf.kernel.state.ids import RE_PROJECT_CODE
 from eawf.kernel.state.models import Goal, Project
@@ -394,7 +395,7 @@ def _build_initial_state(*, project_code: str, project_title: str) -> dict[str, 
     now = datetime.now(UTC)
     timestamp = now.isoformat()
     return {
-        "schema_version": "1.0",
+        "schema_version": current_target_version(),
         "scope_kind": ScopeKind.REPO.value,
         "urn": build_urn("state", owner=project_code),
         "updated_at": timestamp,
