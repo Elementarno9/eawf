@@ -625,7 +625,7 @@ def build_subagent_spec(
         ),
     )
     logger.debug(
-        f"build_subagent_spec wave={wave.id!r} scope={scope_id!r} "
+        f"build_subagent_spec wave={wave.id!r} scope_id={scope_id!r} "
         f"deps={len(spec.dependencies)} decisions={len(spec.decisions)} "
         f"refs={len(spec.references)} role_contract={spec.role_contract is not None}"
     )

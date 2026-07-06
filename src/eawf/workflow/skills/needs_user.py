@@ -270,7 +270,9 @@ def record_pause(
     append_envelope(store_path(state_path, StoreKind.EVENT), envelope)
     if publish is not None:
         publish(envelope)
-    logger.info(f"record_pause scope={scope_id!r} pause_urn={pause_urn!r} urgency={urgency.value}")
+    logger.info(
+        f"record_pause scope_id={scope_id!r} pause_urn={pause_urn!r} urgency={urgency.value}"
+    )
     return pause_urn
 
 

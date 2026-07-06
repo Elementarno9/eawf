@@ -113,7 +113,7 @@ def bridge_clarify_to_pause(
         publish=publish,
     )
     logger.info(
-        f"bridge_clarify_to_pause scope={scope_id!r} pause_urn={pause_urn!r} "
+        f"bridge_clarify_to_pause scope_id={scope_id!r} pause_urn={pause_urn!r} "
         f"urgency={proposal.urgency.value}"
     )
     return pause_urn
