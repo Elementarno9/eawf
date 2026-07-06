@@ -492,6 +492,12 @@ class SessionAttempt(_StrictModel):
             charged on this attempt (optional).
         input_tokens: Non-cached input tokens (optional).
         output_tokens: Output tokens (optional).
+        cost_usd: Priced USD cost of THIS attempt's spawn (optional). A
+            headless spawn stamps its own priced cost here so a wave with
+            several genuine dispatch attempts surfaces per-attempt cost,
+            rather than only the single wave-level ``runtime_latest``
+            snapshot. ``None`` for a legacy attempt captured before this
+            field existed (the cost tab then falls back to the wave snapshot).
     """
 
     attempt: Annotated[int, Field(ge=1)]
@@ -506,6 +512,7 @@ class SessionAttempt(_StrictModel):
     cache_read_input_tokens: int | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
+    cost_usd: Annotated[float, Field(ge=0.0)] | None = None
 
 
 class DispatchAnnotation(_StrictModel):

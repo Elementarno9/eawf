@@ -388,6 +388,85 @@ def test_wave_cost_rollup_falls_back_to_runtime_snapshot(tmp_path: Path) -> None
     assert rollup.cost_usd == Decimal("0.104434")
 
 
+def test_runtime_snapshot_rollup_surfaces_all_attempts(tmp_path: Path) -> None:
+    """Every session attempt gets a row; only the latest is priced from the snapshot.
+
+    A wave re-dispatched N times carries N session attempts but a single
+    baseline/latest snapshot pair (one whole-wave cost delta). The runtime
+    fallback must list all N attempts -- so the table shows the full dispatch
+    history, not just the last try -- pricing only the latest attempt and
+    leaving the earlier attempts un-priced (``$0``), with the aggregate equal to
+    the single stored delta rather than a fabricated sum.
+    """
+    state = _load(_PHASE_ITER_WAVE)
+    wave_id = next(iter(state.waves))
+    state = _wave_with_sessions(state, wave_id, count=3)
+    state = _wave_with_runtime(state, wave_id, cost=0.104434)
+    state_path = tmp_path / ".ea" / "state.json"
+    state_path.parent.mkdir(parents=True)
+    rollup = wave_cost_rollup_for_wave(state, wave_id, state_path)
+    assert rollup is not None
+    # All three attempts surface, in ascending order.
+    assert [a.attempt for a in rollup.attempts] == [1, 2, 3]
+    # Only the latest attempt is priced; the earlier two are un-priced rows.
+    assert rollup.attempts[2].cost_usd == Decimal("0.104434")
+    assert rollup.attempts[0].cost_usd == Decimal("0")
+    assert rollup.attempts[1].cost_usd == Decimal("0")
+    assert rollup.attempts[0].input_tokens == 0
+    # The aggregate stays equal to the single stored delta, not a sum.
+    assert rollup.cost_usd == Decimal("0.104434")
+
+
+def test_runtime_snapshot_rollup_prices_each_attempt_from_its_own_cost(tmp_path: Path) -> None:
+    """Per-attempt ``SessionAttempt.cost_usd`` prices each row distinctly; aggregate sums.
+
+    A wave dispatched twice, where each attempt stamped its OWN priced cost,
+    surfaces both figures on the cost tab (not one wave-level snapshot
+    attributed to the latest). The aggregate is the sum of the two attempts.
+    """
+    state = _load(_PHASE_ITER_WAVE)
+    wave_id = next(iter(state.waves))
+    sessions = {
+        1: SessionAttempt(
+            attempt=1,
+            runtime="codex",
+            session_id="sess-1",
+            session_log_handle="urn:eawf:v1:session-log:codex:sess-1",
+            started_at=_NOW,
+            ended_at=_NOW + timedelta(minutes=3),
+            input_tokens=100,
+            output_tokens=50,
+            cost_usd=0.20,
+        ),
+        2: SessionAttempt(
+            attempt=2,
+            runtime="codex",
+            session_id="sess-2",
+            session_log_handle="urn:eawf:v1:session-log:codex:sess-2",
+            started_at=_NOW + timedelta(minutes=4),
+            ended_at=_NOW + timedelta(minutes=6),
+            input_tokens=80,
+            output_tokens=40,
+            cost_usd=0.15,
+        ),
+    }
+    rebuilt = state.waves[wave_id].model_copy(update={"sessions": sessions})
+    new_waves = dict(state.waves)
+    new_waves[wave_id] = rebuilt
+    state = state.model_copy(update={"waves": new_waves})
+    state_path = tmp_path / ".ea" / "state.json"
+    state_path.parent.mkdir(parents=True)
+    rollup = wave_cost_rollup_for_wave(state, wave_id, state_path)
+    assert rollup is not None
+    assert [a.attempt for a in rollup.attempts] == [1, 2]
+    # Each attempt priced from its OWN cost_usd -- not one snapshot on the latest.
+    assert rollup.attempts[0].cost_usd == Decimal("0.2")
+    assert rollup.attempts[1].cost_usd == Decimal("0.15")
+    assert rollup.attempts[0].input_tokens == 100
+    # Aggregate = sum of both attempts.
+    assert rollup.cost_usd == Decimal("0.35")
+
+
 def test_telemetry_session_wins_over_runtime_snapshot(tmp_path: Path) -> None:
     """A joined telemetry session is authoritative; the runtime fallback never double-counts.
 

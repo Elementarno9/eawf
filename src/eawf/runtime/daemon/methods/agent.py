@@ -815,6 +815,10 @@ def _persist_live_session_attempt(
             cache_read_input_tokens=spawn_result.cache_read_input_tokens,
             input_tokens=spawn_result.input_tokens,
             output_tokens=spawn_result.output_tokens,
+            # Stamp THIS attempt's own priced cost so a wave with several
+            # genuine dispatch attempts surfaces per-attempt cost, not just the
+            # single wave-level runtime snapshot (which credits one spawn).
+            cost_usd=float(price_spawn_result(spawn_result).cost_usd),
         )
         wave.sessions[attempt] = session_attempt
         wave.dispatch_history.append(annotation)

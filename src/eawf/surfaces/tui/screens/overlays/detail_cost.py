@@ -51,7 +51,7 @@ from eawf.surfaces.tui.widgets.eu_bar import (
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 if TYPE_CHECKING:
-    from eawf.kernel.state.models import State, Wave
+    from eawf.kernel.state.models import SessionAttempt, State, Wave
 
 logger = logging.getLogger(__name__)
 
@@ -410,31 +410,41 @@ def _telemetry_session_rollup(wave: Wave, state_path: Path) -> WaveSessionRollup
 
 
 def _runtime_snapshot_rollup(wave: Wave) -> WaveSessionRollup | None:
-    """Build a cost rollup from the wave's runtime snapshot (W50-bound cost).
+    """Build a cost rollup from the wave's stored spawn cost (no telemetry DB).
 
-    A headless spawn's priced cost is stamped onto ``wave.runtime_latest`` at
-    close, never a per-runtime session log the telemetry projector parses, so
-    the telemetry join finds no metered session and the tab would fold to
-    :data:`NO_METERED_SESSIONS` despite a real, stored cost. This surfaces that
-    stored cost as one synthetic attempt attributed to the wave's latest
-    session so the tab quotes the priced figure instead of a misleading ``$0``.
+    A headless spawn's priced cost never reaches the telemetry projector, so
+    the tab would fold to :data:`NO_METERED_SESSIONS` despite a real, stored
+    cost. Two stored sources back the fallback, in priority order:
 
-    Returns ``None`` when no runtime cost is captured (no session attempt, no
-    runtime baseline/latest, or a zero delta), so a genuinely un-metered wave
-    still folds to the honest-absence line -- the surfaced cost is always a
-    real stored figure, never a fabricated zero.
+    - **Per-attempt** (:attr:`~eawf.kernel.state.models.SessionAttempt.cost_usd`):
+      each genuine dispatch attempt stamps its own priced cost, so every
+      attempt row carries its OWN figure and the aggregate is their sum. This
+      is the honest per-attempt view for a wave dispatched more than once.
+    - **Wave snapshot** (``runtime_baseline`` / ``runtime_latest``): the legacy
+      single whole-wave delta for a wave whose attempts predate per-attempt
+      capture. Only the latest attempt is priced from it; earlier attempts
+      render un-priced (so every dispatch still shows, honestly marked as not
+      separately metered).
+
+    Returns ``None`` when no cost is captured either way (so a genuinely
+    un-metered wave folds to the honest-absence line) -- the surfaced cost is
+    always a real stored figure, never a fabricated zero.
     """
     from eawf.workflow.lifecycle.wave import compute_runtime_delta
 
     if not wave.sessions:
         return None
+    # Per-attempt path: any attempt carrying its own priced cost wins.
+    if any(sess.cost_usd is not None for sess in wave.sessions.values()):
+        rows = [_attempt_row_from_session(no, wave.sessions[no]) for no in sorted(wave.sessions)]
+        return _aggregate_rows(wave.id, rows)
+    # Legacy wave-snapshot fallback: one delta, priced onto the latest attempt.
     delta = compute_runtime_delta(
         wave.runtime_baseline, wave.runtime_latest, eu_minutes=DEFAULT_EU_MINUTES
     )
     if delta is None or delta.actual_cost_usd <= 0.0:
         return None
-    attempt_no = max(wave.sessions)
-    attempt = wave.sessions[attempt_no]
+    latest_no = max(wave.sessions)
     baseline = wave.runtime_baseline
     latest = wave.runtime_latest
 
@@ -443,28 +453,60 @@ def _runtime_snapshot_rollup(wave: Wave) -> WaveSessionRollup | None:
         now = getattr(latest, name, 0) or 0
         return max(0, int(now) - int(base))
 
-    row = WaveAttemptRollup(
+    rows = []
+    for attempt_no in sorted(wave.sessions):
+        attempt = wave.sessions[attempt_no]
+        priced = attempt_no == latest_no
+        rows.append(
+            WaveAttemptRollup(
+                attempt=attempt_no,
+                runtime=attempt.runtime,
+                session_id=attempt.session_id,
+                duration_ms=(delta.api_duration_ms or None) if priced else None,
+                attention_eu=delta.elapsed_eu if priced else None,
+                input_tokens=_token_delta("input_tokens") if priced else 0,
+                output_tokens=_token_delta("output_tokens") if priced else 0,
+                cache_read_tokens=_token_delta("cache_read_input_tokens") if priced else 0,
+                cache_write_tokens=_token_delta("cache_creation_input_tokens") if priced else 0,
+                cost_usd=Decimal(str(delta.actual_cost_usd)) if priced else Decimal("0"),
+            )
+        )
+    return _aggregate_rows(wave.id, rows)
+
+
+def _attempt_row_from_session(attempt_no: int, sess: SessionAttempt) -> WaveAttemptRollup:
+    """Build one cost row from a session attempt's OWN captured figures."""
+    duration_ms: int | None = None
+    attention_eu: float | None = None
+    if sess.ended_at is not None:
+        duration_ms = max(0, int((sess.ended_at - sess.started_at).total_seconds() * 1000))
+        attention_eu = (duration_ms / 60_000.0) / DEFAULT_EU_MINUTES
+    return WaveAttemptRollup(
         attempt=attempt_no,
-        runtime=attempt.runtime,
-        session_id=attempt.session_id,
-        duration_ms=delta.api_duration_ms or None,
-        attention_eu=delta.elapsed_eu,
-        input_tokens=_token_delta("input_tokens"),
-        output_tokens=_token_delta("output_tokens"),
-        cache_read_tokens=_token_delta("cache_read_input_tokens"),
-        cache_write_tokens=_token_delta("cache_creation_input_tokens"),
-        cost_usd=Decimal(str(delta.actual_cost_usd)),
+        runtime=sess.runtime,
+        session_id=sess.session_id,
+        duration_ms=duration_ms,
+        attention_eu=attention_eu,
+        input_tokens=sess.input_tokens or 0,
+        output_tokens=sess.output_tokens or 0,
+        cache_read_tokens=sess.cache_read_input_tokens or 0,
+        cache_write_tokens=sess.cache_creation_input_tokens or 0,
+        cost_usd=Decimal(str(sess.cost_usd)) if sess.cost_usd is not None else Decimal("0"),
     )
+
+
+def _aggregate_rows(wave_id: str, rows: list[WaveAttemptRollup]) -> WaveSessionRollup:
+    """Fold per-attempt rows into a wave rollup summing every attempt's figures."""
     return WaveSessionRollup(
-        wave_id=wave.id,
-        attempts=[row],
-        duration_ms=row.duration_ms,
-        attention_eu=row.attention_eu,
-        input_tokens=row.input_tokens,
-        output_tokens=row.output_tokens,
-        cache_read_tokens=row.cache_read_tokens,
-        cache_write_tokens=row.cache_write_tokens,
-        cost_usd=row.cost_usd,
+        wave_id=wave_id,
+        attempts=rows,
+        duration_ms=sum((r.duration_ms or 0 for r in rows), 0) or None,
+        attention_eu=sum((r.attention_eu or 0.0 for r in rows), 0.0) or None,
+        input_tokens=sum(r.input_tokens for r in rows),
+        output_tokens=sum(r.output_tokens for r in rows),
+        cache_read_tokens=sum(r.cache_read_tokens for r in rows),
+        cache_write_tokens=sum(r.cache_write_tokens for r in rows),
+        cost_usd=sum((r.cost_usd for r in rows), Decimal("0")),
     )
 
 
