@@ -630,7 +630,7 @@ def _apply_add_question(
     )
     state.open_questions = questions
     logger.info(
-        f"_apply_add_question question={question_id!r} scope={scope_id!r} "
+        f"_apply_add_question question={question_id!r} scope_id={scope_id!r} "
         f"blocking={args.blocking} status={status.value}"
     )
     return AddQuestionResult(
@@ -1180,7 +1180,7 @@ async def _bind_researcher_body(
         )
     except LLMAssistError as exc:
         logger.info(
-            f"_bind_researcher_body scope={dispatch_scope} assist=failed "
+            f"_bind_researcher_body scope_id={dispatch_scope} assist=failed "
             f"attempts={exc.attempts} action=synth_blocked_body"
         )
         return ResearcherReportBody(

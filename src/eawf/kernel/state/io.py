@@ -434,7 +434,7 @@ def commit_mutation(
     append_envelope(events_path, envelope)
     wal.mark_fsynced(wal_dir, record_id)
     logger.info(
-        f"commit_mutation command={command!r} scope={scope_id!r} "
+        f"commit_mutation command={command!r} scope_id={scope_id!r} "
         f"before={before_version} after={after_version} record={record_id!r}"
     )
     # The daemon's background sweep loop never runs on the fallback path, so

@@ -1743,7 +1743,7 @@ def _append_close_evidence(
         )
         append_envelope(evidence_path, envelope)
         logger.info(
-            f"_append_close_evidence scope={record.scope_id!r} evidence_id={record.id!r} "
+            f"_append_close_evidence scope_id={record.scope_id!r} evidence_id={record.id!r} "
             f"evidence_kind={record.evidence_kind!r} status={record.status!r}"
         )
 
@@ -3163,7 +3163,7 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             ctx.last_event_id = envelope.id
 
             logger.info(
-                f"mutate ok mutation_kind={mutation.kind.value} scope={mutation.scope_id!r} "
+                f"mutate ok mutation_kind={mutation.kind.value} scope_id={mutation.scope_id!r} "
                 f"before={before_version} after={after_version} envelope_id={envelope.id!r}"
             )
 

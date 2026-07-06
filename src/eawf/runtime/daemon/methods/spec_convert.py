@@ -324,7 +324,7 @@ async def convert_legacy(ctx: MethodContext, params: dict[str, Any]) -> dict[str
 
     replay = _idempotent_replay(ctx, args.idempotency_key)
     if replay is not None:
-        logger.info(f"convert_legacy idempotent_replay scope={args.scope_id!r}")
+        logger.info(f"convert_legacy idempotent_replay scope_id={args.scope_id!r}")
         return replay
 
     state_path, event_path, wal_path = _resolve_mutator_paths(

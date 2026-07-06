@@ -303,7 +303,7 @@ def apply_memory_add(state: State, mutation: Mutation) -> None:
         tier=payload.tier,
         promoted_to_artifact_id=payload.promoted_to_artifact_id,
     )
-    logger.info(f"apply_memory_add id={payload.id!r} scope={payload.scope_id!r}")
+    logger.info(f"apply_memory_add id={payload.id!r} scope_id={payload.scope_id!r}")
 
 
 def apply_memory_update(state: State, mutation: Mutation) -> None:
