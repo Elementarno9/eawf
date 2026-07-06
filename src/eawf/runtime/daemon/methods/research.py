@@ -823,7 +823,7 @@ def reconcile_round_claims(
             )
             raised += 1
     logger.info(
-        f"reconcile_round_claims round={findings.round_number} scope={resolved_scope!r} "
+        f"reconcile_round_claims round={findings.round_number} scope_id={resolved_scope!r} "
         f"claims={len(written)} compacted={compacted} answered_questions={answered} "
         f"raised_clarifications={raised}"
     )
@@ -1225,7 +1225,7 @@ def _harden_researcher_body(
     if body.verdict is AgentReportVerdict.PASS and not body.evidence_refs:
         body = body.model_copy(update={"verdict": AgentReportVerdict.PASS_WITH_FOLLOWUPS})
         logger.info(
-            f"_harden_researcher_body scope={dispatch_scope} "
+            f"_harden_researcher_body scope_id={dispatch_scope} "
             "downgrade=uncited_pass verdict=pass-with-followups"
         )
 
@@ -1389,7 +1389,7 @@ async def _spawn_researcher_agent_end(
         # the finding and let the round proceed rather than aborting the whole
         # run. The session close + return below still run.
         logger.info(
-            f"_spawn_researcher_agent_end scope={dispatch_scope} "
+            f"_spawn_researcher_agent_end scope_id={dispatch_scope} "
             f"verdict={body.verdict.value} not close-ready; recorded, continuing"
         )
     # Close the researcher session (W17): mirror the executor close so a
@@ -1401,7 +1401,7 @@ async def _spawn_researcher_agent_end(
         summary=f"researcher {dispatch.domain} closed ({len(body.findings)} findings)",
     )
     logger.info(
-        f"_spawn_researcher_agent_end scope={dispatch_scope} campaign={campaign_id} "
+        f"_spawn_researcher_agent_end scope_id={dispatch_scope} campaign={campaign_id} "
         f"domain={dispatch.domain!r} "
         f"runtime={serving_runtime!r} session={session_id!r} findings={len(body.findings)}"
     )

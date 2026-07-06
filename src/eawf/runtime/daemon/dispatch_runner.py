@@ -342,7 +342,7 @@ def _emit(
         ctx.bus.publish(envelope)
     ctx.last_event_id = envelope.id
     logger.info(
-        f"emit event_type={body['event_type']!r} scope={scope_id!r} envelope_id={envelope.id!r}"
+        f"emit event_type={body['event_type']!r} scope_id={scope_id!r} envelope_id={envelope.id!r}"
     )
     return envelope.id
 

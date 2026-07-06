@@ -162,7 +162,7 @@ def bridge_clarify_run_to_ledger(
         )
         for proposal in proposals
     ]
-    logger.info(f"bridge_clarify_run_to_ledger scope={scope_id!r} seeded={len(pause_urns)}")
+    logger.info(f"bridge_clarify_run_to_ledger scope_id={scope_id!r} seeded={len(pause_urns)}")
     return pause_urns
 
 

@@ -438,7 +438,7 @@ def _apply_convert_legacy_locked(
     wal.mark_fsynced(wal_path, mutation_id)
     _publish(ctx, envelope)
     logger.info(
-        f"convert_legacy ok scope={args.scope_id} converted={converted_count} "
+        f"convert_legacy ok scope_id={args.scope_id} converted={converted_count} "
         f"refused={len(rows) - converted_count} waves={touched} "
         f"before={before_version} after={after_version}"
     )

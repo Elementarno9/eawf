@@ -2749,7 +2749,7 @@ def _commit_worktree_state(
                 ctx.bus.publish(envelope)
             ctx.last_event_id = envelope.id
             logger.info(
-                f"_commit_worktree_state command={command!r} scope={scope_id!r} "
+                f"_commit_worktree_state command={command!r} scope_id={scope_id!r} "
                 f"before={before_version} "
                 f"after={after_version} envelope_id={envelope.id!r}"
             )
@@ -2989,7 +2989,7 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             result["idempotent_replay"] = True
             logger.info(
                 f"mutate idempotent_replay mutation_kind={mutation.kind.value} "
-                f"scope={mutation.scope_id!r} key={idempotency_key!r}"
+                f"scope_id={mutation.scope_id!r} key={idempotency_key!r}"
             )
             return result
 
@@ -3019,7 +3019,7 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             if duration_ms is not None:
                 logger.info(
                     f"mutate finished mutation_kind={mutation.kind.value} "
-                    f"scope={mutation.scope_id!r} duration_ms={duration_ms:.1f}"
+                    f"scope_id={mutation.scope_id!r} duration_ms={duration_ms:.1f}"
                 )
 
     # The portalock keeps the daemon's defense-in-depth guard live
@@ -3187,7 +3187,7 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         if duration_ms is not None:
             logger.info(
                 f"mutate finished mutation_kind={mutation.kind.value} "
-                f"scope={mutation.scope_id!r} duration_ms={duration_ms:.1f}"
+                f"scope_id={mutation.scope_id!r} duration_ms={duration_ms:.1f}"
             )
 
 
@@ -3418,7 +3418,7 @@ async def _mutate_wave_close(
     ctx.last_event_id = envelope.id
 
     logger.info(
-        f"mutate ok mutation_kind={mutation.kind.value} scope={mutation.scope_id!r} "
+        f"mutate ok mutation_kind={mutation.kind.value} scope_id={mutation.scope_id!r} "
         f"before={before_version} after={after_version} envelope_id={envelope.id!r} "
         f"lock_split=True"
     )
