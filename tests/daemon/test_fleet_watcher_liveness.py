@@ -542,3 +542,145 @@ def test_close_on_behalf_records_actuals_from_runtime_delta(tmp_path: Path) -> N
     assert actual.actual_cost_usd == pytest.approx(0.25)
     assert actual.actual_tokens == 150  # (100 + 50) token delta
     assert actual.model == "gpt-5.3-codex-spark"
+
+
+# ---- P30-I25-W03: orphan-claim reaper fails a lane-less wedged wave -----------
+#
+# Every other failure path is LANE-based (the liveness watcher forks a dead lane)
+# or PROCESS-based (the kill ladder reaps a live lane's group). A wave that was
+# CLAIMED + dispatched but never registered an in-flight lane -- its dispatch
+# wedged before the lane landed -- has NO lane for either path, so it stays
+# CLAIMED / IN_PROGRESS forever even after its driving run drained and its agent
+# process group died (the R4 gap). The reaper closes that gap: at the drained-run
+# seam it fails each genuinely-dead lane-less orphan, while sparing a healthy
+# wave (a live pgid, no addressable pgid, or a still-in-flight lane).
+
+
+def _seed_dead_session(state_path: Path, *, pid: int | None, runtime: str) -> None:
+    """Attach a dispatched ``SessionAttempt`` (its child pid) to the watched wave.
+
+    The lane-less pgid source the reaper probes: the spawned child records its
+    pid on the matching ``SessionAttempt.subprocess_pid`` and is its own
+    process-group leader, so that pid IS the pgid. ``pid=None`` seeds an attempt
+    with no addressable group.
+    """
+    from eawf.kernel.state.models import SessionAttempt
+
+    with portalock.acquire(state_path, timeout=5.0):
+        state = load_state(state_path)
+        state.waves[_WAVE_ID].sessions[1] = SessionAttempt(
+            attempt=1,
+            runtime=runtime,
+            session_id="ses-x",
+            session_log_handle=f"urn:eawf:v1:session-log:{runtime}:abcdef",
+            started_at=datetime(2026, 6, 11, tzinfo=UTC),
+            subprocess_pid=pid,
+        )
+        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+
+
+def _drained_loop(ctx: MethodContext, *, liveness: Any, lanes: dict[str, Any] | None = None) -> Any:
+    """Build a ``_Loop`` over a DRAINED (empty-lane) run with an injected probe."""
+    from eawf.kernel.state.models import FleetRun, FleetRunState
+    from eawf.runtime.daemon.methods.fleet import _Loop
+
+    return _Loop(
+        ctx=ctx,
+        run=FleetRun(
+            run_state=FleetRunState.DRAINING,
+            armed_at=datetime(2026, 6, 11, tzinfo=UTC),
+            lanes=lanes if lanes is not None else {},
+        ),
+        spawn=lambda *a, **k: None,  # unused by the reaper
+        watch=lambda *a, **k: "closed",  # unused by the reaper
+        liveness=liveness,
+    )
+
+
+@pytest.mark.parametrize("runtime", ["codex", "claude-code"])
+@pytest.mark.parametrize("status", ["claimed", "in_progress"])
+def test_orphan_claim_reaper_fails_dead_lane_less_wave(
+    tmp_path: Path, runtime: str, status: str
+) -> None:
+    """R4: a lane-less CLAIMED / IN_PROGRESS wave with a dead pgid is driven FAILED.
+
+    The wave dispatched (its child pid is on the SessionAttempt) but never
+    registered an in-flight lane, so no lane-watcher fork nor kill-ladder path
+    applies. Its process group reads dead and the driving run has drained, so the
+    reaper drives it to a clean terminal FAILED (dropping it off
+    ``active_wave_ids``) rather than leaving it wedged -- runtime-generic, since
+    the dispatch/liveness chain carries no codex-vs-claude branch.
+    """
+    state_path = _write_state(tmp_path, status=status, runtime=runtime)
+    _seed_dead_session(state_path, pid=9001, runtime=runtime)
+    ctx = _ctx(state_path)
+    loop = _drained_loop(ctx, liveness=lambda _pgid: False)  # the agent group is gone
+
+    loop._reap_orphan_claims()
+
+    state = load_state(state_path)
+    assert state.waves[_WAVE_ID].status is WaveStatus.FAILED
+    assert "9001" in (state.waves[_WAVE_ID].outcome or "")
+    # A clean failure drops the reaped wave off the active-wave pointer.
+    assert _WAVE_ID not in state.current.active_wave_ids
+
+
+def test_orphan_claim_reaper_spares_live_pgid(tmp_path: Path) -> None:
+    """R4 negative: a lane-less wave whose pgid reads ALIVE is never reaped.
+
+    A live process group is a healthy in-flight agent (a slow lane the run lost
+    track of, say) -- the reaper must not reap a wave it cannot prove is dead, so
+    the wave stays CLAIMED exactly as the watcher spares a live lane.
+    """
+    state_path = _write_state(tmp_path, status="claimed")
+    _seed_dead_session(state_path, pid=9001, runtime="codex")
+    ctx = _ctx(state_path)
+    loop = _drained_loop(ctx, liveness=lambda _pgid: True)  # the agent is alive
+
+    loop._reap_orphan_claims()
+
+    assert load_state(state_path).waves[_WAVE_ID].status is WaveStatus.CLAIMED
+
+
+def test_orphan_claim_reaper_spares_wave_without_pgid(tmp_path: Path) -> None:
+    """R4 negative: a wave with no addressable pgid is not probed and not reaped.
+
+    A wave with no dispatched session (or an attempt that recorded no pid) has no
+    process group to probe -- there is no liveness signal to act on, so the
+    reaper leaves it untouched and never consults the probe (mirroring the
+    watcher's no-pgid care).
+    """
+    state_path = _write_state(tmp_path, status="in_progress")  # no SessionAttempt seeded
+    ctx = _ctx(state_path)
+    probed: list[int] = []
+
+    def _probe(pgid: int) -> bool:
+        probed.append(pgid)
+        return False
+
+    loop = _drained_loop(ctx, liveness=_probe)
+    loop._reap_orphan_claims()
+
+    assert load_state(state_path).waves[_WAVE_ID].status is WaveStatus.IN_PROGRESS
+    assert probed == []  # no addressable pgid -> the probe was never consulted
+
+
+def test_orphan_claim_reaper_spares_wave_with_in_flight_lane(tmp_path: Path) -> None:
+    """R4 negative: a wave that still holds an in-flight lane is not an orphan.
+
+    The reap targets ONLY lane-less waves; a wave with a live lane in the current
+    run is the lane-watcher's to resolve. Even with a dead-reading pgid the reaper
+    skips it, so a healthy in-flight lane is never double-resolved.
+    """
+    state_path = _write_state(tmp_path, status="in_progress")
+    _seed_dead_session(state_path, pid=9001, runtime="codex")
+    ctx = _ctx(state_path)
+    loop = _drained_loop(
+        ctx,
+        liveness=lambda _pgid: False,
+        lanes={_WAVE_ID: _lane(pgid=9001)},  # the wave still holds a lane
+    )
+
+    loop._reap_orphan_claims()
+
+    assert load_state(state_path).waves[_WAVE_ID].status is WaveStatus.IN_PROGRESS

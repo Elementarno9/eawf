@@ -72,6 +72,7 @@ from eawf.kernel.state.models import (
     FleetRunState,
     FleetTerminalReason,
     State,
+    Wave,
 )
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.envelope import Envelope
@@ -1595,6 +1596,34 @@ assert set(_HARD_FAILURE_FORK_REASON) == (set(SpawnFailureClass) - {SpawnFailure
 _SPAWN_FORK_DETAIL_CAP = 1000
 
 
+def _latest_session_pid(wave: Wave) -> int | None:
+    """Resolve a wave's claiming-agent pgid off its latest dispatched session.
+
+    The lane-less pgid source the orphan-claim reaper
+    (:meth:`_Loop._reap_orphan_claims`) probes, the same one
+    :func:`_kill_session_pid` signals for a non-fleet dispatch: a spawned
+    executor records its child pid on the matching
+    :attr:`~eawf.kernel.state.models.SessionAttempt.subprocess_pid`, and the
+    child is its own process-group leader (the adapter spawns
+    ``start_new_session=True``), so that pid IS the pgid. Reads the LATEST
+    attempt's pid so a re-dispatched wave probes its most recent group. A wave
+    with no dispatched session -- or whose latest attempt recorded no pid --
+    yields ``None`` (no addressable group), so the reaper leaves it untouched
+    rather than reaping a wave it cannot prove is dead.
+
+    Args:
+        wave: The :class:`~eawf.kernel.state.models.Wave` whose latest
+            dispatched-session pid to resolve.
+
+    Returns:
+        The latest attempt's ``subprocess_pid`` (its pgid), or ``None`` when no
+        addressable group is recorded.
+    """
+    if not wave.sessions:
+        return None
+    return wave.sessions[max(wave.sessions)].subprocess_pid
+
+
 class LaneRetryExhaustedError(RuntimeError):
     """Raised when a lane's bounded spawn-retry budget is spent without a clean spawn -- DL-11.
 
@@ -1969,6 +1998,10 @@ class _Loop:
             the lane rather than aborting the whole run. ``None`` (the default)
             keeps the pre-W03 direct-spawn path for the synchronous in-process
             callers + the W01 spawner fakes.
+        liveness: Optional process-group liveness probe the orphan-claim reaper
+            (:meth:`_reap_orphan_claims`) consults at the drained-run seam.
+            ``None`` (the default) resolves the live :func:`_default_liveness`
+            at call time; tests inject a deterministic fake.
         runtime_preference: The ``Wave.runtime_preference`` runtime ladder the
             bounded spawn ladder's V5 switch walks past a failed runtime (W03).
         max_total_attempts: Total spawn ceiling for the bounded spawn ladder.
@@ -2001,6 +2034,11 @@ class _Loop:
     fork_evidence: ForkEvidenceReader = _default_fork_evidence
     cancel: threading.Event | None = None
     classify: ErrorClassifier | None = None
+    #: Process-group liveness probe the orphan-claim reaper consults at the
+    #: drained-run seam (``None`` resolves the live :func:`_default_liveness` at
+    #: call time -- mirroring how the watcher wires it). Tests inject a
+    #: deterministic fake so the reaper decides without a real process.
+    liveness: LivenessProbe | None = None
     runtime_preference: list[str] = field(default_factory=list)
     max_total_attempts: int = DEFAULT_MAX_TOTAL_ATTEMPTS
     repair: LaneRepairHook | None = None
@@ -2332,9 +2370,30 @@ class _Loop:
             exc: The dispatch error driving the failure -- its type + message
                 ground the recorded fail reason.
         """
+        reason = f"fleet dispatch error: {type(exc).__name__}: {exc}"[:_SPAWN_FORK_DETAIL_CAP]
+        self._terminal_fail_on_disk(wave_id, reason)
+
+    def _terminal_fail_on_disk(self, wave_id: str, reason: str) -> None:
+        """Drive a still-claimed wave to terminal FAILED on disk with *reason*.
+
+        The shared on-disk fail write the dispatch-error cleanup
+        (:meth:`_fail_wave_on_disk`) and the orphan-claim reaper
+        (:meth:`_reap_orphan_claims`) both route through: acquire the state
+        portalock, load the typed state, and drive the canonical
+        :func:`eawf.workflow.lifecycle.wave.fail_wave` transition so the wave
+        reaches FAILED carrying *reason* and drops off ``current.active_wave_ids``
+        -- a reattach then never re-claims it. The write goes through the daemon
+        canonical writer (locked atomic write), never a hand-rolled mutation. A
+        stateless context (no ``state_path``) is a no-op; an already-terminal /
+        vanished wave (a concurrent close) is left untouched rather than faulting
+        the drive on the cleanup write.
+
+        Args:
+            wave_id: ``W<NN>`` wave to advance off CLAIMED / IN_PROGRESS.
+            reason: The recorded fail reason stamped on the wave outcome.
+        """
         if self.ctx.state_path is None:
             return
-        reason = f"fleet dispatch error: {type(exc).__name__}: {exc}"[:_SPAWN_FORK_DETAIL_CAP]
         state_path = Path(self.ctx.state_path)
         with portalock.acquire(state_path, timeout=5.0):
             state = load_state(state_path)
@@ -2350,7 +2409,56 @@ class _Loop:
             fail_wave(state, wave_id=wave_id, reason=reason)
             state.updated_at = datetime.now(UTC)
             atomic_write_json_locked(state_path, state.model_dump(mode="json"))
-        logger.info(f"_fail_wave_on_disk wave={wave_id} status=failed reason={reason!r}")
+        logger.info(f"_terminal_fail_on_disk wave={wave_id} status=failed reason={reason!r}")
+
+    def _reap_orphan_claims(self) -> None:
+        """Fail each lane-less wedged wave whose claiming process group is dead.
+
+        The claim-based reaper closing the R4 gap: every other failure path is
+        LANE-based (the liveness watcher forks a dead lane) or PROCESS-based (the
+        kill ladder reaps a live lane's group), so a wave that was CLAIMED +
+        dispatched but never registered an in-flight lane -- e.g. its dispatch
+        wedged before the lane landed -- has NO lane for either path to resolve
+        and stays CLAIMED / IN_PROGRESS forever, even after its driving run has
+        drained and its agent process group is dead. Run at the drained-run seam
+        (:meth:`run_to_terminal`, once the frontier + every lane have emptied),
+        this scans disk for such orphans and drives each genuinely-dead one to
+        terminal FAILED through the canonical writer, so a fresh drive can re-open
+        the wave rather than the run leaving it wedged.
+
+        The reap never touches a healthy wave: a candidate is failed only when it
+        (a) is CLAIMED or IN_PROGRESS on disk, (b) has NO in-flight lane in the
+        current run, and (c) has an addressable claiming-agent pgid that reads
+        DEAD via the liveness probe. A wave with no addressable pgid (nothing to
+        probe) or a live pgid is left untouched -- mirroring the watcher's care
+        that only a provably-dead group forks.
+
+        The pgid resolves off the wave's latest :class:`SessionAttempt`
+        ``subprocess_pid`` (the same lane-less source
+        :func:`_kill_session_pid` signals): the spawned child is its own
+        process-group leader, so the recorded pid IS the pgid. The probe is the
+        injected :attr:`liveness` (``None`` resolves the live
+        :func:`_default_liveness`), so the reaper and the watcher share one
+        pgid-liveness mechanism. A stateless context (no ``state_path``) is a
+        no-op.
+        """
+        if self.ctx.state_path is None:
+            return
+        probe = self.liveness if self.liveness is not None else _default_liveness
+        state = load_state(Path(self.ctx.state_path))
+        for wave_id, wave in state.waves.items():
+            if wave_id in self.run.lanes:
+                continue
+            if wave.status not in {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}:
+                continue
+            pgid = _latest_session_pid(wave)
+            if pgid is None or probe(pgid):
+                # No addressable pgid (nothing to probe) or a live group: never
+                # reap a wave we cannot prove is dead -- mirror the watcher.
+                continue
+            reason = f"orphan-claim reaper: run drained, pgid {pgid} dead"[:_SPAWN_FORK_DETAIL_CAP]
+            self._terminal_fail_on_disk(wave_id, reason)
+            logger.warning(f"orphan_claim_reaper wave={wave_id} pgid={pgid} outcome=failed")
 
     def _close_wave_on_disk(self, wave_id: str) -> None:
         """Close a still-open wave whose lane resolved CLOSED -- W49.
@@ -2952,7 +3060,12 @@ class _Loop:
             self._persist()
             if not self.run.lanes:
                 # Nothing in flight and the fill found no frontier wave: the
-                # frontier has drained empty.
+                # frontier has drained empty. Reap any wave left CLAIMED /
+                # IN_PROGRESS with no in-flight lane whose claiming process group
+                # is dead (R4): such a wave wedged before its lane registered, so
+                # neither the lane-watcher fork nor the kill ladder can resolve
+                # it -- without this it stays claimed forever past the drained run.
+                self._reap_orphan_claims()
                 self._finish_run(FleetTerminalReason.DRAINED)
                 self._persist()
                 return self.run
