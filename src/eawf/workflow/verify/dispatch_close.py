@@ -26,8 +26,11 @@ runner reports the dispatch as close-ready.
 
 from __future__ import annotations
 
+import ast
 import logging
+import re
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn
 
@@ -259,6 +262,139 @@ class CloseGateResult:
     failing_detail: str = ""
 
 
+class FloorFailureClass(StrEnum):
+    """How a refused deterministic close-gate should be routed -- P30-I25-W04.
+
+    The bounded grounded-repair ladder re-dispatches a lane on any refused
+    close-gate. That is correct for a refusal the executor can FIX (a real
+    assertion failure, a lint error in changed code, a failing test the agent
+    wrote) but wrong for one it cannot: when a spawn runs in a bare smoke repo
+    (a fresh ``eawf init`` with no ``.pre-commit-config.yaml``, no package dir,
+    no pytest dependency) the deterministic floor gates fail for ENVIRONMENTAL
+    reasons the executor cannot create in-scope, so a re-dispatch burns attempts
+    on an unfixable lane. This class labels the two cases so the fleet close-gate
+    seam routes an environmental refusal to close-with-followups and keeps the
+    repair ladder for executor-fixable refusals.
+    """
+
+    ENVIRONMENTAL = "environmental"
+    EXECUTOR_FIXABLE = "executor_fixable"
+
+
+#: The repo config file the ``pre-commit`` floor gate needs; a bare smoke repo
+#: has none and the executor cannot scaffold it in-scope.
+_PRECOMMIT_CONFIG = ".pre-commit-config.yaml"
+
+#: Regex that recovers the argv list a ``command_exit_zero`` check records in
+#: its detail (``argv=['uv', 'run', 'pre-commit', ...] returncode=1``).
+_ARGV_DETAIL_RE = re.compile(r"argv=(\[[^\]]*\])")
+
+
+def _detail_argv(failing_detail: str) -> list[str]:
+    """Return the argv vector recorded in a ``command_exit_zero`` failing detail.
+
+    A deterministic gate records its detail as ``argv=[...] returncode=N``; this
+    recovers the argv list so the classifier can key off which floor command
+    refused. A detail with no recognizable argv (a timeout string, a jury
+    detail) yields an empty list, which the classifier treats as
+    executor-fixable -- an unrecognized falsifier keeps the repair ladder.
+
+    Args:
+        failing_detail: The grounded falsifier the refusing gate produced.
+
+    Returns:
+        The recorded argv tokens, or ``[]`` when the detail carries no
+        parseable ``argv=[...]`` fragment.
+    """
+    match = _ARGV_DETAIL_RE.search(failing_detail)
+    if match is None:
+        return []
+    try:
+        parsed = ast.literal_eval(match.group(1))
+    except ValueError, SyntaxError:
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [str(token) for token in parsed]
+
+
+def _mypy_targets(argv: list[str]) -> list[str]:
+    """Return the non-flag path targets handed to a ``mypy`` floor gate.
+
+    The python-profile floor pack runs ``mypy src/`` so its target IS the
+    package dir; a target absent from the repo means the executor has no package
+    dir to type-check and cannot create one in-scope. A non-mypy argv yields
+    ``[]``.
+    """
+    if "mypy" not in argv:
+        return []
+    idx = argv.index("mypy")
+    return [token for token in argv[idx + 1 :] if not token.startswith("-")]
+
+
+def _pytest_declared(repo_root: Path) -> bool:
+    """Return whether *repo_root*'s ``pyproject.toml`` declares the pytest dependency.
+
+    A bare smoke repo either has no ``pyproject.toml`` or does not declare
+    pytest, so ``uv run pytest`` fails for a missing test dependency the
+    executor cannot add in-scope. The substring probe is deliberately coarse --
+    any pytest mention (dependency, optional-dependency, or config table) counts
+    as declared.
+    """
+    pyproject = repo_root / "pyproject.toml"
+    if not pyproject.is_file():
+        return False
+    try:
+        return "pytest" in pyproject.read_text(encoding="utf-8")
+    except OSError:
+        return False
+
+
+def classify_floor_failure(
+    *,
+    failing_detail: str,
+    repo_root: Path,
+) -> FloorFailureClass:
+    """Classify a refused deterministic close-gate -- P30-I25-W04.
+
+    Pure function of the gate's grounded falsifier + the repo scaffolding: it
+    reads *failing_detail* to learn which floor command refused, then checks
+    *repo_root* for the scaffolding that command depends on. A floor failure is
+    ENVIRONMENTAL when the failing command needs repo scaffolding the executor
+    cannot create in-scope:
+
+    - the ``pre-commit`` gate + no :data:`_PRECOMMIT_CONFIG` at *repo_root*;
+    - the ``mypy`` gate + a target package dir absent from *repo_root*;
+    - the ``pytest`` gate + no pytest dependency declared in ``pyproject.toml``.
+
+    Everything else (a real assertion failure, a lint error in changed code, a
+    failing test the agent wrote, an unrecognized falsifier) is
+    EXECUTOR_FIXABLE, so the repair ladder keeps its existing behaviour.
+
+    Args:
+        failing_detail: The refusing gate's grounded falsifier
+            (:attr:`CloseGateResult.failing_detail`); carries the ``argv=[...]``
+            the deterministic check recorded.
+        repo_root: The repository root the floor gates ran against, checked for
+            the scaffolding each floor command depends on.
+
+    Returns:
+        :attr:`FloorFailureClass.ENVIRONMENTAL` when the refusal is caused by
+        missing scaffolding the executor cannot create in-scope, else
+        :attr:`FloorFailureClass.EXECUTOR_FIXABLE`.
+    """
+    argv = _detail_argv(failing_detail)
+    tokens = set(argv)
+    if "pre-commit" in tokens and not (repo_root / _PRECOMMIT_CONFIG).is_file():
+        return FloorFailureClass.ENVIRONMENTAL
+    for target in _mypy_targets(argv):
+        if not (repo_root / target).exists():
+            return FloorFailureClass.ENVIRONMENTAL
+    if "pytest" in tokens and not _pytest_declared(repo_root):
+        return FloorFailureClass.ENVIRONMENTAL
+    return FloorFailureClass.EXECUTOR_FIXABLE
+
+
 class _JuryUnreachableError(RuntimeError):
     """Signal that the deterministic-only clean-close runner reached the jury tier.
 
@@ -405,7 +541,9 @@ async def run_close_gates(
 __all__ = [
     "CloseGateResult",
     "DispatchCloseBlockedError",
+    "FloorFailureClass",
     "VerifyResult",
+    "classify_floor_failure",
     "run_close_gates",
     "verify_close_readiness",
 ]

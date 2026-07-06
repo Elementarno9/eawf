@@ -12,6 +12,8 @@ covered by :mod:`tests.runtime.daemon.test_dispatch_close_gate`.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from eawf.kernel.state.enums import AgentReportVerdict, Confidence
@@ -22,7 +24,9 @@ from eawf.kernel.store.kinds.agent_report import (
 )
 from eawf.workflow.verify.dispatch_close import (
     DispatchCloseBlockedError,
+    FloorFailureClass,
     VerifyResult,
+    classify_floor_failure,
     verify_close_readiness,
 )
 
@@ -275,3 +279,106 @@ def test_rung4_off_without_teeth_bit() -> None:
         require_evidence_refs=False,
     )
     assert result.passed is True
+
+
+# ---- Floor-failure classifier (R2b, P30-I25-W04) ----------------------------
+#
+# The classifier decides whether a refused deterministic close-gate is an
+# ENVIRONMENTAL gap the executor cannot fix in-scope (a bare smoke repo missing
+# scaffolding) or an EXECUTOR_FIXABLE refusal (a real lint / test / assertion
+# failure the repair ladder should re-dispatch on).
+
+_PRECOMMIT_DETAIL = "argv=['uv', 'run', 'pre-commit', 'run', '--all-files'] returncode=1"
+_MYPY_DETAIL = "argv=['uv', 'run', 'mypy', 'src/'] returncode=1"
+_PYTEST_DETAIL = "argv=['uv', 'run', 'pytest', '-q'] returncode=1"
+
+
+def _scaffold_full_repo(repo_root: Path) -> None:
+    """Write the floor scaffolding a real python repo carries.
+
+    A repo with a pre-commit config, a package dir, and a pytest dependency
+    declared has no MISSING scaffolding, so a floor-gate refusal against it is a
+    genuine executor-fixable failure (lint / type / test), not an environmental
+    gap.
+    """
+    (repo_root / ".pre-commit-config.yaml").write_text("repos: []\n", encoding="utf-8")
+    (repo_root / "src").mkdir()
+    (repo_root / "pyproject.toml").write_text(
+        '[project]\nname = "x"\n[dependency-groups]\ndev = ["pytest"]\n',
+        encoding="utf-8",
+    )
+
+
+def test_classify_missing_precommit_config_is_environmental(tmp_path: Path) -> None:
+    """A pre-commit floor refusal in a repo with no config is environmental."""
+    # Bare smoke repo: no .pre-commit-config.yaml the executor could scaffold.
+    result = classify_floor_failure(failing_detail=_PRECOMMIT_DETAIL, repo_root=tmp_path)
+    assert result is FloorFailureClass.ENVIRONMENTAL
+
+
+def test_classify_missing_package_dir_is_environmental(tmp_path: Path) -> None:
+    """A mypy floor refusal against an absent package dir is environmental."""
+    (tmp_path / ".pre-commit-config.yaml").write_text("repos: []\n", encoding="utf-8")
+    # No src/ dir for `mypy src/` to type-check.
+    result = classify_floor_failure(failing_detail=_MYPY_DETAIL, repo_root=tmp_path)
+    assert result is FloorFailureClass.ENVIRONMENTAL
+
+
+def test_classify_missing_pytest_dependency_is_environmental(tmp_path: Path) -> None:
+    """A pytest floor refusal with no declared pytest dependency is environmental."""
+    (tmp_path / ".pre-commit-config.yaml").write_text("repos: []\n", encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    # pyproject.toml is absent, so pytest is not a declared test dependency.
+    result = classify_floor_failure(failing_detail=_PYTEST_DETAIL, repo_root=tmp_path)
+    assert result is FloorFailureClass.ENVIRONMENTAL
+
+
+def test_classify_pytest_declared_but_test_fails_is_executor_fixable(tmp_path: Path) -> None:
+    """A pytest refusal in a scaffolded repo is a real test failure the agent can fix."""
+    _scaffold_full_repo(tmp_path)
+    result = classify_floor_failure(failing_detail=_PYTEST_DETAIL, repo_root=tmp_path)
+    assert result is FloorFailureClass.EXECUTOR_FIXABLE
+
+
+def test_classify_lint_error_in_changed_code_is_executor_fixable(tmp_path: Path) -> None:
+    """A pre-commit refusal with the config present is a real lint error the agent can fix."""
+    _scaffold_full_repo(tmp_path)
+    result = classify_floor_failure(failing_detail=_PRECOMMIT_DETAIL, repo_root=tmp_path)
+    assert result is FloorFailureClass.EXECUTOR_FIXABLE
+
+
+def test_classify_mypy_error_with_package_dir_is_executor_fixable(tmp_path: Path) -> None:
+    """A mypy refusal against an EXISTING package dir is a real type error the agent can fix."""
+    _scaffold_full_repo(tmp_path)
+    result = classify_floor_failure(failing_detail=_MYPY_DETAIL, repo_root=tmp_path)
+    assert result is FloorFailureClass.EXECUTOR_FIXABLE
+
+
+def test_classify_wave_specific_command_gate_is_executor_fixable(tmp_path: Path) -> None:
+    """A non-floor command gate refusal is executor-fixable regardless of scaffolding.
+
+    A wave's own ``command_exit_zero`` gate (not one of the pre-commit / mypy /
+    pytest floor commands) checks code the agent wrote, so its refusal never
+    classifies environmental even in a bare repo.
+    """
+    detail = "argv=['python', 'scripts/check_invariant.py'] returncode=1"
+    result = classify_floor_failure(failing_detail=detail, repo_root=tmp_path)
+    assert result is FloorFailureClass.EXECUTOR_FIXABLE
+
+
+def test_classify_unrecognized_detail_is_executor_fixable(tmp_path: Path) -> None:
+    """A detail with no parseable argv (a timeout) keeps the repair ladder -- boundary.
+
+    An unrecognized falsifier must not silently close-with-followups: the safe
+    default is executor-fixable so the repair ladder still fires.
+    """
+    result = classify_floor_failure(
+        failing_detail="timeout after 300s (class='standard')", repo_root=tmp_path
+    )
+    assert result is FloorFailureClass.EXECUTOR_FIXABLE
+
+
+def test_classify_empty_detail_is_executor_fixable(tmp_path: Path) -> None:
+    """An empty falsifier is the min-length boundary -- executor-fixable default."""
+    result = classify_floor_failure(failing_detail="", repo_root=tmp_path)
+    assert result is FloorFailureClass.EXECUTOR_FIXABLE

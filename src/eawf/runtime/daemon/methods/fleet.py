@@ -113,6 +113,8 @@ from eawf.workflow.lifecycle.wave import (
 )
 from eawf.workflow.verify.dispatch_close import (
     CloseGateResult,
+    FloorFailureClass,
+    classify_floor_failure,
     evidence_rung_inputs,
     run_close_gates,
     verify_close_readiness,
@@ -2460,7 +2462,7 @@ class _Loop:
             self._terminal_fail_on_disk(wave_id, reason)
             logger.warning(f"orphan_claim_reaper wave={wave_id} pgid={pgid} outcome=failed")
 
-    def _close_wave_on_disk(self, wave_id: str) -> None:
+    def _close_wave_on_disk(self, wave_id: str, *, outcome_override: str | None = None) -> None:
         """Close a still-open wave whose lane resolved CLOSED -- W49.
 
         A lane the watcher resolved ``"closed"`` from a persisted close-ready
@@ -2476,6 +2478,11 @@ class _Loop:
 
         Args:
             wave_id: ``W<NN>`` wave whose lane resolved a clean close.
+            outcome_override: Optional outcome string stamped on the closed wave
+                instead of the sandboxed-agent default. The W04 environmental
+                close-with-followups path passes the grounded floor-gap so the
+                closed wave carries the followup rather than the generic
+                close-on-behalf outcome.
         """
         if self.ctx.state_path is None:
             return
@@ -2502,7 +2509,10 @@ class _Loop:
             close_wave(
                 state,
                 wave_id=wave_id,
-                outcome="autopilot: report close-ready; closed on behalf of sandboxed agent",
+                outcome=(
+                    outcome_override
+                    or "autopilot: report close-ready; closed on behalf of sandboxed agent"
+                ),
                 tokens_consumed=delta.actual_tokens if delta is not None else None,
                 actual_elapsed_eu=delta.elapsed_eu if delta is not None else None,
                 actual_agent_runtime_eu=delta.agent_runtime_eu if delta is not None else None,
@@ -2565,6 +2575,39 @@ class _Loop:
             )
         )
         return result
+
+    def _classify_close_gate_failure(self, gate_result: CloseGateResult) -> FloorFailureClass:
+        """Classify a refused close-gate as environmental vs executor-fixable -- W04.
+
+        Threads the wave's repo root and the gate's grounded falsifier into the
+        verify-layer classifier
+        (:func:`~eawf.workflow.verify.dispatch_close.classify_floor_failure`) so
+        the :meth:`_finish_lane` close-gate seam can decide between closing the
+        lane with a followup (an ENVIRONMENTAL gap the executor cannot fix
+        in-scope -- a bare smoke repo missing ``.pre-commit-config.yaml`` / the
+        package dir / the pytest dependency) and routing it to the repair ladder
+        (a genuine executor-fixable refusal). A stateless context resolves the
+        repo root to the process cwd so the classifier still runs.
+
+        Args:
+            gate_result: The refused
+                :class:`~eawf.workflow.verify.dispatch_close.CloseGateResult`.
+
+        Returns:
+            The :class:`~eawf.workflow.verify.dispatch_close.FloorFailureClass`
+            the verify-layer classifier assigns.
+        """
+        from eawf.runtime.daemon.methods.state import _config_root_for_state_path
+
+        repo_root = (
+            _config_root_for_state_path(Path(self.ctx.state_path))
+            if self.ctx.state_path is not None
+            else Path.cwd()
+        )
+        return classify_floor_failure(
+            failing_detail=gate_result.failing_detail,
+            repo_root=repo_root,
+        )
 
     def _finalize_wave_sessions(self, state: State, *, wave_id: str, now: datetime) -> int:
         """Close the wave's still-ACTIVE executor session(s) on behalf of the agent.
@@ -2711,19 +2754,40 @@ class _Loop:
         # fork / needs-user pause is unaffected. A passing gate mints
         # deterministic-pass evidence appended after the close commits.
         close_gate_evidence: list[EvidenceRecord] = []
+        environmental_followup: str | None = None
         if outcome == "closed":
             gate_result = self._run_close_gates(wave_id)
             if gate_result is not None and not gate_result.passed:
-                logger.warning(
-                    f"_finish_lane wave={wave_id} close_gate=blocked "
-                    f"criterion={gate_result.failing_criterion_id!r} routes_to=repair_fork"
-                )
-                # A deterministic gate refusal is a genuine failing check, not a
-                # DL-6 operator pause: route it through the existing failing-check
-                # ladder below. classify_fork_reason(watched="closed", MECH/MED) is
-                # already None, so overriding the gated outcome to "forked" reuses
-                # the repair (or terminal-fork) arm without a spurious pause.
-                outcome = "forked"
+                classification = self._classify_close_gate_failure(gate_result)
+                if classification is FloorFailureClass.ENVIRONMENTAL:
+                    # R2b: the refused floor gate needs repo scaffolding the
+                    # executor cannot create in-scope (a bare smoke repo missing
+                    # .pre-commit-config.yaml / the package dir / the pytest
+                    # dependency). Re-dispatching burns attempts on a lane the
+                    # agent literally cannot fix, so keep the gated "closed"
+                    # outcome and close the wave carrying the grounded gap as a
+                    # followup instead of routing it to the repair ladder.
+                    environmental_followup = (
+                        "autopilot: environmental close-gate gap "
+                        f"(executor cannot fix in-scope): {gate_result.failing_detail}"
+                    )
+                    logger.info(
+                        f"repair_ladder wave={wave_id} classification=environmental "
+                        "outcome=close-with-followups"
+                    )
+                else:
+                    logger.warning(
+                        f"_finish_lane wave={wave_id} close_gate=blocked "
+                        f"criterion={gate_result.failing_criterion_id!r} "
+                        "classification=executor_fixable routes_to=repair_fork"
+                    )
+                    # An executor-fixable gate refusal is a genuine failing check,
+                    # not a DL-6 operator pause: route it through the existing
+                    # failing-check ladder below. classify_fork_reason(
+                    # watched="closed", MECH/MED) is already None, so overriding
+                    # the gated outcome to "forked" reuses the repair (or
+                    # terminal-fork) arm without a spurious pause.
+                    outcome = "forked"
             elif gate_result is not None:
                 close_gate_evidence = gate_result.evidence
         del self.run.lanes[wave_id]
@@ -2778,8 +2842,10 @@ class _Loop:
             # not self-close), the wave is still IN_PROGRESS -- flip it to CLOSED
             # on the agent's behalf so the wave matches the tally. DL-5 already
             # ran above (a high-risk close was downgraded to "forked"), so only an
-            # auto-closeable tier reaches here; a self-closed wave is a no-op.
-            self._close_wave_on_disk(wave_id)
+            # auto-closeable tier reaches here; a self-closed wave is a no-op. An
+            # environmental close-gate refusal (R2b) reaches here too -- it closes
+            # carrying the grounded floor gap as a followup rather than repairing.
+            self._close_wave_on_disk(wave_id, outcome_override=environmental_followup)
             if close_gate_evidence and self.ctx.state_path is not None:
                 # W19: the deterministic gates passed -- append their
                 # deterministic-pass evidence rows (bound to the wave) AFTER the

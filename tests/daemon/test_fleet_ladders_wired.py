@@ -50,6 +50,7 @@ from eawf.runtime.runtimes.adapter import (
     RuntimeSpawnError,
 )
 from eawf.workflow.evidence._io import load_state
+from eawf.workflow.verify.dispatch_close import CloseGateResult
 
 pytestmark = pytest.mark.integration
 
@@ -395,6 +396,149 @@ def test_no_repair_hook_keeps_terminal_fork_behaviour(tmp_path: Path) -> None:
     )
     assert run.counters.failed == 1
     assert run.counters.closed == 2
+
+
+# ---- R2b: an ENVIRONMENTAL close-gate refusal closes-with-followups, no repair --
+#
+# The bounded grounded-repair ladder re-dispatches on ANY refused close-gate.
+# In a bare smoke repo the deterministic floor gates fail for ENVIRONMENTAL
+# reasons the executor cannot fix in-scope (missing .pre-commit-config.yaml /
+# package dir / pytest dependency), so a re-dispatch burns attempts on an
+# unfixable lane. The fleet close-gate seam classifies the refusal and routes an
+# environmental one to close-with-followups instead of the repair ladder.
+
+_PRECOMMIT_DETAIL = "argv=['uv', 'run', 'pre-commit', 'run', '--all-files'] returncode=1"
+
+
+def _fake_close_gate(*, passed: bool, detail: str = "") -> Any:
+    """Return a monkeypatch replacement for ``_Loop._run_close_gates``.
+
+    The fake ignores disk state and hands back a fixed
+    :class:`CloseGateResult`, so the classifier + routing at the
+    :meth:`_finish_lane` close-gate seam can be exercised without materializing
+    real floor gates on the wave.
+    """
+
+    def _run(self: Any, wave_id: str) -> CloseGateResult:
+        if passed:
+            return CloseGateResult(passed=True)
+        return CloseGateResult(passed=False, failing_criterion_id="C1", failing_detail=detail)
+
+    return _run
+
+
+@pytest.mark.parametrize("runtime", ["codex", "claude-code"])
+def test_environmental_close_gate_closes_without_repair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runtime: str
+) -> None:
+    """R2b: an environmental floor-gate refusal closes-with-followups, never repairs.
+
+    Every lane's watcher reports ``"closed"`` but the close gate refuses with a
+    pre-commit falsifier; the repo (``tmp_path``) is a bare smoke repo with no
+    ``.pre-commit-config.yaml``, so the classifier labels the refusal
+    ENVIRONMENTAL. With a repair hook WIRED, the seam still routes the lane to
+    close-with-followups -- the repair ladder is NOT entered (``repaired`` stays
+    empty, the dispatch attempt never grows) and every wave closes.
+    """
+    state_path = _write_state(tmp_path)
+    ctx = _ctx(state_path)
+    # A bare smoke repo: repo_root is tmp_path (parent of .ea) with no
+    # .pre-commit-config.yaml the executor could scaffold in-scope.
+    monkeypatch.setattr(
+        fleet_mod._Loop,
+        "_run_close_gates",
+        _fake_close_gate(passed=False, detail=_PRECOMMIT_DETAIL),
+    )
+    repaired: list[str] = []
+
+    def _repair(c: MethodContext, lane: FleetLane) -> LaneRepairOutcome:
+        repaired.append(lane.wave_id)
+        return LaneRepairOutcome(resolved=False, attempts_used=1, dispatch=None)
+
+    run = arm_drive(
+        ctx,
+        frontier=list(_WAVE_IDS),
+        concurrency=1,
+        spawn=lambda c, wid: LaneDispatch(session_id=f"ses-{wid}", pgid=9500, attempt=1),
+        watch=lambda c, lane: "closed",
+        repair=_repair,
+        runtime_preference=[runtime],
+    )
+    # The environmental refusals resolved close-with-followups: every wave
+    # closed, the repair ladder never fired, and no lane forked.
+    assert repaired == []
+    assert run.run_state is FleetRunState.DONE
+    assert run.terminal_reason is FleetTerminalReason.DRAINED
+    assert run.counters.closed == 3
+    assert run.counters.forked == 0
+    assert run.counters.failed == 0
+
+
+@pytest.mark.parametrize("runtime", ["codex", "claude-code"])
+def test_executor_fixable_close_gate_enters_repair_ladder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runtime: str
+) -> None:
+    """R2b: an executor-fixable floor-gate refusal DOES enter the repair ladder.
+
+    The repo carries a ``.pre-commit-config.yaml``, so the same pre-commit
+    falsifier is a real lint error the executor can fix -- the classifier labels
+    it EXECUTOR_FIXABLE and the seam routes W01 to the bounded grounded repair
+    ladder (the pre-existing behaviour). The repair hook here exhausts, leaving
+    W01 forked while the ungated siblings close.
+    """
+    from eawf.runtime.daemon.methods.fleet import _enqueue_fork
+
+    state_path = _write_state(tmp_path)
+    ctx = _ctx(state_path)
+    # Scaffold the repo so the pre-commit refusal is a real lint error, not a
+    # missing-config environmental gap.
+    (tmp_path / ".pre-commit-config.yaml").write_text("repos: []\n", encoding="utf-8")
+
+    def _run_gate(self: Any, wave_id: str) -> CloseGateResult:
+        # Only W01's close gate refuses (executor-fixable); the siblings pass.
+        if wave_id == _WAVE_IDS[0]:
+            return CloseGateResult(
+                passed=False, failing_criterion_id="C1", failing_detail=_PRECOMMIT_DETAIL
+            )
+        return CloseGateResult(passed=True)
+
+    monkeypatch.setattr(fleet_mod._Loop, "_run_close_gates", _run_gate)
+    repaired: list[str] = []
+
+    def _repair(c: MethodContext, lane: FleetLane) -> LaneRepairOutcome:
+        repaired.append(lane.wave_id)
+        # The repair budget is spent: enqueue the REPAIR_EXHAUSTED fork through
+        # the canonical writer then signal exhaustion so the loop counts it once.
+        fork = FleetFork(
+            wave_id=lane.wave_id,
+            attempt=lane.attempt,
+            risk_tier=RiskTier.MECH,
+            reason=FleetForkReason.REPAIR_EXHAUSTED,
+            evidence_ref=f"urn:eawf:v1:fork:{lane.wave_id}:repair_exhausted",
+            forked_at=datetime.now(UTC),
+        )
+        _enqueue_fork(c, fork)
+        return LaneRepairOutcome(resolved=False, attempts_used=3, dispatch=None)
+
+    run = arm_drive(
+        ctx,
+        frontier=list(_WAVE_IDS),
+        concurrency=1,
+        spawn=lambda c, wid: LaneDispatch(session_id=f"ses-{wid}", pgid=9600, attempt=1),
+        watch=lambda c, lane: "closed",
+        repair=_repair,
+        runtime_preference=[runtime],
+    )
+    # The executor-fixable refusal entered the repair ladder for W01 only.
+    assert repaired == [_WAVE_IDS[0]]
+    assert run.run_state is FleetRunState.DONE
+    # W02 + W03 closed clean; W01 forked (REPAIR_EXHAUSTED).
+    assert run.counters.closed == 2
+    persisted = _persisted(state_path)
+    assert persisted is not None
+    reasons = {fork.reason for fork in persisted.forks}
+    assert FleetForkReason.REPAIR_EXHAUSTED in reasons
+    assert run.counters.forked >= 1
 
 
 # ---- C4: the LIVE drive enables the spawn + repair ladders (W11) -------------
