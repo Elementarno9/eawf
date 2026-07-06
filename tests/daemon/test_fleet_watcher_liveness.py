@@ -43,7 +43,7 @@ _WAVE_ID = "P30-I17-W01"
 _FROZEN_TS = "2026-06-11T00:00:00Z"
 
 
-def _state_payload(*, status: str = "in_progress") -> dict[str, Any]:
+def _state_payload(*, status: str = "in_progress", runtime: str = "codex") -> dict[str, Any]:
     return {
         "schema_version": "1.0",
         "scope_kind": "repo",
@@ -121,7 +121,7 @@ def _state_payload(*, status: str = "in_progress") -> dict[str, Any]:
             "ses-x": {
                 "id": "ses-x",
                 "role": "executor",
-                "runtime": "codex",
+                "runtime": runtime,
                 "scope_id": _WAVE_ID,
                 "status": "active",
                 "claimed_wave_ids": [],
@@ -138,8 +138,8 @@ def _state_payload(*, status: str = "in_progress") -> dict[str, Any]:
     }
 
 
-def _write_state(tmp_path: Path, *, status: str = "in_progress") -> Path:
-    state = State.model_validate(_state_payload(status=status))
+def _write_state(tmp_path: Path, *, status: str = "in_progress", runtime: str = "codex") -> Path:
+    state = State.model_validate(_state_payload(status=status, runtime=runtime))
     state_dir = tmp_path / ".ea"
     state_dir.mkdir()
     path = state_dir / "state.json"
@@ -386,6 +386,39 @@ def test_dead_lane_with_close_ready_report_resolves_closed(tmp_path: Path) -> No
         clock=_Clock(step=10.0),
         sleep=lambda _s: None,
     )
+    assert watcher(ctx, _lane()) == "closed"
+
+
+@pytest.mark.parametrize("runtime", ["codex", "claude-code"])
+def test_dead_lane_close_on_report_is_runtime_generic(tmp_path: Path, runtime: str) -> None:
+    """P30-I25-W01: dead-after-report resolves to one CLOSE (no re-dispatch), per runtime.
+
+    The dispatch/bind/liveness chain carries no ``codex``-vs-``claude`` branch --
+    a spawn that ran to completion (its process group reaped) but could not run
+    ``eawf wave close`` itself is classified as NORMAL completion once its wave
+    carries a close-ready report, identically for both runtimes. This pins that
+    runtime-generic invariant: the watcher resolves ``"closed"`` (one close) and
+    never ``"forked"`` (which is what drives a re-dispatch) whether the spawned
+    executor was codex or headless claude.
+
+    The close-on-report resolution itself shipped in I20-W49; this asserts the
+    runtime-parity the P30-I25 lifecycle-consistency iter is premised on. The
+    load-bearing R1 re-dispatch-storm fix lives in W02 (post-close dispatch drop)
+    and W04 (repair gates on executor-fixable failures), not here.
+    """
+    state_path = _write_state(tmp_path, runtime=runtime)
+    _write_report(state_path, verdict=AgentReportVerdict.PASS_WITH_FOLLOWUPS)
+    ctx = _ctx(state_path)
+    watcher = build_liveness_watcher(
+        is_alive=lambda pgid: False,  # the spawned process group is gone
+        stall_deadline=30.0,
+        poll_seconds=0.0,
+        clock=_Clock(step=10.0),
+        sleep=lambda _s: None,
+    )
+    # A single watcher call yields exactly one terminal outcome; "closed" is the
+    # no-re-dispatch resolution ("forked" is what a stall would return to drive
+    # the repair ladder), so this is the one-close / zero-re-dispatch assertion.
     assert watcher(ctx, _lane()) == "closed"
 
 
