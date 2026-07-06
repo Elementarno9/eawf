@@ -49,7 +49,12 @@ from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.dispatch_runner import AGENT_OUTPUT_EVENT_TYPE
 from eawf.runtime.daemon.methods import MethodContext
-from eawf.runtime.daemon.methods.agent import LiveSpawnError, dispatch, kill
+from eawf.runtime.daemon.methods.agent import (
+    LiveSpawnError,
+    _persist_live_session_attempt,
+    dispatch,
+    kill,
+)
 from eawf.runtime.runtimes.adapter import SpawnResult
 from eawf.runtime.runtimes.cancel import CancelResult
 from eawf.workflow.evidence._io import load_state
@@ -158,6 +163,7 @@ def _state_payload(
     agent_role: str = "executor",
     effort_bucket: str = "L",
     token_budget: int | None = None,
+    wave_status: str = "claimed",
 ) -> dict[str, Any]:
     """A minimal valid State with the full phase -> iter -> wave chain.
 
@@ -165,7 +171,8 @@ def _state_payload(
     envelope, which walks wave -> iter -> phase -> scope. The wave starts
     CLAIMED so the runner's head transition flips it to IN_PROGRESS, and
     ``agent_sessions`` starts empty so the live path registers the executor
-    session itself.
+    session itself. ``wave_status`` overrides the wave's status (e.g.
+    ``"closed"`` to model close-on-behalf having already closed the wave).
     """
     return {
         "schema_version": "1.0",
@@ -222,7 +229,7 @@ def _state_payload(
                 "id": _WAVE_ID,
                 "iter_id": "P29-I04",
                 "title": "Live wave-executor spawn",
-                "status": "claimed",
+                "status": wave_status,
                 "deps": [],
                 "blocks": [],
                 "file_scopes": ["src/eawf/runtime/daemon/methods/agent.py"],
@@ -882,3 +889,114 @@ def test_dispatch_spawn_rejects_unknown_wave(
 
     with pytest.raises(ValueError, match="unknown wave"):
         _run(dispatch(ctx, {"wave_id": "P29-I04-W99", "spawn": True}))
+
+
+# --------------------------------------------------------------------------- #
+# R3: a dispatch that completes AFTER close must not persist a phantom attempt.
+# When close-on-behalf has already moved the wave to a terminal status, the
+# live-spawn persist re-reads ``wave.status`` under the lock and DROPS the
+# attempt -- no SessionAttempt row, no dispatch_history entry, no cost / tokens,
+# no state.json mutation -- returning ``None`` so the caller short-circuits.
+# --------------------------------------------------------------------------- #
+
+
+def _terminal_spawn_result(*, runtime: str) -> SpawnResult:
+    """A canned :class:`SpawnResult` for the terminal-drop persist test."""
+    return SpawnResult(
+        session_id="sess-late-xyz789",
+        runtime=runtime,
+        model="model-under-test",
+        resolved_model="model-under-test",
+        subprocess_pid=_STUB_PID,
+        exit_status=0,
+        text=_executor_report_json(),
+        input_tokens=100,
+        output_tokens=42,
+        cache_creation_input_tokens=80,
+        cache_creation_5m_input_tokens=50,
+        cache_creation_1h_input_tokens=30,
+        cache_read_input_tokens=200,
+        started_at=_T0,
+        ended_at=_T1,
+    )
+
+
+@pytest.mark.parametrize("runtime", ["codex", "claude-code"])
+def test_persist_live_session_attempt_drops_when_wave_terminal(
+    tmp_path: Path, runtime: str
+) -> None:
+    """A persist that lands after close-on-behalf drops: no attempt, no cost.
+
+    Models the R3 race: ``_spawn_and_dispatch`` releases the state lock after
+    the claim and runs the spawn UNLOCKED, so close-on-behalf can close the
+    wave before the in-flight dispatch reaches its persist step. The persist
+    re-reads ``wave.status`` under the lock; on a terminal status it writes no
+    :class:`~eawf.kernel.state.models.SessionAttempt`, appends no
+    ``dispatch_history`` row, accrues no cost / tokens, and leaves
+    ``state.json`` untouched, returning ``None``.
+    """
+    state_path = _write_state(tmp_path, wave_status="closed")
+    before = state_path.read_text(encoding="utf-8")
+    ctx = _ctx(state_path)
+
+    result = _persist_live_session_attempt(
+        ctx,
+        wave_id=_WAVE_ID,
+        requested_runtime=runtime,
+        serving_runtime=runtime,
+        session_id="sess-late-xyz789",
+        session_log_handle=f"urn:eawf:v1:session-log:{runtime}:sess-late-xyz789",
+        spawn_result=_terminal_spawn_result(runtime=runtime),
+        pid=_STUB_PID,
+    )
+
+    # 1. The persist is dropped -- the caller gets the terminal sentinel.
+    assert result is None
+    # 2. state.json is byte-for-byte unchanged (no attempt / history / accrual).
+    assert state_path.read_text(encoding="utf-8") == before
+    # 3. No SessionAttempt landed and no cost / tokens accrued on the wave.
+    wave = load_state(state_path).waves[_WAVE_ID]
+    assert wave.sessions == {}
+    assert wave.dispatch_history == []
+    assert wave.tokens_consumed == 0
+    assert wave.runtime_baseline is None
+    assert wave.runtime_latest is None
+
+
+@pytest.mark.parametrize("runtime", ["codex", "claude-code"])
+def test_persist_live_session_attempt_persists_when_wave_active(
+    tmp_path: Path, runtime: str
+) -> None:
+    """Back-compat: a non-terminal wave still persists the attempt + priced cost.
+
+    Guards the terminal recheck against over-reach -- when the wave is still
+    CLAIMED (not raced by close-on-behalf) the persist writes attempt 1, the
+    session-attempt row carries the spawn's priced cost, and the headless
+    runtime snapshot is credited onto the wave.
+    """
+    state_path = _write_state(tmp_path, wave_status="claimed")
+    ctx = _ctx(state_path)
+
+    result = _persist_live_session_attempt(
+        ctx,
+        wave_id=_WAVE_ID,
+        requested_runtime=runtime,
+        serving_runtime=runtime,
+        session_id="sess-live-ok",
+        session_log_handle=f"urn:eawf:v1:session-log:{runtime}:sess-live-ok",
+        spawn_result=_terminal_spawn_result(runtime=runtime),
+        pid=_STUB_PID,
+    )
+
+    assert result is not None
+    attempt, _annotation, session_attempt = result
+    assert attempt == 1
+    wave = load_state(state_path).waves[_WAVE_ID]
+    assert set(wave.sessions) == {1}
+    assert wave.sessions[1].session_id == "sess-live-ok"
+    # The persisted attempt's cost matches the returned session-attempt row.
+    assert wave.sessions[1].cost_usd == pytest.approx(float(session_attempt.cost_usd))
+    # A headless runtime fires no runtime.capture RPC, so the persist credits
+    # its priced snapshot onto the wave (proving the non-terminal path ran).
+    assert wave.runtime_baseline is not None
+    assert wave.runtime_latest is not None

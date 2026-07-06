@@ -72,6 +72,7 @@ from eawf.kernel.state.enums import (
     DispatchNote,
     EffortBucket,
     StoreKind,
+    WaveStatus,
 )
 from eawf.kernel.state.io import state_version
 from eawf.kernel.state.models import (
@@ -130,6 +131,16 @@ class LiveSpawnError(RuntimeError):
     + session-start event sink). A live spawn requested without them fails
     fast rather than silently degrading to the plan-only path.
     """
+
+
+#: Wave statuses that carry no out-edge -- a wave that has reached one of
+#: these is done, and a same-wave dispatch still in flight (close-on-behalf
+#: raced the spawn) must NOT persist a phantom attempt onto it. The live-spawn
+#: persist re-reads ``wave.status`` under the state lock and drops the attempt
+#: when it lands here (R3 concurrency fix).
+_TERMINAL_WAVE_STATUSES: frozenset[WaveStatus] = frozenset(
+    {WaveStatus.CLOSED, WaveStatus.FAILED, WaveStatus.ABANDONED}
+)
 
 
 #: Maps a plugin-manifest :data:`~eawf.runtime.runtimes.manifest.RuntimeId`
@@ -292,13 +303,18 @@ class DispatchPlan(BaseModel):
             paths (no subprocess); the real child pid captured via the
             spawn's ``on_spawn`` callback on the live-spawn path.
         runtime: Resolved runtime adapter id (plugin spelling).
-        annotation: Typed dispatch annotation for the attempt.
+        annotation: Typed dispatch annotation for the attempt. ``None`` on the
+            live-spawn drop path, where close-on-behalf closed the wave mid-flight
+            and the attempt was dropped rather than persisted (R3 concurrency fix).
         session_attempt: Typed session-attempt row for the dispatch (the
-            live-spawn path persists it on the registered session).
+            live-spawn path persists it on the registered session). ``None`` on
+            the live-spawn drop path (see :attr:`annotation`).
         event_ids: Ids of the C09 envelopes emitted to the live event
             log, in append order; empty when no outcome was supplied and
             no live spawn ran. On the live-spawn path these are the
-            runner's emitted ids, including the report-driven events.
+            runner's emitted ids, including the report-driven events; empty on
+            the drop path (``run_dispatch`` is short-circuited so no cost /
+            EU accrues onto the already-terminal wave).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -306,8 +322,8 @@ class DispatchPlan(BaseModel):
     attempt: int
     pid: int
     runtime: str
-    annotation: DispatchAnnotation
-    session_attempt: SessionAttempt
+    annotation: DispatchAnnotation | None = None
+    session_attempt: SessionAttempt | None = None
     event_ids: tuple[str, ...] = ()
 
 
@@ -771,8 +787,25 @@ def _persist_live_session_attempt(
     session_log_handle: str,
     spawn_result: SpawnResult,
     pid: int,
-) -> tuple[int, DispatchAnnotation, SessionAttempt]:
-    """Persist the live spawn attempt, including the pid used for kill/budget."""
+) -> tuple[int, DispatchAnnotation, SessionAttempt] | None:
+    """Persist the live spawn attempt, including the pid used for kill/budget.
+
+    Re-reads ``wave.status`` under the state lock BEFORE computing the attempt:
+    close-on-behalf (the liveness watcher resolving a wave "closed") can move
+    the wave to a terminal status while this dispatch is still in flight
+    unlocked. When the wave has already reached a terminal status
+    (:data:`_TERMINAL_WAVE_STATUSES`), the attempt is DROPPED entirely -- no
+    :class:`~eawf.kernel.state.models.SessionAttempt` is written, no
+    ``dispatch_history`` row is appended, no cost / tokens accrue, the attempt
+    counter is not bumped, and ``state.json`` is not mutated -- and ``None`` is
+    returned so the caller short-circuits the dispatch rather than driving a
+    phantom attempt onto a closed wave (R3 concurrency fix).
+
+    Returns:
+        The ``(attempt, annotation, session_attempt)`` triple for the persisted
+        attempt on the non-terminal path, or ``None`` when the wave was already
+        terminal at persist time and the attempt was dropped.
+    """
     if ctx.state_path is None:
         raise LiveSpawnError(f"live spawn requires state_path for wave: {wave_id!r}")
     state_path = Path(ctx.state_path)
@@ -781,6 +814,15 @@ def _persist_live_session_attempt(
         wave = state.waves.get(wave_id)
         if wave is None:
             raise ValueError(f"unknown wave: {wave_id!r}")
+        if wave.status in _TERMINAL_WAVE_STATUSES:
+            # Close-on-behalf raced this in-flight dispatch and already closed
+            # the wave; drop the attempt so no phantom SessionAttempt / cost /
+            # tokens land on a terminal wave. Nothing is written to state.json.
+            logger.info(
+                f"_persist_live_session_attempt wave={wave_id} "
+                f"status={wave.status.value} outcome=dropped-terminal"
+            )
+            return None
         previous_attempt = max(wave.sessions) if wave.sessions else None
         previous = wave.sessions[previous_attempt] if previous_attempt is not None else None
         attempt = (previous_attempt or 0) + 1
@@ -944,6 +986,44 @@ def _find_active_executor(state: State, *, wave_id: str, runtime: str) -> str | 
         ):
             return sess.id
     return None
+
+
+async def _bind_or_synthesize_report(
+    accepted: SpawnResult,
+    *,
+    wave_id: str,
+    prompt: str,
+    serving_runtime: str,
+    spawn_once: Callable[[str], Awaitable[SpawnResult]],
+) -> ExecutorReportBody:
+    """Bind the spawned agent's output to a report body, synthesizing on exhaustion.
+
+    Wraps :func:`_bind_executor_report`: on report-schema exhaustion the bind
+    raises :class:`~eawf.workflow.dispatch.llm_assist.LLMAssistError` (the model
+    answered in prose), which would strand the wave -- ``run_dispatch`` never
+    runs, so the dispatch-cost emit + EU accrual never fire even though the
+    spawn already spent real cost. The synth fallback derives a typed body from
+    the accepted spawn's exit status so the dispatch always completes and the
+    degrade is auditable.
+
+    Returns:
+        The bound :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody`,
+        or the synthesized body when the assist loop exhausted its ceiling.
+    """
+    try:
+        return await _bind_executor_report(
+            accepted,
+            prompt=prompt,
+            serving_runtime=serving_runtime,
+            spawn_once=spawn_once,
+        )
+    except LLMAssistError as exc:
+        body = _synthesize_executor_report(accepted, wave_id=wave_id, exc=exc)
+        logger.info(
+            f"_spawn_and_dispatch wave={wave_id} status=synth-fallback "
+            f"attempts={exc.attempts} reason={exc.failures[-1].reason!r}"
+        )
+        return body
 
 
 async def _bind_executor_report(
@@ -1333,31 +1413,22 @@ async def _spawn_and_dispatch(
             on_spawn=captured_pid.append,
         )
 
-    try:
-        report_body = await _bind_executor_report(
-            spawn_result,
-            prompt=envelope.prompt,
-            serving_runtime=serving_runtime,
-            spawn_once=_spawn_correction,
-        )
-    except LLMAssistError as exc:
-        # The spawned agent's output never validated against the executor report
-        # schema (e.g. a model that answers in prose). Letting the error escape
-        # would strand the wave -- run_dispatch never runs, so the dispatch-cost
-        # emit + EU accrual never fire even though the spawn already spent real
-        # cost. Synthesize a typed body from the accepted spawn's exit status so
-        # the dispatch always completes and the degrade is auditable.
-        report_body = _synthesize_executor_report(spawn_result, wave_id=wave_id, exc=exc)
-        logger.info(
-            f"_spawn_and_dispatch wave={wave_id} status=synth-fallback "
-            f"attempts={exc.attempts} reason={exc.failures[-1].reason!r}"
-        )
+    # Bind the spawned agent's own output to a validated report body, falling
+    # back to a synthesized body on report-schema exhaustion so the dispatch
+    # always completes (see _bind_or_synthesize_report).
+    report_body = await _bind_or_synthesize_report(
+        spawn_result,
+        wave_id=wave_id,
+        prompt=envelope.prompt,
+        serving_runtime=serving_runtime,
+        spawn_once=_spawn_correction,
+    )
     # Redact local/sensitive tokens from the agent's own report prose before the
     # store scrub runs: a headless agent may cite an absolute path in its
     # summary / outcome, which the report-store scrub rejects -- redacting keeps
     # the report and closes the wave instead of hard-failing a successful spawn.
     report_body = _redact_report_body(report_body)
-    attempt, annotation, session_attempt = _persist_live_session_attempt(
+    persisted = _persist_live_session_attempt(
         ctx,
         wave_id=wave_id,
         requested_runtime=runtime,
@@ -1367,6 +1438,32 @@ async def _spawn_and_dispatch(
         spawn_result=spawn_result,
         pid=pid,
     )
+    if persisted is None:
+        # Close-on-behalf closed the wave while this dispatch ran unlocked, so
+        # the attempt was dropped (no SessionAttempt / cost / tokens). Do NOT
+        # drive run_dispatch -- that would emit dispatch_cost + accrue EU onto
+        # the already-terminal wave (the phantom attempt R3 guards). Return a
+        # no-op plan carrying the real spawn's pid/session but no attempt row
+        # and no emitted events. The reported attempt is the wave's existing
+        # session count (lock-free read) since this dispatch added none.
+        current_wave = load_state(state_path).waves.get(wave_id)
+        dropped_attempt = (
+            max(current_wave.sessions) if current_wave and current_wave.sessions else 0
+        )
+        logger.info(
+            f"_spawn_and_dispatch wave={wave_id} runtime={serving_runtime!r} "
+            f"pid={pid} session={session_id!r} outcome=dropped-terminal"
+        )
+        return DispatchPlan(
+            session_id=session_id,
+            attempt=dropped_attempt,
+            pid=pid,
+            runtime=serving_runtime,
+            annotation=None,
+            session_attempt=None,
+            event_ids=(),
+        )
+    attempt, annotation, session_attempt = persisted
     enforce = _resolve_budget_enforce(state_path)
 
     # 8. Drive the runner with the registered session id + the validated body
