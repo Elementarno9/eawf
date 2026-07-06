@@ -10499,6 +10499,34 @@
       "scope_id": "P30-I24-W11",
       "status": "done",
       "updated_at": "2026-07-04T00:30:34.315252Z"
+    },
+    "P30-I25-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W07",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I25-W07",
+      "model": null,
+      "scope_id": "P30-I25-W07",
+      "status": "done",
+      "updated_at": "2026-07-06T20:52:21.275917Z"
+    },
+    "P30-I25-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W08",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I25-W08",
+      "model": null,
+      "scope_id": "P30-I25-W08",
+      "status": "done",
+      "updated_at": "2026-07-06T21:31:11.972404Z"
     }
   },
   "agent_sessions": {
@@ -10724,6 +10752,20 @@
       "started_at": "2026-07-05T17:35:15.711627Z",
       "status": "closed",
       "summary": "P30 deep review complete; request changes.",
+      "worktree_ids": []
+    },
+    "SES-20260706T212959Z-auditor-claude": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-07-06T21:31:39.372934Z",
+      "id": "SES-20260706T212959Z-auditor-claude",
+      "role": "auditor",
+      "runtime": "claude",
+      "scope_id": "P30-I25-W08::audit",
+      "started_at": "2026-07-06T21:29:59.246577Z",
+      "status": "closed",
+      "summary": "W08 recovery-wave fresh-context audit: pass-with-followups (AR-auditor-P30-I25-W08-01)",
       "worktree_ids": []
     }
   },
@@ -26539,6 +26581,32 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I24-W11",
       "updated_at": "2026-07-04T00:18:21.623192Z"
+    },
+    "P30-I25-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W07-bucket-20260706T204548Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I25-W07",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I25-W07",
+      "updated_at": "2026-07-06T20:45:48.668908Z"
+    },
+    "P30-I25-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W08-bucket-20260706T204549Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I25-W08",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I25-W08",
+      "updated_at": "2026-07-06T20:45:49.234215Z"
     }
   },
   "fleet_run": null,
@@ -30216,7 +30284,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-06T20:44:45.858475Z",
+  "updated_at": "2026-07-06T21:31:11.972610Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -120357,10 +120425,10 @@
       "blocks": [
         "P30-I25-W05"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-06T20:45:48.663664Z",
+      "closed_at": "2026-07-06T20:52:21.275917Z",
+      "commit": "0b879db14327fe774df0c4fa69187dc762da6604",
       "criteria_floor_waiver": {
         "reason": "recovering pre-authored green work from an interrupted ship-prep session; criteria describe the already-landed cost-capture slice",
         "waived_at": "2026-07-06T20:44:16.137344Z",
@@ -120396,12 +120464,12 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-06T20:44:16.171449Z",
-      "outcome": null,
+      "outcome": "Headless per-attempt cost captured on SessionAttempt.cost_usd + rendered on the cost tab with wave-snapshot fallback; overlay tests green. Recovered from an interrupted ship-prep session.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -120426,10 +120494,10 @@
     "P30-I25-W08": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-06T20:45:49.234096Z",
+      "closed_at": "2026-07-06T21:31:11.972404Z",
+      "commit": "efb7ad99ff6e9378543cab77dcbe53871b5e5990",
       "criteria_floor_waiver": {
         "reason": "recovering pre-authored green work from an interrupted ship-prep session; criteria describe the already-landed hygiene slices",
         "waived_at": "2026-07-06T20:44:33.327455Z",
@@ -120469,12 +120537,12 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-06T20:44:33.361376Z",
-      "outcome": null,
+      "outcome": "Ship-prep hygiene recovered: scope_id log-key sweep (completed in the touched files), inlined TUI status messages + widened Esc-leave, fresh-init schema_version derive, SIGKILL portability, and the ship census gate re-pointed at the ACTIVE repair iter. Fresh-context auditor verdict pass-with-followups (AR-auditor-P30-I25-W08-01); full suite 13510 passed.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
