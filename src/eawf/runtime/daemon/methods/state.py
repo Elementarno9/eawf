@@ -78,7 +78,14 @@ from eawf.kernel.state.enums import (
     TrackKind,
     WaveStatus,
 )
-from eawf.kernel.state.models import CriteriaFloorWaiver, RuntimeLatest, State, Track, Wave
+from eawf.kernel.state.models import (
+    CriteriaFloorWaiver,
+    RuntimeLatest,
+    SessionAttempt,
+    State,
+    Track,
+    Wave,
+)
 from eawf.kernel.state.mutations import (
     DecisionMutationError,
     MemoryMutationError,
@@ -2674,6 +2681,76 @@ def _runtime_latest_from_params(params: RuntimeCaptureParams) -> RuntimeLatest:
     )
 
 
+def _upsert_interactive_session_attempt(
+    wave: Wave,
+    *,
+    latest: RuntimeLatest,
+    session_id: str | None,
+) -> None:
+    """Mint (or update) the interactive-Claude ``SessionAttempt`` from a capture.
+
+    The interactive-Claude lifecycle (claude CLI claim/close + the Stop hook)
+    fires ``runtime.capture``, which stamps ``wave.runtime_latest`` -- but unlike
+    a headless spawn (which stamps :attr:`SessionAttempt.cost_usd` in
+    :func:`~eawf.runtime.daemon.methods.agent._persist_live_session_attempt`) it
+    minted NO attempt, so an interactive wave carried cost only on the wave-level
+    snapshot and never surfaced a per-attempt cost row like a headless wave does.
+    This upsert records a single attempt whose ``cost_usd`` is fed from the same
+    priced figure that lands on ``runtime_latest``, restoring per-attempt-cost
+    parity across the headless/interactive axis.
+
+    Idempotency mirrors the headless attempt-counter handling: a repeated
+    Stop-hook capture for the SAME interactive session UPDATES the existing
+    attempt in place (preserving its ``attempt`` number + ``started_at``) rather
+    than appending a duplicate. The dedup key is the capture ``session_id``,
+    synthesised per-wave when the hook omits it so a session-less capture still
+    dedupes onto a single attempt. A capture carrying no priced cost is a no-op:
+    there is nothing to surface as a per-attempt cost row, so the wave-level
+    snapshot stays the only record (unchanged path).
+
+    Args:
+        wave: The active wave whose ``runtime_latest`` this capture stamped.
+        latest: The runtime snapshot the same capture produced; its
+            ``cost_usd`` feeds the attempt so the two agree on the figure.
+        session_id: The interactive Claude Code session id off the capture,
+            or ``None`` when the Stop hook omitted it.
+    """
+    if latest.cost_usd is None:
+        return
+    handle_id = session_id or f"interactive:{wave.id}"
+    runtime = latest.harness or "claude-code"
+    existing_no = next(
+        (no for no, sess in wave.sessions.items() if sess.session_id == handle_id),
+        None,
+    )
+    if existing_no is not None:
+        attempt_no = existing_no
+        started_at = wave.sessions[existing_no].started_at
+        outcome = "update"
+    else:
+        attempt_no = (max(wave.sessions) if wave.sessions else 0) + 1
+        started_at = latest.captured_at
+        outcome = "mint"
+    wave.sessions[attempt_no] = SessionAttempt(
+        attempt=attempt_no,
+        runtime=runtime,
+        session_id=handle_id,
+        session_log_handle=f"urn:eawf:v1:session-log:{runtime}:{handle_id}",
+        started_at=started_at,
+        ended_at=latest.captured_at,
+        exit_status=0,
+        input_tokens=latest.input_tokens,
+        output_tokens=latest.output_tokens,
+        cache_creation_input_tokens=latest.cache_creation_input_tokens,
+        cache_read_input_tokens=latest.cache_read_input_tokens,
+        cost_usd=float(latest.cost_usd),
+    )
+    logger.info(
+        f"_upsert_interactive_session_attempt wave={wave.id} attempt={attempt_no} "
+        f"session_id={handle_id!r} cost_usd={float(latest.cost_usd)} outcome={outcome}"
+    )
+
+
 def _commit_worktree_state(
     *,
     ctx: MethodContext,
@@ -2883,6 +2960,11 @@ async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[st
                         f"validation_failed: active wave missing: {wave_id!r}"
                     )
                 wave.runtime_latest = latest
+                # The interactive-Claude lifecycle mints no SessionAttempt on
+                # its own (only the headless spawn does); record one here off the
+                # same priced capture so an interactive wave surfaces per-attempt
+                # cost the way a headless wave does. Idempotent per session id.
+                _upsert_interactive_session_attempt(wave, latest=latest, session_id=args.session_id)
             if len(active_wave_ids) > 1:
                 logger.warning(f"runtime_capture active_count={len(active_wave_ids)}")
 

@@ -13,11 +13,17 @@ import pytest
 
 from eawf import __version__
 from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.models import State
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.state import runtime_capture
+from eawf.surfaces.tui.screens.overlays.detail_cost import (
+    NO_METERED_SESSIONS,
+    cost_tab_rows,
+    wave_cost_rollup_for_wave,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -233,5 +239,150 @@ def test_runtime_capture_params_forbid_extra_keys(tmp_path: Path) -> None:
     async def body() -> None:
         with pytest.raises(DaemonValidationError, match="extra"):
             await runtime_capture(ctx, _capture_params(unexpected=True))
+
+    _run(body)
+
+
+# --------------------------------------------------------------------------- #
+# Per-attempt-cost parity across the headless / interactive-claude axis.
+#
+# The headless spawn stamps ``SessionAttempt.cost_usd`` directly; the
+# interactive-claude lifecycle (claude CLI claim/close + the Stop hook) mints
+# its attempt HERE, off the Stop-hook ``runtime.capture``. All three wave
+# flavours must surface a per-attempt cost row through the same cost-tab rollup.
+# --------------------------------------------------------------------------- #
+
+
+def _headless_wave_dict(wave_id: str, iter_id: str, *, runtime: str, cost: float) -> dict[str, Any]:
+    """A claimed wave carrying one already-minted headless ``SessionAttempt``.
+
+    Mirrors the attempt shape a headless spawn stamps in
+    ``_persist_live_session_attempt``: a single attempt (number 1) whose own
+    ``cost_usd`` is priced onto the attempt row -- the headless half of the
+    parity the interactive path must match.
+    """
+    return {
+        "id": wave_id,
+        "iter_id": iter_id,
+        "title": "headless spawn",
+        "status": "claimed",
+        "claim_session_id": f"claim-{runtime}",
+        "opened_at": _now().isoformat(),
+        "claimed_at": _now().isoformat(),
+        "sessions": {
+            "1": {
+                "attempt": 1,
+                "runtime": runtime,
+                "session_id": f"sess-{runtime}",
+                "session_log_handle": f"urn:eawf:v1:session-log:{runtime}:sess",
+                "started_at": _now().isoformat(),
+                "ended_at": _now().isoformat(),
+                "exit_status": 0,
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "cost_usd": cost,
+            }
+        },
+    }
+
+
+def test_per_attempt_cost_parity_headless_codex_claude_and_interactive(
+    tmp_path: Path,
+) -> None:
+    """Parity: codex-headless, claude-headless, and interactive-claude waves each
+    surface a per-attempt cost row.
+
+    The headless half stamps ``SessionAttempt.cost_usd`` in the spawn path; the
+    interactive-claude half mints it here off the Stop-hook ``runtime.capture``.
+    All three flow through the SAME cost-tab rollup entry point
+    (``wave_cost_rollup_for_wave`` -> ``cost_tab_rows``), so each renders a
+    per-attempt row carrying its priced cost rather than the honest-absence line.
+    """
+    iter_id = "P30-I05"
+    interactive_id = "P30-I05-W04"
+    codex_id = "P30-I05-W02"
+    claude_id = "P30-I05-W03"
+    codex_cost = 0.1234
+    claude_cost = 0.2345
+    interactive_cost = 0.42  # matches _capture_params default cost_usd "0.42"
+
+    payload = _state_payload(active_wave_ids=[interactive_id])
+    payload["waves"][codex_id] = _headless_wave_dict(
+        codex_id, iter_id, runtime="codex", cost=codex_cost
+    )
+    payload["waves"][claude_id] = _headless_wave_dict(
+        claude_id, iter_id, runtime="claude-code", cost=claude_cost
+    )
+    payload["iters"][iter_id]["wave_ids"] = [interactive_id, codex_id, claude_id]
+    ctx, state_path = _ctx(tmp_path, payload)
+
+    async def body() -> None:
+        await runtime_capture(ctx, _capture_params(session_id="interactive-sess"))
+        state = State.model_validate(orjson.loads(state_path.read_bytes()))
+
+        # The interactive wave gained exactly one minted attempt carrying cost.
+        interactive = state.waves[interactive_id]
+        assert len(interactive.sessions) == 1
+        assert interactive.sessions[1].cost_usd == pytest.approx(interactive_cost)
+        assert interactive.sessions[1].runtime == "claude-code"
+
+        # Every flavour surfaces >=1 per-attempt cost row through the shared
+        # rollup + cost-tab entry points -- identical shape, honest figure.
+        expected = {
+            codex_id: codex_cost,
+            claude_id: claude_cost,
+            interactive_id: interactive_cost,
+        }
+        for wave_id, cost in expected.items():
+            rollup = wave_cost_rollup_for_wave(state, wave_id, state_path)
+            assert rollup is not None
+            assert len(rollup.attempts) >= 1
+            assert float(rollup.attempts[0].cost_usd) == pytest.approx(cost)
+            rows = cost_tab_rows(rollup)
+            labels = [label for label, _ in rows]
+            assert "attempts" in labels
+            assert all(str(value) != NO_METERED_SESSIONS for _label, value in rows)
+
+    _run(body)
+
+
+def test_interactive_capture_idempotent_updates_not_appends(tmp_path: Path) -> None:
+    """A repeated Stop-hook capture for the same session UPDATES its attempt.
+
+    Idempotency parity with the headless attempt counter: two captures for the
+    same interactive session id leave exactly ONE attempt on the wave (the cost
+    updated to the latest figure), never a second duplicate attempt row.
+    """
+    interactive_id = "P30-I05-W04"
+    ctx, state_path = _ctx(tmp_path, _state_payload(active_wave_ids=[interactive_id]))
+
+    async def body() -> None:
+        await runtime_capture(ctx, _capture_params(session_id="sess-x", cost_usd="0.10"))
+        await runtime_capture(ctx, _capture_params(session_id="sess-x", cost_usd="0.30"))
+        state = State.model_validate(orjson.loads(state_path.read_bytes()))
+        wave = state.waves[interactive_id]
+        assert len(wave.sessions) == 1
+        assert wave.sessions[1].session_id == "sess-x"
+        assert wave.sessions[1].cost_usd == pytest.approx(0.30)
+
+    _run(body)
+
+
+def test_interactive_capture_without_cost_mints_no_attempt(tmp_path: Path) -> None:
+    """Boundary: a capture carrying no priced cost mints no attempt.
+
+    Nothing to surface as a per-attempt cost row, so the wave-level runtime
+    snapshot stays the only record and ``sessions`` remains empty (unchanged
+    pre-parity behaviour for a cost-less capture).
+    """
+    interactive_id = "P30-I05-W04"
+    ctx, state_path = _ctx(tmp_path, _state_payload(active_wave_ids=[interactive_id]))
+
+    async def body() -> None:
+        params = _capture_params(session_id="sess-x")
+        del params["cost_usd"]
+        await runtime_capture(ctx, params)
+        state = State.model_validate(orjson.loads(state_path.read_bytes()))
+        assert state.waves[interactive_id].sessions == {}
 
     _run(body)
