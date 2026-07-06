@@ -10711,6 +10711,20 @@
       "status": "active",
       "summary": null,
       "worktree_ids": []
+    },
+    "SES-20260705T173515Z-reviewer-generic": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-07-05T17:35:43.101674Z",
+      "id": "SES-20260705T173515Z-reviewer-generic",
+      "role": "reviewer",
+      "runtime": "generic",
+      "scope_id": "P30",
+      "started_at": "2026-07-05T17:35:15.711627Z",
+      "status": "closed",
+      "summary": "P30 deep review complete; request changes.",
+      "worktree_ids": []
     }
   },
   "artifacts": {
@@ -14070,7 +14084,7 @@
       "SES-20260703T161339Z-auditor-claude-code"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P30-I25",
     "phase_id": "P30",
     "project_code": "EAWF",
     "track_id": null
@@ -29042,6 +29056,28 @@
         "P30-I24-W10",
         "P30-I24-W11"
       ]
+    },
+    "P30-I25": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": "Fix the headless-dispatch lifecycle bug cluster (spurious re-dispatch, dispatch-after-close, orphaned-claim, per-attempt cost) so codex and claude behave identically; a v0.6.0 ship gate.",
+      "estimate_id": null,
+      "id": "P30-I25",
+      "intent": null,
+      "opened_at": "2026-07-06T19:36:36.297316Z",
+      "phase_id": "P30",
+      "status": "active",
+      "title": "Headless dispatch lifecycle consistency",
+      "trigger": "none",
+      "wave_ids": [
+        "P30-I25-W01",
+        "P30-I25-W02",
+        "P30-I25-W03",
+        "P30-I25-W04",
+        "P30-I25-W05",
+        "P30-I25-W06"
+      ]
     }
   },
   "mcp_grants": null,
@@ -30126,7 +30162,8 @@
         "P30-I21",
         "P30-I22",
         "P30-I23",
-        "P30-I24"
+        "P30-I24",
+        "P30-I25"
       ],
       "opened_at": "2026-06-09T12:29:17.752919Z",
       "outcome_ids": [],
@@ -30177,7 +30214,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-04T01:00:06.590194Z",
+  "updated_at": "2026-07-06T19:38:00.038678Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -119704,6 +119741,609 @@
         }
       ],
       "title": "Exempt empty-fixture research-board Enter in the liveness sweep",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I25-W02",
+        "P30-I25-W06"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "smoke-exempt: prose criteria carried in the wave IntentBrief and success strings",
+        "waived_at": "2026-07-06T19:37:30.139320Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/fleet.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W01",
+      "intent": {
+        "desired_outcome": "A post-report process exit closes the wave once with no re-dispatch, identically for codex and headless claude.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Root of the re-dispatch storm; W02 and W03 build on the corrected completion semantics.",
+        "problem": "A spawned agent process exits right after emitting its report; the liveness watcher reads the pgid dead and re-dispatches the lane, fanning one execution into several attempts.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-06T19:37:30.174359Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The liveness watcher classifies a spawned pgid dead-read as NORMAL completion (not stalled-dead) once the wave has a bound report and passing close-readiness; it closes and retires the lane and never re-dispatches.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The liveness watcher classifies a spawned pgid dead-read as NORMAL completion (not stalled-dead) once the wave has a bound report and passing close-readiness; it closes and retires the lane and never re-dispatches.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A unit test with a mock dead pgid plus a close-ready report asserts exactly one close and zero re-dispatch for both codex and claude runtimes.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A unit test with a mock dead pgid plus a close-ready report asserts exactly one close and zero re-dispatch for both codex and claude runtimes.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Treat post-report process exit as completion",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I25-W03",
+        "P30-I25-W06"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "smoke-exempt: prose criteria carried in the wave IntentBrief and success strings",
+        "waived_at": "2026-07-06T19:37:30.685563Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I25-W01"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/agent.py",
+        "src/eawf/runtime/daemon/methods/fleet.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W02",
+      "intent": {
+        "desired_outcome": "A dispatch for a terminal wave is dropped; no post-close attempt or cost is recorded.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Stops the after-close attempt; depends on W01 completion semantics.",
+        "problem": "Close-on-behalf is not atomic with an in-flight dispatch, so a dispatch lands an attempt after the wave is already closed.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-06T19:37:30.718160Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "_persist_live_session_attempt re-reads wave.status under the state lock and drops a dispatch for a terminal wave with no attempt",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "_persist_live_session_attempt re-reads wave.status under the state lock and drops a dispatch for a terminal wave with no attempt",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "grandfathered legacy criterion",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "no dispatch_cost",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "and no token accrual.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "and no token accrual.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "A per-wave in-flight guard spans claim to dispatch to persist so close-on-behalf cannot interleave with an in-flight dispatch.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A per-wave in-flight guard spans claim to dispatch to persist so close-on-behalf cannot interleave with an in-flight dispatch.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-05",
+          "kind": "legacy",
+          "measurable_signal": "A test asserts a dispatch completing after close persists no attempt.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A test asserts a dispatch completing after close persists no attempt.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Gate dispatch and attempt-persist on terminal status",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I25-W06"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "smoke-exempt: prose criteria carried in the wave IntentBrief and success strings",
+        "waived_at": "2026-07-06T19:37:31.239605Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I25-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/fleet.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W03",
+      "intent": {
+        "desired_outcome": "An orphaned claim fails or re-queues cleanly instead of wedging.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Closes the no-failure-path gap; depends on W02 status semantics.",
+        "problem": "A wave that wedges before its attempt persists has no lane, and every failure path is lane-based, so it stays CLAIMED forever with no way to fail.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-06T19:37:31.273122Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "A CLAIMED or IN_PROGRESS wave whose driving fleet_run has drained and whose agent pgid is dead transitions to failed or re-queues via a claim-based failure path.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A CLAIMED or IN_PROGRESS wave whose driving fleet_run has drained and whose agent pgid is dead transitions to failed or re-queues via a claim-based failure path.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A wave that wedges before its attempt persists and thus has no lane is still failable.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A wave that wedges before its attempt persists and thus has no lane is still failable.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "A test drives an orphaned claim to a clean failure.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A test drives an orphaned claim to a clean failure.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Reap orphaned claims whose driving run has drained",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I25-W06"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "smoke-exempt: prose criteria carried in the wave IntentBrief and success strings",
+        "waived_at": "2026-07-06T19:37:58.904600Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/fleet.py",
+        "src/eawf/workflow/dispatch/dispatch_close.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W04",
+      "intent": {
+        "desired_outcome": "Environmental floor failures close-with-followups; only executor-fixable failures re-dispatch.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Removes environmental re-dispatch thrash; independent of the completion-semantics chain.",
+        "problem": "The repair ladder re-dispatches a passing wave when its floor gates fail for environmental reasons such as a missing pre-commit config, src tree, or pytest dep, which the executor cannot fix.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-06T19:37:58.947746Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The grounded-repair ladder re-dispatches only on failures the executor can act on; environmental floor-gate failures such as missing repo scaffolding close-with-followups instead of re-dispatching.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The grounded-repair ladder re-dispatches only on failures the executor can act on; environmental floor-gate failures such as missing repo scaffolding close-with-followups instead of re-dispatching.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A test asserts an environmental floor failure does not trigger a repair re-dispatch.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A test asserts an environmental floor failure does not trigger a repair re-dispatch.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Gate repair re-dispatch on executor-fixable failures",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I25-W06"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "smoke-exempt: prose criteria carried in the wave IntentBrief and success strings",
+        "waived_at": "2026-07-06T19:37:59.459061Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/surfaces/cli/commands/lifecycle_wave.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W05",
+      "intent": {
+        "desired_outcome": "Per-attempt cost is present and consistent across headless-codex, headless-claude, and interactive-claude waves.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Closes the one non-structural divergence; independent of the fleet-loop chain.",
+        "problem": "The interactive-claude lifecycle mints no SessionAttempt and carries cost only on the wave snapshot, so it surfaces no per-attempt cost while headless waves do.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-06T19:37:59.490981Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The interactive-claude claim and close path records a SessionAttempt whose cost_usd is fed from the Stop-hook runtime.capture",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The interactive-claude claim and close path records a SessionAttempt whose cost_usd is fed from the Stop-hook runtime.capture",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "so an interactive-claude wave surfaces per-attempt cost like a headless wave.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "so an interactive-claude wave surfaces per-attempt cost like a headless wave.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "A parity test asserts equal per-attempt-cost shape for a headless-codex",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A parity test asserts equal per-attempt-cost shape for a headless-codex",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "grandfathered legacy criterion",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a headless-claude",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-05",
+          "kind": "legacy",
+          "measurable_signal": "and an interactive-claude wave.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "and an interactive-claude wave.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Record per-attempt cost on the interactive-claude path",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W06": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "smoke-exempt: prose criteria carried in the wave IntentBrief and success strings",
+        "waived_at": "2026-07-06T19:38:00.004109Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I25-W01",
+        "P30-I25-W02",
+        "P30-I25-W03",
+        "P30-I25-W04",
+        "P30-I25-W05"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "tests/e2e/test_lifecycle_consistency.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W06",
+      "intent": {
+        "desired_outcome": "A live cross-runtime drive proves the fixes hold for both codex and claude before the phase closes.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The discriminating verification the whole iter is gated on; depends on all code waves.",
+        "problem": "The lifecycle bug cluster passed unit tests and only surfaced under a live spawn, so unit tests alone cannot verify the fix.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-06T19:38:00.038459Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "A live smoke drive over a codex frontier and a headless-claude frontier asserts one attempt per execution",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A live smoke drive over a codex frontier and a headless-claude frontier asserts one attempt per execution",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "no post-close dispatch",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "no post-close dispatch",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "an orphaned claim failing cleanly",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "an orphaned claim failing cleanly",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "and per-attempt cost present for both runtimes.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "and per-attempt cost present for both runtimes.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-05",
+          "kind": "legacy",
+          "measurable_signal": "The iter does not close until this live gate is green for both runtimes.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The iter does not close until this live gate is green for both runtimes.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Cross-runtime live e2e parity gate for codex and claude",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
