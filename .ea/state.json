@@ -29076,7 +29076,9 @@
         "P30-I25-W03",
         "P30-I25-W04",
         "P30-I25-W05",
-        "P30-I25-W06"
+        "P30-I25-W06",
+        "P30-I25-W07",
+        "P30-I25-W08"
       ]
     }
   },
@@ -30214,7 +30216,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-06T19:38:00.038678Z",
+  "updated_at": "2026-07-06T20:44:45.858475Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -120123,7 +120125,9 @@
         "waived_at": "2026-07-06T19:37:59.459061Z",
         "waived_by": null
       },
-      "deps": [],
+      "deps": [
+        "P30-I25-W07"
+      ],
       "description": null,
       "dispatch_history": [],
       "effort_bucket": "S",
@@ -120344,6 +120348,150 @@
         }
       ],
       "title": "Cross-runtime live e2e parity gate for codex and claude",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W07": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I25-W05"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "recovering pre-authored green work from an interrupted ship-prep session; criteria describe the already-landed cost-capture slice",
+        "waived_at": "2026-07-06T20:44:16.137344Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Persist each headless dispatch attempt's priced cost on SessionAttempt.cost_usd and render per-attempt cost on the detail cost tab, falling back to the wave runtime snapshot for legacy attempts. Headless half of the W05 cost-parity gap.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/runtime/daemon/methods/agent.py",
+        "src/eawf/surfaces/tui/screens/overlays/detail_cost.py",
+        "src/eawf/schemas/state.schema.json"
+      ],
+      "gates": [],
+      "id": "P30-I25-W07",
+      "intent": {
+        "desired_outcome": "Each headless dispatch attempt stamps its own priced cost; the cost tab shows per-attempt rows with a wave-snapshot fallback for legacy attempts.",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-06-lifecycle-consistency-waves.md"
+        ],
+        "planned_steps": [
+          "Add cost_usd to SessionAttempt + regen schema",
+          "Stamp priced cost in _persist_live_session_attempt",
+          "Render per-attempt rollup with wave-snapshot fallback in detail_cost",
+          "Add cost + watch overlay tests"
+        ],
+        "priority_rationale": "Headless half of the W05 cost-parity gap; interactive parity (W05) reads SessionAttempt.cost_usd, so this must land first.",
+        "problem": "A headless wave dispatched more than once surfaced only the single wave-level runtime snapshot, hiding per-attempt cost.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-06T20:44:16.171449Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "SessionAttempt.cost_usd persists each headless spawn priced cost;detail cost tab renders per-attempt rows with a wave-snapshot fallback;cost and watch overlay tests stay green",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "SessionAttempt.cost_usd persists each headless spawn priced cost;detail cost tab renders per-attempt rows with a wave-snapshot fallback;cost and watch overlay tests stay green",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Capture per-attempt spawn cost across the headless axis",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W08": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "recovering pre-authored green work from an interrupted ship-prep session; criteria describe the already-landed hygiene slices",
+        "waived_at": "2026-07-06T20:44:33.327455Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Recover the interrupted ship-prep batch: align daemon log keys to the scope_id convention, inline TUI status templates and widen Esc-leave to any agent body, derive fresh-init schema_version from current_target_version, harden SIGKILL classification for absent signal.SIGKILL, and re-point the ship census gate at the reopened I25 repair path.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/state/io.py",
+        "src/eawf/kernel/state/mutations.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "src/eawf/platform/install/wizard.py",
+        "src/eawf/runtime/daemon/dispatch_runner.py",
+        "tests/lint/test_reclose_staging.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W08",
+      "intent": {
+        "desired_outcome": "The ship-prep hygiene batch lands under attributable commits and the census gate tracks the reopened I25 repair path so the suite is green again.",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-06-lifecycle-consistency-waves.md"
+        ],
+        "planned_steps": [
+          "Align log keys to scope_id",
+          "Inline TUI status templates + widen Esc-leave",
+          "Derive fresh-init schema_version + harden SIGKILL",
+          "Re-point the ship census gate at the ACTIVE repair iter",
+          "Repin init goldens + deflake jury concurrency"
+        ],
+        "priority_rationale": "Preserves green interrupted work before any wave dispatch (a checkout would revert it) and restores a green suite for the per-commit gate during the I25 repair cycle.",
+        "problem": "An interrupted ship-prep session left green log-key, TUI, schema_version, SIGKILL and census fixes uncommitted; opening I25 also reddened the one-pending-wave census gate.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-06T20:44:33.361376Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "daemon log keys use the scope_id naming convention;TUI status templates render inline at their call sites;fresh-init schema_version derives from current_target_version not a literal;SIGKILL classification tolerates an absent signal.SIGKILL;the ship census gate tracks the ACTIVE repair iter and stays",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "daemon log keys use the scope_id naming convention;TUI status templates render inline at their call sites;fresh-init schema_version derives from current_target_version not a literal;SIGKILL classification tolerates an absent signal.SIGKILL;the ship census gate tracks the ACTIVE repair iter and stays green;the full suite is green",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Sweep ship-prep hygiene before the v0.6.0 re-close",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
