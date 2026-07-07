@@ -40,6 +40,7 @@ from eawf.observability.telemetry.join import (
     rollup_wave_sessions,
 )
 from eawf.observability.telemetry.models import TelemetrySession
+from eawf.observability.telemetry.pricing import lookup_pricing
 from eawf.observability.telemetry.store import metrics_db_path, open_store
 from eawf.surfaces.render.link_wrap import PreMarkedText
 from eawf.surfaces.render.units import format_tokens
@@ -208,6 +209,75 @@ def aggregate_cost_bar(rollup: WaveSessionRollup, *, mode: RenderMode = DEFAULT_
     return render_eu_bar_plain(priciest, total, mode=mode)
 
 
+#: The canonical model whose per-class pricing ratios weight the cache-adjusted
+#: ``eff`` headline. The ratios (output ~5x an input token, a cache-read ~0.1x,
+#: a cache-write ~1.25x) are family-stable, so ``eff`` reuses the metering
+#: :class:`~eawf.observability.telemetry.pricing.ModelPricing` weights rather
+#: than forking a second ratio table; the current default model anchors them.
+_EFF_REFERENCE_MODEL: str = "claude-opus-4-8"
+
+
+def effective_tokens(rollup: WaveSessionRollup) -> int | None:
+    """Return the cache-adjusted effective input-token-equivalent for a rollup.
+
+    Weights each summed per-class token count by the SAME metering pricing
+    ratios the ``$`` figure uses (output costs ~5x an input token, a cache-read
+    ~0.1x, a cache-write ~1.25x), normalised to input-token-equivalents. Cheap
+    cache reads contribute little and expensive output much, so ``eff`` reads as
+    the wave's effective token spend rather than a flat raw sum. The single
+    cache-write tier weights against the 5-minute rate (the rollup carries no
+    TTL split, mirroring the adapter's conservative prior).
+
+    Args:
+        rollup: The per-wave joined cost rollup.
+
+    Returns:
+        The rounded effective input-token-equivalent, or ``None`` when the
+        reference pricing row cannot be resolved (no ratios to weight against).
+    """
+    pricing = lookup_pricing(_EFF_REFERENCE_MODEL)
+    if pricing is None or pricing.input_per_token <= 0:
+        return None
+    base = float(pricing.input_per_token)
+    eff = (
+        rollup.input_tokens
+        + rollup.output_tokens * float(pricing.output_per_token) / base
+        + rollup.cache_write_tokens * float(pricing.cache_write_5m_per_token) / base
+        + rollup.cache_read_tokens * float(pricing.cache_read_per_token) / base
+    )
+    return round(eff)
+
+
+def _blended_token_rows(rollup: WaveSessionRollup) -> tuple[tuple[str, str], ...]:
+    """Return the ``eff`` headline + per-class breakdown rows for a rollup.
+
+    The blended token view: a cache-adjusted ``eff`` headline (no raw-sum
+    headline) plus the raw per-class breakdown (in / out / cache-write /
+    cache-read). Empty when ``eff`` cannot be derived so the tab degrades to the
+    per-attempt table alone rather than a fabricated figure.
+
+    Args:
+        rollup: The per-wave joined cost rollup.
+
+    Returns:
+        Two ``(label, value)`` rows (the ``eff`` headline + the breakdown), or
+        an empty tuple when ``eff`` is unresolvable.
+    """
+    eff = effective_tokens(rollup)
+    if eff is None:
+        return ()
+    breakdown = (
+        f"in {format_tokens(rollup.input_tokens)}  "
+        f"out {format_tokens(rollup.output_tokens)}  "
+        f"cache cr {format_tokens(rollup.cache_write_tokens)}  "
+        f"cache rd {format_tokens(rollup.cache_read_tokens)}"
+    )
+    return (
+        ("eff", format_tokens(eff)),
+        ("tokens", breakdown),
+    )
+
+
 def cost_tab_rows(
     rollup: WaveSessionRollup, *, mode: RenderMode = DEFAULT_RENDER_MODE
 ) -> tuple[tuple[str, str], ...]:
@@ -246,6 +316,7 @@ def cost_tab_rows(
         ("attempts", rendered),
         ("total", _aggregate_total_cell(rollup)),
         ("cost", aggregate_cost_bar(rollup, mode=mode)),
+        *_blended_token_rows(rollup),
     )
 
 
