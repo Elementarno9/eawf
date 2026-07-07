@@ -29177,7 +29177,14 @@
         "P30-I21-W25",
         "P30-I21-W26",
         "P30-I21-W27",
-        "P30-I21-W28"
+        "P30-I21-W28",
+        "P30-I21-W29",
+        "P30-I21-W30",
+        "P30-I21-W31",
+        "P30-I21-W32",
+        "P30-I21-W33",
+        "P30-I21-W34",
+        "P30-I21-W35"
       ]
     },
     "P30-I22": {
@@ -30460,7 +30467,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-07T00:41:50.217293Z",
+  "updated_at": "2026-07-07T15:42:16.120646Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -110867,6 +110874,701 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P30-I21-W28-1783096544"
+    },
+    "P30-I21-W29": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I21-W32"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/agent.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/runtime/daemon/runtime_counters.py",
+        "src/eawf/workflow/lifecycle/wave.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/runtime/test_headless_token_capture_w29.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W29",
+      "intent": {
+        "desired_outcome": "A closed headless wave carries real per-class tokens on runtime_latest so compute_runtime_delta yields non-zero tokens_consumed.",
+        "evidence_refs": [
+          "src/eawf/runtime/daemon/methods/agent.py",
+          "src/eawf/runtime/daemon/methods/state.py",
+          "src/eawf/workflow/lifecycle/wave.py"
+        ],
+        "planned_steps": [
+          "Stamp the matched headless runtime snapshot pair unconditionally in _persist_live_session_attempt",
+          "Add a merge helper so runtime.capture never overwrites a populated token field with None",
+          "Add unit tests and verify with a live headless spawn"
+        ],
+        "priority_rationale": null,
+        "problem": "Headless spawn parsed token usage never lands on wave.tokens_consumed so the runtime tab reads no data and close records zero tokens.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-07T15:35:43.608354Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/runtime/test_headless_token_capture_w29.py -q exits zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the headless-token-capture regression suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The headless spawn path stamps the matched runtime snapshot onto wave.runtime_latest so per-class tokens land even when a claim-time baseline exists, and the runtime.capture merge helper never overwrites a populated token field with None; a unit test suite closes a headless wave and asserts wave.tokens_consumed exceeds zero.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Stamp headless spawn tokens onto wave runtime for close capture",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W30": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/claude/adapter.py",
+        "src/eawf/runtime/runtimes/stream_json.py",
+        "src/eawf/runtime/daemon/methods/fleet.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/runtime/test_stream_json_default_w30.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W30",
+      "intent": {
+        "desired_outcome": "Claude spawns default to stream-json and result parsing routes through unwrap_result_envelope so usage extraction survives the format switch.",
+        "evidence_refs": [
+          "src/eawf/runtime/runtimes/claude/adapter.py",
+          "src/eawf/runtime/runtimes/stream_json.py"
+        ],
+        "planned_steps": [
+          "Switch adapter --output-format json to stream-json",
+          "Route _parse_claude_result through unwrap_result_envelope",
+          "Thread on_chunk into the fleet _spawn call"
+        ],
+        "priority_rationale": null,
+        "problem": "Claude headless spawn uses --output-format json causing a multi-minute output blackout while the TUI already parses stream-json.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-07T15:36:32.667091Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/runtime/test_stream_json_default_w30.py -q exits zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the stream-json-default regression suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The claude adapter defaults the spawn output-format to stream-json and routes _parse_claude_result through unwrap_result_envelope so the terminal result line still yields usage, and the fleet spawn threads on_chunk so output chunks emit during the run.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Default claude spawns to stream-json and unwrap the result envelope",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W31": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/main.py",
+        "src/eawf/runtime/daemon/methods/fleet.py",
+        "src/eawf/runtime/daemon/methods/research.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/runtime/test_idle_watchdog_interlock_w31.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W31",
+      "intent": {
+        "desired_outcome": "The watchdog counts live drive and research-run threads as in-flight so it never trips while background work runs and tears the drive down on shutdown.",
+        "evidence_refs": [
+          "src/eawf/runtime/daemon/main.py",
+          "src/eawf/runtime/daemon/methods/fleet.py"
+        ],
+        "planned_steps": [
+          "Count drive_in_flight and research_run_in_flight in the watchdog in-flight probe",
+          "Wire shutdown_drive into the daemon shutdown path",
+          "Verify with a live headless drive and short idle timeout"
+        ],
+        "priority_rationale": null,
+        "problem": "Idle watchdog ignores the background drive thread so a headless daemon with no subscriber can self-kill mid-spawn at the default timeout.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-07T15:36:33.275769Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/runtime/test_idle_watchdog_interlock_w31.py -q exits zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the idle-watchdog-interlock regression suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The idle watchdog counts the live drive and research-run threads as in-flight so a headless daemon with no subscriber never trips while a spawn runs, and shutdown_drive tears the drive down on the daemon shutdown path.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Interlock idle watchdog with live drive and research-run threads",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W32": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": null,
+      "deps": [
+        "P30-I21-W29"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/screens/overlays/detail_cost.py",
+        "src/eawf/runtime/runtimes/metering.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_blended_token_render_w32.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "home"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-02",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W32",
+      "intent": {
+        "desired_outcome": "The cost tab shows an effective cache-adjusted eff headline plus a per-class in out cache-write cache-read breakdown reusing the metering weights.",
+        "evidence_refs": [
+          "src/eawf/surfaces/tui/screens/overlays/detail_cost.py",
+          "src/eawf/runtime/runtimes/metering.py"
+        ],
+        "planned_steps": [
+          "Append an eff aggregate headline and per-class rows in cost_tab_rows",
+          "Compute eff with the existing metering price weights",
+          "Add unit tests over the render rows"
+        ],
+        "priority_rationale": null,
+        "problem": "The cost tab shows no blended token view so an operator cannot read effective cache-adjusted tokens or the in out cache split at a glance.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-07T15:36:33.852903Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01",
+            "G-02"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/tui/test_blended_token_render_w32.py -q exits zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the blended-token-render regression suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The cost tab appends an effective aggregate headline plus per-class input output and cache rows in cost_tab_rows computed with the existing metering price weights, and a unit test asserts the rendered rows.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Render blended effective-token headline and per-class breakdown",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W33": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "src/eawf/surfaces/tui/widgets/output_tail.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_watch_ux_w33.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "autopilot"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-02",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W33",
+      "intent": {
+        "desired_outcome": "The watch surface shows thinking elapsed turns plus elapsed-versus-expected and gives the stream pane more height with fuller backfill.",
+        "evidence_refs": [
+          "src/eawf/surfaces/tui/modes/agent_watch.py",
+          "src/eawf/surfaces/tui/widgets/output_tail.py"
+        ],
+        "planned_steps": [
+          "Add a spawn liveness heartbeat line with elapsed and turns",
+          "Add effort-aware elapsed-versus-expected from the bucket estimate",
+          "Raise the output pane height ratio and backfill cap"
+        ],
+        "priority_rationale": null,
+        "problem": "The watch surface shows no liveness heartbeat or elapsed-versus-expected and squeezes the stream pane so long JSON reads as cut off.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-07T15:36:34.427665Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01",
+            "G-02"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/tui/test_watch_ux_w33.py -q exits zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the watch-ux regression suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The watch surface shows a spawn liveness heartbeat line with elapsed and turns plus an effort-aware elapsed-versus-expected from the bucket estimate, and raises the output pane height ratio and backfill cap.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add spawn liveness heartbeat effort-aware elapsed and taller watch pane",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W34": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/cli/commands/research.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/cli/test_campaign_dryrun_cancel_w34.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W34",
+      "intent": {
+        "desired_outcome": "campaign new --dry-run returns the domain count without persisting and campaign cancel tombstones an active campaign via the existing daemon method.",
+        "evidence_refs": [
+          "src/eawf/cli/commands/research.py"
+        ],
+        "planned_steps": [
+          "Add a --dry-run flag gating the campaign persist call",
+          "Add a campaign cancel verb calling research.cancel_campaign",
+          "Update the local validation guide usage"
+        ],
+        "priority_rationale": null,
+        "problem": "campaign new persists a durable campaign even for a resolve-check leaking sanity campaigns and there is no CLI verb to cancel a campaign.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-07T15:36:34.973853Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/cli/test_campaign_dryrun_cancel_w34.py -q exits zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the campaign dry-run and cancel regression suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The campaign new command gains a dry-run flag that gates the campaign persist call and returns the domain count, and a campaign cancel verb calls research.cancel_campaign; the local validation guide usage is updated.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add campaign new --dry-run and campaign cancel CLI verbs",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W35": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/research_board.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_topic_tree_scope_questions_w35.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "research_board"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-02",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W35",
+      "intent": {
+        "desired_outcome": "Scope-wide questions render in their own section so project-scoped questions never appear under an arbitrary campaign node.",
+        "evidence_refs": [
+          "src/eawf/surfaces/tui/modes/research_board.py"
+        ],
+        "planned_steps": [
+          "Give scope questions a dedicated synthetic section in build_tree_nodes",
+          "Reuse the scope-questions round pattern",
+          "Add a unit test over the tree nodes"
+        ],
+        "priority_rationale": null,
+        "problem": "The topic tree groups project-scoped questions under an arbitrary first campaign node which misleads the reader about their scope.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-07T15:36:35.540989Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01",
+            "G-02"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/tui/test_topic_tree_scope_questions_w35.py -q exits zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "cli_exit",
+            "object": "zero from the topic-tree scope-questions regression suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The topic tree gives scope-wide questions a dedicated synthetic section in build_tree_nodes reusing the scope-questions round pattern so project-scoped questions never render under a campaign node, and a unit test asserts the tree nodes.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Give scope-wide research questions their own topic-tree section",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     },
     "P30-I22-W01": {
       "agent_role": "executor",
