@@ -65,6 +65,58 @@ def unwrap_result_envelope(raw: str) -> str:
     return raw
 
 
+def terminal_result_envelope(raw: str) -> str | None:
+    """Return the raw JSON text of a claude stream-json terminal result event.
+
+    ``--output-format stream-json`` emits one JSON event per line terminated by a
+    ``type=="result"`` envelope carrying ``usage`` / ``total_cost_usd`` /
+    ``session_id`` / ``modelUsage`` -- the fields the metering parse reads. This
+    returns that terminal envelope's raw JSON text (the whole object, not just
+    its inner ``result`` string) so a caller can ``json.loads`` it directly.
+    Accepts a single result envelope (the fast path) as well as a multi-line
+    transcript. Returns ``None`` when no ``type=="result"`` event is present
+    (e.g. the legacy single-object ``{"result": ...}`` json format, which the
+    caller parses whole instead).
+
+    Args:
+        raw: The runtime's stdout text (a stream-json transcript or a single
+            envelope).
+
+    Returns:
+        The terminal result event's raw JSON text, or ``None`` when none is
+        present.
+    """
+    stripped = raw.strip()
+    if not stripped:
+        return None
+    if _is_result_object(stripped):
+        return stripped
+    for line in reversed(stripped.splitlines()):
+        candidate = line.strip()
+        if candidate and _is_result_object(candidate):
+            return candidate
+    return None
+
+
+def _is_result_object(candidate: str) -> bool:
+    """Return whether *candidate* parses to a JSON object with ``type=="result"``.
+
+    Args:
+        candidate: A single (stripped) line or the whole payload.
+
+    Returns:
+        ``True`` when *candidate* is a JSON object whose ``type`` is
+        ``"result"``; ``False`` otherwise.
+    """
+    if not candidate.startswith("{"):
+        return False
+    try:
+        data = json.loads(candidate)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(data, dict) and data.get("type") == _RESULT_EVENT_TYPE
+
+
 def _as_result_envelope(candidate: str) -> str | None:
     """Return the ``result`` string when *candidate* is a result envelope.
 
@@ -226,6 +278,7 @@ def _first_opener(text: str) -> int | None:
 
 __all__ = [
     "extract_embedded_json",
+    "terminal_result_envelope",
     "unwrap_agent_json",
     "unwrap_result_envelope",
 ]

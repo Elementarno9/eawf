@@ -34,6 +34,7 @@ from eawf.runtime.runtimes.adapter import (
 )
 from eawf.runtime.runtimes.cache_control import inject_cache_control
 from eawf.runtime.runtimes.selector import runtime_supports
+from eawf.runtime.runtimes.stream_json import terminal_result_envelope
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
 from eawf.runtime.sandbox.egress_proxy import (
     EnforcementSink,
@@ -356,14 +357,15 @@ def _parse_claude_result(
     started_at: datetime,
     ended_at: datetime,
 ) -> SpawnResult:
-    """Parse a ``claude -p --output-format json`` envelope into a result.
+    """Parse a ``claude -p`` result envelope into a result.
 
-    The single-result JSON envelope carries ``result`` (the answer text),
-    ``session_id``, ``usage`` (the token classes), an optional
-    ``modelUsage`` map naming the billed model, and an optional
-    ``total_cost_usd``. Kept standalone (no adapter ``self``) so the parse
-    is unit-testable against a fixed envelope without spawning a
-    subprocess.
+    Handles both output formats: the ``--output-format stream-json`` transcript
+    (one JSON event per line, terminated by a ``type=="result"`` envelope) and
+    the legacy single-object json envelope. The terminal result envelope carries
+    ``result`` (the answer text), ``session_id``, ``usage`` (the token classes),
+    an optional ``modelUsage`` map naming the billed model, and an optional
+    ``total_cost_usd``. Kept standalone (no adapter ``self``) so the parse is
+    unit-testable against a fixed envelope without spawning a subprocess.
 
     The function is fail-fast: every malformed-output condition raises
     :class:`~eawf.runtime.runtimes.adapter.RuntimeSpawnError` rather than
@@ -400,8 +402,15 @@ def _parse_claude_result(
     raw = stdout.decode(errors="replace").strip()
     if not raw:
         raise RuntimeSpawnError("claude spawn produced empty stdout")
+    # Under --output-format stream-json the CLI emits one JSON event per line
+    # terminated by a type=="result" envelope; under the legacy single-object
+    # json format the whole stdout IS that envelope. Isolate the terminal result
+    # envelope so the usage / cost / session parse survives either format (a
+    # bare {"result": ...} with no type field has no result event and falls
+    # back to parsing the whole stdout).
+    envelope_text = terminal_result_envelope(raw) or raw
     try:
-        data = json.loads(raw)
+        data = json.loads(envelope_text)
     except json.JSONDecodeError as exc:
         raise RuntimeSpawnError(f"claude output is not valid json: {exc}") from exc
     if not isinstance(data, dict):
@@ -674,8 +683,14 @@ class ClaudeAdapter:
             self.cli_binary,
             "-p",
             prompt,
+            # stream-json streams one JSON event per line during the run instead
+            # of withholding a single envelope until the spawn ends -- the fix
+            # for the multi-minute output blackout. Print mode (-p) requires
+            # --verbose for stream-json; the terminal type=="result" line still
+            # carries the usage / cost the metering parse reads.
             "--output-format",
-            "json",
+            "stream-json",
+            "--verbose",
             "--model",
             model,
             *deny_flag,

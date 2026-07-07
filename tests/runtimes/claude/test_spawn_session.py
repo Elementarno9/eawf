@@ -417,7 +417,9 @@ def test_spawn_session_forks_claude_p_and_parses(monkeypatch: pytest.MonkeyPatch
     assert argv[1] == "-p"
     assert argv[2] == "solve it"
     assert "--output-format" in argv
-    assert argv[argv.index("--output-format") + 1] == "json"
+    assert argv[argv.index("--output-format") + 1] == "stream-json"
+    # stream-json in print mode (-p) requires --verbose.
+    assert "--verbose" in argv
     assert "--model" in argv
     assert argv[argv.index("--model") + 1] == "opus"
 
@@ -495,14 +497,16 @@ def test_spawn_session_denied_tools_precede_extra_args(monkeypatch: pytest.Monke
             "do it",
             model="opus",
             denied_tools=["Bash"],
-            extra_args=("--verbose", "--max-turns", "3"),
+            extra_args=("--max-turns", "3", "--tail-sentinel"),
         )
     )
     argv = calls[0]
     # extra_args remain the final three tokens (unchanged escape-hatch contract).
-    assert argv[-3:] == ["--verbose", "--max-turns", "3"]
+    # (--verbose is now part of the base argv for stream-json, so the sentinel
+    # tokens are chosen to not collide with any base flag.)
+    assert argv[-3:] == ["--max-turns", "3", "--tail-sentinel"]
     # The deny flag appears before the first extra_args token.
-    assert argv.index("--disallowedTools") < argv.index("--verbose")
+    assert argv.index("--disallowedTools") < argv.index("--max-turns")
 
 
 def test_spawn_session_denied_tools_built_before_jail_wrap(
