@@ -1360,26 +1360,27 @@ def build_tree_nodes(
       (depth 1) classified off the campaign's OWN status (a CONVERGED campaign
       reads a terminal ``round converged`` label; an ACTIVE campaign derives its
       FA8 auto-run state from the real run records when present, else the pre-run
-      question-ledger classification), one topic node per staged domain (depth 2,
-      capped at :data:`_MAX_TOPICS_PER_CAMPAIGN`), and the scope's open questions
-      grouped as question nodes (depth 1) with the claims that answer each one
-      (:func:`index_claims_by_question`) nested as claim leaves (depth 2). A
-      COLLAPSED campaign emits only its campaign node -- its round / topic /
-      question children are omitted from the flat list, so the ``up`` / ``down``
-      cursor skips them and the ``left`` / ``right`` collapse / expand keys toggle
-      the whole sub-tree.
+      question-ledger classification), and one topic node per staged domain
+      (depth 2, capped at :data:`_MAX_TOPICS_PER_CAMPAIGN`). A COLLAPSED campaign
+      emits only its campaign node -- its round / topic children are omitted from
+      the flat list, so the ``up`` / ``down`` cursor skips them and the ``left``
+      / ``right`` collapse / expand keys toggle the whole sub-tree.
+    * scope-wide -- a single ``scope questions`` round (depth 0) after the
+      campaigns, grouping the scope's open questions as question nodes (depth 1)
+      with the claims that answer each one (:func:`index_claims_by_question`)
+      nested as claim leaves (depth 2).
 
     A question is scope-wide (the daemon stamps it with the research scope, not a
-    campaign id), so the scope's questions nest under its PRIMARY campaign -- the
-    first staged campaign row -- rather than duplicating under every campaign or
-    hanging off the LAST one. When the scope has staged NO campaign, the questions
-    fall back to a scope-level ``scope questions`` round node (depth 0) so a
-    question-only scope still renders. Empty when the scope has neither a campaign
-    nor an open question.
+    campaign id), so the scope's questions render as their OWN top-level ``scope
+    questions`` round node (depth 0) AFTER the campaigns -- never nested under an
+    arbitrary campaign, which would misread project-scoped questions as that one
+    campaign's research gaps (G9). The same section renders whether the scope has
+    staged many campaigns, one, or none. Empty when the scope has neither a
+    campaign nor an open question.
 
     Args:
-        campaigns: The staged campaign rows for the scope; the first is the
-            PRIMARY campaign the scope-wide questions nest under.
+        campaigns: The staged campaign rows for the scope, each an independent
+            top-level node.
         questions: The state-resident open-question rows for the scope.
         claims: The state-resident claim rows; the ones that back-link a
             question nest under it (free-standing claims are not tree leaves).
@@ -1394,10 +1395,6 @@ def build_tree_nodes(
     progress = compute_round_progress(campaigns, claims, questions, rounds)
     round_label, round_detail = _round_label_detail(progress)
     claims_by_question = index_claims_by_question(claims)
-    # The scope-wide questions nest under the PRIMARY (first) campaign so they
-    # read as a campaign that owns its research gaps, never doubled across
-    # campaigns nor orphaned under the last one.
-    primary_id = campaigns[0].campaign_id if campaigns else None
     nodes: list[TreeNode] = []
     for campaign in campaigns:
         is_collapsed = campaign.campaign_id in collapsed
@@ -1455,12 +1452,13 @@ def build_tree_nodes(
                     campaign_id=campaign.campaign_id,
                 )
             )
-        if campaign.campaign_id == primary_id and questions:
-            _append_question_nodes(nodes, questions, claims_by_question)
-    if not campaigns and questions:
-        # A question-only scope (no campaign staged) still needs its questions on
-        # the board: hang them under a scope-level questions round so the group
-        # renders without a campaign to own it.
+    if questions:
+        # Scope-wide questions render as their OWN top-level section (G9): the
+        # daemon stamps them with the research SCOPE, not a campaign id, so
+        # nesting them under an arbitrary (first) campaign misread project-scoped
+        # questions as that one campaign's research gaps. A dedicated scope-level
+        # "scope questions" round keeps them attributable to the scope regardless
+        # of how many campaigns are staged (including none).
         nodes.append(
             TreeNode(
                 kind=NodeKind.ROUND,
@@ -1484,14 +1482,12 @@ def _append_question_nodes(
 ) -> None:
     """Append the open-question nodes (+ their answering-claim leaves) to *nodes*.
 
-    Each question hangs at depth 1 (one indent under its owning campaign, or the
-    scope-level questions round on a campaign-less scope) carrying its lifecycle
-    status for the per-status sigil, with every claim that back-links it
-    (:func:`index_claims_by_question`) nested as a claim leaf at depth 2. A
-    blocking question keeps its status for the sigil and carries the ``blocking``
-    marker in its peek detail. Factored out of :func:`build_tree_nodes` so the
-    two grouping sites (under the primary campaign, and under the scope-level
-    round) share one node-shape definition rather than a divergent copy.
+    Each question hangs at depth 1 (one indent under the scope-level ``scope
+    questions`` round) carrying its lifecycle status for the per-status sigil,
+    with every claim that back-links it (:func:`index_claims_by_question`) nested
+    as a claim leaf at depth 2. A blocking question keeps its status for the
+    sigil and carries the ``blocking`` marker in its peek detail. Factored out of
+    :func:`build_tree_nodes` so the grouping is defined once.
 
     Args:
         nodes: The node accumulator, mutated in place.

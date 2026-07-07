@@ -2631,63 +2631,73 @@ def test_build_tree_nodes_nests_answering_claims_under_their_question() -> None:
     assert claim_node.label == "Implied vol surface is downward sloping in strike"
 
 
-def test_build_tree_nodes_nests_questions_under_primary_campaign() -> None:
-    """A campaign plus open questions nest the questions UNDER the campaign.
+def test_build_tree_nodes_puts_scope_questions_in_own_section() -> None:
+    """Scope-wide questions render as their own depth-0 section after the campaign.
 
-    The redesign makes each campaign a pickable, collapsible root that owns the
-    scope's research gaps: the scope-wide questions hang at depth 1 under the
-    campaign, so there is no separate ``scope questions`` root node -- the only
-    round is the campaign's own round.
+    A question is scope-stamped, not campaign-stamped, so it must NOT nest under
+    an arbitrary campaign (which would read as that one campaign's research gap).
+    The tree renders campaign > round > domains, then a scope-level ``scope
+    questions`` round (``campaign_id`` None) with the question under it (G9).
     """
     nodes = build_tree_nodes((_campaign_row(),), (_question(),))
     kinds = [node.kind for node in nodes]
-    # campaign > round > two domains > the question, all under one campaign.
+    # campaign > round > two domains, THEN the scope-questions section.
     assert kinds == [
         NodeKind.CAMPAIGN,
-        NodeKind.ROUND,
+        NodeKind.ROUND,  # the campaign's own round
         NodeKind.TOPIC,
         NodeKind.TOPIC,
+        NodeKind.ROUND,  # the scope-level questions section
         NodeKind.QUESTION,
     ]
     rounds = [node for node in nodes if node.kind is NodeKind.ROUND]
-    # Exactly one round -- the campaign's own; no scope-level questions root.
-    assert [node.label for node in rounds] == ["round running"]
+    # The campaign's own round (owned), then the scope-level questions round.
     assert rounds[0].campaign_id == "RC-0001"
+    assert rounds[0].label == "round running"
+    assert rounds[1].campaign_id is None
+    assert rounds[1].depth == 0
+    assert rounds[1].label.startswith("scope questions")
     # The campaign node is the collapsible root: it carries its terse round-
     # status word and starts expanded.
     campaign_node = nodes[0]
-    assert campaign_node.kind is NodeKind.CAMPAIGN
-    assert campaign_node.campaign_id == "RC-0001"
     assert campaign_node.status_label == "running"
     assert campaign_node.collapsed is False
-    # The question hangs one indent under the campaign (depth 1), after its
-    # domains -- grouped under the campaign, not orphaned at the scope root.
+    # The question sits at the scope level (campaign_id None), one indent under
+    # the scope-questions round -- never owned by an arbitrary campaign.
     question_node = nodes[-1]
     assert question_node.kind is NodeKind.QUESTION
     assert question_node.depth == 1
+    assert question_node.campaign_id is None
     assert question_node.question_id == "OQ-0001"
 
 
-def test_build_tree_nodes_collapsed_campaign_hides_its_children() -> None:
-    """A collapsed campaign contributes only its campaign node.
+def test_build_tree_nodes_collapsed_campaign_keeps_scope_questions() -> None:
+    """A collapsed campaign drops its OWN children but not the scope questions.
 
-    Passing the campaign id in *collapsed* drops its round / topic / question
-    children from the flat list so the up/down cursor skips them; the campaign
-    node stays, marked collapsed for the ``+`` expand affordance.
+    The scope-wide questions are their own top-level section, not the campaign's
+    children, so collapsing the campaign hides its round / topics while the
+    ``scope questions`` section stays on the board (G9). The campaign node stays,
+    marked collapsed for the ``+`` expand affordance.
     """
     nodes = build_tree_nodes((_campaign_row(),), (_question(),), collapsed=frozenset({"RC-0001"}))
-    assert [node.kind for node in nodes] == [NodeKind.CAMPAIGN]
+    # The campaign collapses to a lone node; the scope questions section stays.
+    assert [node.kind for node in nodes] == [
+        NodeKind.CAMPAIGN,
+        NodeKind.ROUND,  # the scope-questions section (campaign_id None)
+        NodeKind.QUESTION,
+    ]
     assert nodes[0].collapsed is True
     assert nodes[0].status_label == "running"
+    assert nodes[1].campaign_id is None
+    assert nodes[1].label.startswith("scope questions")
 
 
-def test_build_tree_nodes_collapsed_second_campaign_keeps_primary_questions() -> None:
-    """Collapsing a non-primary campaign hides only ITS children, not the questions.
+def test_build_tree_nodes_scope_questions_survive_campaign_collapse() -> None:
+    """The scope-questions section is independent of any campaign's collapse.
 
-    The scope-wide questions nest under the PRIMARY (first) campaign, so a
-    collapse of the second campaign hides that campaign's round / topics while
-    the primary campaign's questions stay visible -- a collapsed campaign hides
-    only its own sub-tree.
+    Scope-wide questions render as their own section after the campaigns, so a
+    collapse of any campaign hides only that campaign's round / topics; the scope
+    questions stay put regardless of which campaign is collapsed (G9).
     """
     primary = _campaign_row(campaign_id="RC-0001")
     secondary = _campaign_row(campaign_id="RC-0002")
@@ -2697,20 +2707,22 @@ def test_build_tree_nodes_collapsed_second_campaign_keeps_primary_questions() ->
         collapsed=frozenset({"RC-0002"}),
     )
     kinds = [node.kind for node in nodes]
-    # The primary keeps round + domains + its question; the secondary collapses
-    # to a lone campaign node.
+    # The primary keeps round + domains; the secondary collapses to a lone node;
+    # the scope-questions section renders once, after both campaigns.
     assert kinds == [
         NodeKind.CAMPAIGN,  # primary
         NodeKind.ROUND,
         NodeKind.TOPIC,
         NodeKind.TOPIC,
-        NodeKind.QUESTION,  # scope question, owned by the primary
         NodeKind.CAMPAIGN,  # secondary, collapsed
+        NodeKind.ROUND,  # scope-questions section (campaign_id None)
+        NodeKind.QUESTION,
     ]
-    assert nodes[-1].campaign_id == "RC-0002"
-    assert nodes[-1].collapsed is True
-    # The question is still present (owned by the primary, not the collapsed one).
-    assert any(node.kind is NodeKind.QUESTION for node in nodes)
+    assert nodes[4].campaign_id == "RC-0002"
+    assert nodes[4].collapsed is True
+    assert nodes[5].campaign_id is None
+    assert nodes[-1].kind is NodeKind.QUESTION
+    assert nodes[-1].campaign_id is None
 
 
 def test_render_tree_renders_per_status_question_sigils() -> None:
@@ -2795,20 +2807,23 @@ def test_render_tree_campaign_row_trails_status_word() -> None:
 
 
 def test_render_tree_collapsed_campaign_shows_expand_affordance() -> None:
-    """A collapsed campaign row keeps its status word, shows +, and hides children.
+    """A collapsed campaign keeps its status word, shows +, and hides its OWN children.
 
     The status word rides the campaign row itself, so it stays readable even when
-    the round child (which also carries the state) is hidden by the collapse.
+    the round child (which also carries the state) is hidden by the collapse. The
+    scope questions are their own section, so they stay on the board (G9).
     """
     nodes = build_tree_nodes((_campaign_row(),), (_question(),), collapsed=frozenset({"RC-0001"}))
     body = render_tree(nodes, -1, mode=DEFAULT_RENDER_MODE)
     campaign_line = next(line for line in body.splitlines() if "Survey the options" in line)
     assert "· running" in campaign_line
     assert "+" in campaign_line
-    # The round + domain + question children are all hidden while collapsed.
+    # The campaign's OWN round + domains are hidden while collapsed...
     assert "domain:" not in body
     assert "round running" not in body
-    assert "Which curve model" not in body
+    # ...but the scope-questions section stays (it is not the campaign's child).
+    assert "scope questions" in body
+    assert "Which curve model" in body
 
 
 def test_research_board_renders_question_tree_with_nested_claims(tmp_path: Path) -> None:
@@ -2866,13 +2881,13 @@ def test_research_board_renders_question_tree_with_nested_claims(tmp_path: Path)
 # --------------------------------------------------------------------------
 
 
-def test_research_board_groups_questions_under_owning_campaign(tmp_path: Path) -> None:
-    """The live board nests the scope's questions under the campaign, not a scope root.
+def test_research_board_puts_questions_in_own_scope_section(tmp_path: Path) -> None:
+    """The live board renders scope questions in their own section, not under a campaign.
 
-    A seeded scope with a staged campaign AND an open question renders the
-    question one indent under the campaign row (grouped by the campaign it
-    belongs to), with no separate ``scope questions`` root -- the campaign owns
-    its research gaps.
+    A seeded scope with a staged campaign AND an open question renders a
+    scope-level ``scope questions`` round with the question under it -- the
+    question is scope-stamped, so it is NOT nested under an arbitrary campaign
+    (G9).
     """
     question = _question("OQ-0001", status=OpenQuestionStatus.OPEN)
     state = _project_state(open_questions={"OQ-0001": question})
@@ -2889,26 +2904,28 @@ def test_research_board_groups_questions_under_owning_campaign(tmp_path: Path) -
             assert isinstance(pane, ResearchBoardModeScreen)
             tree_body = str(pane.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
             lines = tree_body.splitlines()
-            # No scope-level questions root -- the campaign owns the question.
-            assert not any("scope questions" in line for line in lines)
-            campaign_line = next(line for line in lines if "Survey the options" in line)
+            # The scope-questions section IS present as its own group.
+            assert any("scope questions" in line for line in lines)
+            scope_line = next(line for line in lines if "scope questions" in line)
             question_line = next(line for line in lines if "Which curve" in line)
-            # The question is indented deeper than the campaign root it groups under.
-            campaign_col = campaign_line.index("Survey the options")
+            # The question is indented deeper than the scope-questions round it
+            # groups under.
+            scope_col = scope_line.index("scope questions")
             question_col = question_line.index("Which curve")
-            assert campaign_col < question_col
+            assert scope_col < question_col
 
     asyncio.run(body())
 
 
-def test_research_board_left_right_collapse_expand_campaign_questions(
+def test_research_board_left_right_collapse_expand_campaign_domains(
     tmp_path: Path,
 ) -> None:
-    """``right`` / ``left`` on a campaign node show / hide its nested questions.
+    """``right`` / ``left`` on a campaign node show / hide its OWN domains.
 
     The cursor lands on the campaign root first; ``left`` collapses it (its
-    question + domains disappear from the tree) and ``right`` expands it (they
-    reappear) -- the collapse toggle drives the flat node list the cursor walks.
+    domains disappear from the tree) and ``right`` expands it (they reappear) --
+    the collapse toggle drives the flat node list the cursor walks. The scope
+    questions are their own section, so they stay visible through the toggle (G9).
     """
     question = _question("OQ-0001", status=OpenQuestionStatus.OPEN)
     state = _project_state(open_questions={"OQ-0001": question})
@@ -2926,31 +2943,32 @@ def test_research_board_left_right_collapse_expand_campaign_questions(
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, ResearchBoardModeScreen)
-            # The campaign root is selected on mount; its question is visible.
-            assert "Which curve" in _tree_text(pane)
-            # LEFT collapses the campaign -> its question + domains disappear.
+            # The campaign root is selected on mount; its domains are visible.
+            assert "domain:" in _tree_text(pane)
+            # LEFT collapses the campaign -> its domains disappear; the scope
+            # question stays in its own section.
             await pilot.press("left")
             await settle_screen(pilot)
             collapsed = _tree_text(pane)
-            assert "Which curve" not in collapsed
             assert "domain:" not in collapsed
+            assert "Which curve" in collapsed
             assert pane._collapsed == {"RC-0001"}
-            # RIGHT expands it -> the question returns to the tree.
+            # RIGHT expands it -> the domains return to the tree.
             await pilot.press("right")
             await settle_screen(pilot)
             expanded = _tree_text(pane)
-            assert "Which curve" in expanded
+            assert "domain:" in expanded
             assert pane._collapsed == set()
 
     asyncio.run(body())
 
 
-def test_research_board_collapse_hides_only_own_questions(tmp_path: Path) -> None:
-    """Collapsing the non-primary campaign hides ITS sub-tree, not the questions.
+def test_research_board_collapse_hides_only_own_subtree(tmp_path: Path) -> None:
+    """Collapsing a campaign hides ITS sub-tree, not the scope questions.
 
-    Two campaigns are staged; the scope's question nests under the PRIMARY (first)
-    campaign. Collapsing the SECOND campaign hides only its own round / domains --
-    the primary's question stays on the board.
+    Two campaigns are staged; the scope's question renders in its own scope-level
+    section (G9). Collapsing the SECOND campaign hides only its own round /
+    domains -- the scope question stays on the board.
     """
     question = _question("OQ-0001", status=OpenQuestionStatus.OPEN)
     state = _project_state(open_questions={"OQ-0001": question})

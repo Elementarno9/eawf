@@ -228,13 +228,14 @@ def _strip_markup(text: str) -> str:
 # --------------------------------------------------------------------------
 
 
-def test_build_tree_nodes_nests_scope_questions_under_primary_campaign() -> None:
-    """The scope-wide questions nest under the PRIMARY campaign (W02 campaign tree).
+def test_build_tree_nodes_scope_questions_render_as_own_section_after_campaigns() -> None:
+    """Scope-wide questions render as their own depth-0 section after the campaigns (G9).
 
-    W02 made each campaign a pickable root that owns the research gaps: with two
-    campaigns plus scope-wide questions, the questions hang at depth 1 under the
-    FIRST (primary) campaign's sub-tree -- there is no separate depth-0 scope
-    round when a campaign is staged. (Supersedes the retired W26 depth-0 hoist.)
+    A question is scope-stamped, not campaign-stamped, so with two campaigns plus
+    scope-wide questions the questions do NOT nest under an arbitrary campaign
+    (which would misread project-scoped questions as that one campaign's gaps).
+    They render under a single scope-level ``scope questions`` round (campaign_id
+    None, depth 0) after BOTH campaign sub-trees.
     """
     campaigns = (
         _campaign_row("RC-0001", topic="Campaign ABC"),
@@ -243,20 +244,22 @@ def test_build_tree_nodes_nests_scope_questions_under_primary_campaign() -> None
     questions = (_question("OQ-0001"), _question("OQ-0002", title="Second scope question"))
     nodes = build_tree_nodes(campaigns, questions)
 
-    # No scope-level questions round is emitted when a campaign is staged.
-    assert not any(node.kind is NodeKind.ROUND and node.campaign_id is None for node in nodes)
-    # The two questions nest at depth 1, after the primary (first) campaign root
-    # and before the second campaign root.
+    # Exactly one scope-level (campaign_id None) questions round is emitted.
+    scope_rounds = [n for n in nodes if n.kind is NodeKind.ROUND and n.campaign_id is None]
+    assert len(scope_rounds) == 1
+    assert scope_rounds[0].depth == 0
+    assert scope_rounds[0].label.startswith("scope questions")
+    # Both questions hang at depth 1 under that scope round, after BOTH campaigns.
     question_nodes = [node for node in nodes if node.kind is NodeKind.QUESTION]
     assert len(question_nodes) == 2
     for node in question_nodes:
         assert node.depth == 1
-    primary_index = next(i for i, node in enumerate(nodes) if node.kind is NodeKind.CAMPAIGN)
-    second_index = next(
-        i for i, node in enumerate(nodes) if node.kind is NodeKind.CAMPAIGN and i > primary_index
-    )
+        assert node.campaign_id is None
+    last_campaign_index = max(i for i, node in enumerate(nodes) if node.kind is NodeKind.CAMPAIGN)
+    scope_round_index = nodes.index(scope_rounds[0])
     question_indexes = [nodes.index(node) for node in question_nodes]
-    assert all(primary_index < idx < second_index for idx in question_indexes)
+    assert last_campaign_index < scope_round_index
+    assert all(scope_round_index < idx for idx in question_indexes)
 
 
 def test_build_tree_nodes_question_only_scope_roots_the_group_at_depth_zero() -> None:
