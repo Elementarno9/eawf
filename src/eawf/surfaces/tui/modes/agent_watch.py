@@ -89,6 +89,7 @@ from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
     AgentSessionStatus,
+    EffortBucket,
     WaveStatus,
 )
 from eawf.kernel.state.ids import natural_key
@@ -109,6 +110,7 @@ from eawf.surfaces.tui.widgets.footer import Footer, render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
 from eawf.surfaces.tui.widgets.output_tail import OutputTail, format_agent_output_lines
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, status_sigil, tint
+from eawf.workflow.estimation.buckets import BUCKET_EU, EU_MINUTES
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -487,6 +489,16 @@ class WatchTarget:
     attempt: int
     log_handle: str | None = None
     wave_status: WaveStatus | None = None
+    #: The watched attempt's subprocess pid, when a session-attempt row records
+    #: one -- surfaced in the liveness heartbeat (G5). ``None`` before the live
+    #: spawn persists an attempt row.
+    subprocess_pid: int | None = None
+    #: The watched session's start time, the anchor the liveness heartbeat's
+    #: elapsed clock counts from (G5). ``None`` when the session row is unknown.
+    started_at: datetime | None = None
+    #: The watched wave's effort bucket, from which the heartbeat derives the
+    #: expected wall-clock (G6). ``None`` when the wave carries no bucket.
+    effort_bucket: EffortBucket | None = None
 
     @property
     def wave_is_terminal(self) -> bool:
@@ -597,6 +609,8 @@ def _session_watch_target(state: State, session: AgentSession) -> WatchTarget:
         The watch target streaming *session*'s wave.
     """
     attempt = _latest_attempt(state, wave_id=session.scope_id)
+    wave = state.waves.get(session.scope_id)
+    attempt_row = wave.sessions.get(attempt) if wave is not None else None
     return WatchTarget(
         session_id=session.id,
         wave_id=session.scope_id,
@@ -605,6 +619,9 @@ def _session_watch_target(state: State, session: AgentSession) -> WatchTarget:
         attempt=attempt,
         log_handle=_log_handle(state, wave_id=session.scope_id, attempt=attempt),
         wave_status=_wave_status(state, session.scope_id),
+        subprocess_pid=attempt_row.subprocess_pid if attempt_row is not None else None,
+        started_at=session.started_at,
+        effort_bucket=wave.effort_bucket if wave is not None else None,
     )
 
 
@@ -730,10 +747,84 @@ def _wave_session_status(state: State, wave_id: str) -> AgentSessionStatus:
     return session.status if session is not None else AgentSessionStatus.ACTIVE
 
 
+def _format_duration(seconds: float) -> str:
+    """Return a compact ``45s`` / ``2m14s`` / ``1h03m`` duration string.
+
+    Args:
+        seconds: The duration to format (clamped to non-negative).
+
+    Returns:
+        The compact duration, seconds-precise under a minute, minute-precise
+        under an hour, hour+minute-precise above.
+    """
+    total = int(max(0.0, seconds))
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h{minutes:02d}m"
+    if minutes:
+        return f"{minutes}m{secs:02d}s"
+    return f"{secs}s"
+
+
+def _expected_minutes(bucket: EffortBucket | None) -> float | None:
+    """Return the expected wall-clock minutes for an effort bucket (G6).
+
+    Args:
+        bucket: The watched wave's effort bucket, or ``None``.
+
+    Returns:
+        The bucket centroid EU converted to minutes, or ``None`` when the wave
+        carries no bucket.
+    """
+    if bucket is None:
+        return None
+    return BUCKET_EU[bucket] * EU_MINUTES
+
+
+def render_liveness_line(target: WatchTarget, *, turns: int, now: datetime) -> str:
+    """Render the in-flight liveness heartbeat for a non-terminal watched session.
+
+    Surfaces ``thinking · <elapsed>/~<expected> · <turns> turns · pid <pid>`` so
+    a spawn reads as alive and on-track rather than hung: the elapsed clock
+    counts from the session start (G5), the effort-aware ``/~<expected>`` derives
+    from the wave's effort bucket so a long L/XL wave still reads on-track (G6),
+    ``turns`` is the count of streamed output updates, and the pid names the live
+    child. Returns ``""`` when the wave is terminal (the stream is a recorded
+    replay, so there is no live heartbeat).
+
+    Args:
+        target: The watched session.
+        turns: The count of streamed output updates observed so far.
+        now: The current time the elapsed clock measures against.
+
+    Returns:
+        The heartbeat markup line, or ``""`` when the wave is terminal.
+    """
+    if target.wave_is_terminal:
+        return ""
+    parts = ["thinking"]
+    if target.started_at is not None:
+        elapsed = _format_duration((now - target.started_at).total_seconds())
+        expected = _expected_minutes(target.effort_bucket)
+        if expected is not None:
+            parts.append(f"{elapsed}/~{_format_duration(expected * 60)}")
+        else:
+            parts.append(elapsed)
+    parts.append(f"{turns} turns")
+    if target.subprocess_pid is not None:
+        parts.append(f"pid {target.subprocess_pid}")
+    return f"[$muted]{escape_markup(' · '.join(parts))}[/]"
+
+
 def render_watch_header(
-    target: WatchTarget | None, *, mode: RenderMode = DEFAULT_RENDER_MODE
+    target: WatchTarget | None,
+    *,
+    mode: RenderMode = DEFAULT_RENDER_MODE,
+    turns: int = 0,
+    now: datetime | None = None,
 ) -> str:
-    """Render the watched-session header line above the stream.
+    """Render the watched-session header line(s) above the stream.
 
     When a session is being watched the header LEADS with the session's
     lifecycle sigil (the RUNNING diamond for an ACTIVE stream) then names the
@@ -744,23 +835,37 @@ def render_watch_header(
     the session row, so a wave that failed while its session record still reads
     ACTIVE is never labelled ``active``.
 
+    When ``now`` is supplied and the wave is non-terminal a second liveness
+    heartbeat line is appended (:func:`render_liveness_line`); passing ``now``
+    as ``None`` (the default) keeps the single-line header a pure function of
+    the target, so callers that do not want the wall-clock-varying line render
+    unchanged.
+
     Args:
         target: The watched session, or ``None`` when none is being watched.
         mode: The App's resolved render-mode label -- selects the session
             sigil's ASCII / unicode column.
+        turns: The count of streamed output updates for the heartbeat.
+        now: The current time for the elapsed clock, or ``None`` to omit the
+            heartbeat line.
 
     Returns:
-        A content-markup header string.
+        A content-markup header string (one or two lines).
     """
     if target is None:
         return f"[$warn]{EMPTY_NOTICE}[/]\n[$muted]no dispatched executor session to stream[/]"
     header_sigil = _header_status_sigil(target, mode=mode)
     status_word = escape_markup(_header_status_label(target))
-    return (
+    header = (
         f"{header_sigil} [$accent]watching[/] {escape_markup(target.wave_id)} "
         f"[$muted]{escape_markup(target.runtime)}[/] "
         f"[$accent]{status_word}[/]"
     )
+    if now is not None:
+        liveness = render_liveness_line(target, turns=turns, now=now)
+        if liveness:
+            return f"{header}\n{liveness}"
+    return header
 
 
 #: Session-status the header sigil borrows when the watched wave is terminal,
@@ -824,8 +929,10 @@ def is_watched_event(envelope: Envelope, target: WatchTarget | None) -> bool:
 
 
 #: Cap on the persisted output lines the watch tail backfills on mount, so a
-#: long-running spawn's full stream stays bounded.
-_OUTPUT_BACKFILL_LIMIT: int = 500
+#: long-running spawn's full stream stays bounded. Raised from 500 (G10): the
+#: stream pane now gets the majority of the body height, and the operator asked
+#: for the full untruncated output, so more history seeds the tail on mount.
+_OUTPUT_BACKFILL_LIMIT: int = 2000
 
 
 def load_output_chunk_lines(
@@ -2087,7 +2194,7 @@ class AgentWatchModeScreen(ScopeScreen):
     }
     SEAL_HERO_CSS
     AgentWatchModeScreen #watch-output {
-        height: 1fr;
+        height: 3fr;
         margin-top: 1;
     }
     AgentWatchModeScreen #watch-result {
@@ -2572,6 +2679,11 @@ class AgentWatchModeScreen(ScopeScreen):
         # the fleet set happens to change. This runs before the parity early-exit
         # so a steady single-session spawn still streams its persisted chunks.
         self._sync_output_from_store()
+        # Repaint the header's liveness heartbeat every poll tick so the elapsed
+        # clock + streamed-update count track the in-flight spawn (G5/G6). Kept
+        # off the compose path so the static snapshot stays deterministic -- the
+        # wall-clock-varying line is a live-only affordance.
+        self._refresh_header()
         lane_changed = lane_parity_key(resolved) != self._lane_parity
         if parity_session_ids(resolved) == self._parity_ids and not lane_changed:
             return
@@ -2610,6 +2722,31 @@ class AgentWatchModeScreen(ScopeScreen):
             scroller = self._picker.query(f"#{SESSION_PICKER_ID}")
             if scroller:
                 scroller.first().focus()
+
+    def _refresh_header(self) -> None:
+        """Repaint the watch header with the live liveness heartbeat (G5/G6).
+
+        Called on every state-poll tick so the heartbeat's elapsed clock +
+        streamed-update count track the in-flight spawn. A no-op before mount,
+        on the grid / honest-empty paths (no single-session header to repaint),
+        or when the header Static is not composed. Reads the streamed-update
+        count off the mounted :class:`OutputTail` so it counts lines from either
+        the live push or the store sync.
+        """
+        if not self.is_mounted or self.target is None:
+            return
+        header = self.query(f"#{WATCH_HEADER_ID}")
+        if not header:
+            return
+        turns = self._output_tail().line_count if self.query(f"#{WATCH_OUTPUT_ID}") else 0
+        header.first(Static).update(
+            render_watch_header(
+                self.target,
+                mode=self._render_mode(),
+                turns=turns,
+                now=datetime.now(UTC),
+            )
+        )
 
     def _refresh_hints(self) -> None:
         """Re-pin the footer hints to the current body case.

@@ -303,6 +303,17 @@ class OutputTail(VerticalScroll):
         """
         return self._has_output
 
+    @property
+    def line_count(self) -> int:
+        """Return the number of rendered output rows currently in the tail.
+
+        The streamed-update count the liveness heartbeat surfaces (G5): each
+        rendered row is one streamed output line, so this rises as the spawn
+        speaks regardless of whether the lines arrived live or via the store
+        sync. ``0`` while only the waiting notice is shown.
+        """
+        return len(self.query(f".{OUTPUT_TAIL_ROW_CLASS}"))
+
     def compose(self) -> ComposeResult:
         """Yield the pinned waiting notice (the not-yet-spoken surface)."""
         yield Static(WAITING_NOTICE, id=OUTPUT_TAIL_WAITING_ID)
