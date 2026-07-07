@@ -5,8 +5,8 @@
   │     ◆ round running                                           ││ campaign Survey the options-pricing landscape                 ││ ROUND 1 running · 1 claim(s)                                   │
   │       ◌ domain: market-structure                              ││ 2 staged topic(s) · depth medium                              ││ ACTIVE 1 claim(s)                                              │
   │       ◌ domain: pricing-models                                ││                                                               ││ WAITING 1 open question(s)                                     │
-  │     ◌ Which curve model fits the short tenor                  ││ ROUNDS 0 run · running                                        ││ PAUSED 0 checkpoint(s)                                         │
-  │                                                               ││ QUESTIONS 1 open · 0 answered · 0 blocking                    ││ BUDGET 2 staged topic(s), 0 answered, 0 pruned                 │
+  │   ◆ scope questions -- running                                ││ ROUNDS 0 run · running                                        ││ PAUSED 0 checkpoint(s)                                         │
+  │     ◌ Which curve model fits the short tenor                  ││ QUESTIONS 1 open · 0 answered · 0 blocking                    ││ BUDGET 2 staged topic(s), 0 answered, 0 pruned                 │
   │                                                               ││ CLAIMS 1 claim(s) · 0 conflict(s)                             ││ RISKS none                                                     │
   │                                                               ││ BUDGET 2 staged topic(s) · 0 answered · 0 pruned              ││                                                                │
   │                                                               ││ CHECKPOINT 0 open                                             ││                                                                │

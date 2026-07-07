@@ -6,13 +6,13 @@
   │     ◆ round running                ││ campaign Survey the options-pricing ││ ACTIVE 4 claim(s)                   │
   │       ◌ domain: market-structure   ││ landscape                           ││ WAITING 2 open question(s)          │
   │       ◌ domain: pricing-models     ││ 2 staged topic(s) · depth medium    ││ PAUSED 0 checkpoint(s)              │
-  │     ◌ Which curve model fits the   ││                                     ││ BUDGET 2 staged topic(s), 1         │
-  │       short tenor                  ││ ROUNDS 0 run · running              ││ answered, 2 pruned                  │
-  │     ● Does the smile invert past   ││ QUESTIONS 2 open · 1 answered · 1   ││ RISKS 1 blocking question(s)        │
-  │       the 90 delta wing            ││ blocking                            ││                                     │
-  │     ◌ Is the term-structure        ││ CLAIMS 4 claim(s) · 1 conflict(s)   ││                                     │
-  │       arbitrage real               ││ BUDGET 2 staged topic(s) · 1        ││                                     │
-  │                                    ││ answered · 2 pruned                 ││                                     │
+  │   ◆ scope questions -- running     ││                                     ││ BUDGET 2 staged topic(s), 1         │
+  │     ◌ Which curve model fits the   ││ ROUNDS 0 run · running              ││ answered, 2 pruned                  │
+  │       short tenor                  ││ QUESTIONS 2 open · 1 answered · 1   ││ RISKS 1 blocking question(s)        │
+  │     ● Does the smile invert past   ││ blocking                            ││                                     │
+  │       the 90 delta wing            ││ CLAIMS 4 claim(s) · 1 conflict(s)   ││                                     │
+  │     ◌ Is the term-structure        ││ BUDGET 2 staged topic(s) · 1        ││                                     │
+  │       arbitrage real               ││ answered · 2 pruned                 ││                                     │
   │                                    ││ CHECKPOINT 0 open                   ││                                     │
   │                                    ││ LAST ROUND 0 finding(s)             ││                                     │
   │                                    ││                                     ││                                     │
