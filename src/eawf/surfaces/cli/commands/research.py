@@ -78,6 +78,13 @@ def resolve_research_block(flags: GlobalFlags) -> ResearchProfileBlock | None:
 def campaign_new(
     ctx: typer.Context,
     topic: Annotated[str, typer.Argument(help="The campaign topic to fan out across domains.")],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Resolve + count domains without persisting a campaign (a resolve-check).",
+        ),
+    ] = False,
 ) -> None:
     """Stage a research campaign for the active scope and persist it.
 
@@ -88,6 +95,10 @@ def campaign_new(
     through the daemon ``research.create_campaign`` RPC -- falling back to a
     direct store append when the daemon is unavailable. The persisted row
     surfaces in the TUI Research board's topic tree.
+
+    ``--dry-run`` resolves the block and reports the domain count WITHOUT
+    persisting a campaign, so a sanity resolve-check never leaks a durable
+    active campaign into the store.
     """
     from pydantic import ValidationError
 
@@ -115,6 +126,20 @@ def campaign_new(
             exc if isinstance(exc, errors.CliError) else errors.ValidationError(str(exc)),
             flags=flags,
         )
+        return
+
+    if dry_run:
+        body = {
+            "campaign_id": campaign_id,
+            "dry_run": True,
+            "topic": campaign.topic,
+            "domain_count": campaign.domain_count,
+        }
+        text = (
+            f"dry-run campaign (topic={campaign.topic!r}, "
+            f"{campaign.domain_count} domain(s)); not persisted"
+        )
+        emit_json_or_text(body, text, flags=flags)
         return
 
     appended_id = _persist_campaign_via_daemon_or_fallback(state_path, payload)
@@ -181,6 +206,51 @@ def campaign_run(
         f"(state={handle.get('run_state')})"
     )
     emit_json_or_text(handle, text, flags=flags)
+
+
+@campaign_app.command("cancel")
+def campaign_cancel(
+    ctx: typer.Context,
+    campaign_id: Annotated[str, typer.Argument(help="Id of the ACTIVE campaign to cancel.")],
+    reason: Annotated[
+        str | None,
+        typer.Option("--reason", help="Optional short reason recorded on the tombstone."),
+    ] = None,
+) -> None:
+    """Cancel an ACTIVE research campaign, tombstoning it in the store.
+
+    Issues the daemon ``research.cancel_campaign`` RPC, which stamps a cancelled
+    tombstone row so the campaign drops out of ``research status`` and the TUI
+    Research board's topic tree. Like ``campaign run`` this has NO offline
+    fallback: the cancel is a daemon-owned state mutation, so an unavailable
+    daemon -- or a campaign that is not ACTIVE / unknown to the store -- is a
+    hard error rather than a silent no-op.
+    """
+    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+    flags: GlobalFlags = ctx.obj
+    try:
+        resolve_state_path(flags.workspace)
+    except errors.CliError as exc:
+        errors.emit_error(exc, flags=flags)
+        return
+    params: dict[str, object] = {"campaign_id": campaign_id}
+    if reason is not None:
+        params["reason"] = reason
+    try:
+        with DaemonClient() as client:
+            result = client.call("research.cancel_campaign", params)
+    except (OSError, DaemonRpcError) as exc:
+        errors.emit_error(
+            errors.UserError(f"could not cancel campaign: {exc}", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+    text = (
+        f"cancelled campaign {result.get('id')} "
+        f"(status={result.get('status')}, at={result.get('cancelled_at')})"
+    )
+    emit_json_or_text(result, text, flags=flags)
 
 
 def _persist_campaign_via_daemon_or_fallback(
