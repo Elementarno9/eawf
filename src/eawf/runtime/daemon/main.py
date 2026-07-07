@@ -302,7 +302,21 @@ def _build_watchdog(ctx: MethodContext, idle_timeout_seconds: float) -> IdleTime
         return ctx.active_subscriptions > 0
 
     def _in_flight() -> int:
-        return ctx.in_flight_mutations
+        # Count live background work the RPC dispatcher never refreshes
+        # last_activity for: a headless fleet drive (or research campaign) runs
+        # on a daemon thread that neither bumps last_activity nor increments
+        # in_flight_mutations, so without counting it here the watchdog
+        # self-kills a subscriber-less headless drive mid-spawn at the idle
+        # timeout. Function-local imports keep the fleet/research modules off
+        # main's import path (they never import main; this stays cycle-free).
+        from eawf.runtime.daemon.methods.fleet import drive_in_flight
+        from eawf.runtime.daemon.methods.research import research_run_in_flight
+
+        return (
+            ctx.in_flight_mutations
+            + (1 if drive_in_flight() else 0)
+            + (1 if research_run_in_flight() else 0)
+        )
 
     return IdleTimeoutWatchdog(
         idle_timeout_seconds=idle_timeout_seconds,
@@ -310,6 +324,22 @@ def _build_watchdog(ctx: MethodContext, idle_timeout_seconds: float) -> IdleTime
         has_subscribers=_has_subscribers,
         in_flight=_in_flight,
     )
+
+
+def _shutdown_background_drives() -> None:
+    """Signal + join any background fleet drive on daemon shutdown.
+
+    The fleet drive runs on a daemon thread that is not an asyncio task, so the
+    serve loop's task-cancel teardown never reaps it. Cancel + join it here so a
+    mid-drive shutdown stops claiming new waves and does not exit while a drain
+    is mid-write. Research runs carry no cancel signal, so they are left for the
+    process exit / a later reattach; the idle-watchdog interlock already keeps
+    the daemon alive while either is in flight. Function-local import stays
+    cycle-free (fleet never imports main).
+    """
+    from eawf.runtime.daemon.methods.fleet import shutdown_drive
+
+    shutdown_drive()
 
 
 #: Soft alarm ceiling for one in-flight mutation (seconds). Mirrors the
@@ -654,6 +684,7 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
             mutation_watchdog_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await mutation_watchdog_task
+        _shutdown_background_drives()
         server.close()
         await server.wait_closed()
 
@@ -724,6 +755,7 @@ async def _run_windows_server(ctx: MethodContext) -> None:
             mutation_watchdog_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await mutation_watchdog_task
+        _shutdown_background_drives()
         pipe_server.stop()
 
 
