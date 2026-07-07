@@ -35,8 +35,10 @@ This module is the *discriminating experiment* for the cluster, in three parts:
   assertion's teeth catch the state shape.
 * **Part C** -- the LIVE cross-runtime drive (opt-in; skipped unless
   ``EAWF_LIVE_E2E`` is set). It configures BOTH runtime adapters in an isolated
-  ``running_daemon`` sandbox, seeds a smoke frontier with a codex-runtime wave
-  and a claude-runtime wave (plus a wedged orphan), drives the fleet to terminal
+  sandbox (spawning the daemon with a long idle timeout so real minutes-long
+  spawns do not trip the fixture default mid-drive), seeds a smoke frontier with
+  a codex-runtime wave and a claude-runtime wave (plus a wedged orphan), drives
+  the fleet to terminal
   through the real ``fleet.drive`` RPC, and applies all four Part-A assertions
   to the resulting sandbox state. This is the operator's on-demand ship-gate
   check; it does NOT run in CI.
@@ -59,7 +61,7 @@ from typing import Any
 import orjson
 import pytest
 
-from eawf.kernel.state.enums import WaveStatus
+from eawf.kernel.state.enums import EffortBucket, WaveStatus
 from eawf.kernel.state.models import SessionAttempt, State, Wave
 from eawf.surfaces.tui.screens.overlays.detail_cost import (
     attempt_is_priced,
@@ -335,19 +337,32 @@ def _wave(
     claimed_at: datetime | None = None,
     closed_at: datetime | None = None,
     runtime_preference: list[str] | None = None,
+    description: str | None = None,
 ) -> Wave:
     """Build one synthetic ``Wave`` row for a drive fixture."""
     return Wave(
         id=wave_id,
         iter_id=_ITER_ID,
         title=title,
+        description=description,
         status=status,
         opened_at=_T0,
         claimed_at=claimed_at,
         closed_at=closed_at,
         sessions=sessions or {},
         runtime_preference=runtime_preference,
+        effort_bucket=EffortBucket.S,
     )
+
+
+#: A dead-simple, deterministic task each live smoke lane carries so the real
+#: agent finishes fast + emits a close-ready report (the drive then closes it via
+#: close-on-behalf, so the run drains and the reaper fires on the orphan).
+_LIVE_SMOKE_TASK = (
+    "Your ONLY task: create a file named hello.txt in the repository root "
+    "containing exactly the single line: hello. Do nothing else -- no other "
+    "files, no commits, no tests. Then you are done."
+)
 
 
 def _state_with(*waves: Wave) -> State:
@@ -624,18 +639,23 @@ def _seed_cross_runtime_frontier(state_path: Path) -> None:
     """
     from eawf.kernel.state.io import write_state_unlocked
 
-    state = State.model_validate(orjson.loads(state_path.read_bytes()))
+    # Seed from a fixture that already carries phase P01 + iter P01-I01; the
+    # sandbox's own base state is the empty-repo fixture (no iter to hang the
+    # frontier on). The resulting state is written to the sandbox state_path.
+    state = State.model_validate(orjson.loads(_BASE_STATE.read_bytes()))
     codex_wave = _wave(
         wave_id=_LIVE_CODEX_WAVE,
         status=WaveStatus.PENDING,
         title="Codex smoke lane",
         runtime_preference=["codex"],
+        description=_LIVE_SMOKE_TASK,
     )
     claude_wave = _wave(
         wave_id=_LIVE_CLAUDE_WAVE,
         status=WaveStatus.PENDING,
         title="Claude smoke lane",
         runtime_preference=["claude-code"],
+        description=_LIVE_SMOKE_TASK,
     )
     orphan_wave = _wave(
         wave_id=_LIVE_ORPHAN_WAVE,
@@ -743,7 +763,7 @@ def _wait_for_terminal_drive(state_path: Path, deadline: float) -> State:
     not os.environ.get("EAWF_LIVE_E2E"),
     reason="live cross-runtime drive; set EAWF_LIVE_E2E=1",
 )
-def test_live_cross_runtime_drive_holds_all_invariants(running_daemon: E2EEnv) -> None:
+def test_live_cross_runtime_drive_holds_all_invariants(e2e_env: E2EEnv) -> None:
     """A live codex + claude drive holds all four lifecycle invariants.
 
     The discriminating experiment the iter close is gated on: configure BOTH
@@ -752,17 +772,28 @@ def test_live_cross_runtime_drive_holds_all_invariants(running_daemon: E2EEnv) -
     ``fleet.drive`` RPC, then re-load the sandbox state + event store and apply
     every Part-A assertion to the resulting lanes.
 
+    The daemon is spawned here (not via the ``running_daemon`` fixture) with a
+    long idle timeout: real agent spawns take minutes, and the fixture default
+    (``EAWF_DAEMON_IDLE_TIMEOUT=120``) self-exits the daemon mid-drive -- killing
+    the backgrounded drain before close-on-behalf + the reaper can run.
+
     Not run in CI (it makes real, paid runtime spawns); the operator runs it
     on-demand as the ship-gate check with ``EAWF_LIVE_E2E=1``.
     """
-    sandbox = running_daemon
+    sandbox = e2e_env
+    sandbox.env["EAWF_DAEMON_IDLE_TIMEOUT"] = "3600"
+    sandbox.env["EAWF_DAEMON_SESSION_TTL"] = "3600"
+    sandbox.spawn_daemon()
+    assert _wait_for_socket(sandbox, time.monotonic() + _LIVE_SOCKET_TIMEOUT_S), (
+        "sandbox daemon did not expose its socket within the ready timeout"
+    )
     _write_dual_adapter_config(sandbox.repo)
     _seed_cross_runtime_frontier(sandbox.state_path)
 
     reply = _rpc(
         sandbox.sock_file,
         "fleet.drive",
-        {"frontier": [_LIVE_CODEX_WAVE, _LIVE_CLAUDE_WAVE], "concurrency": 2},
+        {"frontier": [_LIVE_CODEX_WAVE, _LIVE_CLAUDE_WAVE], "concurrency": 3},
     )
     assert "error" not in reply, reply
 
