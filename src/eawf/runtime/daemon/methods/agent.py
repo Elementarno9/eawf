@@ -865,15 +865,23 @@ def _persist_live_session_attempt(
         wave.sessions[attempt] = session_attempt
         wave.dispatch_history.append(annotation)
         # A headless runtime fires no runtime.capture RPC, so credit its priced
-        # spawn onto the wave here -- but only when nothing else captured the
-        # runtime (an interactive Claude Code session sets the baseline at claim
-        # and the Stop hook sets the latest; do not clobber a real capture).
-        if wave.runtime_baseline is None and wave.runtime_latest is None:
-            baseline, latest = _headless_runtime_snapshots(
-                spawn_result, serving_runtime=serving_runtime
-            )
-            wave.runtime_baseline = baseline
-            wave.runtime_latest = latest
+        # spawn onto the wave here. The spawn's own SpawnResult is authoritative
+        # for this wave's runtime spend, so stamp the matched zero-baseline +
+        # priced-latest pair unconditionally: a claim-time sidecar baseline (when
+        # one exists) belongs to the operator's interactive session -- a foreign
+        # cumulative counter, not this spawn -- so differencing the spawn's
+        # absolute latest against it would subtract the wrong origin (and can
+        # reject on a negative delta). Replacing both with the matched pair
+        # guarantees a clean, non-negative delta whose tokens + cost are exactly
+        # this spawn's spend, so compute_runtime_delta yields a real
+        # tokens_consumed at close instead of collapsing to zero (a headless
+        # wave never reaches this line on an interactive-capture path -- that
+        # path runs runtime.capture, never _persist_live_session_attempt).
+        baseline, latest = _headless_runtime_snapshots(
+            spawn_result, serving_runtime=serving_runtime
+        )
+        wave.runtime_baseline = baseline
+        wave.runtime_latest = latest
         state.updated_at = now
         atomic_write_json_locked(state_path, state.model_dump(mode="json"))
     logger.info(

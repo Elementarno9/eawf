@@ -379,14 +379,19 @@ def test_headless_spawn_stamps_wave_runtime_latest_with_priced_cost(
     assert delta.elapsed_eu > 0.0
 
 
-def test_headless_stamp_does_not_clobber_existing_runtime_capture(
+def test_headless_stamp_overrides_foreign_claim_baseline(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The dispatch stamp defers to a real capture: an existing baseline stays.
+    """The headless credit replaces a foreign claim-time baseline (G1).
 
-    An interactive Claude Code session captures the baseline at claim and the
-    Stop hook records the latest; the headless credit must NOT overwrite that.
-    Pre-seed a baseline and assert the dispatch leaves it untouched.
+    A claim-time statusline sidecar can seed a FOREIGN cumulative baseline on
+    the wave -- the operator's own interactive Claude Code session, not this
+    spawn. Pre-G1 the headless credit deferred to it, so ``runtime_latest``
+    stayed ``None`` and the spawn's per-class tokens never landed. The spawn's
+    own ``SpawnResult`` is authoritative, so the matched zero-baseline +
+    priced-latest pair now replaces the foreign baseline; the delta is the
+    spawn's own clean, non-zero spend rather than a subtraction against the
+    operator session's counter.
     """
     from eawf.kernel.state.models import RuntimeBaseline, State
 
@@ -404,9 +409,13 @@ def test_headless_stamp_does_not_clobber_existing_runtime_capture(
     _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
 
     wave = State.model_validate_json(state_path.read_text(encoding="utf-8")).waves[_WAVE_ID]
+    # The foreign api_duration_ms=999 baseline is replaced by the zero baseline,
+    # and the priced latest now carries the spawn's real per-class tokens.
     assert wave.runtime_baseline is not None
-    assert wave.runtime_baseline.api_duration_ms == 999
-    assert wave.runtime_latest is None
+    assert wave.runtime_baseline.api_duration_ms == 0
+    assert wave.runtime_latest is not None
+    assert wave.runtime_latest.input_tokens == _INPUT_TOKENS
+    assert wave.runtime_latest.output_tokens == _OUTPUT_TOKENS
 
 
 def test_spawn_dated_opus_4_8_priced_against_family_row(

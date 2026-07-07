@@ -2681,6 +2681,47 @@ def _runtime_latest_from_params(params: RuntimeCaptureParams) -> RuntimeLatest:
     )
 
 
+#: Per-class token fields a runtime.capture merge must never null-clobber.
+_RUNTIME_TOKEN_FIELDS: Final[tuple[str, ...]] = (
+    "input_tokens",
+    "output_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+)
+
+
+def _merge_runtime_latest(existing: RuntimeLatest | None, incoming: RuntimeLatest) -> RuntimeLatest:
+    """Merge a fresh capture over the existing snapshot without null-clobbering tokens.
+
+    A ``runtime.capture`` payload can carry a priced cost + duration while
+    omitting the per-class token counts (the ``context_window.current_usage``
+    block is absent for some payloads). A blind overwrite would wipe token
+    fields a prior headless snapshot populated, collapsing the close-time
+    runtime-delta token tally to zero. Merge so a ``None`` incoming token field
+    preserves the existing populated value; every other field takes the fresh
+    capture's value.
+
+    Args:
+        existing: The wave's current ``runtime_latest`` snapshot, or ``None``.
+        incoming: The freshly-parsed capture snapshot to fold in.
+
+    Returns:
+        ``incoming`` unchanged when there is no existing snapshot; otherwise a
+        copy of ``incoming`` whose per-class token fields fall back to the
+        existing value wherever ``incoming`` left them ``None``.
+    """
+    if existing is None:
+        return incoming
+    fallbacks = {
+        field: getattr(existing, field)
+        for field in _RUNTIME_TOKEN_FIELDS
+        if getattr(incoming, field) is None and getattr(existing, field) is not None
+    }
+    if not fallbacks:
+        return incoming
+    return incoming.model_copy(update=fallbacks)
+
+
 def _upsert_interactive_session_attempt(
     wave: Wave,
     *,
@@ -2959,7 +3000,7 @@ async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[st
                     raise DaemonValidationError(
                         f"validation_failed: active wave missing: {wave_id!r}"
                     )
-                wave.runtime_latest = latest
+                wave.runtime_latest = _merge_runtime_latest(wave.runtime_latest, latest)
                 # The interactive-Claude lifecycle mints no SessionAttempt on
                 # its own (only the headless spawn does); record one here off the
                 # same priced capture so an interactive wave surfaces per-attempt
