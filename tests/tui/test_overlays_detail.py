@@ -48,8 +48,9 @@ from eawf.kernel.store.kinds.agent_report import (
     store_kind_for_role,
 )
 from eawf.kernel.store.paths import store_path
+from eawf.observability.telemetry.join import WaveSessionRollup
 from eawf.surfaces.render.link_wrap import PreMarkedText
-from eawf.surfaces.render.units import format_compact_utc
+from eawf.surfaces.render.units import format_compact_utc, format_tokens
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.screens.overlays.detail import (
     _HISTORY_LINK_LINE,
@@ -1251,87 +1252,93 @@ def test_detail_modal_unclaimed_wave_paints_em_dash_sentinel() -> None:
 
 
 # --------------------------------------------------------------------------
-# Runtime tab — budget-vs-consumed token bar + session runtime-EU (P30-I07-W05)
+# Metrics tab — actual tokens + runtime-EU actual against the bucket estimate
 # --------------------------------------------------------------------------
 
 
-def _state_with_budgeted_session_wave(
+def _session_rollup(
+    wave_id: str,
     *,
-    token_budget: int = 1000,
-    tokens_consumed: int = 250,
-) -> tuple[State, str]:
-    """Return a state whose wave carries a token budget + one ended session.
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    cache_read_tokens: int = 0,
+    cache_write_tokens: int = 0,
+) -> WaveSessionRollup:
+    """Return a wave session rollup carrying the given aggregate token counts.
 
-    Builds on :func:`_state_with_attempted_wave` (two ended
-    :class:`SessionAttempt` rows, a 5-minute then a 4-minute span) and stamps
-    a non-``None`` ``token_budget`` plus a non-zero ``tokens_consumed`` so the
-    runtime tab can paint a real consumed-vs-budget token bar and a non-zero
-    session-derived runtime-EU value.
+    The metrics tab reads the ACTUAL consumed tokens off this rollup (the same
+    source the cost tab prices), so the token row reflects real spend rather
+    than the unpopulated ``tokens_consumed`` budget counter.
+    """
+    return WaveSessionRollup(
+        wave_id=wave_id,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cache_read_tokens=cache_read_tokens,
+        cache_write_tokens=cache_write_tokens,
+    )
+
+
+def test_resolve_detail_wave_metrics_actual_tokens_eu_and_estimate() -> None:
+    """A rollup wave renders actual tokens, actual EU, and the bucket estimate.
+
+    The metrics tab reads the ACTUAL consumed tokens off the session rollup
+    (1200 + 340 + 80 + 20 = 1640), the ACTUAL runtime EU from the two 5min +
+    4min session spans (9min -> 0.30 EU at 30 min/EU), and the effort-bucket
+    EU estimate (bucket M -> 1.00 EU) the actual is measured against.
     """
     state, wave_id = _state_with_attempted_wave()
-    budgeted = state.waves[wave_id].model_copy(
-        update={"token_budget": token_budget, "tokens_consumed": tokens_consumed}
+    bucketed = state.waves[wave_id].model_copy(update={"effort_bucket": EffortBucket.M})
+    state = state.model_copy(update={"waves": {**state.waves, wave_id: bucketed}})
+    rollup = _session_rollup(
+        wave_id,
+        input_tokens=1200,
+        output_tokens=340,
+        cache_read_tokens=80,
+        cache_write_tokens=20,
     )
-    new_waves = dict(state.waves)
-    new_waves[wave_id] = budgeted
-    return state.model_copy(update={"waves": new_waves}), wave_id
+    metrics = dict(resolve_detail(state, wave_id, cost_rollup=rollup).metrics)
+    # The token row is the actual consumed sum, not the empty sentinel.
+    assert metrics["tokens"] != EMPTY_STATE
+    assert format_tokens(1640) in metrics["tokens"]
+    # The EU actual is the 9-minute session span at 30 min/EU.
+    assert metrics["eu"] == "0.30 EU"
+    # The estimate row carries the bucket-M EU estimate beside the actual.
+    assert metrics["estimate"] == "1.00 EU"
 
 
-def test_resolve_detail_wave_runtime_budget_and_session_render_non_empty() -> None:
-    """A budgeted wave with an ended session paints a token bar + runtime-EU.
-
-    Success criterion (P30-I07-W05): a wave with ``token_budget``, a non-zero
-    ``tokens_consumed``, and at least one :class:`SessionAttempt` renders a
-    non-zero token bar AND a non-zero runtime-EU value -- neither row is the
-    honest-absence sentinel.
-    """
-    state, wave_id = _state_with_budgeted_session_wave(token_budget=1000, tokens_consumed=250)
-    card = resolve_detail(state, wave_id)
-    runtime = dict(card.runtime)
-    # The token row is a real consumed-vs-budget bar, not the empty sentinel,
-    # and it carries a non-zero percentage (250/1000 = 25%).
-    assert runtime["tokens"] != EMPTY_STATE
-    assert "25%" in runtime["tokens"]
-    assert "0%" not in runtime["tokens"]
-    # The EU row is a real non-zero value derived from the two session spans
-    # (5min + 4min = 9min -> 9/30 = 0.30 EU at the default 30-min-per-EU rate).
-    assert runtime["eu"] != EMPTY_STATE
-    assert runtime["eu"] == "0.30 EU"
+def test_resolve_detail_wave_metrics_actual_tokens_show_budget_when_set() -> None:
+    """A budgeted wave's token row reads the actual consumed against its budget."""
+    state, wave_id = _state_with_attempted_wave()
+    budgeted = state.waves[wave_id].model_copy(update={"token_budget": 5000})
+    state = state.model_copy(update={"waves": {**state.waves, wave_id: budgeted}})
+    rollup = _session_rollup(wave_id, input_tokens=1200, output_tokens=440)
+    tokens = dict(resolve_detail(state, wave_id, cost_rollup=rollup).metrics)["tokens"]
+    # The actual (1640) reads against the budget (5000), not a percentage bar.
+    assert format_tokens(1640) in tokens
+    assert format_tokens(5000) in tokens
+    assert "budget" in tokens
 
 
-def test_resolve_detail_wave_runtime_empty_state_distinct_from_measured_zero() -> None:
-    """A no-budget, no-session wave shows the sentinel, not a measured zero.
+def test_resolve_detail_wave_metrics_honest_empty_without_rollup() -> None:
+    """A wave with no rollup + no ended session shows the sentinel, not a zero.
 
-    Boundary: ``token_budget is None`` + empty ``sessions`` must render the
-    honest-absence sentinel for BOTH the token and EU rows, and that sentinel
-    must be distinguishable from a measured zero (a wave that consumed zero
-    tokens against a real budget, or ran a zero-length session).
+    Boundary: no joined rollup and empty ``sessions`` render the honest-absence
+    sentinel for BOTH the token and EU rows -- and a rollup that summed to zero
+    tokens is still the sentinel, never a fabricated zero.
     """
     state = _load(_PHASE_ITER_WAVE)
     wave_id = next(iter(state.waves))
-    # The fixture wave carries no token budget and no sessions.
-    assert state.waves[wave_id].token_budget is None
     assert state.waves[wave_id].sessions == {}
-    empty_card = resolve_detail(state, wave_id)
-    empty_runtime = dict(empty_card.runtime)
-    assert empty_runtime["tokens"] == EMPTY_STATE
-    assert empty_runtime["eu"] == EMPTY_STATE
-
-    # A measured zero (a real budget the wave consumed 0 tokens against) is a
-    # 0% bar -- a populated value, NOT the empty sentinel. The two states stay
-    # distinguishable: the empty wave reads "no data", the measured-zero wave
-    # reads a real 0% bar.
-    measured = state.waves[wave_id].model_copy(update={"token_budget": 1000, "tokens_consumed": 0})
-    new_waves = dict(state.waves)
-    new_waves[wave_id] = measured
-    measured_card = resolve_detail(state.model_copy(update={"waves": new_waves}), wave_id)
-    measured_runtime = dict(measured_card.runtime)
-    assert measured_runtime["tokens"] != EMPTY_STATE
-    assert "0%" in measured_runtime["tokens"]
-    assert measured_runtime["tokens"] != empty_runtime["tokens"]
+    empty = dict(resolve_detail(state, wave_id).metrics)
+    assert empty["tokens"] == EMPTY_STATE
+    assert empty["eu"] == EMPTY_STATE
+    # A rollup that joined but summed to zero tokens stays the sentinel.
+    zero = dict(resolve_detail(state, wave_id, cost_rollup=_session_rollup(wave_id)).metrics)
+    assert zero["tokens"] == EMPTY_STATE
 
 
-def test_resolve_detail_wave_runtime_eu_empty_while_session_running() -> None:
+def test_resolve_detail_wave_metrics_eu_empty_while_session_running() -> None:
     """A wave whose only session has not ended yields the EU sentinel.
 
     Error/boundary path: a :class:`SessionAttempt` with ``ended_at is None``
@@ -1357,33 +1364,33 @@ def test_resolve_detail_wave_runtime_eu_empty_while_session_running() -> None:
     )
     new_waves = dict(state.waves)
     new_waves[wave_id] = running
-    card = resolve_detail(state.model_copy(update={"waves": new_waves}), wave_id)
-    runtime = dict(card.runtime)
-    assert runtime["eu"] == EMPTY_STATE
+    metrics = dict(resolve_detail(state.model_copy(update={"waves": new_waves}), wave_id).metrics)
+    assert metrics["eu"] == EMPTY_STATE
 
 
-def test_detail_modal_runtime_paints_token_bar_and_runtime_eu() -> None:
-    """The runtime tab paints a non-empty token bar + runtime-EU value (Pilot)."""
+def test_detail_modal_metrics_paints_actual_tokens_and_eu() -> None:
+    """The metrics tab paints the actual consumed tokens + runtime-EU value (Pilot)."""
 
     async def body() -> None:
-        state, wave_id = _state_with_budgeted_session_wave(token_budget=1000, tokens_consumed=250)
+        state, wave_id = _state_with_attempted_wave()
+        rollup = _session_rollup(wave_id, input_tokens=1200, output_tokens=440)
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
             await app.workers.wait_for_complete()
-            card = resolve_detail(state, wave_id)
+            card = resolve_detail(state, wave_id, cost_rollup=rollup)
             modal = DetailModal(card)
             app.push_screen(modal)
             await pilot.pause()
             await app.workers.wait_for_complete()
             tabs = modal.query_one(TabbedContent)
-            tabs.active = "detail-tab-runtime"
+            tabs.active = "detail-tab-metrics"
             await pilot.pause()
             await app.workers.wait_for_complete()
             rendered = capture_screen_text(app)
-            # The token bar's non-zero percent and the runtime-EU value paint;
-            # neither is the honest-absence sentinel.
-            assert "25%" in rendered
+            # The actual consumed tokens + the runtime-EU value paint; neither
+            # is the honest-absence sentinel.
+            assert format_tokens(1640) in rendered
             assert "0.30 EU" in rendered
 
     asyncio.run(body())
@@ -1446,7 +1453,7 @@ def test_tab_label_text_is_the_chassis_ids() -> None:
         "criteria",
         "gates",
         "evidence",
-        "runtime",
+        "metrics",
         "cost",
         "history",
     ]
@@ -1460,15 +1467,15 @@ def test_tab_label_carries_chrome_glyph_prefix() -> None:
     vocabulary -- resolves THROUGH a chrome role; only ``evidence`` reuses the
     closed lifecycle glyph.
     """
-    # Unicode column: overview triple-bar, gate lozenge, runtime dollar,
+    # Unicode column: overview triple-bar, gate lozenge, metrics summation,
     # evidence closed-circle, criteria right-pointing marker.
     overview_u = sigils.chrome("overview", mode="unicode")
     gate_u = sigils.chrome("gate", mode="unicode")
-    runtime_u = sigils.chrome("runtime", mode="unicode")
+    metrics_u = sigils.chrome("metrics", mode="unicode")
     evidence_u = sigils.glyph(Sigil.CLOSED, mode="unicode")
     assert tab_label("overview", mode="unicode") == f"{overview_u} overview"
     assert tab_label("gates", mode="unicode") == f"{gate_u} gates"
-    assert tab_label("runtime", mode="unicode") == f"{runtime_u} runtime"
+    assert tab_label("metrics", mode="unicode") == f"{metrics_u} metrics"
     assert tab_label("evidence", mode="unicode") == f"{evidence_u} evidence"
     # The criteria / cost / history markers resolve through chrome roles (no
     # local marker remains in this overlay).
@@ -1478,17 +1485,17 @@ def test_tab_label_carries_chrome_glyph_prefix() -> None:
     assert tab_label("criteria", mode="unicode") == f"{criteria_u} criteria"
     assert tab_label("history", mode="unicode") == f"{history_u} history"
     assert tab_label("criteria", mode="unicode").endswith(" criteria")
-    # The cost tab carries the generic currency sign in unicode (the runtime
-    # chrome role already owns the dollar) and falls back to a plain dollar
-    # in ascii where the block currency glyph may not render.
+    # The cost tab owns the dollar now the runtime chrome role is scoped to the
+    # autopilot cockpit; the metrics tab carries the n-ary summation.
     assert tab_label("cost", mode="unicode") == f"{cost_u} cost"
-    assert tab_label("cost", mode="unicode") == "¤ cost"
+    assert tab_label("cost", mode="unicode") == "$ cost"
+    assert tab_label("metrics", mode="unicode") == "∑ metrics"
     # ASCII column flips to the deconflicted fallbacks.
     assert tab_label("overview", mode="ascii") == "= overview"
     assert tab_label("gates", mode="ascii") == "[] gates"
     assert tab_label("evidence", mode="ascii") == "@ evidence"
     assert tab_label("criteria", mode="ascii") == "> criteria"
-    assert tab_label("runtime", mode="ascii") == "$ runtime"
+    assert tab_label("metrics", mode="ascii") == "+ metrics"
     assert tab_label("cost", mode="ascii") == "$ cost"
 
 
@@ -1515,50 +1522,50 @@ def test_resolve_detail_phase_card() -> None:
     assert {"id", "scope", "title", "status", "iters", "waves"} <= row_labels
 
 
-def test_resolve_detail_iter_runtime_has_completion_bar() -> None:
+def test_resolve_detail_iter_metrics_has_completion_bar() -> None:
     state = _load(_PHASE_ITER_WAVE)
     iter_id = next(iter(state.iters))
     card = resolve_detail(state, iter_id)
-    runtime_labels = {label for label, _ in card.runtime}
-    assert "completion" in runtime_labels
+    metrics_labels = {label for label, _ in card.metrics}
+    assert "completion" in metrics_labels
 
 
-def test_resolve_detail_phase_runtime_has_completion_bar() -> None:
+def test_resolve_detail_phase_metrics_has_completion_bar() -> None:
     state = _load(_PHASE_ITER_WAVE)
     phase_id = next(iter(state.phases))
     card = resolve_detail(state, phase_id)
-    runtime_labels = {label for label, _ in card.runtime}
-    assert "completion" in runtime_labels
+    metrics_labels = {label for label, _ in card.metrics}
+    assert "completion" in metrics_labels
 
 
-def test_resolve_detail_wave_runtime_has_size_bar() -> None:
+def test_resolve_detail_wave_metrics_has_size_bar() -> None:
     state, wave_id = _state_with_bucketed_wave(EffortBucket.L)
     card = resolve_detail(state, wave_id)
-    size_values = [value for label, value in card.runtime if label == "size"]
+    size_values = [value for label, value in card.metrics if label == "size"]
     assert size_values
     assert "L" in size_values[0]
     assert EMPTY_STATE not in size_values[0]
 
 
-def test_resolve_detail_wave_runtime_eu_tokens_empty_state() -> None:
+def test_resolve_detail_wave_metrics_eu_tokens_empty_state() -> None:
     state = _load(_PHASE_ITER_WAVE)
     wave_id = next(iter(state.waves))
     card = resolve_detail(state, wave_id)
-    runtime = dict(card.runtime)
+    metrics = dict(card.metrics)
     # Honest-empty: a no-runtime wave shows the sentinel, never 0.00/0.00.
-    assert runtime["eu"] == EMPTY_STATE
-    assert runtime["tokens"] == EMPTY_STATE
-    assert "0.00" not in runtime["eu"]
-    assert "0.00" not in runtime["tokens"]
+    assert metrics["eu"] == EMPTY_STATE
+    assert metrics["tokens"] == EMPTY_STATE
+    assert "0.00" not in metrics["eu"]
+    assert "0.00" not in metrics["tokens"]
 
 
-def test_resolve_detail_iter_runtime_eu_tokens_empty_state() -> None:
+def test_resolve_detail_iter_metrics_eu_tokens_empty_state() -> None:
     state = _load(_PHASE_ITER_WAVE)
     iter_id = next(iter(state.iters))
     card = resolve_detail(state, iter_id)
-    runtime = dict(card.runtime)
-    assert runtime["eu"] == EMPTY_STATE
-    assert runtime["tokens"] == EMPTY_STATE
+    metrics = dict(card.metrics)
+    assert metrics["eu"] == EMPTY_STATE
+    assert metrics["tokens"] == EMPTY_STATE
 
 
 def test_resolve_detail_wave_has_narrative_preview() -> None:
@@ -1577,11 +1584,11 @@ def test_resolve_detail_iter_has_no_narrative_preview() -> None:
     assert card.detail_markdown is None
 
 
-def test_resolve_detail_backlog_has_no_runtime_or_narrative() -> None:
+def test_resolve_detail_backlog_has_no_metrics_or_narrative() -> None:
     state = _load(_BACKLOG)
     item_id = next(iter(state.backlog))
     card = resolve_detail(state, item_id)
-    assert card.runtime == ()
+    assert card.metrics == ()
     assert card.detail_markdown is None
 
 
@@ -1595,13 +1602,13 @@ def test_present_tabs_overview_always_present() -> None:
     assert DetailModal._present_tabs(card) == ("overview",)
 
 
-def test_present_tabs_wave_includes_runtime_and_criteria() -> None:
+def test_present_tabs_wave_includes_metrics_and_criteria() -> None:
     state = _load(_PHASE_ITER_WAVE)
     wave_id = next(iter(state.waves))
     card = resolve_detail(state, wave_id)
     tabs = DetailModal._present_tabs(card)
     assert "overview" in tabs
-    assert "runtime" in tabs
+    assert "metrics" in tabs
     assert "evidence" in tabs
 
 
@@ -1613,7 +1620,7 @@ def test_present_tabs_wave_keeps_empty_gates_tab() -> None:
     card = resolve_detail(state, wave_id)
     assert card.gates == ()
     tabs = DetailModal._present_tabs(card)
-    assert tabs[:5] == ("overview", "criteria", "gates", "evidence", "runtime")
+    assert tabs[:5] == ("overview", "criteria", "gates", "evidence", "metrics")
 
 
 def test_present_tabs_skips_empty_criteria_on_non_wave_card() -> None:
@@ -1630,7 +1637,7 @@ def test_present_tabs_order_follows_chassis_sequence() -> None:
         criteria=(("criterion", "ship it"),),
         gates=(("gate", "pytest"),),
         evidence=(("attempt 1", "fresh"),),
-        runtime=(("size", "M"),),
+        metrics=(("size", "M"),),
         detail_markdown="body",
     )
     assert DetailModal._present_tabs(card) == (
@@ -1638,7 +1645,7 @@ def test_present_tabs_order_follows_chassis_sequence() -> None:
         "criteria",
         "gates",
         "evidence",
-        "runtime",
+        "metrics",
     )
 
 
@@ -1725,7 +1732,7 @@ def test_detail_modal_iter_shows_completion_bar() -> None:
             modal = app.screen
             assert isinstance(modal, DetailModal)
             tabs = modal.query_one(TabbedContent)
-            tabs.active = "detail-tab-runtime"
+            tabs.active = "detail-tab-metrics"
             await pilot.pause()
             rendered = capture_screen_text(app)
             # The closed/total count suffix of the completion bar is visible.
@@ -1746,7 +1753,7 @@ def test_detail_modal_wave_shows_size_bar() -> None:
             modal = app.screen
             assert isinstance(modal, DetailModal)
             tabs = modal.query_one(TabbedContent)
-            tabs.active = "detail-tab-runtime"
+            tabs.active = "detail-tab-metrics"
             await pilot.pause()
             rendered = capture_screen_text(app)
             # The size-bar row carries the bucket label.
@@ -1765,7 +1772,7 @@ def test_detail_modal_metrics_show_empty_state_for_eu_tokens() -> None:
             app.push_screen(DetailModal(card))
             await pilot.pause()
             tabs = app.screen.query_one(TabbedContent)
-            tabs.active = "detail-tab-runtime"
+            tabs.active = "detail-tab-metrics"
             await pilot.pause()
             rendered = capture_screen_text(app)
             assert EMPTY_STATE in rendered
@@ -1847,13 +1854,13 @@ def _full_card() -> DetailCard:
         criteria=(("criterion", "ship the chassis"),),
         gates=(("gate", "pytest"),),
         evidence=(("attempt 1", "fresh (claude)"),),
-        runtime=(("size", "M"),),
+        metrics=(("size", "M"),),
         detail_markdown="# heading\n\n**bold** body",
     )
 
 
 def test_detail_modal_hotkey_activates_matching_tab() -> None:
-    """``o``/``c``/``g``/``v``/``r`` jump straight to their pane when present."""
+    """``o``/``c``/``g``/``v``/``m`` jump straight to their pane when present."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
@@ -1866,7 +1873,7 @@ def test_detail_modal_hotkey_activates_matching_tab() -> None:
                 ("c", "detail-tab-criteria"),
                 ("g", "detail-tab-gates"),
                 ("v", "detail-tab-evidence"),
-                ("r", "detail-tab-runtime"),
+                ("m", "detail-tab-metrics"),
                 ("o", "detail-tab-overview"),
             ):
                 await pilot.press(key)
@@ -1880,7 +1887,7 @@ def test_detail_modal_hotkey_absent_tab_is_noop() -> None:
     """A hotkey for a tab the card lacks leaves the active tab unchanged.
 
     Boundary: a card carrying only the ``overview`` tab (field rows, no
-    criteria / gates / evidence / runtime). Pressing ``g`` (and the other
+    criteria / gates / evidence / metrics). Pressing ``g`` (and the other
     absent-tab keys) must be a no-op rather than raising or switching to a
     missing pane.
     """
@@ -1895,7 +1902,7 @@ def test_detail_modal_hotkey_absent_tab_is_noop() -> None:
             await pilot.pause()
             tabs = app.screen.query_one(TabbedContent)
             assert tabs.active == "detail-tab-overview"
-            for key in ("c", "g", "v", "r"):
+            for key in ("c", "g", "v", "m"):
                 await pilot.press(key)
                 await pilot.pause()
                 assert tabs.active == "detail-tab-overview"
@@ -1950,7 +1957,7 @@ def test_detail_modal_wave_size_row_is_bucket_text() -> None:
     """The wave ``size`` runtime row is the plain bucket string (no bar glyphs)."""
     state, wave_id = _state_with_bucketed_wave(EffortBucket.M)
     card = resolve_detail(state, wave_id)
-    size_values = [value for label, value in card.runtime if label == "size"]
+    size_values = [value for label, value in card.metrics if label == "size"]
     assert size_values == ["M"]
     assert "#" not in size_values[0]
     assert "-" not in size_values[0]
@@ -2203,7 +2210,7 @@ def _five_tab_card() -> DetailCard:
         ),
         criteria=(("criterion", "the five tabs render with chrome glyphs"),),
         evidence=(("attempt 1", "fresh (claude)"),),
-        runtime=(("size", "M"), ("eu", EMPTY_STATE), ("tokens", EMPTY_STATE)),
+        metrics=(("size", "M"), ("eu", EMPTY_STATE), ("tokens", EMPTY_STATE)),
         detail_markdown=None,
     )
 
@@ -2220,17 +2227,17 @@ def test_chassis_five_tab_ids_present_with_chrome_labels() -> None:
             await pilot.pause()
             tabs = modal.query_one(TabbedContent)
             mode = app.render_mode
-            # overview + criteria + evidence + runtime are present (no gates).
+            # overview + criteria + evidence + metrics are present (no gates).
             present_ids = {pane.id for pane in tabs.query(TabPane)}
             assert present_ids == {
                 "detail-tab-overview",
                 "detail-tab-criteria",
                 "detail-tab-evidence",
-                "detail-tab-runtime",
+                "detail-tab-metrics",
             }
             # Each present tab's chrome-glyph word is painted in the tab bar.
             rendered = capture_screen_text(app)
-            for tab_id in ("overview", "criteria", "evidence", "runtime"):
+            for tab_id in ("overview", "criteria", "evidence", "metrics"):
                 word = tab_label(tab_id, mode=mode).split(" ", 1)[1]
                 assert word in rendered
 
@@ -2262,7 +2269,7 @@ def test_chassis_no_gates_wave_renders_no_gates_tab() -> None:
 
 
 def test_chassis_hotkeys_jump_to_each_present_tab() -> None:
-    """``o``/``c``/``v``/``r`` jump to each present tab; ``Tab`` cycles."""
+    """``o``/``c``/``v``/``m`` jump to each present tab; ``Tab`` cycles."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
@@ -2277,7 +2284,7 @@ def test_chassis_hotkeys_jump_to_each_present_tab() -> None:
             for key, expected in (
                 ("c", "detail-tab-criteria"),
                 ("v", "detail-tab-evidence"),
-                ("r", "detail-tab-runtime"),
+                ("m", "detail-tab-metrics"),
                 ("o", "detail-tab-overview"),
             ):
                 await pilot.press(key)
@@ -2294,8 +2301,8 @@ def test_chassis_hotkeys_jump_to_each_present_tab() -> None:
     asyncio.run(body())
 
 
-def test_chassis_runtime_tab_shows_empty_sentinel_not_fabricated_zero() -> None:
-    """The no-runtime wave's runtime tab paints the sentinel, not 0.00/0.00."""
+def test_chassis_metrics_tab_shows_empty_sentinel_not_fabricated_zero() -> None:
+    """The no-runtime wave's metrics tab paints the sentinel, not 0.00/0.00."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
@@ -2305,7 +2312,7 @@ def test_chassis_runtime_tab_shows_empty_sentinel_not_fabricated_zero() -> None:
             app.push_screen(modal)
             await pilot.pause()
             tabs = modal.query_one(TabbedContent)
-            tabs.active = "detail-tab-runtime"
+            tabs.active = "detail-tab-metrics"
             await pilot.pause()
             rendered = capture_screen_text(app)
             assert EMPTY_STATE in rendered

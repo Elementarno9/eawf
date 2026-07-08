@@ -6,23 +6,24 @@ widget emits a selection message (a backlog-item or wave id), the shared
 renders the resolved entity in a tabbed, scrollable card.
 
 The body is split across the cosmic-terminal tabs --
-``overview`` / ``criteria`` / ``gates`` / ``evidence`` / ``runtime`` /
+``overview`` / ``criteria`` / ``gates`` / ``evidence`` / ``metrics`` /
 ``cost`` / ``history`` -- each with a chrome-glyph mnemonic from the reskin
 sigil vocabulary. ``Tab`` / ``Shift+Tab`` cycle the tabs; the single-letter
-keys ``o`` / ``c`` / ``g`` / ``v`` / ``r`` / ``$`` / ``h`` jump to one, and
+keys ``o`` / ``c`` / ``g`` / ``v`` / ``m`` / ``$`` / ``h`` jump to one, and
 the arrow keys keep their native scroll. A ``wave`` card renders the full
-five-tab chassis always (overview / criteria / gates / evidence / runtime) --
+five-tab chassis always (overview / criteria / gates / evidence / metrics) --
 an empty section shows an honest-empty notice rather than hiding the tab (the
 "render the tabs now, fill later" directive) -- while the ``cost`` tab stays
 data-gated and a non-wave card (phase / iter / backlog / incident peek)
 builds only the groups it populates. An ``incident`` card carries its
 chronological event timeline on its own ``history`` tab (designer ruling
 A3-a), and its ``evidence`` group keeps a one-line link pointing at it.
-Honest absence is first-class: the ``runtime`` tab shows the
-:data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel rather than a
-fabricated zero (a real budget still paints a consumed-vs-budget bar +
-session-derived runtime-EU), and the ``cost`` tab renders "no metered
-sessions yet" (with an em-dash + inert marker for an unbillable attempt).
+Honest absence is first-class: the ``metrics`` tab shows the
+:data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel for an actual
+that has not landed rather than a fabricated zero (the effort-bucket EU
+estimate + the session-derived runtime-EU actual + the actual consumed tokens
+paint as they arrive), and the ``cost`` tab renders "no metered sessions yet"
+(with an em-dash + inert marker for an unbillable attempt).
 
 Entity resolution is a pure function (:func:`resolve_detail`) over the
 reactive :class:`~eawf.kernel.state.models.State` returning a typed
@@ -76,7 +77,7 @@ from eawf.surfaces.render.narrative import (
     build_narrative,
     render_narrative_bundle,
 )
-from eawf.surfaces.render.units import format_compact_utc
+from eawf.surfaces.render.units import format_compact_utc, format_tokens
 from eawf.surfaces.tui.screens.overlays.detail_attempts import attempt_rollup_rows
 from eawf.surfaces.tui.screens.overlays.detail_cost import (
     wave_cost_rollup_for_wave,
@@ -93,7 +94,6 @@ from eawf.surfaces.tui.widgets.eu_bar import (
     EMPTY_STATE,
     RenderMode,
     render_completion_bar,
-    render_eu_bar_plain,
 )
 from eawf.surfaces.tui.widgets.sigils import Sigil, status_sigil
 from eawf.workflow.agent_report.rollup import (
@@ -102,6 +102,7 @@ from eawf.workflow.agent_report.rollup import (
     iter_agent_reports,
     per_wave_attempt_rollup,
 )
+from eawf.workflow.estimation.buckets import BUCKET_EU
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import SessionAttempt, State, Wave
@@ -114,12 +115,12 @@ logger = logging.getLogger(__name__)
 #: so the pane label reads e.g. the overview triple-bar mark then
 #: ``overview`` (unicode) / ``= overview`` (ascii). The overview tab is
 #: always built; the rest follow the ``criteria`` / ``gates`` /
-#: ``evidence`` / ``runtime`` chassis order and appear only when their
+#: ``evidence`` / ``metrics`` chassis order and appear only when their
 #: section is non-empty.
 #:
 #: The marks are sourced from the single-home sigil vocabulary
 #: (:mod:`~eawf.surfaces.tui.widgets.sigils`): every tab marker --
-#: ``overview`` / ``gates`` / ``runtime`` / ``criteria`` / ``cost`` /
+#: ``overview`` / ``gates`` / ``metrics`` / ``criteria`` / ``cost`` /
 #: ``history`` -- is a :func:`~eawf.surfaces.tui.widgets.sigils.chrome` role,
 #: and ``evidence`` reuses the closed lifecycle
 #: :func:`~eawf.surfaces.tui.widgets.sigils.glyph`.
@@ -128,7 +129,7 @@ _TAB_LABEL_TEXT: dict[str, str] = {
     "criteria": "criteria",
     "gates": "gates",
     "evidence": "evidence",
-    "runtime": "runtime",
+    "metrics": "metrics",
     "cost": "cost",
     "history": "history",
 }
@@ -144,7 +145,7 @@ _TAB_LABEL_TEXT: dict[str, str] = {
 _TAB_CHROME_ROLE: dict[str, str] = {
     "overview": "overview",
     "gates": "gate",
-    "runtime": "runtime",
+    "metrics": "metrics",
     "criteria": "criteria",
     "cost": "cost",
     "history": "history",
@@ -156,7 +157,7 @@ def _tab_glyph(tab_id: str, *, mode: RenderMode) -> str:
 
     Routes each tab to the single-home sigil vocabulary so the chassis
     never invents a glyph: every tab marker -- ``overview`` / ``gates`` /
-    ``runtime`` and the ``criteria`` / ``cost`` / ``history`` markers folded
+    ``metrics`` and the ``criteria`` / ``cost`` / ``history`` markers folded
     into :data:`~eawf.surfaces.tui.widgets.sigils._CHROME` -- resolves through
     a :func:`~eawf.surfaces.tui.widgets.sigils.chrome` role
     (:data:`_TAB_CHROME_ROLE`); only ``evidence`` reuses the closed lifecycle
@@ -262,9 +263,10 @@ class DetailCard:
     carries the wave's typed gate rows grouped under their owning criterion
     id, each naming the gate's check kind; a wave with no gates leaves the
     group empty so the modal builds no gates tab. The ``evidence`` /
-    ``runtime`` groups are the remaining chassis seams: ``evidence`` carries
-    the wave's attempt rollup + dispatch history and ``runtime`` carries the
-    size + budget-vs-consumed token bar + runtime-EU rows.
+    ``metrics`` groups are the remaining chassis seams: ``evidence`` carries
+    the wave's attempt rollup + dispatch history and ``metrics`` carries the
+    size + the runtime-EU actual against its effort-bucket estimate + the
+    actual consumed tokens.
 
     Attributes:
         title: The card heading (e.g. ``wave P26-I01-W19`` /
@@ -282,13 +284,16 @@ class DetailCard:
             attempt rollup, and the provenance / dispatch-history rows (the
             ``claimed`` work-start row plus one row per dispatch annotation,
             each appending any runtime-switch reason).
-        runtime: The ``runtime`` group — size + a budget-vs-consumed token
-            bar + a session-derived runtime-EU value. A wave with no token
-            budget (``token_budget is None``) renders the shared
+        metrics: The ``metrics`` group — the effort-bucket size, the
+            session-derived runtime-EU actual, the effort-bucket EU estimate
+            it is measured against, and the actual consumed tokens read from
+            the wave's session rollup (the same source the ``cost`` tab uses).
+            A wave with no ended sessions renders the shared
             :data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel for
-            the token row, and a wave with no ended sessions renders it for
-            the EU row, so the empty state stays distinguishable from a
-            measured zero — never a fabricated ``0%`` bar.
+            the EU actual, and a wave with no metered token rollup renders it
+            for the token row, so an honest absence stays distinguishable from
+            a measured zero — the EU estimate still shows whenever a bucket is
+            set, since it is a plan figure independent of runtime.
         cost: The ``cost`` group — the per-attempt cost columns (attempt,
             model, in/out tokens, cache create/read tokens, priced cost, EU)
             plus an aggregate cost bar, joined from the wave's metered
@@ -313,18 +318,18 @@ class DetailCard:
     criteria: tuple[tuple[str, str], ...] = ()
     gates: tuple[tuple[str, str], ...] = ()
     evidence: tuple[tuple[str, str], ...] = ()
-    runtime: tuple[tuple[str, str], ...] = ()
+    metrics: tuple[tuple[str, str], ...] = ()
     cost: tuple[tuple[str, str], ...] = ()
     history: tuple[tuple[str, str], ...] = ()
     detail_markdown: str | None = None
     #: The entity kind the card resolves. ``"wave"`` cards render the full
-    #: five-tab chassis (overview / criteria / gates / evidence / runtime)
+    #: five-tab chassis (overview / criteria / gates / evidence / metrics)
     #: unconditionally -- honest-empty until the data lands, the "render the
     #: tabs now, fill later" reskin directive -- while every other kind keeps
     #: only the groups it populates.
     kind: str = "entity"
     #: The overview glance: a compact ``(label, value)`` quad summarising a wave
-    #: -- criteria bound, gate count, evidence records, runtime EU -- rendered
+    #: -- criteria bound, gate count, evidence records, metrics EU -- rendered
     #: above the narrative so the overview opens as a scannable glance (the
     #: reskin's overview intent) rather than a prose dump. Empty on non-wave cards.
     glance: tuple[tuple[str, str], ...] = ()
@@ -353,7 +358,7 @@ _EMPTY_TAB_NOTICE: dict[str, str] = {
     "criteria": "no criteria bound yet",
     "gates": "no gates declared yet",
     "evidence": "no evidence recorded yet",
-    "runtime": "no runtime captured yet",
+    "metrics": "no metrics captured yet",
     "cost": "no metered sessions yet",
     "history": "no timeline events recorded",
 }
@@ -489,7 +494,7 @@ def _wave_runtime_eu(wave: Wave) -> float | None:
     millisecond total through the canonical
     :func:`~eawf.observability.telemetry.join._duration_ms_to_eu` math (one EU
     per :data:`~eawf.observability.telemetry.join.DEFAULT_EU_MINUTES` minutes),
-    so the runtime tab quotes the same EU unit the close-time telemetry
+    so the metrics tab quotes the same EU unit the close-time telemetry
     rollup does. A wave with no ended sessions yields ``None`` so the caller
     surfaces the honest-absence sentinel rather than a measured zero.
 
@@ -510,58 +515,74 @@ def _wave_runtime_eu(wave: Wave) -> float | None:
     return _duration_ms_to_eu(sum(durations), eu_minutes=DEFAULT_EU_MINUTES)
 
 
-def _wave_runtime(
-    wave: Wave, *, mode: RenderMode = DEFAULT_RENDER_MODE
-) -> tuple[tuple[str, str], ...]:
-    """Build the ``runtime`` tab rows for a wave: budget-vs-consumed signals.
+def _wave_metrics(wave: Wave, cost_rollup: WaveSessionRollup | None) -> tuple[tuple[str, str], ...]:
+    """Build the ``metrics`` tab rows for a wave: estimate-vs-actual signals.
 
-    Surfaces three honest progress signals. ``size`` is the plain effort
-    bucket label (e.g. ``M``) when set. ``tokens`` is a budget-vs-consumed
-    bar (:attr:`~eawf.kernel.state.models.Wave.tokens_consumed` against
-    :attr:`~eawf.kernel.state.models.Wave.token_budget`), and ``eu`` is the
-    runtime effort-unit value derived from the wave's
-    :class:`~eawf.kernel.state.models.SessionAttempt` spans.
+    Surfaces the wave's effort + spend against its plan estimate:
 
-    Both data rows stay honest about absence: a wave with no token budget
-    (``token_budget is None``) surfaces the shared
-    :data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel for the
-    token row rather than a fabricated ``0%`` bar, and a wave with no ended
-    sessions surfaces the sentinel for the EU row. That keeps the empty state
-    (no budget, no sessions) distinguishable from a measured zero -- a real
-    bar / value paints only when a budget or a completed session attempt
-    exists.
+    - ``size`` is the plain effort bucket label (e.g. ``L``) when set.
+    - ``eu`` is the ACTUAL runtime effort units derived from the wave's ended
+      :class:`~eawf.kernel.state.models.SessionAttempt` spans -- the honest
+      :data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel when no
+      session has ended.
+    - ``estimate`` is the effort-bucket EU estimate
+      (:data:`~eawf.workflow.estimation.buckets.BUCKET_EU`) the actual is
+      measured against. It is a plan figure independent of runtime, so it
+      shows whenever a bucket is set -- even before any session lands.
+    - ``tokens`` is the ACTUAL consumed tokens summed off the wave's session
+      rollup (the same rollup the ``cost`` tab prices), with the token budget
+      appended when one is set. This replaces the former budget-vs-consumed
+      bar over the unpopulated
+      :attr:`~eawf.kernel.state.models.Wave.tokens_consumed` counter, which
+      always read empty while the cost tab already showed real session tokens.
+
+    The two actual rows stay honest about absence: no ended session leaves the
+    EU actual the sentinel, and no metered rollup (or a rollup that summed to
+    zero tokens) leaves the token row the sentinel -- distinguishable from a
+    measured zero, and never a fabricated bar.
 
     Args:
         wave: The resolved wave.
-        mode: The active render mode (``"unicode"`` / ``"ascii"``) the token
-            bar glyph run honours.
+        cost_rollup: The wave's joined session rollup, or ``None`` when no
+            metered session joined -- the token row then reads the sentinel.
 
     Returns:
-        Ordered runtime ``(label, value)`` rows.
+        Ordered metrics ``(label, value)`` rows.
     """
     rows: list[tuple[str, str]] = []
     if wave.effort_bucket is not None:
         rows.append(("size", wave.effort_bucket.value))
     runtime_eu = _wave_runtime_eu(wave)
     rows.append(("eu", EMPTY_STATE if runtime_eu is None else f"{runtime_eu:.2f} EU"))
-    # ``token_budget`` is ``None`` (no budget set) -> the helper's non-positive
-    # total guard surfaces the honest-absence sentinel; a real budget paints a
-    # consumed-vs-budget bar that the colour band marks over-budget.
-    token_total = float(wave.token_budget) if wave.token_budget is not None else 0.0
-    token_bar = render_eu_bar_plain(float(wave.tokens_consumed), token_total, mode=mode)
-    rows.append(("tokens", token_bar))
+    if wave.effort_bucket is not None:
+        rows.append(("estimate", f"{BUCKET_EU[wave.effort_bucket]:.2f} EU"))
+    consumed = (
+        0
+        if cost_rollup is None
+        else cost_rollup.input_tokens
+        + cost_rollup.output_tokens
+        + cost_rollup.cache_read_tokens
+        + cost_rollup.cache_write_tokens
+    )
+    if consumed <= 0:
+        tokens_cell = EMPTY_STATE
+    elif wave.token_budget is not None:
+        tokens_cell = f"{format_tokens(consumed)} / {format_tokens(wave.token_budget)} budget"
+    else:
+        tokens_cell = format_tokens(consumed)
+    rows.append(("tokens", tokens_cell))
     return tuple(rows)
 
 
-def _completion_runtime(closed: int, total: int) -> tuple[tuple[str, str], ...]:
-    """Build the iter / phase ``runtime`` rows from child-wave counts.
+def _completion_metrics(closed: int, total: int) -> tuple[tuple[str, str], ...]:
+    """Build the iter / phase ``metrics`` rows from child-wave counts.
 
     Args:
         closed: Count of closed child waves.
         total: Total child-wave count.
 
     Returns:
-        Ordered runtime ``(label, value)`` rows: a real completion bar plus
+        Ordered metrics ``(label, value)`` rows: a real completion bar plus
         honest-empty EU / token sentinel rows (no estimation data is
         populated, so the rows read "no data" rather than ``0.00/0.00``).
     """
@@ -826,9 +847,9 @@ def _wave_card(
     # metered sessions yet" line rather than an empty cost tab.
     cost: tuple[tuple[str, str], ...] = wave_cost_rows(wave, cost_rollup)
 
-    runtime_rows = _wave_runtime(wave)
+    metrics_rows = _wave_metrics(wave, cost_rollup)
     glance, dep_segments = _wave_glance(
-        state, wave, report_rows=report_rows, runtime_rows=runtime_rows
+        state, wave, report_rows=report_rows, metrics_rows=metrics_rows
     )
     return DetailCard(
         title=f"wave {wave.id}",
@@ -836,7 +857,7 @@ def _wave_card(
         criteria=tuple(criteria),
         gates=tuple(gates),
         evidence=tuple(evidence),
-        runtime=runtime_rows,
+        metrics=metrics_rows,
         cost=cost,
         detail_markdown=_wave_narrative_preview(state, wave, reports=report_rows),
         kind="wave",
@@ -857,12 +878,12 @@ def _wave_glance(
     wave: Wave,
     *,
     report_rows: tuple[AgentReportRow, ...],
-    runtime_rows: tuple[tuple[str, str], ...],
+    metrics_rows: tuple[tuple[str, str], ...],
 ) -> tuple[tuple[tuple[str, str], ...], tuple[str, ...]]:
     """Compute the overview glance quad + dependency-path segments for a wave.
 
     The glance is the scannable summary the reskin overview leads with: criteria
-    bound-vs-total, gate count, evidence record count, and the runtime EU value
+    bound-vs-total, gate count, evidence record count, and the metrics EU actual
     (the honest ``EMPTY_STATE`` sentinel when no runtime landed). A criterion
     counts as *bound* when it carries a gate or an oracle tier. The dependency
     path is the wave's deps, then the wave itself, then the waves whose deps name
@@ -872,7 +893,7 @@ def _wave_glance(
         state: The bound state, scanned for the reverse-dep blocks.
         wave: The wave being resolved.
         report_rows: The wave's agent-report rows (the evidence count).
-        runtime_rows: The already-resolved runtime rows (the EU value source).
+        metrics_rows: The already-resolved metrics rows (the EU value source).
 
     Returns:
         A ``(glance, dep_segments)`` pair; ``dep_segments`` is empty when the
@@ -880,12 +901,12 @@ def _wave_glance(
     """
     total = len(wave.success_criteria)
     bound = sum(1 for c in wave.success_criteria if c.gate_ids or c.oracle_tier is not None)
-    eu_value = next((value for label, value in runtime_rows if label == "eu"), EMPTY_STATE)
+    eu_value = next((value for label, value in metrics_rows if label == "eu"), EMPTY_STATE)
     glance: tuple[tuple[str, str], ...] = (
         ("criteria", f"{bound}/{total} bound" if total else "none"),
         ("gates", str(len(wave.gates)) if wave.gates else "none"),
         ("evidence", f"{len(report_rows)} records" if report_rows else "none"),
-        ("runtime", eu_value),
+        ("metrics", eu_value),
     )
     blocks = tuple(other.id for other in state.waves.values() if wave.id in other.deps)
     if not wave.deps and not blocks:
@@ -960,7 +981,7 @@ def _iter_card(state: State, iter_id: str) -> DetailCard | None:
     return DetailCard(
         title=f"iter {it.id}",
         rows=tuple(rows),
-        runtime=_completion_runtime(closed, total),
+        metrics=_completion_metrics(closed, total),
         status_enum=it.status,
     )
 
@@ -1003,7 +1024,7 @@ def _phase_card(state: State, phase_id: str) -> DetailCard | None:
     return DetailCard(
         title=f"phase {phase.id}",
         rows=tuple(rows),
-        runtime=_completion_runtime(closed, total),
+        metrics=_completion_metrics(closed, total),
         status_enum=phase.status,
     )
 
@@ -1249,8 +1270,8 @@ class DetailModal(ModalScreen[None]):
     resolves the card from ``app.state`` via :func:`resolve_detail` when
     it routes the selection message. The modal owns only the presentation,
     the ``Tab`` / ``Shift+Tab`` tab cycle, the single-letter tab hotkeys
-    (``o`` / ``c`` / ``g`` / ``v`` / ``r`` / ``$`` / ``h`` for overview /
-    criteria / gates / evidence / runtime / cost / history), and the ``Esc``
+    (``o`` / ``c`` / ``g`` / ``v`` / ``m`` / ``$`` / ``h`` for overview /
+    criteria / gates / evidence / metrics / cost / history), and the ``Esc``
     close binding. The arrow keys keep their native per-pane scroll behaviour
     — they are deliberately not bound here.
     """
@@ -1316,7 +1337,7 @@ class DetailModal(ModalScreen[None]):
         Binding("c", "show_tab('criteria')", "criteria", show=False),
         Binding("g", "show_tab('gates')", "gates", show=False),
         Binding("v", "show_tab('evidence')", "evidence", show=False),
-        Binding("r", "show_tab('runtime')", "runtime", show=False),
+        Binding("m", "show_tab('metrics')", "metrics", show=False),
         Binding("dollar_sign", "show_tab('cost')", "cost", show=False),
         Binding("h", "show_tab('history')", "history", show=False),
     ]
@@ -1401,7 +1422,7 @@ class DetailModal(ModalScreen[None]):
 
         The ``overview`` tab is ALWAYS present (every card carries an
         identity). A ``wave`` card additionally renders the full five-tab
-        chassis -- ``criteria`` / ``gates`` / ``evidence`` / ``runtime`` are
+        chassis -- ``criteria`` / ``gates`` / ``evidence`` / ``metrics`` are
         ALWAYS present, honest-empty until their data lands (the "render the
         tabs now, fill later" reskin directive), so a wave with no gates yet
         still shows the gates tab as an empty-but-present seam; the ``cost``
@@ -1419,10 +1440,10 @@ class DetailModal(ModalScreen[None]):
         present: list[str] = ["overview"]
         if card.kind == "wave":
             # Wave detail renders the full five-tab chassis now: criteria /
-            # gates / evidence / runtime are ALWAYS present, honest-empty until
+            # gates / evidence / metrics are ALWAYS present, honest-empty until
             # their data lands ("render the tabs now, fill later"). The cost tab
             # stays data-gated -- it is not one of the canonical five.
-            present.extend(["criteria", "gates", "evidence", "runtime"])
+            present.extend(["criteria", "gates", "evidence", "metrics"])
             if card.cost:
                 present.append("cost")
             return tuple(present)
@@ -1437,8 +1458,8 @@ class DetailModal(ModalScreen[None]):
             present.append("gates")
         if card.evidence:
             present.append("evidence")
-        if card.runtime:
-            present.append("runtime")
+        if card.metrics:
+            present.append("metrics")
         if card.cost:
             present.append("cost")
         if card.history:
@@ -1450,7 +1471,7 @@ class DetailModal(ModalScreen[None]):
 
         Args:
             tab_id: One of the chassis tab ids (``overview`` / ``criteria``
-                / ``gates`` / ``evidence`` / ``runtime`` / ``cost`` /
+                / ``gates`` / ``evidence`` / ``metrics`` / ``cost`` /
                 ``history``).
 
         Returns:
@@ -1462,8 +1483,8 @@ class DetailModal(ModalScreen[None]):
             return self._card.gates
         if tab_id == "evidence":
             return self._card.evidence
-        if tab_id == "runtime":
-            return self._card.runtime
+        if tab_id == "metrics":
+            return self._card.metrics
         if tab_id == "cost":
             return self._card.cost
         if tab_id == "history":
@@ -1514,7 +1535,7 @@ class DetailModal(ModalScreen[None]):
         The reskin overview opens with a scannable glance above the narrative: a
         status pill, a dependency-path mini-DAG card (deps to this to blocks,
         the wave itself bold), and a counts quad (criteria bound / gates /
-        evidence records / runtime EU).
+        evidence records / metrics EU).
         """
         card = self._card
         if card.status_pill:
@@ -1609,8 +1630,8 @@ class DetailModal(ModalScreen[None]):
         """Jump straight to the *tab_id* pane, or no-op when it is absent.
 
         Bound to the single-letter tab hotkeys (``o`` / ``c`` / ``g`` /
-        ``v`` / ``r`` / ``$`` / ``h`` for overview / criteria / gates /
-        evidence / runtime / cost / history). A key for a tab the card does
+        ``v`` / ``m`` / ``$`` / ``h`` for overview / criteria / gates /
+        evidence / metrics / cost / history). A key for a tab the card does
         not carry (e.g. ``g`` on a gate-less wave, ``$`` on a wave with no
         session attempts, or ``h`` on a non-incident card) is silently
         ignored so the binding stays harmless on every card shape.

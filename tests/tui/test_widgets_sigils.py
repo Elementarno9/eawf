@@ -85,7 +85,8 @@ _CHROME_UNICODE: dict[str, str] = {
     "check_off": "\u25a2",
     "brand": "\u25c9",
     "criteria": "\u25b8",
-    "cost": "\u00a4",
+    "cost": "$",
+    "metrics": "\u2211",
     "history": "\u21ba",
 }
 _CHROME_ASCII: dict[str, str] = {
@@ -100,6 +101,7 @@ _CHROME_ASCII: dict[str, str] = {
     "brand": "*",
     "criteria": ">",
     "cost": "$",
+    "metrics": "+",
     "history": "<",
 }
 
@@ -161,18 +163,22 @@ def test_chrome_keys_match_source() -> None:
 
 
 def test_chrome_resolves_the_detail_tab_marker_roles() -> None:
-    """The criteria / cost / history tab markers resolve through chrome roles.
+    """The criteria / cost / metrics / history tab markers resolve through chrome roles.
 
-    These three markers were folded out of the detail overlay into the single
-    chrome home, so the detail tab chassis resolves every tab glyph through one
+    These markers were folded out of the detail overlay into the single chrome
+    home, so the detail tab chassis resolves every tab glyph through one
     vocabulary (criterion: tab markers resolve through sigils.py chrome roles).
     """
     assert chrome("criteria", mode="unicode") == "▸"
     assert chrome("criteria", mode="ascii") == ">"
-    # The runtime role already owns the ``$`` mark, so the cost tab carries the
-    # generic currency sign in unicode and a plain dollar in ascii.
-    assert chrome("cost", mode="unicode") == "¤"
+    # The cost tab owns the dollar now the runtime chrome role is scoped to the
+    # autopilot cockpit throughput marker rather than a detail tab.
+    assert chrome("cost", mode="unicode") == "$"
     assert chrome("cost", mode="ascii") == "$"
+    # The metrics tab carries the n-ary summation (its aggregate token + EU
+    # figures), a plain ``+`` in ascii.
+    assert chrome("metrics", mode="unicode") == "∑"
+    assert chrome("metrics", mode="ascii") == "+"
     assert chrome("history", mode="unicode") == "↺"
     assert chrome("history", mode="ascii") == "<"
 
