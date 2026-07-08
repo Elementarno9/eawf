@@ -204,6 +204,12 @@ def aggregate_cost_bar(rollup: WaveSessionRollup, *, mode: RenderMode = DEFAULT_
         The plain bar string, or the empty-state sentinel when the wave's
         aggregate cost is zero.
     """
+    if len(rollup.attempts) < 2:
+        # A single attempt is its own total, so priciest == total would paint a
+        # fabricated 100% "concentration" bar that means nothing. Surface the
+        # shared empty-state sentinel instead -- concentration only has meaning
+        # once two or more attempts compete for the total.
+        return render_eu_bar_plain(0.0, 0.0, mode=mode)
     total = float(rollup.cost_usd)
     priciest = max((float(row.cost_usd) for row in rollup.attempts), default=0.0)
     return render_eu_bar_plain(priciest, total, mode=mode)

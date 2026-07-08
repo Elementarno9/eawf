@@ -183,6 +183,33 @@ def test_aggregate_cost_bar_zero_total_is_empty_state() -> None:
     assert aggregate_cost_bar(_rollup(_attempt(cost_usd=Decimal("0")))) == EMPTY_STATE
 
 
+def test_aggregate_cost_bar_single_priced_attempt_is_empty_state() -> None:
+    """A lone priced attempt surfaces the sentinel, not a fabricated 100% bar.
+
+    W17 regression: with one attempt the priciest attempt IS the total, so the
+    ratio bar painted a meaningless full (100%) "concentration" bar. Spend
+    concentration only has meaning once two or more attempts compete for the
+    total, so a single-attempt rollup surfaces the empty-state sentinel even
+    when the attempt carries a real, positive cost.
+    """
+    bar = aggregate_cost_bar(_rollup(_attempt(cost_usd=Decimal("0.0123"))))
+    assert bar == EMPTY_STATE
+    assert "100%" not in bar
+
+
+def test_aggregate_cost_bar_two_attempts_paints_concentration_bar() -> None:
+    """Two priced attempts paint the real priciest-over-total concentration bar."""
+    bar = aggregate_cost_bar(
+        _rollup(
+            _attempt(cost_usd=Decimal("0.02")),
+            _attempt(attempt=2, session_id="sess-2", cost_usd=Decimal("0.06")),
+        )
+    )
+    # Priciest attempt ($0.06) is 75% of the $0.08 total -- a real bar.
+    assert bar != EMPTY_STATE
+    assert "75%" in bar
+
+
 # --------------------------------------------------------------------------
 # wave_cost_rows — wave-shaped honest absence
 # --------------------------------------------------------------------------
