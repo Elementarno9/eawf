@@ -10821,6 +10821,20 @@
       "scope_id": "P30-I25-W16",
       "status": "done",
       "updated_at": "2026-07-08T16:10:17.460232Z"
+    },
+    "P30-I25-W17": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W17",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I25-W17",
+      "model": null,
+      "scope_id": "P30-I25-W17",
+      "status": "done",
+      "updated_at": "2026-07-08T16:14:56.669485Z"
     }
   },
   "agent_sessions": {
@@ -27203,6 +27217,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I25-W16",
       "updated_at": "2026-07-08T15:54:05.907014Z"
+    },
+    "P30-I25-W17": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W17-bucket-20260708T161420Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I25-W17",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I25-W17",
+      "updated_at": "2026-07-08T16:14:20.197323Z"
     }
   },
   "fleet_run": null,
@@ -30897,7 +30924,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-08T16:10:17.490931Z",
+  "updated_at": "2026-07-08T16:14:56.669731Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -122682,10 +122709,10 @@
       "blocks": [
         "P30-I25-W18"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "ses-p30-i25-w17-inline",
+      "claimed_at": "2026-07-08T16:14:20.170470Z",
+      "closed_at": "2026-07-08T16:14:56.669485Z",
+      "commit": "9b7c1080a373be11b2f749700dc6c55f673f1a89",
       "criteria_floor_waiver": {
         "reason": "smoke-surfaced fix wave appended via CLI; measurable success strings",
         "waived_at": "2026-07-08T15:53:36.786515Z",
@@ -122714,12 +122741,12 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-08T15:53:36.825118Z",
-      "outcome": null,
+      "outcome": "single-attempt cost bar now returns the empty-state sentinel instead of a fabricated 100%; guard + regression tests added",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
