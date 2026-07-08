@@ -291,3 +291,50 @@ def test_matches_subscriber_filter_combinations() -> None:
     assert sub.matches(matching) is True
     assert sub.matches(wrong_scope) is False
     assert sub.matches(wrong_kind) is False
+
+
+# ---------------------------------------------------------------------------
+# W15 -- a publish from a worker-thread loop wakes the main-loop receiver
+# ---------------------------------------------------------------------------
+
+
+def test_register_captures_the_running_loop() -> None:
+    """A subscriber registered inside a running loop records that loop (W15)."""
+
+    async def body() -> None:
+        bus = EventBus()
+        sub = bus.register(connection_id="c-loop")
+        assert sub.loop is asyncio.get_running_loop()
+
+    _run(body)
+
+
+def test_cross_thread_publish_wakes_main_loop_receiver() -> None:
+    """A publish from a WORKER-THREAD loop wakes the main-loop receiver (W15).
+
+    Reproduces the fleet-dispatch push path: the spawn runs on a worker-thread
+    event loop, so ``publish`` -- and the subscriber wake -- fires from a
+    different thread than the receiver. A bare ``asyncio.Event.set()`` from that
+    thread does not schedule the main-loop waiter, so the receiver never wakes
+    and the queued envelope is stranded until an unrelated main-loop publish. The
+    cross-loop wake must deliver the envelope without any such nudge.
+    """
+
+    async def body() -> None:
+        bus = EventBus()
+        sub = bus.register(connection_id="c-cross")
+
+        async def drain() -> Envelope:
+            async for env in bus.iter_subscriber_pushes(sub):
+                return env
+            raise AssertionError("receiver closed before delivering an envelope")
+
+        task = asyncio.create_task(drain())
+        await asyncio.sleep(0)  # let the receiver reach `event.wait()`
+        # Publish from a worker thread (no running loop there): the only way the
+        # main-loop receiver wakes is the cross-loop `call_soon_threadsafe`.
+        await asyncio.to_thread(bus.publish, _build_envelope("E-cross"))
+        received = await asyncio.wait_for(task, timeout=2.0)
+        assert received.id == "E-cross"
+
+    _run(body)

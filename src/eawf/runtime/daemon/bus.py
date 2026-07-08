@@ -81,6 +81,15 @@ class Subscriber:
             payload.
         event: asyncio event set whenever a new envelope is queued so
             the receiver coroutine wakes up.
+        loop: The event loop the subscriber's receiver runs on, captured at
+            :meth:`EventBus.register`. :meth:`EventBus.publish` wakes the
+            subscriber through it with ``call_soon_threadsafe`` so a publish
+            from ANOTHER loop's thread -- e.g. the fleet dispatch's worker-
+            thread loop streaming ``agent.output.chunk`` -- still wakes the
+            main-loop receiver (a bare ``asyncio.Event.set()`` from a foreign
+            thread does not schedule the wake on the owning loop). ``None`` when
+            the subscriber registered outside a running loop (unit tests), which
+            falls back to a direct set.
         closed: True once :meth:`EventBus.unregister` has run; the
             receiver coroutine breaks its loop on this flag.
     """
@@ -93,7 +102,27 @@ class Subscriber:
     dropped_count: int = 0
     last_dropped_id: str | None = None
     event: asyncio.Event = field(default_factory=asyncio.Event)
+    loop: asyncio.AbstractEventLoop | None = None
     closed: bool = False
+
+    def wake(self) -> None:
+        """Wake the subscriber's receiver, safe across event loops.
+
+        The wake schedules :meth:`asyncio.Event.set` on the loop that owns the
+        subscriber's ``event`` so a cross-thread producer (the fleet dispatch's
+        worker-thread loop) still wakes the main-loop receiver. A subscriber
+        with no captured loop (or whose loop has closed) falls back to a direct
+        set -- correct for same-loop unit tests, best-effort at shutdown.
+        """
+        loop = self.loop
+        if loop is None:
+            self.event.set()
+            return
+        try:
+            loop.call_soon_threadsafe(self.event.set)
+        except RuntimeError:
+            # The owning loop is closed (daemon shutdown) -- best-effort set.
+            self.event.set()
 
     def matches(self, envelope: Envelope) -> bool:
         """Return True when *envelope* satisfies the subscriber's filters.
@@ -199,6 +228,13 @@ class EventBus:
             since_event_id=since_event_id,
             queue=deque(maxlen=self._queue_size),
         )
+        # Capture the loop the receiver will run on so a cross-thread publish
+        # (the fleet dispatch's worker-thread loop) wakes it safely. Registering
+        # outside a running loop (a unit test) leaves it None -> direct set.
+        try:
+            sub.loop = asyncio.get_running_loop()
+        except RuntimeError:
+            sub.loop = None
         self._subscribers[connection_id] = sub
         logger.debug(
             f"register connection={connection_id!r} scope={scope_filter!r} kinds={kind_filter}"
@@ -259,7 +295,7 @@ class EventBus:
                 )
             else:
                 queue.append(envelope)
-            sub.event.set()
+            sub.wake()
 
     async def iter_subscriber_pushes(self, subscriber: Subscriber) -> AsyncIterator[Envelope]:
         """Yield queued envelopes for *subscriber* until it is closed.
