@@ -3106,9 +3106,16 @@ class _Loop:
                 # Operator pause: claim no further wave; let the in-flight lanes
                 # finish, then HOLD (re-check each tick) until resume / halt. The
                 # run stays PAUSED on disk for the operator to resume the SAME run.
-                self.run.run_state = FleetRunState.PAUSED
-                self._drain_in_flight_no_claim()
-                self._persist()
+                if self.run.run_state is not FleetRunState.PAUSED:
+                    # Persist the held run + drain the in-flight lanes ONCE, on
+                    # the transition INTO paused. Subsequent hold ticks only
+                    # re-check the disk state and sleep -- re-persisting every
+                    # tick rewrote state.json ~1Hz forever while nothing changed
+                    # (the drain is a no-op once the lanes are done, and the run
+                    # state is already PAUSED, so the write carried no delta).
+                    self.run.run_state = FleetRunState.PAUSED
+                    self._drain_in_flight_no_claim()
+                    self._persist()
                 if self._cancelled():
                     return self.run
                 time.sleep(_WATCH_POLL_SECONDS)
