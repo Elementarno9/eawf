@@ -30924,7 +30924,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-08T16:14:56.669731Z",
+  "updated_at": "2026-07-08T16:19:40.312373Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -122804,8 +122804,8 @@
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": {
-        "reason": "smoke-surfaced fix wave appended via CLI; measurable success strings",
-        "waived_at": "2026-07-08T15:53:37.410898Z",
+        "reason": "reactive smoke-fix wave re-added at bucket L; legacy plain-text criteria preserved from the original append",
+        "waived_at": "2026-07-08T16:19:40.267792Z",
         "waived_by": null
       },
       "deps": [
@@ -122813,24 +122813,31 @@
       ],
       "description": null,
       "dispatch_history": [],
-      "effort_bucket": "S",
+      "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/surfaces/tui/screens/overlays/detail.py",
-        "tests/tui/test_detail_runtime.py"
+        "src/eawf/surfaces/tui/widgets/sigils.py",
+        "tests/tui/test_detail_metrics.py",
+        "tests/snapshots/tui"
       ],
       "gates": [],
       "id": "P30-I25-W18",
       "intent": {
-        "desired_outcome": "The runtime tab is a metrics panel: estimate (bucket EU + budget) beside actuals (runtime EU + consumed tokens from sessions).",
+        "desired_outcome": "Rename the tab to metrics, swap cost/metrics glyphs, and surface actual consumed tokens plus the EU estimate-vs-actual from the session rollup.",
         "evidence_refs": [],
-        "planned_steps": [],
-        "priority_rationale": "Runtime tab reads no-data while the cost tab has the tokens; operator wants estimate + actual.",
-        "problem": "The runtime tab tokens row reads the unpopulated wave.tokens_consumed budget bar so it shows no data, and it surfaces no estimate-vs-actual comparison.",
+        "planned_steps": [
+          "Rename runtime tab to metrics across detail.py",
+          "Swap cost/metrics glyphs in sigils.py",
+          "Read actual tokens + EU from the session rollup and show estimate beside actual",
+          "Rename tests to test_detail_metrics.py and regen tui snapshots"
+        ],
+        "priority_rationale": "Surfaced by the live v0.6.0 acceptance smoke; the tab shows no data despite real session telemetry existing on the wave.",
+        "problem": "The runtime tab reads the unpopulated tokens_consumed budget so it shows no data while the cost tab already has real session tokens; the tab is misnamed and its glyphs are backwards.",
         "risks": [],
         "source_brief_ids": []
       },
       "iter_id": "P30-I25",
-      "opened_at": "2026-07-08T15:53:37.447845Z",
+      "opened_at": "2026-07-08T16:19:40.312073Z",
       "outcome": null,
       "runtime_baseline": null,
       "runtime_latest": null,
@@ -122844,12 +122851,12 @@
           "gate_ids": [],
           "id": "CR-01",
           "kind": "legacy",
-          "measurable_signal": "The runtime tab shows actual runtime EU alongside the effort-bucket EU estimate.",
+          "measurable_signal": "The metrics tab shows actual runtime EU alongside the effort-bucket EU estimate.",
           "oracle_tier": null,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": null,
-          "text": "The runtime tab shows actual runtime EU alongside the effort-bucket EU estimate.",
+          "text": "The metrics tab shows actual runtime EU alongside the effort-bucket EU estimate.",
           "waiver_reason": null
         },
         {
@@ -122872,12 +122879,12 @@
           "gate_ids": [],
           "id": "CR-03",
           "kind": "legacy",
-          "measurable_signal": "A test asserts a wave with session tokens renders real token figures",
+          "measurable_signal": "A test asserts a wave with session tokens renders real token figures not the no-data sentinel",
           "oracle_tier": null,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": null,
-          "text": "A test asserts a wave with session tokens renders real token figures",
+          "text": "A test asserts a wave with session tokens renders real token figures not the no-data sentinel",
           "waiver_reason": null
         },
         {
@@ -122886,12 +122893,12 @@
           "gate_ids": [],
           "id": "CR-04",
           "kind": "legacy",
-          "measurable_signal": "not the no-data sentinel.",
+          "measurable_signal": "The cost tab glyph is the dollar sign and the metrics tab carries its own gauge glyph.",
           "oracle_tier": null,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": null,
-          "text": "not the no-data sentinel.",
+          "text": "The cost tab glyph is the dollar sign and the metrics tab carries its own gauge glyph.",
           "waiver_reason": null
         }
       ],
