@@ -691,6 +691,16 @@ class ClaudeAdapter:
             "--output-format",
             "stream-json",
             "--verbose",
+            # Headless print mode has no TTY to answer a permission prompt, so a
+            # default-mode spawn denies Edit / Write / Bash and the agent reports
+            # "blocked on write permissions". bypassPermissions auto-approves the
+            # tool calls without a prompt; the enforced boundary stays the OS
+            # filesystem jail (below) + the per-wave --disallowedTools deny-list
+            # (which Claude still honors), so this is scoped by the sandbox, not a
+            # blanket grant. acceptEdits is insufficient -- it auto-accepts edits
+            # but still blocks arbitrary Bash (e.g. `uv run`).
+            "--permission-mode",
+            "bypassPermissions",
             "--model",
             model,
             *deny_flag,
