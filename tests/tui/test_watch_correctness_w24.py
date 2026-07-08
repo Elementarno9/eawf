@@ -550,3 +550,54 @@ def test_leave_zoom_no_sessions_falls_back_to_feed(
             assert app.current_mode == "feed"
 
     asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# W11 -- the single-session header status tracks a terminal wave per tick
+# --------------------------------------------------------------------------
+
+
+def test_refresh_header_tracks_terminal_wave_without_recompose(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A wave going terminal mid-zoom flips the header status on the poll tick (W11).
+
+    The single-session zoom pins its target at compose time, and the body
+    recompose that would rebuild it is gated on a parity-set change. When the
+    watched wave fails while the SAME session stays ACTIVE (parity unchanged),
+    no recompose fires -- so only ``_refresh_header`` re-deriving the target can
+    surface the terminal status. The stale rollup is deliberately NOT rebuilt,
+    so ``failed`` appearing proves the per-tick header refresh, not a recompose.
+    """
+    active = {"S-1": _session("S-1", status=AgentSessionStatus.ACTIVE)}
+    state = _state(
+        sessions=active,
+        waves={_WAVE: _wave(_WAVE, status=WaveStatus.IN_PROGRESS)},
+    )
+    state_path = _write_state(tmp_path, state)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            before = normalize_snapshot(capture_screen_text(app))
+            assert "failed" not in before, "the in-progress wave must not read failed yet"
+            # The wave fails; the session stays ACTIVE so the parity set is
+            # unchanged and the body does not recompose.
+            failed = _state(
+                sessions=active,
+                waves={_WAVE: _wave(_WAVE, status=WaveStatus.FAILED)},
+            )
+            app.state = failed
+            pane._on_app_state(failed)
+            await settle_screen(pilot)
+            after = normalize_snapshot(capture_screen_text(app))
+            assert "failed" in after, "the header must track the terminal wave status"
+
+    asyncio.run(body())

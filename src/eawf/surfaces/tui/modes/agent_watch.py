@@ -2738,6 +2738,17 @@ class AgentWatchModeScreen(ScopeScreen):
         header = self.query(f"#{WATCH_HEADER_ID}")
         if not header:
             return
+        # Re-derive the watched target from current state each tick so the
+        # header status word tracks a wave that went terminal (closed / failed)
+        # since the last compose (W11). render_watch_header reads the target's
+        # wave_status verbatim, and the body recompose that would otherwise
+        # rebuild the target is gated on a parity-set change -- so a
+        # single-session zoom whose wave closes without changing the parity set
+        # would show a frozen "active" forever. Fall back to the existing target
+        # when the wave is momentarily unresolvable (mid-transition read).
+        refreshed = self._target_for_wave(self.target.wave_id)
+        if refreshed is not None:
+            self.target = refreshed
         turns = self._output_tail().line_count if self.query(f"#{WATCH_OUTPUT_ID}") else 0
         header.first(Static).update(
             render_watch_header(
