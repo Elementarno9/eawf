@@ -29701,7 +29701,8 @@
         "P30-I25-W11",
         "P30-I25-W12",
         "P30-I25-W13",
-        "P30-I25-W14"
+        "P30-I25-W14",
+        "P30-I25-W15"
       ]
     }
   },
@@ -30839,7 +30840,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-08T15:09:57.912902Z",
+  "updated_at": "2026-07-08T15:37:54.462668Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -122423,6 +122424,94 @@
         }
       ],
       "title": "Stream selected-lane output on the autopilot grid",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W15": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "smoke-surfaced fix wave appended via CLI; measurable success strings",
+        "waived_at": "2026-07-08T15:37:54.415516Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/bus.py",
+        "tests/daemon/test_bus.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W15",
+      "intent": {
+        "desired_outcome": "A cross-thread publish wakes the subscriber so live output streams during a fleet spawn.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Root of the stale watch log + zero live Feed chunks.",
+        "problem": "Chunk events published from the fleet worker-thread loop never wake the main-loop subscriber, so live output never pushes until a main-loop publish flushes the backlog.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-08T15:37:54.462471Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Subscriber captures its loop at register and publish wakes each via call_soon_threadsafe.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Subscriber captures its loop at register and publish wakes each via call_soon_threadsafe.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A worker-thread publish wakes the main-loop subscriber without a same-loop publish.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A worker-thread publish wakes the main-loop subscriber without a same-loop publish.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "A cross-thread test asserts the receiver drains a worker-thread-published envelope.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A cross-thread test asserts the receiver drains a worker-thread-published envelope.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Wake bus subscribers cross-loop-safely",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
