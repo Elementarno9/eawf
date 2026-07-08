@@ -440,6 +440,12 @@ class SubagentSpec(_SpecModel):
             "any `eawf` invocation a cross-tree hazard. If you believe a "
             "state mutation is required, STOP and name it in your report "
             "instead of running it.\n"
+            "- Leave `.ea/` untouched: the daemon owns it and writes live "
+            "dispatch state there while you run. `git add` only your scoped "
+            "files — never `git checkout`, `git restore`, `git stash`, or "
+            "`git clean` the `.ea/` tree to tidy out-of-scope changes; "
+            "reverting it wipes the daemon's claim + session and strands this "
+            "wave.\n"
             "- Never `git commit --no-verify`; root-cause the hook instead."
         )
 

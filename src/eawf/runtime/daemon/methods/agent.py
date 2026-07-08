@@ -76,6 +76,7 @@ from eawf.kernel.state.enums import (
 )
 from eawf.kernel.state.io import state_version
 from eawf.kernel.state.models import (
+    AgentSession,
     DispatchAnnotation,
     RuntimeBaseline,
     RuntimeLatest,
@@ -891,6 +892,81 @@ def _persist_live_session_attempt(
     return attempt, annotation, session_attempt
 
 
+def _reassert_dispatch_state(
+    ctx: MethodContext,
+    *,
+    wave_id: str,
+    session_id: str,
+    serving_runtime: str,
+    started_at: datetime,
+) -> None:
+    """Restore daemon-owned dispatch rows a jailed agent reverted mid-spawn (W10).
+
+    The daemon writes the claim, the executor-session registration, and the
+    phase-active pointer into the repo-tracked ``.ea/state.json`` BEFORE the
+    spawn. A sandboxed executor that runs ``git checkout -- .ea/`` to drop
+    out-of-scope changes reverts those uncommitted rows, so the post-spawn
+    close would resolve a corrupted state: a missing session ``KeyError``s the
+    close, a wave reverted to ``PENDING`` falls off the ready frontier, and a
+    cleared ``phase_id`` orphans the phase. Reload post-spawn and re-assert any
+    missing row from the wave's own bookkeeping so the close proceeds against
+    authoritative state. A no-op when nothing was reverted (the healthy path).
+
+    Args:
+        ctx: Daemon method context carrying the bound ``state_path``.
+        wave_id: The dispatched wave whose rows are re-asserted.
+        session_id: The executor session id the close resolves.
+        serving_runtime: The runtime the accepted spawn ran on.
+        started_at: The spawn start instant, stamped on a reconstructed session.
+    """
+    if ctx.state_path is None:
+        return
+    state_path = Path(ctx.state_path)
+    with portalock.acquire(state_path, timeout=5.0):
+        state = load_state(state_path)
+        wave = state.waves.get(wave_id)
+        if wave is None or wave.status in _TERMINAL_WAVE_STATUSES:
+            # Unknown wave, or close-on-behalf already resolved it terminally --
+            # do not resurrect a wave the daemon lawfully finished.
+            return
+        changed = False
+        if session_id not in state.agent_sessions:
+            state.agent_sessions[session_id] = AgentSession(
+                id=session_id,
+                role=wave.agent_role or AgentSessionRole.EXECUTOR,
+                runtime=serving_runtime,
+                scope_id=wave_id,
+                status=AgentSessionStatus.ACTIVE,
+                claimed_wave_ids=[wave_id],
+                started_at=started_at,
+            )
+            if session_id not in state.current.active_session_ids:
+                state.current.active_session_ids = [
+                    *state.current.active_session_ids,
+                    session_id,
+                ]
+            changed = True
+        if wave.status is WaveStatus.PENDING:
+            # The claim was reverted to the committed (pre-claim) status; the
+            # dispatch is underway, so re-assert IN_PROGRESS with the claim id.
+            wave.status = WaveStatus.IN_PROGRESS
+            wave.claim_session_id = wave.claim_session_id or session_id
+            changed = True
+        iter_row = state.iters.get(wave.iter_id)
+        phase_id = iter_row.phase_id if iter_row is not None else None
+        if phase_id is not None and state.current.phase_id != phase_id:
+            state.current.phase_id = phase_id
+            state.current.iter_id = wave.iter_id
+            changed = True
+        if changed:
+            state.updated_at = datetime.now(UTC)
+            atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+            logger.warning(
+                f"_reassert_dispatch_state wave={wave_id} session={session_id!r} "
+                f"restored=reverted-dispatch-rows"
+            )
+
+
 def _register_executor_session(
     ctx: MethodContext,
     *,
@@ -1472,6 +1548,17 @@ async def _spawn_and_dispatch(
             event_ids=(),
         )
     attempt, annotation, session_attempt = persisted
+    # Re-assert any daemon-owned dispatch row a sandboxed agent reverted while
+    # it ran (W10): a jailed `git checkout -- .ea/` can drop the uncommitted
+    # session registration, claim, and phase pointer, which would otherwise
+    # corrupt the close that follows.
+    _reassert_dispatch_state(
+        ctx,
+        wave_id=wave_id,
+        session_id=session_id,
+        serving_runtime=serving_runtime,
+        started_at=spawn_result.started_at,
+    )
     enforce = _resolve_budget_enforce(state_path)
 
     # 8. Drive the runner with the registered session id + the validated body
