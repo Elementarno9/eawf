@@ -10779,6 +10779,20 @@
       "scope_id": "P30-I25-W13",
       "status": "done",
       "updated_at": "2026-07-08T14:56:57.966792Z"
+    },
+    "P30-I25-W14": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W14",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I25-W14",
+      "model": null,
+      "scope_id": "P30-I25-W14",
+      "status": "done",
+      "updated_at": "2026-07-08T15:09:57.912546Z"
     }
   },
   "agent_sessions": {
@@ -27122,6 +27136,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I25-W13",
       "updated_at": "2026-07-08T14:50:23.037453Z"
+    },
+    "P30-I25-W14": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W14-bucket-20260708T150923Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I25-W14",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I25-W14",
+      "updated_at": "2026-07-08T15:09:23.706492Z"
     }
   },
   "fleet_run": null,
@@ -30812,7 +30839,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-08T14:56:57.967190Z",
+  "updated_at": "2026-07-08T15:09:57.912902Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -122313,10 +122340,10 @@
     "P30-I25-W14": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-inline-p30i25w14",
+      "claimed_at": "2026-07-08T15:09:23.685701Z",
+      "closed_at": "2026-07-08T15:09:57.912546Z",
+      "commit": "6ebcfe0ea0bbaa9973c697e3c7915ce7e7a8e806",
       "criteria_floor_waiver": {
         "reason": "smoke-surfaced fix wave appended via CLI; measurable success strings",
         "waived_at": "2026-07-08T14:49:10.640432Z",
@@ -122345,12 +122372,12 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-08T14:49:10.677688Z",
-      "outcome": null,
+      "outcome": "The autopilot lane grid mounts an output preview streaming the SELECTED lane's persisted output inline (LaneGrid.Selected + _sync_output_from_store follows the selection); no FA4 drill needed. Unit test + regen tui snapshot green, 86 watch/lane tests green.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
