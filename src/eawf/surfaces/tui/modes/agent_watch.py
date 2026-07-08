@@ -3018,13 +3018,23 @@ class AgentWatchModeScreen(ScopeScreen):
         """
         state = self._current_state()
         picker_rows = session_picker_rows(state)
-        # Step back to the roster from ANY agent-viewing body (zoom / lanes /
-        # grid) whenever there is a session to browse -- a lone live stream
-        # returns to a one-row picker, not straight to another mode.
-        # ``_force_picker`` mounts the picker past the no-active-sessions
-        # auto-mount guard for the still-live case. Only the roster itself
-        # (``_body_case == "picker"``) or an empty record falls through to Feed.
-        if self._body_case in ("zoom", "lanes", "grid") and picker_rows:
+        # Step back to the in-mode surface from ANY agent-viewing body (zoom /
+        # lanes / grid) whenever there is something to land on -- a session to
+        # browse, or (from a drilled-in zoom) an active fleet lane -- so a wiped
+        # ``agent_sessions`` never dumps the operator to the Feed (W12). A lone
+        # live stream returns to a one-row picker; a zoom over a fleet whose
+        # roster was momentarily emptied falls through to the lane grid rather
+        # than the Feed. ``_force_picker`` mounts the picker past the
+        # no-active-sessions auto-mount guard; when the roster is empty
+        # ``compose_body`` degrades to the lane grid / zoom by precedence. From
+        # the lane / parity grid the roster-or-Feed exit is unchanged so the
+        # operator can still step out to the Feed. Only the roster itself
+        # (``_body_case == "picker"``) or a truly empty record falls to Feed.
+        if self._body_case == "zoom":
+            stay = bool(picker_rows) or bool(lane_grid_rows(state))
+        else:
+            stay = bool(picker_rows)
+        if self._body_case in ("zoom", "lanes", "grid") and stay:
             self._zoom_pending = False
             self._return_to_picker = True
             self._force_picker = True

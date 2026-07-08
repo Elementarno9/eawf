@@ -43,6 +43,8 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.models import (
     AgentSession,
     CurrentPointers,
+    FleetLane,
+    FleetRun,
     Project,
     State,
     Wave,
@@ -122,8 +124,9 @@ def _state(
     *,
     sessions: dict[str, AgentSession] | None = None,
     waves: dict[str, Wave] | None = None,
+    fleet_run: FleetRun | None = None,
 ) -> State:
-    """Build a minimal repo state, optionally with agent sessions + waves."""
+    """Build a minimal repo state, optionally with agent sessions + waves + a fleet run."""
     return State.model_validate(
         {
             "schema_version": "1.3",
@@ -154,6 +157,7 @@ def _state(
                 if sessions is not None
                 else {}
             ),
+            "fleet_run": fleet_run.model_dump(mode="json") if fleet_run is not None else None,
             "plugins": {},
             "indexes": {},
         }
@@ -599,5 +603,60 @@ def test_refresh_header_tracks_terminal_wave_without_recompose(
             await settle_screen(pilot)
             after = normalize_snapshot(capture_screen_text(app))
             assert "failed" in after, "the header must track the terminal wave status"
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# W12 -- Esc from a zoom over a live fleet lane stays in-mode (never-trapped)
+# --------------------------------------------------------------------------
+
+
+def test_leave_zoom_over_live_lane_stays_in_mode_without_sessions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Esc from a zoom stays in-mode when a fleet lane is live but sessions are empty (W12).
+
+    A sandboxed dispatch can leave ``agent_sessions`` empty (no session roster)
+    while a fleet lane is still in flight. Esc out of the drilled-in zoom must
+    land back on the lane grid, not dump the operator to the Feed -- the
+    never-trapped guarantee. The roster-return guard therefore treats an active
+    lane as a valid in-mode anchor for the zoom body.
+    """
+    run = FleetRun(  # type: ignore[call-arg]
+        run_state="draining",
+        armed_at=_T0,
+        lanes={_WAVE: FleetLane(wave_id=_WAVE, attempt=1, session_id=None, dispatched_at=_T0)},
+    )
+    state = _state(  # NB: no agent_sessions -> the session roster is empty
+        waves={_WAVE: _wave(_WAVE, status=WaveStatus.IN_PROGRESS)},
+        fleet_run=run,
+    )
+    state_path = _write_state(tmp_path, state)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            assert pane.query(LaneGrid), "expected the fleet lane grid on mount"
+            # Simulate the FA3 -> FA4 drill onto the lane (a pinned zoom target).
+            pane._body_case = "zoom"
+            pane.target = WatchTarget(
+                session_id="S-1",
+                wave_id=_WAVE,
+                runtime="claude",
+                status=AgentSessionStatus.ACTIVE,
+                attempt=1,
+            )
+            pane.action_leave_zoom()
+            await settle_screen(pilot)
+            # The live lane is a valid in-mode anchor, so Esc stays in agent-watch.
+            assert app.current_mode != "feed", "Esc must not fall to Feed while a lane is live"
 
     asyncio.run(body())
