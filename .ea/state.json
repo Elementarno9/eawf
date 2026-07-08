@@ -10835,6 +10835,20 @@
       "scope_id": "P30-I25-W17",
       "status": "done",
       "updated_at": "2026-07-08T16:14:56.669485Z"
+    },
+    "P30-I25-W18": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W18",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I25-W18",
+      "model": null,
+      "scope_id": "P30-I25-W18",
+      "status": "done",
+      "updated_at": "2026-07-08T17:56:40.810158Z"
     }
   },
   "agent_sessions": {
@@ -27230,6 +27244,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I25-W17",
       "updated_at": "2026-07-08T16:14:20.197323Z"
+    },
+    "P30-I25-W18": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W18-bucket-20260708T175614Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I25-W18",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I25-W18",
+      "updated_at": "2026-07-08T17:56:14.204113Z"
     }
   },
   "fleet_run": null,
@@ -30924,7 +30951,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-08T16:19:40.312373Z",
+  "updated_at": "2026-07-08T17:56:40.810370Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -122799,10 +122826,10 @@
     "P30-I25-W18": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "ses-p30-i25-w18-inline",
+      "claimed_at": "2026-07-08T17:56:14.175918Z",
+      "closed_at": "2026-07-08T17:56:40.810158Z",
+      "commit": "9ad0de59c3763e5be9bff240ce1f01365dd0ab33",
       "criteria_floor_waiver": {
         "reason": "reactive smoke-fix wave re-added at bucket L; legacy plain-text criteria preserved from the original append",
         "waived_at": "2026-07-08T16:19:40.267792Z",
@@ -122838,12 +122865,12 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-08T16:19:40.312073Z",
-      "outcome": null,
+      "outcome": "renamed runtime tab -> metrics; cost owns $ + metrics owns the summation glyph; tab shows actual tokens from the session rollup + EU estimate/actual; tests in test_overlays_detail.py + test_widgets_sigils.py; 3 detail-overlay goldens regenerated",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
