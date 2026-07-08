@@ -310,14 +310,19 @@ def test_emit_agent_end_report_requires_state_path() -> None:
 
 
 def test_emit_agent_end_report_unknown_session_raises(tmp_path: Path) -> None:
-    """An unknown session id fails fast through the canonical writer."""
+    """A genuinely unresolvable session (unknown wave) fails fast (W09).
+
+    An unknown session id whose wave IS known is reconstructed from the wave's
+    agent_role (W09), so the KeyError only survives when the wave is unknown too
+    -- there is then no bookkeeping to rebuild the session from.
+    """
     state_path = _write_state(tmp_path)
     ctx = _ctx(state_path)
     with pytest.raises(KeyError, match="unknown agent session"):
         emit_agent_end_report(
             ctx,
             session_id="SES-missing",
-            wave_id=_WAVE_ID,
+            wave_id="P28-I03-W99",
             commit_sha="abcdef1",
             outcome="done",
             runtime="claude",

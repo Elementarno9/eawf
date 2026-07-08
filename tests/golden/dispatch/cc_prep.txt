@@ -111,6 +111,7 @@ eawf roadmap revise <phase-id> --add-wave W01 --title "feat: ..."
 - Do **not** push the branch.
 - Do **not** open a PR.
 - Run NO `eawf` command inside this worktree — no state reads, no mutations, no closes: the shared daemon and checkout make any `eawf` invocation a cross-tree hazard. If you believe a state mutation is required, STOP and name it in your report instead of running it.
+- Leave `.ea/` untouched: the daemon owns it and writes live dispatch state there while you run. `git add` only your scoped files — never `git checkout`, `git restore`, `git stash`, or `git clean` the `.ea/` tree to tidy out-of-scope changes; reverting it wipes the daemon's claim + session and strands this wave.
 - Never `git commit --no-verify`; root-cause the hook instead.
 
 ## Estimate
