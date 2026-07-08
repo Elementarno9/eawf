@@ -10765,6 +10765,20 @@
       "scope_id": "P30-I25-W12",
       "status": "done",
       "updated_at": "2026-07-08T14:07:35.674042Z"
+    },
+    "P30-I25-W13": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W13",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I25-W13",
+      "model": null,
+      "scope_id": "P30-I25-W13",
+      "status": "done",
+      "updated_at": "2026-07-08T14:56:57.966792Z"
     }
   },
   "agent_sessions": {
@@ -27095,6 +27109,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I25-W12",
       "updated_at": "2026-07-08T14:07:10.523410Z"
+    },
+    "P30-I25-W13": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W13-bucket-20260708T145023Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I25-W13",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I25-W13",
+      "updated_at": "2026-07-08T14:50:23.037453Z"
     }
   },
   "fleet_run": null,
@@ -30785,7 +30812,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-08T14:49:10.677898Z",
+  "updated_at": "2026-07-08T14:56:57.967190Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -122198,10 +122225,10 @@
       "blocks": [
         "P30-I25-W14"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-inline-p30i25w13",
+      "claimed_at": "2026-07-08T14:50:23.010235Z",
+      "closed_at": "2026-07-08T14:56:57.966792Z",
+      "commit": "7c4c7044d2cd2a209ff0e144d5a21f482610aa21",
       "criteria_floor_waiver": {
         "reason": "smoke-surfaced fix wave appended via CLI; measurable success strings",
         "waived_at": "2026-07-08T14:49:09.980964Z",
@@ -122228,12 +122255,12 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-08T14:49:10.038031Z",
-      "outcome": null,
+      "outcome": "claude adapter launches headless spawn with --permission-mode bypassPermissions so the jailed executor auto-approves Edit/Write/Bash (fixing the smoke 'blocked on write permissions'); deny-list + OS jail stay the boundary. 2 argv tests green, 396 runtime/spawn tests green.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
