@@ -29645,7 +29645,9 @@
         "P30-I25-W09",
         "P30-I25-W10",
         "P30-I25-W11",
-        "P30-I25-W12"
+        "P30-I25-W12",
+        "P30-I25-W13",
+        "P30-I25-W14"
       ]
     }
   },
@@ -30783,7 +30785,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-08T14:07:35.674316Z",
+  "updated_at": "2026-07-08T14:49:10.677898Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -122187,6 +122189,186 @@
         }
       ],
       "title": "Anchor Esc to roster when sessions wiped",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W13": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I25-W14"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "smoke-surfaced fix wave appended via CLI; measurable success strings",
+        "waived_at": "2026-07-08T14:49:09.980964Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/claude/adapter.py",
+        "tests/runtime/runtimes/test_claude_adapter.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W13",
+      "intent": {
+        "desired_outcome": "A jailed headless claude spawn auto-approves its scoped tools so it can implement waves.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Hard blocker; the claude-code runtime cannot complete a file-writing wave until this lands.",
+        "problem": "The headless claude-code spawn passes no permission flag; with no TTY Claude denies Edit/Write and the jailed agent reports blocked, failing every file-writing wave.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-08T14:49:10.038031Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The claude adapter passes a scoped permission argument so a jailed headless claude -p spawn uses Edit/Write/Bash without a TTY prompt.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The claude adapter passes a scoped permission argument so a jailed headless claude -p spawn uses Edit/Write/Bash without a TTY prompt.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A test asserts the built spawn argv carries the permission argument alongside -p and stream-json.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A test asserts the built spawn argv carries the permission argument alongside -p and stream-json.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "The OS jail stays the enforced filesystem boundary.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The OS jail stays the enforced filesystem boundary.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Grant headless claude executor write permission",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W14": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "smoke-surfaced fix wave appended via CLI; measurable success strings",
+        "waived_at": "2026-07-08T14:49:10.640432Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I25-W13"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "tests/tui/test_watch_correctness_w24.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W14",
+      "intent": {
+        "desired_outcome": "The autopilot lane grid surfaces the selected lane live output inline.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Operator-visible autopilot blindness surfaced by the smoke run.",
+        "problem": "During a fleet.drive the Watch lane grid shows no agent output; _sync_output_from_store is gated off in the lane-grid body so the operator must drill into each lane.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-08T14:49:10.677688Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The lane-grid body renders the selected lane's persisted agent output below the grid without drilling into the FA4 zoom.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The lane-grid body renders the selected lane's persisted agent output below the grid without drilling into the FA4 zoom.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "The preview re-syncs on lane selection change and each poll tick.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The preview re-syncs on lane selection change and each poll tick.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "A test asserts the selected lane output lines render in the lane-grid body.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A test asserts the selected lane output lines render in the lane-grid body.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Stream selected-lane output on the autopilot grid",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
