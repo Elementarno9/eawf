@@ -11,15 +11,15 @@
 
 
 
-
             ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
             │                                                                                              │
             │  wave P01-I01-W01                                                                            │
-            │   ≡ overview  ▸ criteria  ◈ gates  ● evidence  $ runtime                                     │
+            │   ≡ overview  ▸ criteria  ◈ gates  ● evidence  ∑ metrics                                     │
             │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-            │  size:   L                                                                                   │
-            │  eu:     — no data                                                                           │
-            │  tokens: — no data                                                                           │
+            │  size:     L                                                                                 │
+            │  eu:       — no data                                                                         │
+            │  estimate: 2.00 EU                                                                           │
+            │  tokens:   — no data                                                                         │
             │                                                                                              │
             │  [ Tab/Shift+Tab cycle · Esc close ]                                                         │
             │                                                                                              │
