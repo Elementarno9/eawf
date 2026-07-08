@@ -10793,6 +10793,20 @@
       "scope_id": "P30-I25-W14",
       "status": "done",
       "updated_at": "2026-07-08T15:09:57.912546Z"
+    },
+    "P30-I25-W15": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W15",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I25-W15",
+      "model": null,
+      "scope_id": "P30-I25-W15",
+      "status": "done",
+      "updated_at": "2026-07-08T15:42:53.222966Z"
     }
   },
   "agent_sessions": {
@@ -27149,6 +27163,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I25-W14",
       "updated_at": "2026-07-08T15:09:23.706492Z"
+    },
+    "P30-I25-W15": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W15-bucket-20260708T153857Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I25-W15",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I25-W15",
+      "updated_at": "2026-07-08T15:38:57.442759Z"
     }
   },
   "fleet_run": null,
@@ -30840,7 +30867,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-08T15:37:54.462668Z",
+  "updated_at": "2026-07-08T15:42:53.254758Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -122431,10 +122458,10 @@
     "P30-I25-W15": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-inline-p30i25w15",
+      "claimed_at": "2026-07-08T15:38:57.411568Z",
+      "closed_at": "2026-07-08T15:42:53.222966Z",
+      "commit": "6d60a1334a315b722c301228eb274c86726c7d68",
       "criteria_floor_waiver": {
         "reason": "smoke-surfaced fix wave appended via CLI; measurable success strings",
         "waived_at": "2026-07-08T15:37:54.415516Z",
@@ -122461,12 +122488,12 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-08T15:37:54.462471Z",
-      "outcome": null,
+      "outcome": "EventBus.publish wakes subscribers via call_soon_threadsafe on the subscriber's captured loop, so a fleet-dispatch worker-thread publish wakes the main-loop receiver -- fixing zero live Feed chunks + stale Watch log. 19 bus tests (2 cross-thread) + 804 daemon tests green.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
