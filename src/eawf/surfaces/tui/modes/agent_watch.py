@@ -1803,6 +1803,23 @@ class LaneGrid(Widget):
             super().__init__()
             self.wave_id = wave_id
 
+    class Selected(Message):
+        """Posted when the selected lane moves so the host re-syncs the preview.
+
+        Attributes:
+            wave_id: The newly-selected lane's wave id -- the wave whose live
+                output the host screen streams into the lane-grid preview (W14).
+        """
+
+        def __init__(self, wave_id: str) -> None:
+            super().__init__()
+            self.wave_id = wave_id
+
+    def selected_wave_id(self) -> str | None:
+        """Return the selected lane's wave id, or ``None`` when none is selected."""
+        row = self._selected_row()
+        return row.wave_id if row is not None else None
+
     def __init__(self, rows: tuple[LaneGridRow, ...], *, mode: RenderMode) -> None:
         """Build the lane grid over *rows* in render *mode*.
 
@@ -1861,7 +1878,11 @@ class LaneGrid(Widget):
         logger.info(f"lane_grid_zoom wave={row.wave_id}")
 
     def watch_selected(self) -> None:
-        """Repaint the lane rows so the selection accent + tint move."""
+        """Repaint the lane rows so the selection accent + tint move.
+
+        Also posts :class:`Selected` so the host screen re-syncs the lane-grid
+        output preview to the newly-highlighted lane's wave (W14).
+        """
         if not self.is_mounted:
             return
         for index, widget in enumerate(self.query(f".{LANE_GRID_ROW_CLASS}").results(Static)):
@@ -1870,6 +1891,9 @@ class LaneGrid(Widget):
             selected = index == self.selected
             widget.update(render_lane_row(self._rows[index], selected=selected, mode=self._mode))
             widget.set_class(selected, LANE_SELECTED_CLASS)
+        wave_id = self.selected_wave_id()
+        if wave_id is not None:
+            self.post_message(self.Selected(wave_id))
 
     def _selected_row(self) -> LaneGridRow | None:
         """Return the selected lane row, or ``None`` when none is selected."""
@@ -2317,6 +2341,12 @@ class AgentWatchModeScreen(ScopeScreen):
     #: backstop the project's TUI-staleness lesson pins. Seeded on every compose.
     _lane_parity: tuple[tuple[str, str], ...] = ()
 
+    #: The wave id the raw-output tail last synced from the store. When it
+    #: changes -- a lane-grid selection moving to a different lane -- the store
+    #: sync resets its cursor and REPLACES the tail with the new wave's lines so
+    #: the preview never appends one wave's output onto another's (W14).
+    _output_synced_wave: str | None = None
+
     def compose_body(self) -> ComposeResult:
         """Yield the fleet verdict rollup then the FA3 lane grid, parity grid, OR zoom.
 
@@ -2350,8 +2380,10 @@ class AgentWatchModeScreen(ScopeScreen):
         self._picker = None
         # Count of tail lines the persisted-store sync owns. Reset per recompose
         # (the tail is rebuilt) so the next sync re-seeds; gates the live push so
-        # store + push never double-render a line (W58).
+        # store + push never double-render a line (W58). The synced-wave marker
+        # resets too so the first post-recompose sync REPLACES the tail (W14).
         self._output_store_cursor = 0
+        self._output_synced_wave = None
         yield VerdictRollupPane(self._fleet_verdict_rollup(), mode=mode)
         # An explicit roster request (the ``l`` key -> ``action_open_roster``)
         # surfaces the browsable session picker over WHATEVER the body would
@@ -2381,6 +2413,10 @@ class AgentWatchModeScreen(ScopeScreen):
             self._body_case = "lanes"
             self._lane_grid = LaneGrid(lane_rows, mode=mode)
             yield self._lane_grid
+            # A live output preview of the SELECTED lane's wave, streamed from
+            # the persisted store so the autopilot grid shows what the
+            # highlighted agent is doing without drilling into its FA4 zoom (W14).
+            yield OutputTail(id=WATCH_OUTPUT_ID)
             return
         if len(sessions) >= 2:
             self._body_case = "grid"
@@ -2462,6 +2498,20 @@ class AgentWatchModeScreen(ScopeScreen):
         self._zoom_pending = True
         logger.info(f"on_lane_grid_zoom wave={message.wave_id}")
         self.call_after_refresh(self._zoom_to_target)
+
+    def on_lane_grid_selected(self, message: LaneGrid.Selected) -> None:
+        """Re-sync the lane-grid output preview to the newly-selected lane (W14).
+
+        Arrow-key selection posts :class:`LaneGrid.Selected`; syncing here (not
+        only on the poll tick) keeps the preview responsive to the cursor, and
+        :meth:`_sync_output_from_store` resets its cursor on the wave change so
+        the tail REPLACES rather than concatenating the previous lane's output.
+
+        Args:
+            message: The selection message carrying the newly-selected wave id.
+        """
+        message.stop()
+        self._sync_output_from_store()
 
     def on_session_picker_pick(self, message: SessionPicker.Pick) -> None:
         """Zoom the picked session to the FA4 single-session view (Enter).
@@ -2615,15 +2665,22 @@ class AgentWatchModeScreen(ScopeScreen):
         push rendered before the store took over), and thereafter appends only
         the lines past the cursor. ``append_output`` (the live push) is gated off
         once the cursor advances, so the two sources never double-render a line.
-        A no-op in the grid path or under a bare harness whose App exposes no
-        ``_state_path``.
+        The watched wave is the single-session zoom's pinned target OR, on the
+        FA3 lane grid, the SELECTED lane's wave -- so an autopilot drive streams
+        the highlighted agent's output inline without drilling into its FA4 zoom
+        (W14). A no-op in the parity-grid path or under a bare harness whose App
+        exposes no ``_state_path``.
 
         Returns:
             ``True`` when the store has at least one line for the watched wave
             (so the on-mount caller skips the live-buffer seed), else ``False``.
         """
-        if self._grid is not None or self._lane_grid is not None or self.target is None:
+        if self._grid is not None:
             return False
+        synced = self._synced_wave()
+        if synced is None:
+            return False
+        wave_id, wave_status = synced
         from pathlib import Path
 
         from eawf.kernel.state.enums import StoreKind
@@ -2632,9 +2689,15 @@ class AgentWatchModeScreen(ScopeScreen):
         state_path = getattr(self.app, "_state_path", None)
         if not isinstance(state_path, Path):
             return False
-        lines = load_output_chunk_lines(
-            store_path(state_path, StoreKind.EVENT), self.target.wave_id
-        )
+        if not self.query(f"#{WATCH_OUTPUT_ID}"):
+            return False
+        if wave_id != self._output_synced_wave:
+            # The watched wave changed -- a lane-grid selection moved to another
+            # lane -- so reset the cursor to REPLACE the tail with the new wave's
+            # lines rather than appending them onto the previous lane's output.
+            self._output_store_cursor = 0
+            self._output_synced_wave = wave_id
+        lines = load_output_chunk_lines(store_path(state_path, StoreKind.EVENT), wave_id)
         if not lines:
             return False
         if self._output_store_cursor == 0:
@@ -2643,11 +2706,31 @@ class AgentWatchModeScreen(ScopeScreen):
             # self-claimed pass never reads as the recorded outcome. The banner
             # is not a store line, so the cursor still tracks the raw line count
             # and later appends stay unbannered.
-            self._output_tail().replace(frame_replay_lines(lines, self.target.wave_status))
+            self._output_tail().replace(frame_replay_lines(lines, wave_status))
         elif len(lines) > self._output_store_cursor:
             self._output_tail().extend(lines[self._output_store_cursor :])
         self._output_store_cursor = len(lines)
         return True
+
+    def _synced_wave(self) -> tuple[str, WaveStatus | None] | None:
+        """Return the ``(wave_id, wave_status)`` whose output the tail should show.
+
+        The single-session zoom shows its pinned :attr:`target`; the FA3 lane
+        grid shows the SELECTED lane's wave so the operator sees the highlighted
+        agent's live output inline without drilling into its FA4 zoom (W14).
+        Returns ``None`` when neither surface names a wave (the parity grid /
+        honest-empty paths).
+        """
+        if self._lane_grid is not None:
+            wave_id = self._lane_grid.selected_wave_id()
+            if wave_id is None:
+                return None
+            state = self._current_state()
+            wave = state.waves.get(wave_id) if state is not None else None
+            return wave_id, (wave.status if wave is not None else None)
+        if self.target is not None:
+            return self.target.wave_id, self.target.wave_status
+        return None
 
     def _on_app_state(self, new_state: State | None) -> None:
         """Recompose the body when a poll tick changes the ACTIVE-executor fleet.

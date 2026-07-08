@@ -660,3 +660,56 @@ def test_leave_zoom_over_live_lane_stays_in_mode_without_sessions(
             assert app.current_mode != "feed", "Esc must not fall to Feed while a lane is live"
 
     asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# W14 -- the lane grid streams the selected lane's output inline
+# --------------------------------------------------------------------------
+
+
+def test_lane_grid_preview_streams_selected_lane_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The autopilot lane grid streams the SELECTED lane's persisted output (W14).
+
+    A fleet.drive body is the lane grid, which showed no agent output -- the
+    store-sync was gated off in the lane body, so the operator had to drill into
+    each lane's FA4 zoom to see what an agent was doing. The grid now mounts an
+    output preview that syncs the selected lane's wave from the store, so a live
+    drive is observable inline.
+    """
+    run = FleetRun(  # type: ignore[call-arg]
+        run_state="draining",
+        armed_at=_T0,
+        lanes={_WAVE: FleetLane(wave_id=_WAVE, attempt=1, session_id=None, dispatched_at=_T0)},
+    )
+    state = _state(
+        waves={_WAVE: _wave(_WAVE, status=WaveStatus.IN_PROGRESS)},
+        fleet_run=run,
+    )
+    state_path = _write_state(tmp_path, state)
+    store = state_path.parent / "store"
+    store.mkdir(parents=True, exist_ok=True)
+    (store / "event.jsonl").write_text(
+        _chunk_row(_WAVE, seq=0, lines="agent: building pyproject.toml") + "\n",
+        encoding="utf-8",
+    )
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            assert pane.query(LaneGrid), "expected the fleet lane grid"
+            frame = normalize_snapshot(capture_screen_text(app))
+            # The selected lane's output streams inline -- no drill into FA4.
+            assert "building pyproject.toml" in frame, (
+                "the selected lane's output should stream in the grid preview"
+            )
+
+    asyncio.run(body())
