@@ -29400,9 +29400,7 @@
         "P30-I21-W32",
         "P30-I21-W33",
         "P30-I21-W34",
-        "P30-I21-W35",
-        "P30-I21-W36",
-        "P30-I21-W37"
+        "P30-I21-W35"
       ]
     },
     "P30-I22": {
@@ -29549,7 +29547,9 @@
         "P30-I25-W07",
         "P30-I25-W08",
         "P30-I25-W09",
-        "P30-I25-W10"
+        "P30-I25-W10",
+        "P30-I25-W11",
+        "P30-I25-W12"
       ]
     }
   },
@@ -30687,7 +30687,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-08T12:54:34.854045Z",
+  "updated_at": "2026-07-08T13:13:37.921293Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -111790,186 +111790,6 @@
       "tokens_consumed": 0,
       "worktree_id": null
     },
-    "P30-I21-W36": {
-      "agent_role": "executor",
-      "blocks": [
-        "P30-I21-W37"
-      ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
-      "criteria_floor_waiver": {
-        "reason": "smoke-surfaced fix wave appended via CLI; success strings are measurable, typed criteria to follow on spec sync",
-        "waived_at": "2026-07-08T12:28:28.624324Z",
-        "waived_by": null
-      },
-      "deps": [],
-      "description": null,
-      "dispatch_history": [],
-      "effort_bucket": "S",
-      "file_scopes": [
-        "src/eawf/surfaces/tui/modes/agent_watch.py",
-        "tests/surfaces/tui/test_agent_watch.py"
-      ],
-      "gates": [],
-      "id": "P30-I21-W36",
-      "intent": {
-        "desired_outcome": "The watch header status tracks the live wave status on every poll tick.",
-        "evidence_refs": [],
-        "planned_steps": [],
-        "priority_rationale": "Operator-visible autopilot-watch staleness surfaced by the v0.6.0 smoke run.",
-        "problem": "_refresh_header repaints from the frozen self.target so a single-session zoom whose wave goes terminal without a parity change shows a stale active status indefinitely.",
-        "risks": [],
-        "source_brief_ids": []
-      },
-      "iter_id": "P30-I21",
-      "opened_at": "2026-07-08T12:28:28.656199Z",
-      "outcome": null,
-      "runtime_baseline": null,
-      "runtime_latest": null,
-      "runtime_preference": null,
-      "sessions": {},
-      "status": "pending",
-      "success_criteria": [
-        {
-          "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
-          "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "_refresh_header in src/eawf/surfaces/tui/modes/agent_watch.py re-derives the watch target from current state before rendering so the header status word reflects a terminal wave status on the next poll tick without a full recompose.",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": null,
-          "text": "_refresh_header in src/eawf/surfaces/tui/modes/agent_watch.py re-derives the watch target from current state before rendering so the header status word reflects a terminal wave status on the next poll tick without a full recompose.",
-          "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
-          "id": "CR-02",
-          "kind": "legacy",
-          "measurable_signal": "A test drives a single-session zoom whose watched wave transitions to failed without a parity-set change and asserts the header status word flips from active to failed.",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": null,
-          "text": "A test drives a single-session zoom whose watched wave transitions to failed without a parity-set change and asserts the header status word flips from active to failed.",
-          "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
-          "id": "CR-03",
-          "kind": "legacy",
-          "measurable_signal": "uv run pytest on the updated agent_watch tests is green with snapshots regenerated.",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": null,
-          "text": "uv run pytest on the updated agent_watch tests is green with snapshots regenerated.",
-          "waiver_reason": null
-        }
-      ],
-      "title": "Live-refresh watch header status each tick",
-      "token_budget": null,
-      "tokens_consumed": 0,
-      "worktree_id": null
-    },
-    "P30-I21-W37": {
-      "agent_role": "executor",
-      "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
-      "criteria_floor_waiver": {
-        "reason": "smoke-surfaced fix wave appended via CLI; success strings are measurable, typed criteria to follow on spec sync",
-        "waived_at": "2026-07-08T12:28:29.167439Z",
-        "waived_by": null
-      },
-      "deps": [
-        "P30-I21-W36"
-      ],
-      "description": null,
-      "dispatch_history": [],
-      "effort_bucket": "XS",
-      "file_scopes": [
-        "src/eawf/surfaces/tui/modes/agent_watch.py",
-        "tests/surfaces/tui/test_agent_watch.py"
-      ],
-      "gates": [],
-      "id": "P30-I21-W37",
-      "intent": {
-        "desired_outcome": "Esc keeps the operator in the watch mode whenever there is a live target or lane to browse.",
-        "evidence_refs": [],
-        "planned_steps": [],
-        "priority_rationale": "Never-trapped guarantee regression surfaced by the smoke run.",
-        "problem": "action_leave_zoom returns to the roster only when session_picker_rows is non-empty so a wiped agent_sessions drops the operator to the Feed breaking the never-trapped guarantee.",
-        "risks": [],
-        "source_brief_ids": []
-      },
-      "iter_id": "P30-I21",
-      "opened_at": "2026-07-08T12:28:29.203357Z",
-      "outcome": null,
-      "runtime_baseline": null,
-      "runtime_latest": null,
-      "runtime_preference": null,
-      "sessions": {},
-      "status": "pending",
-      "success_criteria": [
-        {
-          "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
-          "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "action_leave_zoom in agent_watch.py returns to the in-mode roster or lane surface when a watched target or lane rows exist even if state.agent_sessions is empty instead of falling through to switch_mode feed.",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": null,
-          "text": "action_leave_zoom in agent_watch.py returns to the in-mode roster or lane surface when a watched target or lane rows exist even if state.agent_sessions is empty instead of falling through to switch_mode feed.",
-          "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
-          "id": "CR-02",
-          "kind": "legacy",
-          "measurable_signal": "A test asserts Esc from a single-session zoom with an empty agent_sessions but a live target stays in agent-watch and does not switch to feed.",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": null,
-          "text": "A test asserts Esc from a single-session zoom with an empty agent_sessions but a live target stays in agent-watch and does not switch to feed.",
-          "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
-          "id": "CR-03",
-          "kind": "legacy",
-          "measurable_signal": "uv run pytest on the updated test is green with snapshots regenerated.",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": null,
-          "text": "uv run pytest on the updated test is green with snapshots regenerated.",
-          "waiver_reason": null
-        }
-      ],
-      "title": "Anchor Esc to roster when sessions wiped",
-      "token_budget": null,
-      "tokens_consumed": 0,
-      "worktree_id": null
-    },
     "P30-I22-W01": {
       "agent_role": "executor",
       "blocks": [],
@@ -122091,6 +121911,186 @@
         }
       ],
       "title": "Re-assert daemon dispatch state across spawn",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W11": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I25-W12"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "smoke-surfaced fix wave appended via CLI; success strings measurable, typed criteria to follow on spec sync",
+        "waived_at": "2026-07-08T13:13:37.225860Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "tests/surfaces/tui/test_agent_watch.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W11",
+      "intent": {
+        "desired_outcome": "The watch header status tracks the live wave status on every poll tick.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Operator-visible autopilot-watch staleness surfaced by the v0.6.0 smoke run.",
+        "problem": "_refresh_header repaints from the frozen self.target so a single-session zoom whose wave goes terminal without a parity change shows a stale active status indefinitely.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-08T13:13:37.281302Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "_refresh_header in src/eawf/surfaces/tui/modes/agent_watch.py re-derives the watch target from current state before rendering so the header status word reflects a terminal wave status on the next poll tick without a full recompose.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "_refresh_header in src/eawf/surfaces/tui/modes/agent_watch.py re-derives the watch target from current state before rendering so the header status word reflects a terminal wave status on the next poll tick without a full recompose.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A test drives a single-session zoom whose watched wave transitions to failed without a parity-set change and asserts the header status word flips from active to failed.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A test drives a single-session zoom whose watched wave transitions to failed without a parity-set change and asserts the header status word flips from active to failed.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "uv run pytest on the updated agent_watch tests is green with snapshots regenerated.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "uv run pytest on the updated agent_watch tests is green with snapshots regenerated.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Live-refresh watch header status each tick",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W12": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "smoke-surfaced fix wave appended via CLI; success strings measurable, typed criteria to follow on spec sync",
+        "waived_at": "2026-07-08T13:13:37.883811Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I25-W11"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "tests/surfaces/tui/test_agent_watch.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W12",
+      "intent": {
+        "desired_outcome": "Esc keeps the operator in the watch mode whenever there is a live target or lane to browse.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Never-trapped guarantee regression surfaced by the smoke run.",
+        "problem": "action_leave_zoom returns to the roster only when session_picker_rows is non-empty so a wiped agent_sessions drops the operator to the Feed breaking the never-trapped guarantee.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-08T13:13:37.921069Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "action_leave_zoom in agent_watch.py returns to the in-mode roster or lane surface when a watched target or lane rows exist even if state.agent_sessions is empty instead of falling through to switch_mode feed.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "action_leave_zoom in agent_watch.py returns to the in-mode roster or lane surface when a watched target or lane rows exist even if state.agent_sessions is empty instead of falling through to switch_mode feed.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A test asserts Esc from a single-session zoom with an empty agent_sessions but a live target stays in agent-watch and does not switch to feed.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A test asserts Esc from a single-session zoom with an empty agent_sessions but a live target stays in agent-watch and does not switch to feed.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "uv run pytest on the updated test is green with snapshots regenerated.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "uv run pytest on the updated test is green with snapshots regenerated.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Anchor Esc to roster when sessions wiped",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
