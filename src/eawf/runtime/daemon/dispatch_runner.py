@@ -60,11 +60,13 @@ from pydantic import TypeAdapter
 from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
+    AgentSessionStatus,
     Confidence,
     StoreKind,
     WaveStatus,
 )
 from eawf.kernel.state.io import state_version
+from eawf.kernel.state.models import AgentSession, State
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
@@ -1013,6 +1015,64 @@ def _build_completion_body(
     raise KeyError(f"no completion body builder for role: {role.value!r}")
 
 
+def _fallback_session(
+    state: State,
+    *,
+    session_id: str,
+    wave_id: str,
+    report_body: AgentReportBody | None,
+) -> AgentSession | None:
+    """Reconstruct a minimal executor session when the daemon row is missing.
+
+    A jailed agent that reverts ``.ea/state.json`` mid-spawn drops its own
+    executor session from ``state.agent_sessions`` (W09). Rebuild the session
+    from the wave's own bookkeeping -- its ``agent_role`` and the recorded
+    session attempt (runtime + start time) -- so the close records the report
+    and the wave closes on its verdict instead of ``emit_agent_end_report``
+    raising ``KeyError`` and marking a successful wave failed.
+
+    Args:
+        state: The freshly-loaded state whose ``agent_sessions`` lacks the id.
+        session_id: The missing session id the close is resolving.
+        wave_id: The dispatched wave whose bookkeeping seeds the reconstruction.
+        report_body: The agent's own body when present -- its ``role`` is
+            authoritative (it must match the reconstructed session role or the
+            writer raises ``AgentReportRoleMismatchError``); falls back to the
+            wave's ``agent_role`` on the synth path.
+
+    Returns:
+        The reconstructed :class:`AgentSession`, or ``None`` when the wave or
+        its role is unknown (a genuinely unresolvable session -- the caller
+        then keeps the original ``KeyError``).
+    """
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        return None
+    role = AgentSessionRole(report_body.role) if report_body is not None else wave.agent_role
+    if role is None:
+        return None
+    attempt = max(wave.sessions) if wave.sessions else None
+    rec = wave.sessions.get(attempt) if attempt is not None else None
+    runtime_str = (
+        (rec.runtime if rec is not None else None)
+        or (wave.runtime_latest.harness if wave.runtime_latest is not None else None)
+        or "unknown"
+    )
+    started = (
+        (rec.started_at if rec is not None else None)
+        or (wave.runtime_latest.captured_at if wave.runtime_latest is not None else None)
+        or datetime.now(UTC)
+    )
+    return AgentSession(
+        id=session_id,
+        role=role,
+        runtime=runtime_str,
+        scope_id=wave_id,
+        status=AgentSessionStatus.ACTIVE,
+        started_at=started,
+    )
+
+
 def emit_agent_end_report(
     ctx: MethodContext,
     *,
@@ -1122,7 +1182,20 @@ def emit_agent_end_report(
     state = load_state(state_path)
     session = state.agent_sessions.get(session_id)
     if session is None:
-        raise KeyError(f"unknown agent session: {session_id!r}")
+        # The daemon-owned session row was lost -- e.g. a jailed agent reverted
+        # .ea/state.json mid-spawn (W09). Reconstruct it from the wave's own
+        # bookkeeping and re-register it so the report records and the wave
+        # closes on its verdict rather than KeyErroring a success into a fail.
+        session = _fallback_session(
+            state, session_id=session_id, wave_id=wave_id, report_body=report_body
+        )
+        if session is None:
+            raise KeyError(f"unknown agent session: {session_id!r}")
+        state.agent_sessions[session_id] = session
+        logger.warning(
+            f"emit_agent_end_report reconstructed missing session "
+            f"session={session_id!r} wave={wave_id} role={session.role.value}"
+        )
     if report_body is not None:
         # Live-spawn path: persist the agent's OWN validated body verbatim.
         # Its verdict / outcome / files_changed are authoritative — the

@@ -12,6 +12,7 @@ silently accepting an unverified attempt.
 
 from __future__ import annotations
 
+import copy
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -221,6 +222,74 @@ def test_run_dispatch_passes_gate_end_to_end(tmp_path: Path) -> None:
         outcome="done",
     )
     assert result.report_id is not None
+
+
+# ---- Missing-session reconstruction (W09) ----------------------------------
+
+
+def _write_state_without_session(tmp_path: Path) -> Path:
+    """Serialise a state whose ``agent_sessions`` is empty (session reverted).
+
+    Models the W09 failure: a jailed agent reverted ``.ea/state.json`` mid-spawn,
+    dropping its own executor session from ``agent_sessions`` while the wave's
+    own bookkeeping (``agent_role``) survives.
+    """
+    payload = copy.deepcopy(_state_payload())
+    payload["agent_sessions"] = {}
+    payload["current"]["active_session_ids"] = []
+    state = State.model_validate(payload)
+    state_dir = tmp_path / ".ea"
+    state_dir.mkdir()
+    path = state_dir / "state.json"
+    path.write_text(state.model_dump_json(), encoding="utf-8")
+    return path
+
+
+def test_emit_agent_end_report_reconstructs_missing_session(tmp_path: Path) -> None:
+    """A PASS close succeeds when the session row was reverted out of state (W09).
+
+    Before the fix ``emit_agent_end_report`` raised ``KeyError`` and the fleet
+    marked the successful wave failed. The reconstruction rebuilds the session
+    from the wave's ``agent_role`` so the report records and the close proceeds.
+    """
+    state_path = _write_state_without_session(tmp_path)
+    ctx = _ctx(state_path)
+
+    report_id = emit_agent_end_report(
+        ctx,
+        session_id=_SESSION_ID,
+        wave_id=_WAVE_ID,
+        commit_sha="abcdef1",
+        outcome="implemented W57 verify gate",
+        files_changed=["src/eawf/workflow/verify/dispatch_close.py"],
+        tests_run=["uv run pytest tests/workflow/verify -q"],
+        runtime="claude",
+    )
+    # The report row lands (no KeyError) with the executor role reconstructed
+    # from the wave's agent_role. Durable re-registration of the session into
+    # state.json is W10's job; W09's contract is only that the close proceeds.
+    envelope = _report_envelope(state_path)
+    assert envelope.id == report_id
+    payload = AgentReportPayload.model_validate(envelope.payload)
+    assert payload.body.verdict is AgentReportVerdict.PASS
+    assert payload.header.role is AgentSessionRole.EXECUTOR
+    assert payload.header.session_id == _SESSION_ID
+
+
+def test_emit_agent_end_report_missing_session_and_wave_raises(tmp_path: Path) -> None:
+    """A truly unresolvable session (unknown wave) keeps the original KeyError."""
+    state_path = _write_state_without_session(tmp_path)
+    ctx = _ctx(state_path)
+
+    with pytest.raises(KeyError, match="unknown agent session"):
+        emit_agent_end_report(
+            ctx,
+            session_id="SES-does-not-exist",
+            wave_id="P28-I03-W99",
+            commit_sha="abcdef1",
+            outcome="orphan",
+            runtime="claude",
+        )
 
 
 # ---- Fail path -------------------------------------------------------------
