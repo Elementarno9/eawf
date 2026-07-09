@@ -29841,7 +29841,9 @@
         "P30-I25-W16",
         "P30-I25-W17",
         "P30-I25-W18",
-        "P30-I25-W19"
+        "P30-I25-W19",
+        "P30-I25-W20",
+        "P30-I25-W21"
       ]
     }
   },
@@ -30979,7 +30981,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-09T16:25:14.824409Z",
+  "updated_at": "2026-07-09T16:42:18.784203Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -122966,7 +122968,9 @@
     },
     "P30-I25-W19": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P30-I25-W20"
+      ],
       "claim_session_id": "flow-inline-w19",
       "claimed_at": "2026-07-09T15:48:35.877065Z",
       "closed_at": "2026-07-09T16:25:14.823896Z",
@@ -123081,6 +123085,235 @@
         }
       ],
       "title": "Restore Watch-tail real-time streaming off the event store",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W20": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I25-W21"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "prose success criteria; typed contract detailed in the wave plan + W19 brief lineage",
+        "waived_at": "2026-07-09T16:41:44.095477Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I25-W19"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "src/eawf/runtime/daemon/methods/research.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W20",
+      "intent": {
+        "desired_outcome": "The Watch surface targets any spawned agent role and a campaign researcher's stdout streams live in its zoom.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Generalize the executor-only picker/grid/roster to watchable roles; add role to the header; align the researcher chunk scope to the session; fold in the W19 time-flush; tests + goldens."
+        ],
+        "priority_rationale": "Directly follows W19 (which fixed the executor tail); reuses the same role-agnostic tail keyed on scope_id.",
+        "problem": "Watch mode is executor-only: it never targets researcher or auditor spawns, and researcher chunks key on the campaign id not the session scope so they never render live by scope.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-09T16:41:44.180965Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Generalize the Watch surface picker/grid/roster from executor-only to all spawned agent roles (executor/researcher/auditor) so pick_watch_target and session_picker_rows and the parity grid resolve any watchable session; the header and roster row show the agent role so the operator reads what is bein",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Generalize the Watch surface picker/grid/roster from executor-only to all spawned agent roles (executor/researcher/auditor) so pick_watch_target and session_picker_rows and the parity grid resolve any watchable session; the header and roster row show the agent role so the operator reads what is being watched.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "Fix the researcher live-output scope: the campaign researcher spawn persists agent.output.chunk keyed on the researcher SESSION scope_id rather than the campaign id so the Watch tail filter matches and a researcher's stdout renders live in its zoom.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Fix the researcher live-output scope: the campaign researcher spawn persists agent.output.chunk keyed on the researcher SESSION scope_id rather than the campaign id so the Watch tail filter matches and a researcher's stdout renders live in its zoom.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "Fold the W19 dual-threshold chunk flush (_chunk_should_flush) into the research chunk producer so a slow researcher turn persists promptly instead of only at the 20-line count batch.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Fold the W19 dual-threshold chunk flush (_chunk_should_flush) into the research chunk producer so a slow researcher turn persists promptly instead of only at the 20-line count batch.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "A researcher session is watchable end-to-end: pick_watch_target selects an ACTIVE researcher when no executor is live and its zoom streams the persisted chunks via the W19 poll timer with no re-enter.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A researcher session is watchable end-to-end: pick_watch_target selects an ACTIVE researcher when no executor is live and its zoom streams the persisted chunks via the W19 poll timer with no re-enter.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-05",
+          "kind": "legacy",
+          "measurable_signal": "Tests cover the all-role picker plus the researcher scope alignment plus the research flush parity; affected TUI snapshot goldens regenerated; just test and uv run eawf doctor are green.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Tests cover the all-role picker plus the researcher scope alignment plus the research flush parity; affected TUI snapshot goldens regenerated; just test and uv run eawf doctor are green.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Watch any spawned agent: all-role picker and researcher-live",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W21": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "prose success criteria; auditor-live is verdict-path work split from W20 per operator decision",
+        "waived_at": "2026-07-09T16:42:18.717879Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I25-W20"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/verdict.py",
+        "src/eawf/workflow/dispatch/llm_assist.py",
+        "src/eawf/observability/eval/cross_vendor_jury.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W21",
+      "intent": {
+        "desired_outcome": "A live cross-vendor juror's stdout streams in its own Watch zoom without regressing the close-gate verdict correctness path.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Thread on_chunk through assist_with_schema + SpawnFn; runtime-qualify the auditor session scope; emit persisted chunks the W19 poll timer surfaces; tests."
+        ],
+        "priority_rationale": "Completes 'watch any agent' for the auditor role; isolated from W20 because it is close-gate-path surgery.",
+        "problem": "Auditor spawns in produce_wave_verdict wire no on_chunk and share the wave-audit scope across runtimes, so juror output cannot stream to Watch and parallel jurors would interleave under one scope.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-09T16:42:18.783885Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Thread an optional on_chunk hook through assist_with_schema and the SpawnFn so produce_wave_verdict can stream a juror's stdout as agent.output.chunk without a real subprocess under test.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Thread an optional on_chunk hook through assist_with_schema and the SpawnFn so produce_wave_verdict can stream a juror's stdout as agent.output.chunk without a real subprocess under test.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "Key auditor chunks on a runtime-qualified auditor session scope so parallel jurors on one wave do not interleave in a single Watch zoom; the verdict join key (base_id=wave.id) is unchanged.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Key auditor chunks on a runtime-qualified auditor session scope so parallel jurors on one wave do not interleave in a single Watch zoom; the verdict join key (base_id=wave.id) is unchanged.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "A live cross-vendor juror's output renders in the Watch zoom via the W19 poll timer keyed on its auditor session scope.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A live cross-vendor juror's output renders in the Watch zoom via the W19 poll timer keyed on its auditor session scope.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "Tests cover the on_chunk threading and the runtime-qualified auditor scope without regressing the close-gate verdict path; just test and uv run eawf doctor are green.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Tests cover the on_chunk threading and the runtime-qualified auditor scope without regressing the close-gate verdict path; just test and uv run eawf doctor are green.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Watch auditor jurors live: verdict-path chunk streaming",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
