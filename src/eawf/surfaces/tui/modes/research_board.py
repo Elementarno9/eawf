@@ -185,6 +185,12 @@ _RESOLVE_METHOD: str = "needs_user.resolve"
 #: needs_user open-pause lister (parking leaves the pause open for later).
 _PARK_METHOD: str = "needs_user.park"
 
+#: Daemon JSON-RPC method the ``a`` (approve) key routes through when the
+#: surfaced checkpoint is a blocking OpenQuestion (not a needs_user pause) --
+#: the canonical writer that flips the question terminal + clears its blocking
+#: bit, so the halted campaign resumes.
+_RESOLVE_QUESTION_METHOD: str = "research.resolve_question"
+
 #: Live daemon methods the follow-up / snapshot action keys route through
 #: (P30-I18-W03): ``r`` queries the campaign's next round, ``s`` snapshots the
 #: run state. Both answer with a typed body the board surfaces honestly.
@@ -257,11 +263,13 @@ MODE_KEYS_LINE: str = (
 APPROVE_NO_CHECKPOINT: str = "approve: no checkpoint to approve"
 PARK_NO_CHECKPOINT: str = "park: no checkpoint to park"
 
-#: Action-result line when ``Enter`` fires over a non-claim node (campaign /
-#: round / topic / question). The evidence reader zooms a CLAIM leaf only, so
-#: pressing ``Enter`` elsewhere surfaces this honest hint and opens no modal --
-#: the advertised ``Enter open`` affordance is never a dead key.
-ENTER_NOT_A_CLAIM: str = "select a claim to read its evidence"
+#: Action-result line when ``Enter`` fires over a node with no evidence to
+#: read: a campaign / round / topic node, or a still-open / blocked question
+#: (an ANSWERED question routes to its answering claim's reader instead). The
+#: evidence reader zooms a CLAIM leaf, so pressing ``Enter`` elsewhere surfaces
+#: this honest hint and opens no modal -- the advertised ``Enter open``
+#: affordance is never a dead key.
+ENTER_NOT_A_CLAIM: str = "select a claim or answered question to read its evidence"
 
 #: Action-result line when a checkpoint action could not reach the daemon.
 APPROVE_NO_DAEMON: str = "approve: daemon unavailable -- request not issued"
@@ -2084,29 +2092,47 @@ def render_progress(
     return "\n".join(lines)
 
 
-def render_checkpoint(pause: OpenPause | None) -> str:
-    """Render the bottom checkpoint drawer for the active *pause*.
+def render_checkpoint(checkpoint: OpenPause | OpenQuestion | None) -> str:
+    """Render the bottom checkpoint drawer for the active *checkpoint*.
 
-    When a ``needs_user`` pause is open the drawer names its prompt and lays
-    out its resolution options inline (the ratified ``[discriminator task]
-    [accept stronger] [park]`` shape); ``a`` approves with the first option,
-    ``p`` parks. With no open pause the drawer shows the honest
-    :data:`CHECKPOINT_IDLE` line.
+    The drawer surfaces whichever of the two independent "blocking" sources is
+    open:
+
+    * a ``needs_user`` pause -- the drawer names its prompt and lays out its
+      resolution options inline (the ratified ``[discriminator task]
+      [accept stronger] [park]`` shape); ``a`` approves with the first option,
+      ``p`` parks; or
+    * a blocking :class:`~eawf.kernel.state.models.OpenQuestion` -- surfaced
+      only when no pause is open, since a ``BLOCKED`` blocking question halts
+      the campaign just as hard (the RISKS band + the ``BLOCKED_AWAIT_USER`` run
+      phase count the ``blocking`` bool). The drawer names the question and
+      states that ``a`` resolves it, so the operator is never left with a
+      halted run and an idle-looking drawer.
+
+    With neither open the drawer shows the honest :data:`CHECKPOINT_IDLE` line.
 
     Args:
-        pause: The open ``needs_user`` pause mapped to the active checkpoint,
-            or ``None`` when nothing awaits review.
+        checkpoint: The open ``needs_user`` pause, else the open blocking
+            question, mapped to the active checkpoint; ``None`` when nothing
+            awaits review.
 
     Returns:
         A content-markup drawer string.
     """
-    if pause is None:
+    from eawf.kernel.state.models import OpenQuestion
+
+    if checkpoint is None:
         return f"[$muted]{CHECKPOINT_IDLE}[/]"
+    if isinstance(checkpoint, OpenQuestion):
+        return (
+            f"[$warn]blocking question[/] {escape_markup(checkpoint.title)}\n"
+            f"[$muted]this question gates the campaign -- press a to resolve[/]"
+        )
     options = " ".join(
-        f"[$accent][{escape_markup(option.label)}][/]" for option in pause.question.options
+        f"[$accent][{escape_markup(option.label)}][/]" for option in checkpoint.question.options
     )
     return (
-        f"[$warn]checkpoint[/] {escape_markup(pause.question.question)}\n"
+        f"[$warn]checkpoint[/] {escape_markup(checkpoint.question.question)}\n"
         f"[$muted]options:[/] {options}"
     )
 
@@ -2958,31 +2984,43 @@ class ResearchBoardModeScreen(ScopeScreen):
         self._collapsed &= live
 
     def action_peek_selected(self) -> None:
-        """Open the full-screen evidence reader for a selected CLAIM node (``Enter``).
+        """Open the full-screen evidence reader for a selected claim (``Enter``).
 
         Selection alone morphs the center pane into the node's SCOPED detail
         (campaign stats / question answer / claim summary); ``Enter`` ZOOMS a
-        CLAIM leaf into the full-screen
+        claim into the full-screen
         :class:`~eawf.surfaces.tui.modals.evidence_reader.EvidenceReaderModal` --
         the untruncated claim body, its numbered supporting sources, the refuted
         sibling claims :func:`claim_conflicts` resolves (or the honest ``none``
-        line), and the claim's provenance. A non-claim node (campaign / round /
-        topic / question) surfaces an honest "select a claim" toast and opens no
-        modal, so the advertised ``Enter open`` affordance is never dead.
+        line), and the claim's provenance. ``Enter`` opens the reader for a CLAIM
+        leaf directly, and for an ANSWERED question node it opens the claim that
+        answered it (:attr:`~eawf.kernel.state.models.OpenQuestion.answered_by_claim_id`),
+        so Entering an answered question shows its answer. Any other node -- a
+        campaign / round / topic, or a still-open / blocked question with no
+        answering claim yet -- surfaces an honest toast and opens no modal, so
+        the advertised ``Enter open`` affordance is never dead.
         """
         from eawf.surfaces.tui.modals.evidence_reader import EvidenceReaderModal
 
         node = self._selected_node()
         if node is None:
             return
-        if node.kind is not NodeKind.CLAIM or node.claim_id is None:
+        claim_id = node.claim_id if node.kind is NodeKind.CLAIM else None
+        if claim_id is None and node.kind is NodeKind.QUESTION and node.question_id is not None:
+            # An ANSWERED question has no evidence of its own, but the claim that
+            # answered it does -- route Enter to that claim's reader rather than
+            # dead-ending on the generic toast.
+            question = next((q for q in self._questions if q.id == node.question_id), None)
+            if question is not None and question.answered_by_claim_id is not None:
+                claim_id = question.answered_by_claim_id
+        if claim_id is None:
             self._set_action(f"[$muted]{ENTER_NOT_A_CLAIM}[/]")
             logger.info(f"action_peek_selected non_claim kind={node.kind.value}")
             return
-        claim = next((c for c in self._claims if c.id == node.claim_id), None)
+        claim = next((c for c in self._claims if c.id == claim_id), None)
         if claim is None:
             self._set_action(f"[$muted]{ENTER_NOT_A_CLAIM}[/]")
-            logger.info(f"action_peek_selected claim_missing claim={node.claim_id!r}")
+            logger.info(f"action_peek_selected claim_missing claim={claim_id!r}")
             return
         conflicts = claim_conflicts(claim, self._questions, self._claims)
         modal = EvidenceReaderModal(
@@ -3025,21 +3063,39 @@ class ResearchBoardModeScreen(ScopeScreen):
         )
 
     def action_approve_checkpoint(self) -> None:
-        """Approve the active checkpoint via the real ``needs_user.resolve`` RPC.
+        """Approve the active checkpoint via the real resolve RPC (``a``).
 
-        Resolves the open ``needs_user`` pause mapped to the active checkpoint,
-        choosing the pause's first option label as the approve choice, through
-        the daemon-client seam and surfaces the typed outcome honestly. With no
-        open checkpoint there is nothing to approve; when the daemon is
-        unreachable the result says so rather than implying a resolution.
+        Routes by checkpoint kind:
+
+        * a ``needs_user`` pause resolves through ``needs_user.resolve`` with the
+          pause's first option label as the approve choice; while
+        * a blocking :class:`~eawf.kernel.state.models.OpenQuestion` resolves
+          through ``research.resolve_question``, which clears its ``blocking``
+          bit so the halted campaign resumes.
+
+        Both go through the daemon-client seam and surface the typed outcome
+        honestly. With no open checkpoint there is nothing to approve; when the
+        daemon is unreachable the result says so rather than implying a
+        resolution.
         """
-        pause = self._current_checkpoint()
-        if pause is None:
+        from eawf.kernel.state.models import OpenQuestion
+
+        checkpoint = self._current_checkpoint()
+        if checkpoint is None:
             self._set_action(f"[$warn]{APPROVE_NO_CHECKPOINT}[/]")
             return
-        result_line = self._issue_resolve(pause)
+        if isinstance(checkpoint, OpenQuestion):
+            result_line = self._issue_resolve_question(checkpoint)
+            self._set_action(result_line)
+            logger.info(
+                f"action_approve_checkpoint question={checkpoint.id!r} result={result_line!r}"
+            )
+            return
+        result_line = self._issue_resolve(checkpoint)
         self._set_action(result_line)
-        logger.info(f"action_approve_checkpoint pause={pause.pause_urn!r} result={result_line!r}")
+        logger.info(
+            f"action_approve_checkpoint pause={checkpoint.pause_urn!r} result={result_line!r}"
+        )
 
     def action_park_checkpoint(self) -> None:
         """Park the active checkpoint via the real ``needs_user.park`` RPC.
@@ -3047,16 +3103,19 @@ class ResearchBoardModeScreen(ScopeScreen):
         Parking leaves the pause open for later review; it routes through the
         daemon ``needs_user.park`` lister (the canonical open-pause query) and
         surfaces the honest count of still-open checkpoints. With no open
-        checkpoint there is nothing to park; when the daemon is unreachable the
-        result says so.
+        checkpoint -- or a blocking-question checkpoint, which is not a pause to
+        leave open -- there is nothing to park; when the daemon is unreachable
+        the result says so.
         """
-        pause = self._current_checkpoint()
-        if pause is None:
+        from eawf.kernel.state.models import OpenQuestion
+
+        checkpoint = self._current_checkpoint()
+        if checkpoint is None or isinstance(checkpoint, OpenQuestion):
             self._set_action(f"[$warn]{PARK_NO_CHECKPOINT}[/]")
             return
-        result_line = self._issue_park(pause)
+        result_line = self._issue_park(checkpoint)
         self._set_action(result_line)
-        logger.info(f"action_park_checkpoint pause={pause.pause_urn!r} result={result_line!r}")
+        logger.info(f"action_park_checkpoint pause={checkpoint.pause_urn!r} result={result_line!r}")
 
     def action_followup(self) -> None:
         """Query a follow-up over the campaign's persisted rounds (live RPC).
@@ -3556,6 +3615,42 @@ class ResearchBoardModeScreen(ScopeScreen):
             return f"[$warn]{APPROVE_NO_DAEMON}[/]"
         return f"[$ok]approve: resolved[/] [$muted]choice={escape_markup(choice)}[/]"
 
+    def _issue_resolve_question(self, question: OpenQuestion) -> str:
+        """Issue ``research.resolve_question`` for *question* and return a result line.
+
+        Calls the daemon ``research.resolve_question`` method with the blocking
+        question's id through the same
+        :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam the rest of
+        the TUI mutates through, when a daemon socket is available. The write
+        clears the question's ``blocking`` bit (the load-bearing bit the RISKS
+        band + ``BLOCKED_AWAIT_USER`` run phase count) so the halted campaign
+        resumes. A daemon that is unreachable, rejecting, or timing out yields
+        the honest unavailable / rejected line rather than a faked resolution.
+
+        Args:
+            question: The open blocking question to resolve.
+
+        Returns:
+            A content-markup result line describing the resolve outcome.
+        """
+        if not self._daemon_available():
+            return f"[$warn]{APPROVE_NO_DAEMON}[/]"
+        from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+        try:
+            with DaemonClient(call_timeout_seconds=1.0) as client:
+                client.call(_RESOLVE_QUESTION_METHOD, {"question_id": question.id})
+        except DaemonRpcError as exc:
+            logger.debug(f"_issue_resolve_question daemon_rejected message={exc.message!r}")
+            return (
+                "[$warn]approve: daemon rejected request[/] "
+                f"[$muted]{escape_markup(exc.message)}[/]"
+            )
+        except (OSError, RuntimeError, TimeoutError) as exc:
+            logger.debug(f"_issue_resolve_question daemon_fallback cause={exc!r}")
+            return f"[$warn]{APPROVE_NO_DAEMON}[/]"
+        return f"[$ok]approve: resolved[/] [$muted]question={escape_markup(question.id)}[/]"
+
     def _issue_park(self, pause: OpenPause) -> str:
         """Issue ``needs_user.park`` for *pause*'s scope and return a result line.
 
@@ -3942,17 +4037,27 @@ class ResearchBoardModeScreen(ScopeScreen):
             logger.debug(f"_current_round_rows read_failed cause={exc!r}")
             return ()
 
-    def _current_checkpoint(self) -> OpenPause | None:
-        """Return the active ``needs_user`` checkpoint for the scope, or ``None``.
+    def _current_checkpoint(self) -> OpenPause | OpenQuestion | None:
+        """Return the active checkpoint for the scope, or ``None``.
 
-        Reads the open ``needs_user`` pauses off the scope's event store (the
-        same store the attention feed + global inbox read) and returns the
-        most-recent open pause as the active checkpoint. A read failure (no
-        store, malformed rows) degrades to ``None`` so the drawer shows the
-        honest no-checkpoint line rather than crashing.
+        Surfaces whichever of the two independent "blocking" sources is open,
+        preferring an open ``needs_user`` pause:
+
+        * the most-recent open ``needs_user`` pause off the scope's event store
+          (the same store the attention feed + global inbox read); else
+        * an open BLOCKED blocking :class:`~eawf.kernel.state.models.OpenQuestion`
+          off the bound state, since a blocking question halts the campaign just
+          as hard as a pause (the RISKS band + ``BLOCKED_AWAIT_USER`` run phase
+          count the ``blocking`` bool) yet raises no pause -- without this the
+          drawer read idle while the run stayed blocked, with no way to resolve.
+
+        A read failure (no store, malformed rows) degrades to no pause so the
+        drawer falls back to the blocking-question check or the honest
+        no-checkpoint line rather than crashing.
 
         Returns:
-            The active checkpoint pause, or ``None`` when none is open.
+            The active checkpoint pause, the blocking question, or ``None`` when
+            neither is open.
         """
         state_path = self._resolved_state_path()
         if state_path is None:
@@ -3963,8 +4068,16 @@ class ResearchBoardModeScreen(ScopeScreen):
             pauses = list_open_pauses(state_path)
         except (OSError, ValueError) as exc:
             logger.debug(f"_current_checkpoint read_failed cause={exc!r}")
+            pauses = []
+        if pauses:
+            return pauses[-1]
+        state = self._current_state()
+        if state is None:
             return None
-        return pauses[-1] if pauses else None
+        for question in _sorted_questions(state):
+            if question.blocking and question.status is OpenQuestionStatus.BLOCKED:
+                return question
+        return None
 
     def _current_state(self) -> State | None:
         """Return the bound read-only state, if loaded."""

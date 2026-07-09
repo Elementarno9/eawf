@@ -37,7 +37,13 @@ from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
-from eawf.runtime.daemon.methods.research import add_question, reconcile_round_claims
+from eawf.runtime.daemon.methods.research import (
+    ResolveQuestionParams,
+    _apply_resolve_question,
+    add_question,
+    reconcile_round_claims,
+    resolve_question,
+)
 from eawf.workflow.evidence._io import load_state
 
 pytestmark = pytest.mark.unit
@@ -201,6 +207,78 @@ def test_add_question_rejects_over_cap_title(tmp_path: Path) -> None:
     # The rejected params never reached the writer, so no question row landed.
     state = load_state(state_path)
     assert not (state.open_questions or {})
+
+
+# --------------------------------------------------------------------------
+# resolve_question -- flip a BLOCKED question terminal + clear blocking
+# --------------------------------------------------------------------------
+
+
+def test_resolve_question_marks_answered_and_clears_blocking(tmp_path: Path) -> None:
+    """Resolving a BLOCKED blocking question lands ANSWERED with blocking cleared.
+
+    Clearing ``blocking`` is the load-bearing bit: the RISKS band +
+    ``BLOCKED_AWAIT_USER`` run phase count the ``blocking`` bool, not the status,
+    so a resolve that left it set would never resume the halted campaign.
+    """
+    ctx, state_path = _build_ctx(tmp_path)
+
+    async def body() -> None:
+        added = await add_question(
+            ctx, {"title": "is the venue feed authoritative", "blocking": True}
+        )
+        qid = added["question_id"]
+        result = await resolve_question(ctx, {"question_id": qid})
+        assert result["status"] == "answered"
+        assert result["question_id"] == qid
+        assert result["scope_id"] == "ABC"
+        state = load_state(state_path)
+        assert state.open_questions is not None
+        row = state.open_questions[qid]
+        assert row.status is OpenQuestionStatus.ANSWERED
+        assert row.blocking is False
+        assert row.resolved_at is not None
+        # An operator resolve links no answering claim.
+        assert row.answered_by_claim_id is None
+
+    _run(body)
+
+
+def test_resolve_question_drop_marks_dropped_and_clears_blocking(tmp_path: Path) -> None:
+    """Resolving with ``drop`` lands DROPPED and still clears the blocking bit."""
+    ctx, state_path = _build_ctx(tmp_path)
+
+    async def body() -> None:
+        added = await add_question(ctx, {"title": "is this in scope", "blocking": True})
+        qid = added["question_id"]
+        result = await resolve_question(ctx, {"question_id": qid, "drop": True})
+        assert result["status"] == "dropped"
+        state = load_state(state_path)
+        assert state.open_questions is not None
+        row = state.open_questions[qid]
+        assert row.status is OpenQuestionStatus.DROPPED
+        assert row.blocking is False
+
+    _run(body)
+
+
+def test_resolve_question_unknown_id_raises(tmp_path: Path) -> None:
+    """A resolve against an absent question id fails fast with a clear ValueError."""
+    _ctx, state_path = _build_ctx(tmp_path)
+    state = load_state(state_path)
+    with pytest.raises(ValueError, match="unknown question"):
+        _apply_resolve_question(state, ResolveQuestionParams(question_id="OQ-missing"))
+
+
+def test_resolve_question_rejects_extra_param(tmp_path: Path) -> None:
+    """An unknown param is rejected by extra='forbid' at the params boundary."""
+    ctx, _state_path = _build_ctx(tmp_path)
+
+    async def body() -> None:
+        with pytest.raises(ValidationError):
+            await resolve_question(ctx, {"question_id": "OQ-x", "rogue": True})
+
+    _run(body)
 
 
 # --------------------------------------------------------------------------

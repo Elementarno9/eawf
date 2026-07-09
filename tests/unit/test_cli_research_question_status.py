@@ -166,6 +166,74 @@ def test_question_add_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
 
 # --------------------------------------------------------------------------
+# question resolve -- daemon proxy + offline fallback + unknown id
+# --------------------------------------------------------------------------
+
+
+def test_question_resolve_daemon_proxy_forwards_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The verb proxies research.resolve_question with the id + drop flag."""
+    workspace = _make_workspace(tmp_path)
+    _FakeOkClient.captured = {}
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeOkClient)
+    result = runner.invoke(
+        app,
+        ["-w", str(workspace), "research", "question", "resolve", "OQ-abc", "--drop"],
+    )
+    assert result.exit_code == 0, result.output
+    assert _FakeOkClient.captured["method"] == "research.resolve_question"
+    params = _FakeOkClient.captured["params"]
+    assert params["question_id"] == "OQ-abc"
+    assert params["drop"] is True
+    assert "resolved question OQ-abc" in result.stdout
+
+
+def test_question_resolve_offline_fallback_clears_blocking(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The offline fallback flips a blocking row terminal and clears blocking.
+
+    The load-bearing bit: the RISKS band + BLOCKED_AWAIT_USER run phase count the
+    ``blocking`` bool, so a resolve MUST clear it (not just set a status) for the
+    halted campaign to resume.
+    """
+    from eawf.kernel.state.models import State
+
+    workspace = _make_workspace(tmp_path)
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeUnreachableClient)
+    runner.invoke(
+        app, ["-w", str(workspace), "research", "question", "add", "blocked q", "--blocking"]
+    )
+    state = State.model_validate(orjson.loads((workspace / ".ea" / "state.json").read_bytes()))
+    assert state.open_questions is not None
+    qid = next(q.id for q in state.open_questions.values() if q.title == "blocked q")
+    assert state.open_questions[qid].blocking is True
+
+    result = runner.invoke(app, ["-w", str(workspace), "research", "question", "resolve", qid])
+    assert result.exit_code == 0, result.output
+    resolved = State.model_validate(orjson.loads((workspace / ".ea" / "state.json").read_bytes()))
+    assert resolved.open_questions is not None
+    row = resolved.open_questions[qid]
+    assert row.blocking is False
+    assert row.status.value == "answered"
+    assert row.resolved_at is not None
+
+
+def test_question_resolve_unknown_id_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Resolving an absent id exits non-zero with the honest could-not-resolve line."""
+    workspace = _make_workspace(tmp_path)
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeUnreachableClient)
+    result = runner.invoke(
+        app, ["-w", str(workspace), "research", "question", "resolve", "OQ-nope"]
+    )
+    assert result.exit_code != 0
+    assert "could not resolve question" in result.output
+
+
+# --------------------------------------------------------------------------
 # question list -- empty + populated, exit 0
 # --------------------------------------------------------------------------
 

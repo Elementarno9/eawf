@@ -443,6 +443,111 @@ def _add_question_via_daemon_or_fallback(
     return {"question_id": question_id, "status": status.value, "scope_id": scope_id}
 
 
+@question_app.command("resolve")
+def question_resolve(
+    ctx: typer.Context,
+    question_id: Annotated[str, typer.Argument(help="The open-question id to resolve.")],
+    drop: Annotated[
+        bool,
+        typer.Option("--drop", help="Mark the question DROPPED (out of scope), not ANSWERED."),
+    ] = False,
+) -> None:
+    """Resolve a blocking / open research-campaign question for the active scope.
+
+    Proxies the daemon ``research.resolve_question`` RPC (the canonical writer
+    for ``state.open_questions``), falling back to a direct ``state_transaction``
+    write when the daemon is unavailable (CI / one-shot). Resolving flips the
+    question to a terminal status (ANSWERED, or DROPPED with ``--drop``) and
+    clears its ``blocking`` bit, so a campaign halted on the balanced-autonomy
+    interrupt (a blocking question, D-2) resumes.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        state_path = resolve_state_path(flags.workspace)
+    except errors.CliError as exc:
+        errors.emit_error(exc, flags=flags)
+        return
+    result = _resolve_question_via_daemon_or_fallback(
+        state_path, question_id=question_id, drop=drop
+    )
+    if result is None:
+        errors.emit_error(
+            errors.UserError(
+                f"could not resolve question {question_id!r} (unknown id?)",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+        return
+    text = f"resolved question {result['question_id']} ({result['status']})"
+    emit_json_or_text(result, text, flags=flags)
+
+
+def _resolve_question_via_daemon_or_fallback(
+    state_path: Path, *, question_id: str, drop: bool
+) -> dict[str, str] | None:
+    """Resolve an open question through the daemon RPC, else a direct state write.
+
+    Tries the daemon ``research.resolve_question`` RPC (the canonical writer per
+    AGENTS rule 4). On ANY daemon failure -- a connection error or a typed
+    rejection -- falls back to a direct ``state_transaction`` write so the verb
+    works offline / in CI. Returns ``None`` when the id names no open question.
+
+    Args:
+        state_path: Path to the scope's ``state.json``.
+        question_id: The id of the question to resolve.
+        drop: Mark DROPPED when ``True``, else ANSWERED. Either clears the
+            ``blocking`` bit.
+
+    Returns:
+        A result dict (``question_id`` / ``status`` / ``scope_id``), or ``None``
+        when the id is unknown.
+    """
+    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+    params = {
+        "question_id": question_id,
+        "drop": drop,
+        "repo_root": str(state_path.parent.parent),
+    }
+    try:
+        with DaemonClient() as client:
+            result = client.call("research.resolve_question", params)
+        return {
+            "question_id": str(result["question_id"]),
+            "status": str(result["status"]),
+            "scope_id": str(result["scope_id"]),
+        }
+    except DaemonRpcError as exc:
+        logger.debug(f"_resolve_question daemon_rejected message={exc.message!r}")
+        return None
+    except (OSError, RuntimeError, TimeoutError) as exc:
+        logger.debug(f"_resolve_question daemon_fallback cause={exc!r}")
+
+    # Offline fallback: write the row directly under portalock.
+    from datetime import UTC, datetime
+
+    from eawf.kernel.state.enums import OpenQuestionStatus
+    from eawf.surfaces.cli._mutation import state_transaction
+
+    status = OpenQuestionStatus.DROPPED if drop else OpenQuestionStatus.ANSWERED
+    with state_transaction(state_path) as state:
+        questions = dict(state.open_questions or {})
+        question = questions.get(question_id)
+        if question is None:
+            return None
+        scope_id = question.scope_id
+        questions[question_id] = question.model_copy(
+            update={
+                "status": status,
+                "blocking": False,
+                "resolved_at": datetime.now(UTC),
+            }
+        )
+        state.open_questions = questions
+    return {"question_id": question_id, "status": status.value, "scope_id": scope_id}
+
+
 @question_app.command("list")
 def question_list(ctx: typer.Context) -> None:
     """List the research-campaign open questions for the active scope.

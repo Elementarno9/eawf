@@ -829,6 +829,20 @@ def test_render_checkpoint_populated_surfaces_prompt_and_options() -> None:
     assert "park" in body
 
 
+def test_render_checkpoint_blocking_question_names_it_and_resolve_affordance() -> None:
+    """A blocking question (no pause) renders its title + the ``a`` resolve affordance.
+
+    The drawer must NAME what blocks the run instead of the idle line, so the
+    operator has a way to unblock a campaign halted on a blocking question.
+    """
+    question = _question("OQ-block", status=OpenQuestionStatus.BLOCKED, blocking=True)
+    body = render_checkpoint(question)
+    assert CHECKPOINT_IDLE not in body
+    assert question.title in body
+    assert "blocking question" in body
+    assert "press a to resolve" in body
+
+
 # --------------------------------------------------------------------------
 # build_brief_preview_markdown -- the brief d-tab document projection (W16)
 # --------------------------------------------------------------------------
@@ -1856,6 +1870,95 @@ def test_research_board_enter_on_non_claim_surfaces_hint_no_modal(tmp_path: Path
     asyncio.run(body())
 
 
+async def _walk_to_question(pilot: object, pane: ResearchBoardModeScreen, question_id: str) -> None:
+    """Move the tree cursor onto the QUESTION node for *question_id*."""
+    for _ in range(len(pane._tree)):
+        node = pane._selected_node()
+        if node.kind is NodeKind.QUESTION and node.question_id == question_id:
+            return
+        await pilot.press("down")  # type: ignore[attr-defined]
+    raise AssertionError(f"question node {question_id!r} never reached")
+
+
+def test_research_board_enter_on_answered_question_opens_answering_claim(tmp_path: Path) -> None:
+    """Enter on an ANSWERED question opens the claim that answered it (nav fix).
+
+    An answered question carries no evidence of its own, but its answering claim
+    does; Enter must route to that claim's reader instead of dead-ending on the
+    generic toast.
+    """
+    from eawf.surfaces.tui.modals.evidence_reader import EvidenceReaderModal
+
+    answer = Claim(
+        id="CL-0001",
+        scope_id="QR",
+        title="Short tenor is best fit by SABR",
+        status=ClaimStatus.SUPPORTED,
+        evidence_refs=["docs/sabr.md"],
+        answers_question_id="OQ-0001",
+        created_at=_T0,
+    )
+    question = OpenQuestion(
+        id="OQ-0001",
+        scope_id="QR",
+        title="Which curve model fits the short tenor",
+        status=OpenQuestionStatus.ANSWERED,
+        answered_by_claim_id="CL-0001",
+        created_at=_T0,
+    )
+    state = _project_state(claims={"CL-0001": answer}, open_questions={"OQ-0001": question})
+    state_path = _write_state(tmp_path, state)
+    _append_campaign(state_path, _campaign_payload())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            await _walk_to_question(pilot, pane, "OQ-0001")
+            await settle_screen(pilot)
+            await pilot.press("enter")
+            await settle_screen(pilot)
+            # The answering claim's reader is on top of the stack.
+            assert isinstance(app.screen, EvidenceReaderModal)
+            frame = capture_screen_text(app)
+            assert "Short tenor is best fit by SABR" in frame
+
+    asyncio.run(body())
+
+
+def test_research_board_enter_on_open_question_still_toasts(tmp_path: Path) -> None:
+    """Enter on a still-OPEN question (no answering claim) keeps the honest toast."""
+    from eawf.surfaces.tui.modals.evidence_reader import EvidenceReaderModal
+
+    question = _question("OQ-0001", status=OpenQuestionStatus.OPEN)
+    state = _project_state(open_questions={"OQ-0001": question})
+    state_path = _write_state(tmp_path, state)
+    _append_campaign(state_path, _campaign_payload())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            await _walk_to_question(pilot, pane, "OQ-0001")
+            await settle_screen(pilot)
+            await pilot.press("enter")
+            await settle_screen(pilot)
+            # No reader; the honest toast fires (an open question has no evidence yet).
+            assert isinstance(app.screen, ResearchBoardModeScreen)
+            assert not app.query(EvidenceReaderModal)
+            assert ENTER_NOT_A_CLAIM in "\n".join(toast_messages(app))
+
+    asyncio.run(body())
+
+
 # --------------------------------------------------------------------------
 # Tree-interaction spine (W01) -- arrow-select, scroll-into-view, mount-width
 # --------------------------------------------------------------------------
@@ -2110,6 +2213,103 @@ def test_research_board_approve_issues_needs_user_resolve_rpc(
     assert calls[0][1]["pause_urn"] == pause_urn
     # The approve choice is one of the pause's option labels.
     assert calls[0][1]["choice"] == "accept stronger"
+
+
+def test_blocking_question_checkpoint_and_risks_count_agree(tmp_path: Path) -> None:
+    """Invariant: the RISKS blocking count and the checkpoint drawer never disagree.
+
+    A blocking question present => the drawer is non-idle (a checkpoint surfaced)
+    AND the RISKS blocking count is > 0; after resolve => the count is 0 AND the
+    checkpoint clears -- so the run resumes with no idle-drawer / halted-run
+    split (the exact deadlock this wave fixes).
+    """
+    from eawf.runtime.daemon.methods.research import (
+        ResolveQuestionParams,
+        _apply_resolve_question,
+    )
+
+    blocked = _question("OQ-block", status=OpenQuestionStatus.BLOCKED, blocking=True)
+    state = _project_state(open_questions={"OQ-block": blocked})
+    state_path = _write_state(tmp_path, state)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            # Pre-resolve: the drawer is non-idle + RISKS blocking count is 1.
+            checkpoint = pane._current_checkpoint()
+            assert isinstance(checkpoint, OpenQuestion)
+            assert CHECKPOINT_IDLE not in render_checkpoint(checkpoint)
+            assert blocked.title in render_checkpoint(checkpoint)
+            _campaigns, _claims, questions = pane._current_rows()
+            assert sum(1 for q in questions if q.blocking) == 1
+            # Resolve through the real writer + mirror the new state onto the board.
+            resolved = _project_state(open_questions={"OQ-block": blocked})
+            _apply_resolve_question(resolved, ResolveQuestionParams(question_id="OQ-block"))
+            pane.state = resolved
+            await settle_screen(pilot)
+            # Post-resolve: the checkpoint clears + RISKS blocking count is 0.
+            assert pane._current_checkpoint() is None
+            assert CHECKPOINT_IDLE in render_checkpoint(pane._current_checkpoint())
+            _c2, _cl2, questions2 = pane._current_rows()
+            assert sum(1 for q in questions2 if q.blocking) == 0
+
+    asyncio.run(body())
+
+
+def test_research_board_approve_resolves_blocking_question_rpc(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With a blocking question + a stubbed daemon, ``a`` issues research.resolve_question.
+
+    The approve action routes a surfaced blocking-question checkpoint to the
+    resolve RPC (not needs_user.resolve), forwarding the question id, and
+    surfaces the honest resolved line.
+    """
+    blocked = _question("OQ-block", status=OpenQuestionStatus.BLOCKED, blocking=True)
+    state = _project_state(open_questions={"OQ-block": blocked})
+    state_path = _write_state(tmp_path, state)
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class _FakeClient:
+        def __init__(self, *_a: object, **_k: object) -> None:
+            return None
+
+        def __enter__(self) -> _FakeClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+            calls.append((method, params))
+            return {"question_id": "OQ-block", "status": "answered", "scope_id": "QR"}
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _FakeClient)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            await pilot.press("a")  # approve the surfaced blocking question
+            await settle_screen(pilot)
+            toasts = "\n".join(toast_messages(app))
+            assert "resolved" in toasts
+
+    asyncio.run(body())
+    assert calls and calls[0][0] == "research.resolve_question"
+    assert calls[0][1]["question_id"] == "OQ-block"
 
 
 def test_research_board_park_issues_needs_user_park_rpc(

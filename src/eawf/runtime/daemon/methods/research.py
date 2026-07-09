@@ -681,6 +681,140 @@ async def add_question(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
 
 
 # --------------------------------------------------------------------------
+# resolve_question -- flip a BLOCKED/OPEN question terminal + clear blocking
+# --------------------------------------------------------------------------
+
+
+class ResolveQuestionParams(BaseModel):
+    """Params for :func:`resolve_question`.
+
+    Attributes:
+        question_id: Id of the :class:`OpenQuestion` to resolve; the lookup key
+            into ``state.open_questions``.
+        drop: When ``True`` mark the question ``DROPPED`` (decided out of scope);
+            when ``False`` (default) mark it ``ANSWERED``. Either terminal status
+            clears the ``blocking`` bit so a campaign halted on the question
+            resumes.
+        scope_id: Explicit scope threaded to the canonical writer (mirrors
+            :class:`AddQuestionParams`); the resolve itself keys off
+            *question_id*, so this only anchors the write's scope tag.
+        repo_root: Optional per-request repo anchor for the worktree-aware state
+            writer; ``None`` uses the daemon's boot-time state path.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    question_id: str = Field(min_length=1)
+    drop: bool = False
+    scope_id: str | None = None
+    repo_root: str | None = None
+
+
+class ResolveQuestionResult(BaseModel):
+    """Result of :func:`resolve_question`.
+
+    Attributes:
+        question_id: The id of the question just resolved.
+        status: The question's new terminal status (``"answered"`` /
+            ``"dropped"``).
+        scope_id: The scope the resolved question was bound to.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    question_id: str
+    status: str
+    scope_id: str
+
+
+def _apply_resolve_question(state: State, args: ResolveQuestionParams) -> dict[str, Any]:
+    """Flip one :class:`OpenQuestion` to a terminal status and clear its blocking bit.
+
+    An operator resolve: a ``BLOCKED`` (or still-``OPEN``) question moves to
+    ``ANSWERED`` -- or ``DROPPED`` when *args.drop* -- and its ``blocking`` bit
+    is cleared. Clearing ``blocking`` is load-bearing: the balanced-autonomy
+    interrupt (the RISKS band + the ``BLOCKED_AWAIT_USER`` run phase) counts the
+    ``blocking`` bool, not the status, so a resolve that left the bit set would
+    never drop the count and the run would stay halted. ``answered_by_claim_id``
+    stays ``None`` (an operator resolve has no answering claim, unlike the
+    round-reconcile path).
+
+    Args:
+        state: Loaded :class:`State`. ``state.open_questions`` is mutated in
+            place (copy-then-assign, mirroring :func:`_apply_add_question`).
+        args: Validated :class:`ResolveQuestionParams`.
+
+    Returns:
+        Result dict matching :class:`ResolveQuestionResult`.
+
+    Raises:
+        ValueError: When *args.question_id* names no row in
+            ``state.open_questions``. Mapped to ``-32002 validation_failed`` by
+            the canonical writer.
+    """
+    questions = dict(state.open_questions or {})
+    question = questions.get(args.question_id)
+    if question is None:
+        raise ValueError(f"unknown question: {args.question_id!r}")
+    status = OpenQuestionStatus.DROPPED if args.drop else OpenQuestionStatus.ANSWERED
+    questions[args.question_id] = question.model_copy(
+        update={
+            "status": status,
+            "blocking": False,
+            "resolved_at": datetime.now(UTC),
+        }
+    )
+    state.open_questions = questions
+    logger.info(
+        f"_apply_resolve_question question={args.question_id!r} "
+        f"status={status.value} drop={args.drop}"
+    )
+    return ResolveQuestionResult(
+        question_id=args.question_id,
+        status=status.value,
+        scope_id=question.scope_id,
+    ).model_dump(mode="json")
+
+
+@register("research.resolve_question")
+async def resolve_question(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Resolve an :class:`OpenQuestion` through the canonical state writer.
+
+    The daemon-canonical mutator that unblocks a campaign halted on a blocking
+    question (AGENTS rule 4); the TUI ``a`` approve key on a surfaced blocking
+    question + the headless ``eawf research question resolve`` verb proxy here.
+    The row moves to a terminal status with its ``blocking`` bit cleared through
+    the same per-file portalock + WAL + event-append path every state mutator
+    uses (:func:`_commit_worktree_state`), so the single-writer invariant holds
+    and the board re-renders the run as resumed on its next refresh.
+
+    Args:
+        ctx: Server context -- must carry ``state_path`` (+ ``event_path`` /
+            ``wal_dir`` for the canonical write).
+        params: JSON-RPC params per :class:`ResolveQuestionParams`.
+
+    Returns:
+        Dict matching :class:`ResolveQuestionResult`.
+
+    Raises:
+        ValueError: When *params* does not validate against
+            :class:`ResolveQuestionParams` (an unknown key), or when the id
+            names no open-question row. Mapped to ``-32602 invalid params`` /
+            ``-32002 validation_failed``.
+    """
+    from eawf.runtime.daemon.methods.state import _commit_worktree_state
+
+    args = ResolveQuestionParams.model_validate(params)
+    repo_root = Path(args.repo_root) if args.repo_root else None
+    return _commit_worktree_state(
+        ctx=ctx,
+        repo_root=repo_root,
+        params=params,
+        command="research.resolve_question",
+        scope_id=args.scope_id,
+        apply_func=lambda state: _apply_resolve_question(state, args),
+    )
+
+
+# --------------------------------------------------------------------------
 # Round-end claim reconcile -- fold a round's findings into Claim rows
 # --------------------------------------------------------------------------
 
