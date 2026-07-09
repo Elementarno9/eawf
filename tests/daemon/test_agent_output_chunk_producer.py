@@ -34,6 +34,7 @@ from eawf.runtime.daemon.dispatch_runner import (
     AGENT_OUTPUT_CHUNK_EVENT_TYPE,
     _chunk_should_flush,
     emit_agent_output_chunk,
+    persist_agent_output_chunk,
 )
 from eawf.runtime.daemon.methods import MethodContext
 
@@ -189,6 +190,69 @@ def test_emit_agent_output_chunk_stateless_context_is_noop() -> None:
         emit_agent_output_chunk(ctx, wave_id=_WAVE_ID, session_id="s", seq=0, text="some output")
         is None
     )
+
+
+# ---- W21: the bus-less, context-less persist variant ------------------------
+
+_AUDIT_SCOPE = "P30-I20-W45::audit"
+
+
+def _persisted_chunk_rows(event_path: Path) -> list[dict[str, Any]]:
+    """Return the ``agent.output.chunk`` envelope payloads read off *event_path*."""
+    import json
+
+    rows: list[dict[str, Any]] = []
+    if not event_path.exists():
+        return rows
+    for line in event_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        env = json.loads(line)
+        if env.get("payload", {}).get("event_type") == AGENT_OUTPUT_CHUNK_EVENT_TYPE:
+            rows.append(env)
+    return rows
+
+
+def test_persist_agent_output_chunk_appends_keyed_on_scope(tmp_path: Path) -> None:
+    """The bus-less persist appends one chunk envelope keyed on the given scope."""
+    event_path = tmp_path / "event.jsonl"
+    envelope_id = persist_agent_output_chunk(
+        event_path,
+        scope_id=_AUDIT_SCOPE,
+        session_id=None,
+        seq=0,
+        text="juror thinking\nverdict: pass",
+    )
+    assert envelope_id is not None
+    rows = _persisted_chunk_rows(event_path)
+    assert len(rows) == 1
+    assert rows[0]["scope_id"] == _AUDIT_SCOPE
+    assert rows[0]["payload"]["wave_id"] == _AUDIT_SCOPE
+    assert rows[0]["payload"]["seq"] == 0
+    assert rows[0]["payload"]["lines"] == "juror thinking\nverdict: pass"
+
+
+def test_persist_agent_output_chunk_seq_is_ordered(tmp_path: Path) -> None:
+    """Successive persists carry the caller's monotonic seq, in order."""
+    event_path = tmp_path / "event.jsonl"
+    persist_agent_output_chunk(event_path, scope_id=_AUDIT_SCOPE, session_id=None, seq=0, text="a")
+    persist_agent_output_chunk(event_path, scope_id=_AUDIT_SCOPE, session_id=None, seq=1, text="b")
+    persist_agent_output_chunk(event_path, scope_id=_AUDIT_SCOPE, session_id=None, seq=2, text="c")
+    rows = _persisted_chunk_rows(event_path)
+    assert [row["payload"]["seq"] for row in rows] == [0, 1, 2]
+    assert [row["payload"]["lines"] for row in rows] == ["a", "b", "c"]
+
+
+def test_persist_agent_output_chunk_empty_is_noop(tmp_path: Path) -> None:
+    """A chunk with no capturable text persists no event and writes no file."""
+    event_path = tmp_path / "event.jsonl"
+    assert (
+        persist_agent_output_chunk(
+            event_path, scope_id=_AUDIT_SCOPE, session_id=None, seq=0, text="  \n\n"
+        )
+        is None
+    )
+    assert not _persisted_chunk_rows(event_path)
 
 
 # ---- W19: the dual-threshold chunk-flush predicate --------------------------

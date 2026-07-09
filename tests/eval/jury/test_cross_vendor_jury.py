@@ -678,3 +678,82 @@ def test_daemon_jury_spawn_factory_passes_finite_timeout(
     default_factory = daemon_state._jury_spawn_factory(state, wave, repo_root=tmp_path)
     asyncio.run(default_factory("claude-code")("prompt"))
     assert seen.get("timeout") == 600.0
+
+
+def _persisted_chunk_scopes(event_path: Path) -> list[str]:
+    """Return the envelope ``scope_id`` of every ``agent.output.chunk`` row on disk."""
+    if not event_path.exists():
+        return []
+    scopes: list[str] = []
+    for line in event_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        env = json.loads(line)
+        if env.get("payload", {}).get("event_type") == "agent.output.chunk":
+            scopes.append(env["scope_id"])
+    return scopes
+
+
+def test_daemon_jury_spawn_factory_streams_chunks_to_auditor_scope(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """W21: with events_path threaded, a juror spawn streams stdout to the auditor scope.
+
+    The daemon's ``_jury_spawn_factory`` binds an ``on_chunk`` callback that
+    persists each stdout batch to the auditor session scope
+    (``{wave}::audit``), so the Watch store-poll tail renders the juror's own
+    output live -- the fix for auditor/juror spawns that previously wired no
+    live output.
+    """
+    from eawf.runtime.daemon.methods import state as daemon_state
+    from eawf.workflow.dispatch.verdict import _auditor_scope_id
+
+    class _StreamingAdapter:
+        async def spawn_session(self, prompt: str, **kwargs: Any) -> SpawnResult:
+            on_chunk = kwargs.get("on_chunk")
+            assert on_chunk is not None, "expected on_chunk bound when events_path is threaded"
+            await on_chunk("juror scoring criterion one\n")
+            await on_chunk("verdict: pass\n")
+            return _spawn_result(_auditor_body_json(verdict="pass"), runtime="claude-code")
+
+    monkeypatch.setattr(
+        "eawf.runtime.runtimes.selector.select_adapter", lambda runtime: _StreamingAdapter()
+    )
+    state, _state_path, events_path = _write_state(tmp_path)
+    events_path.parent.mkdir(parents=True, exist_ok=True)
+    wave: Wave = state.waves[_WAVE_ID]
+
+    factory = daemon_state._jury_spawn_factory(
+        state, wave, repo_root=tmp_path, events_path=events_path
+    )
+    asyncio.run(factory("claude-code")("prompt"))
+
+    scopes = _persisted_chunk_scopes(events_path)
+    expected = _auditor_scope_id(_WAVE_ID)
+    assert scopes, "expected at least one agent.output.chunk persisted"
+    assert set(scopes) == {expected}
+
+
+def test_daemon_jury_spawn_factory_no_events_path_binds_no_chunk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """W21: without events_path, the spawn binds no on_chunk and persists no chunk."""
+    from eawf.runtime.daemon.methods import state as daemon_state
+
+    seen: dict[str, Any] = {}
+
+    class _Adapter:
+        async def spawn_session(self, prompt: str, **kwargs: Any) -> SpawnResult:
+            seen.update(kwargs)
+            return _spawn_result(_auditor_body_json(verdict="pass"), runtime="claude-code")
+
+    monkeypatch.setattr("eawf.runtime.runtimes.selector.select_adapter", lambda runtime: _Adapter())
+    state, _state_path, events_path = _write_state(tmp_path)
+    events_path.parent.mkdir(parents=True, exist_ok=True)
+    wave: Wave = state.waves[_WAVE_ID]
+
+    factory = daemon_state._jury_spawn_factory(state, wave, repo_root=tmp_path)
+    asyncio.run(factory("claude-code")("prompt"))
+
+    assert "on_chunk" not in seen
+    assert _persisted_chunk_scopes(events_path) == []

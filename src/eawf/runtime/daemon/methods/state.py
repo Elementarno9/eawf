@@ -1053,6 +1053,7 @@ def _jury_spawn_factory(
     *,
     repo_root: Path,
     timeout_seconds: float = 600.0,
+    events_path: Path | None = None,
 ) -> Any:
     """Return the production per-runtime spawn factory for the jury convener.
 
@@ -1064,10 +1065,25 @@ def _jury_spawn_factory(
     safety floor. Tests monkeypatch this factory builder to return recording
     stubs so no real subprocess runs.
 
+    When *events_path* is supplied, each juror spawn also streams its stdout
+    LIVE to the auditor's Watch roster row (W21): the spawn binds an ``on_chunk``
+    callback that batches output off the count / wall-clock budget
+    (:func:`~eawf.runtime.daemon.dispatch_runner._chunk_should_flush`, W19) and
+    persists each batch bus-less to the auditor session scope
+    (:func:`~eawf.workflow.dispatch.verdict._auditor_scope_id`) via
+    :func:`~eawf.runtime.daemon.dispatch_runner.persist_agent_output_chunk`. The
+    close gate severs the :class:`MethodContext` (only paths cross into
+    ``run_oracle``), so the store-poll tail -- not the bus -- surfaces the chunk;
+    a call site that threads no *events_path* (the spec-jury builder) spawns
+    unchanged, with no live tail.
+
     Args:
         state: Validated state -- read for the wave's sandbox deny-list + role.
         wave: The wave under audit (supplies role + effort for model routing).
         repo_root: Repository root the juror spawns run in.
+        timeout_seconds: Per-juror spawn wall-clock ceiling.
+        events_path: Optional ``event.jsonl`` path -- when set, juror stdout
+            streams live to the auditor's Watch row; when ``None``, no live tail.
 
     Returns:
         A :data:`~eawf.observability.eval.cross_vendor_jury.SpawnFactory` -- a
@@ -1076,17 +1092,23 @@ def _jury_spawn_factory(
     from eawf.kernel.config.layered import resolve_runtime_tier_models
     from eawf.kernel.state.enums import AgentSessionRole as _Role
     from eawf.kernel.state.enums import EffortBucket as _Effort
+    from eawf.runtime.daemon.dispatch_runner import (
+        _chunk_should_flush,
+        persist_agent_output_chunk,
+    )
     from eawf.runtime.runtimes.adapter import SpawnResult
     from eawf.runtime.runtimes.selector import select_adapter
     from eawf.runtime.sandbox.policy import resolve_denied_tools
     from eawf.workflow.dispatch.llm_assist import SpawnFn
     from eawf.workflow.dispatch.routing import model_for_runtime
+    from eawf.workflow.dispatch.verdict import _auditor_scope_id
 
     role = wave.agent_role if wave.agent_role is not None else _Role.AUDITOR
     effort = wave.effort_bucket if wave.effort_bucket is not None else _Effort.M
     denied = sorted(resolve_denied_tools(state.sandbox_policies, wave_id=wave.id))
     cwd = str(repo_root)
     runtime_models = resolve_runtime_tier_models(repo_root)
+    chunk_scope = _auditor_scope_id(wave.id)
 
     def _factory(runtime: str) -> SpawnFn:
         triple = _JURY_RUNTIME_TRIPLE.get(runtime, "claude")
@@ -1094,13 +1116,54 @@ def _jury_spawn_factory(
         adapter = select_adapter(runtime)
 
         async def _spawn(prompt: str) -> SpawnResult:
-            return await adapter.spawn_session(
-                prompt,
-                model=model,
-                cwd=cwd,
-                denied_tools=denied,
-                timeout=timeout_seconds,
-            )
+            if events_path is None:
+                return await adapter.spawn_session(
+                    prompt,
+                    model=model,
+                    cwd=cwd,
+                    denied_tools=denied,
+                    timeout=timeout_seconds,
+                )
+            # Live juror-stdout tail (W21): batch chunks off the W19 count /
+            # time budget and persist each batch bus-less to the auditor session
+            # scope so the Watch store-poll tail renders the juror's own words.
+            chunk_buffer: list[str] = []
+            chunk_seq = [0]
+            last_chunk_flush = [time.monotonic()]
+
+            def _flush_chunk_buffer() -> None:
+                if not chunk_buffer:
+                    return
+                persist_agent_output_chunk(
+                    events_path,
+                    scope_id=chunk_scope,
+                    session_id=None,
+                    seq=chunk_seq[0],
+                    text="".join(chunk_buffer),
+                )
+                chunk_seq[0] += 1
+                chunk_buffer.clear()
+                last_chunk_flush[0] = time.monotonic()
+
+            async def _on_chunk(line: str) -> None:
+                chunk_buffer.append(line)
+                if _chunk_should_flush(
+                    buffered=len(chunk_buffer),
+                    elapsed_s=time.monotonic() - last_chunk_flush[0],
+                ):
+                    _flush_chunk_buffer()
+
+            try:
+                return await adapter.spawn_session(
+                    prompt,
+                    model=model,
+                    cwd=cwd,
+                    denied_tools=denied,
+                    timeout=timeout_seconds,
+                    on_chunk=_on_chunk,
+                )
+            finally:
+                _flush_chunk_buffer()
 
         return _spawn
 
@@ -1341,7 +1404,11 @@ async def _produce_high_risk_verdict(
         logger.debug(f"_produce_high_risk_verdict wave={wave.id} status=already-ready")
         return
     events_path = store_path(state_path, StoreKind.EVENT)
-    spawn = _jury_spawn_factory(state, wave, repo_root=repo_root)("claude-code")
+    # Thread events_path so the single fresh-auditor spawn streams its stdout
+    # live to the auditor's Watch roster row (W21).
+    spawn = _jury_spawn_factory(state, wave, repo_root=repo_root, events_path=events_path)(
+        "claude-code"
+    )
     await produce_wave_verdict(
         state=state,
         state_path=state_path,
@@ -1647,6 +1714,7 @@ async def _enforce_wave_close_gate(
         wave,
         repo_root=repo_root,
         timeout_seconds=verify_block.juror_wall_clock_seconds,
+        events_path=events_path,
     )
     gate_specs = _load_gate_specs(wave_id, state)
     # The staged advisory-to-block gate (TRUST-4): block_authority (computed

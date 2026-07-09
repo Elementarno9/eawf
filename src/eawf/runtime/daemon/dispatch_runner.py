@@ -650,6 +650,85 @@ def emit_agent_output_chunk(
     return envelope_id
 
 
+def persist_agent_output_chunk(
+    events_path: Path,
+    *,
+    scope_id: str,
+    session_id: str | None,
+    seq: int,
+    text: str,
+    trace_request_id: str | None = None,
+) -> str | None:
+    """Persist one LIVE stdout batch off a bus-less, context-less spawn path -- W21.
+
+    The store-only sibling of :func:`emit_agent_output_chunk` for spawn paths
+    that hold an ``event.jsonl`` :class:`~pathlib.Path` but no
+    :class:`~eawf.runtime.daemon.methods.MethodContext` -- the auditor / jury
+    spawn factory, whose ``ctx`` is severed at the close-gate boundary (only
+    paths cross into :func:`eawf.workflow.verify.oracle.run_oracle`). It builds
+    the same union-validated :class:`AgentOutputChunkPayload` envelope keyed on
+    *scope_id* and appends it through the canonical event writer
+    (:func:`eawf.kernel.store.append.append_envelope`) WITHOUT the bus push: the
+    Watch tail's store-poll timer (W19) surfaces the row within the poll
+    interval, so the bus push is only a latency bonus the close-gate path can
+    forgo. Empty output is a no-op (no empty event).
+
+    The envelope ``scope_id`` is the caller-supplied *scope_id* (the auditor
+    session scope, e.g. ``{wave_id}::audit``) rather than a bare wave id, so the
+    chunk routes to the auditor's roster row -- the tail filters on ``scope_id``
+    alone. The payload ``wave_id`` is set to the same scope so the render path
+    (shared with the terminal ``agent.output`` event) stays consistent.
+
+    Args:
+        events_path: Path to ``event.jsonl`` for the canonical append.
+        scope_id: The scope the chunk routes to (the auditor session scope the
+            Watch tail + store backfill filter on).
+        session_id: Runtime session id of the spawn, or ``None`` when unknown.
+        seq: Per-spawn monotonic chunk index (0-based) so the chunk order is
+            reconstructible from the persisted rows.
+        text: The batched output text for this chunk (one or more stdout lines).
+        trace_request_id: Optional daemon RPC request id for the correlation
+            chain.
+
+    Returns:
+        The id of the appended envelope, or ``None`` when there was no output to
+        persist.
+    """
+    lines = capture_output_lines(text)
+    if not lines:
+        return None
+    now = datetime.now(UTC)
+    joined = "\n".join(lines)
+    summary = f"agent_output_chunk scope={scope_id} seq={seq} lines={len(lines)}"
+    payload = AgentOutputChunkPayload(
+        timestamp=now,
+        wave_id=scope_id,
+        session_id=session_id,
+        seq=seq,
+        lines=joined,
+        trace_request_id=trace_request_id,
+        trace_wave_id=scope_id,
+    ).model_dump(mode="json")
+    envelope = Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=scope_id,
+        created_at=now,
+        updated_at=None,
+        summary=summary,
+        payload=payload,
+        blob_refs=[],
+        artifact_ids=[],
+    )
+    append_envelope(events_path, envelope)
+    logger.info(
+        f"persist_agent_output_chunk scope={scope_id} seq={seq} lines={len(lines)} "
+        f"envelope_id={envelope.id!r}"
+    )
+    return envelope.id
+
+
 def emit_runtime_switched(
     ctx: MethodContext,
     *,

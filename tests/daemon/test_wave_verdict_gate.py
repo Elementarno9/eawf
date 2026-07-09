@@ -266,7 +266,14 @@ def _patch_producer_spawn(
     """
     stub = _RecordingSpawn(_auditor_body_json(verdict=verdict, wave_id=wave_id))
 
-    def _fake_factory(state: Any, wave: Any, *, repo_root: Path) -> Callable[[str], Any]:
+    def _fake_factory(
+        state: Any,
+        wave: Any,
+        *,
+        repo_root: Path,
+        timeout_seconds: float = 600.0,
+        events_path: Any = None,
+    ) -> Callable[[str], Any]:
         def _factory(runtime: str) -> _RecordingSpawn:
             return stub
 
