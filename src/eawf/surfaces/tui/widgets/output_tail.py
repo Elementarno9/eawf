@@ -50,30 +50,44 @@ OUTPUT_TAIL_ROW_CLASS: str = "output-tail-row"
 #: waiting" rather than a truncated sentence.
 WAITING_NOTICE: str = "waiting for output…"
 
-#: The codex ``exec --json`` top-level event types the formatter recognises. A
-#: line whose ``type`` is outside this set is not a codex event (plain text, or
-#: another runtime's stream not yet modelled) and passes through verbatim rather
-#: than being dropped.
-_CODEX_EVENT_TYPES: frozenset[str] = frozenset(
-    {
-        "thread.started",
-        "turn.started",
-        "turn.completed",
-        "item.started",
-        "item.completed",
-        "error",
-    }
-)
+#: The dotted namespaces a codex ``exec --json`` event ``type`` lives under
+#: (``thread.started`` / ``turn.completed`` / ``item.updated`` / ...). Any type
+#: under one of these is a codex protocol event this formatter OWNS: it renders
+#: the body-bearing ones (``item.completed``) and DROPS the rest as structural /
+#: streaming noise rather than dumping them as raw JSON into the operator-facing
+#: tail. A ``type`` outside these namespaces (and not ``error``) is not a codex
+#: event -- another runtime's stream, or plain text -- and still passes through
+#: verbatim so nothing an unmodelled runtime emits is silently swallowed.
+_CODEX_EVENT_PREFIXES: tuple[str, ...] = ("thread.", "turn.", "item.")
+
+
+def _is_codex_event(etype: str) -> bool:
+    """Return whether *etype* is a codex ``exec --json`` protocol event type.
+
+    A codex event is either the bare ``error`` type or any dotted type under a
+    :data:`_CODEX_EVENT_PREFIXES` namespace, so a codex version that adds a new
+    ``turn.*`` / ``item.*`` frame is recognised (and dropped as noise) rather
+    than leaking as raw JSON. A type outside these -- e.g. a foreign runtime's
+    ``gemini.turn`` -- is not owned here and passes through verbatim.
+
+    Args:
+        etype: The event object's ``type`` field.
+
+    Returns:
+        ``True`` when *etype* is a codex protocol event type.
+    """
+    return etype == "error" or etype.startswith(_CODEX_EVENT_PREFIXES)
 
 
 def _format_codex_event(event: dict[str, object]) -> list[str] | None:
     """Extract the readable tail lines from one codex ``exec --json`` event.
 
-    Returns the human-readable lines for a recognised codex event (the
-    assistant message text, or a run command with its output), an empty list
-    for a recognised-but-bodyless structural frame (``thread.started`` /
-    ``turn.*`` / ``item.started``), or ``None`` when the event is NOT a codex
-    event so the caller can pass the raw line through unmodified.
+    Returns the human-readable lines for a body-bearing codex event (the
+    assistant message text, a run command with its output, or a failure
+    message), an empty list for a recognised-but-bodyless structural / streaming
+    frame (``thread.started`` / ``turn.*`` / ``item.started`` / ``item.updated``
+    / any other codex-namespace frame), or ``None`` when the event is NOT a
+    codex event so the caller can pass the raw line through unmodified.
 
     Args:
         event: One decoded JSON event object off the agent's stdout stream.
@@ -83,15 +97,17 @@ def _format_codex_event(event: dict[str, object]) -> list[str] | None:
         signal "not a codex event -- render raw".
     """
     etype = event.get("type")
-    if not isinstance(etype, str) or etype not in _CODEX_EVENT_TYPES:
+    if not isinstance(etype, str) or not _is_codex_event(etype):
         return None
-    if etype == "error":
+    if etype in ("error", "turn.failed"):
         err = event.get("error")
         message = err.get("message") if isinstance(err, dict) else event.get("message")
-        return [f"error: {message}"] if isinstance(message, str) and message else []
+        label = "error" if etype == "error" else "turn failed"
+        return [f"{label}: {message}"] if isinstance(message, str) and message else []
     if etype != "item.completed":
-        # A structural frame (turn / thread / item.started) carries no final
-        # readable body; item.completed is where the message + output land.
+        # A structural / streaming frame (turn.* / thread.* / item.started /
+        # item.updated) carries no final readable body; item.completed is where
+        # the message + command output land.
         return []
     item = event.get("item")
     if not isinstance(item, dict):

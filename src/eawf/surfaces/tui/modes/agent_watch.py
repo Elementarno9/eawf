@@ -934,6 +934,16 @@ def is_watched_event(envelope: Envelope, target: WatchTarget | None) -> bool:
 #: for the full untruncated output, so more history seeds the tail on mount.
 _OUTPUT_BACKFILL_LIMIT: int = 2000
 
+#: Cadence of the always-on event-store poll that keeps the raw-output tail live
+#: during a spawn (W19). The tail's live-push path is gated off once the store
+#: takes authority (``_output_store_cursor`` > 0), and its only other re-sync
+#: trigger (:meth:`AgentWatchModeScreen._on_app_state`) fires on a ``state.json``
+#: mtime change -- but a spawn's ``agent.output.chunk`` events land in
+#: ``event.jsonl``, which never bumps ``state.json``. Without this backstop a
+#: steady single-session spawn's output freezes mid-turn until a re-mount. The
+#: poll mirrors the state binder's mtime-poll for the output stream.
+_OUTPUT_POLL_INTERVAL_S: float = 1.0
+
 
 def load_output_chunk_lines(
     event_path: Path | None, wave_id: str, *, limit: int = _OUTPUT_BACKFILL_LIMIT
@@ -2601,10 +2611,37 @@ class AgentWatchModeScreen(ScopeScreen):
         # the store yields nothing, so the tail never double-renders a line.
         if not self._sync_output_from_store():
             self._seed_output_from_buffer()
+        # Always-on event-store poll backstop (W19): the tail's push path is
+        # gated off once the store takes authority and its only other re-sync
+        # trigger (_on_app_state) fires on a state.json mtime change -- but a
+        # spawn's agent.output.chunk events land in event.jsonl, which never
+        # bumps state.json, so a steady single-session spawn's output would
+        # otherwise freeze mid-turn until a re-mount. Textual auto-pauses the
+        # interval on unmount, so no manual teardown is needed.
+        self.set_interval(_OUTPUT_POLL_INTERVAL_S, self._poll_output_tail)
         # Deferred: the body case is decided while the compose generator is
         # consumed, after this mount hook runs -- refresh once the first paint
         # has landed so the hints match the actual body surface.
         self.call_after_refresh(self._refresh_hints)
+
+    def _poll_output_tail(self) -> None:
+        """Bring the raw-output tail up to the persisted event store each tick.
+
+        The always-on event-store poll backstop (W19). The single-session zoom's
+        live-push path is gated off once the store takes authority
+        (:attr:`_output_store_cursor` > 0), and its only other re-sync trigger
+        (:meth:`_on_app_state`) fires on a ``state.json`` mtime change -- but a
+        spawn's ``agent.output.chunk`` events land in ``event.jsonl``, which
+        never bumps ``state.json``. Without this timer a steady single-session
+        spawn's output freezes mid-turn until the operator re-enters the zoom.
+        :meth:`_sync_output_from_store` appends only the lines past the cursor,
+        so re-running it every tick is idempotent; it is a no-op on the
+        parity-grid path or under a bare harness with no event store. A no-op
+        before mount.
+        """
+        if not self.is_mounted:
+            return
+        self._sync_output_from_store()
 
     def _seed_from_buffer(self) -> None:
         """Seed the freshly-composed surface from the App's live event buffer.

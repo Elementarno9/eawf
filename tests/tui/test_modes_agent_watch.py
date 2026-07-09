@@ -617,6 +617,55 @@ def test_agent_watch_tail_syncs_new_chunks_from_store_on_poll(tmp_path: Path) ->
     asyncio.run(body())
 
 
+def test_agent_watch_poll_output_tail_picks_up_new_chunks(tmp_path: Path) -> None:
+    """W19: the poll-timer handler brings new store chunks in with no state change.
+
+    The freeze regression: the tail's live-push path is gated off once the store
+    takes authority and its only other re-sync trigger (_on_app_state) fires on a
+    state.json mtime change -- but agent.output.chunk events land in event.jsonl,
+    which never bumps state.json, so an open zoom would otherwise freeze mid-turn.
+    Seed one chunk, mount the zoom, then persist a second chunk WITHOUT touching
+    state.json and run the timer handler directly -- the new line appends.
+    """
+    state = _state(sessions={"S-1": _session("S-1")})
+    state_path = _write_state(tmp_path, state)
+    store = state_path.parent / "store"
+    store.mkdir(parents=True, exist_ok=True)
+    event_path = store / "event.jsonl"
+    event_path.write_text(
+        _chunk_line(_WAVE, seq=0, lines="first agent word") + "\n", encoding="utf-8"
+    )
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            assert "first agent word" in normalize_snapshot(capture_screen_text(app))
+            # A new chunk persists to event.jsonl only -- state.json is untouched,
+            # so _on_app_state never fires; the poll timer's sync is the only path.
+            with event_path.open("a", encoding="utf-8") as handle:
+                handle.write(_chunk_line(_WAVE, seq=1, lines="second agent word") + "\n")
+            pane._poll_output_tail()
+            await settle_screen(pilot)
+            frame = normalize_snapshot(capture_screen_text(app))
+            assert "first agent word" in frame
+            assert "second agent word" in frame
+            assert frame.count("first agent word") == 1  # no double-render
+
+    asyncio.run(body())
+
+
+def test_agent_watch_poll_output_tail_before_mount_is_noop() -> None:
+    """W19 boundary: the poll handler is a quiet no-op on an unmounted screen."""
+    pane = AgentWatchModeScreen()
+    assert not pane.is_mounted
+    pane._poll_output_tail()  # no raise, no side effect
+
+
 def test_agent_watch_pane_seeds_filtered_from_app_buffer(tmp_path: Path) -> None:
     """A mode switch into Watch seeds the watched wave's buffered events only."""
     state = _state(sessions={"S-1": _session("S-1")})

@@ -461,6 +461,34 @@ AGENT_OUTPUT_CHUNK_EVENT_TYPE: str = "agent.output.chunk"
 #: lines); a final flush at spawn end empties any partial batch.
 _CHUNK_BATCH_LINES: int = 20
 
+#: Wall-clock budget (seconds) after which a partially-filled chunk buffer is
+#: flushed even below :data:`_CHUNK_BATCH_LINES` (W19). Codex streams its output
+#: in bursts at turn boundaries, so a sub-batch burst would otherwise sit
+#: unpersisted -- and thus invisible to the Watch tail, which reads chunks off
+#: the event store -- until the next burst fills the count batch. Bounding the
+#: hold time keeps a slow turn's output flowing to the live tail.
+_CHUNK_FLUSH_INTERVAL_S: float = 1.5
+
+
+def _chunk_should_flush(*, buffered: int, elapsed_s: float) -> bool:
+    """Return whether a partially-filled chunk buffer should flush now (W19).
+
+    Flushes when the buffer reached the line-count batch (:data:`_CHUNK_BATCH_LINES`)
+    OR the wall-clock hold budget elapsed (:data:`_CHUNK_FLUSH_INTERVAL_S`), so a
+    sub-batch codex burst still persists to the event store -- and thus the Watch
+    tail -- within the hold budget instead of waiting for the next burst to fill
+    the count batch.
+
+    Args:
+        buffered: Lines currently buffered (after appending the newest line).
+        elapsed_s: Seconds since the last flush.
+
+    Returns:
+        ``True`` when either the count or the time threshold is met.
+    """
+    return buffered >= _CHUNK_BATCH_LINES or elapsed_s >= _CHUNK_FLUSH_INTERVAL_S
+
+
 #: Ring-buffer cap on the number of raw output lines one spawned session fans to
 #: the live tail (W08). A spawn can emit a very large answer; capping the lines
 #: the producer publishes bounds the event payload + the App-side

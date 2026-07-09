@@ -77,9 +77,37 @@ def test_format_agent_output_lines_passes_through_non_json() -> None:
 
 
 def test_format_agent_output_lines_passes_through_unmodelled_runtime_json() -> None:
-    """JSON with a type no runtime models passes through raw, not dropped."""
+    """JSON with a type no runtime models passes through raw, not dropped.
+
+    A FOREIGN-runtime event (a dotted type outside the codex/claude namespaces)
+    is still surfaced verbatim so nothing an unmodelled runtime emits is silently
+    swallowed -- the codex-namespace drop (W19) is scoped to codex's own frames.
+    """
     chunk = '{"type":"gemini.turn","payload":"hi"}'
     assert format_agent_output_lines(chunk) == [chunk]
+
+
+def test_format_agent_output_lines_drops_codex_item_updated() -> None:
+    """W19: a codex streaming frame outside the old set is dropped, not leaked.
+
+    ``item.updated`` (and any other codex ``thread.`` / ``turn.`` / ``item.``
+    frame) is a protocol event the tail owns: it carries no operator-facing body,
+    so it is dropped rather than dumped as raw JSON into the tail.
+    """
+    chunk = '{"type":"item.updated","item":{"type":"agent_message","text":"partial"}}'
+    assert format_agent_output_lines(chunk) == []
+
+
+def test_format_agent_output_lines_drops_novel_codex_frame() -> None:
+    """W19: a codex-namespace type the tail never modelled is dropped as noise."""
+    chunk = '{"type":"turn.aborted","reason":"cancelled"}'
+    assert format_agent_output_lines(chunk) == []
+
+
+def test_format_agent_output_lines_renders_turn_failed() -> None:
+    """W19: a codex turn.failed surfaces its failure message, prefixed."""
+    chunk = '{"type":"turn.failed","error":{"message":"the model is unavailable"}}'
+    assert format_agent_output_lines(chunk) == ["turn failed: the model is unavailable"]
 
 
 def test_format_agent_output_lines_renders_claude_assistant_message() -> None:

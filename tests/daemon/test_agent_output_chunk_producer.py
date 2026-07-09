@@ -29,7 +29,10 @@ from eawf.kernel.store.kinds.events import (
 )
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.dispatch_runner import (
+    _CHUNK_BATCH_LINES,
+    _CHUNK_FLUSH_INTERVAL_S,
     AGENT_OUTPUT_CHUNK_EVENT_TYPE,
+    _chunk_should_flush,
     emit_agent_output_chunk,
 )
 from eawf.runtime.daemon.methods import MethodContext
@@ -186,3 +189,33 @@ def test_emit_agent_output_chunk_stateless_context_is_noop() -> None:
         emit_agent_output_chunk(ctx, wave_id=_WAVE_ID, session_id="s", seq=0, text="some output")
         is None
     )
+
+
+# ---- W19: the dual-threshold chunk-flush predicate --------------------------
+
+
+def test_chunk_should_flush_at_count_batch() -> None:
+    """Reaching the line-count batch flushes even with no elapsed time."""
+    assert _chunk_should_flush(buffered=_CHUNK_BATCH_LINES, elapsed_s=0.0)
+
+
+def test_chunk_should_flush_below_both_thresholds_holds() -> None:
+    """A sub-batch buffer within the hold budget does NOT flush yet."""
+    assert not _chunk_should_flush(
+        buffered=_CHUNK_BATCH_LINES - 1, elapsed_s=_CHUNK_FLUSH_INTERVAL_S / 2
+    )
+
+
+def test_chunk_should_flush_on_time_budget_below_count() -> None:
+    """A sub-batch burst flushes once the wall-clock hold budget elapses (W19).
+
+    The freeze fix's persistence half: a slow codex turn emitting fewer than the
+    count batch would otherwise sit unpersisted until the next burst; the time
+    budget releases it so the store-backed Watch tail keeps moving.
+    """
+    assert _chunk_should_flush(buffered=1, elapsed_s=_CHUNK_FLUSH_INTERVAL_S)
+
+
+def test_chunk_should_flush_just_under_time_budget_holds() -> None:
+    """A single buffered line just under the hold budget is not flushed yet."""
+    assert not _chunk_should_flush(buffered=1, elapsed_s=_CHUNK_FLUSH_INTERVAL_S - 0.01)
