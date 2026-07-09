@@ -29813,7 +29813,8 @@
         "P30-I25-W15",
         "P30-I25-W16",
         "P30-I25-W17",
-        "P30-I25-W18"
+        "P30-I25-W18",
+        "P30-I25-W19"
       ]
     }
   },
@@ -30951,7 +30952,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-08T17:56:40.810370Z",
+  "updated_at": "2026-07-09T15:45:47.378046Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -122541,7 +122542,9 @@
     },
     "P30-I25-W15": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P30-I25-W19"
+      ],
       "claim_session_id": "SES-inline-p30i25w15",
       "claimed_at": "2026-07-08T15:38:57.411568Z",
       "closed_at": "2026-07-08T15:42:53.222966Z",
@@ -122930,6 +122933,127 @@
         }
       ],
       "title": "Show estimate and actual metrics in the runtime tab",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W19": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "prose success criteria; typed contract detailed in .ea/local/2026-07-09-watch-realtime-freeze.md",
+        "waived_at": "2026-07-09T15:45:47.292764Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I25-W15"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "src/eawf/surfaces/tui/widgets/output_tail.py",
+        "src/eawf/runtime/daemon/methods/agent.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W19",
+      "intent": {
+        "desired_outcome": "The Watch tail streams a live spawn's output in near real time without re-entering the zoom and renders codex output as readable text with no raw-JSON leakage.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Fix plan in .ea/local/2026-07-09-watch-realtime-freeze.md (A+C+D): A event-store poll timer; C time-based chunk flush; D broaden codex event coverage. Verify LIVE and regen goldens."
+        ],
+        "priority_rationale": "v0.6.0 ship-quality gap in the live-Watch surface (same area as W11/W14/W15); the acceptance runbook Part 2 autopilot watch depends on it reading live.",
+        "problem": "Watch zoom raw-output tail does not stream live: a codex spawn shows a few lines then freezes; only re-entering shows full history plus raw JSON. Its refresh is tied to state.json not event.jsonl.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-09T15:45:47.377745Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Add an always-on set_interval (~1s) to AgentWatchModeScreen that calls _sync_output_from_store so the raw-output tail advances from the persisted event store independent of state.json mtime; a live spawn streams new output within ~2s WITHOUT re-entering the zoom.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Add an always-on set_interval (~1s) to AgentWatchModeScreen that calls _sync_output_from_store so the raw-output tail advances from the persisted event store independent of state.json mtime; a live spawn streams new output within ~2s WITHOUT re-entering the zoom.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "The live-push gate no longer strands output: after the store takes authority (_output_store_cursor>0) the tail still advances via the poll backstop so no re-mount is needed to see new chunks.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The live-push gate no longer strands output: after the store takes authority (_output_store_cursor>0) the tail still advances via the poll backstop so no re-mount is needed to see new chunks.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "_on_chunk in agent.py flushes on a ~1-2s time budget in addition to the _CHUNK_BATCH_LINES count threshold so a slow sub-20-line codex turn persists its output promptly.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "_on_chunk in agent.py flushes on a ~1-2s time budget in addition to the _CHUNK_BATCH_LINES count threshold so a slow sub-20-line codex turn persists its output promptly.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "format_agent_output_lines no longer leaks raw codex JSON: unrecognized and structural codex events (including turn.failed) render as readable text or are dropped and never dumped verbatim as JSON.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "format_agent_output_lines no longer leaks raw codex JSON: unrecognized and structural codex events (including turn.failed) render as readable text or are dropped and never dumped verbatim as JSON.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-05",
+          "kind": "legacy",
+          "measurable_signal": "Verified with a LIVE codex spawn (not only Pilot tests) per .ea/local/2026-07-09-watch-realtime-freeze.md; affected TUI goldens regenerated; just test and uv run eawf doctor are green.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Verified with a LIVE codex spawn (not only Pilot tests) per .ea/local/2026-07-09-watch-realtime-freeze.md; affected TUI goldens regenerated; just test and uv run eawf doctor are green.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Restore Watch-tail real-time streaming off the event store",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
