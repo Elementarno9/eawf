@@ -58,6 +58,7 @@ from eawf.runtime.daemon.wal import (
     resolve_wal_retention_seconds,
     run_wal_gc_loop,
 )
+from eawf.runtime.session.store import reconcile_orphaned_sessions
 
 logger = logging.getLogger(__name__)
 
@@ -827,6 +828,16 @@ def run(*, foreground: bool = True) -> int:
                     f"run wal-replay poisoned-present count={replay_report.poisoned_count}; "
                     f"operator should run 'eawf daemon replay-wal --inspect'"
                 )
+
+            # Reconcile orphaned agent sessions: a prior daemon's spawned
+            # children died with it, but their AgentSession rows stay ACTIVE in
+            # state.json and render as zombie live agents on the Watch surface.
+            # A fresh daemon owns no live children, so every ACTIVE session at
+            # boot is orphaned -- flip them all to STALE. Single-threaded here,
+            # pre-listener, so there is no contention on the state lock.
+            orphaned = reconcile_orphaned_sessions(project_state_path, project_event_path)
+            if orphaned:
+                logger.info(f"run reconciled-orphan-sessions flipped={orphaned}")
 
             ctx = MethodContext(
                 started_at=started_at,

@@ -18,9 +18,11 @@ from pathlib import Path
 
 from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
 from eawf.kernel.state.models import AgentSession, State
+from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope as _append_canonical
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
+from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
 
@@ -263,3 +265,54 @@ def close_session(
     )
     logger.info(f"close_session id={session_id} status={status.value}")
     return SessionResult(session=session, event=event)
+
+
+def reconcile_orphaned_sessions(state_path: Path, event_path: Path) -> int:
+    """Flip every ``ACTIVE`` agent session to ``STALE`` at daemon boot.
+
+    A daemon's spawned children (researcher / executor agents) die with the
+    daemon, but their :class:`~eawf.kernel.state.models.AgentSession` rows stay
+    ``ACTIVE`` in ``state.json``, so the Watch surface renders a zombie live
+    agent that never dies. A fresh daemon owns no live children by definition,
+    so every ``ACTIVE`` session at startup is orphaned -- this is a blanket
+    flip, not a per-pid probe (``AgentSession`` carries no subprocess pid).
+
+    Each flip routes through :func:`close_session`, which stamps the terminal
+    status + ``ended_at``, drops the sid from ``state.current.active_session_ids``,
+    and appends a ``session.close`` event to *event_path*. The whole reconcile
+    runs under the canonical ``portalock(state.json)`` + one locked atomic
+    write, mirroring the daemon canonical-writer path. When no session is
+    ``ACTIVE`` the write is skipped (no-op) and no event is appended.
+
+    Args:
+        state_path: Path to ``state.json``.
+        event_path: Path to ``event.jsonl`` (the ``session.close`` event sink).
+
+    Returns:
+        The count of sessions flipped from ``ACTIVE`` to ``STALE``.
+    """
+    # Imported lazily: the ``eawf.workflow.evidence`` package __init__ pulls in
+    # the verdict path, which imports this module -- a module-level import here
+    # is a boot-time circular import.
+    from eawf.workflow.evidence._io import load_state
+
+    with portalock.acquire(state_path, timeout=5.0):
+        state = load_state(state_path)
+        orphan_ids = [
+            sid
+            for sid, session in state.agent_sessions.items()
+            if session.status is AgentSessionStatus.ACTIVE
+        ]
+        for sid in orphan_ids:
+            close_session(
+                state=state,
+                events_path=event_path,
+                session_id=sid,
+                status=AgentSessionStatus.STALE,
+                summary="orphaned by daemon restart",
+            )
+        if orphan_ids:
+            atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+    count = len(orphan_ids)
+    logger.info(f"reconcile_orphaned_sessions flipped={count}")
+    return count

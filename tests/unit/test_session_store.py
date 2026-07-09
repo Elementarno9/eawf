@@ -19,8 +19,10 @@ from eawf.runtime.session.store import (
     append_event,
     checkpoint,
     close_session,
+    reconcile_orphaned_sessions,
     start_session,
 )
+from eawf.workflow.evidence._io import load_state
 
 
 def _make_state() -> State:
@@ -361,3 +363,143 @@ def test_close_after_failed_state_supports_replay(tmp_path: Path) -> None:
         now=datetime.now(UTC) + timedelta(minutes=1),
     )
     assert state.agent_sessions[started.session.id].status is AgentSessionStatus.STALE
+
+
+def _seed_state_path(tmp_path: Path, sessions: dict[str, str]) -> Path:
+    """Write a ``state.json`` seeded with ``{sid: status-value}`` agent sessions.
+
+    ``current.active_session_ids`` mirrors on-disk reality: only sessions whose
+    status is ``active`` are listed. Returns the written ``state.json`` path.
+    """
+    agent_sessions = {
+        sid: {
+            "id": sid,
+            "role": "executor",
+            "runtime": f"claude-{idx}",
+            "scope_id": "QR",
+            "status": status,
+            "claimed_wave_ids": [],
+            "worktree_ids": [],
+            "artifact_ids": [],
+            "started_at": "2026-05-08T00:00:00Z",
+            "ended_at": None,
+            "summary": None,
+        }
+        for idx, (sid, status) in enumerate(sessions.items())
+    }
+    active_ids = [sid for sid, status in sessions.items() if status == "active"]
+    payload = {
+        "schema_version": "1.0",
+        "scope_kind": "repo",
+        "urn": "urn:eawf:v1:state:QR",
+        "updated_at": "2026-05-08T00:00:00Z",
+        "project": {
+            "code": "QR",
+            "slug": "quant",
+            "title": "Quant",
+            "domains": ["quant"],
+            "default_branch": "main",
+            "status": "active",
+            "repo_urn": "urn:eawf:v1:repo:QR",
+        },
+        "current": {
+            "project_code": "QR",
+            "track_id": None,
+            "phase_id": None,
+            "iter_id": None,
+            "active_wave_ids": [],
+            "active_session_ids": active_ids,
+        },
+        "workspace": None,
+        "phases": {},
+        "iters": {},
+        "waves": {},
+        "artifacts": {},
+        "agent_sessions": agent_sessions,
+        "plugins": {},
+        "indexes": {},
+    }
+    state = State.model_validate(payload)
+    state_path = tmp_path / "state.json"
+    state_path.write_text(state.model_dump_json(), encoding="utf-8")
+    return state_path
+
+
+def test_reconcile_orphaned_sessions_flips_active_to_stale(tmp_path: Path) -> None:
+    state_path = _seed_state_path(tmp_path, {"SES-A": "active"})
+    events = tmp_path / "events.jsonl"
+
+    flipped = reconcile_orphaned_sessions(state_path, events)
+
+    assert flipped == 1
+    # Persisted: reload from disk and assert the flip stuck.
+    reloaded = load_state(state_path)
+    assert reloaded.agent_sessions["SES-A"].status is AgentSessionStatus.STALE
+    assert reloaded.agent_sessions["SES-A"].ended_at is not None
+    assert reloaded.agent_sessions["SES-A"].summary == "orphaned by daemon restart"
+    # Dropped from the active pointer set.
+    assert "SES-A" not in reloaded.current.active_session_ids
+    # A session.close event was appended for the orphan.
+    lines = events.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    parsed = json.loads(lines[0])
+    assert parsed["payload"]["event_type"] == "session.close"
+    assert parsed["id"] == "SES-A-close"
+
+
+def test_reconcile_orphaned_sessions_leaves_terminal_untouched(tmp_path: Path) -> None:
+    state_path = _seed_state_path(
+        tmp_path,
+        {
+            "SES-ACTIVE": "active",
+            "SES-CLOSED": "closed",
+            "SES-FAILED": "failed",
+            "SES-STALE": "stale",
+            "SES-CKPT": "checkpointed",
+        },
+    )
+    events = tmp_path / "events.jsonl"
+
+    flipped = reconcile_orphaned_sessions(state_path, events)
+
+    # Only the one ACTIVE session is flipped.
+    assert flipped == 1
+    reloaded = load_state(state_path)
+    assert reloaded.agent_sessions["SES-ACTIVE"].status is AgentSessionStatus.STALE
+    assert reloaded.agent_sessions["SES-CLOSED"].status is AgentSessionStatus.CLOSED
+    assert reloaded.agent_sessions["SES-FAILED"].status is AgentSessionStatus.FAILED
+    assert reloaded.agent_sessions["SES-STALE"].status is AgentSessionStatus.STALE
+    assert reloaded.agent_sessions["SES-CKPT"].status is AgentSessionStatus.CHECKPOINTED
+    # Exactly one close event -- terminal rows did not emit one.
+    lines = events.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+
+
+def test_reconcile_orphaned_sessions_no_sessions_is_noop(tmp_path: Path) -> None:
+    state_path = _seed_state_path(tmp_path, {})
+    events = tmp_path / "events.jsonl"
+    mtime_before = state_path.stat().st_mtime_ns
+
+    flipped = reconcile_orphaned_sessions(state_path, events)
+
+    assert flipped == 0
+    # No write (no-op) and no event file created.
+    assert state_path.stat().st_mtime_ns == mtime_before
+    assert not events.exists()
+
+
+def test_reconcile_orphaned_sessions_idempotent(tmp_path: Path) -> None:
+    state_path = _seed_state_path(tmp_path, {"SES-A": "active", "SES-B": "active"})
+    events = tmp_path / "events.jsonl"
+
+    first = reconcile_orphaned_sessions(state_path, events)
+    second = reconcile_orphaned_sessions(state_path, events)
+
+    assert first == 2
+    assert second == 0
+    reloaded = load_state(state_path)
+    assert reloaded.agent_sessions["SES-A"].status is AgentSessionStatus.STALE
+    assert reloaded.agent_sessions["SES-B"].status is AgentSessionStatus.STALE
+    # Only the first run appended close events (one per orphan); the second is a no-op.
+    lines = events.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2
