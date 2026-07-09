@@ -237,6 +237,8 @@ def test_parity_grid_renders_sessions_side_by_side_fed_by_push(tmp_path: Path) -
             await settle_screen(pilot)
             await pilot.press(_WATCH_DIGIT)  # -> agent_watch
             await settle_screen(pilot)
+            await pilot.press("g")  # opt into the parity grid (W22 default is the roster)
+            await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AgentWatchModeScreen)
             grid = pane.query_one(WatchGrid)
@@ -286,6 +288,8 @@ def test_poll_backstop_grows_zoom_into_parity_grid(tmp_path: Path) -> None:
             await settle_screen(pilot)
             await pilot.press(_WATCH_DIGIT)  # -> agent_watch
             await settle_screen(pilot)
+            await pilot.press("g")  # opt into the grid; still zoom at 1 session (W22)
+            await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AgentWatchModeScreen)
             # One ACTIVE executor -> the single-session zoom, no parity grid yet.
@@ -325,6 +329,8 @@ def test_poll_backstop_reseeds_new_grid_from_buffer(tmp_path: Path) -> None:
         async with app.run_test(size=_SIZE) as pilot:
             await settle_screen(pilot)
             await pilot.press(_WATCH_DIGIT)  # -> agent_watch
+            await settle_screen(pilot)
+            await pilot.press("g")  # opt into the grid; still zoom at 1 session (W22)
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AgentWatchModeScreen)
@@ -373,6 +379,8 @@ def test_poll_backstop_unchanged_fleet_is_a_noop(tmp_path: Path) -> None:
         async with app.run_test(size=_SIZE) as pilot:
             await settle_screen(pilot)
             await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("g")  # opt into the parity grid (W22 default is the roster)
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AgentWatchModeScreen)
@@ -445,6 +453,8 @@ def test_poll_backstop_drains_grid_to_honest_empty(tmp_path: Path) -> None:
         async with app.run_test(size=_SIZE) as pilot:
             await settle_screen(pilot)
             await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("g")  # opt into the parity grid (W22 default is the roster)
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AgentWatchModeScreen)

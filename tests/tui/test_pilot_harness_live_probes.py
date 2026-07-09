@@ -186,6 +186,8 @@ def test_push_state_revision_grows_fleet_pane_without_restart(tmp_path: Path) ->
             await settle_screen(pilot)
             await pilot.press(_WATCH_DIGIT)
             await settle_screen(pilot)
+            await pilot.press("g")  # opt into the parity grid (W22 default is the roster)
+            await settle_screen(pilot)
             screen = app.screen
             assert isinstance(screen, AgentWatchModeScreen)
             # One ACTIVE executor -> single-session zoom, no parity grid yet.
@@ -245,6 +247,8 @@ def test_tick_poll_backstop_refreshes_with_push_disabled(tmp_path: Path) -> None
         async with app.run_test(size=_SIZE) as pilot:
             await settle_screen(pilot)
             await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("g")  # opt into the parity grid (W22 default is the roster)
             await settle_screen(pilot)
             screen = app.screen
             assert isinstance(screen, AgentWatchModeScreen)

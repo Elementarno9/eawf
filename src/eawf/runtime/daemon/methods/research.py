@@ -1274,7 +1274,11 @@ async def _spawn_researcher_agent_end(
     # spend accrues to the campaign and never inflates an unrelated (often
     # already-closed) wave's counters -- those stay executor-only.
     dispatch_scope = campaign_id
-    scope_id = f"{campaign_id}-research-{uuid.uuid4().hex[:8]}"
+    # Embed the domain in the researcher session scope (W22) so the Watch surface
+    # distinguishes sibling researchers by WHAT they investigate rather than an
+    # opaque hash; the display label parses the domain back out. The domain is a
+    # profile-key slug (no spaces), and a short uuid keeps the scope unique.
+    scope_id = f"{campaign_id}-research-{dispatch.domain}-{uuid.uuid4().hex[:6]}"
     session_id = _register_researcher_session(
         ctx,
         scope_id=scope_id,

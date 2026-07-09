@@ -469,6 +469,49 @@ _WATCHABLE_ROLES: frozenset[AgentSessionRole] = frozenset(
     {AgentSessionRole.EXECUTOR, AgentSessionRole.RESEARCHER, AgentSessionRole.AUDITOR}
 )
 
+#: Marker separating the campaign prefix from the domain in a researcher session
+#: scope_id (W22). The scope is ``{campaign_id}-research-{domain}-{uid}``; the
+#: display label extracts ``{domain}`` so sibling researchers on one campaign
+#: read apart by WHAT they investigate rather than by an opaque 40-char scope.
+_RESEARCH_SCOPE_MARKER: str = "-research-"
+
+#: Suffix a verdict-qualified auditor session scope carries. The display label
+#: strips it and trails a compact ``audit`` tag so a juror reads ``<wave> audit``.
+_AUDIT_SCOPE_SUFFIX: str = "::audit"
+
+
+def watch_display_label(role: AgentSessionRole, scope_id: str) -> str:
+    """Return a short human label for a watched session (W22).
+
+    The raw session ``scope_id`` is machine-shaped -- for a researcher a
+    40-plus-char ``{campaign}-research-{domain}-{uid}`` string that reads as
+    noise in the roster. This maps each role to its meaningful short label:
+
+    * executor -- the wave id (already short, e.g. ``P01-I01-W04``);
+    * researcher -- the DOMAIN it investigates (parsed from the scope), so
+      sibling researchers on one campaign read apart by WHAT they do;
+    * auditor -- the audited wave trailed by a compact ``audit`` tag;
+    * any other role -- the scope verbatim.
+
+    The parse is total: a researcher scope without the ``-research-`` marker (a
+    legacy-format session) falls back to the scope unchanged rather than raising.
+
+    Args:
+        role: The watched session's agent role.
+        scope_id: The session's scope id.
+
+    Returns:
+        The short display label for the roster / header / tile.
+    """
+    if role is AgentSessionRole.RESEARCHER and _RESEARCH_SCOPE_MARKER in scope_id:
+        # ``tail`` is ``{domain}-{uid}``; the uid is the trailing hyphen segment,
+        # so dropping it leaves the (possibly hyphenated) domain slug.
+        tail = scope_id.split(_RESEARCH_SCOPE_MARKER, 1)[1]
+        return tail.rsplit("-", 1)[0] if "-" in tail else tail
+    if role is AgentSessionRole.AUDITOR and scope_id.endswith(_AUDIT_SCOPE_SUFFIX):
+        return f"{scope_id[: -len(_AUDIT_SCOPE_SUFFIX)]} audit"
+    return scope_id
+
 
 @dataclass(frozen=True)
 class WatchTarget:
@@ -885,10 +928,11 @@ def render_watch_header(
         return f"[$warn]{EMPTY_NOTICE}[/]\n[$muted]no dispatched executor session to stream[/]"
     header_sigil = _header_status_sigil(target, mode=mode)
     status_word = escape_markup(_header_status_label(target))
+    label = watch_display_label(target.agent_role, target.wave_id)
     header = (
         f"{header_sigil} [$accent]watching[/] "
         f"[$accent]{escape_markup(target.agent_role.value)}[/] "
-        f"{escape_markup(target.wave_id)} "
+        f"{escape_markup(label)} "
         f"[$muted]{escape_markup(target.runtime)}[/] "
         f"[$accent]{status_word}[/]"
     )
@@ -1190,11 +1234,12 @@ class WatchTile(Vertical):
         yield VerticalScroll(classes=WATCH_TILE_LIST_CLASS)
 
     def _header_markup(self) -> str:
-        """Return the tile header markup: session sigil + role + scope + runtime."""
+        """Return the tile header markup: session sigil + role + label + runtime."""
         sigil = session_sigil_markup(self._session.status, mode=self._mode)
+        label = watch_display_label(self._session.role, self._session.scope_id)
         return (
             f"{sigil} [$accent]{escape_markup(self._session.role.value)}[/] "
-            f"[$accent]{escape_markup(self._session.scope_id)}[/] "
+            f"[$accent]{escape_markup(label)}[/] "
             f"[$muted]{escape_markup(self._session.runtime)}[/]"
         )
 
@@ -1959,6 +2004,9 @@ class SessionPickerRow:
         started_label: The session start time as a compact ``HH:MM`` label.
         agent_role: The session's agent role, surfaced in the row so the
             roster reads which KIND of agent each entry is (W20).
+        label: The short human display label (:func:`watch_display_label`) --
+            the wave id for an executor, the domain for a researcher (W22) --
+            shown in place of the raw 40-char scope.
     """
 
     session_id: str
@@ -1967,6 +2015,17 @@ class SessionPickerRow:
     status: AgentSessionStatus
     started_label: str
     agent_role: AgentSessionRole = AgentSessionRole.EXECUTOR
+    label: str = ""
+
+    @property
+    def display(self) -> str:
+        """Return the label to show, falling back to the scope when unset.
+
+        ``session_picker_rows`` always populates ``label``; a directly-built row
+        with no label falls back to its ``wave_id`` (scope) so the column never
+        renders blank.
+        """
+        return self.label or self.wave_id
 
 
 def session_picker_rows(state: State | None) -> tuple[SessionPickerRow, ...]:
@@ -1997,16 +2056,92 @@ def session_picker_rows(state: State | None) -> tuple[SessionPickerRow, ...]:
             status=sess.status,
             started_label=sess.started_at.strftime("%H:%M"),
             agent_role=sess.role,
+            label=watch_display_label(sess.role, sess.scope_id),
         )
         for sess in sessions
     )
 
 
-def render_picker_row(row: SessionPickerRow, *, selected: bool = False, mode: RenderMode) -> str:
-    """Render one session-picker row: ``<sigil> <wave> <runtime> <status> <start>``.
+#: Max width the roster label column pads / truncates to, so a pathologically
+#: long scope can never blow out the table alignment (W22).
+_ROSTER_LABEL_CAP: int = 40
 
-    Leads with the session's lifecycle sigil so running / closed / failed
-    sessions read apart at a glance.
+
+@dataclass(frozen=True)
+class PickerColumnWidths:
+    """The fixed per-column widths for an aligned roster table (W22).
+
+    Attributes:
+        role: Width of the agent-role column (padded so ``researcher`` and
+            ``executor`` line up under one another).
+        label: Width of the display-label column, capped at
+            :data:`_ROSTER_LABEL_CAP`.
+        runtime: Width of the runtime column.
+        status: Width of the status column.
+    """
+
+    role: int
+    label: int
+    runtime: int
+    status: int
+
+
+def picker_column_widths(rows: tuple[SessionPickerRow, ...]) -> PickerColumnWidths:
+    """Return the fixed column widths that align *rows* into a table (W22).
+
+    Each column is sized to its widest cell (the label column capped at
+    :data:`_ROSTER_LABEL_CAP` so one runaway scope can't stretch the table). An
+    empty *rows* yields all-zero widths -- the honest-empty roster path.
+
+    Args:
+        rows: The roster rows the table lays out.
+
+    Returns:
+        The per-column widths for :func:`render_picker_row`.
+    """
+    if not rows:
+        return PickerColumnWidths(role=0, label=0, runtime=0, status=0)
+    return PickerColumnWidths(
+        role=max(len(r.agent_role.value) for r in rows),
+        label=min(_ROSTER_LABEL_CAP, max(len(r.display) for r in rows)),
+        runtime=max(len(r.runtime) for r in rows),
+        status=max(len(r.status.value) for r in rows),
+    )
+
+
+def _truncate_cell(text: str, width: int) -> str:
+    """Truncate *text* to *width* with a trailing ellipsis when it overflows.
+
+    Args:
+        text: The cell text.
+        width: The column width; a non-positive width returns *text* unchanged.
+
+    Returns:
+        *text* unchanged when it fits, else clipped to *width* with a trailing
+        ``…`` (or a bare 1-char clip when *width* is 1).
+    """
+    if width <= 0 or len(text) <= width:
+        return text
+    if width == 1:
+        return text[:1]
+    return text[: width - 1] + "…"
+
+
+def render_picker_row(
+    row: SessionPickerRow,
+    *,
+    selected: bool = False,
+    mode: RenderMode,
+    widths: PickerColumnWidths | None = None,
+) -> str:
+    """Render one session-picker row as an aligned table row (W22).
+
+    Columns -- ``<sigil> <role> <label> <runtime> <status> <start>`` -- are each
+    padded to *widths* so role sits under role and runtime under runtime for a
+    scannable columnar look; an over-long label truncates rather than breaking
+    the column. Leads with the session's lifecycle sigil so running / closed /
+    failed sessions read apart at a glance. With no *widths* (a lone-row render)
+    the cells are left unpadded.
 
     When *selected*, the row is rendered PLAIN (no per-span content-markup
     colours): the ``.-selected`` rule paints a saturated green selection band
@@ -2020,25 +2155,30 @@ def render_picker_row(row: SessionPickerRow, *, selected: bool = False, mode: Re
         selected: Whether this row is the current Enter-zoom target.
         mode: The App's resolved render-mode label — selects the sigil glyph
             column.
+        widths: The shared column widths (:func:`picker_column_widths`) that
+            align every row, or ``None`` to render this row unpadded.
 
     Returns:
         A content-markup picker-row string.
     """
+    w = widths or PickerColumnWidths(role=0, label=0, runtime=0, status=0)
+    role = _truncate_cell(row.agent_role.value, w.role).ljust(w.role)
+    label = _truncate_cell(row.display, w.label).ljust(w.label)
+    runtime = row.runtime.ljust(w.runtime)
+    status = row.status.value.ljust(w.status)
     if selected:
         sigil = escape_markup(glyph(_SESSION_SIGIL[row.status], mode=mode))
         return (
-            f"{sigil} {escape_markup(row.agent_role.value)} "
-            f"{escape_markup(row.wave_id)} "
-            f"{escape_markup(row.runtime)} "
-            f"{escape_markup(row.status.value)} "
+            f"{sigil} {escape_markup(role)} {escape_markup(label)} "
+            f"{escape_markup(runtime)} {escape_markup(status)} "
             f"{escape_markup(row.started_label)}"
         )
     return (
         f"{session_sigil_markup(row.status, mode=mode)} "
-        f"[$accent]{escape_markup(row.agent_role.value)}[/] "
-        f"[$text]{escape_markup(row.wave_id)}[/] "
-        f"[$muted]{escape_markup(row.runtime)}[/] "
-        f"[$muted]{escape_markup(row.status.value)}[/] "
+        f"[$accent]{escape_markup(role)}[/] "
+        f"[$text]{escape_markup(label)}[/] "
+        f"[$muted]{escape_markup(runtime)}[/] "
+        f"[$muted]{escape_markup(status)}[/] "
         f"[$muted]{escape_markup(row.started_label)}[/]"
     )
 
@@ -2101,20 +2241,31 @@ class SessionPicker(Widget):
             super().__init__()
             self.session_id = session_id
 
-    def __init__(self, rows: tuple[SessionPickerRow, ...], *, mode: RenderMode) -> None:
+    def __init__(
+        self,
+        rows: tuple[SessionPickerRow, ...],
+        *,
+        mode: RenderMode,
+        initial_session_id: str | None = None,
+    ) -> None:
         """Build the picker over *rows* in render *mode*.
 
         Args:
             rows: The picker rows (:func:`session_picker_rows`), newest first.
             mode: The App's resolved render-mode label, threaded into each
                 row's lifecycle sigil.
+            initial_session_id: The session to seed the selection on (W22) so a
+                roster re-opened after a zoom lands on the same row rather than
+                the top; ``None`` selects the newest (first) row.
         """
         super().__init__()
         self._rows = rows
         self._mode = mode
+        self._widths = picker_column_widths(rows)
+        self._initial_session_id = initial_session_id
 
     def compose(self) -> ComposeResult:
-        """Yield the selectable session rows."""
+        """Yield the selectable session rows, aligned into a table (W22)."""
         with VerticalScroll(id=SESSION_PICKER_ID):
             for index, row in enumerate(self._rows):
                 selected = index == self.selected
@@ -2124,22 +2275,56 @@ class SessionPicker(Widget):
                     else SESSION_PICKER_ROW_CLASS
                 )
                 yield Static(
-                    render_picker_row(row, selected=selected, mode=self._mode), classes=classes
+                    render_picker_row(row, selected=selected, mode=self._mode, widths=self._widths),
+                    classes=classes,
                 )
 
     def on_mount(self) -> None:
-        """Seed the selection at the newest session (the first row)."""
-        self.set_reactive(type(self).selected, 0 if self._rows else -1)
+        """Seed the selection at the initial session (W22) and scroll it into view.
+
+        Prefers the ``initial_session_id`` row so a roster re-opened after a zoom
+        keeps the operator's place; falls back to the newest (first) row.
+        """
+        self.set_reactive(type(self).selected, self._initial_index())
+        self._scroll_to_selected()
+
+    def _initial_index(self) -> int:
+        """Return the row index to seed the selection on (W22).
+
+        The ``initial_session_id`` row when it is still present, else the newest
+        (first) row, or ``-1`` for an empty roster.
+        """
+        if not self._rows:
+            return -1
+        if self._initial_session_id is not None:
+            for index, row in enumerate(self._rows):
+                if row.session_id == self._initial_session_id:
+                    return index
+        return 0
 
     def action_select_prev(self) -> None:
         """Move the selection to the previous session row (clamped at the top)."""
         if self._rows:
             self.selected = max(0, self.selected - 1)
+            self._scroll_to_selected()
 
     def action_select_next(self) -> None:
         """Move the selection to the next session row (clamped at the bottom)."""
         if self._rows:
             self.selected = min(len(self._rows) - 1, self.selected + 1)
+            self._scroll_to_selected()
+
+    def _scroll_to_selected(self) -> None:
+        """Scroll the selected row into view (W22).
+
+        Keeps a restored (or arrow-moved) selection visible rather than off the
+        top of the scroll; a no-op before mount or with no selection.
+        """
+        if not self.is_mounted or not 0 <= self.selected < len(self._rows):
+            return
+        widgets = list(self.query(f".{SESSION_PICKER_ROW_CLASS}").results(Static))
+        if self.selected < len(widgets):
+            widgets[self.selected].scroll_visible(animate=False)
 
     def action_zoom_session(self) -> None:
         """Zoom the selected session to the FA4 view (Enter).
@@ -2162,7 +2347,11 @@ class SessionPicker(Widget):
             if index >= len(self._rows):
                 continue
             selected = index == self.selected
-            widget.update(render_picker_row(self._rows[index], selected=selected, mode=self._mode))
+            widget.update(
+                render_picker_row(
+                    self._rows[index], selected=selected, mode=self._mode, widths=self._widths
+                )
+            )
             widget.set_class(selected, LANE_SELECTED_CLASS)
 
     def _selected_row(self) -> SessionPickerRow | None:
@@ -2306,6 +2495,7 @@ class AgentWatchModeScreen(ScopeScreen):
         Binding("x", "cancel_session", "kill", show=False),
         Binding("space", "pause_session", "pause", show=False),
         Binding("l", "open_roster", "list", show=False),
+        Binding("g", "toggle_grid", "grid", show=False),
         Binding("v", "view_log", "view log", show=False),
         Binding("escape", "leave_zoom", "back", show=False),
     ]
@@ -2400,6 +2590,17 @@ class AgentWatchModeScreen(ScopeScreen):
     #: the preview never appends one wave's output onto another's (W14).
     _output_synced_wave: str | None = None
 
+    #: Whether the parity grid is the opt-in multi-agent surface (W22). ``False``
+    #: (the default) shows the readable roster at 2+ active agents; the ``g`` key
+    #: toggles the side-by-side grid on, so the grid is a deliberate choice
+    #: rather than a surprise auto-mount.
+    _show_grid: bool = False
+
+    #: The last session the operator zoomed from the roster (W22). Seeds the
+    #: roster selection on a zoom-return so the list re-opens on the same row
+    #: rather than resetting to the top; ``None`` before any zoom.
+    _last_watched_session_id: str | None = None
+
     def compose_body(self) -> ComposeResult:
         """Yield the fleet verdict rollup then the FA3 lane grid, parity grid, OR zoom.
 
@@ -2450,7 +2651,9 @@ class AgentWatchModeScreen(ScopeScreen):
             roster_rows = session_picker_rows(state)
             if roster_rows:
                 self._body_case = "picker"
-                self._picker = SessionPicker(roster_rows, mode=mode)
+                self._picker = SessionPicker(
+                    roster_rows, mode=mode, initial_session_id=self._last_watched_session_id
+                )
                 yield self._picker
                 return
         # A pending FA3 -> FA4 zoom forces the single-session zoom for the pinned
@@ -2472,9 +2675,24 @@ class AgentWatchModeScreen(ScopeScreen):
             yield OutputTail(id=WATCH_OUTPUT_ID)
             return
         if len(sessions) >= 2:
-            self._body_case = "grid"
-            self._grid = WatchGrid(sessions, degraded=self._degraded(), mode=mode)
-            yield self._grid
+            if self._show_grid:
+                self._body_case = "grid"
+                self._grid = WatchGrid(sessions, degraded=self._degraded(), mode=mode)
+                yield self._grid
+                return
+            # W22: the roster (a readable aligned table) is the DEFAULT
+            # multi-agent surface; the parity grid is an explicit ``g`` opt-in,
+            # so 2+ active agents no longer drop the operator into a surprise
+            # side-by-side grid. The roster lists every watchable session and
+            # seeds its selection on the last-watched one so a zoom-return keeps
+            # the operator's place.
+            self._body_case = "picker"
+            self._picker = SessionPicker(
+                session_picker_rows(state),
+                mode=mode,
+                initial_session_id=self._last_watched_session_id,
+            )
+            yield self._picker
             return
         # With nothing live to stream but several finished sessions on record,
         # surface the browsable picker — the lanes are deleted on completion,
@@ -2489,7 +2707,9 @@ class AgentWatchModeScreen(ScopeScreen):
         picker_threshold = 1 if return_to_picker else 2
         if not sessions and len(picker_rows) >= picker_threshold:
             self._body_case = "picker"
-            self._picker = SessionPicker(picker_rows, mode=mode)
+            self._picker = SessionPicker(
+                picker_rows, mode=mode, initial_session_id=self._last_watched_session_id
+            )
             yield self._picker
             return
         self._body_case = "zoom"
@@ -2587,6 +2807,9 @@ class AgentWatchModeScreen(ScopeScreen):
         self.target = _session_watch_target(state, session)
         self._picker = None
         self._zoom_pending = True
+        # Remember the zoomed session so a later Esc back to the roster re-opens
+        # on this row rather than the top (W22).
+        self._last_watched_session_id = message.session_id
         logger.info(f"on_session_picker_pick session={message.session_id!r}")
         self.call_after_refresh(self._zoom_to_target)
 
@@ -3136,6 +3359,22 @@ class AgentWatchModeScreen(ScopeScreen):
         logger.info("action_open_roster to=picker")
         self.call_after_refresh(self._recompose_and_reseed)
 
+    def action_toggle_grid(self) -> None:
+        """Toggle the parity grid on / off (``g``, W22).
+
+        The multi-agent default is the readable roster; ``g`` opts into the
+        side-by-side parity grid (and back), so the grid is a deliberate choice
+        rather than a surprise auto-mount at 2+ active agents. Clears the
+        one-shot roster / zoom flags so the toggle wins the next compose, then
+        recomposes. A no-op away from a multi-session fleet is harmless -- the
+        flag simply has no effect until 2+ watchable sessions are active.
+        """
+        self._show_grid = not self._show_grid
+        self._force_picker = False
+        self._zoom_pending = False
+        logger.info(f"action_toggle_grid show_grid={self._show_grid}")
+        self.call_after_refresh(self._recompose_and_reseed)
+
     def action_view_log(self) -> None:
         """View the watched session's log, surfacing its handle (``v``).
 
@@ -3589,6 +3828,7 @@ __all__ = [
     "lane_state_sigil_markup",
     "parity_session_ids",
     "pick_watch_target",
+    "picker_column_widths",
     "render_lane_row",
     "render_picker_row",
     "render_verdict_rollup_row",
@@ -3598,4 +3838,5 @@ __all__ = [
     "session_sigil_markup",
     "tile_dom_id",
     "verdict_sigil_markup",
+    "watch_display_label",
 ]

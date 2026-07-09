@@ -77,9 +77,12 @@ from eawf.surfaces.tui.modes.agent_watch import (
     is_watched_event,
     load_output_chunk_lines,
     pick_watch_target,
+    picker_column_widths,
+    render_picker_row,
     render_watch_header,
     session_picker_rows,
     tile_dom_id,
+    watch_display_label,
 )
 from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
 from eawf.surfaces.tui.snapshot import (
@@ -400,14 +403,142 @@ def test_pick_watch_target_ignores_non_watchable_role() -> None:
     assert pick_watch_target(state) is None
 
 
-def test_render_watch_header_shows_agent_role() -> None:
-    """The header names the watched agent's role (W20), not only its scope."""
+def test_render_watch_header_shows_agent_role_and_short_label() -> None:
+    """The header names the role + a SHORT label (W20/W22), not the raw scope.
+
+    A researcher's header reads its domain (parsed from the scope) rather than
+    the 40-char ``campaign-{hash}-research-{domain}-{uid}`` string.
+    """
     header = render_watch_header(
-        _target(wave_id="CAMP-1-research-ab", agent_role=AgentSessionRole.RESEARCHER),
+        _target(
+            wave_id="campaign-abc-research-backoff-1a2b3c",
+            agent_role=AgentSessionRole.RESEARCHER,
+        ),
         mode="ascii",
     )
     assert "researcher" in header
-    assert "CAMP-1-research-ab" in header
+    assert "backoff" in header  # the parsed domain
+    assert "campaign-abc" not in header  # the long scope is not shown
+
+
+def test_watch_display_label_per_role() -> None:
+    """The display label shortens each role's scope to its meaningful part (W22)."""
+    # Executor: the wave id, verbatim (already short).
+    assert watch_display_label(AgentSessionRole.EXECUTOR, "P01-I01-W04") == "P01-I01-W04"
+    # Researcher (new format): the domain, parsed out of the scope.
+    assert (
+        watch_display_label(
+            AgentSessionRole.RESEARCHER, "campaign-abc-research-market-structure-1a2b3c"
+        )
+        == "market-structure"
+    )
+    # Auditor: the audited wave with a compact tag.
+    assert (
+        watch_display_label(AgentSessionRole.AUDITOR, "P01-I01-W04::audit") == "P01-I01-W04 audit"
+    )
+
+
+def test_watch_display_label_legacy_researcher_scope_is_total() -> None:
+    """A legacy researcher scope with no domain segment degrades, never raises."""
+    # No ``-research-`` marker at all: returned verbatim.
+    assert watch_display_label(AgentSessionRole.RESEARCHER, "weird-scope") == "weird-scope"
+
+
+def test_picker_column_widths_size_to_widest_cell() -> None:
+    """The roster column widths size to the widest cell so the table aligns (W22)."""
+    rows = session_picker_rows(
+        _state(
+            sessions={
+                "S-exec": _session("S-exec", scope_id="P01-I01-W04"),
+                "S-r": _session(
+                    "S-r",
+                    scope_id="campaign-abc-research-delivery-semantics-1a2b3c",
+                    role=AgentSessionRole.RESEARCHER,
+                ),
+            }
+        )
+    )
+    widths = picker_column_widths(rows)
+    # role column fits ``researcher`` (10); label column fits the longer domain.
+    assert widths.role == len("researcher")
+    assert widths.label == len("delivery-semantics")
+
+
+def test_render_picker_row_pads_role_column_to_align() -> None:
+    """Every rendered row pads the role column to one width so roles line up (W22)."""
+    rows = session_picker_rows(
+        _state(
+            sessions={
+                "S-exec": _session("S-exec", scope_id="P01-I01-W04"),
+                "S-r": _session(
+                    "S-r",
+                    scope_id="c-abc-research-backoff-1a2b3c",
+                    role=AgentSessionRole.RESEARCHER,
+                ),
+            }
+        )
+    )
+    widths = picker_column_widths(rows)
+    # The executor's shorter ``executor`` role is padded to the ``researcher``
+    # width so the following label column starts at the same offset in both rows.
+    exec_row = next(r for r in rows if r.session_id == "S-exec")
+    plain = render_picker_row(exec_row, selected=True, mode="ascii", widths=widths)
+    assert "executor  " in plain  # padded past its 8 chars toward researcher's 10
+
+
+def test_session_picker_seeds_selection_at_initial_session() -> None:
+    """The roster seeds its selection on the initial session (W22), not row 0."""
+    rows = session_picker_rows(
+        _state(
+            sessions={
+                "S-old": _session("S-old", started_at=_T0),
+                "S-new": _session("S-new", started_at=_T0 + timedelta(hours=1)),
+            }
+        )
+    )
+    # Newest-first ordering puts S-new at index 0; seeding on S-old lands on 1.
+    picker = SessionPicker(rows, mode="ascii", initial_session_id="S-old")
+    assert picker._initial_index() == 1
+    # No initial pins the newest (top) row.
+    assert SessionPicker(rows, mode="ascii")._initial_index() == 0
+
+
+def test_agent_watch_roster_is_the_default_at_two_active(tmp_path: Path) -> None:
+    """W22: 2+ active agents default to the readable roster, not the parity grid.
+
+    Two ACTIVE researchers no longer drop the operator into the surprise
+    side-by-side grid -- the browsable roster (SessionPicker) is the default
+    multi-agent surface, and the grid is a ``g`` opt-in.
+    """
+    state = _state(
+        sessions={
+            "S-1": _session(
+                "S-1", scope_id="camp-1-research-prior-art-aa", role=AgentSessionRole.RESEARCHER
+            ),
+            "S-2": _session(
+                "S-2", scope_id="camp-1-research-backoff-bb", role=AgentSessionRole.RESEARCHER
+            ),
+        }
+    )
+    state_path = _write_state(tmp_path, state)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(160, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            # Roster is the default; no auto-mounted parity grid.
+            assert len(pane.query(WatchGrid)) == 0
+            assert pane.query_one(SessionPicker)
+            # `g` opts into the grid.
+            await pilot.press("g")
+            await settle_screen(pilot)
+            assert len(pane.query(WatchGrid)) == 1
+
+    asyncio.run(body())
 
 
 def test_session_picker_rows_lists_all_watchable_roles() -> None:
@@ -771,12 +902,13 @@ def test_agent_watch_pane_seeds_filtered_from_app_buffer(tmp_path: Path) -> None
     asyncio.run(body())
 
 
-def test_agent_watch_mode_mounts_grid_for_two_active_executors(tmp_path: Path) -> None:
-    """Two ACTIVE executor sessions switch the mode body to the parallel grid.
+def test_agent_watch_grid_opt_in_routes_events_per_tile(tmp_path: Path) -> None:
+    """The ``g``-opt-in parity grid tiles two ACTIVE sessions and routes per-tile.
 
-    With two ACTIVE executor sessions on two waves, the agent-watch mode mounts
-    the :class:`WatchGrid` (one tile per session) in place of the single-session
-    zoom; one pushed event per session routes to its OWN tile and not the
+    W22: the grid is no longer the auto-mounted default at 2+ active sessions
+    (the roster is) -- pressing ``g`` opts into the side-by-side grid. With two
+    ACTIVE executor sessions on two waves the grid then mounts one tile per
+    session, and one pushed event per session routes to its OWN tile and not the
     other's.
     """
     state = _state(
@@ -792,6 +924,8 @@ def test_agent_watch_mode_mounts_grid_for_two_active_executors(tmp_path: Path) -
         async with app.run_test(size=(160, 40)) as pilot:
             await settle_screen(pilot)
             await pilot.press(_WATCH_DIGIT)  # -> agent_watch
+            await settle_screen(pilot)
+            await pilot.press("g")  # opt into the parity grid (W22)
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AgentWatchModeScreen)

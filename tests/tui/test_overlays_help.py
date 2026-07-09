@@ -313,9 +313,10 @@ def test_help_renders_mode_action_and_reference_sections() -> None:
             await app.workers.wait_for_complete()
             assert "(navigation only)" in capture_screen_text(app)
             # Scroll further to the reference-nav section (alt-arrow nav).
-            # The Sandbox mode's own action-key rows push this section further
+            # The Sandbox mode's own action-key rows -- plus the Watch mode's
+            # ``g`` grid-toggle action-key row (W22) -- push this section further
             # down the card than the pre-9-mode layout placed it.
-            container.scroll_to(y=70, animate=False)
+            container.scroll_to(y=72, animate=False)
             await pilot.pause()
             await app.workers.wait_for_complete()
             ref = capture_screen_text(app)
