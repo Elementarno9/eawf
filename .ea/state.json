@@ -10878,6 +10878,20 @@
       "status": "done",
       "updated_at": "2026-07-09T17:23:53.770396Z"
     },
+    "P30-I25-W21": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W21",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I25-W21",
+      "model": null,
+      "scope_id": "P30-I25-W21",
+      "status": "done",
+      "updated_at": "2026-07-09T20:09:40.423039Z"
+    },
     "P30-I25-W22": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -10891,6 +10905,34 @@
       "scope_id": "P30-I25-W22",
       "status": "done",
       "updated_at": "2026-07-09T18:35:23.347486Z"
+    },
+    "P30-I25-W23": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W23",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I25-W23",
+      "model": null,
+      "scope_id": "P30-I25-W23",
+      "status": "done",
+      "updated_at": "2026-07-09T20:10:23.550847Z"
+    },
+    "P30-I25-W24": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W24",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I25-W24",
+      "model": null,
+      "scope_id": "P30-I25-W24",
+      "status": "done",
+      "updated_at": "2026-07-09T20:17:48.508577Z"
     }
   },
   "agent_sessions": {
@@ -27326,6 +27368,19 @@
       "scope_id": "P30-I25-W20",
       "updated_at": "2026-07-09T16:43:02.454034Z"
     },
+    "P30-I25-W21": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W21-bucket-20260709T200906Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I25-W21",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I25-W21",
+      "updated_at": "2026-07-09T20:09:06.749839Z"
+    },
     "P30-I25-W22": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I25-W22-bucket-20260709T174219Z",
@@ -27338,6 +27393,32 @@
       "reference_class": "bucket:XL",
       "scope_id": "P30-I25-W22",
       "updated_at": "2026-07-09T17:42:19.111421Z"
+    },
+    "P30-I25-W23": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W23-bucket-20260709T200957Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I25-W23",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I25-W23",
+      "updated_at": "2026-07-09T20:09:57.548791Z"
+    },
+    "P30-I25-W24": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W24-bucket-20260709T201024Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I25-W24",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I25-W24",
+      "updated_at": "2026-07-09T20:10:24.132071Z"
     }
   },
   "fleet_run": null,
@@ -31038,7 +31119,7 @@
   "schema_version": "1.14",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-09T18:35:23.347793Z",
+  "updated_at": "2026-07-09T20:17:48.508823Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -123272,10 +123353,10 @@
     "P30-I25-W21": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-P30I25-close-parent",
+      "claimed_at": "2026-07-09T20:09:06.728594Z",
+      "closed_at": "2026-07-09T20:09:40.423039Z",
+      "commit": "82a1cf099cd8cc71d2b68a7342830d16e0c0346d",
       "criteria_floor_waiver": {
         "reason": "prose success criteria; auditor-live is verdict-path work split from W20 per operator decision",
         "waived_at": "2026-07-09T16:42:18.717879Z",
@@ -123307,12 +123388,12 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-09T16:42:18.783885Z",
-      "outcome": null,
+      "outcome": "Auditor/juror spawns stream stdout live to the Watch tail via bus-less persist_agent_output_chunk keyed on the auditor session scope; events_path threaded into _jury_spawn_factory. 196 close-gate/verdict/jury tests + full suite green.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -123485,10 +123566,10 @@
     "P30-I25-W23": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-P30I25-close-parent",
+      "claimed_at": "2026-07-09T20:09:57.531626Z",
+      "closed_at": "2026-07-09T20:10:23.550847Z",
+      "commit": "2536395c952ddc28d1fe9d6f889c922a7a7f41db",
       "criteria_floor_waiver": {
         "reason": "prose success criteria; daemon state-reconciliation fix surfaced by live testing",
         "waived_at": "2026-07-09T17:45:03.747469Z",
@@ -123518,12 +123599,12 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-09T17:45:03.790464Z",
-      "outcome": null,
+      "outcome": "Daemon boot reconciles orphaned AgentSession rows: blanket ACTIVE->STALE flip via canonical close_session under portalock; boot-safe on absent/invalid state. Kills the zombie live-agent row after daemon kill+restart.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -123590,10 +123671,10 @@
     "P30-I25-W24": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-P30I25-close-parent",
+      "claimed_at": "2026-07-09T20:10:24.113756Z",
+      "closed_at": "2026-07-09T20:17:48.508577Z",
+      "commit": "40dbe28fd4e7433b703102e07cfb9fe5a8343fd3",
       "criteria_floor_waiver": {
         "reason": "prose success criteria; research-board deadlock surfaced by live testing",
         "waived_at": "2026-07-09T18:07:08.172894Z",
@@ -123622,12 +123703,12 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-09T18:07:08.216473Z",
-      "outcome": null,
+      "outcome": "Blocking research questions surface in the checkpoint drawer + resolve via research.resolve_question RPC/CLI (clears the load-bearing blocking bit) so a halted campaign can be unblocked; Enter on an answered question opens its answering claim.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
