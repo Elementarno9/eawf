@@ -147,6 +147,7 @@ def _target(
     runtime: str = "claude",
     status: AgentSessionStatus = AgentSessionStatus.ACTIVE,
     attempt: int = 1,
+    agent_role: AgentSessionRole = AgentSessionRole.EXECUTOR,
 ) -> WatchTarget:
     """Build a directly-constructed watch target for the render helpers."""
     return WatchTarget(
@@ -155,6 +156,7 @@ def _target(
         runtime=runtime,
         status=status,
         attempt=attempt,
+        agent_role=agent_role,
     )
 
 
@@ -345,6 +347,86 @@ def test_pick_watch_target_falls_back_to_closed_executor() -> None:
     assert target is not None
     assert target.session_id == "S-2"
     assert target.status is AgentSessionStatus.FAILED
+
+
+# --------------------------------------------------------------------------
+# W20: watch ANY spawned agent role (executor / researcher / auditor)
+# --------------------------------------------------------------------------
+
+
+def test_pick_watch_target_selects_researcher_when_no_executor() -> None:
+    """A campaign researcher is a valid default watch target (W20).
+
+    With no executor session and one ACTIVE researcher, the picker targets the
+    researcher -- the Watch surface streams any spawned agent, not only wave
+    executors -- and the target carries the researcher role + its session scope
+    (the key the tail filters on), not a wave id.
+    """
+    state = _state(
+        sessions={
+            "S-r": _session("S-r", scope_id="CAMP-1-research-ab", role=AgentSessionRole.RESEARCHER),
+        }
+    )
+    target = pick_watch_target(state)
+    assert target is not None
+    assert target.agent_role is AgentSessionRole.RESEARCHER
+    assert target.wave_id == "CAMP-1-research-ab"
+
+
+def test_pick_watch_target_prefers_active_researcher_over_closed_executor() -> None:
+    """An ACTIVE researcher outranks a CLOSED executor for the default target."""
+    state = _state(
+        sessions={
+            "S-exec": _session("S-exec", status=AgentSessionStatus.CLOSED, started_at=_T0),
+            "S-r": _session(
+                "S-r",
+                scope_id="CAMP-1-research-ab",
+                role=AgentSessionRole.RESEARCHER,
+                started_at=_T0 + timedelta(hours=1),
+            ),
+        }
+    )
+    target = pick_watch_target(state)
+    assert target is not None
+    assert target.session_id == "S-r"
+    assert target.agent_role is AgentSessionRole.RESEARCHER
+
+
+def test_pick_watch_target_ignores_non_watchable_role() -> None:
+    """A REVIEWER session is not a spawned streaming child, so it is never picked."""
+    state = _state(
+        sessions={"S-rev": _session("S-rev", role=AgentSessionRole.REVIEWER)},
+    )
+    assert pick_watch_target(state) is None
+
+
+def test_render_watch_header_shows_agent_role() -> None:
+    """The header names the watched agent's role (W20), not only its scope."""
+    header = render_watch_header(
+        _target(wave_id="CAMP-1-research-ab", agent_role=AgentSessionRole.RESEARCHER),
+        mode="ascii",
+    )
+    assert "researcher" in header
+    assert "CAMP-1-research-ab" in header
+
+
+def test_session_picker_rows_lists_all_watchable_roles() -> None:
+    """The roster lists executor + researcher sessions, each carrying its role."""
+    state = _state(
+        sessions={
+            "S-exec": _session("S-exec", started_at=_T0),
+            "S-r": _session(
+                "S-r",
+                scope_id="CAMP-1-research-ab",
+                role=AgentSessionRole.RESEARCHER,
+                started_at=_T0 + timedelta(hours=1),
+            ),
+        }
+    )
+    rows = session_picker_rows(state)
+    by_id = {row.session_id: row for row in rows}
+    assert by_id["S-exec"].agent_role is AgentSessionRole.EXECUTOR
+    assert by_id["S-r"].agent_role is AgentSessionRole.RESEARCHER
 
 
 # --------------------------------------------------------------------------

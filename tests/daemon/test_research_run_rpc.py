@@ -522,6 +522,14 @@ def test_research_run_rpc_uses_live_producer_without_stub(
     assert cost_rows
     assert all(row.scope_id == "campaign-live" for row in cost_rows)
     assert read_campaign_cost(state_path, "campaign-live") > 0
+    # W20: researcher chunks key on the researcher SESSION scope (not the
+    # campaign) so the Watch tail can filter one researcher's output apart from
+    # its siblings; the cost scope (campaign) and the chunk scope (session) are
+    # deliberately distinct.
+    chunk_rows = [row for row in events if row.payload.get("event_type") == "agent.output.chunk"]
+    assert chunk_rows
+    assert all(row.scope_id != "campaign-live" for row in chunk_rows)
+    assert all(str(row.scope_id).startswith("campaign-live-research-") for row in chunk_rows)
     final_state = State.model_validate(orjson.loads(state_path.read_bytes()))
     active_wave = final_state.waves[_LIVE_WAVE_ID]
     assert active_wave.tokens_consumed == 0  # research never inflated the wave

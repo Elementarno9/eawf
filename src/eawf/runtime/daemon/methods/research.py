@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import replace
@@ -86,8 +87,8 @@ from eawf.kernel.store.paths import store_path
 from eawf.platform.scrub.scan import rewrite_text
 from eawf.runtime.budget.policy import DEFAULT_ENFORCE, EnforceMode
 from eawf.runtime.daemon.dispatch_runner import (
-    _CHUNK_BATCH_LINES,
     DispatchTokens,
+    _chunk_should_flush,
     emit_agent_output_chunk,
     run_dispatch,
 )
@@ -1296,27 +1297,38 @@ async def _spawn_researcher_agent_end(
 
     # Stream the researcher's stdout live to the Watch tail (mirroring the
     # wave-spawn chunk wiring): batch lines + persist each batch as an
-    # agent.output.chunk keyed on the wave so the Watch renders it live rather
-    # than only a terminal agent.output at completion.
+    # agent.output.chunk keyed on the researcher SESSION scope_id (W20) -- the
+    # same scope the Watch target filters on -- so the researcher's zoom renders
+    # its own output live rather than only a terminal agent.output at
+    # completion. The dispatch_scope (the campaign) stays the COST centre; the
+    # chunk scope is the session so the tail can separate one researcher from
+    # its siblings. Flush on the count batch OR a wall-clock budget
+    # (:func:`_chunk_should_flush`, W19) so a slow researcher turn persists
+    # promptly instead of only at the 20-line count.
     chunk_buffer: list[str] = []
     chunk_seq = [0]
+    last_chunk_flush = [time.monotonic()]
 
     def _flush_chunk_buffer() -> None:
         if not chunk_buffer:
             return
         emit_agent_output_chunk(
             ctx,
-            wave_id=dispatch_scope,
+            wave_id=scope_id,
             session_id=session_id,
             seq=chunk_seq[0],
             text="".join(chunk_buffer),
         )
         chunk_seq[0] += 1
         chunk_buffer.clear()
+        last_chunk_flush[0] = time.monotonic()
 
     async def _on_chunk(line: str) -> None:
         chunk_buffer.append(line)
-        if len(chunk_buffer) >= _CHUNK_BATCH_LINES:
+        if _chunk_should_flush(
+            buffered=len(chunk_buffer),
+            elapsed_s=time.monotonic() - last_chunk_flush[0],
+        ):
             _flush_chunk_buffer()
 
     spawn_result = await adapter.spawn_session(

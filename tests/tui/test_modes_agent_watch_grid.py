@@ -10,7 +10,7 @@ App renders :data:`~eawf.surfaces.tui.modes.agent_watch.WATCH_DEGRADED`.
 These tests pin the two halves:
 
 * the pure helpers --
-  :func:`~eawf.surfaces.tui.modes.agent_watch.active_executor_sessions` (tile
+  :func:`~eawf.surfaces.tui.modes.agent_watch.active_watchable_sessions` (tile
   enumeration), :func:`~eawf.surfaces.tui.modes.agent_watch.tile_dom_id`
   (per-session DOM id), and
   :func:`~eawf.surfaces.tui.modes.agent_watch.session_routes_event` (the
@@ -58,7 +58,7 @@ from eawf.surfaces.tui.modes.agent_watch import (
     WATCH_TILE_ROW_CLASS,
     WatchGrid,
     WatchTile,
-    active_executor_sessions,
+    active_watchable_sessions,
     session_routes_event,
     tile_dom_id,
 )
@@ -167,37 +167,45 @@ def _state(sessions: dict[str, AgentSession]) -> State:
 
 
 # --------------------------------------------------------------------------
-# active_executor_sessions -- tile enumeration (boundary cases)
+# active_watchable_sessions -- tile enumeration (boundary cases)
 # --------------------------------------------------------------------------
 
 
-def test_active_executor_sessions_none_state_is_empty() -> None:
+def test_active_watchable_sessions_none_state_is_empty() -> None:
     """An unbound state yields no tiles (honest-empty grid path)."""
-    assert active_executor_sessions(None) == []
+    assert active_watchable_sessions(None) == []
 
 
-def test_active_executor_sessions_filters_to_active_executors() -> None:
-    """Only ACTIVE executor sessions become tiles; others are filtered out."""
+def test_active_watchable_sessions_includes_all_watchable_roles() -> None:
+    """ACTIVE executor + researcher sessions tile (W20); non-watchable + closed drop.
+
+    A researcher is now watchable alongside the executor -- the grid tiles any
+    spawned agent role, not only wave executors -- while a REVIEWER (not a
+    spawned, output-streaming role) and a CLOSED session are filtered out.
+    """
     state = _state(
         {
             "S-active": _session("S-active", scope_id=_WAVE_A),
+            "S-research": _session(
+                "S-research", scope_id="CAMP-1-research-ab", role=AgentSessionRole.RESEARCHER
+            ),
             "S-closed": _session("S-closed", scope_id=_WAVE_B, status=AgentSessionStatus.CLOSED),
             "S-reviewer": _session("S-reviewer", scope_id=_WAVE_B, role=AgentSessionRole.REVIEWER),
         }
     )
-    picked = active_executor_sessions(state)
-    assert [s.id for s in picked] == ["S-active"]
+    picked = active_watchable_sessions(state)
+    assert [s.id for s in picked] == ["S-active", "S-research"]
 
 
-def test_active_executor_sessions_is_id_sorted() -> None:
-    """Two ACTIVE executors are returned id-sorted for a stable tile layout."""
+def test_active_watchable_sessions_is_id_sorted() -> None:
+    """Two ACTIVE watchable sessions are returned id-sorted for a stable layout."""
     state = _state(
         {
             "S-2": _session("S-2", scope_id=_WAVE_B),
             "S-1": _session("S-1", scope_id=_WAVE_A),
         }
     )
-    assert [s.id for s in active_executor_sessions(state)] == ["S-1", "S-2"]
+    assert [s.id for s in active_watchable_sessions(state)] == ["S-1", "S-2"]
 
 
 # --------------------------------------------------------------------------

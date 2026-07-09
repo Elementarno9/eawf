@@ -457,6 +457,19 @@ _TERMINAL_NOT_CLOSED_WAVE_STATUSES: frozenset[WaveStatus] = frozenset(
 )
 
 
+#: The agent roles the Watch surface streams (W20). The default zoom picker,
+#: the roster, and the parity grid resolve any session in one of these roles,
+#: not only wave executors -- so a campaign researcher or a close-gate auditor
+#: is watchable the same way a wave executor is. Every role here scopes its
+#: session + its ``agent.output.chunk`` rows to the SAME ``scope_id`` (a wave id
+#: for an executor, a per-spawn research scope for a researcher), which is the
+#: key the live tail + store backfill filter on. OPERATOR is excluded -- the
+#: coordinating operator is not a spawned, output-streaming child.
+_WATCHABLE_ROLES: frozenset[AgentSessionRole] = frozenset(
+    {AgentSessionRole.EXECUTOR, AgentSessionRole.RESEARCHER, AgentSessionRole.AUDITOR}
+)
+
+
 @dataclass(frozen=True)
 class WatchTarget:
     """The single dispatched session the zoom streams + can cancel.
@@ -464,9 +477,13 @@ class WatchTarget:
     Attributes:
         session_id: The watched :class:`~eawf.kernel.state.models.AgentSession`
             id (record key).
-        wave_id: The wave the session scopes to (its ``scope_id``) -- the key
-            the live event stream is filtered on, since the C09 dispatch
-            events stamp the same wave id as their own ``scope_id``.
+        wave_id: The watched session's ``scope_id`` -- the key the live event
+            stream is filtered on, since the C09 dispatch (and researcher /
+            auditor) events stamp the same scope as their own ``scope_id``. It
+            IS the wave id for an executor session (the dominant case the field
+            is named for); for a researcher it is the per-spawn research scope,
+            for an auditor the verdict-qualified audit scope. The wave-shaped
+            helpers below no-op gracefully when it is not a real wave id.
         runtime: The runtime adapter the session ran on (plugin spelling).
         status: The session lifecycle status at pick time.
         attempt: The wave attempt number to cancel -- the highest recorded
@@ -499,6 +516,11 @@ class WatchTarget:
     #: The watched wave's effort bucket, from which the heartbeat derives the
     #: expected wall-clock (G6). ``None`` when the wave carries no bucket.
     effort_bucket: EffortBucket | None = None
+    #: The watched session's agent role (W20) -- surfaced in the header + roster
+    #: so the operator reads WHAT kind of agent is streaming (executor /
+    #: researcher / auditor), not only its scope. Defaults to EXECUTOR so the
+    #: pre-W20 executor-only callers construct unchanged.
+    agent_role: AgentSessionRole = AgentSessionRole.EXECUTOR
 
     @property
     def wave_is_terminal(self) -> bool:
@@ -525,15 +547,17 @@ class WatchTarget:
 def pick_watch_target(state: State | None) -> WatchTarget | None:
     """Pick the default session to watch from *state*, or ``None``.
 
-    Selects the most-recent ACTIVE executor
-    :class:`~eawf.kernel.state.models.AgentSession` (the live spawn engine
-    registers one EXECUTOR session per dispatch) whose WAVE is not terminal, so
-    the zoom defaults to a session that may still be streaming. A session that
-    still reads ACTIVE only because the spawn dropped off the live stream
+    Selects the most-recent ACTIVE watchable-role
+    :class:`~eawf.kernel.state.models.AgentSession` (:data:`_WATCHABLE_ROLES` --
+    executor, researcher, auditor -- so a campaign researcher is a valid default
+    target, not only a wave executor; W20) whose scope is not a terminal WAVE,
+    so the zoom defaults to a session that may still be streaming. A session
+    that still reads ACTIVE only because the spawn dropped off the live stream
     without closing its record -- its wave already failed / closed / abandoned
     -- is kept OUT of the active pool so the default target is never a finished
-    wave masquerading as live. When no such genuinely-active session exists it
-    falls back to the most-recent executor session of any status so a
+    wave masquerading as live (a non-wave scope has no terminal wave, so it
+    always stays eligible). When no such genuinely-active session exists it
+    falls back to the most-recent watchable session of any status so a
     just-finished dispatch is still inspectable. "Most recent" is by
     :attr:`~eawf.kernel.state.models.AgentSession.started_at`. Returns ``None``
     -- the honest-empty path -- when *state* is unbound or carries no executor
@@ -544,34 +568,38 @@ def pick_watch_target(state: State | None) -> WatchTarget | None:
 
     Returns:
         The :class:`WatchTarget` for the picked session, or ``None`` when no
-        executor session exists to watch.
+        watchable session exists to watch.
     """
     if state is None or not state.agent_sessions:
         return None
-    executors = _executor_sessions(state)
-    if not executors:
+    watchable = _watchable_sessions(state)
+    if not watchable:
         return None
     active = [
         sess
-        for sess in executors
+        for sess in watchable
         if sess.status is AgentSessionStatus.ACTIVE
         and _wave_status(state, sess.scope_id) not in _TERMINAL_WAVE_STATUSES
     ]
-    pool = active if active else executors
+    pool = active if active else watchable
     picked = max(pool, key=lambda sess: sess.started_at)
     target = _session_watch_target(state, picked)
     logger.info(
-        f"pick_watch_target session={target.session_id!r} wave={target.wave_id} "
-        f"runtime={target.runtime!r} status={target.status.value} active={bool(active)}"
+        f"pick_watch_target session={target.session_id!r} scope={target.wave_id} "
+        f"role={target.agent_role.value} runtime={target.runtime!r} "
+        f"status={target.status.value} active={bool(active)}"
     )
     return target
 
 
-def _executor_sessions(state: State) -> list[AgentSession]:
-    """Return every executor session in *state* (any lifecycle status)."""
-    return [
-        sess for sess in state.agent_sessions.values() if sess.role is AgentSessionRole.EXECUTOR
-    ]
+def _watchable_sessions(state: State) -> list[AgentSession]:
+    """Return every watchable-role session in *state* (any lifecycle status).
+
+    Watchable roles (:data:`_WATCHABLE_ROLES`) are the spawned, output-streaming
+    agents -- executor, researcher, auditor -- so the default picker + roster
+    resolve any of them, not only wave executors (W20).
+    """
+    return [sess for sess in state.agent_sessions.values() if sess.role in _WATCHABLE_ROLES]
 
 
 def _wave_status(state: State, wave_id: str) -> WaveStatus | None:
@@ -622,6 +650,7 @@ def _session_watch_target(state: State, session: AgentSession) -> WatchTarget:
         subprocess_pid=attempt_row.subprocess_pid if attempt_row is not None else None,
         started_at=session.started_at,
         effort_bucket=wave.effort_bucket if wave is not None else None,
+        agent_role=session.role,
     )
 
 
@@ -857,7 +886,9 @@ def render_watch_header(
     header_sigil = _header_status_sigil(target, mode=mode)
     status_word = escape_markup(_header_status_label(target))
     header = (
-        f"{header_sigil} [$accent]watching[/] {escape_markup(target.wave_id)} "
+        f"{header_sigil} [$accent]watching[/] "
+        f"[$accent]{escape_markup(target.agent_role.value)}[/] "
+        f"{escape_markup(target.wave_id)} "
         f"[$muted]{escape_markup(target.runtime)}[/] "
         f"[$accent]{status_word}[/]"
     )
@@ -1034,23 +1065,25 @@ def frame_replay_lines(lines: list[str], wave_status: WaveStatus | None) -> list
     return [banner, *lines]
 
 
-def active_executor_sessions(state: State | None) -> list[AgentSession]:
-    """Return the ACTIVE executor sessions to lay out as grid tiles.
+def active_watchable_sessions(state: State | None) -> list[AgentSession]:
+    """Return the ACTIVE watchable-role sessions to lay out as grid tiles.
 
-    The multi-session grid shows one tile per ACTIVE executor
-    :class:`~eawf.kernel.state.models.AgentSession` -- the live spawn engine
-    registers one EXECUTOR session per dispatch, and only the ACTIVE ones are
-    still streaming, so a tile per ACTIVE executor is the parallel watch
-    surface. Ordered by :attr:`~eawf.kernel.state.models.AgentSession.id` so
-    the tile layout is stable across re-renders (the dict insertion order is
-    not load-bearing). An unbound or session-free state yields an empty list --
-    the honest-empty grid path.
+    The multi-session grid shows one tile per ACTIVE watchable
+    :class:`~eawf.kernel.state.models.AgentSession` (:data:`_WATCHABLE_ROLES` --
+    executor, researcher, auditor), so a campaign fanned out over several
+    researchers reads side-by-side the same way a parallel wave fleet does
+    (W20). Only the ACTIVE ones are still streaming, so a tile per ACTIVE
+    watchable session is the parallel watch surface. Ordered by
+    :attr:`~eawf.kernel.state.models.AgentSession.id` so the tile layout is
+    stable across re-renders (the dict insertion order is not load-bearing). An
+    unbound or session-free state yields an empty list -- the honest-empty grid
+    path.
 
     Args:
         state: The bound read-only state, or ``None`` (fresh / user scope).
 
     Returns:
-        The ACTIVE executor sessions, id-sorted; empty when none exist.
+        The ACTIVE watchable sessions, id-sorted; empty when none exist.
     """
     if state is None or not state.agent_sessions:
         return []
@@ -1058,7 +1091,7 @@ def active_executor_sessions(state: State | None) -> list[AgentSession]:
         (
             sess
             for sess in state.agent_sessions.values()
-            if sess.role is AgentSessionRole.EXECUTOR and sess.status is AgentSessionStatus.ACTIVE
+            if sess.role in _WATCHABLE_ROLES and sess.status is AgentSessionStatus.ACTIVE
         ),
         key=lambda sess: sess.id,
     )
@@ -1068,7 +1101,7 @@ def parity_session_ids(state: State | None) -> tuple[str, ...]:
     """Return the id-sorted ACTIVE-executor session ids -- the parity-set key.
 
     The parity lens lays out one tile per ACTIVE executor session
-    (:func:`active_executor_sessions`); this is the stable id key over that
+    (:func:`active_watchable_sessions`); this is the stable id key over that
     set, used by the poll backstop to decide whether the dispatched fleet
     changed since the last render. When a poll tick reveals the SAME set of
     ACTIVE executors the body is left untouched (so the live-pushed event rows
@@ -1083,7 +1116,7 @@ def parity_session_ids(state: State | None) -> tuple[str, ...]:
     Returns:
         The ACTIVE executor session ids, id-sorted; empty when none exist.
     """
-    return tuple(sess.id for sess in active_executor_sessions(state))
+    return tuple(sess.id for sess in active_watchable_sessions(state))
 
 
 def tile_dom_id(session_id: str) -> str:
@@ -1157,10 +1190,11 @@ class WatchTile(Vertical):
         yield VerticalScroll(classes=WATCH_TILE_LIST_CLASS)
 
     def _header_markup(self) -> str:
-        """Return the tile header markup: session sigil + wave + runtime."""
+        """Return the tile header markup: session sigil + role + scope + runtime."""
         sigil = session_sigil_markup(self._session.status, mode=self._mode)
         return (
-            f"{sigil} [$accent]{escape_markup(self._session.scope_id)}[/] "
+            f"{sigil} [$accent]{escape_markup(self._session.role.value)}[/] "
+            f"[$accent]{escape_markup(self._session.scope_id)}[/] "
             f"[$muted]{escape_markup(self._session.runtime)}[/]"
         )
 
@@ -1240,7 +1274,7 @@ class WatchGrid(Widget):
 
         Args:
             sessions: The ACTIVE executor sessions to lay out as tiles
-                (:func:`active_executor_sessions`); empty drives the
+                (:func:`active_watchable_sessions`); empty drives the
                 honest-empty / honest-degraded notice.
             degraded: Whether the host App reports a daemon-unreachable state,
                 so the empty notice reads as degraded rather than honest-empty.
@@ -1914,14 +1948,17 @@ class LaneGrid(Widget):
 
 @dataclass(frozen=True)
 class SessionPickerRow:
-    """One browsable executor session in the picker.
+    """One browsable watchable-role session in the picker.
 
     Attributes:
         session_id: The session record key the Enter-zoom resolves.
-        wave_id: The wave the session scopes to.
+        wave_id: The session's ``scope_id`` (a wave id for an executor, a
+            research / audit scope for the other roles).
         runtime: The runtime adapter the session ran on.
         status: The session lifecycle status (drives the row sigil).
         started_label: The session start time as a compact ``HH:MM`` label.
+        agent_role: The session's agent role, surfaced in the row so the
+            roster reads which KIND of agent each entry is (W20).
     """
 
     session_id: str
@@ -1929,26 +1966,29 @@ class SessionPickerRow:
     runtime: str
     status: AgentSessionStatus
     started_label: str
+    agent_role: AgentSessionRole = AgentSessionRole.EXECUTOR
 
 
 def session_picker_rows(state: State | None) -> tuple[SessionPickerRow, ...]:
-    """Project *state*'s executor sessions into picker rows, newest first.
+    """Project *state*'s watchable-role sessions into picker rows, newest first.
 
-    Every executor session is browsable regardless of lifecycle status — the
-    picker exists precisely so finished sessions stay reachable once their
-    fleet lanes are deleted. Order is most-recent ``started_at`` first so the
-    default selection lands on the newest run.
+    Every watchable session (:data:`_WATCHABLE_ROLES` -- executor, researcher,
+    auditor) is browsable regardless of lifecycle status, so the roster lists
+    any agent eawf ran, not only wave executors (W20); the picker exists
+    precisely so finished sessions stay reachable once their fleet lanes are
+    deleted. Order is most-recent ``started_at`` first so the default selection
+    lands on the newest run.
 
     Args:
         state: The bound read-only state, or ``None`` (fresh / user scope).
 
     Returns:
-        The picker display rows, newest first; empty when no executor
+        The picker display rows, newest first; empty when no watchable
         session exists.
     """
     if state is None or not state.agent_sessions:
         return ()
-    executors = sorted(_executor_sessions(state), key=lambda s: s.started_at, reverse=True)
+    sessions = sorted(_watchable_sessions(state), key=lambda s: s.started_at, reverse=True)
     return tuple(
         SessionPickerRow(
             session_id=sess.id,
@@ -1956,8 +1996,9 @@ def session_picker_rows(state: State | None) -> tuple[SessionPickerRow, ...]:
             runtime=sess.runtime,
             status=sess.status,
             started_label=sess.started_at.strftime("%H:%M"),
+            agent_role=sess.role,
         )
-        for sess in executors
+        for sess in sessions
     )
 
 
@@ -1986,13 +2027,15 @@ def render_picker_row(row: SessionPickerRow, *, selected: bool = False, mode: Re
     if selected:
         sigil = escape_markup(glyph(_SESSION_SIGIL[row.status], mode=mode))
         return (
-            f"{sigil} {escape_markup(row.wave_id)} "
+            f"{sigil} {escape_markup(row.agent_role.value)} "
+            f"{escape_markup(row.wave_id)} "
             f"{escape_markup(row.runtime)} "
             f"{escape_markup(row.status.value)} "
             f"{escape_markup(row.started_label)}"
         )
     return (
         f"{session_sigil_markup(row.status, mode=mode)} "
+        f"[$accent]{escape_markup(row.agent_role.value)}[/] "
         f"[$text]{escape_markup(row.wave_id)}[/] "
         f"[$muted]{escape_markup(row.runtime)}[/] "
         f"[$muted]{escape_markup(row.status.value)}[/] "
@@ -2381,7 +2424,7 @@ class AgentWatchModeScreen(ScopeScreen):
         changes.
         """
         state = self._current_state()
-        sessions = active_executor_sessions(state)
+        sessions = active_watchable_sessions(state)
         mode = self._render_mode()
         self._parity_ids = tuple(sess.id for sess in sessions)
         self._lane_parity = lane_parity_key(state)
@@ -3538,7 +3581,7 @@ __all__ = [
     "WatchGrid",
     "WatchTarget",
     "WatchTile",
-    "active_executor_sessions",
+    "active_watchable_sessions",
     "cancel_mark",
     "is_watched_event",
     "lane_grid_rows",
