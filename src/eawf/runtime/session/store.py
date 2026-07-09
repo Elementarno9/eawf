@@ -284,20 +284,34 @@ def reconcile_orphaned_sessions(state_path: Path, event_path: Path) -> int:
     write, mirroring the daemon canonical-writer path. When no session is
     ``ACTIVE`` the write is skipped (no-op) and no event is appended.
 
+    Boot-safe: an absent or unloadable ``state.json`` (a fresh project whose
+    state is not yet initialised, or a minimal stub) has no sessions to
+    reconcile, so it is a no-op that returns 0 rather than crashing the daemon
+    boot -- the reconcile runs before the listener starts, so a hard failure
+    here would abort startup.
+
     Args:
         state_path: Path to ``state.json``.
         event_path: Path to ``event.jsonl`` (the ``session.close`` event sink).
 
     Returns:
-        The count of sessions flipped from ``ACTIVE`` to ``STALE``.
+        The count of sessions flipped from ``ACTIVE`` to ``STALE`` (0 when the
+        state is absent / unloadable / has no ACTIVE session).
     """
     # Imported lazily: the ``eawf.workflow.evidence`` package __init__ pulls in
     # the verdict path, which imports this module -- a module-level import here
     # is a boot-time circular import.
+    from eawf.surfaces.cli.errors import UserError, ValidationError
     from eawf.workflow.evidence._io import load_state
 
+    if not state_path.exists():
+        return 0
     with portalock.acquire(state_path, timeout=5.0):
-        state = load_state(state_path)
+        try:
+            state = load_state(state_path)
+        except (UserError, ValidationError) as exc:
+            logger.debug(f"reconcile_orphaned_sessions skip reason=state-unloadable cause={exc!r}")
+            return 0
         orphan_ids = [
             sid
             for sid, session in state.agent_sessions.items()
