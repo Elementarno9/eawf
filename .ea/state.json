@@ -10990,6 +10990,20 @@
       "status": "done",
       "updated_at": "2026-07-13T01:13:29.979601Z"
     },
+    "P30-I25-W29": {
+      "actual_cost_usd": 22.269551999999997,
+      "actual_tokens": 115560,
+      "agent_runtime_eu": 3.1078755555555557,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W29",
+      "elapsed_eu": 3.1078755555555557,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W29",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W29",
+      "status": "done",
+      "updated_at": "2026-07-13T04:00:28.475735Z"
+    },
     "P30-I25-W30": {
       "actual_cost_usd": 4.379285999999997,
       "actual_tokens": 7908466,
@@ -11326,6 +11340,20 @@
       "started_at": "2026-07-13T01:16:52.195285Z",
       "status": "stale",
       "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260713T035217Z-auditor-claude-code": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260713T035217Z-auditor-claude-code",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "scope_id": "P30-I25-W29::audit",
+      "started_at": "2026-07-13T03:52:17.468530Z",
+      "status": "active",
+      "summary": null,
       "worktree_ids": []
     }
   },
@@ -14674,9 +14702,12 @@
   },
   "claims": null,
   "current": {
-    "active_session_ids": [],
+    "active_session_ids": [
+      "SES-20260713T035217Z-auditor-claude-code"
+    ],
     "active_wave_ids": [
-      "P30-I25-W29"
+      "P30-I25-W32",
+      "P30-I25-W33"
     ],
     "iter_id": "P30-I25",
     "phase_id": "P30",
@@ -27627,6 +27658,32 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I25-W31",
       "updated_at": "2026-07-13T01:28:03.492391Z"
+    },
+    "P30-I25-W32": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W32-bucket-20260713T032331Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I25-W32",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I25-W32",
+      "updated_at": "2026-07-13T03:23:31.973819Z"
+    },
+    "P30-I25-W33": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W33-bucket-20260713T034542Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I25-W33",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I25-W33",
+      "updated_at": "2026-07-13T03:45:42.710068Z"
     }
   },
   "fleet_run": null,
@@ -30196,7 +30253,9 @@
         "P30-I25-W28",
         "P30-I25-W29",
         "P30-I25-W30",
-        "P30-I25-W31"
+        "P30-I25-W31",
+        "P30-I25-W32",
+        "P30-I25-W33"
       ]
     }
   },
@@ -31334,7 +31393,7 @@
   "schema_version": "1.15",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-13T01:56:55.415809Z",
+  "updated_at": "2026-07-13T04:00:28.476476Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -126217,7 +126276,7 @@
       "blocks": [],
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T01:56:55.388050Z",
-      "closed_at": null,
+      "closed_at": "2026-07-13T04:00:28.475735Z",
       "commit": null,
       "criteria_floor_waiver": {
         "reason": "prose success criteria; live-evidence gate demanded because synthetic-fixture green tests are what hid this defect",
@@ -126254,7 +126313,7 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-12T23:54:50.172834Z",
-      "outcome": null,
+      "outcome": "Live Stop-boundary verification: e2e test + evidence artifact; waves closed with measured EU",
       "runtime_baseline": {
         "api_duration_ms": 7221020,
         "cache_creation_input_tokens": 371253,
@@ -126269,10 +126328,38 @@
         "total_duration_ms": 7221020
       },
       "runtime_carry": null,
-      "runtime_latest": null,
+      "runtime_latest": {
+        "api_duration_ms": 12815196,
+        "cache_creation_input_tokens": 441308,
+        "cache_read_input_tokens": 117620119,
+        "captured_at": "2026-07-13T03:29:58.223665Z",
+        "cost_usd": 68.6829295,
+        "harness": "claude-code",
+        "input_tokens": 798,
+        "model": "claude-opus-4-8",
+        "output_tokens": 218232,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 12815196
+      },
       "runtime_preference": null,
-      "sessions": {},
-      "status": "claimed",
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "cache_creation_input_tokens": 70055,
+          "cache_read_input_tokens": 40870354,
+          "cost_usd": 22.269551999999997,
+          "ended_at": "2026-07-13T03:29:58.223665Z",
+          "exit_status": 0,
+          "input_tokens": 190,
+          "output_tokens": 45315,
+          "runtime": "claude-code",
+          "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "started_at": "2026-07-13T01:56:55.415497Z",
+          "subprocess_pid": null
+        }
+      },
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -126431,7 +126518,7 @@
       ],
       "title": "Verify EU capture live across a real Stop boundary",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 115560,
       "worktree_id": null
     },
     "P30-I25-W30": {
@@ -126713,6 +126800,271 @@
       "title": "Record wave-delta runtime on the interactive attempt row",
       "token_budget": null,
       "tokens_consumed": 61619,
+      "worktree_id": null
+    },
+    "P30-I25-W32": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T03:23:31.947722Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Reactive fix wave appended mid-iter after the W29 close deadlocked on a 600s auditor timeout and an auditor pre-commit run discarded uncommitted edits",
+        "waived_at": "2026-07-13T03:23:17.154867Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The single-auditor close spawn is hard-capped at 600s and never threads the configured juror wall clock, so a wave whose criteria ask for a full-suite run can never close. Worse, the auditor runs pre-commit inside the operator's working tree, whose stash-and-rollback can wipe uncommitted work.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/surfaces/render/dispatch.py",
+        ".ea/config.yaml",
+        "tests/daemon/test_wave_verdict_gate.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W32",
+      "intent": {
+        "desired_outcome": "A long-running close audit completes under the configured wall clock and never mutates the operator's working tree",
+        "evidence_refs": [
+          ".ea/artifacts/evidence/2026-07-13-eu-capture/2026-07-13-attestation.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "W29 cannot close at all until this is fixed, and the tree-stashing hazard already cost a set of uncommitted test edits during this iter",
+        "problem": "The close auditor is killed at 600s regardless of config and runs pre-commit in the live working tree where its stash rollback can destroy uncommitted work",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-13T03:23:17.199192Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 12422511,
+        "cache_creation_input_tokens": 423025,
+        "cache_read_input_tokens": 102663140,
+        "captured_at": "2026-07-13T03:23:31.973790Z",
+        "cost_usd": 60.76033,
+        "harness": "claude-code",
+        "input_tokens": 732,
+        "model": "claude-opus-4-8",
+        "output_tokens": 207794,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 12422511
+      },
+      "runtime_carry": null,
+      "runtime_latest": {
+        "api_duration_ms": 12815196,
+        "cache_creation_input_tokens": 441308,
+        "cache_read_input_tokens": 117620119,
+        "captured_at": "2026-07-13T03:29:58.223665Z",
+        "cost_usd": 68.6829295,
+        "harness": "claude-code",
+        "input_tokens": 798,
+        "model": "claude-opus-4-8",
+        "output_tokens": 218232,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 12815196
+      },
+      "runtime_preference": null,
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "cache_creation_input_tokens": 18283,
+          "cache_read_input_tokens": 14956979,
+          "cost_usd": 7.922599499999997,
+          "ended_at": "2026-07-13T03:29:58.223665Z",
+          "exit_status": 0,
+          "input_tokens": 66,
+          "output_tokens": 10438,
+          "runtime": "claude-code",
+          "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "started_at": "2026-07-13T03:23:31.973790Z",
+          "subprocess_pid": null
+        }
+      },
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The single-auditor close spawn takes its wall-clock ceiling from the configured verify.juror_wall_clock_seconds rather than the hard-coded 600s default so a long audit can finish instead of being killed mid-run",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The single-auditor close spawn takes its wall-clock ceiling from the configured verify.juror_wall_clock_seconds rather than the hard-coded 600s default so a long audit can finish instead of being killed mid-run",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "The auditor dispatch prompt forbids repo-mutating verification commands (notably pre-commit run --all-files",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The auditor dispatch prompt forbids repo-mutating verification commands (notably pre-commit run --all-files",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "whose stash and rollback can discard the operator's uncommitted work) and directs the auditor to read recorded gate evidence instead",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "whose stash and rollback can discard the operator's uncommitted work) and directs the auditor to read recorded gate evidence instead",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "A regression test pins that the close-path auditor spawn is constructed with the configured wall clock and not the default",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A regression test pins that the close-path auditor spawn is constructed with the configured wall clock and not the default",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Stop the close auditor timing out and stashing the live tree",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W33": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T03:45:42.666160Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Reactive fix wave appended mid-iter after the W29 close failed on a float confidence and the operator saw no running agent in the Watch roster",
+        "waived_at": "2026-07-13T03:45:34.275569Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The close auditor emitted confidence as a float (0.78) where the report schema demands the high/medium/low enum; three forced re-asks exhausted and the close failed with no verdict. Separately the close-path auditor session is never persisted, so the Watch roster shows no running agent while the Feed streams its output.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/verdict.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "tests/workflow/dispatch/test_verdict.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W33",
+      "intent": {
+        "desired_outcome": "A close-time audit completes despite a numeric confidence and the running auditor is visible in the Watch roster while it works",
+        "evidence_refs": [
+          ".ea/artifacts/evidence/2026-07-13-eu-capture/2026-07-13-attestation.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "W29 still cannot close after the timeout fix and the operator has no way to observe the agent that is blocking it",
+        "problem": "The close fails when the auditor returns a numeric confidence and the operator cannot see the running auditor in Watch",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-13T03:45:34.330766Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 13753136,
+        "cache_creation_input_tokens": 462836,
+        "cache_read_input_tokens": 122836355,
+        "captured_at": "2026-07-13T03:45:42.710018Z",
+        "cost_usd": 71.6626625,
+        "harness": "claude-code",
+        "input_tokens": 820,
+        "model": "claude-opus-4-8",
+        "output_tokens": 224481,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 13753136
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The auditor prompt names the allowed confidence values explicitly (high or medium or low) so the model is told the contract rather than guessing a number",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The auditor prompt names the allowed confidence values explicitly (high or medium or low) so the model is told the contract rather than guessing a number",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A numeric confidence in an otherwise valid auditor report is coerced into the nearest enum bucket instead of exhausting the re-ask budget and failing the close",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A numeric confidence in an otherwise valid auditor report is coerced into the nearest enum bucket instead of exhausting the re-ask budget and failing the close",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "The close-path auditor session is persisted as soon as it is registered so the Watch roster shows the running auditor live rather than only after the close completes",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The close-path auditor session is persisted as soon as it is registered so the Watch roster shows the running auditor live rather than only after the close completes",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "A regression test pins that a report body carrying a float confidence parses and that an unparseable one still raises",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A regression test pins that a report body carrying a float confidence parses and that an unparseable one still raises",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Unblock the verdict on a numeric confidence and show the live auditor",
+      "token_budget": null,
+      "tokens_consumed": 0,
       "worktree_id": null
     }
   },
