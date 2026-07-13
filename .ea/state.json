@@ -14733,7 +14733,11 @@
     "active_session_ids": [
       "SES-20260713T035217Z-auditor-claude-code"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I25-W34",
+      "P30-I25-W35",
+      "P30-I25-W36"
+    ],
     "iter_id": "P30-I25",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -27709,6 +27713,45 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I25-W33",
       "updated_at": "2026-07-13T03:45:42.710068Z"
+    },
+    "P30-I25-W34": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W34-bucket-20260713T181628Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I25-W34",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I25-W34",
+      "updated_at": "2026-07-13T18:16:28.991330Z"
+    },
+    "P30-I25-W35": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W35-bucket-20260713T181629Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I25-W35",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I25-W35",
+      "updated_at": "2026-07-13T18:16:29.657605Z"
+    },
+    "P30-I25-W36": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W36-bucket-20260713T181630Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I25-W36",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I25-W36",
+      "updated_at": "2026-07-13T18:16:30.309566Z"
     }
   },
   "fleet_run": null,
@@ -30280,7 +30323,10 @@
         "P30-I25-W30",
         "P30-I25-W31",
         "P30-I25-W32",
-        "P30-I25-W33"
+        "P30-I25-W33",
+        "P30-I25-W34",
+        "P30-I25-W35",
+        "P30-I25-W36"
       ]
     }
   },
@@ -31418,7 +31464,7 @@
   "schema_version": "1.15",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-13T04:13:31.749026Z",
+  "updated_at": "2026-07-13T18:16:30.309871Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -127118,6 +127164,360 @@
       "title": "Unblock the verdict on a numeric confidence and show the live auditor",
       "token_budget": null,
       "tokens_consumed": 39265,
+      "worktree_id": null
+    },
+    "P30-I25-W34": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T18:16:28.941061Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Repair wave appended after the iter audit found the shipped duration source silently redefined elapsed_eu as operator wall clock",
+        "waived_at": "2026-07-13T18:15:44.264753Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The transcript timestamp span makes elapsed_eu the claim-to-close wall clock including operator idle time, which the module explicitly forbids (wave.py:277) and which is unbounded across an overnight resume. Sum the per-turn working spans instead so EU stays the agent-runtime basis.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+        "tests/unit/test_transcript_counters.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W34",
+      "intent": {
+        "desired_outcome": "Interactive elapsed_eu measures agent working time only and cannot be inflated by an operator leaving a wave claimed overnight",
+        "evidence_refs": [
+          ".ea/artifacts/evidence/2026-07-13-eu-capture/2026-07-13-attestation.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Every interactive wave closed from now on writes into the calibration corpus this phase exists to build so a wrong basis poisons it permanently",
+        "problem": "Interactive elapsed_eu is the claim-to-close wall clock including idle time which contradicts the documented agent-runtime invariant and is unbounded",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-13T18:15:44.317894Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 65988667,
+        "cache_creation_input_tokens": 1052417,
+        "cache_read_input_tokens": 153338955,
+        "captured_at": "2026-07-13T18:16:28.991254Z",
+        "cost_usd": 93.5602825,
+        "harness": "claude-code",
+        "input_tokens": 942,
+        "model": "claude-opus-4-8",
+        "output_tokens": 254477,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 65988667
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Duration is the sum of per-turn working spans (from a turn's first row to its last) rather than the whole-session first-to-last span so operator idle time between turns is excluded and the agent-runtime basis of wave.py line 277 holds",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Duration is the sum of per-turn working spans (from a turn's first row to its last) rather than the whole-session first-to-last span so operator idle time between turns is excluded and the agent-runtime basis of wave.py line 277 holds",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "An idle gap between turns of any length (an overnight resume) adds no duration so the measure is bounded by work actually done rather than by clock time elapsed",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "An idle gap between turns of any length (an overnight resume) adds no duration so the measure is bounded by work actually done rather than by clock time elapsed",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "Duration remains monotonic as the transcript grows so a later capture never reports a smaller duration and the close-time delta never goes backwards",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Duration remains monotonic as the transcript grows so a later capture never reports a smaller duration and the close-time delta never goes backwards",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "A regression test pins that a transcript with a long idle gap between two short turns reports only the working spans",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A regression test pins that a transcript with a long idle gap between two short turns reports only the working spans",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Measure interactive EU as agent work time not wall clock",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W35": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T18:16:29.623741Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Repair wave appended after the iter audit proved the W32 config leaf inert and the watchdog ceiling incompatible with it",
+        "waived_at": "2026-07-13T18:16:08.698934Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The repo verify overlay carries only odr_blocking so the juror_wall_clock_seconds leaf is discarded and the close auditor still spawns at the 600s default; and the daemon mutation watchdog aborts at 900s so a longer ceiling would be cut mid-mutation anyway. W32 claims behaviour that does not exist.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/verify/readiness.py",
+        "src/eawf/runtime/daemon/main.py",
+        ".ea/config.yaml",
+        "tests/unit/daemon/test_close_gate_auditor_jury_routing.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W35",
+      "intent": {
+        "desired_outcome": "A configured audit ceiling governs the close auditor end to end and the watchdog accommodates it",
+        "evidence_refs": [
+          ".ea/artifacts/evidence/2026-07-13-eu-capture/2026-07-13-attestation.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "W32 shipped a config line that reads as working behaviour but changes nothing which is exactly the idle-contract failure this phase exists to eliminate",
+        "problem": "The configured juror wall clock never reaches the auditor spawn and the watchdog would abort a longer audit anyway so W32 is undelivered",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-13T18:16:08.744643Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 65988667,
+        "cache_creation_input_tokens": 1052417,
+        "cache_read_input_tokens": 153338955,
+        "captured_at": "2026-07-13T18:16:29.657571Z",
+        "cost_usd": 93.5602825,
+        "harness": "claude-code",
+        "input_tokens": 942,
+        "model": "claude-opus-4-8",
+        "output_tokens": 254477,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 65988667
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The repo-layer verify.juror_wall_clock_seconds leaf reaches the resolved VerifyBlock so a configured ceiling actually governs the close auditor spawn rather than being silently discarded by the overlay",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The repo-layer verify.juror_wall_clock_seconds leaf reaches the resolved VerifyBlock so a configured ceiling actually governs the close auditor spawn rather than being silently discarded by the overlay",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "The daemon mutation hard limit is derived from the juror ceiling plus its commit margin rather than being a constant that would abort a legitimately-longer audit mid-mutation",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The daemon mutation hard limit is derived from the juror ceiling plus its commit margin rather than being a constant that would abort a legitimately-longer audit mid-mutation",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "A regression test drives the real config-to-VerifyBlock path (not a monkeypatched block) and asserts the configured ceiling governs the constructed spawn so the test cannot be green over a dead path",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A regression test drives the real config-to-VerifyBlock path (not a monkeypatched block) and asserts the configured ceiling governs the constructed spawn so the test cannot be green over a dead path",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "The configured ceiling in this repo is consistent with the watchdog so a close audit runs to completion instead of being cancelled",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The configured ceiling in this repo is consistent with the watchdog so a close audit runs to completion instead of being cancelled",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Make the configured juror wall clock actually reach the auditor",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W36": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T18:16:30.272268Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Repair wave appended after the iter audit found three defects in the cross-session rebase that were unit-tested only against the happy path",
+        "waived_at": "2026-07-13T18:16:09.947689Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The rebase folds on every session change with no record of which sessions it already folded, so two interleaved sessions double-count without bound; a session that ends without a capture folds nothing and loses its runtime; and the rebased origin is zero rather than the new session's counters at resume, charging the wave for work done before it was resumed.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "tests/unit/test_runtime_session_rebase.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W36",
+      "intent": {
+        "desired_outcome": "A wave spanning several sessions sums each session's runtime exactly once and counts only work done while it was the active wave",
+        "evidence_refs": [
+          ".ea/artifacts/evidence/2026-07-13-eu-capture/2026-07-13-attestation.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "The rebase is the mechanism that lets a wave span sessions at all and it is wrong in three ways that the live run never exercised",
+        "problem": "The cross-session rebase double counts interleaved sessions loses the runtime of a session that ended without a capture and charges pre-resume work to the wave",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-13T18:16:09.985874Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 65988667,
+        "cache_creation_input_tokens": 1052417,
+        "cache_read_input_tokens": 153338955,
+        "captured_at": "2026-07-13T18:16:30.309524Z",
+        "cost_usd": 93.5602825,
+        "harness": "claude-code",
+        "input_tokens": 942,
+        "model": "claude-opus-4-8",
+        "output_tokens": 254477,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 65988667
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The carry records which sessions it has already folded so two interleaved sessions on the same wave cannot fold the same session twice and cannot double-count its runtime",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The carry records which sessions it has already folded so two interleaved sessions on the same wave cannot fold the same session twice and cannot double-count its runtime",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A session that ends without a capture does not silently lose its runtime nor inflate the folded-session count",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A session that ends without a capture does not silently lose its runtime nor inflate the folded-session count",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "The rebased origin is the new session's counters at the moment the wave is resumed rather than zero so work the operator did in that session before touching the wave is not charged to it",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The rebased origin is the new session's counters at the moment the wave is resumed rather than zero so work the operator did in that session before touching the wave is not charged to it",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "Regression tests pin the interleaved-session case and the no-capture case which the shipped code both got wrong",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Regression tests pin the interleaved-session case and the no-capture case which the shipped code both got wrong",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fix the cross-session rebase double count and runtime loss",
+      "token_budget": null,
+      "tokens_consumed": 0,
       "worktree_id": null
     }
   },
