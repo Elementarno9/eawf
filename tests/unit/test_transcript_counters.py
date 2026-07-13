@@ -34,13 +34,11 @@ def test_aggregate_real_transcript_fixture() -> None:
     counters = aggregate_transcript_counters(_TRANSCRIPT_FIXTURE)
 
     assert counters is not None
-    # Both duration fields carry the same figure -- the convention the headless
-    # spawn snapshot uses. Every gap between this fixture's rows is inside a turn
-    # (none exceeds the idle ceiling), so the summed working time is the full
-    # 593_177 ms and it exceeds the single turn-duration row (502_968 ms); the
-    # aggregator reports the larger of the two monotonic measures.
-    assert counters.api_duration_ms == 593_177
-    assert counters.total_duration_ms == 593_177
+    # Claude's own measure of the turn (502_968 ms), not the 593_177 ms span across
+    # the fixture's rows. The span is the wall clock: it would include any wait for
+    # the operator to approve a tool.
+    assert counters.api_duration_ms == 502_968
+    assert counters.total_duration_ms == 502_968
     assert counters.input_tokens == 4
     assert counters.output_tokens == 1_013
     assert counters.cache_creation_input_tokens == 67_527
@@ -115,59 +113,33 @@ def _assistant_row(message_id: str, *, at: str, output_tokens: int = 10) -> dict
     }
 
 
-def test_duration_falls_back_to_the_timestamp_span(tmp_path: Path) -> None:
-    """A live session has no turn_duration row yet -- the row lands after the Stop hook.
-
-    This is the defect the first live run exposed: capture read the transcript
-    mid-turn, found no ``durationMs``, and reported a zero duration, so the
-    API_DURATION EU basis still produced elapsed_eu=0.
-    """
-    rows = [
-        _assistant_row("msg_0001", at="2026-07-13T00:00:00.000Z"),
-        _assistant_row("msg_0002", at="2026-07-13T00:05:00.000Z"),
-    ]
-    path = tmp_path / "t.jsonl"
-    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
-
-    counters = aggregate_transcript_counters(path)
-
-    assert counters is not None
-    assert counters.api_duration_ms == 300_000
-    assert counters.total_duration_ms == 300_000
-
-
-def test_duration_is_monotonic_as_the_transcript_grows(tmp_path: Path) -> None:
+def test_duration_only_grows_as_turn_rows_land(tmp_path: Path) -> None:
     """A later capture never reports a smaller duration than an earlier one.
 
-    A backwards counter would raise ``LifecycleError`` at close, so the reported
-    duration must be the max of the two monotonic measures (turn-duration sum and
-    timestamp span) rather than whichever one happens to be present.
+    A backwards counter re-origins the wave (dropping its measured runtime), so the
+    measure must only ever grow. Summing turn rows is monotone by construction:
+    rows are appended, never rewritten. The old measure was NOT -- a span-based
+    figure fell the moment Claude's smaller one landed.
     """
     path = tmp_path / "t.jsonl"
     early_rows = [
-        _assistant_row("msg_0001", at="2026-07-13T00:00:00.000Z"),
-        _assistant_row("msg_0002", at="2026-07-13T00:10:00.000Z"),
+        _prompt_row(at="2026-07-13T00:00:00.000Z"),
+        _assistant_row("msg_0001", at="2026-07-13T00:10:00.000Z"),
     ]
     path.write_text("\n".join(json.dumps(r) for r in early_rows) + "\n", encoding="utf-8")
     early = aggregate_transcript_counters(path)
 
-    # The turn ends: the turn_duration row finally lands (a smaller figure than
-    # the span, because the span also covers the operator's think time).
     late_rows = [
         *early_rows,
-        {
-            "type": "system",
-            "subtype": "turn_duration",
-            "durationMs": 120_000,
-            "timestamp": "2026-07-13T00:10:05.000Z",
-        },
+        _turn_duration_row(at="2026-07-13T00:10:05.000Z", ms=120_000),
     ]
     path.write_text("\n".join(json.dumps(r) for r in late_rows) + "\n", encoding="utf-8")
     late = aggregate_transcript_counters(path)
 
     assert early is not None
     assert late is not None
-    assert early.api_duration_ms == 600_000
+    assert early.api_duration_ms == 0
+    assert late.api_duration_ms == 120_000
     assert late.api_duration_ms >= early.api_duration_ms
 
 
@@ -325,7 +297,7 @@ def test_transcript_path_for_session_none_when_absent(
     assert transcript_path_for_session("") is None
 
 
-# --- P30-I25-W39: turns are a fact in the transcript, not a gap to guess at --
+# --- P30-I25-W43: Claude measures its own turns; stop re-deriving wall clock --
 
 
 def _prompt_row(*, at: str) -> dict[str, object]:
@@ -345,19 +317,38 @@ def _tool_result_row(*, at: str) -> dict[str, object]:
     }
 
 
-def test_operator_idle_between_turns_is_never_charged(tmp_path: Path) -> None:
-    """Two short turns split by a 14-minute pause report only the two turns.
+def _turn_duration_row(*, at: str, ms: int) -> dict[str, object]:
+    """Claude's own measure of a completed turn. It excludes approval stalls."""
+    return {"type": "system", "subtype": "turn_duration", "timestamp": at, "durationMs": ms}
 
-    The shipped measure charged any gap under a 15-minute ceiling as agent work,
-    so this exact case reported 960_000 ms for 120_000 ms of work. The ceiling was
-    a guess at where a turn ends; the transcript states it outright.
+
+def test_a_twelve_hour_wait_for_tool_approval_is_not_agent_runtime(tmp_path: Path) -> None:
+    """The operator sleeping at a permission prompt is not the agent working.
+
+    When the agent asks to run a tool, Claude Code can put the request to the
+    operator -- and the stall sits INSIDE the turn, between the assistant's
+    `tool_use` row and the `tool_result` that follows. It has the identical shape
+    to a long-running tool, so no span-based measure can tell them apart. In the
+    session that produced this iter, one such stall was 12.9 HOURS of sleep, and
+    the previous measure booked every minute of it as agent runtime.
+
+    Claude measures the turn itself and excludes the wait. Read its number.
     """
     rows = [
-        _prompt_row(at="2026-07-13T09:00:00.000Z"),
-        _assistant_row("msg_0001", at="2026-07-13T09:01:00.000Z"),
-        # The operator reads for 14 minutes -- under the old 15-minute ceiling.
-        _prompt_row(at="2026-07-13T09:15:00.000Z"),
-        _assistant_row("msg_0002", at="2026-07-13T09:16:00.000Z"),
+        _prompt_row(at="2026-07-13T05:00:00.000Z"),
+        {
+            "type": "assistant",
+            "timestamp": "2026-07-13T05:23:11.000Z",
+            "message": {
+                "id": "msg_0001",
+                "model": "claude-opus-4-8",
+                "stop_reason": "tool_use",
+                "usage": {"input_tokens": 1, "output_tokens": 10},
+            },
+        },
+        # ... the operator is asleep. 12.9 hours pass. Then they approve.
+        _tool_result_row(at="2026-07-13T18:15:20.000Z"),
+        _turn_duration_row(at="2026-07-13T18:16:00.000Z", ms=115 * 60_000),
     ]
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
@@ -365,39 +356,38 @@ def test_operator_idle_between_turns_is_never_charged(tmp_path: Path) -> None:
     counters = aggregate_transcript_counters(path)
 
     assert counters is not None
-    assert counters.api_duration_ms == 120_000
+    # Claude's figure: 115 minutes of work. NOT the 13-hour span of the turn.
+    assert counters.api_duration_ms == 115 * 60_000
 
 
-def test_a_long_in_turn_tool_run_is_agent_work_not_idle(tmp_path: Path) -> None:
-    """A 20-minute subagent dispatch counts in full.
-
-    The shipped measure DROPPED any gap over its 15-minute ceiling, erasing the
-    agent's longest real work: a subagent dispatch or a full test suite the agent
-    sits blocked on. Inside a turn there is no idle -- the agent is working.
-    """
+def test_duration_never_exceeds_the_session_wall_clock(tmp_path: Path) -> None:
+    """A measure that outruns the clock is measuring something that did not happen."""
     rows = [
         _prompt_row(at="2026-07-13T09:00:00.000Z"),
-        _assistant_row("msg_0001", at="2026-07-13T09:00:30.000Z"),
-        # The agent dispatches a subagent and waits 20 minutes for it.
-        _tool_result_row(at="2026-07-13T09:20:30.000Z"),
-        _assistant_row("msg_0002", at="2026-07-13T09:21:00.000Z"),
+        _assistant_row("msg_0001", at="2026-07-13T09:10:00.000Z"),
+        _turn_duration_row(at="2026-07-13T09:10:30.000Z", ms=600_000),
+        _prompt_row(at="2026-07-13T09:30:00.000Z"),
+        _assistant_row("msg_0002", at="2026-07-13T09:40:00.000Z"),
+        _turn_duration_row(at="2026-07-13T09:40:30.000Z", ms=600_000),
     ]
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
     counters = aggregate_transcript_counters(path)
+    wall_clock_ms = 40 * 60_000 + 30_000
 
     assert counters is not None
-    assert counters.api_duration_ms == 1_260_000
+    assert counters.api_duration_ms <= wall_clock_ms
 
 
-def test_an_overnight_gap_between_turns_adds_nothing(tmp_path: Path) -> None:
-    """A wave left claimed overnight banks no EU for the hours nobody worked."""
+def test_summed_turn_durations_are_the_measure(tmp_path: Path) -> None:
     rows = [
         _prompt_row(at="2026-07-13T09:00:00.000Z"),
         _assistant_row("msg_0001", at="2026-07-13T09:02:00.000Z"),
-        _prompt_row(at="2026-07-13T23:00:00.000Z"),
-        _assistant_row("msg_0002", at="2026-07-13T23:03:00.000Z"),
+        _turn_duration_row(at="2026-07-13T09:02:30.000Z", ms=120_000),
+        _prompt_row(at="2026-07-13T09:30:00.000Z"),
+        _assistant_row("msg_0002", at="2026-07-13T09:33:00.000Z"),
+        _turn_duration_row(at="2026-07-13T09:33:30.000Z", ms=180_000),
     ]
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
@@ -405,16 +395,23 @@ def test_an_overnight_gap_between_turns_adds_nothing(tmp_path: Path) -> None:
     counters = aggregate_transcript_counters(path)
 
     assert counters is not None
+    # The two turns Claude measured -- and not the 30 minutes the operator spent
+    # reading between them.
     assert counters.api_duration_ms == 300_000
 
 
-def test_tool_results_do_not_split_a_turn(tmp_path: Path) -> None:
-    """A tool_result is a user row too -- but it is mid-turn, not a new prompt."""
+def test_an_unmeasured_turn_reports_zero_rather_than_a_guess(tmp_path: Path) -> None:
+    """No turn row yet -- so no duration. There is deliberately NO span fallback.
+
+    Spanning the in-flight turn would buy one capture of coverage and cost both
+    defects back: it charges that turn's approval stalls, and it makes the duration
+    DROP when Claude's smaller figure lands, which reads as a counter reset and
+    re-origins the wave. Nothing is lost by waiting -- the row arrives before the
+    next capture, so the turn is counted then. The tokens are still captured here.
+    """
     rows = [
         _prompt_row(at="2026-07-13T09:00:00.000Z"),
-        _tool_result_row(at="2026-07-13T09:01:00.000Z"),
-        _tool_result_row(at="2026-07-13T09:02:00.000Z"),
-        _assistant_row("msg_0001", at="2026-07-13T09:03:00.000Z"),
+        _assistant_row("msg_0001", at="2026-07-13T09:05:00.000Z"),
     ]
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
@@ -422,31 +419,30 @@ def test_tool_results_do_not_split_a_turn(tmp_path: Path) -> None:
     counters = aggregate_transcript_counters(path)
 
     assert counters is not None
-    # One turn of three minutes, not three turns of nothing.
-    assert counters.api_duration_ms == 180_000
+    assert counters.api_duration_ms == 0
+    assert counters.output_tokens == 10
 
 
-def test_work_time_stays_monotonic_across_a_turn_boundary(tmp_path: Path) -> None:
-    """Resuming after an idle gap only ever ADDS duration -- never subtracts."""
-    path = tmp_path / "t.jsonl"
-    first_turn = [
+def test_out_of_order_rows_cannot_make_turns_overlap(tmp_path: Path) -> None:
+    """Transcript rows are NOT written chronologically; grouping in file order lies.
+
+    Live corpus: one transcript reported 1633 minutes of turn spans against a 1308
+    minute wall clock -- 125% of the time the session had existed -- because rows
+    interleave out of order and two turns' spans overlapped.
+    """
+    rows = [
         _prompt_row(at="2026-07-13T09:00:00.000Z"),
-        _assistant_row("msg_0001", at="2026-07-13T09:05:00.000Z"),
+        _assistant_row("msg_0001", at="2026-07-13T09:10:00.000Z"),
+        _prompt_row(at="2026-07-13T09:20:00.000Z"),
+        # An out-of-order row: written here, but timestamped back in turn one.
+        _tool_result_row(at="2026-07-13T09:05:00.000Z"),
+        _assistant_row("msg_0002", at="2026-07-13T09:25:00.000Z"),
     ]
-    path.write_text("\n".join(json.dumps(r) for r in first_turn) + "\n", encoding="utf-8")
-    before = aggregate_transcript_counters(path)
+    path = tmp_path / "t.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    resumed = [
-        *first_turn,
-        _prompt_row(at="2026-07-14T09:00:00.000Z"),
-        _assistant_row("msg_0002", at="2026-07-14T09:01:00.000Z"),
-    ]
-    path.write_text("\n".join(json.dumps(r) for r in resumed) + "\n", encoding="utf-8")
-    after = aggregate_transcript_counters(path)
+    counters = aggregate_transcript_counters(path)
+    wall_clock_ms = 25 * 60_000
 
-    assert before is not None
-    assert after is not None
-    assert before.api_duration_ms == 300_000
-    assert after.api_duration_ms >= before.api_duration_ms
-    # The day-long gap adds nothing; the new turn adds its own minute.
-    assert after.api_duration_ms == 360_000
+    assert counters is not None
+    assert counters.api_duration_ms <= wall_clock_ms

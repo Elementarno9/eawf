@@ -68,7 +68,10 @@ _HARNESS_ID = "claude-code"
 #: 1 = whole-session wall-clock span (the operator's clock, idle included).
 #: 2 = summed gaps between rows, dropping gaps over a 15-minute ceiling.
 #: 3 = summed per-TURN spans: everything inside a turn, nothing between turns.
-MEASURE_VERSION: int = 3
+#:     (Still the wall clock: a turn contains the stall at a tool-permission
+#:     prompt, where the agent waits on a human -- 12.9 hours of it, once.)
+#: 4 = Claude's own `turn_duration` per completed turn, which excludes that stall.
+MEASURE_VERSION: int = 4
 
 #: Optional override for the Claude projects root, used by tests to redirect
 #: transcript lookups away from the real ``~/.claude/`` tree.
@@ -215,12 +218,9 @@ def _row_timestamp(row: dict[str, Any]) -> datetime | None:
 def _is_operator_prompt(row: dict[str, Any]) -> bool:
     """Return whether *row* is a fresh operator prompt -- the start of a turn.
 
-    Claude Code writes ``type: "user"`` rows for two very different things: the
-    operator typing, and a tool handing its result back to the agent mid-turn.
-    They are told apart by content -- a prompt carries text, a tool result carries
-    ``tool_result`` blocks -- and the difference is what makes a turn boundary
-    findable at all. (In a real session of this repo: 14 prompts against 546
-    tool-result rows.)
+    Claude Code writes ``type: "user"`` rows for two different things: the
+    operator typing (text content), and a tool handing its result back mid-turn
+    (``tool_result`` content). Only the former starts a turn.
     """
     if row.get("type") != "user":
         return False
@@ -230,46 +230,6 @@ def _is_operator_prompt(row: dict[str, Any]) -> bool:
     if isinstance(content, list):
         return any(isinstance(block, dict) and block.get("type") == "text" for block in content)
     return False
-
-
-def _turn_spans_ms(rows: list[dict[str, Any]]) -> int:
-    """Return summed agent working time: the span of each turn, nothing between.
-
-    A turn runs from an operator prompt to the row before the next one, and the
-    agent works for all of it -- thinking, calling tools, and waiting on the tools
-    it called. The gaps BETWEEN turns are the operator reading, deciding, or being
-    asleep, and belong to nobody.
-
-    This replaces a gap-width heuristic that got both halves wrong. It charged any
-    gap under a 15-minute ceiling as work, so an operator pausing 14 minutes to
-    read banked 14 minutes of "agent runtime"; and it dropped any gap OVER the
-    ceiling, so a 20-minute subagent dispatch -- the agent's longest real work --
-    counted as nothing at all. A turn boundary is a fact in the transcript, not a
-    duration to guess at.
-
-    An in-turn gap of any length counts, because the agent really is working
-    across it. An out-of-turn gap of any length does not, because it really is
-    not. So the measure cannot be inflated by an idle operator, and cannot be
-    deflated by a slow tool.
-    """
-    turns: list[list[datetime]] = []
-    current: list[datetime] = []
-    for row in rows:
-        stamped_at = _row_timestamp(row)
-        if stamped_at is None:
-            continue
-        if _is_operator_prompt(row) and current:
-            turns.append(current)
-            current = []
-        current.append(stamped_at)
-    if current:
-        turns.append(current)
-    total = 0
-    for stamps in turns:
-        if len(stamps) < 2:
-            continue
-        total += max(0, int((max(stamps) - min(stamps)).total_seconds() * 1000))
-    return total
 
 
 def _price(model: str | None, tally: _TokenTally) -> Decimal | None:
@@ -344,14 +304,24 @@ def _scan_rows(rows: list[dict[str, Any]]) -> _TranscriptScan:
             seen.add(key)
         _add_usage(tally, usage)
 
-    # The turn-duration rows are Claude's own per-turn measure, but they land AFTER
-    # the Stop hook reads the file, so a live capture sees none for the turn in
-    # flight and must fall back to that turn's span. Both measures are agent
-    # working time and both grow monotonically with the transcript, so their
-    # maximum is monotonic too.
+    # Claude measures each completed turn itself and writes it as a `turn_duration`
+    # row, and -- crucially -- its figure EXCLUDES the time the agent spent waiting
+    # on the OPERATOR to approve a tool. Nothing derivable from the transcript can
+    # make that distinction: an approval stall and a long-running tool have the
+    # identical shape (assistant `tool_use` ... `tool_result`), and one such stall
+    # in this repo's own history was 12.9 hours of sleep. So read Claude's number
+    # instead of re-deriving one. Twice now, a derived measure has turned out to be
+    # the wall clock wearing a disguise.
+    #
+    # There is deliberately NO span fallback. Spanning the in-flight turn would buy
+    # one capture of extra coverage and cost both defects back: it charges that
+    # turn's approval stalls, and it makes the duration DROP when Claude's smaller
+    # figure lands, which reads as a counter reset and re-origins the wave. Nothing
+    # is lost by waiting: the row arrives before the next capture, so the turn is
+    # counted then. An unmeasured turn reports zero rather than a guess.
     return _TranscriptScan(
         tally=tally,
-        duration_ms=max(turn_duration_ms, _turn_spans_ms(rows)),
+        duration_ms=turn_duration_ms,
         turn_duration_ms=turn_duration_ms,
         model=model,
         messages=len(seen),

@@ -179,8 +179,18 @@ def test_stop_hook_to_actual_records_positive_eu() -> None:
     )
 
 
-def test_capture_without_a_turn_duration_row_still_reports_duration(tmp_path: Path) -> None:
-    """The W30 defect: the turn_duration row lands after the Stop hook reads the file."""
+def test_capture_without_a_turn_duration_row_reports_no_duration(tmp_path: Path) -> None:
+    """An unmeasured turn reports zero duration -- and still captures its tokens.
+
+    The turn_duration row lands after the Stop hook reads the file, so the turn in
+    flight is never measured at capture time. Two earlier attempts filled that gap
+    by deriving a duration from the row timestamps, and BOTH turned out to be the
+    wall clock in disguise -- the second charged 12.9 hours of an operator asleep
+    at a tool-permission prompt as agent runtime.
+
+    So there is no fallback: an unmeasured turn is worth zero, and the row lands
+    before the next capture anyway. Nothing is lost but a capture's lag.
+    """
     rows = [
         json.loads(line)
         for line in _TRANSCRIPT.read_text(encoding="utf-8").splitlines()
@@ -202,9 +212,9 @@ def test_capture_without_a_turn_duration_row_still_reports_duration(tmp_path: Pa
     )
 
     assert len(sink) == 1
-    # elapsed_eu derives from duration, so a zero here means zero EU -- the exact
-    # failure the first live Stop-boundary run hit.
-    assert sink[0]["api_duration_ms"] > 0
+    assert sink[0]["api_duration_ms"] == 0
+    # The capture still happened: the tokens are real and are recorded.
+    assert sink[0]["output_tokens"] > 0
 
 
 def test_wave_spanning_two_sessions_sums_both_runtimes() -> None:
