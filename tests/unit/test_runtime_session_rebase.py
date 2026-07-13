@@ -66,7 +66,7 @@ def test_same_session_capture_does_not_rebase() -> None:
         runtime_latest=_latest("sess-a", api_duration_ms=5_000),
     )
 
-    _rebase_for_session(wave, "sess-a")
+    _rebase_for_session(wave, _latest("sess-a"), "sess-a")
 
     assert wave.runtime_carry is None
     assert wave.runtime_baseline is not None
@@ -84,17 +84,19 @@ def test_new_session_folds_prior_total_and_rebases() -> None:
         ),
     )
 
-    _rebase_for_session(wave, "sess-b")
+    _rebase_for_session(wave, _latest("sess-b"), "sess-b")
 
     assert wave.runtime_carry is not None
     # Session A spent 4_000 ms and 300 input tokens; that total is carried.
     assert wave.runtime_carry.api_duration_ms == 4_000
     assert wave.runtime_carry.input_tokens == 300
     assert wave.runtime_carry.sessions_folded == 1
-    # The baseline is now session B's zero origin, and B has captured nothing yet.
+    # The baseline is now session B's origin -- B's counters as of this capture,
+    # NOT zero (a zero origin would charge the wave for everything B had already
+    # done before the wave was resumed, and would double-count B on a return).
     assert wave.runtime_baseline is not None
     assert wave.runtime_baseline.session_id == "sess-b"
-    assert wave.runtime_baseline.api_duration_ms == 0
+    assert wave.runtime_baseline.api_duration_ms == 0  # this stub capture is empty
     assert wave.runtime_latest is None
 
 
@@ -106,7 +108,7 @@ def test_cross_session_close_sums_both_sessions_instead_of_raising() -> None:
 
     # Session B starts fresh: its cumulative counters begin near zero. Without
     # the rebase this is a backwards counter and the close raises.
-    _rebase_for_session(wave, "sess-b")
+    _rebase_for_session(wave, _latest("sess-b"), "sess-b")
     wave.runtime_latest = _latest("sess-b", api_duration_ms=2_000, input_tokens=50)
 
     delta = compute_runtime_delta(
@@ -128,12 +130,12 @@ def test_second_capture_in_the_new_session_keeps_the_carry() -> None:
         runtime_baseline=_baseline("sess-a", api_duration_ms=1_000),
         runtime_latest=_latest("sess-a", api_duration_ms=5_000),
     )
-    _rebase_for_session(wave, "sess-b")
+    _rebase_for_session(wave, _latest("sess-b"), "sess-b")
     wave.runtime_latest = _latest("sess-b", api_duration_ms=2_000)
 
     # A later Stop in the SAME session must not fold again -- the carry is a
     # per-finished-session accumulator, not a per-capture one.
-    _rebase_for_session(wave, "sess-b")
+    _rebase_for_session(wave, _latest("sess-b"), "sess-b")
     wave.runtime_latest = _latest("sess-b", api_duration_ms=3_000)
 
     delta = compute_runtime_delta(
@@ -153,10 +155,10 @@ def test_three_sessions_sum() -> None:
     wave = _wave(runtime_baseline=_baseline("sess-a"), runtime_latest=None)
     wave.runtime_latest = _latest("sess-a", api_duration_ms=1_000)
 
-    _rebase_for_session(wave, "sess-b")
+    _rebase_for_session(wave, _latest("sess-b"), "sess-b")
     wave.runtime_latest = _latest("sess-b", api_duration_ms=2_000)
 
-    _rebase_for_session(wave, "sess-c")
+    _rebase_for_session(wave, _latest("sess-c"), "sess-c")
     wave.runtime_latest = _latest("sess-c", api_duration_ms=4_000)
 
     delta = compute_runtime_delta(
@@ -176,7 +178,7 @@ def test_unstamped_baseline_adopts_the_capturing_session() -> None:
     # A wave claimed before the v1.15 session stamp, with nothing captured yet.
     wave = _wave(runtime_baseline=_baseline(None, api_duration_ms=1_000))
 
-    _rebase_for_session(wave, "sess-a")
+    _rebase_for_session(wave, _latest("sess-a"), "sess-a")
 
     assert wave.runtime_carry is None
     assert wave.runtime_baseline is not None
@@ -190,7 +192,7 @@ def test_capture_without_a_session_id_leaves_snapshots_alone() -> None:
         runtime_latest=_latest("sess-a", api_duration_ms=5_000),
     )
 
-    _rebase_for_session(wave, None)
+    _rebase_for_session(wave, _latest(None), None)
 
     assert wave.runtime_carry is None
     assert wave.runtime_baseline is not None
@@ -205,7 +207,7 @@ def test_regressed_session_contributes_no_negative_carry() -> None:
         runtime_latest=_latest("sess-a", api_duration_ms=1_000),
     )
 
-    _rebase_for_session(wave, "sess-b")
+    _rebase_for_session(wave, _latest("sess-b"), "sess-b")
 
     assert wave.runtime_carry is not None
     assert wave.runtime_carry.api_duration_ms == 0
@@ -385,3 +387,84 @@ def test_interactive_attempt_is_a_no_op_without_a_baseline() -> None:
     # No baseline means no wave-scoped delta to record; the snapshot stays the
     # only record rather than the attempt claiming the whole session.
     assert wave.sessions == {}
+
+
+# --- P30-I25-W36: the rebase must not double-count or lose runtime ----------
+
+
+def test_returning_to_an_earlier_session_does_not_double_count_it() -> None:
+    """Sessions interleave. A -> B -> A must charge A's early work exactly once.
+
+    The shipped rebase re-originated on ZERO, so returning to session A made the
+    next delta A's ENTIRE cumulative -- including the work already folded into the
+    carry when A was first left. Every alternation charged it again, without
+    bound. (Found by the P30-I25 iter audit; the happy-path tests never
+    interleaved.)
+    """
+    wave = _wave(
+        runtime_baseline=_baseline("sess-a", api_duration_ms=0),
+        runtime_latest=_latest("sess-a", api_duration_ms=1_000),
+    )
+
+    # Leave A for B: A's 1_000 ms is folded.
+    _rebase_for_session(wave, _latest("sess-b", api_duration_ms=0), "sess-b")
+    wave.runtime_latest = _latest("sess-b", api_duration_ms=500)
+
+    # Back to A, whose cumulative counter has kept growing (it is one session's
+    # transcript): 1_000 already folded, now 1_200 total.
+    _rebase_for_session(wave, _latest("sess-a", api_duration_ms=1_200), "sess-a")
+    wave.runtime_latest = _latest("sess-a", api_duration_ms=1_200)
+
+    delta = compute_runtime_delta(
+        wave.runtime_baseline,
+        wave.runtime_latest,
+        carry=wave.runtime_carry,
+        eu_minutes=_EU_MINUTES,
+    )
+
+    assert delta is not None
+    # A's 1_000 (folded) + B's 500 (folded) + A's new work since the return (0).
+    # The old zero-origin code returned 2_700 -- A's 1_200 counted a second time.
+    assert delta.api_duration_ms == 1_500
+
+
+def test_new_session_origin_excludes_work_the_wave_did_not_do() -> None:
+    """A session's pre-resume work must not be charged to the wave it resumes.
+
+    Session B's counters cover everything the operator did in B. A zero origin
+    charged the wave for all of it; the origin is B's counters at the moment the
+    wave is picked up again.
+    """
+    wave = _wave(
+        runtime_baseline=_baseline("sess-a", api_duration_ms=0),
+        runtime_latest=_latest("sess-a", api_duration_ms=1_000),
+    )
+
+    # The operator opens B and spends 10 minutes on something else entirely,
+    # THEN the wave's first capture in B fires.
+    _rebase_for_session(wave, _latest("sess-b", api_duration_ms=600_000), "sess-b")
+    wave.runtime_latest = _latest("sess-b", api_duration_ms=660_000)
+
+    delta = compute_runtime_delta(
+        wave.runtime_baseline,
+        wave.runtime_latest,
+        carry=wave.runtime_carry,
+        eu_minutes=_EU_MINUTES,
+    )
+
+    assert delta is not None
+    # A's 1_000 ms + the 60_000 ms B spent on the wave -- not B's other 600_000.
+    assert delta.api_duration_ms == 61_000
+
+
+def test_a_session_that_captured_nothing_is_not_counted_as_folded() -> None:
+    """Folding nothing must not claim a session's runtime was accounted for."""
+    wave = _wave(runtime_baseline=_baseline("sess-a", api_duration_ms=5_000))
+
+    _rebase_for_session(wave, _latest("sess-b", api_duration_ms=0), "sess-b")
+
+    assert wave.runtime_carry is not None
+    # Nothing was ever captured against session A, so nothing is folded -- and the
+    # count must not pretend otherwise.
+    assert wave.runtime_carry.api_duration_ms == 0
+    assert wave.runtime_carry.sessions_folded == 0

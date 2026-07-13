@@ -228,9 +228,23 @@ def test_wave_spanning_two_sessions_sums_both_runtimes() -> None:
     session_a_duration = first["api_duration_ms"]
 
     # The operator quits and resumes tomorrow: session B's counters start over.
+    # B's FIRST capture establishes B's origin (charging the wave for whatever B
+    # had already done before the wave was resumed would be wrong, and re-basing
+    # on zero would double-count B if the operator ever switched back).
     second = _capture_params_from_stop_hook(session_id="sess-b")
-    _rebase_for_session(wave, "sess-b")
-    wave.runtime_latest = _latest_from_params(second, at=_CLAIMED_AT + timedelta(days=1))
+    resumed_at = _CLAIMED_AT + timedelta(days=1)
+    origin = _latest_from_params(second, at=resumed_at)
+    _rebase_for_session(wave, origin, "sess-b")
+
+    # B then does a further 10 minutes of work on the wave.
+    worked_ms = 600_000
+    wave.runtime_latest = origin.model_copy(
+        update={
+            "api_duration_ms": (origin.api_duration_ms or 0) + worked_ms,
+            "total_duration_ms": (origin.total_duration_ms or 0) + worked_ms,
+            "captured_at": resumed_at + timedelta(minutes=10),
+        }
+    )
 
     delta = compute_runtime_delta(
         wave.runtime_baseline,
@@ -242,8 +256,9 @@ def test_wave_spanning_two_sessions_sums_both_runtimes() -> None:
     assert delta is not None
     assert wave.runtime_carry is not None
     assert wave.runtime_carry.sessions_folded == 1
-    # Both sessions counted, and the close did not raise on the backwards counter.
-    assert delta.api_duration_ms == session_a_duration + second["api_duration_ms"]
+    # Session A's runtime plus the work B actually did on the wave -- and the
+    # close did not raise on B's backwards-looking counters.
+    assert delta.api_duration_ms == session_a_duration + worked_ms
     assert delta.elapsed_eu == pytest.approx(
         delta.api_duration_ms / (DEFAULT_EU_MINUTES * 60_000.0)
     )

@@ -2804,7 +2804,10 @@ def _fold_finished_session(
     """
     base = carry or RuntimeCarry()
     if latest is None:
-        return base.model_copy(update={"sessions_folded": base.sessions_folded + 1})
+        # The session ended without ever capturing, so there is nothing measured
+        # to fold. Counting it as "folded" would claim a session's runtime was
+        # accounted for when in truth it was never seen.
+        return base
     folded: dict[str, float | int] = {}
     for field in _RUNTIME_COUNTER_FIELDS:
         latest_value = getattr(latest, field)
@@ -2816,7 +2819,7 @@ def _fold_finished_session(
     return base.model_copy(update=folded)
 
 
-def _rebase_for_session(wave: Wave, session_id: str | None) -> None:
+def _rebase_for_session(wave: Wave, incoming: RuntimeLatest, session_id: str | None) -> None:
     """Rebase the wave's runtime snapshots onto *session_id*'s counter origin.
 
     Runtime counters are cumulative *within* a session: session B's transcript
@@ -2824,9 +2827,25 @@ def _rebase_for_session(wave: Wave, session_id: str | None) -> None:
     Differencing B's counters against A's baseline is therefore meaningless (and
     would trip the backwards-counter guard on the close path). So on the first
     capture from a session other than the baseline's, the finished session's
-    total is folded into ``wave.runtime_carry`` and the baseline is rebased onto
-    the new session's zero origin -- the close-time delta then sums every
-    session's runtime.
+    total is folded into ``wave.runtime_carry`` and the baseline is re-originated
+    on the new session -- the close-time delta then sums every session's runtime.
+
+    **The new origin is the capturing session's counters right now, not zero.**
+    A zero origin is wrong in two ways, and both bite:
+
+    * *Returning to a session double-counts it.* Sessions interleave (A -> B ->
+      A). On the return to A, a zero origin makes the next delta A's ENTIRE
+      cumulative -- including the work already folded into the carry when A was
+      first left. The wave is then charged twice for it, without bound, once per
+      alternation.
+    * *It absorbs work the wave did not do.* Session B's counters cover
+      everything the operator did in B, so a zero origin charges the wave for any
+      unrelated work B did before the wave was resumed.
+
+    Originating on the incoming counters costs at most the turn that just ended
+    (its work lands before the first capture in the new session establishes the
+    origin). That is a bounded under-count of one turn, against an unbounded
+    over-count -- the safer error, and the honest one.
 
     A capture with no session id, or one matching the baseline's session, leaves
     the snapshots alone. A baseline predating the session stamp (schema < 1.15)
@@ -2846,15 +2865,15 @@ def _rebase_for_session(wave: Wave, session_id: str | None) -> None:
 
     wave.runtime_carry = _fold_finished_session(wave.runtime_carry, baseline, wave.runtime_latest)
     wave.runtime_baseline = RuntimeBaseline(
-        api_duration_ms=0,
-        total_duration_ms=0,
-        cost_usd=0.0,
-        input_tokens=0,
-        output_tokens=0,
-        cache_creation_input_tokens=0,
-        cache_read_input_tokens=0,
-        harness=baseline.harness,
-        model=baseline.model,
+        api_duration_ms=incoming.api_duration_ms or 0,
+        total_duration_ms=incoming.total_duration_ms or 0,
+        cost_usd=incoming.cost_usd or 0.0,
+        input_tokens=incoming.input_tokens or 0,
+        output_tokens=incoming.output_tokens or 0,
+        cache_creation_input_tokens=incoming.cache_creation_input_tokens or 0,
+        cache_read_input_tokens=incoming.cache_read_input_tokens or 0,
+        harness=incoming.harness or baseline.harness,
+        model=incoming.model or baseline.model,
         session_id=session_id,
         captured_at=datetime.now(UTC),
     )
@@ -3213,8 +3232,9 @@ async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[st
                     )
                 # A capture from a session other than the baseline's measures a
                 # fresh counter origin, so rebase (folding the finished session's
-                # total into runtime_carry) before merging this session's counters.
-                _rebase_for_session(wave, args.session_id)
+                # total into runtime_carry, and re-originating on THIS session's
+                # counters) before merging this session's snapshot in.
+                _rebase_for_session(wave, latest, args.session_id)
                 wave.runtime_latest = _merge_runtime_latest(wave.runtime_latest, latest)
                 # The interactive-Claude lifecycle mints no SessionAttempt on
                 # its own (only the headless spawn does); record one here off the
