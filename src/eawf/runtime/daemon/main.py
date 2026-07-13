@@ -356,18 +356,43 @@ _MUTATION_ALARM_SECONDS: float = 120.0
 #: ``VerifyBlock.juror_wall_clock_seconds`` (default 600s) INSIDE the
 #: watched mutation, so a limit below that bound hard-aborts every
 #: legitimate verdict close (the W41 close-loop incident). 900 = the
-#: 600s juror bound + a 300s commit/routing margin.
+#: 600s default juror bound + the commit/routing margin below. A repo that
+#: RAISES the juror ceiling raises this with it -- see
+#: :func:`mutation_hard_limit_for`, without which a configured 1800s audit
+#: would still be cancelled at 900s, mid-mutation, having burned the spend.
 _MUTATION_HARD_LIMIT_SECONDS: float = 900.0
 
+#: Headroom the watchdog leaves above the juror bound for the commit + routing
+#: work that follows the auditor spawn inside the same mutation.
+_COMMIT_MARGIN_SECONDS: float = 300.0
 
-def _resolve_mutation_hard_limit() -> float:
-    """Return the watchdog hard-abort limit in seconds."""
+
+def mutation_hard_limit_for(juror_wall_clock_seconds: float | None) -> float:
+    """Return the watchdog hard limit that accommodates *juror_wall_clock_seconds*.
+
+    The limit tracks the juror ceiling rather than sitting at a constant: an
+    auditor allowed 1800s inside a mutation watched at 900s is killed by the
+    watchdog instead of finishing, which is strictly worse than the timeout it
+    was raised to escape.
+    """
+    if juror_wall_clock_seconds is None or juror_wall_clock_seconds <= 0:
+        return _MUTATION_HARD_LIMIT_SECONDS
+    return max(_MUTATION_HARD_LIMIT_SECONDS, juror_wall_clock_seconds + _COMMIT_MARGIN_SECONDS)
+
+
+def _resolve_mutation_hard_limit(juror_wall_clock_seconds: float | None = None) -> float:
+    """Return the watchdog hard-abort limit in seconds.
+
+    The env override wins outright (an operator debugging a hang); otherwise the
+    limit is derived from the active juror ceiling so a configured long audit is
+    not cancelled by the watchdog that exists to catch a HUNG one.
+    """
     raw = os.environ.get("EAWF_MUTATION_HARD_LIMIT_SECONDS", "")
     try:
         value = float(raw)
     except ValueError:
-        return _MUTATION_HARD_LIMIT_SECONDS
-    return value if value > 0 else _MUTATION_HARD_LIMIT_SECONDS
+        return mutation_hard_limit_for(juror_wall_clock_seconds)
+    return value if value > 0 else mutation_hard_limit_for(juror_wall_clock_seconds)
 
 
 async def run_mutation_watchdog_loop(
@@ -477,10 +502,45 @@ def _publish_watchdog_abort(
     ctx.last_event_id = envelope.id
 
 
+def _configured_juror_wall_clock(ctx: MethodContext) -> float | None:
+    """Return the bound repo's configured juror wall clock, when it has one.
+
+    Read best-effort at boot: an unreadable config leaves the watchdog on its
+    default limit rather than failing the daemon start.
+    """
+    if ctx.state_path is None:
+        return None
+    try:
+        from eawf.kernel.config.layered import get_dotted, merge_config
+
+        repo_root = Path(ctx.state_path).parent.parent
+        merged, _sources = merge_config(repo=repo_root)
+        raw = get_dotted(merged, "verify.juror_wall_clock_seconds")
+    except Exception as exc:
+        logger.debug(f"_configured_juror_wall_clock status='default' err={exc!r}")
+        return None
+    if isinstance(raw, bool) or not isinstance(raw, int | float) or raw <= 0:
+        return None
+    return float(raw)
+
+
 def _schedule_mutation_watchdog(ctx: MethodContext) -> asyncio.Task[None] | None:
-    """Schedule the self-deadlock mutation watchdog on the running loop."""
+    """Schedule the self-deadlock mutation watchdog on the running loop.
+
+    The hard limit tracks the repo's configured juror ceiling: a close-time
+    auditor runs INSIDE the watched mutation, so a watchdog that aborts before
+    the auditor's own ceiling kills every legitimate long audit.
+    """
     assert isinstance(ctx.shutdown_event, asyncio.Event)
-    return asyncio.create_task(run_mutation_watchdog_loop(ctx, stop_event=ctx.shutdown_event))
+    hard_limit = _resolve_mutation_hard_limit(_configured_juror_wall_clock(ctx))
+    logger.info(f"_schedule_mutation_watchdog hard_limit_s={hard_limit}")
+    return asyncio.create_task(
+        run_mutation_watchdog_loop(
+            ctx,
+            stop_event=ctx.shutdown_event,
+            hard_limit_seconds=hard_limit,
+        )
+    )
 
 
 def _schedule_session_ttl_sweep(ctx: MethodContext) -> asyncio.Task[None] | None:

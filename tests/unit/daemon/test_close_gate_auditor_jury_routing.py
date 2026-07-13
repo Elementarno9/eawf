@@ -253,3 +253,61 @@ def test_close_gate_blocking_jury_replaces_auditor(
     assert recorder.produced_verdict is False
     assert recorder.enforced_verdict_gate is False
     assert recorder.oracle_calls == 1
+
+
+# --- P30-I25-W35: the configured ceiling must survive the config->block path ---
+
+
+def test_repo_verify_leaf_reaches_the_resolved_block(tmp_path: Path) -> None:
+    """A configured juror ceiling must actually reach the VerifyBlock.
+
+    W32 threaded the ceiling into the spawn and set it in `.ea/config.yaml`, and
+    its test monkeypatched a synthetic block -- so it was green while the overlay
+    silently dropped every repo `verify:` leaf except `odr_blocking`. The close
+    auditor kept spawning at the 600s default, was killed mid-audit, wrote no
+    verdict, and the gate read "no verdict" as a refusal. The config line was
+    behaviour that did not exist: exactly the idle contract this phase exists to
+    kill. So drive the REAL path here, with no monkeypatching.
+    """
+    from eawf.workflow.verify.readiness import _overlay_repo_verify_leaves
+
+    resolved = _overlay_repo_verify_leaves(
+        VerifyBlock(),
+        {"verify": {"odr_blocking": True, "juror_wall_clock_seconds": 1800.0}},
+    )
+
+    assert resolved is not None
+    assert resolved.juror_wall_clock_seconds == 1800.0
+    assert resolved.juror_wall_clock_seconds != VerifyBlock().juror_wall_clock_seconds
+    # The gate leaf still only tightens.
+    assert resolved.odr_blocking is True
+
+
+def test_repo_verify_overlay_ignores_a_junk_wall_clock() -> None:
+    from eawf.workflow.verify.readiness import _overlay_repo_verify_leaves
+
+    for junk in ("1800", True, 0, -5):
+        resolved = _overlay_repo_verify_leaves(
+            VerifyBlock(), {"verify": {"juror_wall_clock_seconds": junk}}
+        )
+        assert resolved is not None
+        assert resolved.juror_wall_clock_seconds == VerifyBlock().juror_wall_clock_seconds
+
+
+def test_watchdog_hard_limit_accommodates_a_raised_juror_ceiling() -> None:
+    """An auditor allowed 1800s inside a mutation watched at 900s is killed anyway.
+
+    The watchdog exists to catch a HUNG mutation, not to cancel a long one that
+    is working. Raising the juror ceiling without raising the watchdog would make
+    the close strictly worse than the timeout it was raised to escape.
+    """
+    from eawf.runtime.daemon.main import (
+        _MUTATION_HARD_LIMIT_SECONDS,
+        mutation_hard_limit_for,
+    )
+
+    assert mutation_hard_limit_for(1800.0) > 1800.0
+    assert mutation_hard_limit_for(1800.0) == 2100.0
+    # The default ceiling leaves the historical limit untouched.
+    assert mutation_hard_limit_for(600.0) == _MUTATION_HARD_LIMIT_SECONDS
+    assert mutation_hard_limit_for(None) == _MUTATION_HARD_LIMIT_SECONDS

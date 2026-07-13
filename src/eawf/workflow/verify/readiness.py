@@ -648,21 +648,35 @@ def _load_active_verify_block(
 def _overlay_repo_verify_leaves(
     block: VerifyBlock | None, merged_config: dict[str, Any]
 ) -> VerifyBlock | None:
-    """OR-fold the repo-layer ``verify.odr_blocking`` opt-in onto *block*.
+    """Fold the repo-layer ``verify:`` leaves onto *block*.
 
-    Profiles ship the verify spine's defaults; ``.ea/config.yaml`` may opt
-    THIS repo into ODR blocking (``verify: {odr_blocking: true}``) once its
-    new-iter ODR is honest. A layer can only tighten: the overlay ORs onto
-    the profile value, so a repo cannot silently loosen a blocking profile.
+    Profiles ship the verify spine's defaults; ``.ea/config.yaml`` may opt THIS
+    repo into ODR blocking (``verify: {odr_blocking: true}``) once its new-iter
+    ODR is honest. A *gate* layer can only tighten: the overlay ORs onto the
+    profile value, so a repo cannot silently loosen a blocking profile.
+
+    ``juror_wall_clock_seconds`` is not a gate but a resource bound -- how long a
+    close-time auditor may run before it is killed -- so the repo value is taken
+    in either direction. It is carried here because it previously was NOT: the
+    overlay dropped every leaf except ``odr_blocking``, so a repo that configured
+    a longer audit ceiling got the 600s default anyway, and the config line read
+    as behaviour that did not exist. A killed auditor writes no verdict, and the
+    close gate reads "no verdict" as a refusal, so the wave could never close.
     """
     if block is None:
         return None
     verify_section = merged_config.get("verify")
     if not isinstance(verify_section, dict):
         return block
+    updates: dict[str, Any] = {}
     if verify_section.get("odr_blocking") is True and not block.odr_blocking:
-        return block.model_copy(update={"odr_blocking": True})
-    return block
+        updates["odr_blocking"] = True
+    wall_clock = verify_section.get("juror_wall_clock_seconds")
+    if isinstance(wall_clock, int | float) and not isinstance(wall_clock, bool) and wall_clock > 0:
+        updates["juror_wall_clock_seconds"] = float(wall_clock)
+    if not updates:
+        return block
+    return block.model_copy(update=updates)
 
 
 def load_active_verify_block(
