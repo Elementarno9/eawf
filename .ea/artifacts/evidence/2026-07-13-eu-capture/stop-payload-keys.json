@@ -1,0 +1,20 @@
+{
+  "recorded_at": "2026-07-13T01:15Z",
+  "hook_event_name": "Stop",
+  "note": "Key set + value types only; values redacted (they carry local paths, session ids, and assistant prose).",
+  "keys": {
+    "background_tasks": "list",
+    "cwd": "str",
+    "effort": "dict",
+    "hook_event_name": "str",
+    "last_assistant_message": "str",
+    "permission_mode": "str",
+    "prompt_id": "str",
+    "session_crons": "list",
+    "session_id": "str",
+    "stop_hook_active": "bool",
+    "transcript_path": "str"
+  },
+  "carries_cost_block": false,
+  "carries_usage_block": false
+}
