@@ -60,6 +60,16 @@ logger = logging.getLogger(__name__)
 #: Stable harness id stamped on counters aggregated from a Claude transcript.
 _HARNESS_ID = "claude-code"
 
+#: Which definition of "duration" this module currently computes. Bump it whenever
+#: that definition changes, because a counter is only comparable against a baseline
+#: taken under the same definition -- the daemon re-origins a wave whose baseline
+#: carries a different version rather than differencing two incompatible measures.
+#:
+#: 1 = whole-session wall-clock span (the operator's clock, idle included).
+#: 2 = summed gaps between rows, dropping gaps over a 15-minute ceiling.
+#: 3 = summed per-TURN spans: everything inside a turn, nothing between turns.
+MEASURE_VERSION: int = 3
+
 #: Optional override for the Claude projects root, used by tests to redirect
 #: transcript lookups away from the real ``~/.claude/`` tree.
 _PROJECTS_DIR_ENV = "EAWF_CLAUDE_PROJECTS_DIR"
@@ -387,6 +397,7 @@ def aggregate_transcript_counters(transcript_path: Path | str | None) -> Runtime
 
     cost_usd = _price(model, tally)
     counters = RuntimeCounters(
+        measure_version=MEASURE_VERSION,
         api_duration_ms=duration_ms,
         total_duration_ms=duration_ms,
         cost_usd=cost_usd,
@@ -406,6 +417,7 @@ def aggregate_transcript_counters(transcript_path: Path | str | None) -> Runtime
 
 
 __all__ = [
+    "MEASURE_VERSION",
     "aggregate_transcript_counters",
     "projects_root",
     "transcript_path_for_session",

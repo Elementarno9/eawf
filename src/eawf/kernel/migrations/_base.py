@@ -71,7 +71,7 @@ logger = logging.getLogger(__name__)
 #: default ahead of the model's accepted set during a multi-wave bump, and
 #: the guard (:func:`guard_target_supported`) is the boundary that refuses
 #: a default running past what the model can re-load.
-_DEFAULT_TARGET_VERSION = "1.16"
+_DEFAULT_TARGET_VERSION = "1.17"
 
 
 class MigrationError(Exception):

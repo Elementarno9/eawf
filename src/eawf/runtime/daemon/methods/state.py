@@ -2806,6 +2806,7 @@ def _runtime_latest_from_params(params: RuntimeCaptureParams) -> RuntimeLatest:
         harness=params.harness,
         model=params.model,
         session_id=params.session_id,
+        measure_version=params.measure_version,
         captured_at=captured_at,
     )
 
@@ -2849,14 +2850,27 @@ def _fold_finished_session(
     return base.model_copy(update=folded)
 
 
-def _counters_regressed(baseline: RuntimeBaseline, incoming: RuntimeLatest) -> bool:
-    """Return whether *incoming* sits below *baseline* on any comparable counter.
+def _counters_incomparable(baseline: RuntimeBaseline, incoming: RuntimeLatest) -> bool:
+    """Return whether *incoming* cannot be differenced against *baseline*.
 
-    Cumulative counters only ever grow, so a drop means the SOURCE changed under
-    the wave, not that work was undone: the transcript was truncated, the counter
-    reset, or -- as happened in P30-I25 -- the duration basis itself changed while
-    waves were claimed against baselines recorded under the old one.
+    Two ways that happens, and the second is the one that bites quietly:
+
+    * **The counters went backwards.** Cumulative counters only grow, so a drop
+      means the source changed under the wave -- a truncated transcript, a reset.
+    * **The measure changed.** When the definition of the counter changes, the
+      difference between two snapshots is not work, it is the redefinition. This
+      is NOT detectable from the direction the number moved: a redefinition that
+      lowers the figure looks like a regression and gets caught, but one that
+      RAISES it looks exactly like a productive week and gets banked as runtime.
+      Both happened inside P30-I25 -- the first redefinition stranded two claimed
+      waves, the very next inflated three of them by thirteen hours apiece -- which
+      is why the snapshots carry ``measure_version`` and this check reads it rather
+      than inferring from the numbers.
     """
+    base_version = baseline.measure_version
+    new_version = incoming.measure_version
+    if base_version is not None and new_version is not None and base_version != new_version:
+        return True
     for field in _RUNTIME_COUNTER_FIELDS:
         base_value = getattr(baseline, field)
         new_value = getattr(incoming, field)
@@ -2866,7 +2880,7 @@ def _counters_regressed(baseline: RuntimeBaseline, incoming: RuntimeLatest) -> b
 
 
 def _reorigin_on_reset(wave: Wave, incoming: RuntimeLatest) -> None:
-    """Re-origin the baseline on regressed counters so the wave stays measurable.
+    """Re-origin the baseline on incomparable counters so the wave stays measurable.
 
     The alternative is what the close path used to do: raise on the backwards
     counter, which strands the wave FOREVER -- no retry can help, because the
@@ -2885,7 +2899,7 @@ def _reorigin_on_reset(wave: Wave, incoming: RuntimeLatest) -> None:
     )
     wave.runtime_baseline = baseline.model_copy(
         update={field: getattr(incoming, field) or 0 for field in _RUNTIME_COUNTER_FIELDS}
-        | {"captured_at": datetime.now(UTC)}
+        | {"captured_at": datetime.now(UTC), "measure_version": incoming.measure_version}
     )
     wave.runtime_latest = None
     # Record WHY this wave's runtime is short. The measurement taken before the
@@ -2956,6 +2970,7 @@ def _rebase_for_session(wave: Wave, incoming: RuntimeLatest, session_id: str | N
         harness=incoming.harness or baseline.harness,
         model=incoming.model or baseline.model,
         session_id=session_id,
+        measure_version=incoming.measure_version,
         captured_at=datetime.now(UTC),
     )
     wave.runtime_latest = None
@@ -3316,10 +3331,10 @@ async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[st
                 # total into runtime_carry, and re-originating on THIS session's
                 # counters) before merging this session's snapshot in.
                 _rebase_for_session(wave, incoming=latest, session_id=args.session_id)
-                # Same session, but the counters went BACKWARDS: the source reset
-                # or the basis changed under the wave. Re-origin rather than let
-                # the close path raise on it forever.
-                if wave.runtime_baseline is not None and _counters_regressed(
+                # Same session, but the snapshot is not comparable to the baseline:
+                # the counters went backwards, or the measure itself changed. Either
+                # way the difference is not work, so re-origin rather than record it.
+                if wave.runtime_baseline is not None and _counters_incomparable(
                     wave.runtime_baseline, latest
                 ):
                     _reorigin_on_reset(wave, latest)

@@ -16,7 +16,7 @@
   "phases_statuses": {
     "P01": "closed"
   },
-  "schema_version": "1.16",
+  "schema_version": "1.17",
   "scope_kind": "repo",
   "waves_ids": [
     "P01-I01-W01"

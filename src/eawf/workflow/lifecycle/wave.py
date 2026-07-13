@@ -138,6 +138,7 @@ def _capture_runtime_baseline(session_id: str) -> RuntimeBaseline | None:
         harness=counters.harness,
         model=counters.model,
         session_id=session_id,
+        measure_version=counters.measure_version,
         captured_at=datetime.now(UTC),
     )
 

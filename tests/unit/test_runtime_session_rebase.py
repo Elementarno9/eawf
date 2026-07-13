@@ -20,7 +20,7 @@ from eawf.kernel.migrations.v1_14_to_v1_15 import MigrationV114ToV115
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import RuntimeBaseline, RuntimeCarry, RuntimeLatest, Wave
 from eawf.runtime.daemon.methods.state import (
-    _counters_regressed,
+    _counters_incomparable,
     _rebase_for_session,
     _reorigin_on_reset,
     _upsert_interactive_session_attempt,
@@ -491,7 +491,7 @@ def test_regressed_counters_reorigin_instead_of_stranding_the_wave() -> None:
     # The basis changes under the wave: the same session now measures far less.
     incoming = _latest("sess-a", api_duration_ms=18_000_000, output_tokens=250_000)
 
-    assert _counters_regressed(wave.runtime_baseline, incoming) is True
+    assert _counters_incomparable(wave.runtime_baseline, incoming) is True
     _reorigin_on_reset(wave, incoming)
 
     assert wave.runtime_baseline is not None
@@ -525,4 +525,59 @@ def test_forward_counters_are_untouched_by_the_reset_guard() -> None:
     baseline = _baseline("sess-a", api_duration_ms=1_000, output_tokens=10)
     incoming = _latest("sess-a", api_duration_ms=5_000, output_tokens=40)
 
-    assert _counters_regressed(baseline, incoming) is False
+    assert _counters_incomparable(baseline, incoming) is False
+
+
+# --- P30-I25-W42: a changed measure is not work, in EITHER direction --------
+
+
+def test_a_rising_measure_change_is_not_banked_as_runtime() -> None:
+    """A redefinition that RAISES the figure looks exactly like a productive week.
+
+    This is the half the direction heuristic misses. When the duration measure
+    changed from a gap heuristic to per-turn spans, three claimed waves' baselines
+    (22,600,279 ms under the old measure) met a capture of 69,676,393 ms under the
+    new one. Nothing went backwards, so nothing tripped -- and the delta was 13
+    HOURS of fabricated runtime, about 26 EU per wave, silently.
+
+    The snapshots carry the measure that produced them, so the change is a fact
+    rather than an inference from which way the number moved.
+    """
+    baseline = _baseline("sess-a", api_duration_ms=22_600_279)
+    baseline = baseline.model_copy(update={"measure_version": 2})
+    incoming = _latest("sess-a", api_duration_ms=69_676_393)
+    incoming = incoming.model_copy(update={"measure_version": 3})
+
+    # The counters ROSE -- a regression check sees nothing wrong at all.
+    assert incoming.api_duration_ms > baseline.api_duration_ms
+    assert _counters_incomparable(baseline, incoming) is True
+
+
+def test_a_falling_measure_change_is_still_caught() -> None:
+    baseline = _baseline("sess-a", api_duration_ms=65_988_667).model_copy(
+        update={"measure_version": 1}
+    )
+    incoming = _latest("sess-a", api_duration_ms=19_284_744).model_copy(
+        update={"measure_version": 3}
+    )
+
+    assert _counters_incomparable(baseline, incoming) is True
+
+
+def test_the_same_measure_growing_is_ordinary_work() -> None:
+    """The guard must not fire on a wave that simply did some work."""
+    baseline = _baseline("sess-a", api_duration_ms=1_000).model_copy(update={"measure_version": 3})
+    incoming = _latest("sess-a", api_duration_ms=5_000).model_copy(update={"measure_version": 3})
+
+    assert _counters_incomparable(baseline, incoming) is False
+
+
+def test_an_unversioned_baseline_still_compares_on_the_numbers() -> None:
+    """A snapshot predating the version field falls back to the direction check."""
+    baseline = _baseline("sess-a", api_duration_ms=1_000)
+    forward = _latest("sess-a", api_duration_ms=5_000).model_copy(update={"measure_version": 3})
+    backward = _latest("sess-a", api_duration_ms=500).model_copy(update={"measure_version": 3})
+
+    assert baseline.measure_version is None
+    assert _counters_incomparable(baseline, forward) is False
+    assert _counters_incomparable(baseline, backward) is True

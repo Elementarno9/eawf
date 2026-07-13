@@ -52,6 +52,14 @@ class RuntimeCounters(BaseModel):
     model id the runtime billed against. Both are optional because a payload
     without a recognisable ``model`` block omits the model id, and an
     out-of-band ``model_validate`` may construct counters with no attribution.
+
+    ``measure_version`` records WHICH definition of the counters produced them.
+    Cumulative counters are only comparable against a baseline taken under the
+    same definition: when the definition changes, the difference between two
+    snapshots is not work, it is the change. Inferring that from the direction the
+    number moved catches only half the cases -- a falling measure looks like a
+    regression, while a rising one looks exactly like a productive week and
+    silently banks it. The version makes the change a fact rather than a guess.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -65,6 +73,7 @@ class RuntimeCounters(BaseModel):
     cache_read_input_tokens: int | None = Field(default=None, ge=0)
     harness: str | None = None
     model: str | None = None
+    measure_version: int | None = None
 
 
 def _coerce_non_negative_int(raw: Any) -> int | None:

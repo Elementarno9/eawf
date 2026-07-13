@@ -97,6 +97,11 @@ def test_session_end_capture_hook_invokes_runtime_capture_rpc() -> None:
                 # this payload carries no model block so ``model`` stays None.
                 "harness": "claude-code",
                 "model": None,
+                # The statusline shape carries no measure version: it is not the
+                # transcript aggregator, so nothing declares which definition of
+                # the counters produced it, and the daemon falls back to comparing
+                # the numbers themselves (P30-I25-W42).
+                "measure_version": None,
                 "session_id": "session-1",
                 "captured_at": "2026-06-10T12:00:00+00:00",
                 "repo_root": "workspace",

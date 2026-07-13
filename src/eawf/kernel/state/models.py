@@ -563,6 +563,16 @@ class RuntimeBaseline(_StrictModel):
     differenced -- the daemon rebases instead (see :attr:`Wave.runtime_carry`).
     It stays optional: a state written before the v1.15 bump, or a runtime that
     discloses no session id, re-validates with it defaulted to ``None``.
+
+    ``measure_version`` records WHICH definition of the counters produced them,
+    for the same reason and with a sharper edge: a snapshot is comparable only
+    against a baseline taken under the same definition. Change the definition and
+    the difference between two snapshots is not work, it is the change. Detecting
+    that from the direction the number moved catches only the falling half -- a
+    rising redefinition is indistinguishable from a productive week, and gets
+    banked as one. (Both halves happened inside P30-I25: one redefinition stranded
+    two claimed waves, the next inflated three by thirteen hours each.) The version
+    makes it a fact instead of a guess.
     """
 
     api_duration_ms: Annotated[int, Field(ge=0)] | None = None
@@ -575,6 +585,7 @@ class RuntimeBaseline(_StrictModel):
     harness: str | None = None
     model: str | None = None
     session_id: str | None = None
+    measure_version: int | None = None
     captured_at: UtcDatetime
 
 
@@ -1581,13 +1592,13 @@ class FleetRun(_StrictModel):
 class State(_StrictModel):
     """Top-level eawf state document.
 
-    ``schema_version`` accepts the full ``"1.0"`` through ``"1.16"`` range so
+    ``schema_version`` accepts the full ``"1.0"`` through ``"1.17"`` range so
     an on-disk state written before any bump still re-validates after the
     model advances — the migrate chain rewrites the version string in place,
     but a read of an un-migrated state must never reject. The accepted set
     drives the migrate guard's model-supported max, so the literals move in
     lockstep with the migration steps (``v1_0_to_v1_1`` through
-    ``v1_15_to_v1_16``). The ``1.5`` edge is purely additive — it registers
+    ``v1_16_to_v1_17``). The ``1.5`` edge is purely additive — it registers
     :attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum
     value no existing state row references, so no historical fact changes.
     The ``1.6`` edge is likewise purely additive — it adds the top-level
@@ -1654,6 +1665,14 @@ class State(_StrictModel):
     it, an honest reset is indistinguishable from a capture path that silently did
     nothing. It defaults to ``0``; the ``v1_15_to_v1_16`` step backfills it on
     every existing carry.
+
+    The ``1.17`` edge is purely additive: it adds
+    :attr:`RuntimeBaseline.measure_version` (inherited by :class:`RuntimeLatest`),
+    which records which definition of the counters produced a snapshot. Counters
+    are comparable only against a baseline taken under the same definition, and a
+    redefinition that RAISES the figure is otherwise indistinguishable from work.
+    It defaults to ``None``; the ``v1_16_to_v1_17`` step backfills it on every
+    snapshot, and a null version falls back to the old direction check.
     """
 
     schema_version: Literal[
@@ -1674,6 +1693,7 @@ class State(_StrictModel):
         "1.14",
         "1.15",
         "1.16",
+        "1.17",
     ]
     scope_kind: ScopeKind
     urn: UrnStr
