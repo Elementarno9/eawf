@@ -273,8 +273,16 @@ class RuntimeCaptureParams(RuntimeCounters):
     """Params for :func:`runtime_capture`.
 
     The runtime-owned counters are cumulative, so this RPC records the latest
-    observed snapshot onto every active wave. ``session_id`` is optional
-    correlation metadata; the active wave set remains canonical state.
+    observed snapshot onto every active wave; the active wave set remains
+    canonical state. ``session_id`` names the session the counters were read
+    from, which is load-bearing rather than decorative: counters are cumulative
+    *per session*, so it is what lets a capture from a new session rebase the
+    wave's baseline onto that session's origin
+    (:func:`_rebase_for_session`) and what dedupes the interactive
+    :class:`~eawf.kernel.state.models.SessionAttempt`
+    (:func:`_upsert_interactive_session_attempt`). It stays optional: a runtime
+    that discloses no session id still captures, and the wave is then treated as
+    single-session.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -2865,8 +2873,9 @@ def _rebase_for_session(wave: Wave, incoming: RuntimeLatest, session_id: str | N
 
     Runtime counters are cumulative *within* a session: session B's transcript
     starts from zero regardless of what session A already spent on the wave.
-    Differencing B's counters against A's baseline is therefore meaningless (and
-    would trip the backwards-counter guard on the close path). So on the first
+    Differencing B's counters against A's baseline is therefore meaningless --
+    the delta goes backwards, and the close path clamps a backwards counter to
+    zero, so the wave would close reporting no runtime at all. So on the first
     capture from a session other than the baseline's, the finished session's
     total is folded into ``wave.runtime_carry`` and the baseline is re-originated
     on the new session -- the close-time delta then sums every session's runtime.
@@ -2904,7 +2913,9 @@ def _rebase_for_session(wave: Wave, incoming: RuntimeLatest, session_id: str | N
         wave.runtime_baseline = baseline.model_copy(update={"session_id": session_id})
         return
 
-    wave.runtime_carry = _fold_finished_session(wave.runtime_carry, baseline, wave.runtime_latest)
+    wave.runtime_carry = _fold_finished_session(
+        wave.runtime_carry, baseline=baseline, latest=wave.runtime_latest
+    )
     wave.runtime_baseline = RuntimeBaseline(
         api_duration_ms=incoming.api_duration_ms or 0,
         total_duration_ms=incoming.total_duration_ms or 0,
@@ -3058,7 +3069,7 @@ def _upsert_interactive_session_attempt(
     )
     logger.info(
         f"_upsert_interactive_session_attempt wave={wave.id} attempt={attempt_no} "
-        f"session_id={handle_id!r} cost_usd={delta.actual_cost_usd} "
+        f"session={handle_id!r} cost_usd={delta.actual_cost_usd} "
         f"tokens={delta.actual_tokens} outcome={outcome}"
     )
 
@@ -3275,7 +3286,7 @@ async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[st
                 # fresh counter origin, so rebase (folding the finished session's
                 # total into runtime_carry, and re-originating on THIS session's
                 # counters) before merging this session's snapshot in.
-                _rebase_for_session(wave, latest, args.session_id)
+                _rebase_for_session(wave, incoming=latest, session_id=args.session_id)
                 # Same session, but the counters went BACKWARDS: the source reset
                 # or the basis changed under the wave. Re-origin rather than let
                 # the close path raise on it forever.

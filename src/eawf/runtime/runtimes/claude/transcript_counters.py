@@ -32,8 +32,9 @@ Two transcript quirks the aggregator must handle:
   *between* rows and drops any gap wide enough to be a turn boundary
   (:data:`_IDLE_GAP_MS`), leaving the time the agent was actually working. Both
   measures grow monotonically with the transcript, so their maximum is monotonic
-  too and a later capture can never report a smaller duration than an earlier one
-  (a backwards counter would reject the close).
+  too and a later capture can never report a smaller duration than an earlier
+  one -- which is what keeps the close-time delta against the claim-time baseline
+  non-negative without the capture path having to re-origin it.
 
 Every read fails open: a missing, unreadable, or usage-free transcript yields
 ``None`` so the Stop hook stays non-blocking.
@@ -271,8 +272,8 @@ class _TranscriptScan:
 
     Attributes:
         tally: Per-class token totals, deduplicated by billed message.
-        duration_ms: Session runtime so far -- the larger of the turn-duration
-            sum and the row timestamp span (both monotonic, see the module
+        duration_ms: Agent working time so far -- the larger of the turn-duration
+            sum and the idle-filtered row-gap sum (both monotonic, see the module
             docstring).
         turn_duration_ms: The turn-duration sum alone, kept for the debug log so
             a zero (the Stop-hook race) is visible.
@@ -338,9 +339,10 @@ def aggregate_transcript_counters(transcript_path: Path | str | None) -> Runtime
 
     Returns:
         :class:`RuntimeCounters` stamped ``harness="claude-code"`` carrying the
-        session's cumulative duration, per-class token tallies, billed model id,
-        and the token-derived ``cost_usd``. The transcript reports wall-clock
-        only (no model-API split), so both ``api_duration_ms`` and
+        session's cumulative agent working time (see :func:`_active_span_ms` --
+        NOT the session's wall-clock span), per-class token tallies, billed model
+        id, and the token-derived ``cost_usd``. The transcript splits no
+        model-API duration out of the total, so both ``api_duration_ms`` and
         ``total_duration_ms`` carry that one duration -- the same convention the
         headless spawn snapshot uses, which keeps the default API-duration EU
         basis working on the interactive path. ``None`` when the transcript is

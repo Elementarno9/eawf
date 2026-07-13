@@ -88,6 +88,10 @@ def _claim_session_counters(session_id: str) -> RuntimeCounters | None:
         session_id: Claim session id, used to resolve both the session
             transcript and the session-keyed statusline cache the sidecar lives
             beside.
+
+    Returns:
+        The session's cumulative :class:`RuntimeCounters`, or ``None`` when
+        neither the transcript nor the sidecar yields any.
     """
     from eawf.runtime.runtime_counter_sidecar import (
         RuntimeCounterSidecar,
@@ -235,15 +239,34 @@ def compute_runtime_delta(
 ) -> RuntimeDelta | None:
     """Return captured runtime delta between claim baseline and latest counters.
 
-    ``eu_basis`` selects which captured quantity derives elapsed EU.
-    Missing baseline/latest/chosen-basis counters mean there is no captured
-    runtime to apply; comparable counters that move backwards reject the
-    close because the cumulative counter source reset or regressed.
+    ``eu_basis`` selects which captured quantity derives elapsed EU. Missing
+    baseline / latest / chosen-basis counters mean there is no captured runtime
+    to apply, so the delta is ``None``. Counters that moved backwards do NOT
+    reject the close: :func:`_counter_delta` clamps each to a zero delta and
+    warns, so a wave whose counter source reset stays closable (the capture path
+    re-origins the baseline on a regressed counter, so it should not arise here).
 
     ``carry`` folds in the runtime a multi-session wave already spent in sessions
     that have ended (the daemon rebases the baseline onto each new session's
     origin and accumulates the finished session's total there), so the close-time
     figure is *this* session's delta plus every earlier session's total.
+
+    Args:
+        baseline: Claim-time counter snapshot; ``None`` means nothing was
+            captured at claim, so there is no origin to difference against.
+        latest: Freshest counter snapshot captured while the wave was active.
+        carry: Totals already folded in from the wave's finished sessions, or
+            ``None`` when the wave never spanned one.
+        eu_minutes: Minutes represented by one effort unit.
+        eu_basis: Which captured quantity derives ``elapsed_eu``.
+
+    Returns:
+        The :class:`RuntimeDelta`, or ``None`` when no runtime was captured --
+        an absent baseline / latest, or no counter on the chosen basis.
+
+    Raises:
+        LifecycleError: When *eu_minutes* is not positive, or *eu_basis* is not
+            a known :class:`~eawf.kernel.config.schema.EuBasis` member.
     """
     if baseline is None or latest is None:
         return None
@@ -290,8 +313,8 @@ def compute_runtime_delta(
         return None
     # elapsed_eu is the AGENT-RUNTIME basis (the model's api/total duration or a
     # token-derived estimate via _runtime_basis_eu), NOT the claim->close
-    # wall-clock. This is intentional (W21): a wave's effort is the agent's work,
-    # not the operator's elapsed time, so elapsed_eu deliberately equals
+    # wall-clock. This is intentional: a wave's effort is the agent's work, not
+    # the operator's elapsed time, so elapsed_eu deliberately equals
     # agent_runtime_eu here -- do not "fix" it to a wall-clock delta.
     return RuntimeDelta(
         elapsed_eu=elapsed_eu,
@@ -314,7 +337,15 @@ def _runtime_basis_eu(
     token_delta: int | None,
     eu_minutes: float,
 ) -> float | None:
-    """Convert the selected runtime basis into effort units."""
+    """Convert the selected runtime basis into effort units.
+
+    Returns:
+        The basis quantity in EU, or ``None`` when the counter backing the
+        selected basis was never captured.
+
+    Raises:
+        LifecycleError: When *eu_basis* is not a known :class:`EuBasis` member.
+    """
     if eu_basis is EuBasis.API_DURATION:
         return _duration_ms_to_eu(api_duration_ms, eu_minutes=eu_minutes)
     if eu_basis is EuBasis.TOKENS:
@@ -912,28 +943,24 @@ def close_wave(
     :func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha`, which walks
     ``git log --grep '[P##-W##]'`` against the active branch.
 
-    Telemetry handoff (P28-I02-W03/P28-I03-W30): the close path upserts
-    :class:`ActualSummary` for *wave_id* in ``state.actuals`` carrying
-    the wave's :attr:`Wave.tokens_consumed` tally on ``actual_tokens``.
-    When daemon telemetry has a matching per-session duration rollup, the
-    auto-created summary also carries ``attention_eu`` /
-    ``agent_runtime_eu``. Existing summaries are operator-authored actuals;
-    their effort fields are preserved and only token / cost status fields
-    refresh.
-    The auto-created actual carries ``elapsed_eu`` derived from the
-    measured agent runtime when the caller supplies *actual_elapsed_eu*
-    (the daemon close path converts the telemetry-rollup session
-    ``duration_ms`` to EU). The measured session runtime is bounded agent
-    effort — distinct from the open->close wall-clock span, which is NOT
-    agent effort (it counts overnight, cross-session, and other-wave idle
-    time, inflating consumed EU by ~10x per P27-I05 EU research) and is
-    never substituted here. When *actual_elapsed_eu* is ``None`` (no
-    telemetry runtime captured) the auto-created actual leaves
-    ``elapsed_eu=0.0`` so a wave with no measured runtime keeps the honest
-    zero-EU state. ``actual_cost_usd`` stays at ``0.0`` for v0.4 — the
-    per-model rate table that turns tokens into dollars is not yet wired
-    (the field exists so the post-mutation event envelope can publish a
-    typed cost value once the rate table lands).
+    Telemetry handoff: the close path upserts :class:`ActualSummary` for
+    *wave_id* in ``state.actuals`` carrying the wave's
+    :attr:`Wave.tokens_consumed` tally on ``actual_tokens``. Existing
+    summaries are operator-authored actuals; their effort fields are
+    preserved and only token / cost / status fields refresh.
+    The auto-created actual takes its measured figures from the caller: the
+    daemon close path derives ``agent_runtime_eu``, ``elapsed_eu``, and
+    ``actual_cost_usd`` from the wave's runtime baseline-to-latest delta
+    (:func:`compute_runtime_delta`, whose token classes are priced through the
+    per-model rate table), and falls back to the telemetry rollup's session
+    ``duration_ms`` for ``elapsed_eu`` when no runtime snapshot was captured;
+    ``attention_eu`` comes from that same rollup. The measured agent runtime is
+    bounded effort — distinct from the open->close wall-clock span, which is
+    NOT agent effort (it counts overnight, cross-session, and other-wave idle
+    time, inflating consumed EU roughly tenfold) and is never substituted here.
+    When the caller supplies no measured value the auto-created actual keeps the
+    honest zero (``elapsed_eu=0.0``, ``actual_cost_usd=0.0``) rather than
+    inventing one.
     The auto-created actual also carries the ``harness`` + ``model``
     attribution off the wave's latest runtime snapshot
     (:attr:`Wave.runtime_latest`, stamped by the daemon runtime-capture writer)
