@@ -10962,6 +10962,20 @@
       "status": "done",
       "updated_at": "2026-07-13T01:12:35.587063Z"
     },
+    "P30-I25-W27": {
+      "actual_cost_usd": 0.8054660000000027,
+      "actual_tokens": 1324555,
+      "agent_runtime_eu": 0.04884111111111111,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W27",
+      "elapsed_eu": 0.04884111111111111,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W27",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W27",
+      "status": "done",
+      "updated_at": "2026-07-13T01:22:48.466028Z"
+    },
     "P30-I25-W28": {
       "actual_cost_usd": 7.408102499999998,
       "actual_tokens": 13027348,
@@ -11282,6 +11296,20 @@
       "runtime": "claude",
       "scope_id": "P30-I25-W25",
       "started_at": "2026-07-13T00:35:09.311818Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260713T011652Z-auditor-claude-code": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-07-13T01:54:47.642192Z",
+      "id": "SES-20260713T011652Z-auditor-claude-code",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "scope_id": "P30-I25-W27::audit",
+      "started_at": "2026-07-13T01:16:52.195285Z",
       "status": "stale",
       "summary": "orphaned by daemon restart",
       "worktree_ids": []
@@ -14634,7 +14662,7 @@
   "current": {
     "active_session_ids": [],
     "active_wave_ids": [
-      "P30-I25-W27"
+      "P30-I25-W31"
     ],
     "iter_id": "P30-I25",
     "phase_id": "P30",
@@ -27559,6 +27587,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I25-W30",
       "updated_at": "2026-07-13T00:44:40.155766Z"
+    },
+    "P30-I25-W31": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W31-bucket-20260713T012803Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I25-W31",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I25-W31",
+      "updated_at": "2026-07-13T01:28:03.492391Z"
     }
   },
   "fleet_run": null,
@@ -30127,7 +30168,8 @@
         "P30-I25-W27",
         "P30-I25-W28",
         "P30-I25-W29",
-        "P30-I25-W30"
+        "P30-I25-W30",
+        "P30-I25-W31"
       ]
     }
   },
@@ -31265,7 +31307,7 @@
   "schema_version": "1.15",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-13T01:14:08.319748Z",
+  "updated_at": "2026-07-13T01:28:03.493091Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -125714,11 +125756,12 @@
     "P30-I25-W27": {
       "agent_role": "executor",
       "blocks": [
-        "P30-I25-W29"
+        "P30-I25-W29",
+        "P30-I25-W31"
       ],
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T01:14:08.295731Z",
-      "closed_at": null,
+      "closed_at": "2026-07-13T01:22:48.466028Z",
       "commit": null,
       "criteria_floor_waiver": {
         "reason": "prose success criteria; cross-session correctness hazard that goes live once W25 and W26 populate the counters",
@@ -125756,7 +125799,7 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-12T23:54:21.565153Z",
-      "outcome": null,
+      "outcome": "Session-keyed runtime snapshots + runtime_carry accumulator; schema 1.15 migration; cross-session close sums per-session runtimes instead of raising",
       "runtime_baseline": {
         "api_duration_ms": 4629236,
         "cache_creation_input_tokens": 306001,
@@ -125771,10 +125814,38 @@
         "total_duration_ms": 4629236
       },
       "runtime_carry": null,
-      "runtime_latest": null,
+      "runtime_latest": {
+        "api_duration_ms": 4717150,
+        "cache_creation_input_tokens": 311329,
+        "cache_read_input_tokens": 54503061,
+        "captured_at": "2026-07-13T01:15:00.435700Z",
+        "cost_usd": 33.9234755,
+        "harness": "claude-code",
+        "input_tokens": 486,
+        "model": "claude-opus-4-8",
+        "output_tokens": 142249,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 4717150
+      },
       "runtime_preference": null,
-      "sessions": {},
-      "status": "claimed",
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "cache_creation_input_tokens": 311329,
+          "cache_read_input_tokens": 54503061,
+          "cost_usd": 33.9234755,
+          "ended_at": "2026-07-13T01:15:00.435700Z",
+          "exit_status": 0,
+          "input_tokens": 486,
+          "output_tokens": 142249,
+          "runtime": "claude-code",
+          "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "started_at": "2026-07-13T01:15:00.435700Z",
+          "subprocess_pid": null
+        }
+      },
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -125933,7 +126004,7 @@
       ],
       "title": "Rebase runtime counters when a wave spans several sessions",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 1324555,
       "worktree_id": null
     },
     "P30-I25-W28": {
@@ -126455,6 +126526,126 @@
       "title": "Measure session duration from transcript timestamps",
       "token_budget": null,
       "tokens_consumed": 7908466,
+      "worktree_id": null
+    },
+    "P30-I25-W31": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T01:28:03.471242Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Reactive fix wave appended mid-iter after the operator spotted cumulative session totals and a zero-EU span on the interactive attempt row",
+        "waived_at": "2026-07-13T01:28:02.791875Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I25-W27"
+      ],
+      "description": "The interactive SessionAttempt is minted from the session-cumulative snapshot: started_at equals ended_at so the wave-detail metrics tab renders 0.00 EU, and its cost and token columns show the whole session's spend on every wave. Stamp the wave's delta instead, and stop counting prompt-cache re-reads as work tokens.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/workflow/lifecycle/wave.py",
+        "tests/unit/test_runtime_session_rebase.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W31",
+      "intent": {
+        "desired_outcome": "Each wave's attempt row carries its own delta and a real span so the metrics and cost tabs read per-wave truth",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-13-p30-i25-eu-capture-fix.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "W25-W30 made EU capture land but the per-wave surfaces still misreport it; left unfixed the first thing an operator sees after the fix is a zero EU and a 50M token count",
+        "problem": "The interactive attempt row carries session-cumulative cost and tokens with a zero-length span so the wave detail shows 0.00 EU and every wave shows the whole session spend",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-13T01:28:02.842900Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 5469665,
+        "cache_creation_input_tokens": 327894,
+        "cache_read_input_tokens": 59942399,
+        "captured_at": "2026-07-13T01:28:03.492356Z",
+        "cost_usd": 37.0593545,
+        "harness": "claude-code",
+        "input_tokens": 518,
+        "model": "claude-opus-4-8",
+        "output_tokens": 152265,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 5469665
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The interactive SessionAttempt carries the wave-scoped delta (cost and per-class tokens) rather than the session-cumulative snapshot so each wave shows its own spend",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The interactive SessionAttempt carries the wave-scoped delta (cost and per-class tokens) rather than the session-cumulative snapshot so each wave shows its own spend",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "The attempt span runs from the claim baseline capture to the latest capture so the wave-detail metrics tab derives a nonzero EU instead of a zero-length span",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The attempt span runs from the claim baseline capture to the latest capture so the wave-detail metrics tab derives a nonzero EU instead of a zero-length span",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "ActualSummary.actual_tokens counts input plus output plus cache-write tokens and excludes prompt-cache reads (which re-count the same context every request and scale with session position rather than work) while actual_cost_usd still bills cache reads",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "ActualSummary.actual_tokens counts input plus output plus cache-write tokens and excludes prompt-cache reads (which re-count the same context every request and scale with session position rather than work) while actual_cost_usd still bills cache reads",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "A regression test pins that a second wave claimed later in the same session records its own delta rather than the first wave's cumulative totals",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A regression test pins that a second wave claimed later in the same session records its own delta rather than the first wave's cumulative totals",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Record wave-delta runtime on the interactive attempt row",
+      "token_budget": null,
+      "tokens_consumed": 0,
       "worktree_id": null
     }
   },
