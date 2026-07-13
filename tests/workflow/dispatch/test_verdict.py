@@ -31,6 +31,7 @@ from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
     AgentSessionStatus,
+    Confidence,
 )
 from eawf.kernel.state.models import State, Wave
 from eawf.runtime.runtimes.adapter import SpawnResult
@@ -1051,3 +1052,66 @@ def test_auditor_prompt_forbids_mutating_the_working_tree() -> None:
     assert "never mutate" in prompt
     # The auditor is pointed at recorded evidence instead of re-running gates.
     assert "RECORDED evidence" in prompt
+
+
+# --- P30-I25-W33: a numeric confidence must not kill the close --------------
+
+
+def test_parse_auditor_body_coerces_numeric_confidence() -> None:
+    """A float confidence is read as its enum bucket rather than failing the schema.
+
+    A model asked for a "confidence" reaches for a probability far more readily
+    than for one of three words. Because the re-ask loop is bounded, three floats
+    in a row exhausted it and the close failed with NO verdict written -- which
+    the gate then reads as a refusal, so the wave could never close (the live
+    P30-I25-W29 failure: `confidence=0.78`).
+    """
+    raw = json.loads(_auditor_body_json(verdict="pass"))
+    raw["confidence"] = 0.78
+
+    body = parse_auditor_report_body(raw)
+
+    assert body.confidence is Confidence.HIGH
+    assert body.verdict is AgentReportVerdict.PASS
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (1.0, Confidence.HIGH),
+        (0.75, Confidence.HIGH),
+        (0.6, Confidence.MEDIUM),
+        (0.4, Confidence.MEDIUM),
+        (0.2, Confidence.LOW),
+        (0, Confidence.LOW),
+    ],
+)
+def test_numeric_confidence_buckets(value: float, expected: Confidence) -> None:
+    raw = json.loads(_auditor_body_json(verdict="pass"))
+    raw["confidence"] = value
+
+    assert parse_auditor_report_body(raw).confidence is expected
+
+
+def test_unparseable_confidence_still_raises() -> None:
+    """Coercion is not a licence to accept anything: a bad body must still re-ask."""
+    raw = json.loads(_auditor_body_json(verdict="pass"))
+    raw["confidence"] = "very sure"
+
+    with pytest.raises(ValidationError):
+        parse_auditor_report_body(raw)
+
+    # Out of the [0, 1] probability range: not a confidence, so not coerced.
+    out_of_range = json.loads(_auditor_body_json(verdict="pass"))
+    out_of_range["confidence"] = 42.0
+    with pytest.raises(ValidationError):
+        parse_auditor_report_body(out_of_range)
+
+
+def test_auditor_prompt_names_the_allowed_confidence_values() -> None:
+    wave = _make_wave(agent_role="executor", effort_bucket="L")
+
+    prompt = build_auditor_prompt(wave, diff_base="abc123~1")
+
+    assert "`high`, `medium`, or `low`" in prompt
+    assert "never a number" in prompt

@@ -1423,6 +1423,20 @@ async def _produce_high_risk_verdict(
         timeout_seconds=wall_clock_seconds,
         events_path=events_path,
     )("claude-code")
+
+    def _persist_live_auditor_session(registered: State) -> None:
+        """Write the freshly-registered auditor session so Watch can see it.
+
+        The close persists state only when it FINISHES. An audit runs for
+        minutes and can fail, so without this the operator's Watch roster --
+        which reads state -- showed no running agent for the whole audit, and
+        none afterwards when the close failed, while the event Feed streamed the
+        auditor's output the entire time. The close already holds the state lock,
+        so the write goes through the lock-free ``_locked`` primitive.
+        """
+        atomic_write_json_locked(state_path, registered.model_dump(mode="json"))
+        logger.info(f"_produce_high_risk_verdict wave={wave.id} status=auditor-session-persisted")
+
     await produce_wave_verdict(
         state=state,
         state_path=state_path,
@@ -1430,6 +1444,7 @@ async def _produce_high_risk_verdict(
         wave=wave,
         spawn=spawn,
         repo_root=repo_root,
+        on_session_registered=_persist_live_auditor_session,
     )
     logger.info(f"_produce_high_risk_verdict wave={wave.id} status=produced")
 

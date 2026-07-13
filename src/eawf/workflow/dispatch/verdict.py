@@ -52,7 +52,7 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -65,6 +65,7 @@ from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
     AgentSessionStatus,
+    Confidence,
     EffortBucket,
 )
 from eawf.kernel.state.models import AgentSession, State, Wave
@@ -514,7 +515,8 @@ def build_auditor_prompt(
         "Respond with ONLY a single JSON object that validates against the\n"
         "auditor `agent_end` report body (`role` = `auditor`). It MUST carry a\n"
         "`verdict` (one of pass / pass-with-followups / fail / blocked), a\n"
-        "`confidence`, a `summary`, a `target_id` equal to the wave id, one\n"
+        "`confidence` -- the STRING `high`, `medium`, or `low`, never a number --\n"
+        "a `summary`, a `target_id` equal to the wave id, one\n"
         "`criteria` entry (a CriterionVerdict with `criterion` + `passed`) per\n"
         "success criterion above, and any `refutations` you found. No prose, no\n"
         "code fences."
@@ -546,7 +548,43 @@ def parse_auditor_report_body(raw: object) -> AuditorReportBody:
         pydantic.ValidationError: When *raw* is not a valid auditor report
             body (wrong role, missing fields, or a schema mismatch).
     """
-    return _AUDITOR_BODY_ADAPTER.validate_python(raw)
+    return _AUDITOR_BODY_ADAPTER.validate_python(_coerce_confidence(raw))
+
+
+#: Cutoffs for reading a numeric confidence as an enum bucket. A model asked for
+#: a "confidence" reaches for a probability far more readily than for one of
+#: three words, so a bare float is the single most common way an otherwise
+#: correct auditor report fails the schema -- and because the re-ask loop is
+#: bounded, three of them in a row kill the close outright with no verdict
+#: written (P30-I25-W29). The cutoffs are the obvious thirds; the point is to
+#: accept an answer that is already unambiguous, not to invent precision.
+_CONFIDENCE_HIGH: float = 0.75
+_CONFIDENCE_MEDIUM: float = 0.4
+
+
+def _coerce_confidence(raw: object) -> object:
+    """Return *raw* with a numeric ``confidence`` read as its enum bucket.
+
+    A ``0.9`` means ``high`` in any reading of the word, and refusing it costs a
+    whole audit. Anything that is not a plain number in ``[0, 1]`` is passed
+    through untouched, so a genuinely unparseable body still raises
+    :class:`pydantic.ValidationError` and the bounded re-ask still runs.
+    """
+    if not isinstance(raw, dict):
+        return raw
+    value = raw.get("confidence")
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return raw
+    if not 0.0 <= float(value) <= 1.0:
+        return raw
+    if value >= _CONFIDENCE_HIGH:
+        bucket = Confidence.HIGH
+    elif value >= _CONFIDENCE_MEDIUM:
+        bucket = Confidence.MEDIUM
+    else:
+        bucket = Confidence.LOW
+    logger.info(f"_coerce_confidence raw={value!r} bucket={bucket.value!r}")
+    return {**raw, "confidence": bucket.value}
 
 
 #: Suffix appended to the wave id to scope the fresh auditor session. The
@@ -694,6 +732,7 @@ async def produce_wave_verdict(
     repo_root: Path | None = None,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     now: datetime | None = None,
+    on_session_registered: Callable[[State], None] | None = None,
 ) -> WaveVerdictResult:
     """Produce + persist a fresh-context auditor verdict for *wave*.
 
@@ -747,6 +786,11 @@ async def produce_wave_verdict(
         max_attempts: Bounded re-ask ceiling forwarded to
             :func:`assist_with_schema`.
         now: Optional fixed timestamp for the session start (tests pin it).
+        on_session_registered: Optional callback invoked with *state* right
+            after the auditor session is registered and before the spawn runs.
+            The close path binds it to a state persist so the running auditor is
+            visible in the Watch roster while it works, rather than only once the
+            close completes (and never, when the close fails).
 
     Returns:
         A :class:`WaveVerdictResult` carrying the append result, the
@@ -768,6 +812,14 @@ async def produce_wave_verdict(
         runtime=runtime,
         now=now,
     )
+    # The session lands in `state` in memory, and the CALLER persists state --
+    # which, on the close path, happens only when the close finishes. An audit
+    # runs for minutes and can fail, so the operator's Watch roster (which reads
+    # state) showed no running agent at all while the auditor worked, and none
+    # afterwards when the close failed. Persist the registration now so the live
+    # auditor is visible for as long as it runs.
+    if on_session_registered is not None:
+        on_session_registered(state)
 
     diff_base = derive_diff_base(wave.id, repo_root=repo_root)
     prompt = build_auditor_prompt(wave, diff_base=diff_base)
