@@ -11059,6 +11059,76 @@
       "scope_id": "P30-I25-W33",
       "status": "done",
       "updated_at": "2026-07-13T04:13:31.747516Z"
+    },
+    "P30-I25-W34": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W34",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I25-W34",
+      "model": null,
+      "scope_id": "P30-I25-W34",
+      "status": "done",
+      "updated_at": "2026-07-13T18:42:06.425013Z"
+    },
+    "P30-I25-W35": {
+      "actual_cost_usd": 3.1044749999999937,
+      "actual_tokens": 20168,
+      "agent_runtime_eu": 0.3769194444444444,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W35",
+      "elapsed_eu": 0.3769194444444444,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W35",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W35",
+      "status": "done",
+      "updated_at": "2026-07-13T19:11:20.352963Z"
+    },
+    "P30-I25-W36": {
+      "actual_cost_usd": 3.1044749999999937,
+      "actual_tokens": 20168,
+      "agent_runtime_eu": 0.3769194444444444,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W36",
+      "elapsed_eu": 0.3769194444444444,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W36",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W36",
+      "status": "done",
+      "updated_at": "2026-07-13T19:21:30.245093Z"
+    },
+    "P30-I25-W37": {
+      "actual_cost_usd": 7.09964699999999,
+      "actual_tokens": 42120,
+      "agent_runtime_eu": 0.8102772222222222,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W37",
+      "elapsed_eu": 0.8102772222222222,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W37",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W37",
+      "status": "done",
+      "updated_at": "2026-07-13T19:21:53.358356Z"
+    },
+    "P30-I25-W38": {
+      "actual_cost_usd": 1.038113999999993,
+      "actual_tokens": 6282,
+      "agent_runtime_eu": 0.04399388888888889,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W38",
+      "elapsed_eu": 0.04399388888888889,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W38",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W38",
+      "status": "done",
+      "updated_at": "2026-07-13T19:21:54.791798Z"
     }
   },
   "agent_sessions": {
@@ -11374,12 +11444,26 @@
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-07-13T18:41:54.275631Z",
       "id": "SES-20260713T035217Z-auditor-claude-code",
       "role": "auditor",
       "runtime": "claude-code",
       "scope_id": "P30-I25-W29::audit",
       "started_at": "2026-07-13T03:52:17.468530Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260713T191150Z-auditor-claude-code": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260713T191150Z-auditor-claude-code",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "scope_id": "P30-I25-W36::audit",
+      "started_at": "2026-07-13T19:11:50.966645Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -14731,13 +14815,9 @@
   "claims": null,
   "current": {
     "active_session_ids": [
-      "SES-20260713T035217Z-auditor-claude-code"
+      "SES-20260713T191150Z-auditor-claude-code"
     ],
-    "active_wave_ids": [
-      "P30-I25-W34",
-      "P30-I25-W35",
-      "P30-I25-W36"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I25",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -27752,6 +27832,32 @@
       "reference_class": "bucket:L",
       "scope_id": "P30-I25-W36",
       "updated_at": "2026-07-13T18:16:30.309566Z"
+    },
+    "P30-I25-W37": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W37-bucket-20260713T184449Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I25-W37",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I25-W37",
+      "updated_at": "2026-07-13T18:44:49.337893Z"
+    },
+    "P30-I25-W38": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W38-bucket-20260713T190741Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I25-W38",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I25-W38",
+      "updated_at": "2026-07-13T19:07:41.456358Z"
     }
   },
   "fleet_run": null,
@@ -30326,7 +30432,9 @@
         "P30-I25-W33",
         "P30-I25-W34",
         "P30-I25-W35",
-        "P30-I25-W36"
+        "P30-I25-W36",
+        "P30-I25-W37",
+        "P30-I25-W38"
       ]
     }
   },
@@ -31464,7 +31572,7 @@
   "schema_version": "1.15",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-13T18:16:30.309871Z",
+  "updated_at": "2026-07-13T19:21:54.792122Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -127171,7 +127279,7 @@
       "blocks": [],
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T18:16:28.941061Z",
-      "closed_at": null,
+      "closed_at": "2026-07-13T18:42:06.425013Z",
       "commit": null,
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the iter audit found the shipped duration source silently redefined elapsed_eu as operator wall clock",
@@ -127201,7 +127309,7 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-13T18:15:44.317894Z",
-      "outcome": null,
+      "outcome": "Interactive EU is agent work time (summed working gaps, idle dropped) not wall clock; bounded and monotonic",
       "runtime_baseline": {
         "api_duration_ms": 65988667,
         "cache_creation_input_tokens": 1052417,
@@ -127219,7 +127327,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -127288,7 +127396,7 @@
       "blocks": [],
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T18:16:29.623741Z",
-      "closed_at": null,
+      "closed_at": "2026-07-13T19:11:20.352963Z",
       "commit": null,
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the iter audit proved the W32 config leaf inert and the watchdog ceiling incompatible with it",
@@ -127320,25 +127428,53 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-13T18:16:08.744643Z",
-      "outcome": null,
+      "outcome": "Configured juror ceiling reaches the auditor (overlay carries the leaf); watchdog limit derives from it",
       "runtime_baseline": {
-        "api_duration_ms": 65988667,
-        "cache_creation_input_tokens": 1052417,
-        "cache_read_input_tokens": 153338955,
-        "captured_at": "2026-07-13T18:16:29.657571Z",
-        "cost_usd": 93.5602825,
+        "api_duration_ms": 19342498,
+        "cache_creation_input_tokens": 1124183,
+        "cache_read_input_tokens": 184482925,
+        "captured_at": "2026-07-13T18:57:35.478480Z",
+        "cost_usd": 111.0589925,
         "harness": "claude-code",
-        "input_tokens": 942,
+        "input_tokens": 1050,
         "model": "claude-opus-4-8",
-        "output_tokens": 254477,
+        "output_tokens": 302818,
         "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
-        "total_duration_ms": 65988667
+        "total_duration_ms": 19342498
       },
       "runtime_carry": null,
-      "runtime_latest": null,
+      "runtime_latest": {
+        "api_duration_ms": 20020953,
+        "cache_creation_input_tokens": 1135751,
+        "cache_read_input_tokens": 190031235,
+        "captured_at": "2026-07-13T19:08:36.841134Z",
+        "cost_usd": 114.1634675,
+        "harness": "claude-code",
+        "input_tokens": 1068,
+        "model": "claude-opus-4-8",
+        "output_tokens": 311400,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 20020953
+      },
       "runtime_preference": null,
-      "sessions": {},
-      "status": "claimed",
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "cache_creation_input_tokens": 11568,
+          "cache_read_input_tokens": 5548310,
+          "cost_usd": 3.1044749999999937,
+          "ended_at": "2026-07-13T19:08:36.841134Z",
+          "exit_status": 0,
+          "input_tokens": 18,
+          "output_tokens": 8582,
+          "runtime": "claude-code",
+          "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "started_at": "2026-07-13T18:57:35.478480Z",
+          "subprocess_pid": null
+        }
+      },
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -127399,7 +127535,7 @@
       ],
       "title": "Make the configured juror wall clock actually reach the auditor",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 20168,
       "worktree_id": null
     },
     "P30-I25-W36": {
@@ -127407,7 +127543,7 @@
       "blocks": [],
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T18:16:30.272268Z",
-      "closed_at": null,
+      "closed_at": "2026-07-13T19:21:30.245093Z",
       "commit": null,
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the iter audit found three defects in the cross-session rebase that were unit-tested only against the happy path",
@@ -127438,25 +127574,53 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-13T18:16:09.985874Z",
-      "outcome": null,
+      "outcome": "Rebase re-origins on the capturing session: no interleaved double-count, no pre-resume absorption, no lost runtime",
       "runtime_baseline": {
-        "api_duration_ms": 65988667,
-        "cache_creation_input_tokens": 1052417,
-        "cache_read_input_tokens": 153338955,
-        "captured_at": "2026-07-13T18:16:30.309524Z",
-        "cost_usd": 93.5602825,
+        "api_duration_ms": 19342498,
+        "cache_creation_input_tokens": 1124183,
+        "cache_read_input_tokens": 184482925,
+        "captured_at": "2026-07-13T18:57:35.478798Z",
+        "cost_usd": 111.0589925,
         "harness": "claude-code",
-        "input_tokens": 942,
+        "input_tokens": 1050,
         "model": "claude-opus-4-8",
-        "output_tokens": 254477,
+        "output_tokens": 302818,
         "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
-        "total_duration_ms": 65988667
+        "total_duration_ms": 19342498
       },
       "runtime_carry": null,
-      "runtime_latest": null,
+      "runtime_latest": {
+        "api_duration_ms": 20020953,
+        "cache_creation_input_tokens": 1135751,
+        "cache_read_input_tokens": 190031235,
+        "captured_at": "2026-07-13T19:08:36.841134Z",
+        "cost_usd": 114.1634675,
+        "harness": "claude-code",
+        "input_tokens": 1068,
+        "model": "claude-opus-4-8",
+        "output_tokens": 311400,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 20020953
+      },
       "runtime_preference": null,
-      "sessions": {},
-      "status": "claimed",
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "cache_creation_input_tokens": 11568,
+          "cache_read_input_tokens": 5548310,
+          "cost_usd": 3.1044749999999937,
+          "ended_at": "2026-07-13T19:08:36.841134Z",
+          "exit_status": 0,
+          "input_tokens": 18,
+          "output_tokens": 8582,
+          "runtime": "claude-code",
+          "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "started_at": "2026-07-13T18:57:35.478798Z",
+          "subprocess_pid": null
+        }
+      },
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -127517,7 +127681,299 @@
       ],
       "title": "Fix the cross-session rebase double count and runtime loss",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 20168,
+      "worktree_id": null
+    },
+    "P30-I25-W37": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T18:44:49.277167Z",
+      "closed_at": "2026-07-13T19:21:53.358356Z",
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Repair wave appended after the W34 basis change stranded two claimed waves whose baselines were recorded under the old basis",
+        "waived_at": "2026-07-13T18:44:47.954342Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "A counter that moves backwards raises LifecycleError at close, so the wave can never close: a reset counter source or a change of duration basis under a claimed wave strands it permanently. Re-origin on the regressed counters at capture instead, and clamp at close so no wave is ever unclosable.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/workflow/lifecycle/wave.py",
+        "tests/unit/test_runtime_session_rebase.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W37",
+      "intent": {
+        "desired_outcome": "A wave always remains closable and keeps measuring forward after a counter reset or a basis change",
+        "evidence_refs": [
+          ".ea/artifacts/evidence/2026-07-13-eu-capture/2026-07-13-attestation.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "W35 and W36 are stranded right now by exactly this and any future change to the duration basis would strand every claimed wave",
+        "problem": "A backwards counter raises at close so a wave whose counter source reset or whose duration basis changed can never be closed",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-13T18:44:48.012930Z",
+      "outcome": "A regressed counter re-origins at capture and degrades at close; a wave can never be stranded unclosable",
+      "runtime_baseline": {
+        "api_duration_ms": 18562454,
+        "cache_creation_input_tokens": 1111623,
+        "cache_read_input_tokens": 177212421,
+        "captured_at": "2026-07-13T18:44:49.337818Z",
+        "cost_usd": 107.0638205,
+        "harness": "claude-code",
+        "input_tokens": 1026,
+        "model": "claude-opus-4-8",
+        "output_tokens": 293450,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 18562454
+      },
+      "runtime_carry": null,
+      "runtime_latest": {
+        "api_duration_ms": 20020953,
+        "cache_creation_input_tokens": 1135751,
+        "cache_read_input_tokens": 190031235,
+        "captured_at": "2026-07-13T19:08:36.841134Z",
+        "cost_usd": 114.1634675,
+        "harness": "claude-code",
+        "input_tokens": 1068,
+        "model": "claude-opus-4-8",
+        "output_tokens": 311400,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 20020953
+      },
+      "runtime_preference": null,
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "cache_creation_input_tokens": 24128,
+          "cache_read_input_tokens": 12818814,
+          "cost_usd": 7.09964699999999,
+          "ended_at": "2026-07-13T19:08:36.841134Z",
+          "exit_status": 0,
+          "input_tokens": 42,
+          "output_tokens": 17950,
+          "runtime": "claude-code",
+          "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "started_at": "2026-07-13T18:44:49.337818Z",
+          "subprocess_pid": null
+        }
+      },
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "A capture whose counters sit below the baseline for the SAME session is treated as a counter-source reset: the baseline re-origins on the incoming counters and the wave keeps measuring forward instead of stranding",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A capture whose counters sit below the baseline for the SAME session is treated as a counter-source reset: the baseline re-origins on the incoming counters and the wave keeps measuring forward instead of stranding",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A backwards counter at close no longer raises and blocks the close forever; it degrades to a zero delta for that counter with a loud warning so the wave closes honestly rather than becoming unclosable",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A backwards counter at close no longer raises and blocks the close forever; it degrades to a zero delta for that counter with a loud warning so the wave closes honestly rather than becoming unclosable",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "A regression test pins that a wave whose baseline was recorded under a different duration basis still closes",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A regression test pins that a wave whose baseline was recorded under a different duration basis still closes",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "A regression test pins that the re-origin logs the reset rather than silently swallowing it",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A regression test pins that the re-origin logs the reset rather than silently swallowing it",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Never let a backwards counter make a wave unclosable",
+      "token_budget": null,
+      "tokens_consumed": 42120,
+      "worktree_id": null
+    },
+    "P30-I25-W38": {
+      "agent_role": "polisher",
+      "blocks": [],
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T19:07:41.403693Z",
+      "closed_at": "2026-07-13T19:21:54.791798Z",
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Polish wave appended at iter close after the repeated rewrites left docstrings describing superseded behaviour",
+        "waived_at": "2026-07-13T19:07:40.156287Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The iter rewrote the same code paths repeatedly and the docstrings kept describing the version before last. Three actively invite a future reader to undo a fix: a backwards counter no longer rejects the close, the cost table is wired, and the duration is no longer wall clock.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+        "src/eawf/runtime/daemon/methods/state.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W38",
+      "intent": {
+        "desired_outcome": "The changed surface documents what the code now does so the next reader is not misled into restoring a defect",
+        "evidence_refs": [
+          ".ea/artifacts/evidence/2026-07-13-eu-capture/2026-07-13-attestation.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "A lying comment is worse than no comment and one of these explicitly documents the permanent-strand failure that W37 exists to prevent",
+        "problem": "Docstrings across the changed surface describe behaviour that three separate repairs have since replaced and some of them invite undoing the repair",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-13T19:07:40.208101Z",
+      "outcome": "Retired six docstrings the iter made false, three of which invited undoing a fix",
+      "runtime_baseline": {
+        "api_duration_ms": 19941764,
+        "cache_creation_input_tokens": 1132406,
+        "cache_read_input_tokens": 188168517,
+        "captured_at": "2026-07-13T19:07:41.456302Z",
+        "cost_usd": 113.1253535,
+        "harness": "claude-code",
+        "input_tokens": 1062,
+        "model": "claude-opus-4-8",
+        "output_tokens": 308469,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 19941764
+      },
+      "runtime_carry": null,
+      "runtime_latest": {
+        "api_duration_ms": 20020953,
+        "cache_creation_input_tokens": 1135751,
+        "cache_read_input_tokens": 190031235,
+        "captured_at": "2026-07-13T19:08:36.841134Z",
+        "cost_usd": 114.1634675,
+        "harness": "claude-code",
+        "input_tokens": 1068,
+        "model": "claude-opus-4-8",
+        "output_tokens": 311400,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 20020953
+      },
+      "runtime_preference": null,
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "cache_creation_input_tokens": 3345,
+          "cache_read_input_tokens": 1862718,
+          "cost_usd": 1.038113999999993,
+          "ended_at": "2026-07-13T19:08:36.841134Z",
+          "exit_status": 0,
+          "input_tokens": 6,
+          "output_tokens": 2931,
+          "runtime": "claude-code",
+          "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "started_at": "2026-07-13T19:07:41.456302Z",
+          "subprocess_pid": null
+        }
+      },
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "No docstring in the changed surface describes superseded behaviour: none claims a backwards counter rejects the close (W37 removed that raise) none claims the cost rate table is unwired (it is wired) and none calls the captured duration wall clock (W34 made it agent work time)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "No docstring in the changed surface describes superseded behaviour: none claims a backwards counter rejects the close (W37 removed that raise) none claims the cost rate table is unwired (it is wired) and none calls the captured duration wall clock (W34 made it agent work time)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "Every function that raises carries a Raises block and no Raises block claims an exception the function no longer throws",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Every function that raises carries a Raises block and no Raises block claims an exception the function no longer throws",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "Log keys and call-site conventions in the changed surface match the AGENTS naming rules",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Log keys and call-site conventions in the changed surface match the AGENTS naming rules",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "The suite and mypy stay green because the sweep changes no behaviour",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The suite and mypy stay green because the sweep changes no behaviour",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Retire the docstrings this iter made false",
+      "token_budget": null,
+      "tokens_consumed": 6282,
       "worktree_id": null
     }
   },
