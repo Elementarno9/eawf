@@ -11129,6 +11129,62 @@
       "scope_id": "P30-I25-W38",
       "status": "done",
       "updated_at": "2026-07-13T19:21:54.791798Z"
+    },
+    "P30-I25-W39": {
+      "actual_cost_usd": 0.7673775000000091,
+      "actual_tokens": 3349,
+      "agent_runtime_eu": 0.041945,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W39",
+      "elapsed_eu": 0.041945,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W39",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W39",
+      "status": "done",
+      "updated_at": "2026-07-13T21:27:06.620045Z"
+    },
+    "P30-I25-W40": {
+      "actual_cost_usd": 0.7673775000000091,
+      "actual_tokens": 3349,
+      "agent_runtime_eu": 0.041945,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W40",
+      "elapsed_eu": 0.041945,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W40",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W40",
+      "status": "done",
+      "updated_at": "2026-07-13T21:27:08.046969Z"
+    },
+    "P30-I25-W41": {
+      "actual_cost_usd": 0.7673775000000091,
+      "actual_tokens": 3349,
+      "agent_runtime_eu": 0.041945,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W41",
+      "elapsed_eu": 0.041945,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W41",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W41",
+      "status": "done",
+      "updated_at": "2026-07-13T21:27:09.507048Z"
+    },
+    "P30-I25-W42": {
+      "actual_cost_usd": 0.7673775000000091,
+      "actual_tokens": 3349,
+      "agent_runtime_eu": 0.041945,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W42",
+      "elapsed_eu": 0.041945,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W42",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W42",
+      "status": "done",
+      "updated_at": "2026-07-13T21:27:11.076754Z"
     }
   },
   "agent_sessions": {
@@ -14815,12 +14871,7 @@
   "claims": null,
   "current": {
     "active_session_ids": [],
-    "active_wave_ids": [
-      "P30-I25-W39",
-      "P30-I25-W40",
-      "P30-I25-W41",
-      "P30-I25-W42"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I25",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -31631,7 +31682,7 @@
   "schema_version": "1.17",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-13T21:22:32.250035Z",
+  "updated_at": "2026-07-13T21:27:11.077101Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -128079,7 +128130,7 @@
       "blocks": [],
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T19:51:59.746445Z",
-      "closed_at": null,
+      "closed_at": "2026-07-13T21:27:06.620045Z",
       "commit": null,
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the re-audit refuted the idle-ceiling heuristic with a fixture showing 960s reported for 120s of work",
@@ -128109,7 +128160,7 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-13T19:51:33.082606Z",
-      "outcome": null,
+      "outcome": "Duration is the sum of per-turn spans: everything inside a turn counts, nothing between turns does",
       "runtime_baseline": {
         "api_duration_ms": 71492878,
         "cache_creation_input_tokens": 1225025,
@@ -128136,30 +128187,30 @@
         "total_duration_ms": 0
       },
       "runtime_latest": {
-        "api_duration_ms": 71492878,
-        "cache_creation_input_tokens": 1225025,
-        "cache_read_input_tokens": 238239149,
-        "captured_at": "2026-07-13T21:22:32.138706Z",
-        "cost_usd": 140.6963845,
+        "api_duration_ms": 71568379,
+        "cache_creation_input_tokens": 1226979,
+        "cache_read_input_tokens": 239665234,
+        "captured_at": "2026-07-13T21:23:42.090347Z",
+        "cost_usd": 141.463762,
         "harness": "claude-code",
-        "input_tokens": 1212,
+        "input_tokens": 1216,
         "measure_version": 3,
         "model": "claude-opus-4-8",
-        "output_tokens": 372820,
+        "output_tokens": 374211,
         "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
-        "total_duration_ms": 71492878
+        "total_duration_ms": 71568379
       },
       "runtime_preference": null,
       "sessions": {
         "1": {
           "attempt": 1,
-          "cache_creation_input_tokens": 0,
-          "cache_read_input_tokens": 0,
-          "cost_usd": 0.0,
-          "ended_at": "2026-07-13T21:22:32.138706Z",
+          "cache_creation_input_tokens": 1954,
+          "cache_read_input_tokens": 1426085,
+          "cost_usd": 0.7673775000000091,
+          "ended_at": "2026-07-13T21:23:42.090347Z",
           "exit_status": 0,
-          "input_tokens": 0,
-          "output_tokens": 0,
+          "input_tokens": 4,
+          "output_tokens": 1391,
           "runtime": "claude-code",
           "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
           "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
@@ -128167,7 +128218,7 @@
           "subprocess_pid": null
         }
       },
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -128242,7 +128293,7 @@
       ],
       "title": "Delimit turns properly instead of guessing at idle gaps",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 3349,
       "worktree_id": null
     },
     "P30-I25-W40": {
@@ -128250,7 +128301,7 @@
       "blocks": [],
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T19:52:00.344253Z",
-      "closed_at": null,
+      "closed_at": "2026-07-13T21:27:08.046969Z",
       "commit": null,
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the re-audit proved W37 relocated the strand into the zero-EU close gate rather than removing it",
@@ -128281,7 +128332,7 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-13T19:51:34.274414Z",
-      "outcome": null,
+      "outcome": "A recorded counter reset closes the wave instead of being refused as an unexplained zero; a zero delta no longer suppresses the rollup fallback",
       "runtime_baseline": {
         "api_duration_ms": 71492878,
         "cache_creation_input_tokens": 1225025,
@@ -128308,30 +128359,30 @@
         "total_duration_ms": 0
       },
       "runtime_latest": {
-        "api_duration_ms": 71492878,
-        "cache_creation_input_tokens": 1225025,
-        "cache_read_input_tokens": 238239149,
-        "captured_at": "2026-07-13T21:22:32.138706Z",
-        "cost_usd": 140.6963845,
+        "api_duration_ms": 71568379,
+        "cache_creation_input_tokens": 1226979,
+        "cache_read_input_tokens": 239665234,
+        "captured_at": "2026-07-13T21:23:42.090347Z",
+        "cost_usd": 141.463762,
         "harness": "claude-code",
-        "input_tokens": 1212,
+        "input_tokens": 1216,
         "measure_version": 3,
         "model": "claude-opus-4-8",
-        "output_tokens": 372820,
+        "output_tokens": 374211,
         "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
-        "total_duration_ms": 71492878
+        "total_duration_ms": 71568379
       },
       "runtime_preference": null,
       "sessions": {
         "1": {
           "attempt": 1,
-          "cache_creation_input_tokens": 0,
-          "cache_read_input_tokens": 0,
-          "cost_usd": 0.0,
-          "ended_at": "2026-07-13T21:22:32.138706Z",
+          "cache_creation_input_tokens": 1954,
+          "cache_read_input_tokens": 1426085,
+          "cost_usd": 0.7673775000000091,
+          "ended_at": "2026-07-13T21:23:42.090347Z",
           "exit_status": 0,
-          "input_tokens": 0,
-          "output_tokens": 0,
+          "input_tokens": 4,
+          "output_tokens": 1391,
           "runtime": "claude-code",
           "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
           "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
@@ -128339,7 +128390,7 @@
           "subprocess_pid": null
         }
       },
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -128386,7 +128437,7 @@
       ],
       "title": "Let a counter reset close the wave instead of relocating the strand",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 3349,
       "worktree_id": null
     },
     "P30-I25-W41": {
@@ -128394,7 +128445,7 @@
       "blocks": [],
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T19:52:00.949439Z",
-      "closed_at": null,
+      "closed_at": "2026-07-13T21:27:09.507048Z",
       "commit": null,
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the re-audit found two repair tests green over paths excluding the mechanism their criteria name",
@@ -128425,7 +128476,7 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-13T19:51:58.642659Z",
-      "outcome": null,
+      "outcome": "Repair tests drive the real config file and a real wave close; deleting the repair now fails them",
       "runtime_baseline": {
         "api_duration_ms": 71492878,
         "cache_creation_input_tokens": 1225025,
@@ -128452,30 +128503,30 @@
         "total_duration_ms": 0
       },
       "runtime_latest": {
-        "api_duration_ms": 71492878,
-        "cache_creation_input_tokens": 1225025,
-        "cache_read_input_tokens": 238239149,
-        "captured_at": "2026-07-13T21:22:32.138706Z",
-        "cost_usd": 140.6963845,
+        "api_duration_ms": 71568379,
+        "cache_creation_input_tokens": 1226979,
+        "cache_read_input_tokens": 239665234,
+        "captured_at": "2026-07-13T21:23:42.090347Z",
+        "cost_usd": 141.463762,
         "harness": "claude-code",
-        "input_tokens": 1212,
+        "input_tokens": 1216,
         "measure_version": 3,
         "model": "claude-opus-4-8",
-        "output_tokens": 372820,
+        "output_tokens": 374211,
         "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
-        "total_duration_ms": 71492878
+        "total_duration_ms": 71568379
       },
       "runtime_preference": null,
       "sessions": {
         "1": {
           "attempt": 1,
-          "cache_creation_input_tokens": 0,
-          "cache_read_input_tokens": 0,
-          "cost_usd": 0.0,
-          "ended_at": "2026-07-13T21:22:32.138706Z",
+          "cache_creation_input_tokens": 1954,
+          "cache_read_input_tokens": 1426085,
+          "cost_usd": 0.7673775000000091,
+          "ended_at": "2026-07-13T21:23:42.090347Z",
           "exit_status": 0,
-          "input_tokens": 0,
-          "output_tokens": 0,
+          "input_tokens": 4,
+          "output_tokens": 1391,
           "runtime": "claude-code",
           "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
           "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
@@ -128483,7 +128534,7 @@
           "subprocess_pid": null
         }
       },
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -128530,7 +128581,7 @@
       ],
       "title": "Make the repair tests drive the paths their criteria name",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 3349,
       "worktree_id": null
     },
     "P30-I25-W42": {
@@ -128538,7 +128589,7 @@
       "blocks": [],
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T20:53:02.012159Z",
-      "closed_at": null,
+      "closed_at": "2026-07-13T21:27:11.076754Z",
       "commit": null,
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the turn-span basis change inflated three claimed waves by thirteen hours each through the same hole that previously stranded two",
@@ -128571,7 +128622,7 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-13T20:53:00.873615Z",
-      "outcome": null,
+      "outcome": "Snapshots carry the measure that produced them; any change of measure re-origins the wave in either direction",
       "runtime_baseline": {
         "api_duration_ms": 71492878,
         "cache_creation_input_tokens": 1225025,
@@ -128598,30 +128649,30 @@
         "total_duration_ms": 0
       },
       "runtime_latest": {
-        "api_duration_ms": 71492878,
-        "cache_creation_input_tokens": 1225025,
-        "cache_read_input_tokens": 238239149,
-        "captured_at": "2026-07-13T21:22:32.138706Z",
-        "cost_usd": 140.6963845,
+        "api_duration_ms": 71568379,
+        "cache_creation_input_tokens": 1226979,
+        "cache_read_input_tokens": 239665234,
+        "captured_at": "2026-07-13T21:23:42.090347Z",
+        "cost_usd": 141.463762,
         "harness": "claude-code",
-        "input_tokens": 1212,
+        "input_tokens": 1216,
         "measure_version": 3,
         "model": "claude-opus-4-8",
-        "output_tokens": 372820,
+        "output_tokens": 374211,
         "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
-        "total_duration_ms": 71492878
+        "total_duration_ms": 71568379
       },
       "runtime_preference": null,
       "sessions": {
         "1": {
           "attempt": 1,
-          "cache_creation_input_tokens": 0,
-          "cache_read_input_tokens": 0,
-          "cost_usd": 0.0,
-          "ended_at": "2026-07-13T21:22:32.138706Z",
+          "cache_creation_input_tokens": 1954,
+          "cache_read_input_tokens": 1426085,
+          "cost_usd": 0.7673775000000091,
+          "ended_at": "2026-07-13T21:23:42.090347Z",
           "exit_status": 0,
-          "input_tokens": 0,
-          "output_tokens": 0,
+          "input_tokens": 4,
+          "output_tokens": 1391,
           "runtime": "claude-code",
           "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
           "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
@@ -128629,7 +128680,7 @@
           "subprocess_pid": null
         }
       },
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -128690,7 +128741,7 @@
       ],
       "title": "Version the measure so a basis change cannot corrupt a delta",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 3349,
       "worktree_id": null
     }
   },
