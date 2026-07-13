@@ -11458,14 +11458,14 @@
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-07-13T20:29:45.996557Z",
       "id": "SES-20260713T191150Z-auditor-claude-code",
       "role": "auditor",
       "runtime": "claude-code",
       "scope_id": "P30-I25-W36::audit",
       "started_at": "2026-07-13T19:11:50.966645Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -14814,9 +14814,7 @@
   },
   "claims": null,
   "current": {
-    "active_session_ids": [
-      "SES-20260713T191150Z-auditor-claude-code"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [
       "P30-I25-W39",
       "P30-I25-W40",
@@ -31615,7 +31613,7 @@
       "scope_kind": "wave"
     }
   },
-  "schema_version": "1.15",
+  "schema_version": "1.16",
   "scope_kind": "repo",
   "tracks": null,
   "updated_at": "2026-07-13T19:52:00.994827Z",
