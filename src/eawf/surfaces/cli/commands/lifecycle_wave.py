@@ -287,6 +287,39 @@ def _persist_waivers(
             ) from exc
 
 
+def _warn_on_zero_eu_close(ctx: typer.Context, *, wave_id: str, waived: bool) -> None:
+    """Tell the operator when a close recorded no runtime EU.
+
+    The daemon's zero-runtime gate is advisory unless the active profile enforces
+    it, and an advisory refusal used to reach only the daemon log -- which is how
+    EU capture stayed dead for the whole of its life without anyone noticing. Read
+    the recorded actual straight back off state and say so on the close surface.
+
+    Args:
+        ctx: The Typer context the close ran under (resolves the scope's state).
+        wave_id: The wave that just closed.
+        waived: Whether the operator passed ``--no-runtime``, which makes the
+            zero EU an accepted fact rather than a surprise.
+    """
+    loaded = _load_state_readonly(ctx)
+    if loaded is None:
+        return
+    state, _ = loaded
+    actual = state.actuals.get(wave_id)
+    if actual is not None and actual.elapsed_eu > 0.0:
+        return
+    detail = (
+        "runtime waiver accepted"
+        if waived
+        else "EU capture is not landing -- check the runtime Stop hook and the "
+        "daemon runtime.capture path"
+    )
+    print(
+        f"advisory: wave {wave_id} closed with no captured runtime (elapsed_eu=0.0); {detail}",
+        file=sys.stderr,
+    )
+
+
 def _build_no_runtime_waiver_record(
     state: State,
     *,
@@ -979,6 +1012,7 @@ def wave_close_cmd(
             transport_fallback=transport_fallback,
         )
         if proxied:
+            _warn_on_zero_eu_close(ctx, wave_id=wave_id, waived=no_runtime)
             return
 
     drift_warnings: list[str] = []
@@ -1096,6 +1130,7 @@ def wave_close_cmd(
             readiness = readiness_holder[0]
             for warning in readiness.warnings:
                 print(f"advisory: wave {wave_id} readiness: {warning}", file=sys.stderr)
+        _warn_on_zero_eu_close(ctx, wave_id=wave_id, waived=no_runtime)
 
 
 @wave_app.command("fail")

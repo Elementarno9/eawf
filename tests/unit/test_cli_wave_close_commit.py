@@ -305,3 +305,96 @@ def test_no_runtime_waiver_records_human_producer(tmp_path: Path) -> None:
     assert record.refs == [lifecycle_wave.NO_RUNTIME_WAIVER_REF]
     assert record.metrics is not None
     assert record.metrics["operator_session"] == "SES-OP"
+
+
+def _state_with_actual(*, elapsed_eu: float) -> State:
+    """Return a minimal state whose one wave recorded *elapsed_eu* at close."""
+    return State.model_validate(
+        {
+            "schema_version": "1.0",
+            "scope_kind": "repo",
+            "urn": "urn:eawf:v1:state:ABC",
+            "updated_at": "2026-07-13T00:00:00Z",
+            "project": {
+                "code": "ABC",
+                "slug": "abc",
+                "title": "ABC",
+                "description": None,
+                "domains": ["x"],
+                "default_branch": "main",
+                "status": "active",
+                "repo_urn": "urn:eawf:v1:repo:ABC",
+            },
+            "current": {
+                "project_code": "ABC",
+                "phase_id": None,
+                "iter_id": None,
+                "active_wave_ids": [],
+                "active_session_ids": [],
+            },
+            "workspace": None,
+            "phases": {},
+            "iters": {},
+            "waves": {},
+            "actuals": {
+                "P05-I01-W01": {
+                    "id": "ACT-01",
+                    "scope_id": "P05-I01-W01",
+                    "status": "done",
+                    "elapsed_eu": elapsed_eu,
+                    "current_store_record_id": "ACT-REC-01",
+                    "updated_at": "2026-07-13T00:00:00Z",
+                }
+            },
+            "artifacts": {},
+            "agent_sessions": {},
+            "plugins": {},
+            "indexes": {},
+        }
+    )
+
+
+def test_zero_eu_close_warns_the_operator(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A close with no captured runtime says so on the close surface, not just the log."""
+    monkeypatch.setattr(
+        lifecycle_wave,
+        "_load_state_readonly",
+        lambda _ctx: (_state_with_actual(elapsed_eu=0.0), GlobalFlags()),
+    )
+
+    lifecycle_wave._warn_on_zero_eu_close(None, wave_id="P05-I01-W01", waived=False)
+
+    err = capsys.readouterr().err
+    assert "no captured runtime" in err
+    assert "EU capture is not landing" in err
+
+
+def test_zero_eu_close_warning_notes_an_accepted_waiver(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        lifecycle_wave,
+        "_load_state_readonly",
+        lambda _ctx: (_state_with_actual(elapsed_eu=0.0), GlobalFlags()),
+    )
+
+    lifecycle_wave._warn_on_zero_eu_close(None, wave_id="P05-I01-W01", waived=True)
+
+    err = capsys.readouterr().err
+    assert "runtime waiver accepted" in err
+
+
+def test_captured_eu_close_is_quiet(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        lifecycle_wave,
+        "_load_state_readonly",
+        lambda _ctx: (_state_with_actual(elapsed_eu=1.5), GlobalFlags()),
+    )
+
+    lifecycle_wave._warn_on_zero_eu_close(None, wave_id="P05-I01-W01", waived=False)
+
+    assert capsys.readouterr().err == ""

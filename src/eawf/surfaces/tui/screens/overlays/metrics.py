@@ -94,24 +94,36 @@ METRICS_HONEST_NEGATIVE: str = "honest-negative · lights up after EU capture"
 METRICS_CAPTURE_LIVE: str = "EU capture live · telemetry tiles measured"
 
 
-def _eu_capture_landed(state: State | None) -> bool:
-    """Return whether any wave has captured a positive runtime ``elapsed_eu``.
+#: How many of the most recently recorded actuals the capture-live check reads.
+#: The banner answers "is EU capture working *now*", so it must not be pinned
+#: live forever by a handful of historical waves that captured once: a window
+#: over the newest actuals goes dark again as soon as fresh closes stop
+#: capturing, which is exactly how a silently-dead capture path resurfaces.
+_RECENT_ACTUALS: int = 10
 
-    The dashboard is honestly dark until the SessionEnd hook feeds the close
-    path real runtime; once any wave's
+
+def _eu_capture_landed(state: State | None) -> bool:
+    """Return whether EU capture is landing on the *recent* waves.
+
+    The dashboard is honestly dark until the Stop hook feeds the close path real
+    runtime; once a recent wave's
     :class:`~eawf.kernel.state.models.ActualSummary` records a positive
     ``elapsed_eu`` the tiles are measured, so the footer flips from the
-    honest-negative banner to the capture-live affirmation.
+    honest-negative banner to the capture-live affirmation -- and flips back when
+    capture dies, because only the newest :data:`_RECENT_ACTUALS` actuals count.
 
     Args:
         state: The bound scope state, or ``None`` before it loads.
 
     Returns:
-        ``True`` when at least one actual records ``elapsed_eu > 0``.
+        ``True`` when at least one of the most recent actuals records
+        ``elapsed_eu > 0``.
     """
     if state is None:
         return False
-    return any(actual.elapsed_eu > 0.0 for actual in (state.actuals or {}).values())
+    actuals = list((state.actuals or {}).values())
+    recent = sorted(actuals, key=lambda actual: actual.updated_at, reverse=True)[:_RECENT_ACTUALS]
+    return any(actual.elapsed_eu > 0.0 for actual in recent)
 
 
 #: Placeholder body when no state snapshot is available yet.

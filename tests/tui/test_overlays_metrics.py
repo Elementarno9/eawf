@@ -525,6 +525,48 @@ def test_eu_capture_landed_true_with_positive_elapsed_eu() -> None:
     assert _eu_capture_landed(_state_with_captured_eu()) is True
 
 
+def _state_with_stale_capture_only(*, recent_zero_eu: int) -> State:
+    """Return a state whose only captured EU is older than *recent_zero_eu* closes.
+
+    The historical wave carries real EU; every wave closed since captured none --
+    the exact shape of a capture path that died silently.
+    """
+    base = _load_state()
+    wave_id = next(iter(base.waves))
+    actuals = {
+        wave_id: ActualSummary(
+            id="ACT-old",
+            scope_id=wave_id,
+            status=ActualStatus.DONE,
+            elapsed_eu=2.0,
+            current_store_record_id="ACT-REC-old",
+            updated_at=_NOW - timedelta(days=90),
+        )
+    }
+    for index in range(recent_zero_eu):
+        scope_id = f"P00-I01-W{index + 50:02d}"
+        actuals[scope_id] = ActualSummary(
+            id=f"ACT-new-{index:02d}",
+            scope_id=scope_id,
+            status=ActualStatus.DONE,
+            elapsed_eu=0.0,
+            current_store_record_id=f"ACT-REC-new-{index:02d}",
+            updated_at=_NOW - timedelta(minutes=index),
+        )
+    return base.model_copy(update={"actuals": actuals})
+
+
+def test_eu_capture_landed_false_when_only_stale_actuals_carry_eu() -> None:
+    # Regression guard: the banner must go dark when new waves stop capturing,
+    # rather than being pinned "live" forever by a few historical waves.
+    assert _eu_capture_landed(_state_with_stale_capture_only(recent_zero_eu=12)) is False
+
+
+def test_eu_capture_landed_true_while_the_captured_wave_is_still_recent() -> None:
+    # ... and stay live while the captured wave is still inside the window.
+    assert _eu_capture_landed(_state_with_stale_capture_only(recent_zero_eu=3)) is True
+
+
 def test_metrics_footer_is_honest_negative_until_capture() -> None:
     # Default reality: nothing captured, so the pinned honest-negative banner.
     async def body() -> None:
