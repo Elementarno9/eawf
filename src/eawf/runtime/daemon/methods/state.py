@@ -1365,6 +1365,7 @@ async def _produce_high_risk_verdict(
     *,
     state_path: Path,
     repo_root: Path,
+    wall_clock_seconds: float,
 ) -> None:
     """Write the single fresh-auditor verdict the high-risk close gate reads.
 
@@ -1397,6 +1398,12 @@ async def _produce_high_risk_verdict(
             events resolve under its sibling ``store/`` directory.
         repo_root: Repository root forwarded to the auditor's diff-base
             derivation + spawn cwd.
+        wall_clock_seconds: Ceiling for the auditor spawn, taken from the
+            active verify block. It is threaded rather than defaulted because a
+            thorough audit of a large wave can outrun the factory's 600s
+            default, and a killed auditor writes no verdict -- which the gate
+            reads as "no verdict" and refuses the close, so the wave can never
+            close no matter how many times the operator retries.
     """
     from eawf.workflow.dispatch.verdict import (
         produce_wave_verdict,
@@ -1409,9 +1416,13 @@ async def _produce_high_risk_verdict(
     events_path = store_path(state_path, StoreKind.EVENT)
     # Thread events_path so the single fresh-auditor spawn streams its stdout
     # live to the auditor's Watch roster row (W21).
-    spawn = _jury_spawn_factory(state, wave, repo_root=repo_root, events_path=events_path)(
-        "claude-code"
-    )
+    spawn = _jury_spawn_factory(
+        state,
+        wave,
+        repo_root=repo_root,
+        timeout_seconds=wall_clock_seconds,
+        events_path=events_path,
+    )("claude-code")
     await produce_wave_verdict(
         state=state,
         state_path=state_path,
@@ -1691,6 +1702,7 @@ async def _enforce_wave_close_gate(
             wave,
             state_path=state_path,
             repo_root=repo_root,
+            wall_clock_seconds=verify_block.juror_wall_clock_seconds,
         )
         _enforce_wave_verdict_gate(wave, state_path=state_path)
         logger.info(f"_enforce_wave_close_gate wave={wave_id} high_risk=single-auditor passed=True")

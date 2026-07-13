@@ -1032,3 +1032,22 @@ def test_append_agent_report_role_mismatch_is_typed() -> None:
                 base_id=_WAVE_ID,
                 body=body,
             )
+
+
+def test_auditor_prompt_forbids_mutating_the_working_tree() -> None:
+    """The auditor audits the operator's LIVE tree, so it must never mutate it.
+
+    `pre-commit run --all-files` stashes uncommitted changes and rolls them back
+    when a hook auto-fix conflicts with the stash -- during P30-I25 a close-time
+    auditor did exactly that and discarded a set of uncommitted test edits. A
+    verdict never needs to re-run a gate: the executor's run is recorded.
+    """
+    wave = _make_wave(agent_role="executor", effort_bucket="L")
+
+    prompt = build_auditor_prompt(wave, diff_base="abc123~1")
+
+    assert "Working-tree rule" in prompt
+    assert "pre-commit" in prompt
+    assert "never mutate" in prompt
+    # The auditor is pointed at recorded evidence instead of re-running gates.
+    assert "RECORDED evidence" in prompt

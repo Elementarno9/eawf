@@ -36,4 +36,5 @@ runtime:
   - claude-code
 schema_version: '1.0'
 verify:
+  juror_wall_clock_seconds: 1800.0
   odr_blocking: true

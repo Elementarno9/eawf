@@ -486,7 +486,14 @@ def test_band_wave_advisory_authority_routes_to_auditor_not_jury(
         lambda state, *, state_path, verify_block: BlockAuthority.ADVISORY,
     )
 
-    async def _produce(state: Any, wave: Any, *, state_path: Path, repo_root: Path) -> None:
+    async def _produce(
+        state: Any,
+        wave: Any,
+        *,
+        state_path: Path,
+        repo_root: Path,
+        wall_clock_seconds: float,
+    ) -> None:
         return None
 
     monkeypatch.setattr("eawf.runtime.daemon.methods.state._produce_high_risk_verdict", _produce)

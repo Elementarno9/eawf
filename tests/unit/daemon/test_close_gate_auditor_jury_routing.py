@@ -102,6 +102,12 @@ def _state_payload() -> dict[str, Any]:
     }
 
 
+#: A wall clock deliberately unequal to the VerifyBlock default, so the
+#: assertion proves the configured value is threaded rather than the default
+#: coincidentally matching.
+_WALL_CLOCK: float = 1234.0
+
+
 class _Recorder:
     """Records which oracle path the close gate routed through."""
 
@@ -109,6 +115,7 @@ class _Recorder:
         self.produced_verdict = False
         self.enforced_verdict_gate = False
         self.oracle_calls = 0
+        self.verdict_wall_clock: float | None = None
 
 
 def _wire(
@@ -117,7 +124,9 @@ def _wire(
     authority: BlockAuthority,
 ) -> _Recorder:
     recorder = _Recorder()
-    verify_block = VerifyBlock(enforce=True, cross_vendor_jury=True)
+    verify_block = VerifyBlock(
+        enforce=True, cross_vendor_jury=True, juror_wall_clock_seconds=_WALL_CLOCK
+    )
 
     monkeypatch.setattr(
         "eawf.workflow.verify.readiness.load_active_verify_block",
@@ -133,8 +142,16 @@ def _wire(
         lambda state, *, state_path, verify_block: authority,
     )
 
-    async def _produce(state: Any, wave: Any, *, state_path: Path, repo_root: Path) -> None:
+    async def _produce(
+        state: Any,
+        wave: Any,
+        *,
+        state_path: Path,
+        repo_root: Path,
+        wall_clock_seconds: float,
+    ) -> None:
         recorder.produced_verdict = True
+        recorder.verdict_wall_clock = wall_clock_seconds
 
     def _enforce(wave: Any, *, state_path: Path) -> None:
         recorder.enforced_verdict_gate = True
@@ -197,6 +214,12 @@ def test_close_gate_advisory_jury_routes_to_blocking_auditor(
     assert recorder.enforced_verdict_gate is True
     assert recorder.oracle_calls == 0
     assert evidence == []
+    # The auditor spawn takes the CONFIGURED wall clock, not the factory's 600s
+    # default: a killed auditor writes no verdict, and the gate reads "no
+    # verdict" as a refusal -- so a too-short ceiling makes the wave unclosable
+    # no matter how often the operator retries (P30-I25-W32).
+    assert recorder.verdict_wall_clock == _WALL_CLOCK
+    assert VerifyBlock().juror_wall_clock_seconds != _WALL_CLOCK
 
 
 def test_close_gate_blocking_jury_replaces_auditor(

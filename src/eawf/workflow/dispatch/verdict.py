@@ -415,6 +415,28 @@ def _rubric_block(rubric: Sequence[WaveBehavior]) -> str:
     return "\n".join(rows)
 
 
+#: The auditor runs inside the operator's LIVE working tree, so a verification
+#: command that mutates that tree is not a read: ``pre-commit run --all-files``
+#: stashes uncommitted changes and, when a hook auto-fix conflicts with the
+#: stash, rolls the whole thing back -- silently discarding work the operator
+#: has not committed yet. (It cost a set of uncommitted test edits during
+#: P30-I25.) A verdict never needs to re-run the gates: the executor's run is
+#: recorded, and re-running one buys nothing but risk.
+WORKING_TREE_RULE: str = (
+    "## Working-tree rule\n"
+    "\n"
+    "You are auditing the operator's LIVE working tree. Read it; never mutate\n"
+    "it. Do NOT run `pre-commit`, `git stash`, `git checkout`, `git reset`, or\n"
+    "any formatter / fixer in write mode -- `pre-commit run --all-files` stashes\n"
+    "uncommitted changes and can roll them back on a hook conflict, destroying\n"
+    "work the operator has not committed. When a criterion asserts that a gate\n"
+    "passes (tests, lint, pre-commit, CI), verify it from the RECORDED evidence\n"
+    "-- the wave's evidence block, the commit, the stored gate output -- and\n"
+    "mark it unverified if that evidence is absent. Never re-run the gate to\n"
+    "check."
+)
+
+
 def build_auditor_prompt(
     wave: Wave,
     *,
@@ -485,6 +507,7 @@ def build_auditor_prompt(
             f"{_rubric_block(rubric)}"
         )
     sections.append(f"## Success criteria\n\n{criteria}")
+    sections.append(WORKING_TREE_RULE)
     sections.append(
         "## Output contract\n"
         "\n"
