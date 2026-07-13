@@ -754,7 +754,7 @@ class _IdentityStepV10:
 
 def test_model_supported_max_version_derives_from_live_model() -> None:
     """The supported max is read from the live ``State`` Literal, not hard-coded."""
-    assert model_supported_max_version() == "1.14"
+    assert model_supported_max_version() == "1.15"
 
 
 def test_guard_target_supported_allows_target_equal_to_max() -> None:
@@ -896,7 +896,7 @@ def test_migrate_cmd_default_target_migrates_v1_0_to_model_max(
     The default target tracks the model's supported max (see
     test_default_target_tracks_model_supported_max), so a bare migrate on a
     v1.0 state walks every registered edge and lands a re-loadable state at
-    the current maximum — 1.14 as of the P30-I23 bumps.
+    the current maximum — 1.15 as of the P30-I25 bump.
     """
     from typer.testing import CliRunner
 
@@ -911,7 +911,7 @@ def test_migrate_cmd_default_target_migrates_v1_0_to_model_max(
 
     assert result.exit_code == 0, result.output
     reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
-    assert reloaded.schema_version == "1.14"
+    assert reloaded.schema_version == "1.15"
 
 
 def test_migrate_cmd_supported_target_noop_keeps_state_reloadable(

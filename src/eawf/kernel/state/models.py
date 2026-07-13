@@ -547,7 +547,7 @@ class RuntimeBaseline(_StrictModel):
 
     The baseline is the "before" snapshot used by later close-time telemetry
     readers to subtract already-spent runtime/cost/token counters from the
-    same runtime sidecar. Numeric fields are optional because not every runtime
+    same runtime source. Numeric fields are optional because not every runtime
     reports every counter; ``captured_at`` is required so consumers can order
     and audit the snapshot.
 
@@ -556,6 +556,13 @@ class RuntimeBaseline(_StrictModel):
     model id (e.g. ``"claude-opus-4-1"``) the runtime billed against. Both are
     optional because not every runtime reports them, and a state written before
     the v1.11 bump re-validates with both defaulted to ``None``.
+
+    ``session_id`` records WHICH session the counters were read from. Runtime
+    counters are cumulative *per session*, so a baseline taken in one session and
+    a latest taken in another measure two different origins and must not be
+    differenced -- the daemon rebases instead (see :attr:`Wave.runtime_carry`).
+    It stays optional: a state written before the v1.15 bump, or a runtime that
+    discloses no session id, re-validates with it defaulted to ``None``.
     """
 
     api_duration_ms: Annotated[int, Field(ge=0)] | None = None
@@ -567,11 +574,41 @@ class RuntimeBaseline(_StrictModel):
     cache_read_input_tokens: Annotated[int, Field(ge=0)] | None = None
     harness: str | None = None
     model: str | None = None
+    session_id: str | None = None
     captured_at: UtcDatetime
 
 
 class RuntimeLatest(RuntimeBaseline):
     """Latest cumulative runtime counters captured while a wave is active."""
+
+
+class RuntimeCarry(_StrictModel):
+    """Runtime already spent on a wave in sessions that have since ended.
+
+    Baseline and latest are cumulative counters *within one session*. A wave
+    claimed in session A and closed in session B therefore cannot difference the
+    two -- B's counters start from zero, not from where A left off. On the first
+    capture from a new session the daemon folds the finished session's total
+    (``latest - baseline``) into this accumulator and rebases the baseline onto
+    the new session's origin, so a wave spanning N sessions sums N per-session
+    runtimes instead of differencing mismatched origins.
+
+    Every field is a non-negative total, defaulting to zero, so an accumulator
+    with nothing carried yet is the identity for the close-time delta.
+
+    Attributes:
+        sessions_folded: How many finished sessions the totals cover -- the
+            audit trail for a multi-session wave.
+    """
+
+    api_duration_ms: Annotated[int, Field(ge=0)] = 0
+    total_duration_ms: Annotated[int, Field(ge=0)] = 0
+    cost_usd: Annotated[float, Field(ge=0.0)] = 0.0
+    input_tokens: Annotated[int, Field(ge=0)] = 0
+    output_tokens: Annotated[int, Field(ge=0)] = 0
+    cache_creation_input_tokens: Annotated[int, Field(ge=0)] = 0
+    cache_read_input_tokens: Annotated[int, Field(ge=0)] = 0
+    sessions_folded: Annotated[int, Field(ge=0)] = 0
 
 
 class CriteriaFloorWaiver(_StrictModel):
@@ -634,6 +671,7 @@ class Wave(_DescribedEntity):
     claimed_at: UtcDatetime | None = None
     runtime_baseline: RuntimeBaseline | None = None
     runtime_latest: RuntimeLatest | None = None
+    runtime_carry: RuntimeCarry | None = None
     closed_at: UtcDatetime | None = None
     sessions: dict[int, SessionAttempt] = Field(default_factory=dict)
     runtime_preference: list[str] | None = None
@@ -1534,13 +1572,13 @@ class FleetRun(_StrictModel):
 class State(_StrictModel):
     """Top-level eawf state document.
 
-    ``schema_version`` accepts the full ``"1.0"`` through ``"1.14"`` range so
+    ``schema_version`` accepts the full ``"1.0"`` through ``"1.15"`` range so
     an on-disk state written before any bump still re-validates after the
     model advances — the migrate chain rewrites the version string in place,
     but a read of an un-migrated state must never reject. The accepted set
     drives the migrate guard's model-supported max, so the literals move in
     lockstep with the migration steps (``v1_0_to_v1_1`` through
-    ``v1_13_to_v1_14``). The ``1.5`` edge is purely additive — it registers
+    ``v1_14_to_v1_15``). The ``1.5`` edge is purely additive — it registers
     :attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum
     value no existing state row references, so no historical fact changes.
     The ``1.6`` edge is likewise purely additive — it adds the top-level
@@ -1590,6 +1628,15 @@ class State(_StrictModel):
     only the version marker, leaving every row untouched, so a state written
     before the bump re-validates unchanged and the step is a lossless,
     replay-safe round-trip.
+
+    The ``1.15`` edge is purely additive: it adds ``session_id`` to
+    :class:`RuntimeBaseline` (inherited by :class:`RuntimeLatest`) and the
+    optional :attr:`Wave.runtime_carry` accumulator, which together let a wave
+    that spans several sessions sum its per-session runtimes instead of
+    differencing counters taken against two different session origins. Both
+    default to ``None``; the ``v1_14_to_v1_15`` step backfills them explicitly on
+    every wave, and a state written before the bump re-validates with both
+    defaulted and no historical fact changes.
     """
 
     schema_version: Literal[
@@ -1608,6 +1655,7 @@ class State(_StrictModel):
         "1.12",
         "1.13",
         "1.14",
+        "1.15",
     ]
     scope_kind: ScopeKind
     urn: UrnStr

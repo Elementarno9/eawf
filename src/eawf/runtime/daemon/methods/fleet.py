@@ -307,6 +307,7 @@ def _default_lane_spend(ctx: MethodContext, wave_id: str) -> LaneSpend:
     delta = compute_runtime_delta(
         wave.runtime_baseline,
         wave.runtime_latest,
+        carry=wave.runtime_carry,
         eu_minutes=DEFAULT_EU_MINUTES,
         eu_basis=EuBasis.API_DURATION,
     )
@@ -2503,6 +2504,7 @@ class _Loop:
             delta = compute_runtime_delta(
                 wave.runtime_baseline,
                 wave.runtime_latest,
+                carry=wave.runtime_carry,
                 eu_minutes=DEFAULT_EU_MINUTES,
                 eu_basis=EuBasis.API_DURATION,
             )

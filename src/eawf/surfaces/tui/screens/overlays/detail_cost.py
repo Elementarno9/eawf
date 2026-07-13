@@ -517,7 +517,10 @@ def _runtime_snapshot_rollup(wave: Wave) -> WaveSessionRollup | None:
         return _aggregate_rows(wave.id, rows)
     # Legacy wave-snapshot fallback: one delta, priced onto the latest attempt.
     delta = compute_runtime_delta(
-        wave.runtime_baseline, wave.runtime_latest, eu_minutes=DEFAULT_EU_MINUTES
+        wave.runtime_baseline,
+        wave.runtime_latest,
+        carry=wave.runtime_carry,
+        eu_minutes=DEFAULT_EU_MINUTES,
     )
     if delta is None or delta.actual_cost_usd <= 0.0:
         return None

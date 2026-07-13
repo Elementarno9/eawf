@@ -3048,7 +3048,7 @@
     },
     "RuntimeBaseline": {
       "additionalProperties": false,
-      "description": "Cumulative runtime counters captured when a wave is first claimed.\n\nThe baseline is the \"before\" snapshot used by later close-time telemetry\nreaders to subtract already-spent runtime/cost/token counters from the\nsame runtime sidecar. Numeric fields are optional because not every runtime\nreports every counter; ``captured_at`` is required so consumers can order\nand audit the snapshot.\n\n``harness`` and ``model`` carry the attribution that makes the captured\ncounters calibratable: the agent harness id (e.g. ``\"claude-code\"``) and the\nmodel id (e.g. ``\"claude-opus-4-1\"``) the runtime billed against. Both are\noptional because not every runtime reports them, and a state written before\nthe v1.11 bump re-validates with both defaulted to ``None``.",
+      "description": "Cumulative runtime counters captured when a wave is first claimed.\n\nThe baseline is the \"before\" snapshot used by later close-time telemetry\nreaders to subtract already-spent runtime/cost/token counters from the\nsame runtime source. Numeric fields are optional because not every runtime\nreports every counter; ``captured_at`` is required so consumers can order\nand audit the snapshot.\n\n``harness`` and ``model`` carry the attribution that makes the captured\ncounters calibratable: the agent harness id (e.g. ``\"claude-code\"``) and the\nmodel id (e.g. ``\"claude-opus-4-1\"``) the runtime billed against. Both are\noptional because not every runtime reports them, and a state written before\nthe v1.11 bump re-validates with both defaulted to ``None``.\n\n``session_id`` records WHICH session the counters were read from. Runtime\ncounters are cumulative *per session*, so a baseline taken in one session and\na latest taken in another measure two different origins and must not be\ndifferenced -- the daemon rebases instead (see :attr:`Wave.runtime_carry`).\nIt stays optional: a state written before the v1.15 bump, or a runtime that\ndiscloses no session id, re-validates with it defaulted to ``None``.",
       "properties": {
         "api_duration_ms": {
           "anyOf": [
@@ -3157,6 +3157,18 @@
           "default": null,
           "title": "Output Tokens"
         },
+        "session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Session Id"
+        },
         "total_duration_ms": {
           "anyOf": [
             {
@@ -3175,6 +3187,62 @@
         "captured_at"
       ],
       "title": "RuntimeBaseline",
+      "type": "object"
+    },
+    "RuntimeCarry": {
+      "additionalProperties": false,
+      "description": "Runtime already spent on a wave in sessions that have since ended.\n\nBaseline and latest are cumulative counters *within one session*. A wave\nclaimed in session A and closed in session B therefore cannot difference the\ntwo -- B's counters start from zero, not from where A left off. On the first\ncapture from a new session the daemon folds the finished session's total\n(``latest - baseline``) into this accumulator and rebases the baseline onto\nthe new session's origin, so a wave spanning N sessions sums N per-session\nruntimes instead of differencing mismatched origins.\n\nEvery field is a non-negative total, defaulting to zero, so an accumulator\nwith nothing carried yet is the identity for the close-time delta.\n\nAttributes:\n    sessions_folded: How many finished sessions the totals cover -- the\n        audit trail for a multi-session wave.",
+      "properties": {
+        "api_duration_ms": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Api Duration Ms",
+          "type": "integer"
+        },
+        "cache_creation_input_tokens": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Cache Creation Input Tokens",
+          "type": "integer"
+        },
+        "cache_read_input_tokens": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Cache Read Input Tokens",
+          "type": "integer"
+        },
+        "cost_usd": {
+          "default": 0.0,
+          "minimum": 0.0,
+          "title": "Cost Usd",
+          "type": "number"
+        },
+        "input_tokens": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Input Tokens",
+          "type": "integer"
+        },
+        "output_tokens": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Output Tokens",
+          "type": "integer"
+        },
+        "sessions_folded": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Sessions Folded",
+          "type": "integer"
+        },
+        "total_duration_ms": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Total Duration Ms",
+          "type": "integer"
+        }
+      },
+      "title": "RuntimeCarry",
       "type": "object"
     },
     "RuntimeLatest": {
@@ -3287,6 +3355,18 @@
           ],
           "default": null,
           "title": "Output Tokens"
+        },
+        "session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Session Id"
         },
         "total_duration_ms": {
           "anyOf": [
@@ -3802,6 +3882,17 @@
           ],
           "default": null
         },
+        "runtime_carry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuntimeCarry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "runtime_latest": {
           "anyOf": [
             {
@@ -4073,7 +4164,7 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Top-level eawf state document.\n\n``schema_version`` accepts the full ``\"1.0\"`` through ``\"1.14\"`` range so\nan on-disk state written before any bump still re-validates after the\nmodel advances — the migrate chain rewrites the version string in place,\nbut a read of an un-migrated state must never reject. The accepted set\ndrives the migrate guard's model-supported max, so the literals move in\nlockstep with the migration steps (``v1_0_to_v1_1`` through\n``v1_13_to_v1_14``). The ``1.5`` edge is purely additive — it registers\n:attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum\nvalue no existing state row references, so no historical fact changes.\nThe ``1.6`` edge is likewise purely additive — it adds the top-level\n:attr:`dispatch_paused` flag (default ``False``), so a state written\nbefore the bump re-validates with the flag defaulted and no historical\nfact changes. The ``1.7`` edge retypes\n:attr:`Wave.success_criteria` from ``list[str]`` to\n``list[CriterionSpec]`` and backfills every legacy string into a\ngrandfathered :class:`~eawf.kernel.spec.common.CriterionSpec` row, so an\nun-migrated state with bare strings would reject the typed field — the\nmigrate chain rewrites the rows before load. The ``1.8`` edge is purely\nadditive — it adds the typed :attr:`Wave.gates` list (default ``[]``), so a\nstate written before the bump re-validates with the list defaulted and no\nhistorical fact changes; the migrate chain backfills ``gates: []`` on every\nwave for an explicit on-disk row. The ``1.9`` edge adds the optional\n:attr:`Wave.runtime_baseline` claim-time telemetry baseline; it backfills\n``runtime_baseline: None`` on every wave for an explicit on-disk row.\n``Wave.runtime_latest`` is likewise additive on top of ``1.9`` and defaults\nto ``None`` until the runtime.capture daemon RPC records fresh counters.\n\n:attr:`fleet_run` is additive on top of ``1.9`` and defaults to ``None``\n(no active auto-drain loop), so a state written before the field existed\nre-validates with it defaulted and no historical fact changes.\n\nThe ``1.10`` edge is a rename, not an additive field: it renames the\ntop-level ``subprojects`` key to :attr:`tracks` and the cursor field\n``current.subproject_id`` to :attr:`CurrentPointers.track_id`. An\nun-migrated state carrying the old key names rejects under\n``extra=\"forbid\"``, so the ``v1_9_to_v1_10`` migrate step rewrites both\nnames before load. The ``1.11`` edge is purely additive — it adds the\noptional ``harness`` + ``model`` attribution fields to\n:class:`ActualSummary` and :class:`RuntimeBaseline` (inherited by\n:class:`RuntimeLatest`), so EU actuals become calibratable by harness+model.\nBoth default to ``None``; the ``v1_10_to_v1_11`` migrate step backfills NULL\nattribution on every actual + runtime-baseline / runtime-latest row for an\nexplicit on-disk row, and a state written before the bump re-validates with\nboth defaulted and no historical fact changes.\n\nThe ``1.12`` edge is purely additive in the same sense as the ``1.5``\nenum-registration edge: it registers the\n:class:`~eawf.kernel.state.enums.UserDecisionKind` enum and the\n:class:`PauseResolution` typed record (the shared operator-decision shape\nspanning both the ``needs_user`` pause and the fleet-fork surfaces), neither\nof which any existing persisted ``State`` field references -- pause / fork\nresolutions live in the append-only event + evidence stores, not on a\ntop-level ``State`` field. The ``v1_11_to_v1_12`` step therefore rewrites\nonly the version marker, leaving every row untouched, so a state written\nbefore the bump re-validates unchanged and the step is a lossless,\nreplay-safe round-trip.",
+  "description": "Top-level eawf state document.\n\n``schema_version`` accepts the full ``\"1.0\"`` through ``\"1.15\"`` range so\nan on-disk state written before any bump still re-validates after the\nmodel advances — the migrate chain rewrites the version string in place,\nbut a read of an un-migrated state must never reject. The accepted set\ndrives the migrate guard's model-supported max, so the literals move in\nlockstep with the migration steps (``v1_0_to_v1_1`` through\n``v1_14_to_v1_15``). The ``1.5`` edge is purely additive — it registers\n:attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum\nvalue no existing state row references, so no historical fact changes.\nThe ``1.6`` edge is likewise purely additive — it adds the top-level\n:attr:`dispatch_paused` flag (default ``False``), so a state written\nbefore the bump re-validates with the flag defaulted and no historical\nfact changes. The ``1.7`` edge retypes\n:attr:`Wave.success_criteria` from ``list[str]`` to\n``list[CriterionSpec]`` and backfills every legacy string into a\ngrandfathered :class:`~eawf.kernel.spec.common.CriterionSpec` row, so an\nun-migrated state with bare strings would reject the typed field — the\nmigrate chain rewrites the rows before load. The ``1.8`` edge is purely\nadditive — it adds the typed :attr:`Wave.gates` list (default ``[]``), so a\nstate written before the bump re-validates with the list defaulted and no\nhistorical fact changes; the migrate chain backfills ``gates: []`` on every\nwave for an explicit on-disk row. The ``1.9`` edge adds the optional\n:attr:`Wave.runtime_baseline` claim-time telemetry baseline; it backfills\n``runtime_baseline: None`` on every wave for an explicit on-disk row.\n``Wave.runtime_latest`` is likewise additive on top of ``1.9`` and defaults\nto ``None`` until the runtime.capture daemon RPC records fresh counters.\n\n:attr:`fleet_run` is additive on top of ``1.9`` and defaults to ``None``\n(no active auto-drain loop), so a state written before the field existed\nre-validates with it defaulted and no historical fact changes.\n\nThe ``1.10`` edge is a rename, not an additive field: it renames the\ntop-level ``subprojects`` key to :attr:`tracks` and the cursor field\n``current.subproject_id`` to :attr:`CurrentPointers.track_id`. An\nun-migrated state carrying the old key names rejects under\n``extra=\"forbid\"``, so the ``v1_9_to_v1_10`` migrate step rewrites both\nnames before load. The ``1.11`` edge is purely additive — it adds the\noptional ``harness`` + ``model`` attribution fields to\n:class:`ActualSummary` and :class:`RuntimeBaseline` (inherited by\n:class:`RuntimeLatest`), so EU actuals become calibratable by harness+model.\nBoth default to ``None``; the ``v1_10_to_v1_11`` migrate step backfills NULL\nattribution on every actual + runtime-baseline / runtime-latest row for an\nexplicit on-disk row, and a state written before the bump re-validates with\nboth defaulted and no historical fact changes.\n\nThe ``1.12`` edge is purely additive in the same sense as the ``1.5``\nenum-registration edge: it registers the\n:class:`~eawf.kernel.state.enums.UserDecisionKind` enum and the\n:class:`PauseResolution` typed record (the shared operator-decision shape\nspanning both the ``needs_user`` pause and the fleet-fork surfaces), neither\nof which any existing persisted ``State`` field references -- pause / fork\nresolutions live in the append-only event + evidence stores, not on a\ntop-level ``State`` field. The ``v1_11_to_v1_12`` step therefore rewrites\nonly the version marker, leaving every row untouched, so a state written\nbefore the bump re-validates unchanged and the step is a lossless,\nreplay-safe round-trip.\n\nThe ``1.15`` edge is purely additive: it adds ``session_id`` to\n:class:`RuntimeBaseline` (inherited by :class:`RuntimeLatest`) and the\noptional :attr:`Wave.runtime_carry` accumulator, which together let a wave\nthat spans several sessions sum its per-session runtimes instead of\ndifferencing counters taken against two different session origins. Both\ndefault to ``None``; the ``v1_14_to_v1_15`` step backfills them explicitly on\nevery wave, and a state written before the bump re-validates with both\ndefaulted and no historical fact changes.",
   "properties": {
     "actuals": {
       "anyOf": [
@@ -4388,7 +4479,8 @@
         "1.11",
         "1.12",
         "1.13",
-        "1.14"
+        "1.14",
+        "1.15"
       ],
       "title": "Schema Version",
       "type": "string"

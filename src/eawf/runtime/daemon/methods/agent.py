@@ -762,6 +762,7 @@ def _headless_runtime_snapshots(
         cache_read_input_tokens=0,
         harness=serving_runtime,
         model=model,
+        session_id=spawn_result.session_id,
         captured_at=spawn_result.started_at,
     )
     latest = RuntimeLatest(
@@ -774,6 +775,7 @@ def _headless_runtime_snapshots(
         cache_read_input_tokens=spawn_result.cache_read_input_tokens,
         harness=serving_runtime,
         model=model,
+        session_id=spawn_result.session_id,
         captured_at=spawn_result.ended_at,
     )
     return baseline, latest

@@ -80,6 +80,8 @@ from eawf.kernel.state.enums import (
 )
 from eawf.kernel.state.models import (
     CriteriaFloorWaiver,
+    RuntimeBaseline,
+    RuntimeCarry,
     RuntimeLatest,
     SessionAttempt,
     State,
@@ -725,6 +727,7 @@ def _wave_runtime_delta(
     return compute_runtime_delta(
         wave.runtime_baseline,
         wave.runtime_latest,
+        carry=wave.runtime_carry,
         eu_minutes=eu_minutes,
         eu_basis=eu_basis,
     )
@@ -2745,7 +2748,93 @@ def _runtime_latest_from_params(params: RuntimeCaptureParams) -> RuntimeLatest:
         cache_read_input_tokens=params.cache_read_input_tokens,
         harness=params.harness,
         model=params.model,
+        session_id=params.session_id,
         captured_at=captured_at,
+    )
+
+
+#: Every counter a runtime snapshot carries and a carry accumulates.
+_RUNTIME_COUNTER_FIELDS: Final[tuple[str, ...]] = (
+    "api_duration_ms",
+    "total_duration_ms",
+    "cost_usd",
+    "input_tokens",
+    "output_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+)
+
+
+def _fold_finished_session(
+    carry: RuntimeCarry | None,
+    baseline: RuntimeBaseline,
+    latest: RuntimeLatest | None,
+) -> RuntimeCarry:
+    """Return *carry* with the finished session's total (``latest - baseline``) added.
+
+    Counter deltas are clamped at zero: a session whose snapshots regressed (a
+    reset counter source) contributes nothing rather than a negative total.
+    """
+    base = carry or RuntimeCarry()
+    if latest is None:
+        return base.model_copy(update={"sessions_folded": base.sessions_folded + 1})
+    folded: dict[str, float | int] = {}
+    for field in _RUNTIME_COUNTER_FIELDS:
+        latest_value = getattr(latest, field)
+        if latest_value is None:
+            continue
+        baseline_value = getattr(baseline, field) or 0
+        folded[field] = getattr(base, field) + max(0, latest_value - baseline_value)
+    folded["sessions_folded"] = base.sessions_folded + 1
+    return base.model_copy(update=folded)
+
+
+def _rebase_for_session(wave: Wave, session_id: str | None) -> None:
+    """Rebase the wave's runtime snapshots onto *session_id*'s counter origin.
+
+    Runtime counters are cumulative *within* a session: session B's transcript
+    starts from zero regardless of what session A already spent on the wave.
+    Differencing B's counters against A's baseline is therefore meaningless (and
+    would trip the backwards-counter guard on the close path). So on the first
+    capture from a session other than the baseline's, the finished session's
+    total is folded into ``wave.runtime_carry`` and the baseline is rebased onto
+    the new session's zero origin -- the close-time delta then sums every
+    session's runtime.
+
+    A capture with no session id, or one matching the baseline's session, leaves
+    the snapshots alone. A baseline predating the session stamp (schema < 1.15)
+    adopts the capturing session when nothing has been captured against it yet.
+    """
+    baseline = wave.runtime_baseline
+    if baseline is None or session_id is None:
+        return
+    if baseline.session_id == session_id:
+        return
+    if baseline.session_id is None and wave.runtime_latest is None:
+        # A baseline predating the session stamp with nothing captured against it
+        # yet: adopt the capturing session rather than treating the wave as
+        # multi-session and folding a zero total.
+        wave.runtime_baseline = baseline.model_copy(update={"session_id": session_id})
+        return
+
+    wave.runtime_carry = _fold_finished_session(wave.runtime_carry, baseline, wave.runtime_latest)
+    wave.runtime_baseline = RuntimeBaseline(
+        api_duration_ms=0,
+        total_duration_ms=0,
+        cost_usd=0.0,
+        input_tokens=0,
+        output_tokens=0,
+        cache_creation_input_tokens=0,
+        cache_read_input_tokens=0,
+        harness=baseline.harness,
+        model=baseline.model,
+        session_id=session_id,
+        captured_at=datetime.now(UTC),
+    )
+    wave.runtime_latest = None
+    logger.info(
+        f"rebase_runtime_counters wave={wave.id} session={session_id!r} "
+        f"sessions_folded={wave.runtime_carry.sessions_folded}"
     )
 
 
@@ -3068,6 +3157,10 @@ async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[st
                     raise DaemonValidationError(
                         f"validation_failed: active wave missing: {wave_id!r}"
                     )
+                # A capture from a session other than the baseline's measures a
+                # fresh counter origin, so rebase (folding the finished session's
+                # total into runtime_carry) before merging this session's counters.
+                _rebase_for_session(wave, args.session_id)
                 wave.runtime_latest = _merge_runtime_latest(wave.runtime_latest, latest)
                 # The interactive-Claude lifecycle mints no SessionAttempt on
                 # its own (only the headless spawn does); record one here off the

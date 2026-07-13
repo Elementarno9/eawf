@@ -31,6 +31,7 @@ from eawf.kernel.state.models import (
     ActualSummary,
     CriteriaFloorWaiver,
     RuntimeBaseline,
+    RuntimeCarry,
     RuntimeLatest,
     State,
     Wave,
@@ -114,6 +115,7 @@ def _capture_runtime_baseline(session_id: str) -> RuntimeBaseline | None:
         cache_read_input_tokens=counters.cache_read_input_tokens,
         harness=counters.harness,
         model=counters.model,
+        session_id=session_id,
         captured_at=datetime.now(UTC),
     )
 
@@ -146,10 +148,28 @@ def _counter_delta(
     return delta
 
 
+def _with_carry(
+    delta: int | float | None,
+    carried: int | float,
+) -> int | float | None:
+    """Fold prior-session *carried* runtime into this session's *delta*.
+
+    A wave that spanned earlier sessions carries their finished totals in
+    :class:`~eawf.kernel.state.models.RuntimeCarry`; the close-time figure is the
+    current session's delta plus that carry. A counter this session never
+    reported (``None``) still resolves to the carry when there is one, so a wave
+    whose work happened entirely in a previous session does not lose it.
+    """
+    if delta is None:
+        return carried if carried else None
+    return delta + carried
+
+
 def compute_runtime_delta(
     baseline: RuntimeBaseline | None,
     latest: RuntimeLatest | None,
     *,
+    carry: RuntimeCarry | None = None,
     eu_minutes: float,
     eu_basis: EuBasis = EuBasis.API_DURATION,
 ) -> RuntimeDelta | None:
@@ -159,19 +179,29 @@ def compute_runtime_delta(
     Missing baseline/latest/chosen-basis counters mean there is no captured
     runtime to apply; comparable counters that move backwards reject the
     close because the cumulative counter source reset or regressed.
+
+    ``carry`` folds in the runtime a multi-session wave already spent in sessions
+    that have ended (the daemon rebases the baseline onto each new session's
+    origin and accumulates the finished session's total there), so the close-time
+    figure is *this* session's delta plus every earlier session's total.
     """
     if baseline is None or latest is None:
         return None
     if eu_minutes <= 0.0:
         raise LifecycleError(f"eu_minutes must be positive: {eu_minutes!r}")
 
-    api_duration_ms = _counter_delta(
-        "api_duration_ms", baseline.api_duration_ms, latest.api_duration_ms
+    api_duration_ms = _with_carry(
+        _counter_delta("api_duration_ms", baseline.api_duration_ms, latest.api_duration_ms),
+        carry.api_duration_ms if carry is not None else 0,
     )
-    total_duration_ms = _counter_delta(
-        "total_duration_ms", baseline.total_duration_ms, latest.total_duration_ms
+    total_duration_ms = _with_carry(
+        _counter_delta("total_duration_ms", baseline.total_duration_ms, latest.total_duration_ms),
+        carry.total_duration_ms if carry is not None else 0,
     )
-    cost_usd_delta = _counter_delta("cost_usd", baseline.cost_usd, latest.cost_usd)
+    cost_usd_delta = _with_carry(
+        _counter_delta("cost_usd", baseline.cost_usd, latest.cost_usd),
+        carry.cost_usd if carry is not None else 0.0,
+    )
     token_delta = 0
     token_seen = False
     for field_name in (
@@ -180,10 +210,13 @@ def compute_runtime_delta(
         "cache_creation_input_tokens",
         "cache_read_input_tokens",
     ):
-        value = _counter_delta(
-            field_name,
-            getattr(baseline, field_name),
-            getattr(latest, field_name),
+        value = _with_carry(
+            _counter_delta(
+                field_name,
+                getattr(baseline, field_name),
+                getattr(latest, field_name),
+            ),
+            getattr(carry, field_name) if carry is not None else 0,
         )
         if value is not None:
             token_delta += int(value)
