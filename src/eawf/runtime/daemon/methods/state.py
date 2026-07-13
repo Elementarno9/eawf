@@ -2893,27 +2893,47 @@ def _upsert_interactive_session_attempt(
     :func:`~eawf.runtime.daemon.methods.agent._persist_live_session_attempt`) it
     minted NO attempt, so an interactive wave carried cost only on the wave-level
     snapshot and never surfaced a per-attempt cost row like a headless wave does.
-    This upsert records a single attempt whose ``cost_usd`` is fed from the same
-    priced figure that lands on ``runtime_latest``, restoring per-attempt-cost
-    parity across the headless/interactive axis.
+    This upsert records that attempt, restoring per-attempt-cost parity across
+    the headless/interactive axis.
+
+    The attempt carries the wave's **delta**, not the capture snapshot. The
+    snapshot is cumulative for the whole session, so stamping it verbatim charged
+    every active wave with the entire session's cost and token volume, and left
+    the attempt with ``started_at == ended_at`` -- a zero-length span, which the
+    wave-detail metrics tab (which derives EU from attempt spans) renders as
+    ``0.00 EU`` even though the recorded actual carries real EU. The attempt
+    therefore spans claim (the baseline capture) to this capture, and its cost and
+    per-class tokens come from :func:`compute_runtime_delta`.
 
     Idempotency mirrors the headless attempt-counter handling: a repeated
     Stop-hook capture for the SAME interactive session UPDATES the existing
     attempt in place (preserving its ``attempt`` number + ``started_at``) rather
     than appending a duplicate. The dedup key is the capture ``session_id``,
     synthesised per-wave when the hook omits it so a session-less capture still
-    dedupes onto a single attempt. A capture carrying no priced cost is a no-op:
-    there is nothing to surface as a per-attempt cost row, so the wave-level
-    snapshot stays the only record (unchanged path).
+    dedupes onto a single attempt. A capture carrying no priced cost, or one with
+    no baseline to difference against, is a no-op: there is nothing wave-scoped to
+    surface, so the wave-level snapshot stays the only record.
 
     Args:
         wave: The active wave whose ``runtime_latest`` this capture stamped.
-        latest: The runtime snapshot the same capture produced; its
-            ``cost_usd`` feeds the attempt so the two agree on the figure.
+        latest: The runtime snapshot the same capture produced; the wave's delta
+            against it feeds the attempt.
         session_id: The interactive Claude Code session id off the capture,
             or ``None`` when the Stop hook omitted it.
     """
     if latest.cost_usd is None:
+        return
+    # The snapshot is CUMULATIVE for the whole session, so stamping it verbatim
+    # put the entire session's spend on every wave and left the attempt with a
+    # zero-length span (started_at == ended_at), which the wave-detail metrics tab
+    # renders as 0.00 EU. The wave's own delta is what belongs on its attempt row.
+    delta = compute_runtime_delta(
+        wave.runtime_baseline,
+        latest,
+        carry=wave.runtime_carry,
+        eu_minutes=DEFAULT_EU_MINUTES,
+    )
+    if delta is None:
         return
     handle_id = session_id or f"interactive:{wave.id}"
     runtime = latest.harness or "claude-code"
@@ -2927,7 +2947,13 @@ def _upsert_interactive_session_attempt(
         outcome = "update"
     else:
         attempt_no = (max(wave.sessions) if wave.sessions else 0) + 1
-        started_at = latest.captured_at
+        # The attempt starts when the wave was baselined (its claim), not when the
+        # capture fired, so the span is the wave's working window.
+        started_at = (
+            wave.runtime_baseline.captured_at
+            if wave.runtime_baseline is not None
+            else latest.captured_at
+        )
         outcome = "mint"
     wave.sessions[attempt_no] = SessionAttempt(
         attempt=attempt_no,
@@ -2937,15 +2963,16 @@ def _upsert_interactive_session_attempt(
         started_at=started_at,
         ended_at=latest.captured_at,
         exit_status=0,
-        input_tokens=latest.input_tokens,
-        output_tokens=latest.output_tokens,
-        cache_creation_input_tokens=latest.cache_creation_input_tokens,
-        cache_read_input_tokens=latest.cache_read_input_tokens,
-        cost_usd=float(latest.cost_usd),
+        input_tokens=delta.input_tokens,
+        output_tokens=delta.output_tokens,
+        cache_creation_input_tokens=delta.cache_creation_input_tokens,
+        cache_read_input_tokens=delta.cache_read_input_tokens,
+        cost_usd=delta.actual_cost_usd,
     )
     logger.info(
         f"_upsert_interactive_session_attempt wave={wave.id} attempt={attempt_no} "
-        f"session_id={handle_id!r} cost_usd={float(latest.cost_usd)} outcome={outcome}"
+        f"session_id={handle_id!r} cost_usd={delta.actual_cost_usd} "
+        f"tokens={delta.actual_tokens} outcome={outcome}"
     )
 
 

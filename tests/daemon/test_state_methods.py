@@ -834,7 +834,8 @@ def test_mutate_wave_close_uses_runtime_delta_when_captured(tmp_path: Path) -> N
         expected_eu = 12000 / (30 * 60_000)
         assert actual["elapsed_eu"] == pytest.approx(expected_eu)
         assert actual["agent_runtime_eu"] == pytest.approx(expected_eu)
-        assert actual["actual_tokens"] == 162
+        # Work tokens exclude cache reads (7): 100 input + 50 output + 5 write.
+        assert actual["actual_tokens"] == 155
         assert actual["actual_cost_usd"] == pytest.approx(0.42)
 
     _run(body)
@@ -874,9 +875,11 @@ def test_mutate_wave_close_uses_configured_token_basis(tmp_path: Path) -> None:
         await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         written = orjson.loads(state_path.read_bytes())
         actual = written["actuals"]["P24-I01-W09"]
-        assert actual["elapsed_eu"] == pytest.approx(800 / DEFAULT_TOKENS_PER_EU)
-        assert actual["agent_runtime_eu"] == pytest.approx(800 / DEFAULT_TOKENS_PER_EU)
-        assert actual["actual_tokens"] == 800
+        # 500 input + 200 output + 50 cache-write; the 50-token cache-read delta
+        # is billed but is not work, so the TOKENS basis does not count it.
+        assert actual["elapsed_eu"] == pytest.approx(750 / DEFAULT_TOKENS_PER_EU)
+        assert actual["agent_runtime_eu"] == pytest.approx(750 / DEFAULT_TOKENS_PER_EU)
+        assert actual["actual_tokens"] == 750
 
     _run(body)
 

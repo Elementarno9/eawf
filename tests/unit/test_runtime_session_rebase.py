@@ -19,7 +19,10 @@ import pytest
 from eawf.kernel.migrations.v1_14_to_v1_15 import MigrationV114ToV115
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import RuntimeBaseline, RuntimeCarry, RuntimeLatest, Wave
-from eawf.runtime.daemon.methods.state import _rebase_for_session
+from eawf.runtime.daemon.methods.state import (
+    _rebase_for_session,
+    _upsert_interactive_session_attempt,
+)
 from eawf.workflow.lifecycle.wave import compute_runtime_delta
 
 _TS = datetime(2026, 7, 13, tzinfo=UTC)
@@ -285,3 +288,100 @@ def test_migration_pre_post_version_guards() -> None:
         step.check_pre({"schema_version": "1.13"})
     with pytest.raises(Exception, match="schema_version"):
         step.check_post({"schema_version": "1.14"})
+
+
+# --- interactive attempt row: wave delta, not session totals ---------------
+
+
+def test_interactive_attempt_carries_the_wave_delta_not_session_totals() -> None:
+    """The attempt row is per-wave: the snapshot it comes from is per-session.
+
+    Stamping the cumulative snapshot verbatim charged every active wave with the
+    whole session's spend and left a zero-length span, which the wave-detail
+    metrics tab (EU derived from attempt spans) rendered as 0.00 EU.
+    """
+    claimed_at = datetime(2026, 7, 13, 1, 0, tzinfo=UTC)
+    captured_at = datetime(2026, 7, 13, 1, 30, tzinfo=UTC)
+    wave = _wave(
+        runtime_baseline=RuntimeBaseline(
+            session_id="sess-a",
+            api_duration_ms=600_000,
+            cost_usd=20.0,
+            input_tokens=300,
+            output_tokens=90_000,
+            cache_creation_input_tokens=200_000,
+            cache_read_input_tokens=30_000_000,
+            captured_at=claimed_at,
+        )
+    )
+    latest = RuntimeLatest(
+        session_id="sess-a",
+        api_duration_ms=2_400_000,
+        cost_usd=25.0,
+        input_tokens=350,
+        output_tokens=100_000,
+        cache_creation_input_tokens=210_000,
+        cache_read_input_tokens=34_000_000,
+        captured_at=captured_at,
+    )
+    wave.runtime_latest = latest
+
+    _upsert_interactive_session_attempt(wave, latest=latest, session_id="sess-a")
+
+    attempt = wave.sessions[1]
+    # The wave's own spend, not the session's $25 / 34M cumulative totals.
+    assert attempt.cost_usd == pytest.approx(5.0)
+    assert attempt.output_tokens == 10_000
+    assert attempt.cache_read_input_tokens == 4_000_000
+    # A real span: claim -> capture, so the detail tab derives nonzero EU.
+    assert attempt.started_at == claimed_at
+    assert attempt.ended_at == captured_at
+    assert attempt.ended_at > attempt.started_at
+
+
+def test_second_wave_in_the_same_session_records_only_its_own_delta() -> None:
+    """A wave claimed later in a session must not inherit the earlier wave's spend."""
+    first_claim = datetime(2026, 7, 13, 1, 0, tzinfo=UTC)
+    second_claim = datetime(2026, 7, 13, 1, 20, tzinfo=UTC)
+    captured_at = datetime(2026, 7, 13, 1, 30, tzinfo=UTC)
+
+    def _wave_claimed_at(wave_id: str, when: datetime, *, output_tokens: int) -> Wave:
+        return _wave(
+            id=wave_id,
+            runtime_baseline=RuntimeBaseline(
+                session_id="sess-a",
+                api_duration_ms=0,
+                cost_usd=1.0,
+                output_tokens=output_tokens,
+                captured_at=when,
+            ),
+        )
+
+    latest = RuntimeLatest(
+        session_id="sess-a",
+        api_duration_ms=1_800_000,
+        cost_usd=9.0,
+        output_tokens=100_000,
+        captured_at=captured_at,
+    )
+    early = _wave_claimed_at("P00-I01-W01", first_claim, output_tokens=10_000)
+    late = _wave_claimed_at("P00-I01-W02", second_claim, output_tokens=80_000)
+    for wave in (early, late):
+        wave.runtime_latest = latest
+        _upsert_interactive_session_attempt(wave, latest=latest, session_id="sess-a")
+
+    # The late wave saw 20k output tokens of work, not the session's 100k.
+    assert early.sessions[1].output_tokens == 90_000
+    assert late.sessions[1].output_tokens == 20_000
+    assert late.sessions[1].started_at == second_claim
+
+
+def test_interactive_attempt_is_a_no_op_without_a_baseline() -> None:
+    wave = _wave(runtime_baseline=None)
+    latest = _latest("sess-a", api_duration_ms=1_000, cost_usd=2.0)
+
+    _upsert_interactive_session_attempt(wave, latest=latest, session_id="sess-a")
+
+    # No baseline means no wave-scoped delta to record; the snapshot stays the
+    # only record rather than the attempt claiming the whole session.
+    assert wave.sessions == {}

@@ -498,8 +498,12 @@ def test_eu_basis_tokens_uses_token_delta() -> None:
     )
 
     assert delta is not None
-    assert delta.actual_tokens == 800
-    assert delta.elapsed_eu == pytest.approx(800 / DEFAULT_TOKENS_PER_EU)
+    # Work tokens exclude the cache-read delta (65 - 15 = 50): a cache read
+    # re-counts the same context every request, so it tracks session position
+    # rather than effort. 500 input + 200 output + 50 cache-write = 750.
+    assert delta.actual_tokens == 750
+    assert delta.cache_read_input_tokens == 50
+    assert delta.elapsed_eu == pytest.approx(750 / DEFAULT_TOKENS_PER_EU)
     assert delta.agent_runtime_eu == pytest.approx(delta.elapsed_eu)
 
 

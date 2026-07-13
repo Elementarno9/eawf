@@ -36,7 +36,11 @@ from tests.daemon.test_spawn_cost_binding import (
     _write_state,
 )
 
-_TOTAL_TOKENS = _INPUT_TOKENS + _OUTPUT_TOKENS + _CACHE_5M + _CACHE_1H + _CACHE_READ
+#: Work tokens exclude the prompt-cache READ class (P30-I25-W31): a cache read
+#: re-counts the same context on every request, so its volume tracks how far into
+#: a session the wave sits rather than the work done. Cache reads stay billed in
+#: ``actual_cost_usd`` and visible per-class on the runtime snapshot.
+_WORK_TOKENS = _INPUT_TOKENS + _OUTPUT_TOKENS + _CACHE_5M + _CACHE_1H
 
 
 def test_headless_spawn_captures_tokens_over_foreign_claim_baseline(
@@ -83,7 +87,8 @@ def test_headless_spawn_captures_tokens_over_foreign_claim_baseline(
     assert wave.runtime_baseline.input_tokens == 0
     delta = compute_runtime_delta(wave.runtime_baseline, wave.runtime_latest, eu_minutes=30.0)
     assert delta is not None
-    assert delta.actual_tokens == _TOTAL_TOKENS
+    assert delta.actual_tokens == _WORK_TOKENS
+    assert delta.cache_read_input_tokens == _CACHE_READ
     assert delta.actual_tokens > 0
 
 
@@ -120,7 +125,7 @@ def test_headless_close_records_nonzero_tokens_consumed(
     loop._close_wave_on_disk(_WAVE_ID)
 
     wave = State.model_validate_json(state_path.read_text(encoding="utf-8")).waves[_WAVE_ID]
-    assert wave.tokens_consumed == _TOTAL_TOKENS
+    assert wave.tokens_consumed == _WORK_TOKENS
     assert wave.tokens_consumed > 0
 
 

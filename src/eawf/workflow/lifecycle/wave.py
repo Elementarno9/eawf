@@ -56,6 +56,24 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+#: Every per-class token counter a runtime snapshot carries.
+_TOKEN_FIELDS: tuple[str, ...] = (
+    "input_tokens",
+    "output_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+)
+
+#: The token classes that count as WORK. Cache reads are excluded: they re-count
+#: the same cached context on every request, so their volume tracks session
+#: position and context size rather than effort. They remain billed (they land in
+#: ``actual_cost_usd``) and stay visible per-class on the runtime snapshots.
+_WORK_TOKEN_FIELDS: tuple[str, ...] = (
+    "input_tokens",
+    "output_tokens",
+    "cache_creation_input_tokens",
+)
+
 
 def _claim_session_counters(session_id: str) -> RuntimeCounters | None:
     """Return the claiming session's cumulative runtime counters, when readable.
@@ -122,13 +140,41 @@ def _capture_runtime_baseline(session_id: str) -> RuntimeBaseline | None:
 
 @dataclass(frozen=True)
 class RuntimeDelta:
-    """Close-time runtime delta derived from baseline and latest counters."""
+    """Close-time runtime delta derived from baseline and latest counters.
+
+    ``actual_tokens`` deliberately EXCLUDES prompt-cache reads. A cache read
+    re-counts the same cached context on every request, so its volume tracks how
+    far into a session the wave sits (and how big the context has grown by then)
+    rather than how much work the wave did: the same wave claimed late in a long
+    session reads millions more cached tokens than it would have claimed first.
+    Counting that as effort makes the figure useless for calibration. The cache
+    reads are still real spend, so ``actual_cost_usd`` bills them, and the
+    per-class tallies stay on the runtime snapshots for the cost surfaces.
+
+    Attributes:
+        elapsed_eu: Measured effort units on the configured EU basis.
+        agent_runtime_eu: The agent-runtime EU (equal to ``elapsed_eu``; see the
+            note in :func:`compute_runtime_delta`).
+        actual_tokens: New tokens the wave burned -- input + output + cache
+            writes, excluding cache reads.
+        actual_cost_usd: Priced spend for the wave, cache reads included.
+        api_duration_ms: Measured agent runtime in milliseconds.
+        input_tokens: Non-cached input-token delta.
+        output_tokens: Output-token delta.
+        cache_creation_input_tokens: Prompt-cache write delta.
+        cache_read_input_tokens: Prompt-cache read delta (billed, not counted as
+            work in ``actual_tokens``).
+    """
 
     elapsed_eu: float
     agent_runtime_eu: float
     actual_tokens: int
     actual_cost_usd: float
     api_duration_ms: int
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_creation_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
 
 
 def _counter_delta(
@@ -202,14 +248,8 @@ def compute_runtime_delta(
         _counter_delta("cost_usd", baseline.cost_usd, latest.cost_usd),
         carry.cost_usd if carry is not None else 0.0,
     )
-    token_delta = 0
-    token_seen = False
-    for field_name in (
-        "input_tokens",
-        "output_tokens",
-        "cache_creation_input_tokens",
-        "cache_read_input_tokens",
-    ):
+    tokens: dict[str, int] = {}
+    for field_name in _TOKEN_FIELDS:
         value = _with_carry(
             _counter_delta(
                 field_name,
@@ -219,14 +259,17 @@ def compute_runtime_delta(
             getattr(carry, field_name) if carry is not None else 0,
         )
         if value is not None:
-            token_delta += int(value)
-            token_seen = True
+            tokens[field_name] = int(value)
+
+    # Cache reads are billed but are NOT work: the same context is re-read on
+    # every request, so the tally scales with session position, not effort.
+    token_delta = sum(tokens.get(field, 0) for field in _WORK_TOKEN_FIELDS)
 
     elapsed_eu = _runtime_basis_eu(
         eu_basis,
         api_duration_ms=int(api_duration_ms) if api_duration_ms is not None else None,
         total_duration_ms=int(total_duration_ms) if total_duration_ms is not None else None,
-        token_delta=token_delta if token_seen else None,
+        token_delta=token_delta if tokens else None,
         eu_minutes=eu_minutes,
     )
     if elapsed_eu is None:
@@ -242,6 +285,10 @@ def compute_runtime_delta(
         actual_tokens=token_delta,
         actual_cost_usd=float(cost_usd_delta) if cost_usd_delta is not None else 0.0,
         api_duration_ms=int(api_duration_ms) if api_duration_ms is not None else 0,
+        input_tokens=tokens.get("input_tokens", 0),
+        output_tokens=tokens.get("output_tokens", 0),
+        cache_creation_input_tokens=tokens.get("cache_creation_input_tokens", 0),
+        cache_read_input_tokens=tokens.get("cache_read_input_tokens", 0),
     )
 
 
