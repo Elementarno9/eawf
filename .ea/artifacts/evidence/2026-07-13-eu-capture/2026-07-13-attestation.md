@@ -26,6 +26,20 @@ A fresh-context audit of the whole iter returned **FAIL** and was right on three
 - **The cross-session rebase was wrong in three ways** (W36): returning to an earlier session double-counted it without bound, a resumed session's pre-wave work was charged to the wave, and a session that ended without a capture lost its runtime while still counting as folded. None of it shows in these rows -- every capture here came from ONE session, so the multi-session mechanism was never exercised live. Its evidence is unit tests, not this run.
 - **The configured audit ceiling did nothing** (W35). W32 set `verify.juror_wall_clock_seconds: 1800` and threaded it into the spawn, but the repo config overlay silently dropped every `verify:` leaf except `odr_blocking`, so the close auditor kept spawning at the 600s default. The config line was an idle contract. The watchdog would have aborted a longer audit at 900s regardless.
 
+## The basis change stranded two waves (W37)
+
+Fixing the EU basis broke the waves carrying the fix, and the failure was unrecoverable — worth recording, because the same trap waits for any future change to a cumulative counter.
+
+W35 and W36 were CLAIMED against baselines recorded under the OLD (wall-clock) basis: `api_duration_ms = 65,988,667`. Once W34 landed, their next capture measured the same session under the new basis and read `19,284,744` — a **backwards counter**, which `_counter_delta` raised on. The baseline lives on disk, so every retry of the close compared against it and raised again. No operator action could clear it: **the two waves were permanently unclosable, stranded by the very fix they carried.** The daemon proved it live:
+
+```
+LifecycleError: runtime counter api_duration_ms decreased: baseline=65988667 latest=19284744
+```
+
+W37 makes a regressed counter a *re-origin* at capture rather than a raise at close (a wave that under-reports its runtime is a bad measurement; a wave that can never close is a broken workflow). Verified live — the same capture that used to crash the daemon now logs `reorigin_on_counter_reset ... re-originating` and succeeds.
+
+The cost is honest and permanent: **W35 and W36 lost the runtime they had accrued under the old basis** (it cannot be reconstructed), so their actuals under-report. W34's own actual is `elapsed_eu=0.0` for a different reason — it was closed in the same turn it was claimed, with no Stop boundary between, so no capture ever fired for it. That zero is an operator process error, not a capture failure.
+
 ## Known distortions in this data
 
 Recorded rather than quietly corrected, because they are visible in `state-rows.json` and would otherwise read as measurement error:
