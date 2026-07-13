@@ -305,7 +305,7 @@ def _warn_on_zero_eu_close(ctx: typer.Context, *, wave_id: str, waived: bool) ->
     if loaded is None:
         return
     state, _ = loaded
-    actual = state.actuals.get(wave_id)
+    actual = (state.actuals or {}).get(wave_id)
     if actual is not None and actual.elapsed_eu > 0.0:
         return
     detail = (
