@@ -15672,6 +15672,19 @@
       "status": "open",
       "title": "Research profile ships no default research block for CLI campaign new"
     },
+    "B108": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-13T23:16:09.575618Z",
+      "description": "Every required criterion in this repo is a grandfathered legacy string with no oracle tier, so the Oracle-Determinism-Ratio is 0.0 and every close rests on an auditor reading prose. Decision D-ODR-ADVISORY holds the ODR gate advisory until that is drained. Assign deterministic oracle tiers (T1 static through T5 golden) to the required criteria so a close is falsified by a reproducible check rather than a judgment, then set verify.odr_blocking back to true.",
+      "id": "B108",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "P30",
+      "status": "open",
+      "title": "Type the legacy success criteria so the ODR gate can re-arm"
+    },
     "B70": {
       "closed_at": null,
       "commit": null,
@@ -15905,6 +15918,22 @@
       "status": "active",
       "superseded_by": null,
       "title": "Split wave close: deterministic pre-flight outside the state lock"
+    },
+    "D-ODR-ADVISORY": {
+      "alternatives": [
+        "Leave odr_blocking true and drain the criteria now (rejected: 214 required criteria in this iter alone and every future iter close blocked until its own are typed, which turns a repair iter into a phase-sized campaign)",
+        "Leave odr_blocking true and add a typed sub-floor waiver on the iter (rejected: new bypass mechanism authored inside the iter whose purpose was to stop shipping half-wired contracts)"
+      ],
+      "consequences": [],
+      "created_at": "2026-07-13T23:15:51.071766Z",
+      "description": null,
+      "id": "D-ODR-ADVISORY",
+      "obsoleted_at": null,
+      "rationale": "The Oracle-Determinism-Ratio scores what fraction of a scope's required criteria are falsified by a reproducible automated oracle (tiers T1 through T5) rather than by a judgment oracle (an approval or a jury reading prose). This repo scores 0.0: every required criterion is a grandfathered legacy string with no oracle tier, so every close rests on someone reading prose. The repo config set verify.odr_blocking to true, but the field was silently dropped by the profile verify-block merge and so gated nothing from the day it was written; P30-I25-W48 fixed the merge and the flag became live, at which point iter close began refusing every iter in the repo. The precondition the field's own contract states is that a profile opts in only after its legacy sub-floor criteria have been drained, and 0 of 214 required criteria in this iter are drained. Setting the flag to false records what the system has actually done since the flag shipped rather than asserting a policy the repo cannot satisfy. The gate re-arms when criteria carry deterministic oracle tiers; backlog item B-ODR-DRAIN carries that campaign. This is a policy statement about an unmet precondition and not a weakening of verification: the close-time auditor, the criteria floor, and the zero-runtime gate are all unaffected.",
+      "scope_id": "P30-I25",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Keep the ODR gate advisory until the legacy criteria are typed"
     },
     "D-RPC-TERMINAL": {
       "alternatives": [
@@ -32672,7 +32701,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-13T23:08:58.773908Z",
+  "updated_at": "2026-07-13T23:16:09.575618Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
