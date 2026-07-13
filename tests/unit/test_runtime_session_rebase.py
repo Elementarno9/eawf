@@ -719,3 +719,28 @@ def test_migration_v118_pre_post_version_guards() -> None:
 
     with pytest.raises(ValidationError):
         step.check_pre({"schema_version": "1.16"})
+
+
+def test_a_session_that_never_captured_says_its_runtime_was_dropped(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """W48: a dropped session's runtime is announced, not swallowed.
+
+    A session that ended without ever capturing has nothing to fold, so the carry
+    is right to stay empty -- but the wave really did spend runtime in it, and
+    that runtime is now gone. Dropping it in silence is exactly how a capture path
+    that DIED passes for one that had nothing to do, which is the confusion this
+    whole iter exists to make impossible.
+    """
+    wave = _wave(
+        runtime_baseline=_baseline("sess-a", api_duration_ms=1_000),
+        runtime_latest=None,
+    )
+
+    with caplog.at_level("WARNING"):
+        _rebase_for_session(wave, _latest("sess-b"), "sess-b")
+
+    assert wave.runtime_carry is not None
+    assert wave.runtime_carry.sessions_folded == 0
+    assert "never-captured" in caplog.text
+    assert "dropped" in caplog.text

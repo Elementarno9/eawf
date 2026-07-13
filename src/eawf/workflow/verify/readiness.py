@@ -512,14 +512,24 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
     Union-merges the list-valued fields (``floor_checks`` concatenated;
     ``argv_allowlist`` / ``uiux_bands`` / ``jury_vendors`` deduplicated,
     first-occurrence order preserved), OR-folds the boolean gating bits
-    (``enforce`` / ``cross_vendor_jury``), and takes the last contributor's
-    ``waiver_mode`` + ``timeout_class_seconds`` + ``checkpoint`` overrides.
-    Because the ``checkpoint`` dial is last-contributor-wins, a downstream
-    profile that sets ``checkpoint.checkpoint_mode: barrier`` overrides an
-    upstream ``optimistic`` block. The merged ``enforce`` is the *fleet*
+    (``enforce`` / ``cross_vendor_jury`` / ``odr_blocking``), and takes the last
+    contributor's scalar dials (``waiver_mode``, ``timeout_class_seconds``,
+    ``juror_wall_clock_seconds``, ``odr_floor``, ``jury_authority``,
+    ``checkpoint``). Because the scalar dials are last-contributor-wins, a
+    downstream profile that sets ``checkpoint.checkpoint_mode: barrier`` overrides
+    an upstream ``optimistic`` block. The merged ``enforce`` is the *fleet*
     opt-in; band-conditional resolution (:func:`resolve_wave_verify_block`)
     narrows it per wave at the close seam so a single enforcing profile does
     not gate every wave.
+
+    The merge rebuilds the block field by field, so EVERY field the model carries
+    has to be listed here: one left out is silently reset to its default, and a
+    profile that set it has no way to tell. That is what happened to
+    ``juror_wall_clock_seconds``, ``odr_floor``, ``odr_blocking`` and
+    ``jury_authority`` -- declared as config, dropped on merge, latent only
+    because no shipped profile happened to set them. Add a field to
+    :class:`~eawf.platform.profiles.models.VerifyBlock` and it must be added
+    here in the same change.
     """
     if not blocks:
         return None
@@ -534,8 +544,12 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
     has_timeout_overrides = False
     waiver_mode: Literal["A", "B", "C"] = "B"
     checkpoint = blocks[-1].checkpoint
+    juror_wall_clock_seconds = blocks[-1].juror_wall_clock_seconds
+    odr_floor = blocks[-1].odr_floor
+    jury_authority = blocks[-1].jury_authority
     enforce = False
     cross_vendor_jury = False
+    odr_blocking = False
     for block in blocks:
         floor_checks.extend(block.floor_checks)
         for argv_head in block.argv_allowlist:
@@ -559,6 +573,7 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
         waiver_mode = block.waiver_mode
         enforce = enforce or block.enforce
         cross_vendor_jury = cross_vendor_jury or block.cross_vendor_jury
+        odr_blocking = odr_blocking or block.odr_blocking
     return VerifyBlock(
         floor_checks=floor_checks,
         argv_allowlist=argv_allowlist,
@@ -566,8 +581,12 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
         waiver_mode=waiver_mode,
         enforce=enforce,
         cross_vendor_jury=cross_vendor_jury,
+        juror_wall_clock_seconds=juror_wall_clock_seconds,
         uiux_bands=uiux_bands,
         jury_vendors=jury_vendors,
+        odr_floor=odr_floor,
+        odr_blocking=odr_blocking,
+        jury_authority=jury_authority,
         checkpoint=checkpoint,
     )
 

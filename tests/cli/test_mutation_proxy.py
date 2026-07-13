@@ -585,3 +585,75 @@ def test_mutate_via_daemon_rejects_daemonless_env(
             verb="wave close",
             fallback=_fallback,
         )
+
+
+# ---- W48: the wire timeout tracks the configured juror ceiling ---------------
+
+
+class _TimeoutRecordingClient(_FakeClient):
+    """Records the ``call_timeout_seconds`` the dispatch shim constructs it with."""
+
+    last_timeout: float | None = None
+
+    def __init__(self, *_args: Any, **kwargs: Any) -> None:
+        _TimeoutRecordingClient.last_timeout = kwargs.get("call_timeout_seconds")
+
+
+def test_mutate_via_daemon_wire_timeout_tracks_the_juror_ceiling(
+    monkeypatch: pytest.MonkeyPatch,
+    _no_spawn: None,
+) -> None:
+    """A gated close waits as long as the daemon may legitimately run.
+
+    The shim used the client's 30s default while a close-path auditor may run for
+    the configured juror ceiling (1800s here), so the CLI timed out and reported
+    ``DaemonMutationIndeterminate`` for a mutation the daemon then applied. Drop
+    the ``call_timeout_seconds`` argument in ``_mutate_via_daemon`` and this test
+    sees the 30s default again.
+    """
+    from eawf.runtime.daemon.limits import cli_mutation_timeout_for
+
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.limits.configured_juror_wall_clock",
+        lambda _repo_root: 1800.0,
+    )
+    _set_client(monkeypatch, _TimeoutRecordingClient)
+    _TimeoutRecordingClient.last_timeout = None
+
+    _dispatch._mutate_via_daemon(
+        MutationKind.WAVE_CLOSE,
+        _PARAMS,
+        None,
+        scope_id="P24-I01-W09",
+        verb="wave close",
+        fallback=lambda: {"proxied": False},
+    )
+
+    assert _TimeoutRecordingClient.last_timeout == cli_mutation_timeout_for(1800.0)
+
+
+def test_mutate_via_daemon_wire_timeout_without_a_configured_ceiling(
+    monkeypatch: pytest.MonkeyPatch,
+    _no_spawn: None,
+) -> None:
+    """Boundary: no configured ceiling still clears the daemon's own hard limit."""
+    from eawf.runtime.daemon.limits import cli_mutation_timeout_for, mutation_hard_limit_for
+
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.limits.configured_juror_wall_clock",
+        lambda _repo_root: None,
+    )
+    _set_client(monkeypatch, _TimeoutRecordingClient)
+    _TimeoutRecordingClient.last_timeout = None
+
+    _dispatch._mutate_via_daemon(
+        MutationKind.WAVE_CLOSE,
+        _PARAMS,
+        None,
+        scope_id="P24-I01-W09",
+        verb="wave close",
+        fallback=lambda: {"proxied": False},
+    )
+
+    assert _TimeoutRecordingClient.last_timeout == cli_mutation_timeout_for(None)
+    assert _TimeoutRecordingClient.last_timeout > mutation_hard_limit_for(None)

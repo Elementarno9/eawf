@@ -26,6 +26,11 @@ from eawf.kernel.state.models import State
 from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.observability.eval.jury_validation import BlockAuthority
 from eawf.platform.profiles.models import VerifyBlock
+from eawf.runtime.daemon.limits import (
+    cli_mutation_timeout_for,
+    configured_juror_wall_clock,
+    mutation_hard_limit_for,
+)
 from eawf.runtime.daemon.methods import state as daemon_state
 from eawf.workflow.verify.oracle import OracleResult
 
@@ -326,3 +331,35 @@ def test_watchdog_hard_limit_accommodates_a_raised_juror_ceiling() -> None:
     # The default ceiling leaves the historical limit untouched.
     assert mutation_hard_limit_for(600.0) == _MUTATION_HARD_LIMIT_SECONDS
     assert mutation_hard_limit_for(None) == _MUTATION_HARD_LIMIT_SECONDS
+
+
+def test_cli_wire_timeout_outlives_the_daemon_hard_limit(tmp_path: Path) -> None:
+    """W48: the CLI must not give up before the daemon does.
+
+    A gated close spawns a fresh-context auditor INSIDE the watched mutation, so
+    the daemon may legitimately hold the request for the juror ceiling plus the
+    commit margin. The CLI's wire timeout was a 30s constant -- less than a
+    THIRTIETH of the daemon's own floor -- so every gated close raised
+    ``DaemonMutationIndeterminate`` ("the write may or may not have applied")
+    while the daemon went on to apply it. It misreported every close in P30-I25.
+
+    The ceiling is read off the repo's real config file, through the same helper
+    the CLI calls, so deleting the wiring cannot leave this green.
+    """
+    from eawf.surfaces.cli._daemon_client import DEFAULT_CALL_TIMEOUT_SECONDS
+
+    ea = tmp_path / ".ea"
+    ea.mkdir()
+    (ea / "config.yaml").write_text(
+        "schema_version: '1.0'\nverify:\n  juror_wall_clock_seconds: 1800.0\n",
+        encoding="utf-8",
+    )
+
+    ceiling = configured_juror_wall_clock(tmp_path)
+
+    assert ceiling == 1800.0
+    # The old constant could not even cover the daemon's DEFAULT limit, let alone
+    # a raised ceiling -- that is the whole bug, in one line.
+    assert mutation_hard_limit_for(None) > DEFAULT_CALL_TIMEOUT_SECONDS
+    assert cli_mutation_timeout_for(ceiling) > mutation_hard_limit_for(ceiling)
+    assert cli_mutation_timeout_for(None) > mutation_hard_limit_for(None)

@@ -23,6 +23,7 @@ import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Final
 
 from eawf import __version__
 from eawf.kernel.state.enums import StoreKind
@@ -35,6 +36,11 @@ from eawf.observability.logging.scrub import SensitiveScrubber
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.idle import IdleTimeoutWatchdog
+from eawf.runtime.daemon.limits import (
+    MUTATION_HARD_LIMIT_SECONDS,
+    configured_juror_wall_clock,
+    mutation_hard_limit_for,
+)
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.recovery import replay_wal
 from eawf.runtime.daemon.runtime_dir import (
@@ -355,29 +361,10 @@ _MUTATION_ALARM_SECONDS: float = 120.0
 #: a real fresh-context auditor whose wall clock is bounded by
 #: ``VerifyBlock.juror_wall_clock_seconds`` (default 600s) INSIDE the
 #: watched mutation, so a limit below that bound hard-aborts every
-#: legitimate verdict close (the W41 close-loop incident). 900 = the
-#: 600s default juror bound + the commit/routing margin below. A repo that
-#: RAISES the juror ceiling raises this with it -- see
-#: :func:`mutation_hard_limit_for`, without which a configured 1800s audit
-#: would still be cancelled at 900s, mid-mutation, having burned the spend.
-_MUTATION_HARD_LIMIT_SECONDS: float = 900.0
-
-#: Headroom the watchdog leaves above the juror bound for the commit + routing
-#: work that follows the auditor spawn inside the same mutation.
-_COMMIT_MARGIN_SECONDS: float = 300.0
-
-
-def mutation_hard_limit_for(juror_wall_clock_seconds: float | None) -> float:
-    """Return the watchdog hard limit that accommodates *juror_wall_clock_seconds*.
-
-    The limit tracks the juror ceiling rather than sitting at a constant: an
-    auditor allowed 1800s inside a mutation watched at 900s is killed by the
-    watchdog instead of finishing, which is strictly worse than the timeout it
-    was raised to escape.
-    """
-    if juror_wall_clock_seconds is None or juror_wall_clock_seconds <= 0:
-        return _MUTATION_HARD_LIMIT_SECONDS
-    return max(_MUTATION_HARD_LIMIT_SECONDS, juror_wall_clock_seconds + _COMMIT_MARGIN_SECONDS)
+#: legitimate verdict close (the W41 close-loop incident). The CLI's wire
+#: timeout must in turn exceed THIS -- all three deadlines live in
+#: :mod:`eawf.runtime.daemon.limits` so they move together.
+_MUTATION_HARD_LIMIT_SECONDS: Final[float] = MUTATION_HARD_LIMIT_SECONDS
 
 
 def _resolve_mutation_hard_limit(juror_wall_clock_seconds: float | None = None) -> float:
@@ -510,18 +497,7 @@ def _configured_juror_wall_clock(ctx: MethodContext) -> float | None:
     """
     if ctx.state_path is None:
         return None
-    try:
-        from eawf.kernel.config.layered import get_dotted, merge_config
-
-        repo_root = Path(ctx.state_path).parent.parent
-        merged, _sources = merge_config(repo=repo_root)
-        raw = get_dotted(merged, "verify.juror_wall_clock_seconds")
-    except Exception as exc:
-        logger.debug(f"_configured_juror_wall_clock status='default' err={exc!r}")
-        return None
-    if isinstance(raw, bool) or not isinstance(raw, int | float) or raw <= 0:
-        return None
-    return float(raw)
+    return configured_juror_wall_clock(Path(ctx.state_path).parent.parent)
 
 
 def _schedule_mutation_watchdog(ctx: MethodContext) -> asyncio.Task[None] | None:

@@ -2882,7 +2882,15 @@ def _fold_finished_session(
     if latest is None:
         # The session ended without ever capturing, so there is nothing measured
         # to fold. Counting it as "folded" would claim a session's runtime was
-        # accounted for when in truth it was never seen.
+        # accounted for when in truth it was never seen -- but dropping it in
+        # silence is how a dead capture path passes for an idle one. Say what is
+        # being lost, so the missing runtime has a recorded reason like every
+        # other way this wave can under-report.
+        logger.warning(
+            f"fold_finished_session session={baseline.session_id!r} status='never-captured'; "
+            "the session ended with nothing captured against its baseline -- "
+            "whatever runtime it spent on this wave is dropped, not carried"
+        )
         return base
     divisor = shared_wave_divisor(baseline, latest)
     folded: dict[str, float | int] = {}

@@ -286,6 +286,7 @@ def _mutate_via_daemon[FallbackT](
             ``except CliError`` handler renders it.
     """
     from eawf.kernel.state.mutations import Mutation
+    from eawf.runtime.daemon.limits import cli_mutation_timeout_for, configured_juror_wall_clock
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
     escalate_mutation(verb, flags=flags, runtime_dir=runtime_dir)
@@ -311,7 +312,17 @@ def _mutate_via_daemon[FallbackT](
     #   so this is surfaced as the indeterminate error, NOT a blind
     #   fallback. A ``DaemonRpcError`` is a clean daemon RESPONSE (the
     #   write outcome is determinate) and keeps its specific mapping.
-    client = DaemonClient(runtime_dir=runtime_dir)
+    # The wire timeout must outlive the daemon's own hard limit. A gated close
+    # spawns a fresh-context auditor INSIDE the mutation, bounded by the repo's
+    # configured juror ceiling -- so a fixed 30s client gave up while the daemon
+    # was still working and reported the close as INDETERMINATE, an answer the
+    # operator cannot act on, for a mutation that then applied successfully.
+    client = DaemonClient(
+        runtime_dir=runtime_dir,
+        call_timeout_seconds=cli_mutation_timeout_for(
+            configured_juror_wall_clock(Path(repo_root)),
+        ),
+    )
     try:
         client.__enter__()
     except (OSError, NotImplementedError) as exc:

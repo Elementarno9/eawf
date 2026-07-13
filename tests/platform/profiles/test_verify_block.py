@@ -764,3 +764,76 @@ def test_checkpoint_block_rejects_unknown_field() -> None:
                 "phantom_field": True,
             }
         )
+
+
+# ---- W48: the merge preserves every field the block carries ------------------
+
+
+def test_merge_verify_blocks_preserves_the_juror_ceiling() -> None:
+    """A profile-set juror ceiling survives the merge instead of resetting to 600s.
+
+    The merge rebuilds ``VerifyBlock`` field by field, and this field was not in
+    the list -- so a profile that raised its auditor's wall clock to 1800s got a
+    merged block back that said 600. Idle contract: declared as config, dropped
+    on the way to the close path.
+    """
+    merged = _merge_verify_blocks([VerifyBlock(juror_wall_clock_seconds=1800.0)])
+
+    assert merged is not None
+    assert merged.juror_wall_clock_seconds == pytest.approx(1800.0)
+
+
+def test_merge_verify_blocks_preserves_the_odr_dials_and_jury_authority() -> None:
+    """The ODR dials and the jury's trust floors survive the merge too.
+
+    ``odr_blocking`` is a gating bit, so it OR-folds like ``enforce``: one profile
+    opting into a hard ODR gate gates the composed block. ``odr_floor`` and
+    ``jury_authority`` are scalar dials, so the last contributor wins, as
+    ``waiver_mode`` and ``checkpoint`` already did.
+    """
+    from eawf.platform.profiles.models import JuryAuthorityConfig
+
+    authority = JuryAuthorityConfig(min_labeled_waves=50)
+    merged = _merge_verify_blocks(
+        [
+            VerifyBlock(odr_blocking=True),
+            VerifyBlock(odr_floor=0.5, jury_authority=authority),
+        ]
+    )
+
+    assert merged is not None
+    assert merged.odr_blocking is True
+    assert merged.odr_floor == pytest.approx(0.5)
+    assert merged.jury_authority == authority
+
+
+def test_merge_verify_blocks_covers_every_field_on_the_model() -> None:
+    """No field may be added to VerifyBlock without being merged.
+
+    The failure this pins is structural, not about any one field: a field the
+    merge forgets is silently reset to its default, and the profile that set it
+    has no way to find out. Rather than re-testing each field, assert the merged
+    block round-trips a fully non-default one.
+    """
+    from eawf.platform.profiles.models import CheckpointBlock, JuryAuthorityConfig
+
+    source = VerifyBlock(
+        argv_allowlist=["uv"],
+        timeout_class_seconds={"quick": 5},
+        waiver_mode="C",
+        enforce=True,
+        cross_vendor_jury=True,
+        juror_wall_clock_seconds=1800.0,
+        uiux_bands=["tui"],
+        jury_vendors=["claude"],
+        odr_floor=0.55,
+        odr_blocking=True,
+        jury_authority=JuryAuthorityConfig(min_labeled_waves=42),
+        checkpoint=CheckpointBlock(checkpoint_mode="barrier"),
+    )
+
+    merged = _merge_verify_blocks([source])
+
+    assert merged is not None
+    for field in VerifyBlock.model_fields:
+        assert getattr(merged, field) == getattr(source, field), field
