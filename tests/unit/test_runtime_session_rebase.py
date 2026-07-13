@@ -20,7 +20,9 @@ from eawf.kernel.migrations.v1_14_to_v1_15 import MigrationV114ToV115
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import RuntimeBaseline, RuntimeCarry, RuntimeLatest, Wave
 from eawf.runtime.daemon.methods.state import (
+    _counters_regressed,
     _rebase_for_session,
+    _reorigin_on_reset,
     _upsert_interactive_session_attempt,
 )
 from eawf.workflow.lifecycle.wave import compute_runtime_delta
@@ -468,3 +470,59 @@ def test_a_session_that_captured_nothing_is_not_counted_as_folded() -> None:
     # count must not pretend otherwise.
     assert wave.runtime_carry.api_duration_ms == 0
     assert wave.runtime_carry.sessions_folded == 0
+
+
+# --- P30-I25-W37: a backwards counter must never strand a wave --------------
+
+
+def test_regressed_counters_reorigin_instead_of_stranding_the_wave() -> None:
+    """A counter that goes backwards in the SAME session is a source reset.
+
+    P30-I25 hit this for real: W34 changed the duration basis (wall clock ->
+    agent work time) while W35 and W36 were CLAIMED against baselines recorded
+    under the old basis. Their next capture read ~18M ms against a ~66M ms
+    baseline -- a backwards counter, which the close path raised on. The baseline
+    lives on disk, so every retry raised again: the waves were unclosable forever,
+    by their own fix.
+    """
+    wave = _wave(
+        runtime_baseline=_baseline("sess-a", api_duration_ms=66_000_000, output_tokens=250_000),
+    )
+    # The basis changes under the wave: the same session now measures far less.
+    incoming = _latest("sess-a", api_duration_ms=18_000_000, output_tokens=250_000)
+
+    assert _counters_regressed(wave.runtime_baseline, incoming) is True
+    _reorigin_on_reset(wave, incoming)
+
+    assert wave.runtime_baseline is not None
+    # The origin moves to the regressed counters; the wave keeps measuring forward.
+    assert wave.runtime_baseline.api_duration_ms == 18_000_000
+    assert wave.runtime_latest is None
+
+
+def test_a_wave_stranded_by_a_basis_change_still_closes() -> None:
+    """The close must degrade to a zero delta, never raise and strand the wave."""
+    wave = _wave(
+        runtime_baseline=_baseline("sess-a", api_duration_ms=66_000_000),
+        runtime_latest=_latest("sess-a", api_duration_ms=18_000_000),
+    )
+
+    delta = compute_runtime_delta(
+        wave.runtime_baseline,
+        wave.runtime_latest,
+        carry=wave.runtime_carry,
+        eu_minutes=_EU_MINUTES,
+    )
+
+    # A bad measurement (zero runtime recorded) beats a broken workflow (a wave
+    # that can never be closed by any means).
+    assert delta is not None
+    assert delta.api_duration_ms == 0
+    assert delta.elapsed_eu == 0.0
+
+
+def test_forward_counters_are_untouched_by_the_reset_guard() -> None:
+    baseline = _baseline("sess-a", api_duration_ms=1_000, output_tokens=10)
+    incoming = _latest("sess-a", api_duration_ms=5_000, output_tokens=40)
+
+    assert _counters_regressed(baseline, incoming) is False

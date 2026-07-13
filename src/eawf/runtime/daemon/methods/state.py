@@ -2819,6 +2819,47 @@ def _fold_finished_session(
     return base.model_copy(update=folded)
 
 
+def _counters_regressed(baseline: RuntimeBaseline, incoming: RuntimeLatest) -> bool:
+    """Return whether *incoming* sits below *baseline* on any comparable counter.
+
+    Cumulative counters only ever grow, so a drop means the SOURCE changed under
+    the wave, not that work was undone: the transcript was truncated, the counter
+    reset, or -- as happened in P30-I25 -- the duration basis itself changed while
+    waves were claimed against baselines recorded under the old one.
+    """
+    for field in _RUNTIME_COUNTER_FIELDS:
+        base_value = getattr(baseline, field)
+        new_value = getattr(incoming, field)
+        if base_value is not None and new_value is not None and new_value < base_value:
+            return True
+    return False
+
+
+def _reorigin_on_reset(wave: Wave, incoming: RuntimeLatest) -> None:
+    """Re-origin the baseline on regressed counters so the wave stays measurable.
+
+    The alternative is what the close path used to do: raise on the backwards
+    counter, which strands the wave FOREVER -- no retry can help, because the
+    baseline is on disk and every future capture compares against it. The runtime
+    the old basis measured cannot be recovered, so it is dropped (loudly); what
+    matters is that the wave stays closable and keeps measuring forward.
+    """
+    baseline = wave.runtime_baseline
+    if baseline is None:
+        return
+    logger.warning(
+        f"reorigin_on_counter_reset wave={wave.id} session={incoming.session_id!r} "
+        f"baseline_api_duration_ms={baseline.api_duration_ms!r} "
+        f"incoming_api_duration_ms={incoming.api_duration_ms!r}; "
+        "counters regressed (source reset or basis change) -- re-originating"
+    )
+    wave.runtime_baseline = baseline.model_copy(
+        update={field: getattr(incoming, field) or 0 for field in _RUNTIME_COUNTER_FIELDS}
+        | {"captured_at": datetime.now(UTC)}
+    )
+    wave.runtime_latest = None
+
+
 def _rebase_for_session(wave: Wave, incoming: RuntimeLatest, session_id: str | None) -> None:
     """Rebase the wave's runtime snapshots onto *session_id*'s counter origin.
 
@@ -3235,6 +3276,13 @@ async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[st
                 # total into runtime_carry, and re-originating on THIS session's
                 # counters) before merging this session's snapshot in.
                 _rebase_for_session(wave, latest, args.session_id)
+                # Same session, but the counters went BACKWARDS: the source reset
+                # or the basis changed under the wave. Re-origin rather than let
+                # the close path raise on it forever.
+                if wave.runtime_baseline is not None and _counters_regressed(
+                    wave.runtime_baseline, latest
+                ):
+                    _reorigin_on_reset(wave, latest)
                 wave.runtime_latest = _merge_runtime_latest(wave.runtime_latest, latest)
                 # The interactive-Claude lifecycle mints no SessionAttempt on
                 # its own (only the headless spawn does); record one here off the

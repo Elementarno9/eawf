@@ -507,13 +507,28 @@ def test_eu_basis_tokens_uses_token_delta() -> None:
     assert delta.agent_runtime_eu == pytest.approx(delta.elapsed_eu)
 
 
-def test_compute_runtime_delta_latest_below_baseline_raises() -> None:
+def test_compute_runtime_delta_latest_below_baseline_degrades_never_strands() -> None:
+    """A backwards counter must NOT raise: raising strands the wave forever.
+
+    This used to raise ``LifecycleError``. But the baseline lives on disk, so every
+    retry of the close compared against it and raised again -- no operator action
+    could clear it. P30-I25 hit this for real: W34 changed the duration basis while
+    waves were CLAIMED against baselines recorded under the old one, and those waves
+    became permanently unclosable by their own fix.
+
+    A wave that under-reports its runtime is a bad measurement. A wave that can
+    never close is a broken workflow. So the delta degrades to zero (loudly) and
+    the capture path re-origins on the reset (P30-I25-W37).
+    """
     captured_at = datetime.now(UTC)
     baseline = RuntimeBaseline(api_duration_ms=5000, captured_at=captured_at)
     latest = RuntimeLatest(api_duration_ms=4999, captured_at=captured_at)
 
-    with pytest.raises(LifecycleError, match="api_duration_ms"):
-        compute_runtime_delta(baseline, latest, eu_minutes=30.0)
+    delta = compute_runtime_delta(baseline, latest, eu_minutes=30.0)
+
+    assert delta is not None
+    assert delta.api_duration_ms == 0
+    assert delta.elapsed_eu == 0.0
 
 
 def test_close_wave_tokens_consumed_param_sets_final_tally() -> None:

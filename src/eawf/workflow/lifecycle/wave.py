@@ -182,15 +182,29 @@ def _counter_delta(
     baseline_value: int | float | None,
     latest_value: int | float | None,
 ) -> int | float | None:
-    """Return a non-negative counter delta, or ``None`` when either side is absent."""
+    """Return a non-negative counter delta, or ``None`` when either side is absent.
+
+    A backwards counter used to RAISE here, which stranded the wave: the baseline
+    lives on disk, so every retry of the close compared against it and raised
+    again, and no operator action could clear it. (P30-I25 hit this for real --
+    W34 changed the duration basis while waves were claimed against baselines
+    recorded under the old one, making them permanently unclosable.)
+
+    The capture path re-origins on a regressed counter so this should not arise;
+    when it does anyway, degrade to a zero delta and say so loudly. A wave that
+    under-reports its runtime is a bad measurement. A wave that can never close is
+    a broken workflow.
+    """
     if baseline_value is None or latest_value is None:
         return None
     delta = latest_value - baseline_value
     if delta < 0:
-        raise LifecycleError(
-            f"runtime counter {field_name} decreased: "
-            f"baseline={baseline_value!r} latest={latest_value!r}"
+        logger.warning(
+            f"_counter_delta field={field_name} baseline={baseline_value!r} "
+            f"latest={latest_value!r} delta=0 status='regressed'; "
+            "counter source reset or basis changed -- recording no runtime for it"
         )
+        return 0
     return delta
 
 
