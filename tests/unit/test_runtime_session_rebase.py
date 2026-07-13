@@ -572,12 +572,29 @@ def test_the_same_measure_growing_is_ordinary_work() -> None:
     assert _counters_incomparable(baseline, incoming) is False
 
 
-def test_an_unversioned_baseline_still_compares_on_the_numbers() -> None:
-    """A snapshot predating the version field falls back to the direction check."""
-    baseline = _baseline("sess-a", api_duration_ms=1_000)
-    forward = _latest("sess-a", api_duration_ms=5_000).model_copy(update={"measure_version": 3})
-    backward = _latest("sess-a", api_duration_ms=500).model_copy(update={"measure_version": 3})
+def test_an_unversioned_baseline_is_not_a_matching_one() -> None:
+    """An unversioned baseline came from SOME earlier measure -- which one is unknown.
+
+    Treating unknown as "same" is exactly what let the gap-heuristic baselines
+    survive the turn-span change: they carried no version, the new capture carried
+    3, the numbers rose, and 13 hours per wave was banked as work. Unknown is the
+    one thing that is definitely not known to match.
+    """
+    baseline = _baseline("sess-a", api_duration_ms=22_600_279)
+    incoming = _latest("sess-a", api_duration_ms=69_676_393).model_copy(
+        update={"measure_version": 3}
+    )
 
     assert baseline.measure_version is None
+    assert incoming.api_duration_ms > baseline.api_duration_ms  # nothing "went backwards"
+    assert _counters_incomparable(baseline, incoming) is True
+
+
+def test_two_unversioned_snapshots_fall_back_to_the_numbers() -> None:
+    """The statusline path declares no measure at all -- compare as before."""
+    baseline = _baseline("sess-a", api_duration_ms=1_000)
+    forward = _latest("sess-a", api_duration_ms=5_000)
+    backward = _latest("sess-a", api_duration_ms=500)
+
     assert _counters_incomparable(baseline, forward) is False
     assert _counters_incomparable(baseline, backward) is True

@@ -2869,7 +2869,13 @@ def _counters_incomparable(baseline: RuntimeBaseline, incoming: RuntimeLatest) -
     """
     base_version = baseline.measure_version
     new_version = incoming.measure_version
-    if base_version is not None and new_version is not None and base_version != new_version:
+    if base_version != new_version and not (base_version is None and new_version is None):
+        # An UNVERSIONED baseline is not a matching one -- it was produced by some
+        # earlier definition of the counters, and which one is exactly the fact
+        # nobody recorded. Treating unknown as "same" is what let the gap-heuristic
+        # baselines survive the turn-span change and bank 13 hours apiece. Two
+        # unversioned snapshots (the statusline path, which declares no measure at
+        # all) still fall through to the direction check below.
         return True
     for field in _RUNTIME_COUNTER_FIELDS:
         base_value = getattr(baseline, field)
