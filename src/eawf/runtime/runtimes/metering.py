@@ -99,6 +99,7 @@ __all__ = [
     "MeteredCost",
     "meter_and_emit",
     "price_spawn_result",
+    "price_token_counts",
 ]
 
 
@@ -164,12 +165,78 @@ def _price_tokens(result: SpawnResult, pricing: ModelPricing) -> Decimal:
     Returns:
         The exact token-derived cost in USD.
     """
+    return _sum_token_cost(
+        pricing,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        cache_creation_5m_input_tokens=result.cache_creation_5m_input_tokens,
+        cache_creation_1h_input_tokens=result.cache_creation_1h_input_tokens,
+        cache_read_input_tokens=result.cache_read_input_tokens,
+    )
+
+
+def _sum_token_cost(
+    pricing: ModelPricing,
+    *,
+    input_tokens: int,
+    output_tokens: int,
+    cache_creation_5m_input_tokens: int,
+    cache_creation_1h_input_tokens: int,
+    cache_read_input_tokens: int,
+) -> Decimal:
+    """Sum per-class token counts against *pricing* into an exact USD cost."""
     return (
-        result.input_tokens * pricing.input_per_token
-        + result.output_tokens * pricing.output_per_token
-        + result.cache_creation_5m_input_tokens * pricing.cache_write_5m_per_token
-        + result.cache_creation_1h_input_tokens * pricing.cache_write_1h_per_token
-        + result.cache_read_input_tokens * pricing.cache_read_per_token
+        input_tokens * pricing.input_per_token
+        + output_tokens * pricing.output_per_token
+        + cache_creation_5m_input_tokens * pricing.cache_write_5m_per_token
+        + cache_creation_1h_input_tokens * pricing.cache_write_1h_per_token
+        + cache_read_input_tokens * pricing.cache_read_per_token
+    )
+
+
+def price_token_counts(
+    model: str,
+    *,
+    input_tokens: int,
+    output_tokens: int,
+    cache_creation_5m_input_tokens: int,
+    cache_creation_1h_input_tokens: int,
+    cache_read_input_tokens: int,
+) -> Decimal | None:
+    """Price bare per-class token counts for *model*, or ``None`` when unpriceable.
+
+    The spawn-free counterpart of :func:`price_spawn_result`: the interactive
+    Claude path has no :class:`SpawnResult` to price -- it aggregates its token
+    tallies out of the session transcript -- but must bill them against the same
+    Decimal table so interactive and headless cost attribution agree.
+
+    Args:
+        model: Model id to resolve a pricing row for (exact match, then
+            longest-prefix alias fallback).
+        input_tokens: Non-cached input tokens.
+        output_tokens: Output tokens.
+        cache_creation_5m_input_tokens: Prompt-cache write tokens at the
+            5-minute TTL rate.
+        cache_creation_1h_input_tokens: Prompt-cache write tokens at the 1-hour
+            TTL rate.
+        cache_read_input_tokens: Prompt-cache read tokens.
+
+    Returns:
+        The exact token-derived cost in USD, or ``None`` when no pricing row
+        matches *model* -- so the caller records a null cost rather than a
+        fabricated ``$0``.
+    """
+    pricing = lookup_pricing(model)
+    if pricing is None:
+        logger.warning(f"price_token_counts model={model!r} pricing=unresolved cost_usd=none")
+        return None
+    return _sum_token_cost(
+        pricing,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cache_creation_5m_input_tokens=cache_creation_5m_input_tokens,
+        cache_creation_1h_input_tokens=cache_creation_1h_input_tokens,
+        cache_read_input_tokens=cache_read_input_tokens,
     )
 
 

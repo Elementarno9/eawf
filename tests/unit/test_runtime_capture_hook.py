@@ -105,7 +105,7 @@ def test_session_end_capture_hook_invokes_runtime_capture_rpc() -> None:
     ]
 
 
-def test_session_end_capture_hook_missing_cost_makes_no_rpc_call() -> None:
+def test_session_end_capture_hook_without_counters_makes_no_rpc_call() -> None:
     client = _RecordingClient()
     runner = HookRunner()
     register_runtime_capture_hooks(runner, daemon_client_factory=lambda: client)
@@ -114,7 +114,7 @@ def test_session_end_capture_hook_missing_cost_makes_no_rpc_call() -> None:
 
     assert client.calls == []
     assert results[0].block is False
-    assert results[0].output == "runtime.capture skipped: no cost block"
+    assert results[0].output == "runtime.capture skipped: no usable counters"
 
 
 def test_session_end_capture_hook_daemon_error_is_non_blocking() -> None:

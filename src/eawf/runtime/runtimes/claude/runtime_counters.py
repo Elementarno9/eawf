@@ -5,6 +5,15 @@ last-call token figures under ``context_window.current_usage``. This module
 normalises that runtime-owned shape into a small typed model while degrading
 like the statusline token helpers: absent or wrong-typed fields are omitted
 rather than raising.
+
+The ``cost`` block is *statusline* data. Claude Code's hook payloads carry no
+such block, so this parser is not the counter source on the hook path -- see
+:mod:`eawf.runtime.runtimes.claude.transcript_counters`, which aggregates the
+session transcript the Stop payload points at. Parsing is therefore gated on
+finding at least one **usable** counter (a duration, a cost, or a token tally)
+rather than on the presence of a ``cost`` mapping: EU is derived from duration,
+not cost, so a payload carrying duration but no cost still has runtime worth
+capturing.
 """
 
 from __future__ import annotations
@@ -18,6 +27,21 @@ from pydantic import BaseModel, ConfigDict, Field
 #: Claude Code statusline / SessionEnd payload, so the harness is always Claude
 #: Code; the model id is read per-payload off ``model`` (see :func:`_model_id`).
 _HARNESS_ID = "claude-code"
+
+#: The measured fields that make a parse worth capturing. ``harness`` / ``model``
+#: are attribution, not measurement, so a payload yielding only those is treated
+#: as carrying no counters at all.
+_COUNTER_FIELDS = frozenset(
+    {
+        "api_duration_ms",
+        "total_duration_ms",
+        "cost_usd",
+        "input_tokens",
+        "output_tokens",
+        "cache_creation_input_tokens",
+        "cache_read_input_tokens",
+    }
+)
 
 
 class RuntimeCounters(BaseModel):
@@ -113,21 +137,22 @@ def _model_id(claude_payload: dict[str, Any]) -> str | None:
 
 
 def parse_runtime_counters(claude_payload: dict[str, Any]) -> RuntimeCounters | None:
-    """Parse Claude Code runtime counters, returning ``None`` without a cost block.
+    """Parse Claude Code runtime counters, returning ``None`` without usable counters.
 
     Args:
         claude_payload: Decoded Claude Code statusline/hook payload.
 
     Returns:
-        Parsed :class:`RuntimeCounters` when ``payload["cost"]`` is a mapping,
-        otherwise ``None``. The ``harness`` attribution is always stamped
+        Parsed :class:`RuntimeCounters` when the payload yields at least one
+        usable counter -- a duration, a cost, or a token tally -- otherwise
+        ``None``. The ``harness`` attribution is always stamped
         (``"claude-code"``) and the ``model`` id is read off the payload when
-        present. Wrong-typed fields are omitted, not raised.
+        present, but attribution alone is not a counter: a payload carrying only
+        a model id yields ``None`` so the caller degrades rather than capturing
+        an empty snapshot. Wrong-typed fields are omitted, not raised.
     """
     cost = claude_payload.get("cost")
-    if not isinstance(cost, dict):
-        return None
-
+    cost_block = cost if isinstance(cost, dict) else {}
     current_usage = _current_usage_block(claude_payload)
     data: dict[str, int | Decimal | str] = {"harness": _HARNESS_ID}
 
@@ -135,15 +160,15 @@ def parse_runtime_counters(claude_payload: dict[str, Any]) -> RuntimeCounters | 
     if model_id is not None:
         data["model"] = model_id
 
-    api_duration_ms = _first_int(cost, "api_duration_ms", "total_api_duration_ms")
+    api_duration_ms = _first_int(cost_block, "api_duration_ms", "total_api_duration_ms")
     if api_duration_ms is not None:
         data["api_duration_ms"] = api_duration_ms
 
-    total_duration_ms = _first_int(cost, "total_duration_ms")
+    total_duration_ms = _first_int(cost_block, "total_duration_ms")
     if total_duration_ms is not None:
         data["total_duration_ms"] = total_duration_ms
 
-    cost_usd = _first_decimal(cost, "cost_usd", "total_cost_usd")
+    cost_usd = _first_decimal(cost_block, "cost_usd", "total_cost_usd")
     if cost_usd is not None:
         data["cost_usd"] = cost_usd
 
@@ -157,6 +182,8 @@ def parse_runtime_counters(claude_payload: dict[str, Any]) -> RuntimeCounters | 
         if value is not None:
             data[field_name] = value
 
+    if not _COUNTER_FIELDS & data.keys():
+        return None
     return RuntimeCounters.model_validate(data)
 
 

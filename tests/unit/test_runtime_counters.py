@@ -81,11 +81,27 @@ def test_parse_runtime_counters_accepts_canonical_cost_aliases() -> None:
     assert counters.output_tokens == 5
 
 
-def test_parse_runtime_counters_missing_cost_returns_none() -> None:
+def test_parse_runtime_counters_no_usable_counter_returns_none() -> None:
     assert parse_runtime_counters({}) is None
-    assert (
-        parse_runtime_counters({"context_window": {"current_usage": {"input_tokens": 1}}}) is None
-    )
+    # Attribution without measurement is not a capture: a payload carrying only
+    # a model id yields no counters.
+    assert parse_runtime_counters({"model": "claude-opus-4-8"}) is None
+    # An empty cost block used to be enough to "capture" (an all-null snapshot).
+    assert parse_runtime_counters({"cost": {}}) is None
+
+
+def test_parse_runtime_counters_captures_without_a_cost_block() -> None:
+    """EU derives from duration, not cost, so a cost-free payload still captures.
+
+    The old gate required ``payload["cost"]`` to be a mapping, which the real
+    Claude hook payload never carries -- capture was skipped on every session.
+    """
+    counters = parse_runtime_counters({"context_window": {"current_usage": {"input_tokens": 1}}})
+
+    assert counters is not None
+    assert counters.input_tokens == 1
+    assert counters.cost_usd is None
+    assert counters.harness == "claude-code"
 
 
 def test_runtime_counters_rejects_unknown_keys() -> None:

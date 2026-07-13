@@ -30,13 +30,16 @@ import time
 from collections.abc import Callable, Iterable
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import orjson
 from pydantic import BaseModel, ConfigDict
 
 from eawf.runtime.hooks.event import HookEvent, HookEventType
 from eawf.runtime.lock import portalock
+
+if TYPE_CHECKING:
+    from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
 
 logger = logging.getLogger(__name__)
 
@@ -188,13 +191,16 @@ def _session_end_payload(event: HookEvent) -> dict[str, Any]:
 def _coerce_cost_usd_string(raw: Any) -> Decimal | None:
     """Return a string ``cost_usd`` (e.g. ``"0.82"``) as a non-negative Decimal.
 
-    Claude Code's Stop / SessionEnd / SubagentStop hook stdin ships ``cost_usd``
-    as a JSON string, whereas the statusline parser
+    Claude Code's Stop / SessionEnd / SubagentStop hook stdin carries **no** cost
+    block at all -- the counters live in the session transcript the payload
+    points at (see :func:`_transcript_counters`). This coercion exists for the
+    statusline-shaped payloads a wrapper may forward instead, where ``cost_usd``
+    can arrive as a JSON string while
     :func:`~eawf.runtime.runtimes.claude.runtime_counters.parse_runtime_counters`
-    only accepts a numeric ``cost_usd``. Returning a :class:`~decimal.Decimal`
-    keeps the value exact through the parser without touching the statusline
-    contract. A non-string, malformed, non-finite, or negative value yields
-    ``None`` so the field is dropped rather than crashing the fail-open hook.
+    accepts only a numeric value. Returning a :class:`~decimal.Decimal` keeps the
+    value exact through the parser without touching the statusline contract. A
+    non-string, malformed, non-finite, or negative value yields ``None`` so the
+    field is dropped rather than crashing the fail-open hook.
     """
     if not isinstance(raw, str):
         return None
@@ -208,11 +214,13 @@ def _coerce_cost_usd_string(raw: Any) -> Decimal | None:
 
 
 def _normalise_claude_hook_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Adapt a real Claude Code hook stdin payload to the statusline parser shape.
+    """Adapt a counter-carrying hook stdin payload to the statusline parser shape.
 
-    Claude Code delivers hook input on stdin (per the hooks reference): the
-    Stop / SessionEnd / SubagentStop payloads carry token usage under a flat
-    ``usage`` block and a string ``cost_usd`` inside ``cost``, while
+    This is the *fallback* counter path. A real Claude Code Stop / SessionEnd /
+    SubagentStop payload carries neither ``cost`` nor ``usage`` -- its counters
+    are read from the transcript instead (:func:`_transcript_counters`) -- but a
+    forwarding wrapper may hand the hook a payload that does carry a flat
+    ``usage`` block or a string ``cost_usd`` inside ``cost``, while
     :func:`~eawf.runtime.runtimes.claude.runtime_counters.parse_runtime_counters`
     was built against the statusline shape (tokens under
     ``context_window.current_usage``, a numeric ``cost_usd``). This adapter
@@ -246,6 +254,23 @@ def _normalise_claude_hook_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return normalised
 
 
+def _transcript_counters(payload: dict[str, Any]) -> RuntimeCounters | None:
+    """Aggregate the session transcript *payload* points at, when it has one.
+
+    The Stop / SessionEnd payload's ``transcript_path`` is where Claude Code's
+    runtime facts actually live (token usage, turn durations, the billed model
+    id). Reading it is therefore the primary counter source; a payload without a
+    usable ``transcript_path`` yields ``None`` and the caller falls back to the
+    statusline-shaped parse.
+    """
+    from eawf.runtime.runtimes.claude.transcript_counters import aggregate_transcript_counters
+
+    raw = payload.get("transcript_path")
+    if not isinstance(raw, str) or not raw:
+        return None
+    return aggregate_transcript_counters(raw)
+
+
 def capture_runtime_on_session_end(
     event: HookEvent,
     *,
@@ -254,19 +279,24 @@ def capture_runtime_on_session_end(
 ) -> HookResult:
     """Forward parsed SESSION_END runtime counters to ``runtime.capture``.
 
-    The hook never blocks the source runtime. Missing cost data is a clean
-    no-op; daemon failures are surfaced in a non-blocking result so Claude's
-    Stop hook degrades like the statusline path.
+    Counters come from the session transcript the payload points at, falling
+    back to a statusline-shaped parse of the payload itself. The hook never
+    blocks the source runtime: a payload with no usable counter (no readable
+    transcript and no statusline block) is a clean no-op, and daemon failures
+    are surfaced in a non-blocking result so Claude's Stop hook degrades like the
+    statusline path.
     """
     from eawf.runtime.runtimes.claude.runtime_counters import parse_runtime_counters
 
     payload = _session_end_payload(event)
-    counters = parse_runtime_counters(_normalise_claude_hook_payload(payload))
+    counters = _transcript_counters(payload) or parse_runtime_counters(
+        _normalise_claude_hook_payload(payload)
+    )
     if counters is None:
         return HookResult(
             name="runtime.capture",
             block=False,
-            output="runtime.capture skipped: no cost block",
+            output="runtime.capture skipped: no usable counters",
         )
 
     params = counters.model_dump(mode="json")

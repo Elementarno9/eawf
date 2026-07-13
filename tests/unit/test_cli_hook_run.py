@@ -114,7 +114,7 @@ def test_hook_run_with_payload_folds_into_payloads_key() -> None:
     assert env.body["scope_id"] == ""
 
 
-def test_hook_run_session_end_without_cost_is_nonblocking() -> None:
+def test_hook_run_session_end_without_counters_is_nonblocking() -> None:
     payload = {"hook_event_name": "Stop", "session_id": "session-1"}
     result = runner.invoke(app, ["hook", "run", "session_end"], input=json.dumps(payload))
 
@@ -123,7 +123,7 @@ def test_hook_run_session_end_without_cost_is_nonblocking() -> None:
     assert isinstance(env.body, dict)
     assert env.body["blocked"] is False
     assert env.body["results"][0]["name"] == "runtime.capture"
-    assert env.body["results"][0]["output"] == "runtime.capture skipped: no cost block"
+    assert env.body["results"][0]["output"] == "runtime.capture skipped: no usable counters"
 
 
 def test_hook_run_unknown_event_type_returns_invalid_input() -> None:
