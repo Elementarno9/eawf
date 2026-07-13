@@ -11031,6 +11031,34 @@
       "scope_id": "P30-I25-W31",
       "status": "done",
       "updated_at": "2026-07-13T01:56:42.465497Z"
+    },
+    "P30-I25-W32": {
+      "actual_cost_usd": 19.211069000000002,
+      "actual_tokens": 95851,
+      "agent_runtime_eu": 1.3022411111111112,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W32",
+      "elapsed_eu": 1.3022411111111112,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W32",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W32",
+      "status": "done",
+      "updated_at": "2026-07-13T04:10:24.287185Z"
+    },
+    "P30-I25-W33": {
+      "actual_cost_usd": 8.308736500000009,
+      "actual_tokens": 39265,
+      "agent_runtime_eu": 0.563005,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W33",
+      "elapsed_eu": 0.563005,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W33",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W33",
+      "status": "done",
+      "updated_at": "2026-07-13T04:13:31.747516Z"
     }
   },
   "agent_sessions": {
@@ -14705,10 +14733,7 @@
     "active_session_ids": [
       "SES-20260713T035217Z-auditor-claude-code"
     ],
-    "active_wave_ids": [
-      "P30-I25-W32",
-      "P30-I25-W33"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I25",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -31393,7 +31418,7 @@
   "schema_version": "1.15",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-13T04:00:28.476476Z",
+  "updated_at": "2026-07-13T04:13:31.749026Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -126807,7 +126832,7 @@
       "blocks": [],
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T03:23:31.947722Z",
-      "closed_at": null,
+      "closed_at": "2026-07-13T04:10:24.287185Z",
       "commit": null,
       "criteria_floor_waiver": {
         "reason": "Reactive fix wave appended mid-iter after the W29 close deadlocked on a 600s auditor timeout and an auditor pre-commit run discarded uncommitted edits",
@@ -126839,7 +126864,7 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-13T03:23:17.199192Z",
-      "outcome": null,
+      "outcome": "Close auditor takes the configured wall clock; auditor prompt forbids tree-mutating verification (pre-commit stash rollback)",
       "runtime_baseline": {
         "api_duration_ms": 12422511,
         "cache_creation_input_tokens": 423025,
@@ -126855,29 +126880,29 @@
       },
       "runtime_carry": null,
       "runtime_latest": {
-        "api_duration_ms": 12815196,
-        "cache_creation_input_tokens": 441308,
-        "cache_read_input_tokens": 117620119,
-        "captured_at": "2026-07-13T03:29:58.223665Z",
-        "cost_usd": 68.6829295,
+        "api_duration_ms": 14766545,
+        "cache_creation_input_tokens": 487992,
+        "cache_read_input_tokens": 138247738,
+        "captured_at": "2026-07-13T04:02:29.598433Z",
+        "cost_usd": 79.971399,
         "harness": "claude-code",
-        "input_tokens": 798,
+        "input_tokens": 882,
         "model": "claude-opus-4-8",
-        "output_tokens": 218232,
+        "output_tokens": 238528,
         "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
-        "total_duration_ms": 12815196
+        "total_duration_ms": 14766545
       },
       "runtime_preference": null,
       "sessions": {
         "1": {
           "attempt": 1,
-          "cache_creation_input_tokens": 18283,
-          "cache_read_input_tokens": 14956979,
-          "cost_usd": 7.922599499999997,
-          "ended_at": "2026-07-13T03:29:58.223665Z",
+          "cache_creation_input_tokens": 64967,
+          "cache_read_input_tokens": 35584598,
+          "cost_usd": 19.211069000000002,
+          "ended_at": "2026-07-13T04:02:29.598433Z",
           "exit_status": 0,
-          "input_tokens": 66,
-          "output_tokens": 10438,
+          "input_tokens": 150,
+          "output_tokens": 30734,
           "runtime": "claude-code",
           "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
           "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
@@ -126885,7 +126910,7 @@
           "subprocess_pid": null
         }
       },
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -126946,7 +126971,7 @@
       ],
       "title": "Stop the close auditor timing out and stashing the live tree",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 95851,
       "worktree_id": null
     },
     "P30-I25-W33": {
@@ -126954,7 +126979,7 @@
       "blocks": [],
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T03:45:42.666160Z",
-      "closed_at": null,
+      "closed_at": "2026-07-13T04:13:31.747516Z",
       "commit": null,
       "criteria_floor_waiver": {
         "reason": "Reactive fix wave appended mid-iter after the W29 close failed on a float confidence and the operator saw no running agent in the Watch roster",
@@ -126985,7 +127010,7 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-13T03:45:34.330766Z",
-      "outcome": null,
+      "outcome": "Numeric confidence coerced to its enum bucket + prompt names allowed values; close-path auditor session persisted at registration so Watch shows it live",
       "runtime_baseline": {
         "api_duration_ms": 13753136,
         "cache_creation_input_tokens": 462836,
@@ -127000,10 +127025,38 @@
         "total_duration_ms": 13753136
       },
       "runtime_carry": null,
-      "runtime_latest": null,
+      "runtime_latest": {
+        "api_duration_ms": 14766545,
+        "cache_creation_input_tokens": 487992,
+        "cache_read_input_tokens": 138247738,
+        "captured_at": "2026-07-13T04:02:29.598433Z",
+        "cost_usd": 79.971399,
+        "harness": "claude-code",
+        "input_tokens": 882,
+        "model": "claude-opus-4-8",
+        "output_tokens": 238528,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 14766545
+      },
       "runtime_preference": null,
-      "sessions": {},
-      "status": "claimed",
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "cache_creation_input_tokens": 25156,
+          "cache_read_input_tokens": 15411383,
+          "cost_usd": 8.308736500000009,
+          "ended_at": "2026-07-13T04:02:29.598433Z",
+          "exit_status": 0,
+          "input_tokens": 62,
+          "output_tokens": 14047,
+          "runtime": "claude-code",
+          "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "started_at": "2026-07-13T03:45:42.710018Z",
+          "subprocess_pid": null
+        }
+      },
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -127064,7 +127117,7 @@
       ],
       "title": "Unblock the verdict on a numeric confidence and show the live auditor",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 39265,
       "worktree_id": null
     }
   },
