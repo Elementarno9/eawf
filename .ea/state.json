@@ -11234,14 +11234,14 @@
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-07-13T00:48:32.311582Z",
       "id": "SES-20260713T003509Z-operator-claude",
       "role": "operator",
       "runtime": "claude",
       "scope_id": "P30-I25-W25",
       "started_at": "2026-07-13T00:35:09.311818Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -14590,12 +14590,11 @@
   },
   "claims": null,
   "current": {
-    "active_session_ids": [
-      "SES-20260713T003509Z-operator-claude"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [
       "P30-I25-W26",
-      "P30-I25-W28"
+      "P30-I25-W28",
+      "P30-I25-W30"
     ],
     "iter_id": "P30-I25",
     "phase_id": "P30",
@@ -27494,6 +27493,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I25-W28",
       "updated_at": "2026-07-13T00:36:02.797594Z"
+    },
+    "P30-I25-W30": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W30-bucket-20260713T004440Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I25-W30",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I25-W30",
+      "updated_at": "2026-07-13T00:44:40.155766Z"
     }
   },
   "fleet_run": null,
@@ -30061,7 +30073,8 @@
         "P30-I25-W26",
         "P30-I25-W27",
         "P30-I25-W28",
-        "P30-I25-W29"
+        "P30-I25-W29",
+        "P30-I25-W30"
       ]
     }
   },
@@ -31199,7 +31212,7 @@
   "schema_version": "1.15",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-13T00:36:02.797869Z",
+  "updated_at": "2026-07-13T00:44:40.156021Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -125088,7 +125101,8 @@
       "blocks": [
         "P30-I25-W26",
         "P30-I25-W27",
-        "P30-I25-W29"
+        "P30-I25-W29",
+        "P30-I25-W30"
       ],
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T00:01:19.313723Z",
@@ -125507,9 +125521,37 @@
         "total_duration_ms": 0
       },
       "runtime_carry": null,
-      "runtime_latest": null,
+      "runtime_latest": {
+        "api_duration_ms": 0,
+        "cache_creation_input_tokens": 274677,
+        "cache_read_input_tokens": 40379281,
+        "captured_at": "2026-07-13T00:37:04.629763Z",
+        "cost_usd": 25.8490905,
+        "harness": "claude-code",
+        "input_tokens": 396,
+        "model": "claude-opus-4-8",
+        "output_tokens": 116428,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 0
+      },
       "runtime_preference": null,
-      "sessions": {},
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "cache_creation_input_tokens": 274677,
+          "cache_read_input_tokens": 40379281,
+          "cost_usd": 25.8490905,
+          "ended_at": "2026-07-13T00:37:04.629763Z",
+          "exit_status": 0,
+          "input_tokens": 396,
+          "output_tokens": 116428,
+          "runtime": "claude-code",
+          "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "started_at": "2026-07-13T00:37:04.629763Z",
+          "subprocess_pid": null
+        }
+      },
       "status": "claimed",
       "success_criteria": [
         {
@@ -125884,9 +125926,37 @@
         "total_duration_ms": 0
       },
       "runtime_carry": null,
-      "runtime_latest": null,
+      "runtime_latest": {
+        "api_duration_ms": 0,
+        "cache_creation_input_tokens": 274677,
+        "cache_read_input_tokens": 40379281,
+        "captured_at": "2026-07-13T00:37:04.629763Z",
+        "cost_usd": 25.8490905,
+        "harness": "claude-code",
+        "input_tokens": 396,
+        "model": "claude-opus-4-8",
+        "output_tokens": 116428,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 0
+      },
       "runtime_preference": null,
-      "sessions": {},
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "cache_creation_input_tokens": 274677,
+          "cache_read_input_tokens": 40379281,
+          "cost_usd": 25.8490905,
+          "ended_at": "2026-07-13T00:37:04.629763Z",
+          "exit_status": 0,
+          "input_tokens": 396,
+          "output_tokens": 116428,
+          "runtime": "claude-code",
+          "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "started_at": "2026-07-13T00:37:04.629763Z",
+          "subprocess_pid": null
+        }
+      },
       "status": "claimed",
       "success_criteria": [
         {
@@ -126185,6 +126255,111 @@
         }
       ],
       "title": "Verify EU capture live across a real Stop boundary",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W30": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T00:44:40.140868Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Reactive fix wave appended mid-iter after the live Stop-boundary run exposed the racing turn_duration row",
+        "waived_at": "2026-07-13T00:44:34.824355Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I25-W25"
+      ],
+      "description": "The Stop hook races the turn_duration row: at capture time the transcript carries no durationMs row yet so the captured duration is 0 and the API_DURATION basis still yields elapsed_eu=0. Derive duration from the transcript timestamp span and keep the turn-duration sum as a floor.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+        "tests/unit/test_transcript_counters.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W30",
+      "intent": {
+        "desired_outcome": "A wave closed across a Stop boundary records a nonzero elapsed_eu under the default API_DURATION basis",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-13-p30-i25-eu-capture-fix.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "W25-W27 restored token and cost capture but the EU basis is duration; without a duration source the zero-EU close gate still blocks every interactive close",
+        "problem": "Captured runtime duration is 0 on the interactive path because the Stop hook reads the transcript before the turn_duration row lands",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-13T00:44:34.866649Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 2441500,
+        "cache_creation_input_tokens": 287644,
+        "cache_read_input_tokens": 44007272,
+        "captured_at": "2026-07-13T00:44:40.155742Z",
+        "cost_usd": 28.014551,
+        "harness": "claude-code",
+        "input_tokens": 420,
+        "model": "claude-opus-4-8",
+        "output_tokens": 125295,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 2441500
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The transcript aggregator derives duration from the row timestamp span so a capture taken before the turn_duration row is flushed still reports a nonzero duration",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The transcript aggregator derives duration from the row timestamp span so a capture taken before the turn_duration row is flushed still reports a nonzero duration",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "Duration stays monotonic within a session (the max of the turn-duration sum and the timestamp span) so a later capture never reports a smaller duration and the close-time delta never goes backwards",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Duration stays monotonic within a session (the max of the turn-duration sum and the timestamp span) so a later capture never reports a smaller duration and the close-time delta never goes backwards",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "A wave claimed and closed across a real Stop boundary records elapsed_eu greater than 0 under the default API_DURATION basis",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A wave claimed and closed across a real Stop boundary records elapsed_eu greater than 0 under the default API_DURATION basis",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Measure session duration from transcript timestamps",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
