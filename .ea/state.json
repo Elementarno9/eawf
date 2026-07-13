@@ -14871,7 +14871,11 @@
   "claims": null,
   "current": {
     "active_session_ids": [],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I25-W43",
+      "P30-I25-W44",
+      "P30-I25-W45"
+    ],
     "iter_id": "P30-I25",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -27964,6 +27968,45 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I25-W42",
       "updated_at": "2026-07-13T20:53:02.066399Z"
+    },
+    "P30-I25-W43": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W43-bucket-20260713T214247Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I25-W43",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I25-W43",
+      "updated_at": "2026-07-13T21:42:47.275538Z"
+    },
+    "P30-I25-W44": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W44-bucket-20260713T214247Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I25-W44",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I25-W44",
+      "updated_at": "2026-07-13T21:42:47.970663Z"
+    },
+    "P30-I25-W45": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W45-bucket-20260713T214314Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I25-W45",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I25-W45",
+      "updated_at": "2026-07-13T21:43:14.988508Z"
     }
   },
   "fleet_run": null,
@@ -30544,7 +30587,10 @@
         "P30-I25-W39",
         "P30-I25-W40",
         "P30-I25-W41",
-        "P30-I25-W42"
+        "P30-I25-W42",
+        "P30-I25-W43",
+        "P30-I25-W44",
+        "P30-I25-W45"
       ]
     }
   },
@@ -31682,7 +31728,7 @@
   "schema_version": "1.17",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-13T21:27:11.077101Z",
+  "updated_at": "2026-07-13T21:43:14.988773Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -128742,6 +128788,333 @@
       "title": "Version the measure so a basis change cannot corrupt a delta",
       "token_budget": null,
       "tokens_consumed": 3349,
+      "worktree_id": null
+    },
+    "P30-I25-W43": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T21:42:47.219590Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Repair wave appended after the third audit proved the turn-span measure re-created wall clock by charging the operator stall at a tool-permission prompt",
+        "waived_at": "2026-07-13T21:42:24.431639Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "A turn span charges the stall at a tool-permission prompt, where the agent waits on the operator: one such stall in this session was 12.9 hours of sleep booked as agent runtime. Claude already measures each completed turn and excludes that wait; use its figure and fall back to a span only for the turn still in flight.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+        "tests/unit/test_transcript_counters.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W43",
+      "intent": {
+        "desired_outcome": "Duration counts the time the agent worked as Claude itself measures it and never the time it spent waiting on a human",
+        "evidence_refs": [
+          ".ea/artifacts/evidence/2026-07-13-eu-capture/2026-07-13-attestation.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "This is the third attempt at the duration measure and the first two both silently reproduced wall clock which is the defect the whole iter exists to remove",
+        "problem": "The turn span charges the wait at a tool-permission prompt so operator sleep is recorded as agent runtime and the measure is wall clock again",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-13T21:42:24.476007Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 72513676,
+        "cache_creation_input_tokens": 1239378,
+        "cache_read_input_tokens": 244694636,
+        "captured_at": "2026-07-13T21:42:47.275505Z",
+        "cost_usd": 144.305148,
+        "harness": "claude-code",
+        "input_tokens": 1230,
+        "measure_version": 3,
+        "model": "claude-opus-4-8",
+        "output_tokens": 382316,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 72513676
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Duration for a completed turn is Claude own turn_duration figure for that turn rather than the span across its rows so the wait at a tool-permission prompt is not charged as agent runtime",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Duration for a completed turn is Claude own turn_duration figure for that turn rather than the span across its rows so the wait at a tool-permission prompt is not charged as agent runtime",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "Only the turn still in flight (which has no turn_duration row yet because the row lands after the Stop hook reads the file) falls back to its row span",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Only the turn still in flight (which has no turn_duration row yet because the row lands after the Stop hook reads the file) falls back to its row span",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "Rows are ordered by timestamp before being grouped into turns so out-of-order rows cannot make two turn spans overlap and report more runtime than the session has existed",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Rows are ordered by timestamp before being grouped into turns so out-of-order rows cannot make two turn spans overlap and report more runtime than the session has existed",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "The reported duration never exceeds the session wall clock and a regression test pins that",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The reported duration never exceeds the session wall clock and a regression test pins that",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-05",
+          "kind": "legacy",
+          "measurable_signal": "A regression test pins that a twelve-hour wait between an assistant tool_use row and its tool_result row is not counted",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A regression test pins that a twelve-hour wait between an assistant tool_use row and its tool_result row is not counted",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Use Claude own per-turn duration instead of re-deriving wall clock",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W44": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T21:42:47.924133Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Repair wave appended after the third audit found the ceiling test still green over a dead path for the third time",
+        "waived_at": "2026-07-13T21:42:25.569798Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The ceiling test calls the overlay helper directly, so deleting the overlay call site in the loader leaves it green. That is the third recurrence of a test green over the mechanism its criterion names, in the same file.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/unit/daemon/test_close_gate_auditor_jury_routing.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W44",
+      "intent": {
+        "desired_outcome": "The test fails when the repair it guards is removed",
+        "evidence_refs": [
+          ".ea/artifacts/evidence/2026-07-13-eu-capture/2026-07-13-attestation.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "A test green over a dead path is the exact defect this phase exists to eliminate and it has now recurred three times in this one file",
+        "problem": "The ceiling test reaches past the loader to the helper so deleting the loader call site leaves the test green",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-13T21:42:25.604822Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 72513676,
+        "cache_creation_input_tokens": 1239378,
+        "cache_read_input_tokens": 244694636,
+        "captured_at": "2026-07-13T21:42:47.970628Z",
+        "cost_usd": 144.305148,
+        "harness": "claude-code",
+        "input_tokens": 1230,
+        "measure_version": 3,
+        "model": "claude-opus-4-8",
+        "output_tokens": 382316,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 72513676
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The ceiling test calls load_active_verify_block which is the entry point the close path itself calls rather than reaching past it to the overlay helper",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The ceiling test calls load_active_verify_block which is the entry point the close path itself calls rather than reaching past it to the overlay helper",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "Removing the overlay call site from the loader makes the test fail which is the property the criterion asks for and which the current test does not have",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Removing the overlay call site from the loader makes the test fail which is the property the criterion asks for and which the current test does not have",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Test the ceiling through the entry point the close path calls",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W45": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T21:43:14.944339Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Repair wave appended after the third audit found the reset exemption and the unversioned writers compose into a silent-zero laundering path",
+        "waived_at": "2026-07-13T21:43:00.388099Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The statusline and headless writers stamp no measure version so any flip between counter sources re-origins the wave and records a reset and that reset then excuses a zero-EU close. Two repairs compose into a path that hides the very failure the zero-EU gate exists to catch.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/claude/runtime_counters.py",
+        "src/eawf/runtime/daemon/methods/agent.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "tests/unit/test_runtime_session_rebase.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W45",
+      "intent": {
+        "desired_outcome": "A source flip is an identified change and a recorded reset never becomes a standing excuse for a silent zero",
+        "evidence_refs": [
+          ".ea/artifacts/evidence/2026-07-13-eu-capture/2026-07-13-attestation.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "The zero-EU gate is the last line that catches a dead capture path and these two repairs together punch a hole in it",
+        "problem": "Unversioned writers make every counter-source flip look like a reset and a recorded reset then excuses a zero-EU close",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-13T21:43:00.421322Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 72547941,
+        "cache_creation_input_tokens": 1242247,
+        "cache_read_input_tokens": 246151343,
+        "captured_at": "2026-07-13T21:43:14.988481Z",
+        "cost_usd": 145.1059615,
+        "harness": "claude-code",
+        "input_tokens": 1234,
+        "measure_version": 3,
+        "model": "claude-opus-4-8",
+        "output_tokens": 384066,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 72547941
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Every writer of a runtime snapshot stamps the measure that produced it so a flip between the transcript the statusline and the headless spawn is a known change rather than an unknown one",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Every writer of a runtime snapshot stamps the measure that produced it so a flip between the transcript the statusline and the headless spawn is a known change rather than an unknown one",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A reset recorded because the source flipped does not by itself excuse an unexplained zero-EU close forever after so the gate keeps its teeth on a capture path that dies later",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A reset recorded because the source flipped does not by itself excuse an unexplained zero-EU close forever after so the gate keeps its teeth on a capture path that dies later",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "A regression test pins that a source flip is detected and a test pins that a stale reset does not disarm the gate against a later silent zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A regression test pins that a source flip is detected and a test pins that a stale reset does not disarm the gate against a later silent zero",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Stop a source flip laundering a silent zero into an excused close",
+      "token_budget": null,
+      "tokens_consumed": 0,
       "worktree_id": null
     }
   },
