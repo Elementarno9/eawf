@@ -21,9 +21,16 @@ Two transcript quirks the aggregator must handle:
 - **Duplicate usage rows.** A single assistant message is appended once per
   content block, each copy repeating the *same* ``message.usage``. Summing rows
   blindly multiplies the token tally, so rows are deduplicated by message id.
-- **Duration lives off the message.** Wall-clock time is emitted on
-  ``type: "system"`` / ``subtype: "turn_duration"`` rows as a top-level
-  ``durationMs``, not inside the assistant message.
+- **Duration lives off the message, and lands late.** Wall-clock time is emitted
+  on ``type: "system"`` / ``subtype: "turn_duration"`` rows as a top-level
+  ``durationMs``, not inside the assistant message -- and that row is written
+  *after* the Stop hook has already run, so a hook-time read of a live session
+  sees no duration at all. The session's row timestamps are therefore the
+  reliable duration source: the span from the first row to the last is the
+  session runtime so far. Both measures are monotonic as the transcript grows,
+  so the aggregator reports their maximum and a later capture can never report a
+  smaller duration than an earlier one (a backwards counter would reject the
+  close).
 
 Every read fails open: a missing, unreadable, or usage-free transcript yields
 ``None`` so the Stop hook stays non-blocking.
@@ -36,6 +43,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -178,6 +186,24 @@ def _add_usage(tally: _TokenTally, usage: dict[str, Any]) -> None:
         )
 
 
+def _row_timestamp(row: dict[str, Any]) -> datetime | None:
+    """Return the row's ISO-8601 ``timestamp`` as a datetime, else ``None``."""
+    raw = row.get("timestamp")
+    if not isinstance(raw, str) or not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _session_span_ms(first: datetime | None, last: datetime | None) -> int:
+    """Return the wall-clock span between the first and last transcript rows."""
+    if first is None or last is None:
+        return 0
+    return max(0, int((last - first).total_seconds() * 1000))
+
+
 def _price(model: str | None, tally: _TokenTally) -> Decimal | None:
     """Return the token-derived cost for *tally* under *model*, or ``None``.
 
@@ -204,40 +230,42 @@ def _price(model: str | None, tally: _TokenTally) -> Decimal | None:
     )
 
 
-def aggregate_transcript_counters(transcript_path: Path | str | None) -> RuntimeCounters | None:
-    """Aggregate a Claude session transcript into cumulative runtime counters.
+@dataclass
+class _TranscriptScan:
+    """What one pass over the transcript rows yields.
 
-    Args:
-        transcript_path: Path to the session JSONL, typically read off the Stop
-            hook payload's ``transcript_path``. ``None`` short-circuits.
-
-    Returns:
-        :class:`RuntimeCounters` stamped ``harness="claude-code"`` carrying the
-        session's cumulative duration, per-class token tallies, billed model id,
-        and the token-derived ``cost_usd``. The transcript reports turn
-        wall-clock only (no model-API split), so both ``api_duration_ms`` and
-        ``total_duration_ms`` carry that one duration -- the same convention the
-        headless spawn snapshot uses, which keeps the default API-duration EU
-        basis working on the interactive path. ``None`` when the transcript is
-        absent, unreadable, or carries no usable counter (neither a duration nor
-        a token tally), so the caller degrades rather than capturing an empty
-        snapshot.
+    Attributes:
+        tally: Per-class token totals, deduplicated by billed message.
+        duration_ms: Session runtime so far -- the larger of the turn-duration
+            sum and the row timestamp span (both monotonic, see the module
+            docstring).
+        turn_duration_ms: The turn-duration sum alone, kept for the debug log so
+            a zero (the Stop-hook race) is visible.
+        model: The last billed model id seen, or ``None``.
+        messages: How many distinct billed messages the tally covers.
     """
-    if transcript_path is None:
-        return None
-    path = Path(transcript_path)
-    try:
-        rows = _read_rows(path)
-    except OSError as exc:
-        logger.debug(f"aggregate_transcript_counters path={path.name!r} err={exc!r}")
-        return None
 
+    tally: _TokenTally
+    duration_ms: int
+    turn_duration_ms: int
+    model: str | None
+    messages: int
+
+
+def _scan_rows(rows: list[dict[str, Any]]) -> _TranscriptScan:
+    """Fold the transcript rows into token, duration, and attribution totals."""
     tally = _TokenTally()
     seen: set[str] = set()
-    duration_ms = 0
+    turn_duration_ms = 0
+    first_at: datetime | None = None
+    last_at: datetime | None = None
     model: str | None = None
     for row in rows:
-        duration_ms += _non_negative_int(row.get("durationMs"))
+        turn_duration_ms += _non_negative_int(row.get("durationMs"))
+        stamped_at = _row_timestamp(row)
+        if stamped_at is not None:
+            first_at = stamped_at if first_at is None or stamped_at < first_at else first_at
+            last_at = stamped_at if last_at is None or stamped_at > last_at else last_at
         message = row.get("message")
         if not isinstance(message, dict):
             continue
@@ -254,6 +282,50 @@ def aggregate_transcript_counters(transcript_path: Path | str | None) -> Runtime
             seen.add(key)
         _add_usage(tally, usage)
 
+    # The turn-duration rows land after the Stop hook reads the file, so the
+    # timestamp span is what a live capture actually has to work with. Both grow
+    # monotonically with the transcript, so the maximum is monotonic too.
+    return _TranscriptScan(
+        tally=tally,
+        duration_ms=max(turn_duration_ms, _session_span_ms(first_at, last_at)),
+        turn_duration_ms=turn_duration_ms,
+        model=model,
+        messages=len(seen),
+    )
+
+
+def aggregate_transcript_counters(transcript_path: Path | str | None) -> RuntimeCounters | None:
+    """Aggregate a Claude session transcript into cumulative runtime counters.
+
+    Args:
+        transcript_path: Path to the session JSONL, typically read off the Stop
+            hook payload's ``transcript_path``. ``None`` short-circuits.
+
+    Returns:
+        :class:`RuntimeCounters` stamped ``harness="claude-code"`` carrying the
+        session's cumulative duration, per-class token tallies, billed model id,
+        and the token-derived ``cost_usd``. The transcript reports wall-clock
+        only (no model-API split), so both ``api_duration_ms`` and
+        ``total_duration_ms`` carry that one duration -- the same convention the
+        headless spawn snapshot uses, which keeps the default API-duration EU
+        basis working on the interactive path. ``None`` when the transcript is
+        absent, unreadable, or carries no usable counter (neither a duration nor
+        a token tally), so the caller degrades rather than capturing an empty
+        snapshot.
+    """
+    if transcript_path is None:
+        return None
+    path = Path(transcript_path)
+    try:
+        rows = _read_rows(path)
+    except OSError as exc:
+        logger.debug(f"aggregate_transcript_counters path={path.name!r} err={exc!r}")
+        return None
+
+    scan = _scan_rows(rows)
+    tally = scan.tally
+    model = scan.model
+    duration_ms = scan.duration_ms
     if duration_ms == 0 and tally.total == 0:
         return None
 
@@ -270,8 +342,9 @@ def aggregate_transcript_counters(transcript_path: Path | str | None) -> Runtime
         model=model,
     )
     logger.debug(
-        f"aggregate_transcript_counters rows={len(rows)} messages={len(seen)} "
-        f"duration_ms={duration_ms} tokens={tally.total} model={model!r}"
+        f"aggregate_transcript_counters rows={len(rows)} messages={scan.messages} "
+        f"duration_ms={duration_ms} turn_duration_ms={scan.turn_duration_ms} "
+        f"tokens={tally.total} model={model!r}"
     )
     return counters
 

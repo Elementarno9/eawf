@@ -34,10 +34,12 @@ def test_aggregate_real_transcript_fixture() -> None:
     counters = aggregate_transcript_counters(_TRANSCRIPT_FIXTURE)
 
     assert counters is not None
-    # The transcript reports turn wall-clock only, so both duration fields carry
-    # it -- the same convention the headless spawn snapshot uses.
-    assert counters.api_duration_ms == 502_968
-    assert counters.total_duration_ms == 502_968
+    # The transcript reports wall-clock only, so both duration fields carry the
+    # same figure -- the convention the headless spawn snapshot uses. The
+    # timestamp span (593_177 ms) exceeds the single turn-duration row
+    # (502_968 ms), and the aggregator reports the larger of the two.
+    assert counters.api_duration_ms == 593_177
+    assert counters.total_duration_ms == 593_177
     assert counters.input_tokens == 4
     assert counters.output_tokens == 1_013
     assert counters.cache_creation_input_tokens == 67_527
@@ -98,6 +100,95 @@ def test_aggregate_sums_distinct_messages_and_durations(tmp_path: Path) -> None:
     assert counters.input_tokens == 15
     assert counters.output_tokens == 27
     assert counters.api_duration_ms == 3_500
+
+
+def _assistant_row(message_id: str, *, at: str, output_tokens: int = 10) -> dict[str, object]:
+    return {
+        "type": "assistant",
+        "timestamp": at,
+        "message": {
+            "id": message_id,
+            "model": "claude-opus-4-8",
+            "usage": {"input_tokens": 1, "output_tokens": output_tokens},
+        },
+    }
+
+
+def test_duration_falls_back_to_the_timestamp_span(tmp_path: Path) -> None:
+    """A live session has no turn_duration row yet -- the row lands after the Stop hook.
+
+    This is the defect the first live run exposed: capture read the transcript
+    mid-turn, found no ``durationMs``, and reported a zero duration, so the
+    API_DURATION EU basis still produced elapsed_eu=0.
+    """
+    rows = [
+        _assistant_row("msg_0001", at="2026-07-13T00:00:00.000Z"),
+        _assistant_row("msg_0002", at="2026-07-13T00:05:00.000Z"),
+    ]
+    path = tmp_path / "t.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    counters = aggregate_transcript_counters(path)
+
+    assert counters is not None
+    assert counters.api_duration_ms == 300_000
+    assert counters.total_duration_ms == 300_000
+
+
+def test_duration_is_monotonic_as_the_transcript_grows(tmp_path: Path) -> None:
+    """A later capture never reports a smaller duration than an earlier one.
+
+    A backwards counter would raise ``LifecycleError`` at close, so the reported
+    duration must be the max of the two monotonic measures (turn-duration sum and
+    timestamp span) rather than whichever one happens to be present.
+    """
+    path = tmp_path / "t.jsonl"
+    early_rows = [
+        _assistant_row("msg_0001", at="2026-07-13T00:00:00.000Z"),
+        _assistant_row("msg_0002", at="2026-07-13T00:10:00.000Z"),
+    ]
+    path.write_text("\n".join(json.dumps(r) for r in early_rows) + "\n", encoding="utf-8")
+    early = aggregate_transcript_counters(path)
+
+    # The turn ends: the turn_duration row finally lands (a smaller figure than
+    # the span, because the span also covers the operator's think time).
+    late_rows = [
+        *early_rows,
+        {
+            "type": "system",
+            "subtype": "turn_duration",
+            "durationMs": 120_000,
+            "timestamp": "2026-07-13T00:10:05.000Z",
+        },
+    ]
+    path.write_text("\n".join(json.dumps(r) for r in late_rows) + "\n", encoding="utf-8")
+    late = aggregate_transcript_counters(path)
+
+    assert early is not None
+    assert late is not None
+    assert early.api_duration_ms == 600_000
+    assert late.api_duration_ms >= early.api_duration_ms
+
+
+def test_duration_uses_turn_rows_when_rows_carry_no_timestamp(tmp_path: Path) -> None:
+    rows = [
+        {"type": "system", "subtype": "turn_duration", "durationMs": 7_000},
+        {
+            "type": "assistant",
+            "message": {
+                "id": "msg_0001",
+                "model": "claude-opus-4-8",
+                "usage": {"output_tokens": 5},
+            },
+        },
+    ]
+    path = tmp_path / "t.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    counters = aggregate_transcript_counters(path)
+
+    assert counters is not None
+    assert counters.api_duration_ms == 7_000
 
 
 def test_aggregate_prices_cache_write_ttl_split(tmp_path: Path) -> None:

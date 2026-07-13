@@ -54,8 +54,10 @@ _BASH = shutil.which("bash")
 _needs_bash = pytest.mark.skipif(_BASH is None, reason="bash is required to run the wrapper")
 
 #: Totals the transcript fixture aggregates to (two billed messages, each
-#: repeated across content-block rows, plus one ``turn_duration`` row).
-_FIXTURE_DURATION_MS = 502968
+#: repeated across content-block rows, plus one ``turn_duration`` row). The
+#: duration is the row timestamp span, which exceeds the single turn-duration
+#: row -- the aggregator reports the larger of the two monotonic measures.
+_FIXTURE_DURATION_MS = 593177
 _FIXTURE_INPUT_TOKENS = 4
 _FIXTURE_OUTPUT_TOKENS = 1013
 _FIXTURE_CACHE_CREATION_TOKENS = 67527
