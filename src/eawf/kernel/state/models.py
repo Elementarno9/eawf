@@ -599,6 +599,14 @@ class RuntimeCarry(_StrictModel):
     Attributes:
         sessions_folded: How many finished sessions the totals cover -- the
             audit trail for a multi-session wave.
+        counter_resets: How many times the counter source reset under this wave
+            (a truncated transcript, or a change to what the duration measures)
+            and the baseline had to be re-originated. Each reset drops the
+            runtime measured before it -- it cannot be re-derived -- so this is
+            the recorded REASON a wave may close with less runtime than it
+            really spent, or with none at all. Without it, that close is
+            indistinguishable from a capture path that silently did nothing,
+            which is the failure this whole iter exists to make impossible.
     """
 
     api_duration_ms: Annotated[int, Field(ge=0)] = 0
@@ -609,6 +617,7 @@ class RuntimeCarry(_StrictModel):
     cache_creation_input_tokens: Annotated[int, Field(ge=0)] = 0
     cache_read_input_tokens: Annotated[int, Field(ge=0)] = 0
     sessions_folded: Annotated[int, Field(ge=0)] = 0
+    counter_resets: Annotated[int, Field(ge=0)] = 0
 
 
 class CriteriaFloorWaiver(_StrictModel):
@@ -1572,13 +1581,13 @@ class FleetRun(_StrictModel):
 class State(_StrictModel):
     """Top-level eawf state document.
 
-    ``schema_version`` accepts the full ``"1.0"`` through ``"1.15"`` range so
+    ``schema_version`` accepts the full ``"1.0"`` through ``"1.16"`` range so
     an on-disk state written before any bump still re-validates after the
     model advances — the migrate chain rewrites the version string in place,
     but a read of an un-migrated state must never reject. The accepted set
     drives the migrate guard's model-supported max, so the literals move in
     lockstep with the migration steps (``v1_0_to_v1_1`` through
-    ``v1_14_to_v1_15``). The ``1.5`` edge is purely additive — it registers
+    ``v1_15_to_v1_16``). The ``1.5`` edge is purely additive — it registers
     :attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum
     value no existing state row references, so no historical fact changes.
     The ``1.6`` edge is likewise purely additive — it adds the top-level
@@ -1637,6 +1646,14 @@ class State(_StrictModel):
     default to ``None``; the ``v1_14_to_v1_15`` step backfills them explicitly on
     every wave, and a state written before the bump re-validates with both
     defaulted and no historical fact changes.
+
+    The ``1.16`` edge is purely additive: it adds
+    :attr:`RuntimeCarry.counter_resets`, which records how many times the counter
+    source reset under a wave. A reset drops the runtime measured before it, so
+    the count is the recorded REASON a wave closed with missing runtime -- without
+    it, an honest reset is indistinguishable from a capture path that silently did
+    nothing. It defaults to ``0``; the ``v1_15_to_v1_16`` step backfills it on
+    every existing carry.
     """
 
     schema_version: Literal[
@@ -1656,6 +1673,7 @@ class State(_StrictModel):
         "1.13",
         "1.14",
         "1.15",
+        "1.16",
     ]
     scope_kind: ScopeKind
     urn: UrnStr

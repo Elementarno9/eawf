@@ -10,7 +10,7 @@
   "iters_ids": [],
   "phases_ids": [],
   "phases_statuses": {},
-  "schema_version": "1.15",
+  "schema_version": "1.16",
   "scope_kind": "repo",
   "waves_ids": []
 }

@@ -392,6 +392,7 @@ def test_state_schema_version_accepts_supported_set() -> None:
         "1.13",
         "1.14",
         "1.15",
+        "1.16",
     }
 
 

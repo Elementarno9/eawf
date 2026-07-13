@@ -2328,3 +2328,78 @@ def test_mutate_phase_open_then_state_read_roundtrips_description(tmp_path: Path
         assert phase_row["description"] == "phase open round-trip description"
 
     _run(body)
+
+
+# --- P30-I25-W40/W41: a counter reset must not strand the wave --------------
+
+
+def test_close_succeeds_for_a_wave_whose_counters_reset(tmp_path: Path) -> None:
+    """A wave re-originated by a counter reset CLOSES -- no operator waiver needed.
+
+    This drives the real `mutate` close, not the delta helper. The prior test only
+    asserted `compute_runtime_delta` returned 0.0 -- which is exactly the value the
+    close gate then REFUSED, so the wave still could not close and the test was
+    green over the failure.
+
+    The live case: P30-I25-W34 changed what the duration measures while waves were
+    claimed against baselines under the old measure. Their counters "went
+    backwards", the capture path re-originated them, and the resulting zero-EU
+    close was refused -- stranding the wave, since the baseline is on disk and
+    every retry hits the same zero.
+    """
+    payload = _build_state_payload()
+    wave = payload["waves"]["P24-I01-W09"]
+    now = _now().isoformat()
+    # The reset re-originated the wave: baseline == latest, so the delta is 0.
+    wave["runtime_baseline"] = {"api_duration_ms": 500, "captured_at": now}
+    wave["runtime_latest"] = {"api_duration_ms": 500, "captured_at": now}
+    # ... and the wave RECORDS why its runtime is missing.
+    wave["runtime_carry"] = {"counter_resets": 1}
+    ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        written = orjson.loads(state_path.read_bytes())
+        # It CLOSES. That is the whole point: a recorded reset is an honest reason
+        # for missing runtime, not a silent capture failure.
+        assert written["waves"]["P24-I01-W09"]["status"] == "closed"
+        assert written["actuals"]["P24-I01-W09"]["elapsed_eu"] == 0.0
+
+    _run(body)
+
+
+def test_close_still_refuses_an_unexplained_zero(tmp_path: Path) -> None:
+    """Without a recorded reset, a zero-EU close is still refused.
+
+    The gate's teeth stay in: the reset exemption is not a licence for a silent
+    capture failure, which is the defect the gate exists to catch.
+    """
+    from eawf.runtime.daemon.methods import DaemonValidationError
+
+    payload = _build_state_payload()
+    wave = payload["waves"]["P24-I01-W09"]
+    now = _now().isoformat()
+    wave["runtime_baseline"] = {"api_duration_ms": 500, "captured_at": now}
+    wave["runtime_latest"] = {"api_duration_ms": 500, "captured_at": now}
+    wave["runtime_carry"] = {"counter_resets": 0}
+    ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="no captured runtime"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        written = orjson.loads(state_path.read_bytes())
+        assert written["waves"]["P24-I01-W09"]["status"] == "claimed"
+
+    _run(body)

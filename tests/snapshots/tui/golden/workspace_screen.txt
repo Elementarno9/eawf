@@ -37,4 +37,4 @@
 
 
  ↑↓ select  ·  Enter open  ·  …  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit weekly burn: — no data•
-△ state schema 1.0 trails live daemon schema 1.15; showing a migrated read-only view -- run eawf migrate to update the
+△ state schema 1.0 trails live daemon schema 1.16; showing a migrated read-only view -- run eawf migrate to update the

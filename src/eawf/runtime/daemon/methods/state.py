@@ -915,7 +915,21 @@ def _enforce_nonzero_runtime_close(
     state_path: Path,
     repo_root: Path,
 ) -> None:
-    """Reject silent zero-EU wave closes unless the active profile is advisory."""
+    """Reject SILENT zero-EU wave closes unless the profile is advisory or the zero is explained.
+
+    The word doing the work is *silent*. The gate exists because a zero-EU close
+    used to mean the capture path had quietly died -- which it had, for the whole
+    of its life. It does not exist to punish a wave whose runtime is missing for a
+    RECORDED reason.
+
+    A counter reset is such a reason: the source was truncated or its basis
+    changed, the capture path re-originated the wave, and the runtime measured
+    before that point is gone for good. The wave records this on
+    :attr:`~eawf.kernel.state.models.RuntimeCarry.counter_resets`. Refusing the
+    close would strand it -- the baseline lives on disk, so every retry hits the
+    same zero -- which is the same unrecoverable trap the gate was written to
+    prevent, just wearing the gate's own uniform.
+    """
     wave_id = str(mutation.params.get("wave_id", ""))
     if not wave_id or (elapsed_eu is not None and elapsed_eu > 0.0):
         return
@@ -926,6 +940,14 @@ def _enforce_nonzero_runtime_close(
     if mutation.params.get("no_runtime_waiver") is True:
         logger.warning(
             f"wave_close_runtime_zero wave={wave_id!r} mode='waived' message={message!r}"
+        )
+        return
+    wave = state.waves.get(wave_id)
+    resets = wave.runtime_carry.counter_resets if wave and wave.runtime_carry else 0
+    if resets > 0:
+        logger.warning(
+            f"wave_close_runtime_zero wave={wave_id!r} mode='reset' counter_resets={resets}; "
+            "runtime lost to a counter-source reset -- closing on the recorded reason"
         )
         return
     if _runtime_zero_close_enforces(
@@ -2866,6 +2888,13 @@ def _reorigin_on_reset(wave: Wave, incoming: RuntimeLatest) -> None:
         | {"captured_at": datetime.now(UTC)}
     )
     wave.runtime_latest = None
+    # Record WHY this wave's runtime is short. The measurement taken before the
+    # reset cannot be re-derived, so the wave may close with less runtime than it
+    # really spent -- or with none. Without the count, that close is
+    # indistinguishable from a capture path that silently did nothing, and the
+    # zero-runtime gate must then either refuse every reset or trust every zero.
+    carry = wave.runtime_carry or RuntimeCarry()
+    wave.runtime_carry = carry.model_copy(update={"counter_resets": carry.counter_resets + 1})
 
 
 def _rebase_for_session(wave: Wave, incoming: RuntimeLatest, session_id: str | None) -> None:
@@ -3699,9 +3728,15 @@ async def _mutate_wave_close(
         state_path=state_path,
         repo_root=repo_anchor,
     )
+    # A ZERO delta must not suppress the rollup. A zero means the snapshots yielded
+    # nothing (a reset re-originated them, or nothing was captured) -- it is an
+    # absence of evidence, and the telemetry rollup may hold real evidence of the
+    # wave's runtime. Preferring a manufactured 0.0 over a measured figure throws
+    # away the better answer.
+    measured_eu = runtime_delta.elapsed_eu if runtime_delta is not None else None
     wave_close_elapsed_eu = (
-        runtime_delta.elapsed_eu
-        if runtime_delta is not None
+        measured_eu
+        if measured_eu
         else _wave_close_elapsed_eu(
             wave_close_rollup,
             eu_minutes=_close_eu_minutes,
