@@ -724,6 +724,13 @@ def _resolve_config_runtime_preference(state_path: Path) -> list[str]:
     return [p for p in raw if isinstance(p, str)] if isinstance(raw, list) else []
 
 
+#: Which measure the headless snapshots come from: the spawn's own wall-clock
+#: duration, which is a different quantity from either the transcript's per-turn
+#: figure or the statusline's cost block. Declared so a flip between sources is a
+#: known change rather than an unknown one (see P30-I25-W45).
+_HEADLESS_MEASURE_VERSION: int = 201
+
+
 def _headless_runtime_snapshots(
     spawn_result: SpawnResult, *, serving_runtime: str
 ) -> tuple[RuntimeBaseline, RuntimeLatest]:
@@ -753,6 +760,7 @@ def _headless_runtime_snapshots(
         0, int((spawn_result.ended_at - spawn_result.started_at).total_seconds() * 1000)
     )
     baseline = RuntimeBaseline(
+        measure_version=_HEADLESS_MEASURE_VERSION,
         api_duration_ms=0,
         total_duration_ms=0,
         cost_usd=0.0,
@@ -766,6 +774,7 @@ def _headless_runtime_snapshots(
         captured_at=spawn_result.started_at,
     )
     latest = RuntimeLatest(
+        measure_version=_HEADLESS_MEASURE_VERSION,
         api_duration_ms=duration_ms,
         total_duration_ms=duration_ms,
         cost_usd=float(priced.cost_usd),

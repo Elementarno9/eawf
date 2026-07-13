@@ -907,6 +907,28 @@ def _runtime_zero_close_enforces(
     return True if verify_block is None else verify_block.enforce
 
 
+def _zero_is_explained_by_a_reset(wave: Wave) -> bool:
+    """Return whether this wave's missing runtime is explained by a counter reset.
+
+    A reset drops the runtime measured before it, so it IS an honest reason for a
+    zero -- but only while it is the last thing that happened to the wave's
+    counters. Once a capture reports after the reset, the capture path has proven
+    itself alive, and any zero from that point on is unexplained again.
+
+    Without that second condition the exemption is a standing pardon: one reset in
+    a wave's first minute would excuse every zero it ever records, including the
+    zeros of a capture path that silently dies forty turns later -- which is the
+    precise failure the gate exists to catch, laundered through the mechanism meant
+    to keep an honest reset from stranding a wave.
+    """
+    carry = wave.runtime_carry
+    baseline = wave.runtime_baseline
+    if carry is None or carry.counter_resets <= 0 or baseline is None:
+        return False
+    latest = wave.runtime_latest
+    return latest is None or latest.captured_at <= baseline.captured_at
+
+
 def _enforce_nonzero_runtime_close(
     state: State,
     mutation: Mutation,
@@ -943,8 +965,8 @@ def _enforce_nonzero_runtime_close(
         )
         return
     wave = state.waves.get(wave_id)
-    resets = wave.runtime_carry.counter_resets if wave and wave.runtime_carry else 0
-    if resets > 0:
+    if wave is not None and _zero_is_explained_by_a_reset(wave):
+        resets = wave.runtime_carry.counter_resets if wave.runtime_carry else 0
         logger.warning(
             f"wave_close_runtime_zero wave={wave_id!r} mode='reset' counter_resets={resets}; "
             "runtime lost to a counter-source reset -- closing on the recorded reason"

@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.runtime.runtimes.claude.runtime_counters import (
+    STATUSLINE_MEASURE_VERSION,
     RuntimeCounters,
     parse_runtime_counters,
 )
@@ -58,6 +59,7 @@ def test_parse_runtime_counters_real_status_payload() -> None:
         cache_read_input_tokens=2_000,
         harness="claude-code",
         model="claude-opus-4-1",
+        measure_version=STATUSLINE_MEASURE_VERSION,
     )
 
 
@@ -134,6 +136,10 @@ def test_parse_runtime_counters_drops_type_mismatched_fields() -> None:
         cache_read_input_tokens=2_000,
         harness="claude-code",
         model=None,
+        # The statusline declares its own measure: its cost block is a different
+        # quantity from the transcript's per-turn duration, and a flip between the
+        # two must read as a change of measure, not as work (P30-I25-W45).
+        measure_version=STATUSLINE_MEASURE_VERSION,
     )
 
 

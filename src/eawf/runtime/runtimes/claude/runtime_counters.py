@@ -28,6 +28,15 @@ from pydantic import BaseModel, ConfigDict, Field
 #: Code; the model id is read per-payload off ``model`` (see :func:`_model_id`).
 _HARNESS_ID = "claude-code"
 
+#: Which measure THIS module's counters come from: the statusline's own cost block,
+#: which is a different quantity from the transcript aggregator's per-turn duration.
+#: It is declared (rather than left null) so that a flip between the two sources is
+#: an identified change of measure rather than an unknown one -- an unknown source
+#: re-origins the wave and records a reset, and a recorded reset excuses a zero-EU
+#: close, so an undeclared source launders a silent capture failure into a clean
+#: one. See :data:`eawf.runtime.runtimes.claude.transcript_counters.MEASURE_VERSION`.
+STATUSLINE_MEASURE_VERSION: int = 101
+
 #: The measured fields that make a parse worth capturing. ``harness`` / ``model``
 #: are attribution, not measurement, so a payload yielding only those is treated
 #: as carrying no counters at all.
@@ -163,7 +172,10 @@ def parse_runtime_counters(claude_payload: dict[str, Any]) -> RuntimeCounters | 
     cost = claude_payload.get("cost")
     cost_block = cost if isinstance(cost, dict) else {}
     current_usage = _current_usage_block(claude_payload)
-    data: dict[str, int | Decimal | str] = {"harness": _HARNESS_ID}
+    data: dict[str, int | Decimal | str] = {
+        "harness": _HARNESS_ID,
+        "measure_version": STATUSLINE_MEASURE_VERSION,
+    }
 
     model_id = _model_id(claude_payload)
     if model_id is not None:
@@ -197,6 +209,7 @@ def parse_runtime_counters(claude_payload: dict[str, Any]) -> RuntimeCounters | 
 
 
 __all__ = [
+    "STATUSLINE_MEASURE_VERSION",
     "RuntimeCounters",
     "parse_runtime_counters",
 ]

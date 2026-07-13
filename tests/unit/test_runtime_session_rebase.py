@@ -598,3 +598,29 @@ def test_two_unversioned_snapshots_fall_back_to_the_numbers() -> None:
 
     assert _counters_incomparable(baseline, forward) is False
     assert _counters_incomparable(baseline, backward) is True
+
+
+def test_a_flip_between_counter_sources_is_a_known_change() -> None:
+    """Each writer declares its own measure, so a source flip is identified.
+
+    The transcript aggregator, the statusline parser, and the headless spawn all
+    measure different quantities. When the transcript is unreadable the runner falls
+    back to the statusline -- and if that snapshot declared NO measure, the flip
+    looked like an unknown source: it re-originated the wave, recorded a reset, and
+    the reset then excused a zero-EU close. Two repairs composing into a way to
+    launder a silent capture failure into a clean one (P30-I25-W45).
+    """
+    from eawf.runtime.runtimes.claude.runtime_counters import STATUSLINE_MEASURE_VERSION
+    from eawf.runtime.runtimes.claude.transcript_counters import MEASURE_VERSION
+
+    assert STATUSLINE_MEASURE_VERSION != MEASURE_VERSION
+
+    transcript_baseline = _baseline("sess-a", api_duration_ms=1_000).model_copy(
+        update={"measure_version": MEASURE_VERSION}
+    )
+    statusline_capture = _latest("sess-a", api_duration_ms=9_000).model_copy(
+        update={"measure_version": STATUSLINE_MEASURE_VERSION}
+    )
+
+    # The numbers ROSE, so nothing looks wrong -- but they measure different things.
+    assert _counters_incomparable(transcript_baseline, statusline_capture) is True

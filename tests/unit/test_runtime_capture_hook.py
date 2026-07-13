@@ -97,11 +97,11 @@ def test_session_end_capture_hook_invokes_runtime_capture_rpc() -> None:
                 # this payload carries no model block so ``model`` stays None.
                 "harness": "claude-code",
                 "model": None,
-                # The statusline shape carries no measure version: it is not the
-                # transcript aggregator, so nothing declares which definition of
-                # the counters produced it, and the daemon falls back to comparing
-                # the numbers themselves (P30-I25-W42).
-                "measure_version": None,
+                # The statusline declares its OWN measure (P30-I25-W45): its cost
+                # block is a different quantity from the transcript's per-turn
+                # duration, so a flip between the two sources must read as a change
+                # of measure rather than as work.
+                "measure_version": 101,
                 "session_id": "session-1",
                 "captured_at": "2026-06-10T12:00:00+00:00",
                 "repo_root": "workspace",

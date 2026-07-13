@@ -2350,7 +2350,8 @@ def test_close_succeeds_for_a_wave_whose_counters_reset(tmp_path: Path) -> None:
     payload = _build_state_payload()
     wave = payload["waves"]["P24-I01-W09"]
     now = _now().isoformat()
-    # The reset re-originated the wave: baseline == latest, so the delta is 0.
+    # The reset re-originated the wave: baseline == latest, so the delta is 0, and
+    # nothing has captured since (the reset is the last thing that happened).
     wave["runtime_baseline"] = {"api_duration_ms": 500, "captured_at": now}
     wave["runtime_latest"] = {"api_duration_ms": 500, "captured_at": now}
     # ... and the wave RECORDS why its runtime is missing.
@@ -2388,6 +2389,44 @@ def test_close_still_refuses_an_unexplained_zero(tmp_path: Path) -> None:
     wave["runtime_baseline"] = {"api_duration_ms": 500, "captured_at": now}
     wave["runtime_latest"] = {"api_duration_ms": 500, "captured_at": now}
     wave["runtime_carry"] = {"counter_resets": 0}
+    ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="no captured runtime"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        written = orjson.loads(state_path.read_bytes())
+        assert written["waves"]["P24-I01-W09"]["status"] == "claimed"
+
+    _run(body)
+
+
+def test_a_stale_reset_does_not_pardon_a_later_silent_zero(tmp_path: Path) -> None:
+    """A reset excuses a zero only while it is the LAST thing that happened.
+
+    Once a capture reports after the reset, the capture path has proven itself
+    alive -- so a zero from that point on is unexplained again. Without this, one
+    reset in a wave's first minute would pardon every zero it ever recorded,
+    including those of a capture path that silently died forty turns later. That is
+    exactly the failure the gate exists to catch, laundered through the mechanism
+    meant to stop an honest reset from stranding a wave (P30-I25-W45).
+    """
+    from eawf.runtime.daemon.methods import DaemonValidationError
+
+    payload = _build_state_payload()
+    wave = payload["waves"]["P24-I01-W09"]
+    reset_at = _now()
+    later = (reset_at + timedelta(hours=2)).isoformat()
+    # A reset happened...
+    wave["runtime_carry"] = {"counter_resets": 1}
+    wave["runtime_baseline"] = {"api_duration_ms": 500, "captured_at": reset_at.isoformat()}
+    # ... but captures have reported SINCE, and they measured nothing.
+    wave["runtime_latest"] = {"api_duration_ms": 500, "captured_at": later}
     ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
     mutation = Mutation(
         kind=MutationKind.WAVE_CLOSE,
