@@ -10947,6 +10947,48 @@
       "scope_id": "P30-I25-W25",
       "status": "done",
       "updated_at": "2026-07-13T00:35:43.786710Z"
+    },
+    "P30-I25-W26": {
+      "actual_cost_usd": 7.408102499999998,
+      "actual_tokens": 13027348,
+      "agent_runtime_eu": 1.7542116666666667,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W26",
+      "elapsed_eu": 1.7542116666666667,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W26",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W26",
+      "status": "done",
+      "updated_at": "2026-07-13T01:12:35.587063Z"
+    },
+    "P30-I25-W28": {
+      "actual_cost_usd": 7.408102499999998,
+      "actual_tokens": 13027348,
+      "agent_runtime_eu": 1.7542116666666667,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W28",
+      "elapsed_eu": 1.7542116666666667,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W28",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W28",
+      "status": "done",
+      "updated_at": "2026-07-13T01:13:29.979601Z"
+    },
+    "P30-I25-W30": {
+      "actual_cost_usd": 4.379285999999997,
+      "actual_tokens": 7908466,
+      "agent_runtime_eu": 0.3978227777777778,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W30",
+      "elapsed_eu": 0.3978227777777778,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W30",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W30",
+      "status": "done",
+      "updated_at": "2026-07-13T01:13:30.868407Z"
     }
   },
   "agent_sessions": {
@@ -14592,9 +14634,7 @@
   "current": {
     "active_session_ids": [],
     "active_wave_ids": [
-      "P30-I25-W26",
-      "P30-I25-W28",
-      "P30-I25-W30"
+      "P30-I25-W27"
     ],
     "iter_id": "P30-I25",
     "phase_id": "P30",
@@ -27481,6 +27521,19 @@
       "scope_id": "P30-I25-W26",
       "updated_at": "2026-07-13T00:36:01.770596Z"
     },
+    "P30-I25-W27": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W27-bucket-20260713T011408Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I25-W27",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I25-W27",
+      "updated_at": "2026-07-13T01:14:08.319287Z"
+    },
     "P30-I25-W28": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I25-W28-bucket-20260713T003602Z",
@@ -31212,7 +31265,7 @@
   "schema_version": "1.15",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-13T00:44:40.156021Z",
+  "updated_at": "2026-07-13T01:14:08.319748Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -125471,7 +125524,7 @@
       ],
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T00:36:01.749910Z",
-      "closed_at": null,
+      "closed_at": "2026-07-13T01:12:35.587063Z",
       "commit": null,
       "criteria_floor_waiver": {
         "reason": "prose success criteria; baseline half of the EU capture repair, symmetric with the W25 latest-counter path",
@@ -125506,7 +125559,7 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-12T23:54:20.936779Z",
-      "outcome": null,
+      "outcome": "Claim-time baseline now comes from the claiming session transcript (harness+model attribution); statusline sidecar kept as fallback",
       "runtime_baseline": {
         "api_duration_ms": 0,
         "cache_creation_input_tokens": 270538,
@@ -125522,29 +125575,29 @@
       },
       "runtime_carry": null,
       "runtime_latest": {
-        "api_duration_ms": 0,
-        "cache_creation_input_tokens": 274677,
-        "cache_read_input_tokens": 40379281,
-        "captured_at": "2026-07-13T00:37:04.629763Z",
-        "cost_usd": 25.8490905,
+        "api_duration_ms": 3157581,
+        "cache_creation_input_tokens": 303347,
+        "cache_read_input_tokens": 51888734,
+        "captured_at": "2026-07-13T00:49:00.590397Z",
+        "cost_usd": 32.393837,
         "harness": "claude-code",
-        "input_tokens": 396,
+        "input_tokens": 470,
         "model": "claude-opus-4-8",
-        "output_tokens": 116428,
+        "output_tokens": 136546,
         "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
-        "total_duration_ms": 0
+        "total_duration_ms": 3157581
       },
       "runtime_preference": null,
       "sessions": {
         "1": {
           "attempt": 1,
-          "cache_creation_input_tokens": 274677,
-          "cache_read_input_tokens": 40379281,
-          "cost_usd": 25.8490905,
-          "ended_at": "2026-07-13T00:37:04.629763Z",
+          "cache_creation_input_tokens": 303347,
+          "cache_read_input_tokens": 51888734,
+          "cost_usd": 32.393837,
+          "ended_at": "2026-07-13T00:49:00.590397Z",
           "exit_status": 0,
-          "input_tokens": 396,
-          "output_tokens": 116428,
+          "input_tokens": 470,
+          "output_tokens": 136546,
           "runtime": "claude-code",
           "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
           "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
@@ -125552,7 +125605,7 @@
           "subprocess_pid": null
         }
       },
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -125655,7 +125708,7 @@
       ],
       "title": "Derive the claim-time runtime baseline from the same transcript",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 13027348,
       "worktree_id": null
     },
     "P30-I25-W27": {
@@ -125663,8 +125716,8 @@
       "blocks": [
         "P30-I25-W29"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T01:14:08.295731Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": {
@@ -125704,12 +125757,24 @@
       "iter_id": "P30-I25",
       "opened_at": "2026-07-12T23:54:21.565153Z",
       "outcome": null,
-      "runtime_baseline": null,
+      "runtime_baseline": {
+        "api_duration_ms": 4629236,
+        "cache_creation_input_tokens": 306001,
+        "cache_read_input_tokens": 53187619,
+        "captured_at": "2026-07-13T01:14:08.319252Z",
+        "cost_usd": 33.1180095,
+        "harness": "claude-code",
+        "input_tokens": 478,
+        "model": "claude-opus-4-8",
+        "output_tokens": 138472,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 4629236
+      },
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -125878,7 +125943,7 @@
       ],
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T00:36:02.784200Z",
-      "closed_at": null,
+      "closed_at": "2026-07-13T01:13:29.979601Z",
       "commit": null,
       "criteria_floor_waiver": {
         "reason": "prose success criteria; observability gap that let the EU capture defect stay invisible for the whole capture-path lifetime",
@@ -125911,7 +125976,7 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-12T23:54:49.536326Z",
-      "outcome": null,
+      "outcome": "Metrics banner scoped to recent actuals; zero-EU close advisory surfaced on the close surface",
       "runtime_baseline": {
         "api_duration_ms": 0,
         "cache_creation_input_tokens": 270538,
@@ -125927,29 +125992,29 @@
       },
       "runtime_carry": null,
       "runtime_latest": {
-        "api_duration_ms": 0,
-        "cache_creation_input_tokens": 274677,
-        "cache_read_input_tokens": 40379281,
-        "captured_at": "2026-07-13T00:37:04.629763Z",
-        "cost_usd": 25.8490905,
+        "api_duration_ms": 3157581,
+        "cache_creation_input_tokens": 303347,
+        "cache_read_input_tokens": 51888734,
+        "captured_at": "2026-07-13T00:49:00.590397Z",
+        "cost_usd": 32.393837,
         "harness": "claude-code",
-        "input_tokens": 396,
+        "input_tokens": 470,
         "model": "claude-opus-4-8",
-        "output_tokens": 116428,
+        "output_tokens": 136546,
         "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
-        "total_duration_ms": 0
+        "total_duration_ms": 3157581
       },
       "runtime_preference": null,
       "sessions": {
         "1": {
           "attempt": 1,
-          "cache_creation_input_tokens": 274677,
-          "cache_read_input_tokens": 40379281,
-          "cost_usd": 25.8490905,
-          "ended_at": "2026-07-13T00:37:04.629763Z",
+          "cache_creation_input_tokens": 303347,
+          "cache_read_input_tokens": 51888734,
+          "cost_usd": 32.393837,
+          "ended_at": "2026-07-13T00:49:00.590397Z",
           "exit_status": 0,
-          "input_tokens": 396,
-          "output_tokens": 116428,
+          "input_tokens": 470,
+          "output_tokens": 136546,
           "runtime": "claude-code",
           "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
           "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
@@ -125957,7 +126022,7 @@
           "subprocess_pid": null
         }
       },
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -126046,7 +126111,7 @@
       ],
       "title": "Surface a dark EU capture instead of a stuck live banner",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 13027348,
       "worktree_id": null
     },
     "P30-I25-W29": {
@@ -126264,7 +126329,7 @@
       "blocks": [],
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T00:44:40.140868Z",
-      "closed_at": null,
+      "closed_at": "2026-07-13T01:13:30.868407Z",
       "commit": null,
       "criteria_floor_waiver": {
         "reason": "Reactive fix wave appended mid-iter after the live Stop-boundary run exposed the racing turn_duration row",
@@ -126296,7 +126361,7 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-13T00:44:34.866649Z",
-      "outcome": null,
+      "outcome": "Duration derived from transcript timestamp span (max with turn-duration sum) so a hook-time capture reports nonzero duration",
       "runtime_baseline": {
         "api_duration_ms": 2441500,
         "cache_creation_input_tokens": 287644,
@@ -126311,10 +126376,38 @@
         "total_duration_ms": 2441500
       },
       "runtime_carry": null,
-      "runtime_latest": null,
+      "runtime_latest": {
+        "api_duration_ms": 3157581,
+        "cache_creation_input_tokens": 303347,
+        "cache_read_input_tokens": 51888734,
+        "captured_at": "2026-07-13T00:49:00.590397Z",
+        "cost_usd": 32.393837,
+        "harness": "claude-code",
+        "input_tokens": 470,
+        "model": "claude-opus-4-8",
+        "output_tokens": 136546,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 3157581
+      },
       "runtime_preference": null,
-      "sessions": {},
-      "status": "claimed",
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "cache_creation_input_tokens": 303347,
+          "cache_read_input_tokens": 51888734,
+          "cost_usd": 32.393837,
+          "ended_at": "2026-07-13T00:49:00.590397Z",
+          "exit_status": 0,
+          "input_tokens": 470,
+          "output_tokens": 136546,
+          "runtime": "claude-code",
+          "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "started_at": "2026-07-13T00:49:00.590397Z",
+          "subprocess_pid": null
+        }
+      },
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -126361,7 +126454,7 @@
       ],
       "title": "Measure session duration from transcript timestamps",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 7908466,
       "worktree_id": null
     }
   },
