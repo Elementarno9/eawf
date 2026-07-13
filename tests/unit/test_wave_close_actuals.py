@@ -37,6 +37,7 @@ from eawf.kernel.state.models import (
     CurrentPointers,
     Project,
     RuntimeBaseline,
+    RuntimeCarry,
     RuntimeLatest,
     State,
 )
@@ -392,6 +393,60 @@ def test_close_wave_threads_attribution_onto_auto_actual() -> None:
     assert actual.model == "claude-opus-4-1"
 
 
+def test_close_wave_marks_a_reset_wave_excluded_from_calibration() -> None:
+    """W47: a re-originated runtime closes honestly but does not calibrate anything.
+
+    A counter reset drops the runtime measured before it, and it cannot be
+    re-derived -- so the wave closes on a FLOOR, not a measure. The row is the
+    honest record of what was captured; the flag is what stops a calibration
+    consumer from reading it as a reference class.
+    """
+    state = _empty_state()
+    _seed_wave(state)
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    wave = state.waves["P01-I01-W01"]
+    wave.runtime_carry = RuntimeCarry(counter_resets=1)
+
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
+
+    assert state.actuals is not None
+    assert state.actuals["P01-I01-W01"].calibration_excluded is True
+
+
+def test_close_wave_marks_a_shared_session_excluded_from_calibration() -> None:
+    """W47: a wave that shared its session closes on a split, not a measurement."""
+    state = _empty_state()
+    _seed_wave(state)
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    state.waves["P01-I01-W01"].runtime_latest = RuntimeLatest(
+        api_duration_ms=17000,
+        shared_wave_count=4,
+        captured_at=datetime.now(UTC),
+    )
+
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
+
+    assert state.actuals is not None
+    assert state.actuals["P01-I01-W01"].calibration_excluded is True
+
+
+def test_close_wave_leaves_a_clean_measurement_calibratable() -> None:
+    """Boundary: an unshared, un-reset wave is NOT excluded -- the flag has teeth."""
+    state = _empty_state()
+    _seed_wave(state)
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    state.waves["P01-I01-W01"].runtime_latest = RuntimeLatest(
+        api_duration_ms=17000,
+        shared_wave_count=1,
+        captured_at=datetime.now(UTC),
+    )
+
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
+
+    assert state.actuals is not None
+    assert state.actuals["P01-I01-W01"].calibration_excluded is False
+
+
 def test_close_wave_null_attribution_when_no_runtime_latest() -> None:
     """Boundary: with no captured runtime, the recorded actual stays unattributed.
 
@@ -680,3 +735,56 @@ def test_metrics_variance_empty_without_measured_elapsed_eu() -> None:
     assert metric.actual_eu == pytest.approx(0.0)
     assert metric.planned_eu == pytest.approx(1.0)
     assert metric.variance_pct == pytest.approx(-100.0)
+
+
+# ---- v1.18 -> v1.19 migration (calibration_excluded) -------------------------
+
+
+def _state_v1_18_with_actual() -> dict[str, object]:
+    return {
+        "schema_version": "1.18",
+        "actuals": {
+            "P01-I01-W01": {
+                "id": "ACT-P01-I01-W01",
+                "scope_id": "P01-I01-W01",
+                "status": "done",
+                "elapsed_eu": 1.0,
+                "current_store_record_id": "REC-P01-I01-W01",
+                "updated_at": "2026-07-13T00:00:00Z",
+            }
+        },
+    }
+
+
+def test_migration_backfills_calibration_excluded() -> None:
+    from eawf.kernel.migrations.v1_18_to_v1_19 import MigrationV118ToV119
+
+    out = MigrationV118ToV119().apply(_state_v1_18_with_actual())
+
+    assert out["schema_version"] == "1.19"
+    # False is what an unmarked row has always meant: nothing known to disqualify it.
+    assert out["actuals"]["P01-I01-W01"]["calibration_excluded"] is False
+
+
+def test_migration_v119_does_not_mutate_input() -> None:
+    from eawf.kernel.migrations.v1_18_to_v1_19 import MigrationV118ToV119
+
+    payload = _state_v1_18_with_actual()
+
+    MigrationV118ToV119().apply(payload)
+
+    assert payload["schema_version"] == "1.18"
+    assert "calibration_excluded" not in payload["actuals"]["P01-I01-W01"]  # type: ignore[index,operator]
+
+
+def test_migration_v119_pre_post_version_guards() -> None:
+    from eawf.kernel.migrations.v1_18_to_v1_19 import MigrationV118ToV119
+
+    step = MigrationV118ToV119()
+    payload = _state_v1_18_with_actual()
+
+    step.check_pre(payload)
+    step.check_post(step.apply(payload))
+
+    with pytest.raises(Exception, match="schema_version"):
+        step.check_pre({"schema_version": "1.17"})

@@ -995,6 +995,18 @@ class ActualSummary(_StrictModel):
     ``"claude-code"``) and the model id the runtime billed against. Both are
     optional because not every recorded actual knows them, and a state written
     before the v1.11 bump re-validates with both defaulted to ``None``.
+
+    ``calibration_excluded`` marks a row that was MEASURED but does not calibrate
+    anything, so a consumer can skip it from state alone rather than from a human
+    reading a document. The close path sets it when the wave's runtime was
+    re-originated by a counter reset (:attr:`RuntimeCarry.counter_resets`, which
+    means the runtime before the reset is gone and the figure is a floor, not a
+    measure) or shared across concurrent waves
+    (:attr:`RuntimeBaseline.shared_wave_count`, where the split among sharers is
+    an approximation whenever the concurrency moved mid-span). Both are honest
+    records of what was captured; neither is a reference class. It defaults to
+    ``False`` so an unmarked row means "nothing known to disqualify it", and a
+    state written before the v1.19 bump re-validates unchanged.
     """
 
     id: IdStr
@@ -1007,6 +1019,7 @@ class ActualSummary(_StrictModel):
     actual_cost_usd: Annotated[float, Field(ge=0.0)] = 0.0
     harness: str | None = None
     model: str | None = None
+    calibration_excluded: bool = False
     current_store_record_id: str
     updated_at: UtcDatetime
 
@@ -1693,6 +1706,15 @@ class State(_StrictModel):
     the count N concurrent waves each difference -- and each record -- the whole
     session's runtime. It defaults to ``None``; the ``v1_17_to_v1_18`` step
     backfills it on every snapshot, and a null count reads as a divisor of one.
+
+    The ``1.19`` edge is purely additive: it adds
+    :attr:`ActualSummary.calibration_excluded`, which marks an actual that was
+    measured but does not calibrate anything -- its runtime was re-originated by a
+    counter reset, or shared across concurrent waves. Without the flag a consumer
+    has no way to tell such a row from a clean one, so the exclusion would live in
+    a document rather than in state. It defaults to ``False``; the
+    ``v1_18_to_v1_19`` step backfills it on every actual, and a state written
+    before the bump re-validates with no historical fact changed.
     """
 
     schema_version: Literal[
@@ -1715,6 +1737,7 @@ class State(_StrictModel):
         "1.16",
         "1.17",
         "1.18",
+        "1.19",
     ]
     scope_kind: ScopeKind
     urn: UrnStr

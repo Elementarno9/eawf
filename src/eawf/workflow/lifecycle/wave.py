@@ -406,6 +406,32 @@ def compute_runtime_delta(
     )
 
 
+def runtime_is_calibration_excluded(wave: Wave) -> bool:
+    """Return whether this wave's measured runtime disqualifies it as calibration data.
+
+    The row is still an honest record of what was captured -- it is just not a
+    reference class, and a consumer must be able to see that from state rather
+    than from a document. Two things disqualify it:
+
+    * **The counters were re-originated.** A counter reset (a truncated
+      transcript, a changed measure) drops the runtime measured before it, and it
+      cannot be re-derived. What the wave closes on is a floor, not a measure.
+    * **The session was shared.** One capture is written to every active wave, so
+      a wave that shared its session closes on a SPLIT of one session's counters
+      (:func:`shared_wave_divisor`), and the split is an approximation whenever
+      the concurrency moved mid-span.
+
+    Args:
+        wave: The wave being closed.
+
+    Returns:
+        ``True`` when the wave's runtime was re-originated or shared.
+    """
+    resets = wave.runtime_carry.counter_resets if wave.runtime_carry is not None else 0
+    shared = shared_wave_divisor(wave.runtime_baseline, wave.runtime_latest)
+    return resets > 0 or shared > 1
+
+
 def _runtime_basis_eu(
     eu_basis: EuBasis,
     *,
@@ -1044,6 +1070,12 @@ def close_wave(
     so a recorded actual is calibratable by harness+model; both stay ``None``
     when no runtime was captured.
 
+    The close path also marks the actual ``calibration_excluded`` when the wave's
+    runtime was re-originated by a counter reset or shared across concurrent waves
+    (:func:`runtime_is_calibration_excluded`). Such a row is an honest record of
+    what was captured but is not a reference class, and the flag is what lets a
+    consumer skip it reading state alone.
+
     Args:
         state: State to mutate in place.
         wave_id: Id of the claimed/in-progress wave to close.
@@ -1120,6 +1152,10 @@ def close_wave(
     # Both stay nullable when no runtime was captured.
     actual_harness = wave.runtime_latest.harness if wave.runtime_latest is not None else None
     actual_model = wave.runtime_latest.model if wave.runtime_latest is not None else None
+    # A wave whose counters were re-originated or shared closes on an honest
+    # figure that is nonetheless not a reference class. Mark it on the row so a
+    # calibration consumer skips it from state alone.
+    calibration_excluded = runtime_is_calibration_excluded(wave)
     if existing is None:
         state.actuals[wave_id] = ActualSummary(
             id=f"ACT-{wave_id}",
@@ -1132,6 +1168,7 @@ def close_wave(
             actual_cost_usd=auto_cost_usd,
             harness=actual_harness,
             model=actual_model,
+            calibration_excluded=calibration_excluded,
             current_store_record_id=f"REC-{wave_id}",
             updated_at=now,
         )
@@ -1144,11 +1181,18 @@ def close_wave(
             existing.harness = actual_harness
         if actual_model is not None:
             existing.model = actual_model
+        # An operator-authored actual still has its token + cost fields refreshed
+        # from the same disqualified capture, so the exclusion applies to it too.
+        # Only ever set, never clear: nothing about a close makes a re-originated
+        # or shared row calibratable again.
+        if calibration_excluded:
+            existing.calibration_excluded = True
         existing.updated_at = now
     logger.info(
         f"close_wave id={wave_id} outcome={outcome!r} "
         f"actual_tokens={wave.tokens_consumed} actual_cost_usd={auto_cost_usd} "
-        f"actual_attention_eu={actual_attention_eu} elapsed_eu={auto_elapsed_eu}"
+        f"actual_attention_eu={actual_attention_eu} elapsed_eu={auto_elapsed_eu} "
+        f"calibration_excluded={calibration_excluded}"
     )
     return wave
 
