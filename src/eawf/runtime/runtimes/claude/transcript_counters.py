@@ -25,16 +25,17 @@ Two transcript quirks the aggregator must handle:
   ``type: "system"`` / ``subtype: "turn_duration"`` rows as a top-level
   ``durationMs``, not inside the assistant message -- and that row is written
   *after* the Stop hook has already run, so a hook-time read of a live session
-  sees no duration at all. The row timestamps are therefore the reliable source,
-  but the first-to-last SPAN over them is the operator's wall clock, not the
-  agent's work: it counts every minute spent reading, and a wave left claimed
-  overnight would bank tens of EU for nothing. So the aggregator sums the gaps
-  *between* rows and drops any gap wide enough to be a turn boundary
-  (:data:`_IDLE_GAP_MS`), leaving the time the agent was actually working. Both
-  measures grow monotonically with the transcript, so their maximum is monotonic
-  too and a later capture can never report a smaller duration than an earlier
-  one -- which is what keeps the close-time delta against the claim-time baseline
-  non-negative without the capture path having to re-origin it.
+  sees no duration for the turn in flight. The row timestamps carry the rest, but
+  the first-to-last SPAN over them is the operator's wall clock, not the agent's
+  work: it counts every minute spent reading, and a wave left claimed overnight
+  would bank tens of EU for nothing. So the aggregator sums each TURN's span
+  instead (:func:`_turn_spans_ms`) -- a turn runs from an operator prompt to the
+  row before the next one -- and counts nothing between turns. Everything inside
+  a turn is agent runtime, including the minutes it sits blocked on a tool it
+  called; nothing outside one is. Both measures grow monotonically with the
+  transcript, so their maximum is monotonic too and a later capture never reports
+  a smaller duration than an earlier one -- which keeps the close-time delta
+  against the claim-time baseline non-negative without a re-origin.
 
 Every read fails open: a missing, unreadable, or usage-free transcript yields
 ``None`` so the Stop hook stays non-blocking.
@@ -49,7 +50,6 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -202,41 +202,63 @@ def _row_timestamp(row: dict[str, Any]) -> datetime | None:
         return None
 
 
-#: A gap between consecutive transcript rows longer than this is IDLE, not work:
-#: the agent has finished its turn and the operator is reading, thinking, or away.
-#: Gaps shorter than it are within a turn -- a tool call, a test run, a model
-#: round trip -- and count as agent runtime. 15 minutes sits above the longest
-#: in-turn tool run this repo produces (a full ``just test`` is ~11 min) and well
-#: below any realistic operator absence, so the measure captures long tool work
-#: without ever charging a wave for the operator's lunch.
-_IDLE_GAP_MS: int = 900_000
+def _is_operator_prompt(row: dict[str, Any]) -> bool:
+    """Return whether *row* is a fresh operator prompt -- the start of a turn.
 
-
-def _active_span_ms(stamps: list[datetime]) -> int:
-    """Return agent WORKING time: the summed row-to-row gaps, idle gaps dropped.
-
-    The whole-session span (first row to last) is the claim-to-close wall clock,
-    which is emphatically NOT the wave's effort: it counts every minute the
-    operator spent reading, and a wave left claimed overnight would record tens
-    of EU for no work at all. :func:`eawf.workflow.lifecycle.wave.compute_runtime_delta`
-    says so outright -- ``elapsed_eu`` is the agent-runtime basis, never the
-    claim-to-close wall clock.
-
-    So sum the gaps BETWEEN consecutive rows and drop any gap wider than
-    :data:`_IDLE_GAP_MS`, which is the shape of a turn boundary. What remains is
-    the time the agent was actually working, and it is bounded by construction: an
-    idle gap of any length -- a coffee break, an overnight resume -- contributes
-    nothing. Appending rows only ever adds gaps, so the measure stays monotonic
-    and a later capture can never report a smaller duration than an earlier one.
+    Claude Code writes ``type: "user"`` rows for two very different things: the
+    operator typing, and a tool handing its result back to the agent mid-turn.
+    They are told apart by content -- a prompt carries text, a tool result carries
+    ``tool_result`` blocks -- and the difference is what makes a turn boundary
+    findable at all. (In a real session of this repo: 14 prompts against 546
+    tool-result rows.)
     """
-    if len(stamps) < 2:
-        return 0
-    ordered = sorted(stamps)
+    if row.get("type") != "user":
+        return False
+    content = (row.get("message") or {}).get("content")
+    if isinstance(content, str):
+        return bool(content)
+    if isinstance(content, list):
+        return any(isinstance(block, dict) and block.get("type") == "text" for block in content)
+    return False
+
+
+def _turn_spans_ms(rows: list[dict[str, Any]]) -> int:
+    """Return summed agent working time: the span of each turn, nothing between.
+
+    A turn runs from an operator prompt to the row before the next one, and the
+    agent works for all of it -- thinking, calling tools, and waiting on the tools
+    it called. The gaps BETWEEN turns are the operator reading, deciding, or being
+    asleep, and belong to nobody.
+
+    This replaces a gap-width heuristic that got both halves wrong. It charged any
+    gap under a 15-minute ceiling as work, so an operator pausing 14 minutes to
+    read banked 14 minutes of "agent runtime"; and it dropped any gap OVER the
+    ceiling, so a 20-minute subagent dispatch -- the agent's longest real work --
+    counted as nothing at all. A turn boundary is a fact in the transcript, not a
+    duration to guess at.
+
+    An in-turn gap of any length counts, because the agent really is working
+    across it. An out-of-turn gap of any length does not, because it really is
+    not. So the measure cannot be inflated by an idle operator, and cannot be
+    deflated by a slow tool.
+    """
+    turns: list[list[datetime]] = []
+    current: list[datetime] = []
+    for row in rows:
+        stamped_at = _row_timestamp(row)
+        if stamped_at is None:
+            continue
+        if _is_operator_prompt(row) and current:
+            turns.append(current)
+            current = []
+        current.append(stamped_at)
+    if current:
+        turns.append(current)
     total = 0
-    for earlier, later in pairwise(ordered):
-        gap = int((later - earlier).total_seconds() * 1000)
-        if 0 < gap <= _IDLE_GAP_MS:
-            total += gap
+    for stamps in turns:
+        if len(stamps) < 2:
+            continue
+        total += max(0, int((max(stamps) - min(stamps)).total_seconds() * 1000))
     return total
 
 
@@ -293,13 +315,9 @@ def _scan_rows(rows: list[dict[str, Any]]) -> _TranscriptScan:
     tally = _TokenTally()
     seen: set[str] = set()
     turn_duration_ms = 0
-    stamps: list[datetime] = []
     model: str | None = None
     for row in rows:
         turn_duration_ms += _non_negative_int(row.get("durationMs"))
-        stamped_at = _row_timestamp(row)
-        if stamped_at is not None:
-            stamps.append(stamped_at)
         message = row.get("message")
         if not isinstance(message, dict):
             continue
@@ -316,14 +334,14 @@ def _scan_rows(rows: list[dict[str, Any]]) -> _TranscriptScan:
             seen.add(key)
         _add_usage(tally, usage)
 
-    # The turn-duration rows land AFTER the Stop hook reads the file, so a live
-    # capture usually sees none of them and must fall back to the row timestamps.
-    # Both measures are agent working time (the turn rows by construction, the
-    # gap sum because idle gaps are dropped) and both grow monotonically with the
-    # transcript, so their maximum is monotonic too.
+    # The turn-duration rows are Claude's own per-turn measure, but they land AFTER
+    # the Stop hook reads the file, so a live capture sees none for the turn in
+    # flight and must fall back to that turn's span. Both measures are agent
+    # working time and both grow monotonically with the transcript, so their
+    # maximum is monotonic too.
     return _TranscriptScan(
         tally=tally,
-        duration_ms=max(turn_duration_ms, _active_span_ms(stamps)),
+        duration_ms=max(turn_duration_ms, _turn_spans_ms(rows)),
         turn_duration_ms=turn_duration_ms,
         model=model,
         messages=len(seen),
@@ -339,9 +357,10 @@ def aggregate_transcript_counters(transcript_path: Path | str | None) -> Runtime
 
     Returns:
         :class:`RuntimeCounters` stamped ``harness="claude-code"`` carrying the
-        session's cumulative agent working time (see :func:`_active_span_ms` --
-        NOT the session's wall-clock span), per-class token tallies, billed model
-        id, and the token-derived ``cost_usd``. The transcript splits no
+        session's cumulative agent working time (see :func:`_turn_spans_ms` --
+        the summed spans of its turns, NOT the session's wall-clock span),
+        per-class token tallies, billed model id, and the token-derived
+        ``cost_usd``. The transcript splits no
         model-API duration out of the total, so both ``api_duration_ms`` and
         ``total_duration_ms`` carry that one duration -- the same convention the
         headless spawn snapshot uses, which keeps the default API-duration EU

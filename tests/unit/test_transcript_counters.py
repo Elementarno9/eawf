@@ -325,25 +325,39 @@ def test_transcript_path_for_session_none_when_absent(
     assert transcript_path_for_session("") is None
 
 
-# --- P30-I25-W34: EU is agent work time, not the operator's wall clock ------
+# --- P30-I25-W39: turns are a fact in the transcript, not a gap to guess at --
 
 
-def test_idle_gap_between_turns_is_not_counted_as_work(tmp_path: Path) -> None:
-    """A wave left claimed overnight must not bank EU for the hours nobody worked.
+def _prompt_row(*, at: str) -> dict[str, object]:
+    """An operator prompt -- a user row carrying TEXT. This starts a turn."""
+    return {"type": "user", "timestamp": at, "message": {"role": "user", "content": "do the thing"}}
 
-    The shipped duration was the first-to-last row SPAN, which is the operator's
-    wall clock: it counted reading, thinking, and sleeping. `compute_runtime_delta`
-    forbids exactly that ("elapsed_eu is the AGENT-RUNTIME basis ... NOT the
-    claim->close wall-clock"). Two short turns either side of an overnight gap
-    must report only the two turns.
+
+def _tool_result_row(*, at: str) -> dict[str, object]:
+    """A tool handing its result back MID-TURN -- also a user row, but not a prompt."""
+    return {
+        "type": "user",
+        "timestamp": at,
+        "message": {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}],
+        },
+    }
+
+
+def test_operator_idle_between_turns_is_never_charged(tmp_path: Path) -> None:
+    """Two short turns split by a 14-minute pause report only the two turns.
+
+    The shipped measure charged any gap under a 15-minute ceiling as agent work,
+    so this exact case reported 960_000 ms for 120_000 ms of work. The ceiling was
+    a guess at where a turn ends; the transcript states it outright.
     """
     rows = [
-        # Turn one: two minutes of work.
-        _assistant_row("msg_0001", at="2026-07-13T09:00:00.000Z"),
-        _assistant_row("msg_0002", at="2026-07-13T09:02:00.000Z"),
-        # ... the operator goes home. Fourteen hours pass.
-        _assistant_row("msg_0003", at="2026-07-13T23:00:00.000Z"),
-        _assistant_row("msg_0004", at="2026-07-13T23:03:00.000Z"),
+        _prompt_row(at="2026-07-13T09:00:00.000Z"),
+        _assistant_row("msg_0001", at="2026-07-13T09:01:00.000Z"),
+        # The operator reads for 14 minutes -- under the old 15-minute ceiling.
+        _prompt_row(at="2026-07-13T09:15:00.000Z"),
+        _assistant_row("msg_0002", at="2026-07-13T09:16:00.000Z"),
     ]
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
@@ -351,16 +365,56 @@ def test_idle_gap_between_turns_is_not_counted_as_work(tmp_path: Path) -> None:
     counters = aggregate_transcript_counters(path)
 
     assert counters is not None
-    # Two minutes plus three minutes of work -- not the fourteen-hour span.
+    assert counters.api_duration_ms == 120_000
+
+
+def test_a_long_in_turn_tool_run_is_agent_work_not_idle(tmp_path: Path) -> None:
+    """A 20-minute subagent dispatch counts in full.
+
+    The shipped measure DROPPED any gap over its 15-minute ceiling, erasing the
+    agent's longest real work: a subagent dispatch or a full test suite the agent
+    sits blocked on. Inside a turn there is no idle -- the agent is working.
+    """
+    rows = [
+        _prompt_row(at="2026-07-13T09:00:00.000Z"),
+        _assistant_row("msg_0001", at="2026-07-13T09:00:30.000Z"),
+        # The agent dispatches a subagent and waits 20 minutes for it.
+        _tool_result_row(at="2026-07-13T09:20:30.000Z"),
+        _assistant_row("msg_0002", at="2026-07-13T09:21:00.000Z"),
+    ]
+    path = tmp_path / "t.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    counters = aggregate_transcript_counters(path)
+
+    assert counters is not None
+    assert counters.api_duration_ms == 1_260_000
+
+
+def test_an_overnight_gap_between_turns_adds_nothing(tmp_path: Path) -> None:
+    """A wave left claimed overnight banks no EU for the hours nobody worked."""
+    rows = [
+        _prompt_row(at="2026-07-13T09:00:00.000Z"),
+        _assistant_row("msg_0001", at="2026-07-13T09:02:00.000Z"),
+        _prompt_row(at="2026-07-13T23:00:00.000Z"),
+        _assistant_row("msg_0002", at="2026-07-13T23:03:00.000Z"),
+    ]
+    path = tmp_path / "t.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    counters = aggregate_transcript_counters(path)
+
+    assert counters is not None
     assert counters.api_duration_ms == 300_000
 
 
-def test_long_in_turn_tool_run_still_counts_as_work(tmp_path: Path) -> None:
-    """A ten-minute test run inside a turn is the agent working, not idling."""
+def test_tool_results_do_not_split_a_turn(tmp_path: Path) -> None:
+    """A tool_result is a user row too -- but it is mid-turn, not a new prompt."""
     rows = [
-        _assistant_row("msg_0001", at="2026-07-13T09:00:00.000Z"),
-        # The agent kicks off the suite and waits ten minutes for it.
-        _assistant_row("msg_0002", at="2026-07-13T09:10:00.000Z"),
+        _prompt_row(at="2026-07-13T09:00:00.000Z"),
+        _tool_result_row(at="2026-07-13T09:01:00.000Z"),
+        _tool_result_row(at="2026-07-13T09:02:00.000Z"),
+        _assistant_row("msg_0001", at="2026-07-13T09:03:00.000Z"),
     ]
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
@@ -368,30 +422,31 @@ def test_long_in_turn_tool_run_still_counts_as_work(tmp_path: Path) -> None:
     counters = aggregate_transcript_counters(path)
 
     assert counters is not None
-    assert counters.api_duration_ms == 600_000
+    # One turn of three minutes, not three turns of nothing.
+    assert counters.api_duration_ms == 180_000
 
 
-def test_work_time_stays_monotonic_across_an_idle_gap(tmp_path: Path) -> None:
-    """Resuming after an idle gap only ever ADDS duration -- never subtracts.
-
-    A backwards counter raises at close, so the measure must not shrink when the
-    transcript grows across a turn boundary.
-    """
+def test_work_time_stays_monotonic_across_a_turn_boundary(tmp_path: Path) -> None:
+    """Resuming after an idle gap only ever ADDS duration -- never subtracts."""
     path = tmp_path / "t.jsonl"
     first_turn = [
-        _assistant_row("msg_0001", at="2026-07-13T09:00:00.000Z"),
-        _assistant_row("msg_0002", at="2026-07-13T09:05:00.000Z"),
+        _prompt_row(at="2026-07-13T09:00:00.000Z"),
+        _assistant_row("msg_0001", at="2026-07-13T09:05:00.000Z"),
     ]
     path.write_text("\n".join(json.dumps(r) for r in first_turn) + "\n", encoding="utf-8")
     before = aggregate_transcript_counters(path)
 
-    resumed = [*first_turn, _assistant_row("msg_0003", at="2026-07-14T09:00:00.000Z")]
+    resumed = [
+        *first_turn,
+        _prompt_row(at="2026-07-14T09:00:00.000Z"),
+        _assistant_row("msg_0002", at="2026-07-14T09:01:00.000Z"),
+    ]
     path.write_text("\n".join(json.dumps(r) for r in resumed) + "\n", encoding="utf-8")
     after = aggregate_transcript_counters(path)
 
     assert before is not None
     assert after is not None
     assert before.api_duration_ms == 300_000
-    # The day-long gap adds nothing, but nothing is lost either.
     assert after.api_duration_ms >= before.api_duration_ms
-    assert after.api_duration_ms == 300_000
+    # The day-long gap adds nothing; the new turn adds its own minute.
+    assert after.api_duration_ms == 360_000
