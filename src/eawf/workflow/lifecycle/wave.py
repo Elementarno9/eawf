@@ -13,6 +13,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from eawf.kernel.config.schema import EuBasis
 from eawf.kernel.spec.common import CriterionSpec
@@ -48,31 +50,58 @@ from eawf.workflow.lifecycle.spec import (
     validate_transition,
 )
 
+if TYPE_CHECKING:
+    from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
+
 logger = logging.getLogger(__name__)
 
 
-def _capture_runtime_baseline(session_id: str) -> RuntimeBaseline | None:
-    """Return a claim-time runtime sidecar snapshot, when one is available.
+def _claim_session_counters(session_id: str) -> RuntimeCounters | None:
+    """Return the claiming session's cumulative runtime counters, when readable.
 
-    Reads the statusline runtime-counter sidecar keyed by *session_id* and
-    converts the cumulative counters into a baseline stamped at claim time.
-    Returns ``None`` when no sidecar exists for the session (the common case
-    when a wave is claimed outside an instrumented Claude Code session) so the
-    close-time delta degrades to "no captured runtime" rather than subtracting
-    against a phantom zero baseline.
+    The transcript is the primary source: every Claude Code session writes one,
+    so a wave claimed from an ordinary session has counters to baseline against.
+    The statusline runtime-counter sidecar stays a fallback for an operator whose
+    statusline IS ``eawf statusline`` (it writes the sidecar) but whose transcript
+    does not resolve.
 
     Args:
-        session_id: Claim session id, used to resolve the session-keyed
-            statusline cache path the sidecar lives beside.
+        session_id: Claim session id, used to resolve both the session
+            transcript and the session-keyed statusline cache the sidecar lives
+            beside.
     """
     from eawf.runtime.runtime_counter_sidecar import (
         RuntimeCounterSidecar,
         sidecar_path_for_statusline_cache,
     )
     from eawf.runtime.runtimes.claude.statusline import cache_path_for
+    from eawf.runtime.runtimes.claude.transcript_counters import (
+        aggregate_transcript_counters,
+        transcript_path_for_session,
+    )
 
+    transcript = transcript_path_for_session(session_id, cwd=Path.cwd())
+    counters = aggregate_transcript_counters(transcript)
+    if counters is not None:
+        return counters
     sidecar = RuntimeCounterSidecar(sidecar_path_for_statusline_cache(cache_path_for(session_id)))
-    counters = sidecar.read()
+    return sidecar.read()
+
+
+def _capture_runtime_baseline(session_id: str) -> RuntimeBaseline | None:
+    """Return a claim-time runtime snapshot of the claiming session.
+
+    Converts the session's cumulative counters (see
+    :func:`_claim_session_counters`) into a baseline stamped at claim time.
+    Returns ``None`` when the session exposes no counters at all -- neither a
+    readable transcript nor a statusline sidecar -- so the close-time delta
+    degrades to "no captured runtime" rather than subtracting against a phantom
+    zero baseline.
+
+    Args:
+        session_id: Claim session id whose counters the baseline snapshots.
+    """
+    counters = _claim_session_counters(session_id)
     if counters is None:
         return None
     return RuntimeBaseline(
@@ -83,6 +112,8 @@ def _capture_runtime_baseline(session_id: str) -> RuntimeBaseline | None:
         output_tokens=counters.output_tokens,
         cache_creation_input_tokens=counters.cache_creation_input_tokens,
         cache_read_input_tokens=counters.cache_read_input_tokens,
+        harness=counters.harness,
+        model=counters.model,
         captured_at=datetime.now(UTC),
     )
 
@@ -127,7 +158,7 @@ def compute_runtime_delta(
     ``eu_basis`` selects which captured quantity derives elapsed EU.
     Missing baseline/latest/chosen-basis counters mean there is no captured
     runtime to apply; comparable counters that move backwards reject the
-    close because the cumulative sidecar reset or regressed.
+    close because the cumulative counter source reset or regressed.
     """
     if baseline is None or latest is None:
         return None
