@@ -14817,7 +14817,11 @@
     "active_session_ids": [
       "SES-20260713T191150Z-auditor-claude-code"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I25-W39",
+      "P30-I25-W40",
+      "P30-I25-W41"
+    ],
     "iter_id": "P30-I25",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -27858,6 +27862,45 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I25-W38",
       "updated_at": "2026-07-13T19:07:41.456358Z"
+    },
+    "P30-I25-W39": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W39-bucket-20260713T195159Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I25-W39",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I25-W39",
+      "updated_at": "2026-07-13T19:51:59.792639Z"
+    },
+    "P30-I25-W40": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W40-bucket-20260713T195200Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I25-W40",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I25-W40",
+      "updated_at": "2026-07-13T19:52:00.384625Z"
+    },
+    "P30-I25-W41": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W41-bucket-20260713T195200Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I25-W41",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I25-W41",
+      "updated_at": "2026-07-13T19:52:00.994566Z"
     }
   },
   "fleet_run": null,
@@ -30434,7 +30477,10 @@
         "P30-I25-W35",
         "P30-I25-W36",
         "P30-I25-W37",
-        "P30-I25-W38"
+        "P30-I25-W38",
+        "P30-I25-W39",
+        "P30-I25-W40",
+        "P30-I25-W41"
       ]
     }
   },
@@ -31572,7 +31618,7 @@
   "schema_version": "1.15",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-13T19:21:54.792122Z",
+  "updated_at": "2026-07-13T19:52:00.994827Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -127974,6 +128020,345 @@
       "title": "Retire the docstrings this iter made false",
       "token_budget": null,
       "tokens_consumed": 6282,
+      "worktree_id": null
+    },
+    "P30-I25-W39": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T19:51:59.746445Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Repair wave appended after the re-audit refuted the idle-ceiling heuristic with a fixture showing 960s reported for 120s of work",
+        "waived_at": "2026-07-13T19:51:33.029893Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The 15-minute idle ceiling charges up to 15 minutes of operator idle per turn boundary as agent work and erases any in-turn gap longer than it, which is exactly the long subagent and suite runs the agent blocks on. Turn boundaries are detectable: an operator prompt is a user row whose content is text, not a tool result.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+        "tests/unit/test_transcript_counters.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W39",
+      "intent": {
+        "desired_outcome": "Duration counts exactly the time inside the agent's turns and nothing between them",
+        "evidence_refs": [
+          ".ea/artifacts/evidence/2026-07-13-eu-capture/2026-07-13-attestation.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "The duration basis feeds every recorded actual so a wrong measure poisons the calibration corpus this phase exists to build",
+        "problem": "The idle-gap heuristic charges operator idle under fifteen minutes as work and drops agent work over fifteen minutes entirely",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-13T19:51:33.082606Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 22600279,
+        "cache_creation_input_tokens": 1159843,
+        "cache_read_input_tokens": 200114403,
+        "captured_at": "2026-07-13T19:51:59.792591Z",
+        "cost_usd": 119.8058065,
+        "harness": "claude-code",
+        "input_tokens": 1100,
+        "model": "claude-opus-4-8",
+        "output_tokens": 325787,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 22600279
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Duration is the sum of per-turn spans where a turn begins at an operator prompt row (a user row carrying text rather than a tool result) so idle between turns is excluded no matter how short it is",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Duration is the sum of per-turn spans where a turn begins at an operator prompt row (a user row carrying text rather than a tool result) so idle between turns is excluded no matter how short it is",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A long in-turn gap is counted rather than erased so a fourteen-minute subagent dispatch or a suite run the agent blocks on is agent runtime not idle",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A long in-turn gap is counted rather than erased so a fourteen-minute subagent dispatch or a suite run the agent blocks on is agent runtime not idle",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "When a turn carries an authoritative turn_duration row that value is preferred over the turn span rather than the larger of the two being taken",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "When a turn carries an authoritative turn_duration row that value is preferred over the turn span rather than the larger of the two being taken",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "Duration remains monotonic as the transcript grows",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Duration remains monotonic as the transcript grows",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-05",
+          "kind": "legacy",
+          "measurable_signal": "A regression test pins two short turns split by a fourteen-minute operator pause reporting only the two turns and a test pins a twenty-minute in-turn tool run counting in full",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A regression test pins two short turns split by a fourteen-minute operator pause reporting only the two turns and a test pins a twenty-minute in-turn tool run counting in full",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Delimit turns properly instead of guessing at idle gaps",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W40": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T19:52:00.344253Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Repair wave appended after the re-audit proved W37 relocated the strand into the zero-EU close gate rather than removing it",
+        "waived_at": "2026-07-13T19:51:34.235908Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The clamp yields elapsed_eu zero and the zero-runtime gate then refuses the close for any enforcing wave, so the wave still cannot close without an operator waiver. The zero-valued delta also suppresses the telemetry-rollup fallback, discarding real evidence of the wave's runtime.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/workflow/lifecycle/wave.py",
+        "tests/daemon/test_state_methods.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W40",
+      "intent": {
+        "desired_outcome": "A counter reset degrades the measurement without ever blocking the close and without discarding rollup evidence",
+        "evidence_refs": [
+          ".ea/artifacts/evidence/2026-07-13-eu-capture/2026-07-13-attestation.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "W37 claimed to remove an unrecoverable strand and instead moved it one gate along which is the same defect wearing a different mask",
+        "problem": "A wave whose counters reset still cannot close because the clamped zero-EU delta is refused by the zero-runtime gate",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-13T19:51:34.274414Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 22600279,
+        "cache_creation_input_tokens": 1159843,
+        "cache_read_input_tokens": 200114403,
+        "captured_at": "2026-07-13T19:52:00.384591Z",
+        "cost_usd": 119.8058065,
+        "harness": "claude-code",
+        "input_tokens": 1100,
+        "model": "claude-opus-4-8",
+        "output_tokens": 325787,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 22600279
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "A wave whose counters were re-originated by a reset closes without an operator waiver: the zero-runtime gate recognises a recorded reset as the honest reason for the missing runtime rather than treating it as an unexplained zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A wave whose counters were re-originated by a reset closes without an operator waiver: the zero-runtime gate recognises a recorded reset as the honest reason for the missing runtime rather than treating it as an unexplained zero",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A zero-valued runtime delta no longer suppresses the telemetry-rollup fallback so a wave with real rollup evidence records that rather than a manufactured zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A zero-valued runtime delta no longer suppresses the telemetry-rollup fallback so a wave with real rollup evidence records that rather than a manufactured zero",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "A regression test drives an actual wave close (not just the delta helper) for a wave whose baseline was recorded under a different basis and asserts the close succeeds",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A regression test drives an actual wave close (not just the delta helper) for a wave whose baseline was recorded under a different basis and asserts the close succeeds",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Let a counter reset close the wave instead of relocating the strand",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W41": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T19:52:00.949439Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Repair wave appended after the re-audit found two repair tests green over paths excluding the mechanism their criteria name",
+        "waived_at": "2026-07-13T19:51:58.599614Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Two repair tests are green over paths that exclude the mechanism under test: the ceiling test builds a config dict by hand and constructs no spawn, and the strand test never closes a wave. That is the same green-over-a-stub failure this iter exists to eliminate, reproduced inside its own repairs.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tests/unit/daemon/test_close_gate_auditor_jury_routing.py",
+        "tests/unit/test_runtime_session_rebase.py",
+        "tests/daemon/test_state_methods.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W41",
+      "intent": {
+        "desired_outcome": "Each repair test fails when its repair is removed",
+        "evidence_refs": [
+          ".ea/artifacts/evidence/2026-07-13-eu-capture/2026-07-13-attestation.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "A test that is green over a dead path is the exact defect class this entire phase exists to eliminate and it has now recurred inside the repairs themselves",
+        "problem": "Two repair tests pass without exercising the code path whose behaviour their criteria assert",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-13T19:51:58.642659Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 22600279,
+        "cache_creation_input_tokens": 1159843,
+        "cache_read_input_tokens": 200114403,
+        "captured_at": "2026-07-13T19:52:00.994536Z",
+        "cost_usd": 119.8058065,
+        "harness": "claude-code",
+        "input_tokens": 1100,
+        "model": "claude-opus-4-8",
+        "output_tokens": 325787,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 22600279
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "A test drives the real config-file to VerifyBlock path (writing a repo config and resolving it through the loader rather than hand-building the merged dict) and asserts the resolved ceiling is the one the close-path spawn is constructed with",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A test drives the real config-file to VerifyBlock path (writing a repo config and resolving it through the loader rather than hand-building the merged dict) and asserts the resolved ceiling is the one the close-path spawn is constructed with",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A test closes an actual wave whose baseline was recorded under a different duration basis and asserts the close succeeds rather than only asserting the delta helper returns zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A test closes an actual wave whose baseline was recorded under a different duration basis and asserts the close succeeds rather than only asserting the delta helper returns zero",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "Deleting the overlay call site or the reset handling makes these tests fail so they cannot stay green over a dead path",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Deleting the overlay call site or the reset handling makes these tests fail so they cannot stay green over a dead path",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Make the repair tests drive the paths their criteria name",
+      "token_budget": null,
+      "tokens_consumed": 0,
       "worktree_id": null
     }
   },
