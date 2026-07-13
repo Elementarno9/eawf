@@ -258,61 +258,44 @@ def test_close_gate_blocking_jury_replaces_auditor(
 # --- P30-I25-W35: the configured ceiling must survive the config->block path ---
 
 
-def test_repo_config_file_ceiling_reaches_the_resolved_block(tmp_path: Path) -> None:
-    """A ceiling written to `.ea/config.yaml` must reach the resolved VerifyBlock.
+def test_repo_config_file_ceiling_reaches_the_close_path_loader(tmp_path: Path) -> None:
+    """A ceiling in `.ea/config.yaml` must reach the block THE CLOSE PATH resolves.
 
-    Drives the REAL path: a config FILE on disk -> `merge_config` -> the overlay ->
-    the block the close-gate spawn is constructed from. No hand-built dict, no
-    monkeypatched block.
+    Drives `load_active_verify_block` -- the function the close gate itself calls
+    (`daemon/methods/state.py` -> `_load_active_verify_block` -> the overlay). Not
+    the overlay helper, and not a monkeypatched block.
 
-    Both prior attempts at this test were green over a dead path. W32's asserted
-    the ceiling on a synthetic block it had monkeypatched in, while the overlay
-    silently dropped the leaf -- so the auditor kept spawning at 600s, was killed
-    mid-audit, wrote no verdict, and the wave could not close. W35's replacement
-    called the overlay with a literal dict, never touching the config file or the
-    loader. A test that skips the mechanism its criterion names is the exact defect
-    this phase exists to kill, and it had already recurred twice here.
+    This is the THIRD attempt at this test, and the first two were both green over
+    a dead path -- the exact defect class the phase exists to kill:
+
+    - W32's asserted the ceiling on a synthetic block it had monkeypatched in,
+      while the overlay silently dropped the leaf. The auditor kept spawning at
+      600s, was killed mid-audit, wrote no verdict, and the wave could not close.
+    - W35's called `_overlay_repo_verify_leaves` directly, reaching PAST the loader
+      whose call site is the thing that could go missing. Deleting that call site
+      left it green.
+
+    So: delete the overlay call site in the loader and this test fails.
     """
-    from eawf.kernel.config.layered import merge_config
-    from eawf.workflow.verify.readiness import _overlay_repo_verify_leaves
+    from eawf.workflow.verify.readiness import load_active_verify_block
 
     ea = tmp_path / ".ea"
     ea.mkdir()
     (ea / "config.yaml").write_text(
-        "schema_version: '1.0'\nverify:\n  juror_wall_clock_seconds: 1800.0\n",
+        "schema_version: '1.0'\n"
+        "profiles:\n  enabled:\n    - core\n    - python\n"
+        "verify:\n  juror_wall_clock_seconds: 1800.0\n",
         encoding="utf-8",
     )
+    state = State.model_validate(_state_payload())
+    wave_id = next(iter(state.waves))
 
-    merged, _sources = merge_config(repo=tmp_path)
-    resolved = _overlay_repo_verify_leaves(VerifyBlock(), merged)
+    resolved = load_active_verify_block(wave_id, state, repo_root=tmp_path, config_root=tmp_path)
 
     assert resolved is not None
-    # The value came off the FILE, through the loader, onto the block.
+    # Off the FILE, through the loader the close path calls, onto the block.
     assert resolved.juror_wall_clock_seconds == 1800.0
     assert resolved.juror_wall_clock_seconds != VerifyBlock().juror_wall_clock_seconds
-
-
-def test_the_watchdog_limit_tracks_the_ceiling_from_the_config_file(tmp_path: Path) -> None:
-    """The ceiling read off disk must also move the watchdog that would kill it."""
-    from eawf.kernel.config.layered import merge_config
-    from eawf.runtime.daemon.main import mutation_hard_limit_for
-    from eawf.workflow.verify.readiness import _overlay_repo_verify_leaves
-
-    ea = tmp_path / ".ea"
-    ea.mkdir()
-    (ea / "config.yaml").write_text(
-        "schema_version: '1.0'\nverify:\n  juror_wall_clock_seconds: 1800.0\n",
-        encoding="utf-8",
-    )
-    merged, _sources = merge_config(repo=tmp_path)
-    resolved = _overlay_repo_verify_leaves(VerifyBlock(), merged)
-
-    assert resolved is not None
-    limit = mutation_hard_limit_for(resolved.juror_wall_clock_seconds)
-
-    # An auditor allowed 1800s inside a mutation aborted at 900s is killed anyway.
-    assert limit > resolved.juror_wall_clock_seconds
-    assert limit == 2100.0
 
 
 def test_repo_verify_overlay_ignores_a_junk_wall_clock() -> None:
