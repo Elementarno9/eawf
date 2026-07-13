@@ -34,10 +34,11 @@ def test_aggregate_real_transcript_fixture() -> None:
     counters = aggregate_transcript_counters(_TRANSCRIPT_FIXTURE)
 
     assert counters is not None
-    # The transcript reports wall-clock only, so both duration fields carry the
-    # same figure -- the convention the headless spawn snapshot uses. The
-    # timestamp span (593_177 ms) exceeds the single turn-duration row
-    # (502_968 ms), and the aggregator reports the larger of the two.
+    # Both duration fields carry the same figure -- the convention the headless
+    # spawn snapshot uses. Every gap between this fixture's rows is inside a turn
+    # (none exceeds the idle ceiling), so the summed working time is the full
+    # 593_177 ms and it exceeds the single turn-duration row (502_968 ms); the
+    # aggregator reports the larger of the two monotonic measures.
     assert counters.api_duration_ms == 593_177
     assert counters.total_duration_ms == 593_177
     assert counters.input_tokens == 4
@@ -322,3 +323,75 @@ def test_transcript_path_for_session_none_when_absent(
 
     assert transcript_path_for_session("sess-missing", cwd=Path("/workspace/proj")) is None
     assert transcript_path_for_session("") is None
+
+
+# --- P30-I25-W34: EU is agent work time, not the operator's wall clock ------
+
+
+def test_idle_gap_between_turns_is_not_counted_as_work(tmp_path: Path) -> None:
+    """A wave left claimed overnight must not bank EU for the hours nobody worked.
+
+    The shipped duration was the first-to-last row SPAN, which is the operator's
+    wall clock: it counted reading, thinking, and sleeping. `compute_runtime_delta`
+    forbids exactly that ("elapsed_eu is the AGENT-RUNTIME basis ... NOT the
+    claim->close wall-clock"). Two short turns either side of an overnight gap
+    must report only the two turns.
+    """
+    rows = [
+        # Turn one: two minutes of work.
+        _assistant_row("msg_0001", at="2026-07-13T09:00:00.000Z"),
+        _assistant_row("msg_0002", at="2026-07-13T09:02:00.000Z"),
+        # ... the operator goes home. Fourteen hours pass.
+        _assistant_row("msg_0003", at="2026-07-13T23:00:00.000Z"),
+        _assistant_row("msg_0004", at="2026-07-13T23:03:00.000Z"),
+    ]
+    path = tmp_path / "t.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    counters = aggregate_transcript_counters(path)
+
+    assert counters is not None
+    # Two minutes plus three minutes of work -- not the fourteen-hour span.
+    assert counters.api_duration_ms == 300_000
+
+
+def test_long_in_turn_tool_run_still_counts_as_work(tmp_path: Path) -> None:
+    """A ten-minute test run inside a turn is the agent working, not idling."""
+    rows = [
+        _assistant_row("msg_0001", at="2026-07-13T09:00:00.000Z"),
+        # The agent kicks off the suite and waits ten minutes for it.
+        _assistant_row("msg_0002", at="2026-07-13T09:10:00.000Z"),
+    ]
+    path = tmp_path / "t.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    counters = aggregate_transcript_counters(path)
+
+    assert counters is not None
+    assert counters.api_duration_ms == 600_000
+
+
+def test_work_time_stays_monotonic_across_an_idle_gap(tmp_path: Path) -> None:
+    """Resuming after an idle gap only ever ADDS duration -- never subtracts.
+
+    A backwards counter raises at close, so the measure must not shrink when the
+    transcript grows across a turn boundary.
+    """
+    path = tmp_path / "t.jsonl"
+    first_turn = [
+        _assistant_row("msg_0001", at="2026-07-13T09:00:00.000Z"),
+        _assistant_row("msg_0002", at="2026-07-13T09:05:00.000Z"),
+    ]
+    path.write_text("\n".join(json.dumps(r) for r in first_turn) + "\n", encoding="utf-8")
+    before = aggregate_transcript_counters(path)
+
+    resumed = [*first_turn, _assistant_row("msg_0003", at="2026-07-14T09:00:00.000Z")]
+    path.write_text("\n".join(json.dumps(r) for r in resumed) + "\n", encoding="utf-8")
+    after = aggregate_transcript_counters(path)
+
+    assert before is not None
+    assert after is not None
+    assert before.api_duration_ms == 300_000
+    # The day-long gap adds nothing, but nothing is lost either.
+    assert after.api_duration_ms >= before.api_duration_ms
+    assert after.api_duration_ms == 300_000

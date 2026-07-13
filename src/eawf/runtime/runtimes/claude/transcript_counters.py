@@ -21,16 +21,19 @@ Two transcript quirks the aggregator must handle:
 - **Duplicate usage rows.** A single assistant message is appended once per
   content block, each copy repeating the *same* ``message.usage``. Summing rows
   blindly multiplies the token tally, so rows are deduplicated by message id.
-- **Duration lives off the message, and lands late.** Wall-clock time is emitted
-  on ``type: "system"`` / ``subtype: "turn_duration"`` rows as a top-level
+- **Duration lives off the message, and lands late.** Per-turn time is emitted on
+  ``type: "system"`` / ``subtype: "turn_duration"`` rows as a top-level
   ``durationMs``, not inside the assistant message -- and that row is written
   *after* the Stop hook has already run, so a hook-time read of a live session
-  sees no duration at all. The session's row timestamps are therefore the
-  reliable duration source: the span from the first row to the last is the
-  session runtime so far. Both measures are monotonic as the transcript grows,
-  so the aggregator reports their maximum and a later capture can never report a
-  smaller duration than an earlier one (a backwards counter would reject the
-  close).
+  sees no duration at all. The row timestamps are therefore the reliable source,
+  but the first-to-last SPAN over them is the operator's wall clock, not the
+  agent's work: it counts every minute spent reading, and a wave left claimed
+  overnight would bank tens of EU for nothing. So the aggregator sums the gaps
+  *between* rows and drops any gap wide enough to be a turn boundary
+  (:data:`_IDLE_GAP_MS`), leaving the time the agent was actually working. Both
+  measures grow monotonically with the transcript, so their maximum is monotonic
+  too and a later capture can never report a smaller duration than an earlier one
+  (a backwards counter would reject the close).
 
 Every read fails open: a missing, unreadable, or usage-free transcript yields
 ``None`` so the Stop hook stays non-blocking.
@@ -45,6 +48,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -197,11 +201,42 @@ def _row_timestamp(row: dict[str, Any]) -> datetime | None:
         return None
 
 
-def _session_span_ms(first: datetime | None, last: datetime | None) -> int:
-    """Return the wall-clock span between the first and last transcript rows."""
-    if first is None or last is None:
+#: A gap between consecutive transcript rows longer than this is IDLE, not work:
+#: the agent has finished its turn and the operator is reading, thinking, or away.
+#: Gaps shorter than it are within a turn -- a tool call, a test run, a model
+#: round trip -- and count as agent runtime. 15 minutes sits above the longest
+#: in-turn tool run this repo produces (a full ``just test`` is ~11 min) and well
+#: below any realistic operator absence, so the measure captures long tool work
+#: without ever charging a wave for the operator's lunch.
+_IDLE_GAP_MS: int = 900_000
+
+
+def _active_span_ms(stamps: list[datetime]) -> int:
+    """Return agent WORKING time: the summed row-to-row gaps, idle gaps dropped.
+
+    The whole-session span (first row to last) is the claim-to-close wall clock,
+    which is emphatically NOT the wave's effort: it counts every minute the
+    operator spent reading, and a wave left claimed overnight would record tens
+    of EU for no work at all. :func:`eawf.workflow.lifecycle.wave.compute_runtime_delta`
+    says so outright -- ``elapsed_eu`` is the agent-runtime basis, never the
+    claim-to-close wall clock.
+
+    So sum the gaps BETWEEN consecutive rows and drop any gap wider than
+    :data:`_IDLE_GAP_MS`, which is the shape of a turn boundary. What remains is
+    the time the agent was actually working, and it is bounded by construction: an
+    idle gap of any length -- a coffee break, an overnight resume -- contributes
+    nothing. Appending rows only ever adds gaps, so the measure stays monotonic
+    and a later capture can never report a smaller duration than an earlier one.
+    """
+    if len(stamps) < 2:
         return 0
-    return max(0, int((last - first).total_seconds() * 1000))
+    ordered = sorted(stamps)
+    total = 0
+    for earlier, later in pairwise(ordered):
+        gap = int((later - earlier).total_seconds() * 1000)
+        if 0 < gap <= _IDLE_GAP_MS:
+            total += gap
+    return total
 
 
 def _price(model: str | None, tally: _TokenTally) -> Decimal | None:
@@ -257,15 +292,13 @@ def _scan_rows(rows: list[dict[str, Any]]) -> _TranscriptScan:
     tally = _TokenTally()
     seen: set[str] = set()
     turn_duration_ms = 0
-    first_at: datetime | None = None
-    last_at: datetime | None = None
+    stamps: list[datetime] = []
     model: str | None = None
     for row in rows:
         turn_duration_ms += _non_negative_int(row.get("durationMs"))
         stamped_at = _row_timestamp(row)
         if stamped_at is not None:
-            first_at = stamped_at if first_at is None or stamped_at < first_at else first_at
-            last_at = stamped_at if last_at is None or stamped_at > last_at else last_at
+            stamps.append(stamped_at)
         message = row.get("message")
         if not isinstance(message, dict):
             continue
@@ -282,12 +315,14 @@ def _scan_rows(rows: list[dict[str, Any]]) -> _TranscriptScan:
             seen.add(key)
         _add_usage(tally, usage)
 
-    # The turn-duration rows land after the Stop hook reads the file, so the
-    # timestamp span is what a live capture actually has to work with. Both grow
-    # monotonically with the transcript, so the maximum is monotonic too.
+    # The turn-duration rows land AFTER the Stop hook reads the file, so a live
+    # capture usually sees none of them and must fall back to the row timestamps.
+    # Both measures are agent working time (the turn rows by construction, the
+    # gap sum because idle gaps are dropped) and both grow monotonically with the
+    # transcript, so their maximum is monotonic too.
     return _TranscriptScan(
         tally=tally,
-        duration_ms=max(turn_duration_ms, _session_span_ms(first_at, last_at)),
+        duration_ms=max(turn_duration_ms, _active_span_ms(stamps)),
         turn_duration_ms=turn_duration_ms,
         model=model,
         messages=len(seen),
