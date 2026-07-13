@@ -18,6 +18,14 @@ The prior state of the world, for contrast: 1217 waves, of which 10 had a runtim
 - **The duration source is the transcript timestamp span, not the `turn_duration` row.** The first live run captured real tokens and cost but a **zero duration**: Claude Code writes the `turn_duration` row *after* the Stop hook has already read the transcript. Since `elapsed_eu` derives from duration under the default `API_DURATION` basis, EU would still have landed at zero.
 - **Duration stays monotonic.** The aggregator reports the max of the turn-duration sum and the row timestamp span. Both grow with the transcript, so a later capture can never report a smaller duration and the close-time delta never goes backwards.
 
+## What the iter audit changed after this run
+
+A fresh-context audit of the whole iter returned **FAIL** and was right on three counts. The rows in `state-rows.json` were recorded BEFORE those repairs, so they carry the defects below. They are left as written -- rewriting a closed actual means hand-editing state -- and named here instead.
+
+- **The EU in these rows is wall clock, not work.** The duration source was the transcript's first-to-last row span, which counts the operator reading, thinking, and sleeping. On this session's own transcript that span read 1102.7 min against 284.2 min of actual work: **EU here is inflated roughly 4x**. W34 replaced it with the summed working gaps (idle gaps dropped), which is bounded and matches the agent-runtime basis the code always claimed. Every actual recorded before W34 overstates effort.
+- **The cross-session rebase was wrong in three ways** (W36): returning to an earlier session double-counted it without bound, a resumed session's pre-wave work was charged to the wave, and a session that ended without a capture lost its runtime while still counting as folded. None of it shows in these rows -- every capture here came from ONE session, so the multi-session mechanism was never exercised live. Its evidence is unit tests, not this run.
+- **The configured audit ceiling did nothing** (W35). W32 set `verify.juror_wall_clock_seconds: 1800` and threaded it into the spawn, but the repo config overlay silently dropped every `verify:` leaf except `odr_blocking`, so the close auditor kept spawning at the 600s default. The config line was an idle contract. The watchdog would have aborted a longer audit at 900s regardless.
+
 ## Known distortions in this data
 
 Recorded rather than quietly corrected, because they are visible in `state-rows.json` and would otherwise read as measurement error:
@@ -37,6 +45,8 @@ Recorded rather than quietly corrected, because they are visible in `state-rows.
 ## Provenance
 
 Recorded by the P30-I25-W29 session on 2026-07-13, against the interactive Claude Code path on branch `feature/eawf-v0.6-p30`. The waves attested here (W25, W26, W27, W28, W30, W31) are the fix itself, measured by the capture path they repair.
+
+Amended the same day after the iter audit (W34-W36 repairs). The live proof stands -- capture lands, the close gate passes on measurement, the attribution is real -- but the magnitudes in `state-rows.json` predate the EU-basis correction and overstate effort. Treat them as proof that capture WORKS, not as calibration data.
 
 ## Scrub
 
