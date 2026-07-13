@@ -573,6 +573,17 @@ class RuntimeBaseline(_StrictModel):
     banked as one. (Both halves happened inside P30-I25: one redefinition stranded
     two claimed waves, the next inflated three by thirteen hours each.) The version
     makes it a fact instead of a guess.
+
+    ``shared_wave_count`` records HOW MANY waves were active when the snapshot was
+    captured. One capture is written to every active wave, and each wave then
+    differences the whole session -- so N concurrent waves each record the SAME
+    runtime, and the session is counted N times over. (P30-I25 recorded it: two
+    fan-out waves both read 0.3769 EU / $3.10, four more all read 0.0419 EU.) The
+    count is the divisor the close-time delta applies, so a shared session is split
+    among its sharers instead of being handed to each of them whole. It stays
+    optional: a snapshot written before the v1.18 bump, and the headless
+    single-wave spawn path, re-validate with it defaulted to ``None``, which the
+    delta reads as a divisor of one.
     """
 
     api_duration_ms: Annotated[int, Field(ge=0)] | None = None
@@ -586,6 +597,7 @@ class RuntimeBaseline(_StrictModel):
     model: str | None = None
     session_id: str | None = None
     measure_version: int | None = None
+    shared_wave_count: Annotated[int, Field(ge=1)] | None = None
     captured_at: UtcDatetime
 
 
@@ -1673,6 +1685,14 @@ class State(_StrictModel):
     redefinition that RAISES the figure is otherwise indistinguishable from work.
     It defaults to ``None``; the ``v1_16_to_v1_17`` step backfills it on every
     snapshot, and a null version falls back to the old direction check.
+
+    The ``1.18`` edge is purely additive: it adds
+    :attr:`RuntimeBaseline.shared_wave_count` (inherited by
+    :class:`RuntimeLatest`), which records how many waves were active when a
+    snapshot was captured. One capture is written to every active wave, so without
+    the count N concurrent waves each difference -- and each record -- the whole
+    session's runtime. It defaults to ``None``; the ``v1_17_to_v1_18`` step
+    backfills it on every snapshot, and a null count reads as a divisor of one.
     """
 
     schema_version: Literal[
@@ -1694,6 +1714,7 @@ class State(_StrictModel):
         "1.15",
         "1.16",
         "1.17",
+        "1.18",
     ]
     scope_kind: ScopeKind
     urn: UrnStr

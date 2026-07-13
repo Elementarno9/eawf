@@ -24,6 +24,7 @@ from eawf.surfaces.tui.screens.overlays.detail_cost import (
     cost_tab_rows,
     wave_cost_rollup_for_wave,
 )
+from eawf.workflow.lifecycle.wave import compute_runtime_delta
 
 pytestmark = pytest.mark.unit
 
@@ -233,6 +234,104 @@ def test_runtime_capture_attribution_defaults_null_when_absent(tmp_path: Path) -
         latest = payload["waves"]["P30-I05-W04"]["runtime_latest"]
         assert latest["harness"] is None
         assert latest["model"] is None
+
+    _run(body)
+
+
+def test_two_waves_sharing_one_capture_each_record_half_of_it(tmp_path: Path) -> None:
+    """W46: a session shared by two waves is split between them, not handed to each.
+
+    ``runtime.capture`` writes the SAME session snapshot to every active wave, and
+    each wave then differences the whole session -- so before this the two waves
+    each recorded the session's entire runtime and cost. (P30-I25 lived it: W35 and
+    W36 both closed on 0.3769 EU / $3.10, the same session counted twice.)
+
+    The capture stamps the concurrency it saw, and the close-time delta divides by
+    it. Delete the ``shared_wave_count`` stamp in ``_runtime_latest_from_params``,
+    or the division in ``compute_runtime_delta``, and the halves below become
+    wholes.
+    """
+    active_wave_ids = ["P30-I05-W03", "P30-I05-W04"]
+    ctx, state_path = _ctx(tmp_path, _state_payload(active_wave_ids=active_wave_ids))
+
+    async def body() -> None:
+        await runtime_capture(ctx, _capture_params())
+
+        state = State.model_validate(orjson.loads(state_path.read_bytes()))
+        for wave_id in active_wave_ids:
+            wave = state.waves[wave_id]
+            # The divisor is on the row, readable straight out of state.json --
+            # the split is auditable rather than a silent halving.
+            assert wave.runtime_latest is not None
+            assert wave.runtime_latest.shared_wave_count == 2
+
+            delta = compute_runtime_delta(
+                wave.runtime_baseline,
+                wave.runtime_latest,
+                carry=wave.runtime_carry,
+                eu_minutes=30.0,
+            )
+            assert delta is not None
+            assert delta.shared_wave_count == 2
+            # The session spent 17000ms / $0.42 / 150 work-tokens; each wave gets half.
+            assert delta.api_duration_ms == 8500
+            assert delta.actual_cost_usd == pytest.approx(0.21)
+            assert delta.input_tokens == 50
+            assert delta.output_tokens == 25
+            assert delta.elapsed_eu == pytest.approx(8500 / 60_000 / 30.0)
+
+    _run(body)
+
+
+def test_one_wave_alone_in_its_session_records_all_of_it(tmp_path: Path) -> None:
+    """Boundary: the divisor is 1 for an unshared session -- no runtime is lost."""
+    ctx, state_path = _ctx(tmp_path, _state_payload(active_wave_ids=["P30-I05-W04"]))
+
+    async def body() -> None:
+        await runtime_capture(ctx, _capture_params())
+
+        state = State.model_validate(orjson.loads(state_path.read_bytes()))
+        wave = state.waves["P30-I05-W04"]
+        assert wave.runtime_latest is not None
+        assert wave.runtime_latest.shared_wave_count == 1
+
+        delta = compute_runtime_delta(
+            wave.runtime_baseline,
+            wave.runtime_latest,
+            carry=wave.runtime_carry,
+            eu_minutes=30.0,
+        )
+        assert delta is not None
+        assert delta.shared_wave_count == 1
+        assert delta.api_duration_ms == 17000
+        assert delta.actual_cost_usd == pytest.approx(0.42)
+
+    _run(body)
+
+
+def test_a_wave_that_shared_then_ran_alone_keeps_the_larger_divisor(tmp_path: Path) -> None:
+    """A later solo capture does not hand the shared runtime back.
+
+    The wave shared its session (count 2), then the sibling closed and the next
+    capture saw only this wave (count 1). Taking the freshest count would undo the
+    split for runtime that really was shared, so the merge keeps the largest
+    concurrency the wave was captured under.
+    """
+    ctx, state_path = _ctx(tmp_path, _state_payload(active_wave_ids=["P30-I05-W03", "P30-I05-W04"]))
+
+    async def body() -> None:
+        await runtime_capture(ctx, _capture_params())
+        # The sibling closes; the next capture sees this wave on its own.
+        payload = orjson.loads(state_path.read_bytes())
+        payload["current"]["active_wave_ids"] = ["P30-I05-W04"]
+        state_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
+
+        await runtime_capture(ctx, _capture_params(api_duration_ms=25000))
+
+        state = State.model_validate(orjson.loads(state_path.read_bytes()))
+        latest = state.waves["P30-I05-W04"].runtime_latest
+        assert latest is not None
+        assert latest.shared_wave_count == 2
 
     _run(body)
 

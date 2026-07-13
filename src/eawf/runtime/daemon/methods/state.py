@@ -2805,7 +2805,11 @@ def _build_runtime_capture_event_envelope(
     )
 
 
-def _runtime_latest_from_params(params: RuntimeCaptureParams) -> RuntimeLatest:
+def _runtime_latest_from_params(
+    params: RuntimeCaptureParams,
+    *,
+    shared_wave_count: int,
+) -> RuntimeLatest:
     """Convert capture params into the state-model runtime snapshot.
 
     Threads the parser-stamped ``harness`` + ``model`` attribution off the
@@ -2814,6 +2818,15 @@ def _runtime_latest_from_params(params: RuntimeCaptureParams) -> RuntimeLatest:
     :class:`RuntimeLatest` so a recorded actual derived from this snapshot
     carries non-null attribution and becomes calibratable by harness+model.
     Both stay nullable -- a payload with no recognised model still persists.
+
+    ``shared_wave_count`` is the daemon's own count of the waves this one capture
+    is about to be written to. The counters are the SESSION's, not any one wave's,
+    so the count is what lets the close-time delta hand each wave a share instead
+    of handing every wave the whole session.
+
+    Args:
+        params: The validated capture payload.
+        shared_wave_count: How many active waves this capture is written to.
     """
     captured_at = params.captured_at or datetime.now(UTC)
     cost_usd = float(params.cost_usd) if params.cost_usd is not None else None
@@ -2829,6 +2842,7 @@ def _runtime_latest_from_params(params: RuntimeCaptureParams) -> RuntimeLatest:
         model=params.model,
         session_id=params.session_id,
         measure_version=params.measure_version,
+        shared_wave_count=shared_wave_count,
         captured_at=captured_at,
     )
 
@@ -2854,20 +2868,36 @@ def _fold_finished_session(
 
     Counter deltas are clamped at zero: a session whose snapshots regressed (a
     reset counter source) contributes nothing rather than a negative total.
+
+    The folded total is the wave's SHARE of that session -- divided by however many
+    waves were active when its counters were captured
+    (:func:`~eawf.workflow.lifecycle.wave.shared_wave_divisor`). Dividing here, at
+    the point the session's total is finalised, is what lets the close-time delta
+    add the carry verbatim: each session is split by ITS OWN concurrency rather
+    than by whatever concurrency the wave happens to end under.
     """
+    from eawf.workflow.lifecycle.wave import shared_wave_divisor
+
     base = carry or RuntimeCarry()
     if latest is None:
         # The session ended without ever capturing, so there is nothing measured
         # to fold. Counting it as "folded" would claim a session's runtime was
         # accounted for when in truth it was never seen.
         return base
+    divisor = shared_wave_divisor(baseline, latest)
     folded: dict[str, float | int] = {}
     for field in _RUNTIME_COUNTER_FIELDS:
         latest_value = getattr(latest, field)
         if latest_value is None:
             continue
         baseline_value = getattr(baseline, field) or 0
-        folded[field] = getattr(base, field) + max(0, latest_value - baseline_value)
+        session_total = max(0, latest_value - baseline_value) / divisor
+        existing = getattr(base, field)
+        folded[field] = (
+            existing + session_total
+            if isinstance(existing, float)
+            else existing + int(session_total)
+        )
     folded["sessions_folded"] = base.sessions_folded + 1
     return base.model_copy(update=folded)
 
@@ -2927,7 +2957,11 @@ def _reorigin_on_reset(wave: Wave, incoming: RuntimeLatest) -> None:
     )
     wave.runtime_baseline = baseline.model_copy(
         update={field: getattr(incoming, field) or 0 for field in _RUNTIME_COUNTER_FIELDS}
-        | {"captured_at": datetime.now(UTC), "measure_version": incoming.measure_version}
+        | {
+            "captured_at": datetime.now(UTC),
+            "measure_version": incoming.measure_version,
+            "shared_wave_count": incoming.shared_wave_count,
+        }
     )
     wave.runtime_latest = None
     # Record WHY this wave's runtime is short. The measurement taken before the
@@ -2999,6 +3033,7 @@ def _rebase_for_session(wave: Wave, incoming: RuntimeLatest, session_id: str | N
         model=incoming.model or baseline.model,
         session_id=session_id,
         measure_version=incoming.measure_version,
+        shared_wave_count=incoming.shared_wave_count,
         captured_at=datetime.now(UTC),
     )
     wave.runtime_latest = None
@@ -3028,6 +3063,11 @@ def _merge_runtime_latest(existing: RuntimeLatest | None, incoming: RuntimeLates
     preserves the existing populated value; every other field takes the fresh
     capture's value.
 
+    ``shared_wave_count`` takes the LARGEST concurrency either snapshot saw, not
+    the freshest. A wave that shared its session with three others and then ran on
+    alone still accrued that shared runtime, so letting the final solo capture
+    (count 1) overwrite the count would hand it the whole session back.
+
     Args:
         existing: The wave's current ``runtime_latest`` snapshot, or ``None``.
         incoming: The freshly-parsed capture snapshot to fold in.
@@ -3035,18 +3075,26 @@ def _merge_runtime_latest(existing: RuntimeLatest | None, incoming: RuntimeLates
     Returns:
         ``incoming`` unchanged when there is no existing snapshot; otherwise a
         copy of ``incoming`` whose per-class token fields fall back to the
-        existing value wherever ``incoming`` left them ``None``.
+        existing value wherever ``incoming`` left them ``None``, and whose
+        shared-wave count is the max of the two.
     """
     if existing is None:
         return incoming
-    fallbacks = {
+    updates: dict[str, Any] = {
         field: getattr(existing, field)
         for field in _RUNTIME_TOKEN_FIELDS
         if getattr(incoming, field) is None and getattr(existing, field) is not None
     }
-    if not fallbacks:
+    shared_counts = [
+        count
+        for count in (existing.shared_wave_count, incoming.shared_wave_count)
+        if count is not None
+    ]
+    if shared_counts and max(shared_counts) != incoming.shared_wave_count:
+        updates["shared_wave_count"] = max(shared_counts)
+    if not updates:
         return incoming
-    return incoming.model_copy(update=fallbacks)
+    return incoming.model_copy(update=updates)
 
 
 def _upsert_interactive_session_attempt(
@@ -3347,7 +3395,7 @@ async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[st
                     "validation_failed: runtime.capture requires active waves"
                 )
 
-            latest = _runtime_latest_from_params(args)
+            latest = _runtime_latest_from_params(args, shared_wave_count=len(active_wave_ids))
             for wave_id in active_wave_ids:
                 wave = state.waves.get(wave_id)
                 if wave is None:

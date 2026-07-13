@@ -156,6 +156,10 @@ class RuntimeDelta:
     reads are still real spend, so ``actual_cost_usd`` bills them, and the
     per-class tallies stay on the runtime snapshots for the cost surfaces.
 
+    Every counter below is the wave's SHARE of the session it was captured in --
+    the raw delta divided by :attr:`shared_wave_count`. See
+    :func:`shared_wave_divisor`.
+
     Attributes:
         elapsed_eu: Measured effort units on the configured EU basis.
         agent_runtime_eu: The agent-runtime EU (equal to ``elapsed_eu``; see the
@@ -169,6 +173,10 @@ class RuntimeDelta:
         cache_creation_input_tokens: Prompt-cache write delta.
         cache_read_input_tokens: Prompt-cache read delta (billed, not counted as
             work in ``actual_tokens``).
+        shared_wave_count: The divisor applied -- how many waves shared the
+            session these counters were captured in. ``1`` when the wave had the
+            session to itself. Carried on the delta so the split is auditable
+            rather than a silent halving.
     """
 
     elapsed_eu: float
@@ -180,6 +188,7 @@ class RuntimeDelta:
     output_tokens: int = 0
     cache_creation_input_tokens: int = 0
     cache_read_input_tokens: int = 0
+    shared_wave_count: int = 1
 
 
 def _counter_delta(
@@ -211,6 +220,53 @@ def _counter_delta(
         )
         return 0
     return delta
+
+
+def shared_wave_divisor(
+    baseline: RuntimeBaseline | None,
+    latest: RuntimeLatest | None,
+) -> int:
+    """Return how many waves shared the session these snapshots were captured in.
+
+    One ``runtime.capture`` writes the same session snapshot to EVERY active wave,
+    and each wave then differences the whole session. Without a divisor, N
+    concurrent waves each record the session's entire runtime and cost: the
+    runtime is real, but it is one session's, counted N times. (P30-I25 recorded
+    exactly that -- two fan-out waves both closed on 0.3769 EU / $3.10, four more
+    all closed on 0.0419 EU.)
+
+    The snapshots each carry the concurrency the capture saw, and this takes the
+    LARGEST of them. When the concurrency changed mid-span the exact split is not
+    recoverable -- the counters are cumulative, not per-interval -- so the choice
+    is which way to err. The largest count under-credits a wave that spent part of
+    its life alone; the smallest hands one session's runtime to several waves
+    again. Under-crediting is the honest error, and a wave whose runtime was
+    shared is marked excluded from calibration anyway.
+
+    Args:
+        baseline: The wave's claim-time (or re-originated) snapshot.
+        latest: The wave's freshest capture.
+
+    Returns:
+        The divisor -- at least ``1``, which is what an unshared session, a
+        headless single-wave spawn, and a pre-v1.18 snapshot all resolve to.
+    """
+    counts = [
+        snapshot.shared_wave_count
+        for snapshot in (baseline, latest)
+        if snapshot is not None and snapshot.shared_wave_count is not None
+    ]
+    return max(counts) if counts else 1
+
+
+def _shared_share(
+    delta: int | float | None,
+    divisor: int,
+) -> int | float | None:
+    """Return the wave's share of a counter *delta* captured across *divisor* waves."""
+    if delta is None or divisor <= 1:
+        return delta
+    return delta / divisor
 
 
 def _with_carry(
@@ -252,6 +308,13 @@ def compute_runtime_delta(
     origin and accumulates the finished session's total there), so the close-time
     figure is *this* session's delta plus every earlier session's total.
 
+    This session's delta is the wave's SHARE of the session: divided by however
+    many waves were active when its counters were captured
+    (:func:`shared_wave_divisor`), because one capture is written to every active
+    wave and each would otherwise difference -- and record -- the whole session.
+    The carry needs no division here: the daemon divides each finished session's
+    total as it folds it, so the carry already holds this wave's share of it.
+
     Args:
         baseline: Claim-time counter snapshot; ``None`` means nothing was
             captured at claim, so there is no origin to difference against.
@@ -274,25 +337,37 @@ def compute_runtime_delta(
     if eu_minutes <= 0.0:
         raise LifecycleError(f"eu_minutes must be positive: {eu_minutes!r}")
 
+    divisor = shared_wave_divisor(baseline, latest)
     api_duration_ms = _with_carry(
-        _counter_delta("api_duration_ms", baseline.api_duration_ms, latest.api_duration_ms),
+        _shared_share(
+            _counter_delta("api_duration_ms", baseline.api_duration_ms, latest.api_duration_ms),
+            divisor,
+        ),
         carry.api_duration_ms if carry is not None else 0,
     )
     total_duration_ms = _with_carry(
-        _counter_delta("total_duration_ms", baseline.total_duration_ms, latest.total_duration_ms),
+        _shared_share(
+            _counter_delta(
+                "total_duration_ms", baseline.total_duration_ms, latest.total_duration_ms
+            ),
+            divisor,
+        ),
         carry.total_duration_ms if carry is not None else 0,
     )
     cost_usd_delta = _with_carry(
-        _counter_delta("cost_usd", baseline.cost_usd, latest.cost_usd),
+        _shared_share(_counter_delta("cost_usd", baseline.cost_usd, latest.cost_usd), divisor),
         carry.cost_usd if carry is not None else 0.0,
     )
     tokens: dict[str, int] = {}
     for field_name in _TOKEN_FIELDS:
         value = _with_carry(
-            _counter_delta(
-                field_name,
-                getattr(baseline, field_name),
-                getattr(latest, field_name),
+            _shared_share(
+                _counter_delta(
+                    field_name,
+                    getattr(baseline, field_name),
+                    getattr(latest, field_name),
+                ),
+                divisor,
             ),
             getattr(carry, field_name) if carry is not None else 0,
         )
@@ -327,6 +402,7 @@ def compute_runtime_delta(
         output_tokens=tokens.get("output_tokens", 0),
         cache_creation_input_tokens=tokens.get("cache_creation_input_tokens", 0),
         cache_read_input_tokens=tokens.get("cache_read_input_tokens", 0),
+        shared_wave_count=divisor,
     )
 
 

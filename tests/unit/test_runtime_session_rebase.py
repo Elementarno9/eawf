@@ -15,8 +15,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from eawf.kernel.migrations.v1_14_to_v1_15 import MigrationV114ToV115
+from eawf.kernel.migrations.v1_17_to_v1_18 import MigrationV117ToV118
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import RuntimeBaseline, RuntimeCarry, RuntimeLatest, Wave
 from eawf.runtime.daemon.methods.state import (
@@ -213,6 +215,43 @@ def test_regressed_session_contributes_no_negative_carry() -> None:
 
     assert wave.runtime_carry is not None
     assert wave.runtime_carry.api_duration_ms == 0
+
+
+def test_each_session_is_folded_at_its_own_concurrency() -> None:
+    """W46: the carry holds the wave's SHARE of each finished session.
+
+    Session A was shared by four waves, session B by none. Folding A's raw total
+    and dividing it later by B's concurrency would split each session by whatever
+    concurrency the wave happened to END under -- so the division happens as the
+    session's total is finalised, at the concurrency that session actually had.
+    """
+    wave = _wave(
+        runtime_baseline=_baseline("sess-a", api_duration_ms=1_000, shared_wave_count=4),
+        runtime_latest=_latest("sess-a", api_duration_ms=9_000, shared_wave_count=4),
+    )
+
+    _rebase_for_session(wave, _latest("sess-b", shared_wave_count=1), "sess-b")
+
+    assert wave.runtime_carry is not None
+    # Session A spent 8_000 ms across four waves; this wave's share is 2_000.
+    assert wave.runtime_carry.api_duration_ms == 2_000
+    assert wave.runtime_carry.sessions_folded == 1
+
+
+def test_a_shared_session_delta_is_the_waves_share_not_the_whole(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The close-time delta divides by the concurrency the counters were captured under."""
+    del caplog
+    baseline = _baseline("sess-a", api_duration_ms=1_000, cost_usd=1.0, shared_wave_count=2)
+    latest = _latest("sess-a", api_duration_ms=5_000, cost_usd=3.0, shared_wave_count=2)
+
+    delta = compute_runtime_delta(baseline, latest, eu_minutes=_EU_MINUTES)
+
+    assert delta is not None
+    assert delta.shared_wave_count == 2
+    assert delta.api_duration_ms == 2_000
+    assert delta.actual_cost_usd == pytest.approx(1.0)
 
 
 def test_carry_defaults_are_the_delta_identity() -> None:
@@ -624,3 +663,59 @@ def test_a_flip_between_counter_sources_is_a_known_change() -> None:
 
     # The numbers ROSE, so nothing looks wrong -- but they measure different things.
     assert _counters_incomparable(transcript_baseline, statusline_capture) is True
+
+
+# --- v1.17 -> v1.18 migration ----------------------------------------------
+
+
+def _state_v1_17(*, with_snapshots: bool) -> dict[str, Any]:
+    wave: dict[str, Any] = {
+        "id": "P00-I01-W01",
+        "iter_id": "P00-I01",
+        "title": "Wave one",
+        "status": WaveStatus.PENDING.value,
+        "success_criteria": [_CRITERION],
+        "opened_at": "2026-07-13T00:00:00Z",
+    }
+    if with_snapshots:
+        wave["runtime_baseline"] = {"api_duration_ms": 10, "captured_at": "2026-07-13T00:00:00Z"}
+        wave["runtime_latest"] = {"api_duration_ms": 90, "captured_at": "2026-07-13T00:00:00Z"}
+    return {"schema_version": "1.17", "waves": {"P00-I01-W01": wave}}
+
+
+def test_migration_backfills_shared_wave_count() -> None:
+    out = MigrationV117ToV118().apply(_state_v1_17(with_snapshots=True))
+
+    assert out["schema_version"] == "1.18"
+    wave = out["waves"]["P00-I01-W01"]
+    # A null count reads as a divisor of one -- what the delta effectively used
+    # before the field existed, so no historical figure changes.
+    assert wave["runtime_baseline"]["shared_wave_count"] is None
+    assert wave["runtime_latest"]["shared_wave_count"] is None
+
+
+def test_migration_v118_handles_waves_without_snapshots() -> None:
+    out = MigrationV117ToV118().apply(_state_v1_17(with_snapshots=False))
+
+    assert out["schema_version"] == "1.18"
+    assert "runtime_baseline" not in out["waves"]["P00-I01-W01"]
+
+
+def test_migration_v118_does_not_mutate_input() -> None:
+    payload = _state_v1_17(with_snapshots=True)
+
+    MigrationV117ToV118().apply(payload)
+
+    assert payload["schema_version"] == "1.17"
+    assert "shared_wave_count" not in payload["waves"]["P00-I01-W01"]["runtime_baseline"]
+
+
+def test_migration_v118_pre_post_version_guards() -> None:
+    step = MigrationV117ToV118()
+    payload = _state_v1_17(with_snapshots=False)
+
+    step.check_pre(payload)
+    step.check_post(step.apply(payload))
+
+    with pytest.raises(ValidationError):
+        step.check_pre({"schema_version": "1.16"})
