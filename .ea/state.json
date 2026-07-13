@@ -11003,6 +11003,20 @@
       "scope_id": "P30-I25-W30",
       "status": "done",
       "updated_at": "2026-07-13T01:13:30.868407Z"
+    },
+    "P30-I25-W31": {
+      "actual_cost_usd": 8.924265000000005,
+      "actual_tokens": 61619,
+      "agent_runtime_eu": 0.9206488888888888,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I25-W31",
+      "elapsed_eu": 0.9206488888888888,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W31",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W31",
+      "status": "done",
+      "updated_at": "2026-07-13T01:56:42.465497Z"
     }
   },
   "agent_sessions": {
@@ -14662,7 +14676,7 @@
   "current": {
     "active_session_ids": [],
     "active_wave_ids": [
-      "P30-I25-W31"
+      "P30-I25-W29"
     ],
     "iter_id": "P30-I25",
     "phase_id": "P30",
@@ -27575,6 +27589,19 @@
       "scope_id": "P30-I25-W28",
       "updated_at": "2026-07-13T00:36:02.797594Z"
     },
+    "P30-I25-W29": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W29-bucket-20260713T015655Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I25-W29",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I25-W29",
+      "updated_at": "2026-07-13T01:56:55.415539Z"
+    },
     "P30-I25-W30": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I25-W30-bucket-20260713T004440Z",
@@ -31307,7 +31334,7 @@
   "schema_version": "1.15",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-13T01:28:03.493091Z",
+  "updated_at": "2026-07-13T01:56:55.415809Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -126188,8 +126215,8 @@
     "P30-I25-W29": {
       "agent_role": "auditor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+      "claimed_at": "2026-07-13T01:56:55.388050Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": {
@@ -126228,12 +126255,24 @@
       "iter_id": "P30-I25",
       "opened_at": "2026-07-12T23:54:50.172834Z",
       "outcome": null,
-      "runtime_baseline": null,
+      "runtime_baseline": {
+        "api_duration_ms": 7221020,
+        "cache_creation_input_tokens": 371253,
+        "cache_read_input_tokens": 76749765,
+        "captured_at": "2026-07-13T01:56:55.415497Z",
+        "cost_usd": 46.4133775,
+        "harness": "claude-code",
+        "input_tokens": 608,
+        "model": "claude-opus-4-8",
+        "output_tokens": 172917,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 7221020
+      },
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -126533,7 +126572,7 @@
       "blocks": [],
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T01:28:03.471242Z",
-      "closed_at": null,
+      "closed_at": "2026-07-13T01:56:42.465497Z",
       "commit": null,
       "criteria_floor_waiver": {
         "reason": "Reactive fix wave appended mid-iter after the operator spotted cumulative session totals and a zero-EU span on the interactive attempt row",
@@ -126566,7 +126605,7 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-13T01:28:02.842900Z",
-      "outcome": null,
+      "outcome": "Interactive attempt row carries the wave delta with a claim-to-capture span; actual_tokens excludes prompt-cache reads (billed in cost, not counted as work)",
       "runtime_baseline": {
         "api_duration_ms": 5469665,
         "cache_creation_input_tokens": 327894,
@@ -126581,10 +126620,38 @@
         "total_duration_ms": 5469665
       },
       "runtime_carry": null,
-      "runtime_latest": null,
+      "runtime_latest": {
+        "api_duration_ms": 7126833,
+        "cache_creation_input_tokens": 369702,
+        "cache_read_input_tokens": 75967659,
+        "captured_at": "2026-07-13T01:55:09.889676Z",
+        "cost_usd": 45.9836195,
+        "harness": "claude-code",
+        "input_tokens": 604,
+        "model": "claude-opus-4-8",
+        "output_tokens": 171990,
+        "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+        "total_duration_ms": 7126833
+      },
       "runtime_preference": null,
-      "sessions": {},
-      "status": "claimed",
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "cache_creation_input_tokens": 41808,
+          "cache_read_input_tokens": 16025260,
+          "cost_usd": 8.924265000000005,
+          "ended_at": "2026-07-13T01:55:09.889676Z",
+          "exit_status": 0,
+          "input_tokens": 86,
+          "output_tokens": 19725,
+          "runtime": "claude-code",
+          "session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:49101e49-508d-4a3a-8066-29b0b0ef6fc8",
+          "started_at": "2026-07-13T01:28:03.492356Z",
+          "subprocess_pid": null
+        }
+      },
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -126645,7 +126712,7 @@
       ],
       "title": "Record wave-delta runtime on the interactive attempt row",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 61619,
       "worktree_id": null
     }
   },
