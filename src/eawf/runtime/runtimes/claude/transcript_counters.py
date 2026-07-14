@@ -32,13 +32,21 @@ Two transcript quirks the aggregator must handle:
   CONTAINS the stall at a tool-permission prompt -- 12.9 hours of it, once -- and
   nothing in the transcript distinguishes that stall from a long-running tool.
   Claude measures its own turn and excludes the wait.
-- **Claude's figure still needs a ceiling.** It is not always a measure of work: a
-  resumed session's interrupted turn is closed out with its full wall clock, so a
-  transcript spanning six SECONDS can carry a ``turn_duration`` of 101.75 hours
-  (203.5 EU on one wave, and downstream nothing catches an inflation -- the close
-  path re-origins only on a declared measure change or a decrease). Whatever the
-  agent did, it did inside the transcript's own lifetime, so the sum is clamped to
-  that span (:func:`_transcript_span_ms`).
+- **An INTERRUPTED turn is unmeasurable, and is excluded.** Claude's figure excludes
+  the operator's waiting only for a turn it COMPLETES. When the operator hits Esc,
+  Claude closes the turn out with everything that elapsed -- including the hours they
+  were away -- so the row IS that turn's wall clock. Real examples in this repo:
+  76.26 h (152.5 EU) and 22.67 h (43.6 EU). Clamping cannot help, because a turn's
+  wall clock lies INSIDE the transcript's; the interrupted turn is dropped instead
+  (:func:`_is_interrupt_signal` -- Claude marks the interrupt in the row immediately
+  before the ``turn_duration`` row, exactly, on all 16 such rows across 330 real
+  transcripts). Dropping it under-reports the work done before the interrupt; that is
+  bounded by one turn, where believing the row is unbounded.
+- **The transcript's lifetime is a ceiling, never a substitute.** A sum that outruns
+  its own transcript is data this code does not understand, so it reports NO duration
+  rather than the transcript's span -- the span is the operator's whole-session wall
+  clock, which is measure 1, the first defect this module ever had. Reporting it
+  under a later version number would make it undetectable rather than correct.
 
 Every read fails open: a missing, unreadable, or usage-free transcript yields
 ``None`` so the Stop hook stays non-blocking.
@@ -54,7 +62,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
 
@@ -83,7 +91,14 @@ _HARNESS_ID = "claude-code"
 #:     input most likely to be the pathological resumed file -- so the ceiling had
 #:     a door in it. A transcript that cannot demonstrate a lifetime now justifies
 #:     no duration at all.
-MEASURE_VERSION: int = 6
+#: 7 = the INTERRUPTED turn is excluded, and the ceiling never substitutes the span.
+#:     Versions 5 and 6 bounded the fabrication WITH the fabrication: the giant row
+#:     is Claude closing out a turn the operator interrupted, its figure IS that
+#:     turn's wall clock, and that wall clock lies INSIDE the transcript's -- so the
+#:     clamp was a no-op on every real case but one (76.26 h / 152.5 EU still landed
+#:     from this repo's own transcript). An interrupted turn is not mis-measured, it
+#:     is unmeasurable, so it contributes nothing.
+MEASURE_VERSION: int = 7
 
 #: Optional override for the Claude projects root, used by tests to redirect
 #: transcript lookups away from the real ``~/.claude/`` tree.
@@ -227,6 +242,44 @@ def _row_timestamp(row: dict[str, Any]) -> datetime | None:
         return None
 
 
+#: Markers Claude Code writes when the OPERATOR interrupts a running turn.
+_INTERRUPT_MARKERS: Final[tuple[str, ...]] = (
+    "Request interrupted by user",
+    "stopped by the user",
+)
+
+
+def _row_text(row: dict[str, Any]) -> str:
+    """Return the row's message text, flattened across the content-block shapes."""
+    message = row.get("message")
+    if not isinstance(message, dict):
+        return ""
+    content = message.get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return " ".join(str(block.get("text", "")) for block in content if isinstance(block, dict))
+    return ""
+
+
+def _is_interrupt_signal(row: dict[str, Any]) -> bool:
+    """Return whether *row* is Claude announcing that the operator interrupted a turn.
+
+    Two shapes, and Claude writes either one in the row IMMEDIATELY BEFORE the
+    ``turn_duration`` row that closes the interrupted turn out: a ``system`` /
+    ``agents_killed`` row (when background agents were running), or a message
+    carrying an interruption marker (when they were not). Across the 330 real
+    transcripts on the machine that produced this iter, 16 ``turn_duration`` rows
+    have such a predecessor and the other 412 have none -- the rule is exact on real
+    data rather than a heuristic. Keying on ``agents_killed`` alone would have missed
+    10 of the 11 interrupts observed here.
+    """
+    if row.get("type") == "system" and row.get("subtype") == "agents_killed":
+        return True
+    text = _row_text(row)
+    return any(marker in text for marker in _INTERRUPT_MARKERS)
+
+
 def _is_turn_duration_row(row: dict[str, Any]) -> bool:
     """Return whether *row* is the ``turn_duration`` row Claude writes per turn.
 
@@ -312,15 +365,39 @@ class _TranscriptScan:
     messages: int
 
 
+def _completed_turn_durations(rows: list[dict[str, Any]]) -> tuple[int, int]:
+    """Return ``(summed duration of COMPLETED turns, count of interrupted turns)``.
+
+    An INTERRUPTED turn's figure is that turn's WALL CLOCK, not its work. Claude
+    excludes the operator's waiting only for a turn it COMPLETES; when the operator
+    hits Esc it closes the turn out with everything that elapsed, the hours they were
+    away from the keyboard included. So an interrupted turn is not mis-measured, it
+    is UNMEASURABLE, and it contributes nothing here.
+
+    Dropping it under-reports the real work done before the interrupt -- an error
+    bounded by one turn. Believing the row is unbounded: 76.26 hours (152.5 EU) sits
+    in this repo's own transcripts and would have entered the calibration corpus as
+    clean data.
+    """
+    total_ms = 0
+    interrupted = 0
+    for index, row in enumerate(rows):
+        if not _is_turn_duration_row(row):
+            continue
+        if index > 0 and _is_interrupt_signal(rows[index - 1]):
+            interrupted += 1
+            continue
+        total_ms += _non_negative_int(row.get("durationMs"))
+    return total_ms, interrupted
+
+
 def _scan_rows(rows: list[dict[str, Any]]) -> _TranscriptScan:
     """Fold the transcript rows into token, duration, and attribution totals."""
     tally = _TokenTally()
     seen: set[str] = set()
-    turn_duration_ms = 0
+    turn_duration_ms, interrupted_turns = _completed_turn_durations(rows)
     model: str | None = None
     for row in rows:
-        if _is_turn_duration_row(row):
-            turn_duration_ms += _non_negative_int(row.get("durationMs"))
         message = row.get("message")
         if not isinstance(message, dict):
             continue
@@ -353,25 +430,31 @@ def _scan_rows(rows: list[dict[str, Any]]) -> _TranscriptScan:
     # is lost by waiting: the row arrives before the next capture, so the turn is
     # counted then. An unmeasured turn reports zero rather than a guess.
     #
-    # Claude's own figure still needs a CEILING, because it is not always a measure
-    # of work. A resumed session's interrupted turn is closed out with its entire
-    # wall clock: one real transcript here spans 6.083 SECONDS and carries a single
-    # turn_duration row of 366,298,957 ms -- 101.75 hours, 203.5 EU on one wave.
-    # Whatever the agent did, it did inside the transcript's own lifetime, so the
-    # span is the bound. Clamping under-reports a turn that genuinely began in an
-    # earlier file; that error is bounded by the span and recoverable, where a
-    # fabricated hundred-hour delta is neither -- and nothing downstream catches
-    # it, since an inflation is an INCREASE and the close path only re-origins on a
-    # declared measure change or a decrease.
+    # The transcript's own lifetime is still a hard ceiling on what any of this can
+    # mean: whatever the agent did, it did inside the file that reported it. But when
+    # that ceiling is BREACHED, the answer is not to substitute the span -- the span
+    # is the whole-session wall clock, which is MEASURE_VERSION 1, the very first
+    # defect this module ever had ("the operator's clock, idle included"). Shipping
+    # it under a later version number does not make it a measurement; it makes it an
+    # undetectable one, since nothing downstream can tell a substituted figure from a
+    # measured one. A sum that outruns its own transcript is data this code does not
+    # understand, so it reports NOTHING and says so. With interrupted turns excluded
+    # above, no real transcript reaches this branch: it is a canary, not a path.
     span_ms = _transcript_span_ms(rows)
-    duration_ms = min(turn_duration_ms, span_ms)
+    duration_ms = turn_duration_ms
     if turn_duration_ms > span_ms:
+        duration_ms = 0
         logger.warning(
             f"_scan_rows turn_duration_ms={turn_duration_ms} span_ms={span_ms} "
-            f"duration_ms={duration_ms} status='clamped'; "
-            "the summed turn durations exceed the transcript's own lifetime -- "
-            "reporting the span (a resumed session closes its interrupted turn "
-            "with the full wall clock)"
+            f"interrupted_turns={interrupted_turns} duration_ms=0 status='unmeasurable'; "
+            "the summed turn durations outrun the transcript's own lifetime -- "
+            "reporting no duration rather than the operator's wall clock"
+        )
+    elif interrupted_turns:
+        logger.info(
+            f"_scan_rows interrupted_turns={interrupted_turns} duration_ms={duration_ms} "
+            "status='excluded'; an interrupted turn is closed out with its wall clock, "
+            "so its figure is not agent runtime and contributes none"
         )
     return _TranscriptScan(
         tally=tally,

@@ -423,44 +423,94 @@ def test_a_twelve_hour_wait_for_tool_approval_is_not_agent_runtime(tmp_path: Pat
     assert counters.api_duration_ms == 115 * 60_000
 
 
-def test_duration_never_exceeds_the_session_wall_clock(tmp_path: Path) -> None:
-    """A measure that outruns the clock is measuring something that did not happen.
+def test_an_interrupted_turn_contributes_no_runtime(tmp_path: Path) -> None:
+    """The shape a CLAMP cannot catch, because the fabrication sits under the ceiling.
 
-    The shape here is REAL, not invented: a transcript on the machine that produced
-    this iter spans 6.083 seconds and carries a single ``turn_duration`` row of
-    366,298,957 ms -- 101.75 hours. Claude Code closes out the interrupted turn of a
-    resumed session with its entire wall clock, and the row lands in the new file
-    next to an ``agents_killed`` row. Through the close arithmetic that is 203.5 EU
-    on one wave, and nothing downstream catches it: an inflation is an INCREASE, and
-    the close path re-origins only on a declared measure change or a decrease.
+    This is the real 343dbe7f transcript's shape, reduced: the operator walks away
+    while the agent works, comes back hours later and hits Esc. Claude kills the
+    background agents and closes the turn out with its full WALL CLOCK -- 76.26 hours
+    in the real file, 152.5 EU. That figure lies INSIDE the transcript's own span
+    (the turn began after the file did), so the W49/W50 ceiling was a no-op on it:
+    `min(sum, span)` returns the sum. Six real transcripts carry such a row; the
+    clamp helped exactly one of them.
 
-    The previous version of this test asserted ``<=`` over a fixture that already
-    satisfied the ceiling, against production code implementing no clamp at all --
-    it passed against an aggregator that DOUBLED every duration. This one fails the
-    moment the clamp is deleted.
+    An interrupted turn is not mis-measured, it is UNMEASURABLE -- Claude excludes
+    the operator's waiting only for a turn it COMPLETES. So it contributes nothing,
+    and the completed turn beside it still counts in full.
+
+    Delete the interrupt check in `_scan_rows` and this test books the 4 hours.
     """
     rows = [
-        _prompt_row(at="2026-07-12T23:52:16.125Z"),
-        _assistant_row("msg_0001", at="2026-07-12T23:52:19.000Z"),
-        {
-            "type": "system",
-            "subtype": "agents_killed",
-            "timestamp": "2026-07-12T23:52:21.000Z",
-        },
-        _turn_duration_row(at="2026-07-12T23:52:21.810Z", ms=366_298_957),
-        _tool_result_row(at="2026-07-12T23:52:22.026Z"),
+        _prompt_row(at="2026-07-13T09:00:00.000Z"),
+        _assistant_row("msg_0001", at="2026-07-13T09:05:00.000Z"),
+        _turn_duration_row(at="2026-07-13T09:05:30.000Z", ms=300_000),  # a real 5-min turn
+        _prompt_row(at="2026-07-13T09:10:00.000Z"),
+        _assistant_row("msg_0002", at="2026-07-13T09:11:00.000Z"),
+        # ... the operator leaves. Four hours later they return and press Esc.
+        {"type": "system", "subtype": "agents_killed", "timestamp": "2026-07-13T13:10:00.000Z"},
+        _turn_duration_row(at="2026-07-13T13:10:01.000Z", ms=4 * 3_600_000),
     ]
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
     counters = aggregate_transcript_counters(path)
-    wall_clock_ms = 5_901  # 23:52:16.125 -> 23:52:22.026
 
     assert counters is not None
-    # The claimed 101.75 hours is 60,000x the life of the transcript that reported
-    # it. Whatever the agent did, it did inside that lifetime.
-    assert counters.api_duration_ms == wall_clock_ms
-    assert counters.api_duration_ms <= wall_clock_ms
+    # The 4 hours are the operator's absence, and they sit comfortably inside the
+    # transcript's own 4h10m span -- which is exactly why a ceiling cannot see them.
+    assert counters.api_duration_ms == 300_000
+
+
+def test_an_interrupt_without_background_agents_is_still_an_interrupt(tmp_path: Path) -> None:
+    """Esc with no background agents running leaves no ``agents_killed`` row.
+
+    Claude then marks the interruption in the message itself. Both markers sit in the
+    row immediately BEFORE the closeout, on all 16 such rows across the 330 real
+    transcripts on this machine -- so the rule keys on the interrupt, not on the
+    agents. Keying on ``agents_killed`` alone would have missed 10 of the 11
+    interrupts observed here.
+    """
+    rows = [
+        _prompt_row(at="2026-07-13T09:00:00.000Z"),
+        _assistant_row("msg_0001", at="2026-07-13T09:01:00.000Z"),
+        {
+            "type": "user",
+            "timestamp": "2026-07-13T11:00:00.000Z",
+            "message": {"role": "user", "content": "[Request interrupted by user]"},
+        },
+        _turn_duration_row(at="2026-07-13T11:00:01.000Z", ms=2 * 3_600_000),
+    ]
+    path = tmp_path / "t.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    counters = aggregate_transcript_counters(path)
+
+    assert counters is not None
+    assert counters.api_duration_ms == 0
+
+
+def test_the_span_is_never_substituted_for_a_measurement(tmp_path: Path) -> None:
+    """When the ceiling breaks, report nothing -- not the operator's clock.
+
+    Substituting the transcript's span ships MEASURE_VERSION 1 ("the operator's
+    clock, idle included") under a later version number, which does not make it a
+    measurement -- it makes it an undetectable one. Three real transcripts landed
+    43.6, 38.1 and 18.8 EU that way through the W49 clamp.
+    """
+    rows = [
+        _prompt_row(at="2026-07-13T09:00:00.000Z"),
+        _assistant_row("msg_0001", at="2026-07-13T09:01:00.000Z"),
+        # A completed turn claiming more time than the transcript has existed: data
+        # this code does not understand.
+        _turn_duration_row(at="2026-07-13T09:01:30.000Z", ms=10 * 3_600_000),
+    ]
+    path = tmp_path / "t.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    counters = aggregate_transcript_counters(path)
+
+    assert counters is not None
+    assert counters.api_duration_ms == 0  # not the 90-second span, and not the 10 hours
 
 
 def test_an_ordinary_session_is_not_clamped(tmp_path: Path) -> None:
