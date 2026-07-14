@@ -260,6 +260,13 @@ def pipe_ready(pipe_name: str, wait_ms: int = 0) -> bool:
     (``ERROR_FILE_NOT_FOUND``) or no instance free within the wait
     (``ERROR_SEM_TIMEOUT``) returns False so the caller keeps polling.
 
+    ``WaitNamedPipe`` signals success by RETURNING (pywin32 hands back ``None``)
+    and failure by raising, so success is the absence of an exception -- not a
+    truthy return. Truth-testing the return value reports every healthy pipe as
+    unready, which is why the readiness probe answered False even against a
+    bound pipe that the very next call could round-trip on, and why the cold-start
+    poll never saw the daemon come up.
+
     Args:
         pipe_name: The ``\\.\pipe\eawfd-<user>`` path to probe.
         wait_ms: Milliseconds to wait for a free instance (0 = poll once).
@@ -268,9 +275,11 @@ def pipe_ready(pipe_name: str, wait_ms: int = 0) -> bool:
         True when a pipe instance is available; False otherwise.
     """
     try:
-        return bool(win32pipe.WaitNamedPipe(pipe_name, wait_ms))
-    except pywintypes.error:
+        win32pipe.WaitNamedPipe(pipe_name, wait_ms)
+    except pywintypes.error as exc:
+        logger.debug(f"pipe_ready not-ready pipe={pipe_name!r} err={exc!s}")
         return False
+    return True
 
 
 def _read_full_message_with_deadline(pipe: Any, deadline: float) -> bytes:
@@ -642,6 +651,10 @@ class WindowsPipeServer:
         self._subscribe_router = subscribe_router
         self._queue: asyncio.Queue[tuple[bytes, ReplyCallback]] = asyncio.Queue()
         self._shutdown = threading.Event()
+        #: Live subscription feeds, so ``stop`` can unregister them rather than
+        #: leaving a subscriber on the bus until the streamer's next heartbeat.
+        self._feeds: set[SubscriptionFeed] = set()
+        self._feeds_lock = threading.Lock()
         #: Set by the listener once the FIRST pipe instance is bound, so
         #: ``start`` can return a server a client can actually reach.
         self._bound = threading.Event()
@@ -709,9 +722,21 @@ class WindowsPipeServer:
         so :func:`win32pipe.ConnectNamedPipe` unblocks immediately
         rather than waiting for a real client. The asyncio dispatch
         task drains any in-flight frames before returning.
+
+        Live subscription feeds are closed HERE rather than left to the
+        streaming threads. A streamer is parked in ``next_frame`` for up to a
+        heartbeat, so leaving the unregister to its own unwind keeps the
+        subscriber on the bus for seconds after the daemon was told to stop --
+        a stopped daemon that still holds subscriptions.
         """
         logger.info("stop signal-sent")
         self._shutdown.set()
+        with self._feeds_lock:
+            feeds = tuple(self._feeds)
+            self._feeds.clear()
+        for feed in feeds:
+            with contextlib.suppress(Exception):
+                feed.close()
         self._wake_listener()
         if self._dispatch_task is not None:
             self._dispatch_task.cancel()
@@ -941,6 +966,8 @@ class WindowsPipeServer:
             pipe: The connected pipe handle held open for the stream.
             feed: The thread-pullable subscription feed.
         """
+        with self._feeds_lock:
+            self._feeds.add(feed)
         try:
             win32file.WriteFile(pipe, b'{"jsonrpc":"2.0","id":null,"result":{"ok":true}}\n')
             while not self._shutdown.is_set():
@@ -954,6 +981,8 @@ class WindowsPipeServer:
         except pywintypes.error as exc:
             logger.info(f"_stream_subscription pipe-closed err={exc!s}")
         finally:
+            with self._feeds_lock:
+                self._feeds.discard(feed)
             feed.close()
 
     async def _dispatch_loop(self) -> None:

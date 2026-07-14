@@ -29,7 +29,6 @@ if sys.platform == "win32":  # pragma: no cover - win32-only branch
     import ntsecuritycon
     import win32api
     import win32con
-    import win32pipe
     import win32security
 
 logger = logging.getLogger(__name__)
@@ -127,7 +126,10 @@ def verify_peer_sid(pipe_handle: Any, expected_sid: Any | None = None) -> None:
     if expected_sid is None:
         expected_sid = _current_user_sid()
 
-    win32pipe.ImpersonateNamedPipeClient(pipe_handle)
+    # ImpersonateNamedPipeClient lives on win32security, NOT win32pipe: calling
+    # it through win32pipe raises AttributeError on the first verified
+    # connection, which is why no SID check has ever actually run.
+    win32security.ImpersonateNamedPipeClient(pipe_handle)
     try:
         thread_token = win32security.OpenThreadToken(
             win32api.GetCurrentThread(),
