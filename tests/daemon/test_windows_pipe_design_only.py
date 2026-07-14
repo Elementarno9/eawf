@@ -67,9 +67,12 @@ def test_build_user_only_security_attributes_returns_sec_attrs() -> None:
 
     sa = build_user_only_security_attributes()
     # pywin32 ``SECURITY_ATTRIBUTES`` exposes ``SECURITY_DESCRIPTOR`` +
-    # ``bInheritHandle`` attributes; both must be wired.
+    # ``bInheritHandle`` attributes; both must be wired. ``bInheritHandle`` is a
+    # win32 BOOL, which pywin32 hands back as an int -- an identity check against
+    # the False singleton can never hold, so the handle-inheritance assertion was
+    # failing on the falsiness it meant to assert.
     assert hasattr(sa, "SECURITY_DESCRIPTOR")
-    assert sa.bInheritHandle is False
+    assert sa.bInheritHandle == 0
 
     sd = sa.SECURITY_DESCRIPTOR
     # Owner SID bound + DACL present (defaulted=False).

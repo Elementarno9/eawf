@@ -56,6 +56,13 @@ logger = logging.getLogger(__name__)
 # it is a chunking hint, NOT a frame ceiling.
 _PIPE_BUFFER_BYTES = 65536
 
+# How long ``WindowsPipeServer.start`` waits for the listener thread to bind the
+# first pipe instance. Binding is a single ``CreateNamedPipe`` call, so this is a
+# generous ceiling on a startup step that normally lands in microseconds -- it
+# exists to turn a listener that cannot bind into a raised error instead of a
+# server that silently accepts nothing.
+_BIND_TIMEOUT_SECONDS = 10.0
+
 # Default wait (ms) for ``WaitNamedPipe`` when a client opens the pipe. The
 # server may be mid-accept between connections; the wait blocks until an
 # instance is free rather than failing fast with ERROR_PIPE_BUSY. Critically,
@@ -635,6 +642,11 @@ class WindowsPipeServer:
         self._subscribe_router = subscribe_router
         self._queue: asyncio.Queue[tuple[bytes, ReplyCallback]] = asyncio.Queue()
         self._shutdown = threading.Event()
+        #: Set by the listener once the FIRST pipe instance is bound, so
+        #: ``start`` can return a server a client can actually reach.
+        self._bound = threading.Event()
+        #: The bind failure the listener hit, re-raised by ``start``.
+        self._bind_error: BaseException | None = None
         self._listener_thread: threading.Thread | None = None
         self._dispatch_task: asyncio.Task[None] | None = None
 
@@ -654,8 +666,22 @@ class WindowsPipeServer:
         :meth:`__init__`; the listener thread is a daemon thread so a
         terminal SIGINT does not hang the process.
 
+        BLOCKS until the listener has bound the first pipe instance. Returning
+        earlier would hand back a server that is listening in name only: the
+        pipe does not exist until the thread's first ``CreateNamedPipe``
+        lands, and a client that connects before then gets
+        ``ERROR_FILE_NOT_FOUND`` while the readiness probe reports the bound
+        pipe as absent. Whether that happens is decided by which thread wins a
+        race, i.e. by how loaded the host is.
+
         Raises:
-            RuntimeError: When called twice on the same instance.
+            RuntimeError: When called twice on the same instance, or when the
+                listener neither binds nor fails within
+                :data:`_BIND_TIMEOUT_SECONDS` -- a server nobody can reach is
+                a startup failure, not a warning.
+            pywintypes.error: Propagated from the listener when the first
+                ``CreateNamedPipe`` fails (a taken pipe name, a DACL the host
+                rejects).
         """
         if self._listener_thread is not None:
             raise RuntimeError("windows pipe server already started")
@@ -666,6 +692,13 @@ class WindowsPipeServer:
             daemon=True,
         )
         self._listener_thread.start()
+        if not self._bound.wait(timeout=_BIND_TIMEOUT_SECONDS):
+            raise RuntimeError(
+                f"windows pipe listener did not bind within {_BIND_TIMEOUT_SECONDS}s: "
+                f"{self._pipe_name!r}"
+            )
+        if self._bind_error is not None:
+            raise self._bind_error
         self._dispatch_task = self._loop.create_task(self._dispatch_loop())
 
     def stop(self) -> None:
@@ -718,7 +751,13 @@ class WindowsPipeServer:
         """
         from eawf.runtime.daemon.windows_security import build_user_only_security_attributes
 
-        sec_attrs = build_user_only_security_attributes()
+        try:
+            sec_attrs = build_user_only_security_attributes()
+        except BaseException as exc:
+            self._bind_error = exc
+            self._bound.set()
+            logger.exception("_listen_loop security-attributes-failed")
+            return
 
         while not self._shutdown.is_set():
             pipe = None
@@ -735,6 +774,21 @@ class WindowsPipeServer:
                     0,
                     sec_attrs,
                 )
+            except BaseException as exc:
+                # A first instance that never binds is a startup failure, not a
+                # transient: report it through start() rather than spinning here
+                # while the caller waits on a pipe that will never exist.
+                if not self._bound.is_set():
+                    self._bind_error = exc
+                    self._bound.set()
+                    logger.exception("_listen_loop bind-failed")
+                    return
+                logger.warning(f"_listen_loop create err={exc!s}")
+                continue
+            # The pipe now EXISTS: a client can connect and the readiness probe
+            # can see it. Only now is start() free to return.
+            self._bound.set()
+            try:
                 win32pipe.ConnectNamedPipe(pipe, None)
                 if self._shutdown.is_set():
                     break
