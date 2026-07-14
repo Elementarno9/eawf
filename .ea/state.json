@@ -31811,7 +31811,9 @@
         "P30-I21-W35",
         "P30-I21-W36",
         "P30-I21-W37",
-        "P30-I21-W38"
+        "P30-I21-W38",
+        "P30-I21-W39",
+        "P30-I21-W40"
       ]
     },
     "P30-I22": {
@@ -33150,7 +33152,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T11:15:43.399027Z",
+  "updated_at": "2026-07-14T11:30:28.104874Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -115939,6 +115941,180 @@
         }
       ],
       "title": "Retire the two statements this iter made false",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W39": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Reactive review-repair wave appended at the ship gate; criteria authored from the PR reviewer blocker and gated by the named test",
+        "waived_at": "2026-07-14T11:30:10.858187Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "W53 taught the bucket re-fit and both estimate-quality metrics to skip a calibration-excluded actual, but the telemetry projection feeding the TUI metrics overlay still counts them. The same typed metric reports two different numbers depending on whether the operator runs the CLI or opens the overlay, and the per-bucket variance rows are literally a reference class. The shipped release note claims every reference-class consumer skips the row; one does not.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/observability/telemetry/metrics_projection.py",
+        "tests/unit/test_metrics_projection.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W39",
+      "intent": {
+        "desired_outcome": "Every surface that treats an actual as a reference class reports the same number, and the release note that says so is true.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Skip a calibration-excluded actual in the variance projection so the aggregate and per-bucket rows both drop it",
+          "Add a test asserting the projection and the CLI metric agree on a state carrying an excluded row"
+        ],
+        "priority_rationale": "A metric that reports two numbers depending on which surface you open is worse than a missing metric, and shipping a false release note is what W38 exists to prevent.",
+        "problem": "The telemetry variance projection does not filter calibration_excluded, so the M26 gauge disagrees with itself across the CLI and the TUI overlay.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-14T11:30:10.912461Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The telemetry variance projection skips a calibration-excluded actual so its aggregate and per-bucket rows agree with the CLI metric on the same state",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The telemetry variance projection skips a calibration-excluded actual so its aggregate and per-bucket rows agree with the CLI metric on the same state",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A test drives both the projection and compute_estimate_actual_variance over a state carrying an excluded row and asserts they report the same sample count and variance",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A test drives both the projection and compute_estimate_actual_variance over a state carrying an excluded row and asserts they report the same sample count and variance",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Make the metrics projection honour the calibration exclusion",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W40": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Reactive review-repair wave appended at the ship gate; criteria authored from the PR reviewer should-fix findings and gated by the acceptance and CLI suites",
+        "waived_at": "2026-07-14T11:30:28.058952Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The cancel verb tombstones the campaign record but the round loop never re-reads it, so a campaign cancelled at round 1 of a 5-round budget still spawns paid researcher sessions for rounds 2 through 5 and books each dispatch cost against the cancelled campaign. The spend is then unreachable because the status surface only reads ACTIVE campaigns. A cancel that does not stop the spending is not a cancel.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/research.py",
+        "src/eawf/surfaces/cli/commands/research.py",
+        "src/eawf/runtime/runtimes/claude/adapter.py",
+        "tests/daemon/test_research_campaign_acceptance.py",
+        "tests/unit/test_cli_research_question_status.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W40",
+      "intent": {
+        "desired_outcome": "A cancelled campaign halts before the next round spawns, and its booked spend stays readable after the campaign leaves ACTIVE.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Re-read the campaign status between rounds and halt the loop on a non-ACTIVE row",
+          "Report campaign cost for terminal campaigns rather than only ACTIVE ones and read the event store once rather than once per campaign",
+          "Retire the third stale output-format docstring W38 missed"
+        ],
+        "priority_rationale": "The cancel verb ships in this release; a cancel that keeps spawning paid agents costs the operator real money and hides the bill.",
+        "problem": "A mid-run cancel stops only the terminal flip. The round loop keeps spawning paid researchers for the remaining budget and books their spend to a cancelled campaign the status surface cannot show.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-14T11:30:28.104616Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "A campaign cancelled mid-run halts before the next round spawns so no further researcher is paid for and no further cost books against it",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A campaign cancelled mid-run halts before the next round spawns so no further researcher is paid for and no further cost books against it",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "The researcher spend booked against a campaign stays readable from an operator surface after the campaign reaches a terminal state rather than only while it is ACTIVE",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The researcher spend booked against a campaign stays readable from an operator surface after the campaign reaches a terminal state rather than only while it is ACTIVE",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "The stream-json docstring on the chunked drain helper no longer claims the live stream is typically one chunk",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The stream-json docstring on the chunked drain helper no longer claims the live stream is typically one chunk",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Make a cancelled campaign actually stop spending",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
