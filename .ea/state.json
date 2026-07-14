@@ -10275,6 +10275,36 @@
       "status": "done",
       "updated_at": "2026-07-14T10:39:41.445277Z"
     },
+    "P30-I21-W37": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I21-W37",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W37",
+      "model": null,
+      "scope_id": "P30-I21-W37",
+      "status": "done",
+      "updated_at": "2026-07-14T11:06:53.502148Z"
+    },
+    "P30-I21-W38": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I21-W38",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W38",
+      "model": null,
+      "scope_id": "P30-I21-W38",
+      "status": "done",
+      "updated_at": "2026-07-14T11:10:53.209438Z"
+    },
     "P30-I22-W01": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 12000,
@@ -15886,6 +15916,19 @@
       "scope_id": "P30",
       "status": "open",
       "title": "Stop --success splitting a criterion on its own commas"
+    },
+    "B116": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-14T11:10:54.194501Z",
+      "description": "The round writer pairs claims to open questions by index order (zip over the written claims and the OPEN questions), so a round's Nth claim marks the Nth OPEN question ANSWERED whether or not it answers it. The link is written both ways and the lifecycle is correct; only the pairing is a heuristic. Replace it with a semantic link, or narrow the auto-resolve to the single-open-question case where index order cannot be wrong.",
+      "id": "B116",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "P30",
+      "status": "open",
+      "title": "Pair a claim to the question it actually answers"
     },
     "B70": {
       "closed_at": null,
@@ -27680,6 +27723,32 @@
       "scope_id": "P30-I21-W36",
       "updated_at": "2026-07-14T10:38:19.193190Z"
     },
+    "P30-I21-W37": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W37-bucket-20260714T110652Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I21-W37",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I21-W37",
+      "updated_at": "2026-07-14T11:06:52.683763Z"
+    },
+    "P30-I21-W38": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W38-bucket-20260714T110641Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I21-W38",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I21-W38",
+      "updated_at": "2026-07-14T11:06:41.150276Z"
+    },
     "P30-I22-W01": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I22-W01-bucket-20260701T234041Z",
@@ -33060,7 +33129,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T11:02:58.649509Z",
+  "updated_at": "2026-07-14T11:10:59.436461Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -114081,7 +114150,7 @@
       "claim_session_id": "flow-tuifix-W26",
       "claimed_at": "2026-07-03T15:48:12.445644Z",
       "closed_at": "2026-07-03T16:24:24.982054Z",
-      "commit": "c5c491862f20e06ab2b778cd9c1ece410cad2121",
+      "commit": "935f67133f071540215d8a9170598a3bfc78e892",
       "criteria_floor_waiver": null,
       "deps": [],
       "description": "Topic tree: hoist the scope-wide questions node to depth zero so it stops nesting under the last campaign; carry per-campaign CampaignStatus so converged campaigns stop reading as running; scope the claims pane to the selected node; answered questions leave Unresolved; keep indent on wrapped tree lines; Enter peek visibly responds.",
@@ -114999,7 +115068,7 @@
       "claim_session_id": "operator-p30-i21-close",
       "claimed_at": "2026-07-07T17:22:15.828842Z",
       "closed_at": "2026-07-07T17:22:26.454221Z",
-      "commit": "c4e45f174814925fe9e9961fe8a42f6d1c095924",
+      "commit": "86f7940ddb534c18dde9ce897d42632e57d49db5",
       "criteria_floor_waiver": null,
       "deps": [],
       "description": null,
@@ -115198,7 +115267,7 @@
       "claim_session_id": "operator-p30-i21-close",
       "claimed_at": "2026-07-07T17:22:30.690635Z",
       "closed_at": "2026-07-07T17:22:38.374306Z",
-      "commit": "27ffe55880f1fd764d54146fd692699bc417243e",
+      "commit": "839a5bcf72f9eb3f6b346abff55017bff702d7f9",
       "criteria_floor_waiver": null,
       "deps": [],
       "description": null,
@@ -115565,10 +115634,10 @@
     "P30-I21-W37": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+      "claimed_at": "2026-07-14T11:06:52.669287Z",
+      "closed_at": "2026-07-14T11:06:53.502148Z",
+      "commit": "af4a76b58d1580811d8eb3476d21ff468606fa18",
       "criteria_floor_waiver": {
         "reason": "Reactive audit-repair wave appended at the ship gate; criteria authored as prose from the auditor finding and gated by the named test",
         "waived_at": "2026-07-14T11:02:44.983652Z",
@@ -115599,13 +115668,27 @@
       },
       "iter_id": "P30-I21",
       "opened_at": "2026-07-14T11:02:45.030486Z",
-      "outcome": null,
-      "runtime_baseline": null,
+      "outcome": "eawf research status now reports the researcher spend booked against the ACTIVE campaigns in both JSON and text; read_campaign_cost has a production caller",
+      "runtime_baseline": {
+        "api_duration_ms": 2501828,
+        "cache_creation_input_tokens": 303248,
+        "cache_read_input_tokens": 38879526,
+        "captured_at": "2026-07-14T11:06:52.683735Z",
+        "cost_usd": 24.873483,
+        "harness": "claude-code",
+        "input_tokens": 398,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 95970,
+        "session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+        "shared_wave_count": null,
+        "total_duration_ms": 2501828
+      },
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -115644,10 +115727,10 @@
     "P30-I21-W38": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+      "claimed_at": "2026-07-14T11:06:41.133657Z",
+      "closed_at": "2026-07-14T11:10:53.209438Z",
+      "commit": "4960a1abc771a8877e89373a7b291c5ad899a7e5",
       "criteria_floor_waiver": {
         "reason": "Reactive audit-repair wave appended at the ship gate; criteria are prose over log and docstring truthfulness with no separate gate beyond the suite",
         "waived_at": "2026-07-14T11:02:58.599708Z",
@@ -115677,13 +115760,27 @@
       },
       "iter_id": "P30-I21",
       "opened_at": "2026-07-14T11:02:58.649307Z",
-      "outcome": null,
-      "runtime_baseline": null,
+      "outcome": "The run-complete log reports the terminal state the campaign actually reached (a mid-run cancel is no longer logged as a convergence) and the claude adapter docstrings name stream-json",
+      "runtime_baseline": {
+        "api_duration_ms": 2501828,
+        "cache_creation_input_tokens": 297814,
+        "cache_read_input_tokens": 38277156,
+        "captured_at": "2026-07-14T11:06:41.150244Z",
+        "cost_usd": 24.506038,
+        "harness": "claude-code",
+        "input_tokens": 394,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 95494,
+        "session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+        "shared_wave_count": null,
+        "total_duration_ms": 2501828
+      },
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -115725,7 +115822,7 @@
       "claim_session_id": "operator-i22-fixes",
       "claimed_at": "2026-07-01T23:40:41.968368Z",
       "closed_at": "2026-07-01T23:41:17.303457Z",
-      "commit": null,
+      "commit": "d4f83611cc26c00bfbb05f3d3ca09e6c6d893800",
       "criteria_floor_waiver": null,
       "deps": [],
       "description": null,
@@ -115789,7 +115886,7 @@
       "claim_session_id": "operator-i22-fixes",
       "claimed_at": "2026-07-01T23:41:32.242401Z",
       "closed_at": "2026-07-01T23:41:47.332640Z",
-      "commit": null,
+      "commit": "542cd5e7adf3d5ddf7d849900eabda754bd5b0e8",
       "criteria_floor_waiver": null,
       "deps": [],
       "description": null,
@@ -115897,7 +115994,7 @@
       "claim_session_id": "operator-i22-fixes",
       "claimed_at": "2026-07-01T23:46:04.135928Z",
       "closed_at": "2026-07-01T23:46:23.020440Z",
-      "commit": null,
+      "commit": "a50c1aaececaa94f7c69c33aecc476f0fb7d70e7",
       "criteria_floor_waiver": null,
       "deps": [],
       "description": null,
@@ -116071,7 +116168,7 @@
       "claim_session_id": "flow-P30-I22-W05",
       "claimed_at": "2026-07-02T04:46:24.594314Z",
       "closed_at": "2026-07-02T05:12:04.715357Z",
-      "commit": "b88b48ce2ebabb8e51ae933517aab3ac1c32972f",
+      "commit": "682136fc450520e07e40ad004b9d6c4698670e85",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I22-W04"
@@ -116178,7 +116275,7 @@
       "claim_session_id": "exec-P30-I22-W06",
       "claimed_at": "2026-07-02T04:46:25.150291Z",
       "closed_at": "2026-07-02T05:14:21.861932Z",
-      "commit": "1e89c54c41f578d5bb4fc8f1aa1839e62b2a5be4",
+      "commit": "5e60a25921c7a1567bcb826d2b3ef14c8712be17",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I22-W04"
@@ -116267,7 +116364,7 @@
       "claim_session_id": "flow-P30-I22-W07",
       "claimed_at": "2026-07-02T05:15:28.762230Z",
       "closed_at": "2026-07-02T05:41:25.008134Z",
-      "commit": "1c9cf44232ac3c18ccb676be591bf4263403211c",
+      "commit": "da7a4fbcb3bf15173727556f77e6358eb7a1df17",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I22-W04",
@@ -116620,7 +116717,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T14:11:15.009159Z",
       "closed_at": "2026-07-02T15:34:02.444043Z",
-      "commit": "157382ca93f94437bc09c93cb323455ed1fcd196",
+      "commit": "269aa37ba516ca6784869b25d788ed9036b79011",
       "criteria_floor_waiver": null,
       "deps": [],
       "description": null,
@@ -118310,7 +118407,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T17:03:45.433847Z",
       "closed_at": "2026-07-02T17:18:07.800674Z",
-      "commit": "8ea625753bcad850cec2db33b11700b6b7b5a531",
+      "commit": "3603e5ccabb59c8075cb9216311d6d2cff6566fc",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W02"
@@ -118962,7 +119059,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T19:45:12.326475Z",
       "closed_at": "2026-07-02T20:05:06.366997Z",
-      "commit": "69cf5c6c460e392ed662fbe29a29c1768572793b",
+      "commit": "2b3047467dd1b05ac2d9d8a2e17b21e83199e12c",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W08"
@@ -120252,7 +120349,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T16:05:41.752316Z",
       "closed_at": "2026-07-02T16:39:35.831408Z",
-      "commit": "702e988bb2cdc5f1ed2f20473c22b2409bc7e2cd",
+      "commit": "d7d8729c4cc86472930a2eec5d432cb3ef0a3cfc",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W02"
@@ -121940,7 +122037,7 @@
       "claim_session_id": "flow-i23",
       "claimed_at": "2026-07-03T01:42:35.096083Z",
       "closed_at": "2026-07-03T01:43:42.388881Z",
-      "commit": "616ba9bbf81c62c39a7481c0d803372df810e3f8",
+      "commit": "609497a31c12bc2d8d99e9d3f0fc2aa38fd51a0b",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W35"
@@ -122249,7 +122346,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T16:40:07.846492Z",
       "closed_at": "2026-07-02T17:00:23.213833Z",
-      "commit": "3ce439ea29fd0e689e65b8d06899831b1bd43acc",
+      "commit": "730bcef4ddb803fc5938583c7b9b6c0df2c258cb",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W02"
@@ -123066,7 +123163,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-02T19:43:43.247260Z",
       "closed_at": "2026-07-02T21:27:04.949338Z",
-      "commit": "9b7fba76f1e37bea2f59d2f94837aca9db226378",
+      "commit": "b348971367a0c0e0d98e637ed4d356a5953566ef",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W42"
@@ -123718,7 +123815,7 @@
       "claim_session_id": "flow-i23",
       "claimed_at": "2026-07-02T23:30:17.655000Z",
       "closed_at": "2026-07-02T23:52:17.916908Z",
-      "commit": "2c740a6c82f3e94ae65f8f665be5cbfedbe07492",
+      "commit": "b3d0cc63531a2f919411912ff9751c8d795c40d7",
       "criteria_floor_waiver": null,
       "deps": [
         "P30-I23-W39",
@@ -125911,7 +126008,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": "2026-07-06T22:46:39.205105Z",
       "closed_at": "2026-07-07T00:41:50.217064Z",
-      "commit": "eb577439070827dfa74f7126730ba7d52022855b",
+      "commit": "6d3ed0a1e6bf22777120f68b80b1b0192928460d",
       "criteria_floor_waiver": {
         "reason": "smoke-exempt: prose criteria carried in the wave IntentBrief and success strings",
         "waived_at": "2026-07-06T19:38:00.004109Z",
@@ -126546,7 +126643,7 @@
       "claim_session_id": "SES-inline-p30i25w10",
       "claimed_at": "2026-07-08T13:27:43.568732Z",
       "closed_at": "2026-07-08T13:35:58.170043Z",
-      "commit": "071bb34005c4f844b8915b8e769d1b2d90affe81",
+      "commit": "b1419a1b3ae716c7e6457ac57c2ab458955ad50c",
       "criteria_floor_waiver": {
         "reason": "smoke-surfaced fix wave appended via CLI; success strings measurable, typed criteria to follow on spec sync",
         "waived_at": "2026-07-08T12:29:27.753602Z",
@@ -127454,7 +127551,7 @@
       "claim_session_id": "SES-inline-p30i25w14",
       "claimed_at": "2026-07-08T15:09:23.685701Z",
       "closed_at": "2026-07-08T15:09:57.912546Z",
-      "commit": "6ebcfe0ea0bbaa9973c697e3c7915ce7e7a8e806",
+      "commit": "6e9867fbdb40d6c4a839994e874ba31846bd6c8d",
       "criteria_floor_waiver": {
         "reason": "smoke-surfaced fix wave appended via CLI; measurable success strings",
         "waived_at": "2026-07-08T14:49:10.640432Z",
@@ -128686,7 +128783,7 @@
       "claim_session_id": "flow-inline-w20",
       "claimed_at": "2026-07-09T16:43:02.413340Z",
       "closed_at": "2026-07-09T17:23:53.770396Z",
-      "commit": "93e77447521a666c7f550599ee37a21f3f1b7ac9",
+      "commit": "7aa535fefb40735ee27ebdd8b9f1bc3b78409f1d",
       "criteria_floor_waiver": {
         "reason": "prose success criteria; typed contract detailed in the wave plan + W19 brief lineage",
         "waived_at": "2026-07-09T16:41:44.095477Z",
@@ -129380,7 +129477,7 @@
       "claim_session_id": "SES-P30I25-close-parent",
       "claimed_at": "2026-07-09T20:09:57.531626Z",
       "closed_at": "2026-07-09T20:10:23.550847Z",
-      "commit": "2536395c952ddc28d1fe9d6f889c922a7a7f41db",
+      "commit": "dd57474e080f5ac1aadfc8a5282c944a148912ff",
       "criteria_floor_waiver": {
         "reason": "prose success criteria; daemon state-reconciliation fix surfaced by live testing",
         "waived_at": "2026-07-09T17:45:03.747469Z",
@@ -129818,7 +129915,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T00:01:19.313723Z",
       "closed_at": "2026-07-13T00:35:43.786710Z",
-      "commit": null,
+      "commit": "e21beb11a2caa990b34be7a701928decf014190c",
       "criteria_floor_waiver": {
         "reason": "prose success criteria; live-defect repair of the EU capture path surfaced by a real Claude Code Stop payload",
         "waived_at": "2026-07-12T23:53:58.929751Z",
@@ -130844,7 +130941,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T00:36:01.749910Z",
       "closed_at": "2026-07-13T01:12:35.587063Z",
-      "commit": null,
+      "commit": "3aa2b30af0290277f6ebd35b186b3ab8c56fa8af",
       "criteria_floor_waiver": {
         "reason": "prose success criteria; baseline half of the EU capture repair, symmetric with the W25 latest-counter path",
         "waived_at": "2026-07-12T23:54:20.885446Z",
@@ -131240,7 +131337,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T01:14:08.295731Z",
       "closed_at": "2026-07-13T01:22:48.466028Z",
-      "commit": null,
+      "commit": "29eafd6e52872df71ec7082645d0df3d423f703b",
       "criteria_floor_waiver": {
         "reason": "prose success criteria; cross-session correctness hazard that goes live once W25 and W26 populate the counters",
         "waived_at": "2026-07-12T23:54:21.529378Z",
@@ -131828,7 +131925,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T00:36:02.784200Z",
       "closed_at": "2026-07-13T01:13:29.979601Z",
-      "commit": null,
+      "commit": "eaaf2f9e276c62dc553102fdfd82866f77a60a3b",
       "criteria_floor_waiver": {
         "reason": "prose success criteria; observability gap that let the EU capture defect stay invisible for the whole capture-path lifetime",
         "waived_at": "2026-07-12T23:54:49.483545Z",
@@ -132177,7 +132274,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T01:56:55.388050Z",
       "closed_at": "2026-07-13T04:00:28.475735Z",
-      "commit": null,
+      "commit": "521c179c3c99c4c641f503ceae77dd92b2d6f0d3",
       "criteria_floor_waiver": {
         "reason": "prose success criteria; live-evidence gate demanded because synthetic-fixture green tests are what hid this defect",
         "waived_at": "2026-07-12T23:54:50.133497Z",
@@ -132729,7 +132826,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T00:44:40.140868Z",
       "closed_at": "2026-07-13T01:13:30.868407Z",
-      "commit": null,
+      "commit": "c7a81692b7fa6e218e9a7c6ec198371aefb9e7c1",
       "criteria_floor_waiver": {
         "reason": "Reactive fix wave appended mid-iter after the live Stop-boundary run exposed the racing turn_duration row",
         "waived_at": "2026-07-13T00:44:34.824355Z",
@@ -132948,7 +133045,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T01:28:03.471242Z",
       "closed_at": "2026-07-13T01:56:42.465497Z",
-      "commit": null,
+      "commit": "b499d0cf728745848fd57649d2270b5a96fe9890",
       "criteria_floor_waiver": {
         "reason": "Reactive fix wave appended mid-iter after the operator spotted cumulative session totals and a zero-EU span on the interactive attempt row",
         "waived_at": "2026-07-13T01:28:02.791875Z",
@@ -133213,7 +133310,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T03:23:31.947722Z",
       "closed_at": "2026-07-13T04:10:24.287185Z",
-      "commit": null,
+      "commit": "e767692a0330ea2c69b8548a3d32724a81d5bc0a",
       "criteria_floor_waiver": {
         "reason": "Reactive fix wave appended mid-iter after the W29 close deadlocked on a 600s auditor timeout and an auditor pre-commit run discarded uncommitted edits",
         "waived_at": "2026-07-13T03:23:17.154867Z",
@@ -133481,7 +133578,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T03:45:42.666160Z",
       "closed_at": "2026-07-13T04:13:31.747516Z",
-      "commit": null,
+      "commit": "4cb21ebd3fac78319368804b5f9b5468a64590de",
       "criteria_floor_waiver": {
         "reason": "Reactive fix wave appended mid-iter after the W29 close failed on a float confidence and the operator saw no running agent in the Watch roster",
         "waived_at": "2026-07-13T03:45:34.275569Z",
@@ -133744,7 +133841,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T18:16:28.941061Z",
       "closed_at": "2026-07-13T18:42:06.425013Z",
-      "commit": null,
+      "commit": "22a10f277c0e97adb8b952c0e03c259f72c80ca7",
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the iter audit found the shipped duration source silently redefined elapsed_eu as operator wall clock",
         "waived_at": "2026-07-13T18:15:44.264753Z",
@@ -133972,7 +134069,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T18:16:29.623741Z",
       "closed_at": "2026-07-13T19:11:20.352963Z",
-      "commit": null,
+      "commit": "7ef8b436f8fe54848f87a856e699adedd89f3696",
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the iter audit proved the W32 config leaf inert and the watchdog ceiling incompatible with it",
         "waived_at": "2026-07-13T18:16:08.698934Z",
@@ -134240,7 +134337,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T18:16:30.272268Z",
       "closed_at": "2026-07-13T19:21:30.245093Z",
-      "commit": null,
+      "commit": "94df0527219bf4fd3a0bfbaf1afa99d202bed010",
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the iter audit found three defects in the cross-session rebase that were unit-tested only against the happy path",
         "waived_at": "2026-07-13T18:16:09.947689Z",
@@ -134503,7 +134600,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T18:44:49.277167Z",
       "closed_at": "2026-07-13T19:21:53.358356Z",
-      "commit": null,
+      "commit": "9fe0b2b32603ce64c75219e6b74a99ce1110cc90",
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the W34 basis change stranded two claimed waves whose baselines were recorded under the old basis",
         "waived_at": "2026-07-13T18:44:47.954342Z",
@@ -134766,7 +134863,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T19:07:41.403693Z",
       "closed_at": "2026-07-13T19:21:54.791798Z",
-      "commit": null,
+      "commit": "06fa90176fbe9571e43fe0ecc09fc955e028117d",
       "criteria_floor_waiver": {
         "reason": "Polish wave appended at iter close after the repeated rewrites left docstrings describing superseded behaviour",
         "waived_at": "2026-07-13T19:07:40.156287Z",
@@ -135029,7 +135126,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T19:51:59.746445Z",
       "closed_at": "2026-07-13T21:27:06.620045Z",
-      "commit": null,
+      "commit": "b762f1b09f7d1e5f757852222a5ede0c5a21c4e0",
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the re-audit refuted the idle-ceiling heuristic with a fixture showing 960s reported for 120s of work",
         "waived_at": "2026-07-13T19:51:33.029893Z",
@@ -135338,7 +135435,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T19:52:00.344253Z",
       "closed_at": "2026-07-13T21:27:08.046969Z",
-      "commit": null,
+      "commit": "cd31b63d95e3806f35d29c59720c226bb7826fbc",
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the re-audit proved W37 relocated the strand into the zero-EU close gate rather than removing it",
         "waived_at": "2026-07-13T19:51:34.235908Z",
@@ -135800,7 +135897,7 @@
       "claim_session_id": "49101e49-508d-4a3a-8066-29b0b0ef6fc8",
       "claimed_at": "2026-07-13T20:53:02.012159Z",
       "closed_at": "2026-07-13T21:27:11.076754Z",
-      "commit": null,
+      "commit": "55bfab3cbcaa09dd644f16191d99f8394e0a430a",
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the turn-span basis change inflated three claimed waves by thirteen hours each through the same hole that previously stranded two",
         "waived_at": "2026-07-13T20:53:00.816544Z",
@@ -137084,7 +137181,7 @@
       "claim_session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
       "claimed_at": "2026-07-13T22:18:07.645363Z",
       "closed_at": "2026-07-13T23:08:57.681663Z",
-      "commit": "b41b84da38603d521cd999ceff592c91d5a6dd32",
+      "commit": "0ebb105e14f8166f31400b7ee65fc5fc4fd88353",
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the fourth-cycle finding that this iter's own EU rows are not a measurement of anything",
         "waived_at": "2026-07-13T22:17:11.101389Z",
@@ -137313,7 +137410,7 @@
       "claim_session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
       "claimed_at": "2026-07-13T22:18:08.217011Z",
       "closed_at": "2026-07-13T23:08:58.773515Z",
-      "commit": "dd36039218e25fa8db0324757ffd7f17fe589436",
+      "commit": "7fcb10089fc722f0aafebfb95442701e8046213e",
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the fourth-cycle finding of two idle contracts left standing on the close path",
         "waived_at": "2026-07-13T22:17:24.731863Z",
