@@ -146,7 +146,12 @@ def verify_peer_sid(pipe_handle: Any, expected_sid: Any | None = None) -> None:
     finally:
         win32security.RevertToSelf()
 
-    if not win32security.EqualSid(peer_sid, expected_sid):
+    # pywin32 has no EqualSid: a PySID compares by value with ``==``, and calling
+    # a function that does not exist raised AttributeError on every verified
+    # connection -- which the worker turned into a closed pipe, so no client
+    # could complete a SID-verified round-trip and the daemon never answered a
+    # cold-start ping.
+    if peer_sid != expected_sid:
         peer_repr = win32security.ConvertSidToStringSid(peer_sid)
         expected_repr = win32security.ConvertSidToStringSid(expected_sid)
         logger.warning(f"verify_peer_sid reject expected={expected_repr!r} actual={peer_repr!r}")
