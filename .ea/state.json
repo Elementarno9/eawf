@@ -32442,6 +32442,46 @@
         "P30-I25-W52",
         "P30-I25-W53"
       ]
+    },
+    "P30-I26": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": "Frozen release-integrity iter that closes P30 as v0.6.0: reconcile the stale I21 lifecycle state, relabel or disable eight truth defects, delete seven no-op hooks, fix the degraded-banner CI blocker, land the measured test-suite reorg and CI-cost rework, then ship.",
+      "estimate_id": null,
+      "id": "P30-I26",
+      "intent": null,
+      "opened_at": "2026-07-14T22:50:49.335464Z",
+      "phase_id": "P30",
+      "status": "planned",
+      "title": "Release-integrity repair and v0.6.0 ship",
+      "trigger": "none",
+      "wave_ids": [
+        "P30-I26-W01",
+        "P30-I26-W02",
+        "P30-I26-W03",
+        "P30-I26-W04",
+        "P30-I26-W05",
+        "P30-I26-W06",
+        "P30-I26-W07",
+        "P30-I26-W08",
+        "P30-I26-W09",
+        "P30-I26-W10",
+        "P30-I26-W11",
+        "P30-I26-W12",
+        "P30-I26-W13",
+        "P30-I26-W14",
+        "P30-I26-W15",
+        "P30-I26-W16",
+        "P30-I26-W17",
+        "P30-I26-W18",
+        "P30-I26-W19",
+        "P30-I26-W20",
+        "P30-I26-W21",
+        "P30-I26-W22",
+        "P30-I26-W23",
+        "P30-I26-W24"
+      ]
     }
   },
   "mcp_grants": null,
@@ -33538,7 +33578,8 @@
         "P30-I22",
         "P30-I23",
         "P30-I24",
-        "P30-I25"
+        "P30-I25",
+        "P30-I26"
       ],
       "opened_at": "2026-06-09T12:29:17.752919Z",
       "outcome_ids": [],
@@ -33589,7 +33630,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T15:45:50.334520Z",
+  "updated_at": "2026-07-14T22:57:52.836267Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -141523,6 +141564,2454 @@
         }
       ],
       "title": "Make the calibration exclusion bite in the re-fit",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:18.214082Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "One-line wire-key correctness bug with a permanently-degrading live impact; add the missing seam test.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/state_binding.py",
+        "tests/tui/test_state_binding_subscription.py"
+      ],
+      "gates": [],
+      "id": "P30-I26-W01",
+      "intent": {
+        "desired_outcome": "TUI reconnect uses since_event_id and an integration test proves ordered catch-up across a disconnect with no event gap",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "One-line wire-key correctness bug with a permanently-degrading live impact; add the missing seam test.",
+        "problem": "TUI reconnect sends wire key 'since' but daemon SubscribeParams is extra=forbid on since_event_id so every reconnect after one event fails and Watch drops to mtime poll",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:18.248141Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "state_binding builds the reconnect param as since_event_id not since",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "state_binding builds the reconnect param as since_event_id not since",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "a daemon+TUI integration test disconnects then writes events then reconnects and asserts ordered catch-up with no gap",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a daemon+TUI integration test disconnects then writes events then reconnects and asserts ordered catch-up with no gap",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "the existing unit test no longer pins the wrong key",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the existing unit test no longer pins the wrong key",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Rename the reconnect cursor to since_event_id + reconnect test",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W08",
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:18.804978Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "No per-process pause exists anywhere in src; relabel to the honest repo-wide meaning rather than fake it.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/agent_watch.py"
+      ],
+      "gates": [],
+      "id": "P30-I26-W02",
+      "intent": {
+        "desired_outcome": "The pause control is honestly labelled as pausing new dispatches and Stop agent stays the truthful per-agent action",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "No per-process pause exists anywhere in src; relabel to the honest repo-wide meaning rather than fake it.",
+        "problem": "Watch space=pause is per-session-labelled but calls targetless agent.pause that only sets the repo-wide next-claim flag so the running child keeps spending tokens",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:18.838675Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "space binding + footer hint + toast read 'pause new dispatches' not 'pause'",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "space binding + footer hint + toast read 'pause new dispatches' not 'pause'",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "the per-session ACTIVE precondition is removed",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the per-session ACTIVE precondition is removed",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "Stop agent via agent.kill remains the per-agent action",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Stop agent via agent.kill remains the per-agent action",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Relabel watch pause as pause-new-dispatches",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W08",
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:19.450670Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Delivery-into-the-next-round is the S follow-up in P31; the honest label is what unblocks the release.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/research.py",
+        "src/eawf/surfaces/tui/modes/research_board.py"
+      ],
+      "gates": [],
+      "id": "P30-I26-W03",
+      "intent": {
+        "desired_outcome": "The control is labelled queue-for-next-round and the _channel_notes docstring no longer claims it shapes the round dispatch",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Delivery-into-the-next-round is the S follow-up in P31; the honest label is what unblocks the release.",
+        "problem": "The research board t=steer note is read only after the round findings arrive and never reaches a researcher prompt so steering does not shape the running round",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:19.488361Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "the t action label + toast say 'queue note for next round' not 'steer'",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the t action label + toast say 'queue note for next round' not 'steer'",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "the _channel_notes docstring stops claiming the notes shape the round dispatch set",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the _channel_notes docstring stops claiming the notes shape the round dispatch set",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "no code path claims the running researcher saw the note",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "no code path claims the running researcher saw the note",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Relabel research steer as queue-for-next-round",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W08",
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:20.121000Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The daemon already rejects session_policy continue with -32602 so nothing working is lost. Real resume is P31.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/claude/adapter.py",
+        "src/eawf/runtime/runtimes/codex/adapter.py",
+        "src/eawf/runtime/runtimes/capabilities.yaml",
+        "src/eawf/kernel/config/registry/leaf_catalog.py",
+        "src/eawf/kernel/config/defaults.py",
+        "src/eawf/platform/templates/init/research.yaml"
+      ],
+      "gates": [],
+      "id": "P30-I26-W04",
+      "intent": {
+        "desired_outcome": "session_resume is unsupported for claude+codex continue_session raises instead of faking and the config leaf drops the value dispatch throws away",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "The daemon already rejects session_policy continue with -32602 so nothing working is lost. Real resume is P31.",
+        "problem": "continue_session returns a typed SessionAttempt without spawning a resume while capabilities say session_resume supported and the config leaf offers continue which dispatch discards",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:20.157011Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "capabilities sets session_resume unsupported for claude-code and codex",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "capabilities sets session_resume unsupported for claude-code and codex",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "continue_session raises NotImplementedError instead of returning a SessionAttempt",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "continue_session raises NotImplementedError instead of returning a SessionAttempt",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "dispatch.session_policy_default choices are narrowed to fresh and both init templates set fresh",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "dispatch.session_policy_default choices are narrowed to fresh and both init templates set fresh",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "session_policy continue is removed from the four skill manifests",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "session_policy continue is removed from the four skill manifests",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Disable unsupported session continuation and narrow the config leaf",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:20.723225Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Policy already decided by W46; the instruction is simply stale. No implement alternative.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/render/skills/registry.py",
+        "tests/golden"
+      ],
+      "gates": [],
+      "id": "P30-I26-W05",
+      "intent": {
+        "desired_outcome": "The generated skill bodies stop instructing agents to commit the event store and warn against force-adding it",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Policy already decided by W46; the instruction is simply stale. No implement alternative.",
+        "problem": "Generated prep ship and flow skills still tell agents to commit the event store which W46 gitignored because it carries raw stdout that leaks machine paths",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:20.759800Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "_GOTCHA_STATE_BOOKKEEPING no longer says to commit the event store",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "_GOTCHA_STATE_BOOKKEEPING no longer says to commit the event store",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "the string warns the event store is gitignored and must not be force-added",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the string warns the event store is gitignored and must not be force-added",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "the prep ship and flow skill goldens are regenerated and green",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the prep ship and flow skill goldens are regenerated and green",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Correct the event-store commit instruction in generated skills",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:21.332890Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Verify the current Codex combined global+project cap before pinning the default threshold.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/render/agents_md.py",
+        "src/eawf/observability/doctor/checks.py",
+        "tests"
+      ],
+      "gates": [],
+      "id": "P30-I26-W06",
+      "intent": {
+        "desired_outcome": "Doctor emits a blocking diagnostic when rendered AGENTS.md exceeds a configurable codex cap naming the blocks past the cut",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Verify the current Codex combined global+project cap before pinning the default threshold.",
+        "problem": "Generated AGENTS.md is 52381 bytes with no byte-cap gate against Codex ~32 KiB project-doc limit so the guidance tail can be silently dropped",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:21.367995Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "a doctor check measures rendered AGENTS.md bytes against a configurable cap",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a doctor check measures rendered AGENTS.md bytes against a configurable cap",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "the check emits a blocking diagnostic when over the cap",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the check emits a blocking diagnostic when over the cap",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "the diagnostic names which render blocks fall past the cut",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the diagnostic names which render blocks fall past the cut",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add the AGENTS.md byte-cap doctor diagnostic",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W07": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:21.949453Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Highest-harm of the eight. Exit status 0 means the process exited not that the work passed. Mirror the researcher BLOCKED path.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/agent.py",
+        "src/eawf/kernel/spec",
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "tests"
+      ],
+      "gates": [],
+      "id": "P30-I26-W07",
+      "intent": {
+        "desired_outcome": "Unparseable executor output can never close a wave green and synthesized reports are visibly marked",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Highest-harm of the eight. Exit status 0 means the process exited not that the work passed. Mirror the researcher BLOCKED path.",
+        "problem": "A synthesized executor report mints verdict PASS from exit_status 0 with no marker so a wave closes green on output no agent authored",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:21.986457Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "the synth path mints BLOCKED or FAIL not PASS from exit_status 0",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the synth path mints BLOCKED or FAIL not PASS from exit_status 0",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "AgentReportBody carries a report_source authored-or-synthesized field set on both synth paths",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "AgentReportBody carries a report_source authored-or-synthesized field set on both synth paths",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "Watch and the report modal render a synthesized-or-degraded marker",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Watch and the report modal render a synthesized-or-degraded marker",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Stop closing waves green on synthesized reports",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W08": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:52.235751Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I26-W02",
+        "P30-I26-W03",
+        "P30-I26-W04"
+      ],
+      "description": "The CHANGELOG 0.6.0 section and PR 29 body advertise pause steer and resume controls that W02 W03 W04 retract or relabel; PR body updated at ship time.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "CHANGELOG.md"
+      ],
+      "gates": [],
+      "id": "P30-I26-W08",
+      "intent": {
+        "desired_outcome": "Release notes and PR body describe the controls honestly matching the relabelled behaviour",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Shipping release notes that re-assert retracted controls would re-introduce the exact truth defect the iter fixes.",
+        "problem": "CHANGELOG and PR body advertise pause steer and resume controls that W02 W03 W04 just retracted or relabelled",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:52.270889Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "a CHANGELOG 0.6.0 no longer claims per-agent pause live steering or session resume",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a CHANGELOG 0.6.0 no longer claims per-agent pause live steering or session resume",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "b the wording matches the relabelled controls from W02 W03 W04",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "b the wording matches the relabelled controls from W02 W03 W04",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Scrub retracted control claims from CHANGELOG and PR body",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:22.575922Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Deletes ~3172 of 3199 exit-127s by removing hooks that never guarded. C04 fail-closed is P31.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/claude/plugin_install.py",
+        "src/eawf/platform/templates/claude/hook.sh.j2",
+        "src/eawf/runtime/runtimes/claude/statusline_modules/hooks_plugins.py",
+        "src/eawf/runtime/runtimes/codex/plugin_install.py",
+        "tests/golden/plugin_install"
+      ],
+      "gates": [],
+      "id": "P30-I26-W09",
+      "intent": {
+        "desired_outcome": "Only session_end ships it resolves in worktrees via absolute path and PATH bootstrap and the statusline stops reporting presence as health",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Deletes ~3172 of 3199 exit-127s by removing hooks that never guarded. C04 fail-closed is P31.",
+        "problem": "The shipped settings wire 8 Claude hooks but only session_end has a handler; seven are no-ops that 127 in worktrees while the statusline reports file-count as healthy",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:22.610223Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "plugin_install stops installing the seven handler-less Claude hooks",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "plugin_install stops installing the seven handler-less Claude hooks",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "session_end uses an absolute interpreter path + PATH bootstrap and resolves inside a git worktree",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "session_end uses an absolute interpreter path + PATH bootstrap and resolves inside a git worktree",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "the statusline hooks segment no longer reports file-count as status ok",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the statusline hooks segment no longer reports file-count as status ok",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "Codex hooks stop rendering with --runtime claude",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Codex hooks stop rendering with --runtime claude",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-05",
+          "kind": "legacy",
+          "measurable_signal": "plugin_install goldens are regenerated and green",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "plugin_install goldens are regenerated and green",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Delete the seven no-op hooks fix session_end and relabel statusline",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W10": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:23.229306Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "This is the defect that let I21 go invisible for 13 days. Low severity but a real FSM hole.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/iter_.py",
+        "src/eawf/kernel/validate/invariants.py",
+        "tests"
+      ],
+      "gates": [],
+      "id": "P30-I26-W10",
+      "intent": {
+        "desired_outcome": "The lifecycle refuses a second active iter repoints on close and validate flags the orphan-active and multi-active shapes",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "This is the defect that let I21 go invisible for 13 days. Low severity but a real FSM hole.",
+        "problem": "open_iter and activate_iter never refuse a second ACTIVE iter under one phase close_iter nulls the pointer instead of repointing and no invariant flags an orphan-active or multi-active iter",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:23.267610Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "open_iter and activate_iter reject when another iter under the same phase is ACTIVE unless an explicit opt-in flag is passed",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "open_iter and activate_iter reject when another iter under the same phase is ACTIVE unless an explicit opt-in flag is passed",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "close_iter repoints current.iter_id to the lowest-numbered remaining ACTIVE iter of the phase",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "close_iter repoints current.iter_id to the lowest-numbered remaining ACTIVE iter of the phase",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "a new invariant flags an ACTIVE iter under current.phase_id with a null current.iter_id",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a new invariant flags an ACTIVE iter under current.phase_id with a null current.iter_id",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "a new invariant flags more than one ACTIVE iter under one phase",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a new invariant flags more than one ACTIVE iter under one phase",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Refuse a second active iter and repoint the pointer on close",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W11": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W24",
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:23.850560Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The real macos-15 blocker. Do NOT regenerate goldens; the goldens are correct and the capture was nondeterministic.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/snapshot/pilot_harness.py",
+        "tests"
+      ],
+      "gates": [],
+      "id": "P30-I26-W11",
+      "intent": {
+        "desired_outcome": "Golden capture forces degraded off and the heartbeat lit before every capture so goldens are host-independent without regen",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "The real macos-15 blocker. Do NOT regenerate goldens; the goldens are correct and the capture was nondeterministic.",
+        "problem": "On CI with no daemon the degraded banner covers the header row and the heartbeat blank cell drops the trailing bullet so slow-host golden captures drift",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:23.887625Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "the snapshot harness forces app.degraded False and _sync_degraded_banner before capture",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the snapshot harness forces app.degraded False and _sync_degraded_banner before capture",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "the harness forces the heartbeat lit via Heartbeat.ack before capture",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the harness forces the heartbeat lit via Heartbeat.ack before capture",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "the previously-drifting goldens capture identically on a slow host without regeneration",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the previously-drifting goldens capture identically on a slow host without regeneration",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Quiesce the degraded banner and heartbeat before golden capture",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W12": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W14",
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:24.509180Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Driving all keys against one Pilot is unsafe (q quits 20/20; r/u/w switch scope). Press nothing. Keep the _advertised_keys_at monkeypatch seam.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/snapshot/behaviour_probe.py",
+        "tests/snapshots/tui/test_affordance_matrix.py"
+      ],
+      "gates": [],
+      "id": "P30-I26-W12",
+      "intent": {
+        "desired_outcome": "The sweep reads the binding map once per cell and presses nothing collapsing 250 mounts to 40 with unchanged classification",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Driving all keys against one Pilot is unsafe (q quits 20/20; r/u/w switch scope). Press nothing. Keep the _advertised_keys_at monkeypatch seam.",
+        "problem": "sweep_unresolved_affordances mounts a fresh EaApp per advertised key (250 mounts per run x2) but the sweep only branches on UNRESOLVED which is a pure active_bindings read taken before any press",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:24.544343Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "no pilot.press remains reachable from sweep_unresolved_affordances",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "no pilot.press remains reachable from sweep_unresolved_affordances",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "mounts per sweep run are at most twice the legal-cell-count (40 from 250)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "mounts per sweep run are at most twice the legal-cell-count (40 from 250)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "both sweep tests and test_sweep_deferred_keys_excluded_from_result stay green",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "both sweep tests and test_sweep_deferred_keys_excluded_from_result stay green",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "combined sweep wall-clock is under 60s from 326s",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "combined sweep wall-clock is under 60s from 326s",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Batch the affordance sweep to one binding-map read per cell",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W13": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W15",
+        "P30-I26-W21",
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:25.133206Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "NOT --diff-filter=MDR which drops 38 of 993 commits and starves range_spans_multiple_iters; apply the M/D/R filter in Python.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tools/snapshot_pairing_gate.py",
+        "tests/unit/test_snapshot_pairing_gate.py"
+      ],
+      "gates": [],
+      "id": "P30-I26-W13",
+      "intent": {
+        "desired_outcome": "One git log name-status pass yields every hash subject and changed-file status with byte-equivalent results under 2s",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "NOT --diff-filter=MDR which drops 38 of 993 commits and starves range_spans_multiple_iters; apply the M/D/R filter in Python.",
+        "problem": "The gate forks git twice per commit (1987 forks over 993 commits at 30.5s) and the cost grows with every commit landed on the phase branch",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:25.166529Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "exactly one git subprocess per gate invocation is reachable from main",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "exactly one git subprocess per gate invocation is reachable from main",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "the same 95 golden-mutating SHAs and 993 subjects as the old implementation",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the same 95 golden-mutating SHAs and 993 subjects as the old implementation",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "runtime is under 2s over the 993-commit range",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "runtime is under 2s over the 993-commit range",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "rename and copy records parse correctly with the destination path matched",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "rename and copy records parse correctly with the destination path matched",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Collapse the snapshot pairing gate to a single git pass",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W14": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:25.727980Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I26-W12"
+      ],
+      "description": "Least-specified wave in the brief; the >=40% gate keeps it from sprawling to fill its 2 EU.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "tests/tui",
+        "tests/snapshots/tui"
+      ],
+      "gates": [],
+      "id": "P30-I26-W14",
+      "intent": {
+        "desired_outcome": "Other per-iteration remount loops are fixed or documented and the Textual serial wall-clock drops materially",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Least-specified wave in the brief; the >=40% gate keeps it from sprawling to fill its 2 EU.",
+        "problem": "W12 fixes the worst instance of a remount-per-iteration pattern recurring 1053 times across 137 files with 900 in the Textual tier",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:25.763357Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "a baseline is captured before any edit",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a baseline is captured before any edit",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "tests/snapshots/tui serial wall-clock drops at least 40 percent against the post-W12 baseline",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "tests/snapshots/tui serial wall-clock drops at least 40 percent against the post-W12 baseline",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "collected count and pass count are unchanged",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "collected count and pass count are unchanged",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "every remaining per-iteration remount is fixed or carries a one-line load-bearing-isolation comment",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "every remaining per-iteration remount is fixed or carries a one-line load-bearing-isolation comment",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Audit the remaining per-iteration Pilot remounts",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W15": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W16",
+        "P30-I26-W20",
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:26.343619Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I26-W13"
+      ],
+      "description": "Single commit no behavioural change. There is no tests/unit/conftest.py so the move cannot orphan a fixture.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "tests/unit",
+        "tests/integration",
+        ".github/workflows/ci.yaml",
+        ".github/workflows/release.yaml"
+      ],
+      "gates": [],
+      "id": "P30-I26-W15",
+      "intent": {
+        "desired_outcome": "The 79 files live under tests/integration in one pure-move commit with no behavioural change and git log follow stays usable",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Single commit no behavioural change. There is no tests/unit/conftest.py so the move cannot orphan a fixture.",
+        "problem": "79 files under tests/unit boot CliRunner fork subprocess or spin Textual so the unit tier name carries no information and the directory costs 31ms per test",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:26.380797Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "zero files under tests/unit import CliRunner subprocess or textual",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "zero files under tests/unit import CliRunner subprocess or textual",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "the collected test count is unchanged before and after the move",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the collected test count is unchanged before and after the move",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "the three out-of-tree path refs at ci.yaml 447 and 449 and release.yaml 53 are updated in the same commit",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the three out-of-tree path refs at ci.yaml 447 and 449 and release.yaml 53 are updated in the same commit",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "tests/integration is green",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "tests/integration is green",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Re-home the 79 non-unit test files into the integration tier",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W16": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W22",
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:26.965159Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I26-W15"
+      ],
+      "description": "Next free code is EAWF024 (004-009 a dead gap; do not reuse). Six registration sites incl idle_contract_gate.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/lint/eawf024_test_tier_contract.py",
+        "src/eawf/surfaces/cli/commands/hook.py",
+        "src/eawf/kernel/spec/common.py",
+        "tools/idle_contract_gate.py",
+        ".pre-commit-config.yaml",
+        "pyproject.toml",
+        "tests/unit/conftest.py",
+        "tests/integration/conftest.py",
+        "tests/tui/conftest.py"
+      ],
+      "gates": [],
+      "id": "P30-I26-W16",
+      "intent": {
+        "desired_outcome": "EAWF024 reds any tests/unit file importing CliRunner subprocess or textual and tier markers derive from the directory",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Next free code is EAWF024 (004-009 a dead gap; do not reuse). Six registration sites incl idle_contract_gate.",
+        "problem": "Without a mechanical gate the tier re-blurs within a phase because nothing stops a unit test importing CliRunner subprocess or textual",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:27.001755Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "EAWF024 fires on a planted violation under tests/unit",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "EAWF024 fires on a planted violation under tests/unit",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "the lint is wired so idle_contract_gate passes with EAWF024 registered",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the lint is wired so idle_contract_gate passes with EAWF024 registered",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "a noqa for EAWF024 parses via the ruff external list and pre-commit is green",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a noqa for EAWF024 parses via the ruff external list and pre-commit is green",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "tier markers derive from the directory with no per-file edit",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "tier markers derive from the directory with no per-file edit",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add the EAWF024 test-tier lint and apply tier markers",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W17": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W21",
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:27.565033Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Cost call not the CI-red fix (that is W11). Run the coverage_gate floors locally first; they have never run in CI.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".github/workflows/ci.yaml"
+      ],
+      "gates": [],
+      "id": "P30-I26-W17",
+      "intent": {
+        "desired_outcome": "The matrix is ubuntu-24.04 plus macos-26 coverage runs on ubuntu only and resvg is confined to the ubuntu leg",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Cost call not the CI-red fix (that is W11). Run the coverage_gate floors locally first; they have never run in CI.",
+        "problem": "The four-OS matrix instruments coverage four times for one measurement and compiles resvg uncached in every job for eight skipif-guarded tests",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:27.600235Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "the os matrix lists exactly ubuntu-24.04 and macos-26",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the os matrix lists exactly ubuntu-24.04 and macos-26",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "the --cov flags appear only on the ubuntu leg",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the --cov flags appear only on the ubuntu leg",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "the resvg step is gated to ubuntu and the eight tests skip cleanly on macOS",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the resvg step is gated to ubuntu and the eight tests skip cleanly on macOS",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "the drifted inline coverage-gate heredoc is replaced by uv run python tools/coverage_gate.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the drifted inline coverage-gate heredoc is replaced by uv run python tools/coverage_gate.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Cut the matrix run coverage on Ubuntu only and confine resvg",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W18": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:28.161640Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Cheap hygiene; the measured worst case today is the macos leg at ~47 min.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        ".github/workflows/ci.yaml",
+        ".github/workflows/release.yaml",
+        ".github/workflows/plugin-release.yaml",
+        ".github/workflows/phase-release.yaml",
+        ".github/workflows/reviewdog.yml"
+      ],
+      "gates": [],
+      "id": "P30-I26-W18",
+      "intent": {
+        "desired_outcome": "Every job in every workflow carries a timeout-minutes ceiling with headroom over the measured worst case",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Cheap hygiene; the measured worst case today is the macos leg at ~47 min.",
+        "problem": "Zero timeout-minutes exist across all five workflow files so any job can squat to GitHubs six-hour cap",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:28.198176Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "the timeout-minutes count in each workflow file is at least its job count",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the timeout-minutes count in each workflow file is at least its job count",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "the test job ceiling has headroom over the measured worst case",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the test job ceiling has headroom over the measured worst case",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add timeout-minutes to every CI job",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W19": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:28.771791Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Operator decision: delete not nightly. Rebuildable in P31 when someone owns the sandbox fix.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        ".github/workflows/ci.yaml",
+        "pyproject.toml",
+        "docs/reference/mutation-testing.md"
+      ],
+      "gates": [],
+      "id": "P30-I26-W19",
+      "intent": {
+        "desired_outcome": "The inert mutation-core job is removed and its fabricated score signal is gone",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Operator decision: delete not nightly. Rebuildable in P31 when someone owns the sandbox fix.",
+        "problem": "mutation-core has never run a mutant it dies in 19s on a sandbox SchemaError and publishes a fabricated score while continue-on-error hides it",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:28.808830Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "mutation-core no longer appears in ci.yaml",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "mutation-core no longer appears in ci.yaml",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "no workflow publishes a mutation score",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "no workflow publishes a mutation score",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "the mutation-testing doc notes the job was removed pending a real owner",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the mutation-testing doc notes the job was removed pending a real owner",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Delete the inert mutation-core CI job",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W20": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:29.407028Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I26-W15"
+      ],
+      "description": "Deps W15 because two of the asserting test paths may shift under the re-home.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".github/workflows/ci.yaml",
+        "tests/unit/test_phase_release_workflow.py",
+        "tests/unit/test_lifecycle_phase_prepare_close.py"
+      ],
+      "gates": [],
+      "id": "P30-I26-W20",
+      "intent": {
+        "desired_outcome": "The redundant jobs are gone and the asserting test verifies the four contracts run in the main job instead of the workflow text",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Deps W15 because two of the asserting test paths may shift under the re-home.",
+        "problem": "The four release-readiness matrix jobs each full-checkout and uv sync to run one tests file the main run already collects and a test asserts ci.yaml contains the job",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:29.443038Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "the release-readiness block is removed from ci.yaml",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the release-readiness block is removed from ci.yaml",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "test_ci_release_readiness_matrix_job_exists is rewritten to assert the four test files run in the main job",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "test_ci_release_readiness_matrix_job_exists is rewritten to assert the four test files run in the main job",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "the release-preflight evidence string is re-pointed at the main test job",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the release-preflight evidence string is re-pointed at the main test job",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "the four release-contract test files are still collected by the main run",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the four release-contract test files are still collected by the main run",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Delete the redundant release-readiness jobs and fix the asserting test",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W21": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:30.017464Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I26-W13",
+        "P30-I26-W17"
+      ],
+      "description": "Deps W17 so just test ci mirrors the reworked ci.yaml. Absorbs the dropped W-i residue.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "justfile",
+        "tools/changed_scope.py",
+        "tests/unit/test_changed_scope.py"
+      ],
+      "gates": [],
+      "id": "P30-I26-W21",
+      "intent": {
+        "desired_outcome": "One parameterized recipe gives changed full tui and ci modes and a deterministic git-diff selector that over-selects safely",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Deps W17 so just test ci mirrors the reworked ci.yaml. Absorbs the dropped W-i residue.",
+        "problem": "just test duplicates a preamble across three recipes and there is no changed-scope inner loop or ci-mirroring recipe",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:30.051747Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "a changed non-.py file forces the full golden tier",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a changed non-.py file forces the full golden tier",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "a changed src module selects its matching test files and package directory",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a changed src module selects its matching test files and package directory",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "the selector holds no persisted state",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the selector holds no persisted state",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "just test ci reproduces the final ci.yaml invocation verbatim",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "just test ci reproduces the final ci.yaml invocation verbatim",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Parameterize just test and add the changed-scope selector",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W22": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:30.602602Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I26-W16"
+      ],
+      "description": "One line caps ~2900 of ~3879 property executions under CI.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/conftest.py",
+        "pyproject.toml"
+      ],
+      "gates": [],
+      "id": "P30-I26-W22",
+      "intent": {
+        "desired_outcome": "A ci Hypothesis profile caps property examples and the slow marker is applied via the tier conftests",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "One line caps ~2900 of ~3879 property executions under CI.",
+        "problem": "There is no register_profile anywhere and the slow marker is declared but applied to zero tests",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:30.637722Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "register_profile ci with max_examples 25 exists and is selected under CI",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "register_profile ci with max_examples 25 exists and is selected under CI",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "pytest -m slow collects a non-zero count",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "pytest -m slow collects a non-zero count",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "property-test wall-clock under the ci profile drops measurably",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "property-test wall-clock under the ci profile drops measurably",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add the Hypothesis ci profile and apply the slow marker",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W23": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:31.813088Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I26-W01",
+        "P30-I26-W02",
+        "P30-I26-W03",
+        "P30-I26-W04",
+        "P30-I26-W05",
+        "P30-I26-W06",
+        "P30-I26-W07",
+        "P30-I26-W08",
+        "P30-I26-W09",
+        "P30-I26-W10",
+        "P30-I26-W11",
+        "P30-I26-W12",
+        "P30-I26-W13",
+        "P30-I26-W14",
+        "P30-I26-W15",
+        "P30-I26-W16",
+        "P30-I26-W17",
+        "P30-I26-W18",
+        "P30-I26-W19",
+        "P30-I26-W20",
+        "P30-I26-W21",
+        "P30-I26-W22",
+        "P30-I26-W24"
+      ],
+      "description": "Ship vehicle in the P28 jsonl audit shape. Runs after freeze plus audit plus polish.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        ".ea/state.json",
+        "CHANGELOG.md"
+      ],
+      "gates": [],
+      "id": "P30-I26-W23",
+      "intent": {
+        "desired_outcome": "A-P30-I22-ship is minted in the P28 jsonl shape and the phase closes in one commit with the standalone release annotation",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Ship vehicle in the P28 jsonl audit shape. Runs after freeze plus audit plus polish.",
+        "problem": "P30 needs a ship-gate audit and a single phase-close commit carrying the release annotation to tag v0.6.0",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:31.849757Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "audit A-P30-I22-ship exists with kind ship-gate scope P30 status complete verdict pass or minor and a resolving report artifact",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "audit A-P30-I22-ship exists with kind ship-gate scope P30 status complete verdict pass or minor and a resolving report artifact",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "the phase-close commit subject is exactly the bracketed P30 state close iter plus phase with the audit and standalone release groups",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the phase-close commit subject is exactly the bracketed P30 state close iter plus phase with the audit and standalone release groups",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "prepare-close P30 returns ok True before the close",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "prepare-close P30 returns ok True before the close",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Mint the ship-gate audit and execute the v0.6.0 phase close",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I26-W24": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I26-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
+        "waived_at": "2026-07-14T22:57:31.214175Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P30-I26-W11"
+      ],
+      "description": "Operator elected to fix the live layout not just the snapshot capture. Mirror the bottom-docked stale-schema banner.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/theme.tcss",
+        "src/eawf/surfaces/tui/app.py",
+        "tests"
+      ],
+      "gates": [],
+      "id": "P30-I26-W24",
+      "intent": {
+        "desired_outcome": "The degraded banner no longer obscures the header in a live daemon-down session while staying clearly surfaced",
+        "evidence_refs": [
+          ".ea/local/research/2026-07-15-p30-i26-finish-plan.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Operator elected to fix the live layout not just the snapshot capture. Mirror the bottom-docked stale-schema banner.",
+        "problem": "When the daemon is down the top-docked degraded banner covers the header row so a live operator loses the brand breadcrumb and runtime row",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I26",
+      "opened_at": "2026-07-14T22:57:31.248873Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "in a daemon-down session the header brand breadcrumb and runtime row remain visible",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "in a daemon-down session the header brand breadcrumb and runtime row remain visible",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "the degraded banner is still clearly surfaced by bottom-docking or insetting it",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the degraded banner is still clearly surfaced by bottom-docking or insetting it",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "a snapshot test covers the daemon-down layout with both banner and header present",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a snapshot test covers the daemon-down layout with both banner and header present",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Stop the degraded banner covering the header row in live sessions",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
