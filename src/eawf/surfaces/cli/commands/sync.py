@@ -523,11 +523,23 @@ def sync_cmd(
         mode="write",
     )
     emit_json_or_text(payload, _format_text(payload), flags=flags)
+    # Post-render byte-cap check: the doctor check owns the blocking verdict, but
+    # sync is where AGENTS.md is (re)written, so measure the fresh file here too.
+    # Codex silently truncates a project doc past its byte cap, dropping the
+    # guidance tail; recording the outcome at render time (WARNING when over)
+    # gives the operator a trail without a separate `eawf doctor` run. Logged,
+    # not echoed, so the ``--json`` stdout envelope stays a single clean object.
+    from eawf.observability.doctor.checks import check_agents_md_byte_cap
+
+    byte_cap = check_agents_md_byte_cap(workspace=target_dir)
+    if byte_cap.status == "fail":
+        logger.warning(f"sync_cmd agents_md_over_cap detail={byte_cap.detail!r}")
     logger.info(
         f"sync_cmd target={target_dir} profiles={enabled_profiles} "
         f"added={report['regions_added']} updated={report['regions_updated']} "
         f"unchanged={report['regions_unchanged']} "
-        f"memory_views_regenerated={report['memory_views_regenerated']}"
+        f"memory_views_regenerated={report['memory_views_regenerated']} "
+        f"agents_md_byte_cap={byte_cap.status}"
     )
 
 

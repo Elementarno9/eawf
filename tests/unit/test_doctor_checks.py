@@ -225,7 +225,7 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.setenv("EAWF_RUNTIME_DIR", str(tmp_path / "eawfd"))
     monkeypatch.chdir(tmp_path)
     results = checks.run_all(workspace=tmp_path)
-    assert len(results) == 11
+    assert len(results) == 12
     assert {r.name for r in results} == {
         "tools_available",
         "state_present",
@@ -238,6 +238,7 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
         "launchd_agent",
         "runtime_dir_size",
         "render_output_roundtrip",
+        "agents_md_byte_cap",
     }
 
 

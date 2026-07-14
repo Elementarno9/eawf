@@ -40,7 +40,11 @@ effect (e.g. ``eawf decisions show``-style read-only renders).
 Public API::
 
     RenderResult                    # dataclass: target + per-region status
+    BlockByteSpan                   # dataclass: one block's UTF-8 byte span
+    ByteCapReport                   # dataclass: byte total + dropped block ids
     lint_entity_title(title) -> list[str]
+    block_byte_spans(text) -> list[BlockByteSpan]
+    measure_agents_md_byte_cap(text, *, cap) -> ByteCapReport
     render_decisions_section(decisions, *, scope_id) -> str
     render_agents_md(
         composed, target, manifest, *, generator, state, decisions_scope_id
@@ -476,6 +480,92 @@ def normalize_entity_title(title: str, description: str | None = None) -> str:
     while candidate.endswith("."):
         candidate = candidate[:-1].rstrip()
     return _trim_title_to_cap(candidate)
+
+
+@dataclass(frozen=True)
+class BlockByteSpan:
+    """One managed render block's UTF-8 byte position in a rendered document.
+
+    :func:`~eawf.surfaces.render.regions.find_regions` reports each region's span
+    as Python *character* offsets. AGENTS.md carries non-ASCII prose (em-dashes,
+    typographic quotes) so a character offset is NOT a byte offset, and a
+    downstream reader that truncates at a *byte* cap (Codex's project-doc limit)
+    needs byte positions. This dataclass carries the converted byte span.
+
+    Attributes:
+        id: Region id (the ``id=`` on the block's BEGIN marker).
+        start_byte: UTF-8 byte offset where the block's BEGIN marker starts.
+        end_byte: UTF-8 byte offset one past the block's END marker.
+    """
+
+    id: str
+    start_byte: int
+    end_byte: int
+
+
+@dataclass(frozen=True)
+class ByteCapReport:
+    """Measurement of a rendered AGENTS.md against a byte cap.
+
+    Attributes:
+        total_bytes: UTF-8 byte size of the whole rendered document.
+        cap: The byte cap the total was measured against.
+        dropped_block_ids: Ordered ids of the managed render blocks whose BEGIN
+            marker starts at or past :attr:`cap` — a reader that truncates the
+            file at :attr:`cap` bytes never sees them.
+    """
+
+    total_bytes: int
+    cap: int
+    dropped_block_ids: list[str]
+
+    @property
+    def over_cap(self) -> bool:
+        """Return ``True`` when the document exceeds its byte cap."""
+        return self.total_bytes > self.cap
+
+
+def block_byte_spans(text: str) -> list[BlockByteSpan]:
+    """Return each managed render block's UTF-8 byte span in *text*, in order.
+
+    The block boundaries come from
+    :func:`~eawf.surfaces.render.regions.find_regions`; this helper converts
+    their character-offset spans to byte offsets so a caller can compare a
+    block's start position against a byte cap. Pure — no I/O, no globals.
+
+    Raises:
+        RegionParseError: *text* has malformed managed-region markers.
+    """
+    spans: list[BlockByteSpan] = []
+    for region in regions.find_regions(text):
+        start_char, end_char = region.span
+        start_byte = len(text[:start_char].encode("utf-8"))
+        end_byte = len(text[:end_char].encode("utf-8"))
+        spans.append(BlockByteSpan(id=region.id, start_byte=start_byte, end_byte=end_byte))
+    return spans
+
+
+def measure_agents_md_byte_cap(text: str, *, cap: int) -> ByteCapReport:
+    """Measure *text*'s UTF-8 byte size against *cap* and name dropped blocks.
+
+    A block is "dropped" when its BEGIN marker starts at or past *cap*: a
+    consumer that reads only the first *cap* bytes (Codex silently truncates a
+    project doc at its byte limit) never sees that block, so its guidance is
+    lost. Pure — no I/O, no globals; the caller supplies *text* and *cap*.
+
+    Args:
+        text: The fully rendered AGENTS.md document.
+        cap: Positive byte budget to measure against.
+
+    Raises:
+        ValueError: *cap* is not positive.
+        RegionParseError: *text* has malformed managed-region markers.
+    """
+    if cap <= 0:
+        raise ValueError(f"cap must be positive: {cap!r}")
+    total = len(text.encode("utf-8"))
+    dropped = [span.id for span in block_byte_spans(text) if span.start_byte >= cap]
+    return ByteCapReport(total_bytes=total, cap=cap, dropped_block_ids=dropped)
 
 
 def _has_unmanaged_content(text: str) -> bool:

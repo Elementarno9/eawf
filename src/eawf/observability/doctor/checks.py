@@ -19,6 +19,9 @@ this install workable?".
 - :func:`check_render_output_roundtrip` — proves the
   :mod:`eawf.surfaces.render.envelope` JSON ⇄ markdown round-trip is byte-stable on a
   synthetic envelope; if this regresses every skill is broken (W08).
+- :func:`check_agents_md_byte_cap` — measures the on-disk AGENTS.md byte size
+  against Codex's project-doc byte cap and **fails** (blocking) when over,
+  naming the render blocks whose guidance falls past the truncation cut.
 
 The doctor command (`eawf.surfaces.cli.commands.doctor`) consumes the list, formats it
 via :mod:`eawf.observability.doctor.report`, and selects the highest-severity status to
@@ -38,10 +41,12 @@ from eawf.kernel.config.layered import merge_config
 from eawf.kernel.config.profile import KNOWN_PROFILES
 from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.platform.install.instrument_probe import probe
+from eawf.surfaces.render.agents_md import measure_agents_md_byte_cap
 from eawf.surfaces.render.drift import detect_drift
 from eawf.surfaces.render.envelope import OutputEnvelope, from_markdown, to_markdown
 from eawf.surfaces.render.manifest import Manifest
 from eawf.surfaces.render.manifest import load as load_manifest
+from eawf.surfaces.render.regions import RegionParseError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -854,6 +859,80 @@ def check_render_output_roundtrip() -> CheckResult:
     )
 
 
+# Codex reads a project's AGENTS.md up to a combined ~32 KiB budget and silently
+# truncates the rest, so any guidance past this byte offset never reaches the
+# agent. 32768 = 32 * 1024 is that documented budget; doctor FAILS (blocking)
+# when the rendered AGENTS.md exceeds it, because a silently-dropped guidance
+# tail is a correctness defect, not a capacity warning. A test can monkeypatch
+# this constant to exercise the over-cap path against a small fixture.
+CODEX_PROJECT_DOC_BYTE_CAP = 32768
+
+
+def check_agents_md_byte_cap(*, workspace: Path | None) -> CheckResult:
+    """Fail when the rendered AGENTS.md exceeds Codex's project-doc byte cap.
+
+    Codex truncates a project doc at :data:`CODEX_PROJECT_DOC_BYTE_CAP` bytes,
+    silently dropping every render block past the cut, so a too-large AGENTS.md
+    loses its guidance tail without any error. This check reads the on-disk
+    AGENTS.md at the workspace anchor, measures its UTF-8 byte size via
+    :func:`~eawf.surfaces.render.agents_md.measure_agents_md_byte_cap`, and
+    returns a **blocking** ``fail`` when over — naming the managed render blocks
+    that fall past the cut so the operator knows exactly what Codex never sees.
+
+    Behaviour:
+
+    - No workspace anchor, or no AGENTS.md at the anchor → ``ok`` (nothing to
+      measure; the initialised-tree angle is :func:`check_state_present`'s job).
+    - AGENTS.md within the cap → ``ok`` with the measured byte size.
+    - AGENTS.md over the cap → ``fail`` naming the dropped block ids.
+    - Malformed managed-region markers → the byte total is still measurable, so
+      the cap verdict stands, but the dropped-block list is left empty (marker
+      validity is :func:`check_manifest_in_sync`'s remit).
+
+    Args:
+        workspace: Workspace anchor holding the rendered AGENTS.md; ``None``
+            defers to the pwd-upward ``.ea/`` walk.
+    """
+    name = "agents_md_byte_cap"
+    anchor = _resolve_anchor(workspace)
+    if anchor is None:
+        return CheckResult(name=name, status="ok", detail="no workspace anchor")
+    doc_path = anchor / "AGENTS.md"
+    if not doc_path.is_file():
+        return CheckResult(name=name, status="ok", detail=f"no AGENTS.md at {doc_path}")
+    text = doc_path.read_text(encoding="utf-8")
+    try:
+        report = measure_agents_md_byte_cap(text, cap=CODEX_PROJECT_DOC_BYTE_CAP)
+    except RegionParseError as exc:
+        total = len(text.encode("utf-8"))
+        over = total > CODEX_PROJECT_DOC_BYTE_CAP
+        return CheckResult(
+            name=name,
+            status="fail" if over else "ok",
+            detail=(
+                f"AGENTS.md {total}B vs {CODEX_PROJECT_DOC_BYTE_CAP}B cap; "
+                f"blocks unnameable (malformed markers: {exc})"
+            ),
+        )
+    if report.over_cap:
+        dropped = report.dropped_block_ids
+        shown = ", ".join(dropped[:8])
+        suffix = f" (+{len(dropped) - 8} more)" if len(dropped) > 8 else ""
+        return CheckResult(
+            name=name,
+            status="fail",
+            detail=(
+                f"AGENTS.md {report.total_bytes}B exceeds {report.cap}B cap; "
+                f"{len(dropped)} block(s) past the cut: {shown}{suffix}"
+            ),
+        )
+    return CheckResult(
+        name=name,
+        status="ok",
+        detail=f"AGENTS.md {report.total_bytes}B within {report.cap}B cap",
+    )
+
+
 def tools_available(
     *,
     workspace: Path,
@@ -940,5 +1019,6 @@ def run_all(
         check_launchd_agent(),
         check_runtime_dir_size(workspace=anchor),
         check_render_output_roundtrip(),
+        check_agents_md_byte_cap(workspace=anchor),
     ]
     return results
