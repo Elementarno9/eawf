@@ -889,20 +889,26 @@ def _runtime_zero_close_enforces(
     state_path: Path,
     repo_root: Path,
 ) -> bool:
-    """Return whether a zero-runtime close should block instead of warn."""
-    from eawf.workflow.verify.readiness import load_active_verify_block, resolve_wave_verify_block
+    """Return whether a zero-runtime close should block instead of warn.
 
-    wave = state.waves.get(wave_id)
-    if wave is None:
+    Reads the FLEET verify block, not the band-narrowed one. The UI/UX band exists
+    to scope *criteria* enforcement -- a spec jury judging a screen has nothing to
+    say about a wave that touches no screen -- but runtime capture is not a property
+    of the band: every wave burns agent runtime and every wave's actual feeds the
+    same corpus. Narrowing this gate by band made it advisory for every wave outside
+    the band, which in P30-I25 meant every wave in the iter: the gate that exists to
+    refuse a silent zero could not refuse anything, and reported a pass while doing
+    it. A gate that cannot fail is not a gate.
+    """
+    from eawf.workflow.verify.readiness import load_active_verify_block
+
+    if wave_id not in state.waves:
         return True
-    verify_block = resolve_wave_verify_block(
-        load_active_verify_block(
-            wave_id,
-            state,
-            repo_root=repo_root,
-            config_root=_config_root_for_state_path(state_path),
-        ),
-        wave,
+    verify_block = load_active_verify_block(
+        wave_id,
+        state,
+        repo_root=repo_root,
+        config_root=_config_root_for_state_path(state_path),
     )
     return True if verify_block is None else verify_block.enforce
 
@@ -911,15 +917,29 @@ def _zero_is_explained_by_a_reset(wave: Wave) -> bool:
     """Return whether this wave's missing runtime is explained by a counter reset.
 
     A reset drops the runtime measured before it, so it IS an honest reason for a
-    zero -- but only while it is the last thing that happened to the wave's
-    counters. Once a capture reports after the reset, the capture path has proven
-    itself alive, and any zero from that point on is unexplained again.
+    zero -- but only while nothing has been MEASURED since. Once a capture reports
+    counters beyond the re-originated baseline, the capture path has proven itself
+    alive and productive, and any zero from that point on is unexplained again.
 
-    Without that second condition the exemption is a standing pardon: one reset in
-    a wave's first minute would excuse every zero it ever records, including the
-    zeros of a capture path that silently dies forty turns later -- which is the
-    precise failure the gate exists to catch, laundered through the mechanism meant
-    to keep an honest reset from stranding a wave.
+    Without that second condition the exemption is a standing pardon: one reset in a
+    wave's first minute would excuse every zero it ever records, including the zeros
+    of a capture path that silently dies forty turns later -- the precise failure the
+    gate exists to catch, laundered through the mechanism meant to keep an honest
+    reset from stranding a wave.
+
+    The condition is deliberately the CLOCK, not the counters, and the choice is
+    load-bearing. "An honest reset with a no-op capture after it" and "a capture path
+    that is alive but reporting a frozen snapshot" are the same bytes in
+    ``state.json``: identical counters, a later ``captured_at``. One rule has to lose.
+    Pardoning on frozen counters would close the second case in silence -- which is
+    the original defect of this whole iter, where every wave recorded 0.0 EU for
+    months and nobody noticed. Refusing it costs an explicit ``--no-runtime`` waiver,
+    which is recorded on the wave and visible in review.
+
+    So a wave whose measure was re-originated and which then takes a capture that
+    measures nothing does NOT close silently; it closes with a waiver, or it closes
+    once a capture measures something. Neither strands it (:func:`_reorigin_on_reset`
+    guarantees it stays measurable going forward), and neither hides it.
     """
     carry = wave.runtime_carry
     baseline = wave.runtime_baseline

@@ -2442,3 +2442,46 @@ def test_a_stale_reset_does_not_pardon_a_later_silent_zero(tmp_path: Path) -> No
         assert written["waves"]["P24-I01-W09"]["status"] == "claimed"
 
     _run(body)
+
+
+def test_the_zero_runtime_gate_bites_outside_the_uiux_band(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """W52: the runtime gate reads the FLEET opt-in, not the band-narrowed block.
+
+    The UI/UX band scopes CRITERIA enforcement -- a spec jury judging a screen has
+    nothing to say about a wave that touches no screen. Runtime capture is not a
+    property of the band: every wave burns agent runtime, and every wave's actual
+    feeds the same corpus. Narrowing this gate by band made it advisory for every
+    wave outside the band, which in P30-I25 meant every wave in the iter: it could
+    not refuse anything, and reported a pass while doing it.
+
+    Restore `resolve_wave_verify_block` here and the close below succeeds with a
+    warning -- which is what shipped, and what let a wave close on a figure the fifth
+    audit proved was broken.
+    """
+    from eawf.platform.profiles.models import VerifyBlock
+    from eawf.runtime.daemon.methods import DaemonValidationError
+
+    # An enforcing profile whose band is the TUI. The wave under test is not a TUI
+    # wave, so the band-narrowed resolver used to hand back enforce=False.
+    monkeypatch.setattr(
+        "eawf.workflow.verify.readiness.load_active_verify_block",
+        lambda *a, **k: VerifyBlock(enforce=True, uiux_bands=["tui"]),
+    )
+    payload = _build_state_payload()
+    ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="no captured runtime"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        written = orjson.loads(state_path.read_bytes())
+        assert written["waves"]["P24-I01-W09"]["status"] == "claimed"
+
+    _run(body)
