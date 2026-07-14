@@ -31719,7 +31719,9 @@
         "P30-I21-W33",
         "P30-I21-W34",
         "P30-I21-W35",
-        "P30-I21-W36"
+        "P30-I21-W36",
+        "P30-I21-W37",
+        "P30-I21-W38"
       ]
     },
     "P30-I22": {
@@ -33058,7 +33060,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T10:46:08.274737Z",
+  "updated_at": "2026-07-14T11:02:58.649509Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -115556,6 +115558,163 @@
         }
       ],
       "title": "Complete the 0.6.0 release notes before the re-close",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W37": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Reactive audit-repair wave appended at the ship gate; criteria authored as prose from the auditor finding and gated by the named test",
+        "waived_at": "2026-07-14T11:02:44.983652Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "W15 books researcher spend to the campaign's own cost centre and read_campaign_cost sums it correctly, but no production code calls the reader: the only caller is a test. The data is live and the read side is dark, so an operator cannot see what a campaign cost. This is the one contract I21 added that never fires in production.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/research.py",
+        "tests/unit/test_research_cli.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W37",
+      "intent": {
+        "desired_outcome": "eawf research status reports the researcher spend booked against the active campaigns, so the cost centre W15 created is readable by the operator.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Sum read_campaign_cost over the active campaigns in the research status handler",
+          "Render the total in both the JSON body and the text line",
+          "Add a test that a campaign with a booked dispatch_cost event reports a non-zero cost"
+        ],
+        "priority_rationale": "The phase theme is never ship an idle contract again; this is the last one the ship-gate audit found.",
+        "problem": "read_campaign_cost has zero production callers. Campaign spend is written on the real path but no surface reads it, so the campaign cost centre is queryable only by a test.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-14T11:02:45.030486Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "eawf research status reports the summed researcher spend booked against the active campaigns in both its JSON body and its text line so the campaign cost centre is readable from an operator surface rather than only from a test",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "eawf research status reports the summed researcher spend booked against the active campaigns in both its JSON body and its text line so the campaign cost centre is readable from an operator surface rather than only from a test",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A test drives the status handler over a campaign carrying a booked dispatch_cost event and asserts the reported cost is non-zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A test drives the status handler over a campaign carrying a booked dispatch_cost event and asserts the reported cost is non-zero",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Surface the campaign cost the campaign already books",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W38": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Reactive audit-repair wave appended at the ship gate; criteria are prose over log and docstring truthfulness with no separate gate beyond the suite",
+        "waived_at": "2026-07-14T11:02:58.599708Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The ship-gate audit found two lines that no longer tell the truth. The run-complete log line hardcodes terminal=converged even when the state flip is skipped (an operator cancel mid-run logs a convergence that did not happen), and two adapter docstrings still say --output-format json after W30 switched the default to stream-json.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/research.py",
+        "src/eawf/runtime/runtimes/claude/adapter.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W38",
+      "intent": {
+        "desired_outcome": "The log line reports the terminal state the run actually reached, and the adapter docstrings name the format the code actually emits.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Log the terminal state the run actually reached rather than a hardcoded converged",
+          "Update the two adapter docstrings to say stream-json"
+        ],
+        "priority_rationale": "A log line that reports a convergence that did not happen is worse than no log line: it is read as evidence.",
+        "problem": "The run-complete log says terminal=converged even when the convergence flip was skipped, and two adapter docstrings still name the pre-W30 --output-format json default.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-14T11:02:58.649307Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The research run-complete log line reports the terminal state the run actually reached so an operator cancel is not logged as a convergence",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The research run-complete log line reports the terminal state the run actually reached so an operator cancel is not logged as a convergence",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "The claude adapter docstrings name stream-json which is the format the code emits since W30 rather than the json default it replaced",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The claude adapter docstrings name stream-json which is the format the code emits since W30 rather than the json default it replaced",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Retire the two statements this iter made false",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
