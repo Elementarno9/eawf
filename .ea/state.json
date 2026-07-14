@@ -15874,6 +15874,19 @@
       "status": "open",
       "title": "Reconcile the P30-I25-W41 commit-less ledger row"
     },
+    "B115": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-14T10:46:08.274737Z",
+      "description": "roadmap revise --add-wave --success takes a comma-separated list with no escape, so any criterion whose prose contains a comma is silently split into fragments. P30-I21-W36 and P30-I25-W53 landed rows reading 'its bullets' and 'bucketed'. The flag fragments exactly the criteria the typed-criteria floor exists to protect, and a closed wave cannot be resynced. Take repeatable --success or a spec file, and reject a fragment under the 20-char floor rather than converting it.",
+      "id": "B115",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "P30",
+      "status": "open",
+      "title": "Stop --success splitting a criterion on its own commas"
+    },
     "B70": {
       "closed_at": null,
       "commit": null,
@@ -27472,6 +27485,19 @@
       "scope_id": "P30-I21-W21",
       "updated_at": "2026-07-01T17:34:14.443293Z"
     },
+    "P30-I21-W22": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W22-bucket-20260714T104011Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I21-W22",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I21-W22",
+      "updated_at": "2026-07-14T10:40:11.320242Z"
+    },
     "P30-I21-W23": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I21-W23-bucket-20260701T213454Z",
@@ -33032,7 +33058,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T10:39:41.445530Z",
+  "updated_at": "2026-07-14T10:46:08.274737Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -113419,7 +113445,7 @@
       "agent_role": null,
       "blocks": [],
       "claim_session_id": null,
-      "claimed_at": null,
+      "claimed_at": "2026-07-14T10:40:11.311459Z",
       "closed_at": null,
       "commit": null,
       "criteria_floor_waiver": null,
@@ -113506,7 +113532,21 @@
       "iter_id": "P30-I21",
       "opened_at": "2026-07-01T14:47:26.270091Z",
       "outcome": null,
-      "runtime_baseline": null,
+      "runtime_baseline": {
+        "api_duration_ms": 0,
+        "cache_creation_input_tokens": 215562,
+        "cache_read_input_tokens": 14912042,
+        "captured_at": "2026-07-14T10:40:11.320218Z",
+        "cost_usd": 10.960371,
+        "harness": "claude-code",
+        "input_tokens": 216,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 53906,
+        "session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+        "shared_wave_count": null,
+        "total_duration_ms": 0
+      },
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
@@ -115274,7 +115314,88 @@
       "file_scopes": [
         "CHANGELOG.md"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "criterion": "schema_version",
+            "file_scopes": [
+              "CHANGELOG.md"
+            ],
+            "pattern": "schema_version"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "measurement",
+            "file_scopes": [
+              "CHANGELOG.md"
+            ],
+            "pattern": "measurement"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "reclose",
+            "file_scopes": [
+              "CHANGELOG.md"
+            ],
+            "pattern": "reclose"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "GATE-03",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "bullets",
+            "file_scopes": [
+              "CHANGELOG.md"
+            ],
+            "pattern": "bullets"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "GATE-04",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "remain",
+            "file_scopes": [
+              "CHANGELOG.md"
+            ],
+            "pattern": "remain"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-05",
+          "id": "GATE-05",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I21-W36",
       "intent": {
         "desired_outcome": "The 0.6.0 section documents every schema edge shipped since v0.5.4 and its Fixed entry describes what P30-I25 actually delivered.",
@@ -115315,71 +115436,121 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "CHANGELOG 0.6.0 carries a migration note for every schema_version edge between the last release and 1.19 so an upgrading repo can see what each bump did and that eawf migrate advances it",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "CHANGELOG 0.6.0 carries a migration note for every schema_version edge between the last release and 1.19 so an upgrading repo can see what each bump did and that eawf migrate advances it",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "CHANGELOG 0.6.0 carries a migration note for every schema_version edge between the last release and 1.19 so an upgrading repo can see what each bump did and that eawf migrate advances it",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "The I25 entry under Fixed describes the runtime-measurement chain and the calibration-exclusion repair rather than only the four original lifecycle bugs",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The I25 entry under Fixed describes the runtime-measurement chain and the calibration-exclusion repair rather than only the four original lifecycle bugs",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "The I25 entry under Fixed describes the runtime-measurement chain and the calibration-exclusion repair rather than only the four original lifecycle bugs",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-03"
+          ],
           "id": "CR-03",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "The reclose staging suite still passes because the 0.6.0 heading",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The reclose staging suite still passes because the 0.6.0 heading",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "The reclose staging suite still passes because the 0.6.0 heading",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-04"
+          ],
           "id": "CR-04",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "grandfathered legacy criterion",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "its bullets",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "its bullets",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-05"
+          ],
           "id": "CR-05",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "and the 1.13 and 1.14 notes remain intact",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "and the 1.13 and 1.14 notes remain intact",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "and the 1.13 and 1.14 notes remain intact",
           "waiver_reason": null
         }
@@ -138279,7 +138450,122 @@
         "tests/unit/test_estimation_buckets.py",
         "tests/unit/test_estimation_metrics.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "criterion": "calibration_excluded",
+            "file_scopes": [
+              "src/eawf/workflow/estimation/buckets.py",
+              "src/eawf/workflow/estimation/metrics.py",
+              "tests/unit/test_estimation_buckets.py",
+              "tests/unit/test_estimation_metrics.py"
+            ],
+            "pattern": "calibration_excluded"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "bucketed",
+            "file_scopes": [
+              "src/eawf/workflow/estimation/buckets.py",
+              "src/eawf/workflow/estimation/metrics.py",
+              "tests/unit/test_estimation_buckets.py",
+              "tests/unit/test_estimation_metrics.py"
+            ],
+            "pattern": "bucketed"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "elapsed_eu",
+            "file_scopes": [
+              "src/eawf/workflow/estimation/buckets.py",
+              "src/eawf/workflow/estimation/metrics.py",
+              "tests/unit/test_estimation_buckets.py",
+              "tests/unit/test_estimation_metrics.py"
+            ],
+            "pattern": "elapsed_eu"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "GATE-03",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "compute_estimate_actual_variance",
+            "file_scopes": [
+              "src/eawf/workflow/estimation/buckets.py",
+              "src/eawf/workflow/estimation/metrics.py",
+              "tests/unit/test_estimation_buckets.py",
+              "tests/unit/test_estimation_metrics.py"
+            ],
+            "pattern": "compute_estimate_actual_variance"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "GATE-04",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "compute_weekly_burn",
+            "file_scopes": [
+              "src/eawf/workflow/estimation/buckets.py",
+              "src/eawf/workflow/estimation/metrics.py",
+              "tests/unit/test_estimation_buckets.py",
+              "tests/unit/test_estimation_metrics.py"
+            ],
+            "pattern": "compute_weekly_burn"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-05",
+          "id": "GATE-05",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "qualifying",
+            "file_scopes": [
+              "src/eawf/workflow/estimation/buckets.py",
+              "src/eawf/workflow/estimation/metrics.py",
+              "tests/unit/test_estimation_buckets.py",
+              "tests/unit/test_estimation_metrics.py"
+            ],
+            "pattern": "qualifying"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-06",
+          "id": "GATE-06",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I25-W53",
       "intent": {
         "desired_outcome": "Every consumer that treats an actual as a reference class skips an excluded row; weekly burn keeps counting it because the row is real spend.",
@@ -138321,85 +138607,145 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "calibrate_buckets drops an actual whose calibration_excluded is true even when it is CLOSED",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "calibrate_buckets drops an actual whose calibration_excluded is true even when it is CLOSED",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "calibrate_buckets drops an actual whose calibration_excluded is true even when it is CLOSED",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "grandfathered legacy criterion",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "bucketed",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "bucketed",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-03"
+          ],
           "id": "CR-03",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "in-window and carries positive elapsed_eu",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "in-window and carries positive elapsed_eu",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "in-window and carries positive elapsed_eu",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-04"
+          ],
           "id": "CR-04",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "The two estimate-quality metrics compute_eu_variance and compute_estimate_actual_variance skip a calibration-excluded actual so a re-originated or shared-session figure cannot move the precision or M26 variance headline",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The two estimate-quality metrics compute_eu_variance and compute_estimate_actual_variance skip a calibration-excluded actual so a re-originated or shared-session figure cannot move the precision or M2",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "The two estimate-quality metrics compute_eu_variance and compute_estimate_actual_variance skip a calibration-excluded actual so a re-originated or shared-session figure cannot move the precision or M26 variance headline",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-05"
+          ],
           "id": "CR-05",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "compute_weekly_burn keeps counting an excluded actual because the row is real spend and only its use as a reference class is disqualified",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "compute_weekly_burn keeps counting an excluded actual because the row is real spend and only its use as a reference class is disqualified",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "compute_weekly_burn keeps counting an excluded actual because the row is real spend and only its use as a reference class is disqualified",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-06"
+          ],
           "id": "CR-06",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "A test asserts each of the three consumers on a row that is excluded and otherwise fully qualifying and turns red if the filter is removed",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "A test asserts each of the three consumers on a row that is excluded and otherwise fully qualifying and turns red if the filter is removed",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "A test asserts each of the three consumers on a row that is excluded and otherwise fully qualifying and turns red if the filter is removed",
           "waiver_reason": null
         }
