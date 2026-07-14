@@ -20,12 +20,25 @@ which refresh as a side-effect of any wave that adds a CLI command)
 are deliberately out of scope — they have their own per-wave refresh
 path and need no paired ``test:`` commit.
 
-The gate walks the commits between the PR base and head. The contract
-targets *mutations* of already-committed goldens (status ``M`` / ``D`` /
-``R``) — silently rewriting golden bytes is exactly what must ride a
-paired ``test:`` commit. Pure *additions* (status ``A``) are exempt: a
-brand-new surface ships its fixtures alongside the ``feat:`` wave that
-introduces it.
+The gate walks the commits between the PR base and head in a **single**
+``git log --name-status -z`` pass (see :func:`scan_range`): the whole
+range, its subjects, and every commit's changed-file statuses come back
+from one subprocess, so the gate stays fast (~0.1s) over a phase-sized
+range instead of shelling ``git`` once per commit. The contract targets
+*mutations* of already-committed goldens (status ``M`` / ``D`` / ``R``)
+— silently rewriting golden bytes is exactly what must ride a paired
+``test:`` commit. Pure *additions* (status ``A``) are exempt: a brand-new
+surface ships its fixtures alongside the ``feat:`` wave that introduces
+it.
+
+The ``M`` / ``D`` / ``R`` filter is applied **in Python** over the parsed
+records, never as a ``git`` ``--diff-filter``: a ``--diff-filter`` prunes
+the commits with no matching file from the log output entirely, which
+would starve :func:`range_spans_multiple_iters` (it needs *every* commit's
+subject to tell a phase PR apart from a single-iter one). Rename (``R``)
+and copy (``C``) entries arrive from ``--name-status -z`` in the three-token
+``<status>\\0<old-path>\\0<new-path>`` form and are matched on the
+**destination** (new) path.
 
 For each commit that *modifies / deletes / renames* a managed golden
 file, the subject must match one of:
@@ -65,6 +78,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+from dataclasses import dataclass
 
 from eawf.surfaces.cli.commands.snapshot import SNAPSHOT_SURFACES
 
@@ -93,9 +107,49 @@ _PAIRED_SUBJECT_RE = re.compile(
 # tell a multi-iter phase-PR range apart from a single-iter small-CL range.
 _ITER_KEY_RE = re.compile(r"^\[(P\d{2,}(?:-I\d{2,})?)")
 
+# Sentinel token that heads each commit's ``git log`` record. It cannot
+# collide with a ``--name-status`` status token (single letter + optional
+# similarity score) and never reaches the boundary check as a path or
+# subject, which are consumed positionally — see :func:`_parse_log`.
+_RECORD_SENTINEL = "COMMIT"
+
+# ``git log --format`` string that prints, per commit, the sentinel, the
+# full SHA, and the subject, each field NUL-separated (``%x00``). The
+# ``-z`` flag then NUL-terminates the header and NUL-delimits the trailing
+# ``--name-status`` file entries so the whole stream parses in one pass.
+_LOG_FORMAT = f"--format={_RECORD_SENTINEL}%x00%H%x00%s"
+
+# Status codes that count as a golden *mutation* — the Python-side
+# equivalent of the old ``git diff-tree --diff-filter=MDR``. ``A`` (add)
+# and ``C`` (copy) are intentionally excluded; a rename shows as ``R`` and
+# is matched on its destination path.
+_MUTATION_CODES = frozenset({"M", "D", "R"})
+
+
+@dataclass(frozen=True)
+class CommitRecord:
+    """A single commit parsed from the ``git log --name-status -z`` stream.
+
+    Attributes:
+        sha: The full 40-hex commit SHA.
+        subject: The commit subject (``%s`` — first line only, no newline).
+        changed: ``(status_code, path)`` pairs for the commit's changed
+            files. ``status_code`` is the leading letter of the raw status
+            (``M`` / ``A`` / ``D`` / ``R`` / ``C`` / ...); for rename and
+            copy entries ``path`` is the *destination* (new) path.
+    """
+
+    sha: str
+    subject: str
+    changed: tuple[tuple[str, str], ...]
+
 
 def _run_git(args: list[str]) -> str:
-    """Return stdout of ``git <args>`` (stripped); raise on failure."""
+    """Return stdout of ``git <args>``; raise on failure.
+
+    Raises:
+        subprocess.CalledProcessError: If ``git`` exits non-zero.
+    """
     proc = subprocess.run(
         ["git", *args],
         check=True,
@@ -105,18 +159,76 @@ def _run_git(args: list[str]) -> str:
     return proc.stdout
 
 
-def commits_in_range(base: str, head: str) -> list[str]:
-    """Return the commit SHAs in ``base..head`` (oldest-last is fine).
+def _parse_log(raw: str) -> list[CommitRecord]:
+    """Parse a ``git log --name-status -z`` stream into :class:`CommitRecord`s.
+
+    The stream is a flat NUL-delimited token list. Each commit opens with
+    the :data:`_RECORD_SENTINEL` token, followed by its SHA and subject;
+    then come the ``--name-status`` file entries. A plain entry is two
+    tokens (``<status>``, ``<path>``); a rename / copy entry is three
+    (``<status>``, ``<old-path>``, ``<new-path>``) and is recorded against
+    its destination path. The first status token of each commit carries a
+    leading ``\\n`` (git's header/diff separator under ``-z``), stripped
+    here; empty tokens (the trailing separator) are skipped. Paths and
+    subjects are consumed positionally, so a file literally named
+    ``COMMIT`` never trips the sentinel check.
+
+    Args:
+        raw: The raw stdout of the single ``git log`` pass.
+
+    Returns:
+        One record per commit, in ``git log`` order (newest first).
+    """
+    tokens = raw.split("\x00")
+    records: list[CommitRecord] = []
+    header: tuple[str, str] | None = None
+    changed: list[tuple[str, str]] = []
+    index = 0
+    total = len(tokens)
+    while index < total:
+        token = tokens[index]
+        if token == _RECORD_SENTINEL:
+            if header is not None:
+                records.append(CommitRecord(header[0], header[1], tuple(changed)))
+            header = (tokens[index + 1], tokens[index + 2])
+            changed = []
+            index += 3
+            continue
+        status = token.strip()
+        if not status:
+            index += 1
+            continue
+        code = status[0]
+        if code in ("R", "C"):
+            # ``<status>\0<old-path>\0<new-path>`` — match the destination.
+            changed.append((code, tokens[index + 2]))
+            index += 3
+        else:
+            changed.append((code, tokens[index + 1]))
+            index += 2
+    if header is not None:
+        records.append(CommitRecord(header[0], header[1], tuple(changed)))
+    return records
+
+
+def scan_range(base: str, head: str) -> list[CommitRecord]:
+    """Return the parsed commits in ``base..head`` from one ``git`` subprocess.
+
+    This is the gate's only git-invoking function on the ``main`` path: a
+    single ``git log --name-status -z`` pass yields every commit's SHA,
+    subject, and changed-file statuses at once, replacing the former
+    per-commit ``rev-list`` + ``diff-tree`` + ``log`` fan-out.
 
     Args:
         base: The PR base SHA (merge-base side).
         head: The PR head SHA.
 
     Returns:
-        The list of commit SHAs reachable from *head* but not *base*.
+        One :class:`CommitRecord` per commit reachable from *head* but not
+        *base*, in ``git log`` order (newest first).
     """
-    out = _run_git(["rev-list", f"{base}..{head}"])
-    return [line.strip() for line in out.splitlines() if line.strip()]
+    raw = _run_git(["log", "--name-status", "-z", _LOG_FORMAT, f"{base}..{head}"])
+    return _parse_log(raw)
 
 
 def _is_managed_golden(path: str) -> bool:
@@ -124,32 +236,19 @@ def _is_managed_golden(path: str) -> bool:
     return any(path.startswith(prefix) for prefix in _WATCHED_DIRS)
 
 
-def commit_mutates_golden(sha: str) -> bool:
-    """Return whether *sha* modifies / deletes / renames a managed golden.
+def commit_mutates_golden(record: CommitRecord) -> bool:
+    """Return whether *record* modifies / deletes / renames a managed golden.
 
     "Managed" means a file under one of the C09 §5.6 surface directories
-    (:data:`_WATCHED_DIRS`). Pure additions (status ``A``) are
-    intentionally excluded: a new surface ships its fixtures with the
-    ``feat:`` wave that introduces them. Only mutations of already-
-    committed bytes (``M`` / ``D`` / ``R``) require a paired ``test:``
-    subject.
+    (:data:`_WATCHED_DIRS`). Pure additions (status ``A``) and copies
+    (status ``C``) are intentionally excluded: a new surface ships its
+    fixtures with the ``feat:`` wave that introduces them. Only mutations
+    of already-committed bytes (``M`` / ``D`` / ``R``) require a paired
+    ``test:`` subject; a rename is matched on its destination path.
     """
-    out = _run_git(
-        [
-            "diff-tree",
-            "--no-commit-id",
-            "--name-only",
-            "-r",
-            "--diff-filter=MDR",
-            sha,
-        ]
+    return any(
+        code in _MUTATION_CODES and _is_managed_golden(path) for code, path in record.changed
     )
-    return any(_is_managed_golden(line.strip()) for line in out.splitlines())
-
-
-def commit_subject(sha: str) -> str:
-    """Return the subject (first line) of *sha*'s commit message."""
-    return _run_git(["log", "-1", "--format=%s", sha]).strip()
 
 
 def is_paired(subject: str) -> bool:
@@ -168,8 +267,8 @@ def iter_key(subject: str) -> str | None:
     return match.group(1) if match else None
 
 
-def range_spans_multiple_iters(shas: list[str]) -> bool:
-    """Return whether *shas* reference more than one distinct phase/iter scope.
+def range_spans_multiple_iters(records: list[CommitRecord]) -> bool:
+    """Return whether *records* reference more than one distinct phase/iter scope.
 
     A phase PR (the one-PR-per-phase model) bundles commits from every iter
     of the phase, so its range yields multiple distinct iter keys; a managed
@@ -177,16 +276,31 @@ def range_spans_multiple_iters(shas: list[str]) -> bool:
     is enforced only for the latter — phase PRs defer to wholesale diff review
     plus the snapshot test suite, which already pins golden freshness.
     """
-    keys = {key for sha in shas if (key := iter_key(commit_subject(sha)))}
+    keys = {key for record in records if (key := iter_key(record.subject))}
     return len(keys) > 1
 
 
-def find_unpaired(base: str, head: str) -> list[tuple[str, str]]:
-    """Return ``(sha, subject)`` for every unpaired golden-mutating commit.
+def _unpaired_in_records(records: list[CommitRecord]) -> list[tuple[str, str]]:
+    """Return ``(short_sha, subject)`` for every unpaired golden-mutating record.
 
-    A commit is *unpaired* when it modifies / deletes / renames a
-    managed golden file but its subject does not match the wave-form
-    ``test:`` grammar.
+    A commit is *unpaired* when it modifies / deletes / renames a managed
+    golden file but its subject does not match the wave-form ``test:``
+    grammar. Pure in-memory pass over already-parsed records — no git.
+    """
+    offenders: list[tuple[str, str]] = []
+    for record in records:
+        if not commit_mutates_golden(record):
+            continue
+        if not is_paired(record.subject):
+            offenders.append((record.sha[:9], record.subject))
+    return offenders
+
+
+def find_unpaired(base: str, head: str) -> list[tuple[str, str]]:
+    """Return ``(short_sha, subject)`` for every unpaired golden-mutating commit.
+
+    Convenience wrapper: scans ``base..head`` in one git pass
+    (:func:`scan_range`) and applies :func:`_unpaired_in_records`.
 
     Args:
         base: The PR base SHA.
@@ -196,14 +310,7 @@ def find_unpaired(base: str, head: str) -> list[tuple[str, str]]:
         The offending commits as ``(short_sha, subject)`` tuples; empty
         when every golden-mutating commit is correctly paired.
     """
-    offenders: list[tuple[str, str]] = []
-    for sha in commits_in_range(base, head):
-        if not commit_mutates_golden(sha):
-            continue
-        subject = commit_subject(sha)
-        if not is_paired(subject):
-            offenders.append((sha[:9], subject))
-    return offenders
+    return _unpaired_in_records(scan_range(base, head))
 
 
 def main(argv: list[str]) -> int:
@@ -219,12 +326,14 @@ def main(argv: list[str]) -> int:
         print("snapshot pairing gate: no base/head — skipping (not a PR)")
         return 0
 
-    offenders = find_unpaired(base, head)
+    # The single git subprocess for the whole gate run.
+    records = scan_range(base, head)
+    offenders = _unpaired_in_records(records)
     if not offenders:
         print("snapshot pairing gate: ok (all golden changes paired)")
         return 0
 
-    if range_spans_multiple_iters(commits_in_range(base, head)):
+    if range_spans_multiple_iters(records):
         # Phase-PR model (one PR per phase): the range bundles commits from
         # multiple iters and ships as a single reviewed unit, and the snapshot
         # test suite already asserts every committed golden matches current-

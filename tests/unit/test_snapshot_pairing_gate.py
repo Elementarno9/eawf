@@ -11,12 +11,17 @@ Coverage:
 - the pure subject-grammar helpers ``is_paired`` / ``iter_key`` /
   ``range_spans_multiple_iters`` over their boundary + reject cases;
 - ``_is_managed_golden`` matches the C09 §5.6 watch set and rejects siblings;
+- the single-pass perf contract: ``main`` fires exactly *one* git subprocess
+  per gate run (a spy on ``subprocess.run`` asserts the call count is ``1``);
+- ``_parse_log`` decodes the ``git log --name-status -z`` stream, matching
+  rename (``R``) / copy (``C``) records on their *destination* path;
 - the NEGATIVE CONTROL the wave's criterion names: a real ephemeral git repo
   whose single-iter range carries an *unpaired* golden mutation (a ``feat:``
   subject that rewrites committed golden bytes) reds the gate -- ``find_unpaired``
   cites it and ``main`` returns exit ``1``;
 - the positive control: the same mutation under a wave-form ``test:`` subject is
   paired and the gate passes;
+- a rename of a golden within the managed dir is caught on its destination path;
 - a pure *addition* of a golden (status ``A``) is exempt -- a new surface ships
   its fixtures with the ``feat:`` wave that introduces it;
 - the phase-PR escape hatch: a range spanning multiple iters surfaces the bundled
@@ -24,8 +29,8 @@ Coverage:
 - the no-base/no-head push-build path no-ops at exit ``0``.
 
 ``tools/`` is excluded from the package, so the gate is loaded via
-:mod:`importlib`. The git-walking functions shell out to bare ``git`` against the
-cwd, so the negative-control tests ``chdir`` into the ephemeral fixture repo.
+:mod:`importlib`. The single ``git log`` pass shells out to bare ``git`` against
+the cwd, so the git-fixture tests ``chdir`` into the ephemeral fixture repo.
 """
 
 from __future__ import annotations
@@ -83,6 +88,10 @@ def _init_repo(workdir: Path) -> Path:
     _git(workdir, "init", "-q", "-b", "main")
     _git(workdir, "config", "user.email", "ci@example.com")
     _git(workdir, "config", "user.name", "ci")
+    # Pin rename detection ON so ``git log --name-status`` emits ``R`` records
+    # deterministically across git versions (the production default, but made
+    # explicit here so the rename-parsing test cannot flake on a stray config).
+    _git(workdir, "config", "diff.renames", "true")
     golden = workdir / _GOLDEN_DIR / "screen.txt"
     golden.parent.mkdir(parents=True, exist_ok=True)
     golden.write_text("original golden bytes\n", encoding="utf-8")
@@ -149,8 +158,8 @@ def test_range_spans_multiple_iters_is_false_for_single_iter(
     base = _git(repo, "rev-list", "--max-parents=0", "HEAD")
     # Drive the helper from the fixture repo's cwd (gate shells out to bare git).
     monkeypatch.chdir(repo)
-    shas = _GATE.commits_in_range(base, "HEAD")
-    assert _GATE.range_spans_multiple_iters(shas) is False
+    records = _GATE.scan_range(base, "HEAD")
+    assert _GATE.range_spans_multiple_iters(records) is False
 
 
 def test_is_managed_golden_matches_watch_set_and_rejects_siblings() -> None:
@@ -160,6 +169,97 @@ def test_is_managed_golden_matches_watch_set_and_rejects_siblings() -> None:
     assert _GATE._is_managed_golden(sibling) is False
     # The unmanaged CLI help-panel tree is deliberately out of scope.
     assert _GATE._is_managed_golden("tests/golden/cli/help.txt") is False
+
+
+# --- single-pass perf contract + stream parsing -----------------------------------
+
+
+def test_main_invokes_exactly_one_git_subprocess(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # PERF CONTRACT (the criterion): the whole gate run reaches git exactly once.
+    # The former implementation fanned out to `rev-list` + a per-commit `diff-tree`
+    # + `log`, which is ~30s over a phase-sized range; the single `git log
+    # --name-status -z` pass collapses that to one subprocess.
+    repo = _init_repo(tmp_path / "onecall")
+    base = _git(repo, "rev-list", "--max-parents=0", "HEAD")
+    _commit_golden_mutation(repo, subject="[P30-I15-W06] test: snapshot update state")
+    monkeypatch.chdir(repo)
+
+    # Spy is installed *after* fixture setup so only `main`'s git calls count.
+    calls: list[list[str]] = []
+    real_run = _GATE.subprocess.run
+
+    def counting_run(cmd: list[str], *args: object, **kwargs: object) -> object:
+        calls.append(cmd)
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(_GATE.subprocess, "run", counting_run)
+    rc = _GATE.main(["snapshot_pairing_gate.py", base, "HEAD"])
+
+    assert rc == 0
+    assert len(calls) == 1
+    # ...and the single call is the name-status log pass, not a per-commit probe.
+    (only_call,) = calls
+    assert only_call[0] == "git"
+    assert "log" in only_call
+    assert "--name-status" in only_call
+    assert "-z" in only_call
+
+
+def test_parse_log_matches_rename_and_copy_on_destination_path() -> None:
+    # `git log --name-status -z` renders a modify as `<status>\0<path>`, but a
+    # rename/copy as the three-token `<status>\0<old-path>\0<new-path>`. The
+    # parser must record the DESTINATION (new) path for R/C so the gate matches
+    # a golden by where the bytes landed, not where they came from. The leading
+    # `\n` on the first status is git's header/diff separator under `-z`.
+    sha = "a" * 40
+    raw = (
+        f"COMMIT\x00{sha}\x00[P30-I15-W06] test: x\x00"
+        f"\nM\x00{_GOLDEN_DIR}one.txt\x00"
+        f"R100\x00{_GOLDEN_DIR}old.txt\x00{_GOLDEN_DIR}new.txt\x00"
+        f"C080\x00src/orig.py\x00{_GOLDEN_DIR}copied.txt\x00"
+    )
+    records = _GATE._parse_log(raw)
+
+    assert len(records) == 1
+    record = records[0]
+    assert record.sha == sha
+    assert record.subject == "[P30-I15-W06] test: x"
+    # Destination paths, never the sources, are recorded for R/C.
+    assert ("M", f"{_GOLDEN_DIR}one.txt") in record.changed
+    assert ("R", f"{_GOLDEN_DIR}new.txt") in record.changed
+    assert ("C", f"{_GOLDEN_DIR}copied.txt") in record.changed
+    assert (f"{_GOLDEN_DIR}old.txt") not in [path for _, path in record.changed]
+
+
+def test_parse_log_returns_empty_for_empty_stream() -> None:
+    # Boundary: an empty range (`git log` over base..base) yields no records.
+    assert _GATE._parse_log("") == []
+
+
+def test_golden_rename_within_managed_dir_is_caught_on_destination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A rename of a committed golden lands as an `R` record whose destination is
+    # still under the managed dir, so it is a mutation the gate must catch. Under
+    # a `feat:` subject the single-iter range must red.
+    repo = _init_repo(tmp_path / "rename")
+    base = _git(repo, "rev-list", "--max-parents=0", "HEAD")
+    _git(repo, "mv", f"{_GOLDEN_DIR}screen.txt", f"{_GOLDEN_DIR}renamed.txt")
+    _git(repo, "commit", "-q", "-m", "[P30-I15-W06] feat: rename a golden fixture")
+    monkeypatch.chdir(repo)
+
+    records = _GATE.scan_range(base, "HEAD")
+    assert len(records) == 1
+    codes = {code for code, _ in records[0].changed}
+    assert "R" in codes
+    rename_paths = [path for code, path in records[0].changed if code == "R"]
+    assert rename_paths == [f"{_GOLDEN_DIR}renamed.txt"]  # destination, not source
+    assert _GATE.commit_mutates_golden(records[0]) is True
+
+    rc = _GATE.main(["snapshot_pairing_gate.py", base, "HEAD"])
+    assert rc == 1
 
 
 # --- the wave's named negative + positive controls (real git fixture) -------------
