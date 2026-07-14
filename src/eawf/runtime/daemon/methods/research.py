@@ -69,6 +69,7 @@ from eawf.kernel.state.enums import (
     Confidence,
     EffortBucket,
     OpenQuestionStatus,
+    ReportSource,
     StoreKind,
     Urgency,
 )
@@ -1312,9 +1313,10 @@ async def _bind_researcher_body(
     validates as a :class:`ResearcherReportBody` even after the bounded re-ask
     loop (e.g. prose, not JSON), :func:`assist_with_schema` raises
     :class:`LLMAssistError`. Rather than let that unparseable output abort the
-    whole campaign round, record a typed BLOCKED body so the round persists the
-    degrade. The BLOCKED verdict is tolerated downstream by the caller's
-    :class:`DispatchCloseBlockedError` handler.
+    whole campaign round, record a typed BLOCKED body (marked
+    ``report_source=synthesized`` so the degrade is honest on the wire) so the
+    round persists the degrade. The BLOCKED verdict is tolerated downstream by
+    the caller's :class:`DispatchCloseBlockedError` handler.
 
     Args:
         prompt: The researcher dispatch prompt.
@@ -1341,6 +1343,7 @@ async def _bind_researcher_body(
         return ResearcherReportBody(
             verdict=AgentReportVerdict.BLOCKED,
             confidence=Confidence.LOW,
+            report_source=ReportSource.SYNTHESIZED,
             summary=f"researcher output did not validate after {exc.attempts} attempt(s)",
             question="researcher produced no parseable findings; re-run or narrow the domain",
             recommendation="re-dispatch the researcher with a tighter prompt",

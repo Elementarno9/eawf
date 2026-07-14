@@ -49,6 +49,7 @@ from eawf.kernel.state.enums import (
     IterStatus,
     IterTrigger,
     PhaseStatus,
+    ReportSource,
     WaveStatus,
 )
 from eawf.kernel.state.ids import natural_key
@@ -324,6 +325,11 @@ class FleetVerdictRow(BaseModel):
             the pane tints the row by (pass / pass-with-followups / fail /
             blocked).
         runtime: Runtime adapter id that produced the verdict report.
+        report_source: Whether the report was authored by the agent or
+            synthesized by the daemon on assist-loop exhaustion; the pane flags
+            a synthesized row so a degrade never reads as an authored verdict.
+            Defaults to :attr:`~eawf.kernel.state.enums.ReportSource.AUTHORED`
+            so a pre-marker replayed envelope reads as authored.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -331,6 +337,7 @@ class FleetVerdictRow(BaseModel):
     wave_id: str
     verdict: AgentReportVerdict
     runtime: str
+    report_source: ReportSource = ReportSource.AUTHORED
 
 
 def fleet_verdict_rollup(state_path: Path) -> list[FleetVerdictRow]:
@@ -365,6 +372,7 @@ def fleet_verdict_rollup(state_path: Path) -> list[FleetVerdictRow]:
             wave_id=row.payload.header.base_id,
             verdict=row.payload.body.verdict,
             runtime=row.payload.header.runtime,
+            report_source=row.payload.body.report_source,
         )
     rollup = [latest_by_wave[wave_id] for wave_id in sorted(latest_by_wave)]
     logger.debug(f"fleet_verdict_rollup waves={len(rollup)}")

@@ -42,6 +42,7 @@ from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
     AgentSessionStatus,
+    ReportSource,
     StoreKind,
 )
 from eawf.kernel.state.models import State
@@ -749,6 +750,8 @@ def test_run_campaign_live_unparseable_researcher_synthesizes_blocked(
     payloads = [AgentReportPayload.model_validate(row.payload) for row in reports]
     assert all(p.body.verdict is AgentReportVerdict.BLOCKED for p in payloads)
     assert all("did not validate" in p.body.summary for p in payloads)
+    # The synth body is honestly marked: provenance is synthesized, not authored.
+    assert all(p.body.report_source is ReportSource.SYNTHESIZED for p in payloads)
 
 
 def test_run_campaign_live_absolute_path_report_is_redacted_not_crashed(

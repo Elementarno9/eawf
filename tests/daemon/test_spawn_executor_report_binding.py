@@ -24,11 +24,19 @@ The two load-bearing assertions, one per wave success criterion:
 P30-I20-W41 layers the SAFETY-NET half on top: when the bounded re-ask loop
 exhausts its ceiling (a model that answers in prose), the dispatch no longer
 lets :class:`LLMAssistError` escape -- it SYNTHESIZES a typed
-:class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody` from the
-accepted spawn's exit status (PASS on exit 0, FAIL otherwise), at MEDIUM
-confidence with a parse-failure follow-up, so :func:`run_dispatch` always runs
-and the dispatch-cost + EU accrual still fire. The error-path tests below assert
-that synthesized row instead of a propagated exception.
+:class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody` so
+:func:`run_dispatch` always runs and the dispatch-cost + EU accrual still fire.
+
+P30-I26-W07 hardens the synth verdict (truth defect T8): a synthesized body was
+NEVER authored by the agent, and ``exit_status == 0`` means the process exited,
+not that the work passed -- so the synth path must not mint a green
+:attr:`~eawf.kernel.state.enums.AgentReportVerdict.PASS`. It now ALWAYS mints
+:attr:`~eawf.kernel.state.enums.AgentReportVerdict.BLOCKED` (mirroring the
+researcher synth path) at LOW confidence, carries a
+:attr:`~eawf.kernel.state.enums.ReportSource.SYNTHESIZED` provenance marker, and
+a parse-failure follow-up. BLOCKED is not close-ready, so the close gate blocks
+the wave (``DispatchCloseBlockedError``) AFTER the row + cost land -- the wave is
+never closed green on output no agent authored, but it is not stranded either.
 """
 
 from __future__ import annotations
@@ -47,6 +55,7 @@ from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
     Confidence,
+    ReportSource,
     StoreKind,
 )
 from eawf.kernel.store.envelope import Envelope
@@ -332,6 +341,9 @@ def test_spawn_persists_real_executor_body_not_synthetic(
     assert body.outcome == _REAL_OUTCOME
     assert body.files_changed == _REAL_FILES
     assert body.verdict.value == "pass"
+    # The authored (bound) path relies on the default provenance marker: a body
+    # the agent's own output validated into is AUTHORED, never synthesized.
+    assert body.report_source is ReportSource.AUTHORED
     # And it is NOT the synthetic placeholder the runner used to mint.
     assert not body.outcome.startswith(_SYNTHETIC_PREFIX)
     assert not body.summary.startswith(_SYNTHETIC_PREFIX)
@@ -344,20 +356,23 @@ def test_spawn_persists_real_executor_body_not_synthetic(
 # --------------------------------------------------------------------------- #
 
 
-def test_spawn_invalid_body_reasks_then_synthesizes_report(
+def test_spawn_invalid_body_synthesizes_blocked_not_pass_on_exit_zero(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Invalid output re-asks naming the failure, then SYNTHESIZES a typed row.
+    """Truth defect T8: an exit-0 synth mints BLOCKED (never PASS) + synthesized.
 
     A stub whose ``text`` is not a valid ``ExecutorReportBody`` (missing the
     executor-required ``wave_id`` / ``outcome``) drives the bounded re-ask loop:
     the re-ask prompt names the validation failure. On ceiling-exhaustion the
-    dispatch no longer lets :class:`LLMAssistError` escape -- it synthesizes a
-    typed ``ExecutorReportBody`` from the accepted spawn's exit status so
-    :func:`run_dispatch` still runs (cost + EU accrue) and the wave is not
-    stranded. The synthesized row carries MEDIUM confidence (the report was not
-    authored) and one parse-failure follow-up so the degrade is auditable.
+    dispatch synthesizes a typed row rather than letting :class:`LLMAssistError`
+    escape -- so :func:`run_dispatch` still runs (cost + EU accrue) and the wave
+    is not stranded. The keystone assertion: the accepted spawn exited 0, but a
+    synthesized body was NEVER authored, so the verdict is BLOCKED (a green PASS
+    would close the wave on output no agent stood behind). BLOCKED is not
+    close-ready, so the close gate blocks the wave AFTER the row + cost land.
     """
+    from eawf.workflow.verify.dispatch_close import DispatchCloseBlockedError
+
     state_path = _write_state(tmp_path)
     event_path = tmp_path / ".ea" / "store" / "event.jsonl"
     # Valid JSON, wrong shape: an executor body without wave_id / outcome.
@@ -366,8 +381,11 @@ def test_spawn_invalid_body_reasks_then_synthesizes_report(
     _patch_adapter(monkeypatch, adapter)
     ctx = _ctx(state_path, event_path=event_path)
 
-    # No exception escapes: the dispatch synthesizes a body and completes.
-    _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+    # The synthesized BLOCKED row is persisted, then the verify gate blocks the
+    # close -- the wave is never closed green on the exit-0 signal.
+    with pytest.raises(DispatchCloseBlockedError) as exc_info:
+        _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+    assert "verdict=blocked" in str(exc_info.value)
 
     # The re-ask prompts (every spawn after the first) named the validation
     # failure before the loop exhausted its ceiling.
@@ -384,10 +402,13 @@ def test_spawn_invalid_body_reasks_then_synthesizes_report(
     payload = AgentReportPayload.model_validate(rows[0].payload)
     body = payload.body
     assert payload.header.role is AgentSessionRole.EXECUTOR
-    # MEDIUM confidence flags the synthesized (not authored) report.
-    assert body.confidence is Confidence.MEDIUM
-    # The accepted spawn exited 0 -> PASS per the exit-status rule.
-    assert body.verdict is AgentReportVerdict.PASS
+    # The keystone: exit 0 does NOT mint a green PASS -- a synthesized body is
+    # BLOCKED (never verified as passing), at LOW confidence.
+    assert body.verdict is AgentReportVerdict.BLOCKED
+    assert body.verdict is not AgentReportVerdict.PASS
+    assert body.confidence is Confidence.LOW
+    # The provenance marker is honest: this body was synthesized, not authored.
+    assert body.report_source is ReportSource.SYNTHESIZED
     # The synthesized prose names the parse failure (attempt count + reason).
     assert "synthesized executor report" in body.outcome
     assert "schema_mismatch" in body.outcome
@@ -401,23 +422,28 @@ def test_spawn_invalid_body_reasks_then_synthesizes_report(
     assert _dispatch_cost_event_count(event_path) == 1
 
 
-def test_spawn_invalid_json_reasks_then_synthesizes_report(
+def test_spawn_invalid_json_synthesizes_blocked_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Non-JSON output re-asks naming ``invalid_json`` then synthesizes a row.
+    """Non-JSON output re-asks naming ``invalid_json`` then synthesizes BLOCKED.
 
     The error-path companion: a stub whose ``text`` is free prose (not JSON at
     all) is classified ``invalid_json``; the re-ask names that classification and
-    on exhaustion the dispatch synthesizes a typed row naming ``invalid_json``
-    rather than raising.
+    on exhaustion the dispatch synthesizes a typed BLOCKED / synthesized row
+    naming ``invalid_json``. BLOCKED is not close-ready, so the close gate blocks
+    the wave after the row lands.
     """
+    from eawf.workflow.verify.dispatch_close import DispatchCloseBlockedError
+
     state_path = _write_state(tmp_path)
     event_path = tmp_path / ".ea" / "store" / "event.jsonl"
     adapter = _RecordingStub(text="the executor answer in free prose")
     _patch_adapter(monkeypatch, adapter)
     ctx = _ctx(state_path, event_path=event_path)
 
-    _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+    with pytest.raises(DispatchCloseBlockedError) as exc_info:
+        _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+    assert "verdict=blocked" in str(exc_info.value)
 
     reask_prompts = adapter.prompts[1:]
     assert reask_prompts
@@ -426,25 +452,27 @@ def test_spawn_invalid_json_reasks_then_synthesizes_report(
     rows = _executor_report_rows(state_path)
     assert len(rows) == 1
     body = AgentReportPayload.model_validate(rows[0].payload).body
-    assert body.confidence is Confidence.MEDIUM
-    assert body.verdict is AgentReportVerdict.PASS
+    assert body.verdict is AgentReportVerdict.BLOCKED
+    assert body.confidence is Confidence.LOW
+    assert body.report_source is ReportSource.SYNTHESIZED
     # The synthesized prose names the invalid_json classification.
     assert "invalid_json" in body.outcome
     assert len(body.followups) == 1
 
 
-def test_spawn_synthesized_verdict_is_fail_on_nonzero_exit(
+def test_spawn_synthesized_verdict_is_blocked_on_nonzero_exit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Boundary: a nonzero accepted-spawn exit synthesizes a FAIL verdict.
+    """Boundary: a nonzero accepted-spawn exit ALSO synthesizes BLOCKED.
 
-    The verdict mirrors the accepted spawn's exit status: ``exit_status == 0``
-    is PASS (the two tests above), and a nonzero exit is FAIL. A FAIL body still
-    flows into :func:`run_dispatch` -- cost + EU accrue and the report row is
-    persisted -- BEFORE the post-execution verify gate blocks the close on the
-    FAIL verdict (raising :class:`DispatchCloseBlockedError`). The block is the
-    correct downstream behavior: a synthesized FAIL must not silently close the
-    wave, but it must not strand it either (cost already accrued, row recorded).
+    The verdict no longer mirrors the accepted spawn's exit status: whether the
+    spawn exited 0 or nonzero, a synthesized body is BLOCKED because it was never
+    authored. A BLOCKED body still flows into :func:`run_dispatch` -- cost + EU
+    accrue and the report row is persisted -- BEFORE the post-execution verify
+    gate blocks the close on the BLOCKED verdict (raising
+    :class:`DispatchCloseBlockedError`). The block is the correct downstream
+    behavior: a synthesized report must not silently close the wave, but it must
+    not strand it either (cost already accrued, row recorded).
     """
     from eawf.workflow.verify.dispatch_close import DispatchCloseBlockedError
 
@@ -455,17 +483,18 @@ def test_spawn_synthesized_verdict_is_fail_on_nonzero_exit(
     _patch_adapter(monkeypatch, adapter)
     ctx = _ctx(state_path, event_path=event_path)
 
-    # The synthesized FAIL is persisted, then the verify gate blocks the close.
+    # The synthesized BLOCKED is persisted, then the verify gate blocks the close.
     with pytest.raises(DispatchCloseBlockedError) as exc_info:
         _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
-    assert "verdict=fail" in str(exc_info.value)
+    assert "verdict=blocked" in str(exc_info.value)
 
     # The report row landed (cost + EU accrued) BEFORE the close was blocked.
     rows = _executor_report_rows(state_path)
     assert len(rows) == 1
     body = AgentReportPayload.model_validate(rows[0].payload).body
-    assert body.verdict is AgentReportVerdict.FAIL
-    assert body.confidence is Confidence.MEDIUM
+    assert body.verdict is AgentReportVerdict.BLOCKED
+    assert body.confidence is Confidence.LOW
+    assert body.report_source is ReportSource.SYNTHESIZED
     assert "exit_status=1" in body.outcome
     assert len(body.followups) == 1
 

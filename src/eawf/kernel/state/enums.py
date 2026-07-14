@@ -397,6 +397,25 @@ class AgentReportVerdict(StrEnum):
     BLOCKED = "blocked"
 
 
+class ReportSource(StrEnum):
+    """How an agent report body reached the store.
+
+    Distinguishes a body the agent itself authored from one the daemon
+    synthesized after the agent's own output failed report-body validation.
+    A synthesized body is a DEGRADE, never a verified pass: the daemon minted
+    it from the spawn's observable signals so cost + EU still accrue, but no
+    agent authored the verdict. Surfaces carry the marker so an operator never
+    reads a synthesized body as an authored outcome.
+
+    Values:
+        AUTHORED: The agent's own output validated into the typed body.
+        SYNTHESIZED: The daemon minted the body on assist-loop exhaustion.
+    """
+
+    AUTHORED = "authored"
+    SYNTHESIZED = "synthesized"
+
+
 class AgentSessionStatus(StrEnum):
     ACTIVE = "active"
     CHECKPOINTED = "checkpointed"

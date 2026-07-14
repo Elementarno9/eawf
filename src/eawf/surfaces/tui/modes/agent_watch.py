@@ -90,6 +90,7 @@ from eawf.kernel.state.enums import (
     AgentSessionRole,
     AgentSessionStatus,
     EffortBucket,
+    ReportSource,
     WaveStatus,
 )
 from eawf.kernel.state.ids import natural_key
@@ -109,7 +110,8 @@ from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import Footer, render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
 from eawf.surfaces.tui.widgets.output_tail import OutputTail, format_agent_output_lines
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, status_sigil, tint
+from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, status_sigil, tint
+from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
 from eawf.workflow.estimation.buckets import BUCKET_EU, EU_MINUTES
 
 if TYPE_CHECKING:
@@ -183,6 +185,18 @@ WATCH_REPLAY_TEMPLATE: str = "session {status} -- replaying its recorded stream"
 #: the bracketed status reads literally.
 WATCH_REPLAY_VERDICT_BANNER: str = (
     "[wave {status}] the replayed output below is the agent's own words, not the recorded verdict"
+)
+
+#: Banner prepended to the watch output tail (the report replay) when the watched
+#: wave's latest report was SYNTHESIZED -- the daemon minted the body from the
+#: spawn's exit signals after the agent's own output failed report-body
+#: validation, so the recorded verdict is a synth BLOCKED, never an authored
+#: pass. The banner frames the replay so the operator reads the report as a
+#: degrade rather than taking the agent's self-claim as the outcome. Plain text
+#: (the tail escapes each line), so the bracketed lead reads literally.
+WATCH_SYNTHESIZED_REPORT_BANNER: str = (
+    "[report synthesized] the recorded verdict was minted by the daemon after the "
+    "agent's output failed validation -- a degrade, not an authored pass"
 )
 
 #: Id of the session-picker scroll listing browsable executor sessions.
@@ -380,6 +394,40 @@ def session_sigil_markup(status: AgentSessionStatus, *, mode: RenderMode) -> str
     return _sigil_markup(_SESSION_SIGIL[status], mode=mode)
 
 
+#: Label a synthesized report wears on the watch surfaces, trailing the
+#: warn-triangle attention mark. A synthesized body was minted by the daemon
+#: (not authored by the agent) after the agent's output failed report-body
+#: validation, so the badge flags the row as a DEGRADE the operator must not
+#: read as an authored verdict.
+SYNTHESIZED_BADGE: str = "synth"
+
+
+def synthesized_marker_markup(report_source: ReportSource, *, mode: RenderMode) -> str:
+    """Return the warn-tinted synthesized badge, or ``""`` when the body was authored.
+
+    A synthesized report was minted by the daemon after the agent's own output
+    failed report-body validation (see
+    :func:`~eawf.runtime.daemon.methods.agent._synthesize_executor_report`), so
+    it is a degrade, never a verified pass. The watch surfaces flag it with the
+    attention-triangle chrome mark plus the :data:`SYNTHESIZED_BADGE` label in
+    the warn band, so a synthesized row never reads as an authored verdict. An
+    authored report yields the empty string so the caller appends no badge.
+
+    Args:
+        report_source: The report body's provenance marker.
+        mode: The App's resolved render-mode label -- selects the glyph column.
+
+    Returns:
+        The warn-tinted ``<triangle> synth`` badge span, or ``""`` when the
+        body was authored.
+    """
+    if report_source is not ReportSource.SYNTHESIZED:
+        return ""
+    triangle = escape_markup(chrome("attention", mode=mode))
+    hue = BAND_HEX["warn"]
+    return f"[{hue}]{triangle} {SYNTHESIZED_BADGE}[/]"
+
+
 def verdict_sigil_markup(verdict: AgentReportVerdict, *, mode: RenderMode) -> str:
     """Return *verdict*'s outcome-tinted sigil markup for the rollup row.
 
@@ -431,9 +479,11 @@ def render_verdict_rollup_row(row: FleetVerdictRow, *, mode: RenderMode) -> str:
     hue = status_sigil(row.verdict).tint_hex
     word = escape_markup(row.verdict.value)
     tinted_word = f"[{hue}]{word}[/]" if hue is not None else f"[$muted]{word}[/]"
+    marker = synthesized_marker_markup(row.report_source, mode=mode)
+    suffix = f" {marker}" if marker else ""
     return (
         f"[$accent]{escape_markup(row.wave_id)}[/] {sigil} {tinted_word} "
-        f"[$muted]{escape_markup(row.runtime)}[/]"
+        f"[$muted]{escape_markup(row.runtime)}[/]{suffix}"
     )
 
 
@@ -1079,34 +1129,51 @@ def load_output_chunk_lines(
     return lines[-limit:]
 
 
-def frame_replay_lines(lines: list[str], wave_status: WaveStatus | None) -> list[str]:
-    """Prefix a terminal-not-closed wave's replay with its real verdict banner.
+def frame_replay_lines(
+    lines: list[str],
+    wave_status: WaveStatus | None,
+    *,
+    report_source: ReportSource | None = None,
+) -> list[str]:
+    """Prefix a replay with its degrade banners: synthesized-report + verdict.
 
     The output tail replays the agent's own streamed stdout, which for a failed
-    or abandoned wave may still self-claim a pass. When *wave_status* is
-    terminal-not-closed (failed / abandoned) this prepends the
-    :data:`WATCH_REPLAY_VERDICT_BANNER` so the operator reads the wave's real
-    recorded terminal status BEFORE the agent's self-claim, rather than taking
-    the self-claim as the verdict. The raw replay is kept below the banner --
-    nothing is censored. A closed wave (which carries a recorded verdict
-    already), a non-terminal wave, or an unknown wave (``None``) returns *lines*
-    unframed.
+    or abandoned wave may still self-claim a pass. Two independent degrade
+    banners are prepended so the operator never reads the self-claim as the
+    outcome:
+
+    * **Synthesized report** -- when *report_source* is
+      :attr:`~eawf.kernel.state.enums.ReportSource.SYNTHESIZED` the daemon minted
+      the recorded verdict (a synth BLOCKED) after the agent's output failed
+      report-body validation, so the
+      :data:`WATCH_SYNTHESIZED_REPORT_BANNER` frames the replay as a degrade.
+    * **Terminal-not-closed wave** -- when *wave_status* is failed / abandoned
+      the :data:`WATCH_REPLAY_VERDICT_BANNER` names the wave's real recorded
+      terminal status BEFORE the agent's self-claim.
+
+    The raw replay is kept below the banners -- nothing is censored. An authored
+    report on a closed / non-terminal / unknown wave returns *lines* unframed.
 
     Args:
         lines: The replay tail lines, oldest-first.
         wave_status: The watched wave's status, or ``None`` when unknown.
+        report_source: The watched wave's latest report provenance, or ``None``
+            when unknown; a synthesized source prepends the degrade banner.
 
     Returns:
-        The lines with the verdict banner prepended when the wave is
-        terminal-not-closed, else a copy of *lines* unchanged.
+        The lines with any applicable degrade banners prepended (synthesized
+        first, then the terminal-verdict banner), else a copy of *lines*
+        unchanged.
     """
-    if wave_status is None or wave_status not in _TERMINAL_NOT_CLOSED_WAVE_STATUSES:
-        return list(lines)
-    banner = (
-        f"[wave {wave_status.value}] the replayed output below is the agent's own words, "
-        "not the recorded verdict"
-    )
-    return [banner, *lines]
+    banners: list[str] = []
+    if report_source is ReportSource.SYNTHESIZED:
+        banners.append(WATCH_SYNTHESIZED_REPORT_BANNER)
+    if wave_status is not None and wave_status in _TERMINAL_NOT_CLOSED_WAVE_STATUSES:
+        banners.append(
+            f"[wave {wave_status.value}] the replayed output below is the agent's own words, "
+            "not the recorded verdict"
+        )
+    return [*banners, *lines]
 
 
 def active_watchable_sessions(state: State | None) -> list[AgentSession]:
@@ -3004,12 +3071,15 @@ class AgentWatchModeScreen(ScopeScreen):
         if not lines:
             return False
         if self._output_store_cursor == 0:
-            # The first sync REPLACES the tail; frame a terminal-not-closed
-            # wave's replay with the wave's real verdict banner so the agent's
-            # self-claimed pass never reads as the recorded outcome. The banner
-            # is not a store line, so the cursor still tracks the raw line count
-            # and later appends stay unbannered.
-            self._output_tail().replace(frame_replay_lines(lines, wave_status))
+            # The first sync REPLACES the tail; frame a synthesized-report or a
+            # terminal-not-closed wave's replay with the degrade banner(s) so the
+            # agent's self-claimed pass never reads as the recorded outcome. The
+            # banners are not store lines, so the cursor still tracks the raw
+            # line count and later appends stay unbannered.
+            report_source = self._latest_report_source(wave_id)
+            self._output_tail().replace(
+                frame_replay_lines(lines, wave_status, report_source=report_source)
+            )
         elif len(lines) > self._output_store_cursor:
             self._output_tail().extend(lines[self._output_store_cursor :])
         self._output_store_cursor = len(lines)
@@ -3740,6 +3810,34 @@ class AgentWatchModeScreen(ScopeScreen):
             return []
         return fleet_verdict_rollup(state_path)
 
+    def _latest_report_source(self, wave_id: str) -> ReportSource | None:
+        """Return the watched wave's latest executor-report provenance, if any.
+
+        Reads the EXECUTOR report store off the host App's read-only state path
+        and returns the most-recent (last, since rows arrive oldest-first) row's
+        ``report_source`` so the output tail can frame a SYNTHESIZED report's
+        replay with the degrade banner (:func:`frame_replay_lines`). A bare
+        harness without a bound state path, or a wave with no executor report
+        row, yields ``None`` so the tail renders unframed.
+
+        Args:
+            wave_id: The watched wave whose latest executor report to resolve.
+
+        Returns:
+            The latest executor report's
+            :class:`~eawf.kernel.state.enums.ReportSource`, or ``None`` when no
+            state path is bound or no executor report exists for the wave.
+        """
+        state_path = self._state_path()
+        if state_path is None:
+            return None
+        from eawf.workflow.agent_report.rollup import iter_agent_reports
+
+        rows = iter_agent_reports(state_path, role=AgentSessionRole.EXECUTOR, base_id=wave_id)
+        if not rows:
+            return None
+        return rows[-1].payload.body.report_source
+
     def _state_path(self) -> Path | None:
         """Return the host App's read-only ``state.json`` path, if configured."""
         from pathlib import Path
@@ -3794,6 +3892,7 @@ __all__ = [
     "ROLLUP_EMPTY_NOTICE",
     "SESSION_PICKER_ID",
     "SESSION_PICKER_ROW_CLASS",
+    "SYNTHESIZED_BADGE",
     "WATCH_DEGRADED",
     "WATCH_EMPTY_ID",
     "WATCH_GRID_EMPTY_ID",
@@ -3807,6 +3906,7 @@ __all__ = [
     "WATCH_ROLLUP_ID",
     "WATCH_ROLLUP_ROW_CLASS",
     "WATCH_ROW_CLASS",
+    "WATCH_SYNTHESIZED_REPORT_BANNER",
     "WATCH_TILE_CLASS",
     "WATCH_TILE_LIST_CLASS",
     "WATCH_TILE_ROW_CLASS",
@@ -3822,6 +3922,7 @@ __all__ = [
     "WatchTile",
     "active_watchable_sessions",
     "cancel_mark",
+    "frame_replay_lines",
     "is_watched_event",
     "lane_grid_rows",
     "lane_parity_key",
@@ -3836,6 +3937,7 @@ __all__ = [
     "session_picker_rows",
     "session_routes_event",
     "session_sigil_markup",
+    "synthesized_marker_markup",
     "tile_dom_id",
     "verdict_sigil_markup",
     "watch_display_label",

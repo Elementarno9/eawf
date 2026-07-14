@@ -72,6 +72,7 @@ from eawf.kernel.state.enums import (
     Confidence,
     DispatchNote,
     EffortBucket,
+    ReportSource,
     StoreKind,
     WaveStatus,
 )
@@ -1098,9 +1099,10 @@ async def _bind_or_synthesize_report(
     raises :class:`~eawf.workflow.dispatch.llm_assist.LLMAssistError` (the model
     answered in prose), which would strand the wave -- ``run_dispatch`` never
     runs, so the dispatch-cost emit + EU accrual never fire even though the
-    spawn already spent real cost. The synth fallback derives a typed body from
-    the accepted spawn's exit status so the dispatch always completes and the
-    degrade is auditable.
+    spawn already spent real cost. The synth fallback mints a typed BLOCKED body
+    (marked ``report_source=synthesized``) so the dispatch always completes and
+    the degrade is auditable -- never a green PASS, since a synthesized body was
+    not authored by the agent (see :func:`_synthesize_executor_report`).
 
     Returns:
         The bound :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody`,
@@ -1242,27 +1244,35 @@ def _synthesize_executor_report(
     :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody` from the
     accepted spawn's observable outcome signals so the dispatch always completes.
 
-    The verdict mirrors the accepted spawn's exit status (``exit_status == 0``
-    is :attr:`AgentReportVerdict.PASS`, else :attr:`AgentReportVerdict.FAIL`),
-    the confidence is :attr:`Confidence.MEDIUM` (the report was synthesized, not
-    authored), and a follow-up names the parse failure so the degrade is
-    auditable. The body reuses the runner's
+    The verdict is ALWAYS :attr:`AgentReportVerdict.BLOCKED`, mirroring the
+    researcher synth path (:func:`~eawf.runtime.daemon.methods.research._bind_researcher_body`):
+    a synthesized body means the agent's work was never verified as passing, so
+    a green close must not be minted from ``exit_status == 0`` -- the process
+    exited, the work did not pass. (BLOCKED is tolerated downstream by the
+    close path's blocked handler.) The confidence is :attr:`Confidence.LOW`
+    (nothing was verified), the ``report_source`` marker is
+    :attr:`ReportSource.SYNTHESIZED`, and a follow-up names the parse failure so
+    the degrade is auditable. The body reuses the runner's
     :func:`~eawf.runtime.daemon.dispatch_runner._build_completion_body` so the
     synthetic path mints the same typed shape as the rich-output path.
 
     Args:
         accepted: The already-completed, already-priced spawn whose exit status
-            drives the synthesized verdict.
+            is recorded in the synthesized prose (but never drives the verdict).
         wave_id: The wave the synthesized report scopes.
         exc: The exhausted-assist error carrying the attempt ceiling and the
             ordered rejection trail (the last failure's ``reason`` is named in
             the synthesized prose + the follow-up).
 
     Returns:
-        A typed :class:`ExecutorReportBody` carrying the synthesized verdict,
-        MEDIUM confidence, and one parse-failure follow-up.
+        A typed :class:`ExecutorReportBody` carrying the BLOCKED synth verdict,
+        LOW confidence, ``report_source=synthesized``, and one parse-failure
+        follow-up.
     """
-    verdict = AgentReportVerdict.PASS if accepted.exit_status == 0 else AgentReportVerdict.FAIL
+    # A synthesized body was never authored by the agent, so it is a degrade,
+    # not a verified pass -- mint BLOCKED (mirroring the researcher synth path)
+    # so a wave never closes green on output no agent stood behind.
+    verdict = AgentReportVerdict.BLOCKED
     last_reason = exc.failures[-1].reason if exc.failures else "unknown"
     # Bound to the executor body's outcome cap (1000); the summary cap (4000)
     # is wider, so a string that fits outcome fits both.
@@ -1282,7 +1292,7 @@ def _synthesize_executor_report(
         files_changed=[],
         tests_run=[],
         verdict=verdict,
-        confidence=Confidence.MEDIUM,
+        confidence=Confidence.LOW,
     )
     # The EXECUTOR role forces an ExecutorReportBody; narrow for the typed copy.
     if not isinstance(built, ExecutorReportBody):  # pragma: no cover - role forces this
@@ -1300,7 +1310,13 @@ def _synthesize_executor_report(
             f"the spawn exit status so cost + EU still accrue"
         )[:500],
     )
-    return built.model_copy(update={"commit_sha": None, "followups": [followup]})
+    return built.model_copy(
+        update={
+            "commit_sha": None,
+            "followups": [followup],
+            "report_source": ReportSource.SYNTHESIZED,
+        }
+    )
 
 
 async def _spawn_and_dispatch(
@@ -1323,10 +1339,12 @@ async def _spawn_and_dispatch(
     against the executor report body (e.g. a model that answers in prose).
     Rather than let :class:`~eawf.workflow.dispatch.llm_assist.LLMAssistError`
     escape -- which would strand the wave with cost already spent but
-    :func:`run_dispatch` never run -- the path synthesizes a typed
-    :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody` from the
-    accepted spawn's exit status (see :func:`_synthesize_executor_report`) so the
-    dispatch always completes and the dispatch-cost + EU accrual still fire.
+    :func:`run_dispatch` never run -- the path synthesizes a typed BLOCKED
+    :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody`
+    (``report_source=synthesized``, see :func:`_synthesize_executor_report`) so
+    the dispatch always completes and the dispatch-cost + EU accrual still fire.
+    The BLOCKED verdict then blocks the close: a synthesized body is never closed
+    green, because the agent never authored a passing report.
 
     Args:
         ctx: Daemon method context — supplies ``state_path``, ``event_path``,

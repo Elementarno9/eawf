@@ -41,6 +41,7 @@ from eawf.kernel.state.enums import (
     AgentSessionRole,
     Confidence,
     ProjectStatus,
+    ReportSource,
     ScopeKind,
 )
 from eawf.kernel.state.models import (
@@ -61,18 +62,23 @@ from eawf.kernel.store.paths import store_path
 from eawf.observability.eval.reputation import FleetVerdictRow
 from eawf.surfaces.tui.modes.agent_watch import (
     ROLLUP_EMPTY_NOTICE,
+    SYNTHESIZED_BADGE,
     WATCH_ROLLUP_EMPTY_ID,
     WATCH_ROLLUP_ID,
     WATCH_ROLLUP_ROW_CLASS,
+    WATCH_SYNTHESIZED_REPORT_BANNER,
     AgentWatchModeScreen,
     VerdictRollupPane,
+    frame_replay_lines,
     render_verdict_rollup_row,
+    synthesized_marker_markup,
     verdict_sigil_markup,
 )
 from eawf.surfaces.tui.snapshot import settle_screen
 from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
-from eawf.surfaces.tui.widgets.sigils import status_sigil
+from eawf.surfaces.tui.widgets.sigils import chrome, status_sigil
+from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
 
 _THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
 _T0 = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
@@ -87,9 +93,17 @@ _WAVE_B = "P01-I01-W02"
 assert _THEME.is_file(), f"missing theme: {_THEME}"
 
 
-def _row(wave_id: str, verdict: AgentReportVerdict, runtime: str = "claude") -> FleetVerdictRow:
+def _row(
+    wave_id: str,
+    verdict: AgentReportVerdict,
+    runtime: str = "claude",
+    *,
+    report_source: ReportSource = ReportSource.AUTHORED,
+) -> FleetVerdictRow:
     """Build a directly-constructed fleet verdict row for the render helpers."""
-    return FleetVerdictRow(wave_id=wave_id, verdict=verdict, runtime=runtime)
+    return FleetVerdictRow(
+        wave_id=wave_id, verdict=verdict, runtime=runtime, report_source=report_source
+    )
 
 
 def _append_auditor_verdict(
@@ -99,6 +113,7 @@ def _append_auditor_verdict(
     attempt: int = 1,
     verdict: AgentReportVerdict,
     runtime: str = "claude",
+    report_source: ReportSource = ReportSource.AUTHORED,
 ) -> None:
     """Append one AUDITOR verdict envelope at ``base_id`` to the on-disk store."""
     role = AgentSessionRole.AUDITOR
@@ -109,6 +124,7 @@ def _append_auditor_verdict(
         confidence=Confidence.HIGH,
         summary="recorded auditor verdict",
         target_id=base_id,
+        report_source=report_source,
     )
     header = AgentReportHeader(
         report_id=report_id,
@@ -259,6 +275,68 @@ def test_render_verdict_rollup_row_names_wave_verdict_runtime() -> None:
 
 
 # --------------------------------------------------------------------------
+# Synthesized-report marker -- the T8 degrade badge (P30-I26-W07)
+# --------------------------------------------------------------------------
+
+
+def test_synthesized_marker_markup_authored_is_empty() -> None:
+    """An authored report renders no synthesized badge -- an empty marker string."""
+    assert synthesized_marker_markup(ReportSource.AUTHORED, mode="unicode") == ""
+
+
+def test_synthesized_marker_markup_synthesized_warns() -> None:
+    """A synthesized report renders the warn-tinted attention mark + synth label.
+
+    The daemon minted this body after the agent's output failed validation, so
+    the marker flags a degrade: the warn-band attention triangle plus the
+    ``synth`` label, so the operator never reads it as an authored verdict.
+    """
+    marker = synthesized_marker_markup(ReportSource.SYNTHESIZED, mode="unicode")
+    assert marker != ""
+    assert SYNTHESIZED_BADGE in marker
+    # The attention-triangle chrome mark carries the degrade shape.
+    assert chrome("attention", mode="unicode") in marker
+    # Painted in the warn band, not the closed / pass tint.
+    assert f"[{BAND_HEX['warn']}]" in marker
+
+
+def test_render_verdict_rollup_row_flags_synthesized_report() -> None:
+    """Watch: a synthesized row wears the synth badge; an authored row does not.
+
+    The falsifiable half of criterion 3: the Watch verdict-rollup row surfaces
+    a synthesized report so an operator sees the report was not authored, and an
+    authored row carries no such badge (no false degrade signal).
+    """
+    synth = _row(_WAVE_A, AgentReportVerdict.BLOCKED, report_source=ReportSource.SYNTHESIZED)
+    authored = _row(_WAVE_B, AgentReportVerdict.PASS, report_source=ReportSource.AUTHORED)
+    synth_rendered = render_verdict_rollup_row(synth, mode="unicode")
+    authored_rendered = render_verdict_rollup_row(authored, mode="unicode")
+    assert SYNTHESIZED_BADGE in synth_rendered
+    assert chrome("attention", mode="unicode") in synth_rendered
+    assert SYNTHESIZED_BADGE not in authored_rendered
+
+
+def test_frame_replay_lines_prepends_synthesized_banner() -> None:
+    """The report replay: a synthesized report prepends the degrade banner.
+
+    The report-modal half of criterion 3: when the watched wave's latest report
+    was synthesized, the output-tail replay is framed with the
+    :data:`WATCH_SYNTHESIZED_REPORT_BANNER` so the agent's self-claimed pass in
+    the replayed stdout never reads as the recorded outcome. An authored report
+    (``report_source=None``) on a non-terminal wave leaves the lines unframed.
+    """
+    lines = ["the agent's replayed stdout", "PASS: wave done"]
+    framed = frame_replay_lines(lines, None, report_source=ReportSource.SYNTHESIZED)
+    assert framed[0] == WATCH_SYNTHESIZED_REPORT_BANNER
+    assert framed[1:] == lines
+    # An authored report on a non-terminal wave leaves the replay unframed.
+    unframed = frame_replay_lines(lines, None, report_source=ReportSource.AUTHORED)
+    assert unframed == lines
+    # The default (unknown provenance) is also unframed on a non-terminal wave.
+    assert frame_replay_lines(lines, None) == lines
+
+
+# --------------------------------------------------------------------------
 # Mounted pane -- two verdicts tinted, honest-empty
 # --------------------------------------------------------------------------
 
@@ -349,6 +427,43 @@ def test_watch_screen_rollup_reads_seeded_verdicts(tmp_path: Path) -> None:
             assert status_sigil(AgentReportVerdict.PASS).render(mode="unicode") in blob
             assert status_sigil(AgentReportVerdict.FAIL).render(mode="unicode") in blob
             assert ROLLUP_EMPTY_NOTICE not in blob
+
+    asyncio.run(body())
+
+
+def test_watch_screen_rollup_flags_synthesized_verdict(tmp_path: Path) -> None:
+    """End-to-end: a synthesized verdict on disk surfaces the synth badge in Watch.
+
+    The full Watch wiring for criterion 3: a seeded verdict whose body was
+    synthesized (``report_source=synthesized``) flows store -> FleetVerdictRow ->
+    ``render_verdict_rollup_row``, and the mounted rollup row shows the ``synth``
+    degrade badge so the operator sees the report was not authored. The authored
+    verdict on the sibling wave carries no such badge.
+    """
+    state = _state()
+    state_path = _write_state(tmp_path, state)
+    _append_auditor_verdict(
+        state_path,
+        base_id=_WAVE_A,
+        verdict=AgentReportVerdict.BLOCKED,
+        report_source=ReportSource.SYNTHESIZED,
+    )
+    _append_auditor_verdict(state_path, base_id=_WAVE_B, verdict=AgentReportVerdict.PASS)
+
+    async def body() -> None:
+        app = _ScreenHostApp(state=state, state_path=state_path)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, AgentWatchModeScreen)
+            pane = screen.query_one(f"#{WATCH_ROLLUP_ID}", VerdictRollupPane)
+            rows = [
+                str(r.render()) for r in pane.query(f".{WATCH_ROLLUP_ROW_CLASS}").results(Static)
+            ]
+            blob = "\n".join(rows)
+            # The synthesized verdict surfaces the degrade badge in the row.
+            assert SYNTHESIZED_BADGE in blob
+            assert chrome("attention", mode="unicode") in blob
 
     asyncio.run(body())
 

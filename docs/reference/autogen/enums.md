@@ -41,6 +41,7 @@ that module is listed with its members.
 | `PhaseStatus` | `planned`, `active`, `closed`, `archived` |
 | `PluginInstallStatus` | `installed`, `drifted`, `conflicted`, `disabled` |
 | `ProjectStatus` | `active`, `archived`, `retired` |
+| `ReportSource` | `authored`, `synthesized` |
 | `RiskTier` | `mech`, `med`, `high`, `ui` |
 | `ScopeKind` | `repo`, `workspace` |
 | `ScopeTier` | `workspace`, `repo`, `phase`, `iter`, `wave` |

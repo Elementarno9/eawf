@@ -8,7 +8,13 @@ from typing import Annotated, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from eawf.kernel.spec.common import EvidenceKind
-from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, Confidence, StoreKind
+from eawf.kernel.state.enums import (
+    AgentReportVerdict,
+    AgentSessionRole,
+    Confidence,
+    ReportSource,
+    StoreKind,
+)
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.state.urn import build as build_urn
 
@@ -91,11 +97,21 @@ class AgentReportHeader(_StrictModel):
 
 
 class AgentReportCommonBody(_StrictModel):
-    """Fields every role report body must carry."""
+    """Fields every role report body must carry.
+
+    The ``report_source`` marker records whether the agent authored the body
+    or the daemon synthesized it on assist-loop exhaustion. It defaults to
+    :attr:`~eawf.kernel.state.enums.ReportSource.AUTHORED` so the normal bound
+    path (and every replayed pre-marker envelope) reads as authored; the two
+    synth paths (executor + researcher fallback) set it to
+    :attr:`~eawf.kernel.state.enums.ReportSource.SYNTHESIZED` so a degrade is
+    honest on the wire and in the watch surfaces.
+    """
 
     verdict: AgentReportVerdict
     confidence: Confidence
     summary: Annotated[str, Field(min_length=1, max_length=4000)]
+    report_source: ReportSource = ReportSource.AUTHORED
     evidence_refs: list[AgentReportEvidenceRef] = Field(default_factory=list)
     followups: list[AgentReportFollowup] = Field(default_factory=list)
 

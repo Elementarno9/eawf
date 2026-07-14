@@ -7,7 +7,12 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, Confidence
+from eawf.kernel.state.enums import (
+    AgentReportVerdict,
+    AgentSessionRole,
+    Confidence,
+    ReportSource,
+)
 from eawf.kernel.store.kinds.agent_report import (
     AgentReportEvidenceRef,
     AgentReportFollowup,
@@ -113,6 +118,34 @@ def test_agent_report_verdict_values() -> None:
     assert actual == expected
     with pytest.raises(ValueError):
         AgentReportVerdict("maybe")
+
+
+def test_report_source_defaults_to_authored() -> None:
+    """The normal (bound) path relies on the default: a body is AUTHORED."""
+    assert _body().report_source is ReportSource.AUTHORED
+
+
+def test_report_source_synthesized_round_trips_through_payload() -> None:
+    """A synthesized body carries the marker verbatim across a JSON round-trip."""
+    body = _body().model_copy(update={"report_source": ReportSource.SYNTHESIZED})
+    payload = AgentReportPayload(header=_header(), body=body)
+    loaded = AgentReportPayload.model_validate_json(payload.model_dump_json())
+    assert loaded.body.report_source is ReportSource.SYNTHESIZED
+
+
+def test_report_source_values() -> None:
+    """The provenance marker is a closed two-value enum; a typo raises."""
+    assert {member.value for member in ReportSource} == {"authored", "synthesized"}
+    with pytest.raises(ValueError):
+        ReportSource("guessed")
+
+
+def test_report_source_rejects_unknown_value_on_body() -> None:
+    """An out-of-vocabulary report_source fails validation at the boundary."""
+    raw = _body().model_dump(mode="json")
+    raw["report_source"] = "hallucinated"
+    with pytest.raises(ValidationError):
+        ExecutorReportBody.model_validate(raw)
 
 
 def test_report_record_id_normalises_role_and_base_id() -> None:
