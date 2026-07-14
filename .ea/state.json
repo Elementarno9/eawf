@@ -15815,7 +15815,9 @@
   "current": {
     "active_session_ids": [],
     "active_wave_ids": [
-      "P30-I25-W50"
+      "P30-I25-W50",
+      "P30-I25-W51",
+      "P30-I25-W52"
     ],
     "iter_id": "P30-I25",
     "phase_id": "P30",
@@ -15993,6 +15995,22 @@
       "status": "superseded",
       "superseded_by": "D-I25-ODR-DRAIN",
       "title": "Keep the ODR gate advisory until the legacy criteria are typed"
+    },
+    "D-RESET-PARDON-STRICT": {
+      "alternatives": [
+        "Key the pardon on the counters as W52 CR-02 asked (rejected: it silently pardons a capture path that is alive but frozen which is the exact failure the gate exists to catch)",
+        "Drop the pardon entirely and require a waiver for every re-originated wave (rejected: waiver fatigue degrades the signal that makes a waiver worth reading)"
+      ],
+      "consequences": [],
+      "created_at": "2026-07-14T01:37:01.113390Z",
+      "description": null,
+      "id": "D-RESET-PARDON-STRICT",
+      "obsoleted_at": null,
+      "rationale": "W52 was authored with a criterion asking that the reset pardon key on whether a capture reported new counters rather than on when it arrived so that a no-op capture cannot strand a re-originated wave. Implementing it as written would weaken the gate and the criterion is therefore superseded. Two states are byte-identical in state.json: an honest reset followed by a capture that measured nothing and a capture path that is alive but reporting a frozen snapshot. Both show the same counters and a later captured_at. A rule that pardons on frozen counters closes the second case in silence which is the original defect of this entire iter where every wave recorded zero effort units for months and nobody noticed. A rule that refuses it costs an explicit no-runtime waiver which is recorded on the wave and visible in review. Silence is the failure this iter exists to eliminate and a waiver is not silence so the strict clock-based rule stands. The wave is not stranded either way because the re-origin guarantees it stays measurable going forward and a later capture that measures something closes it without any waiver at all.",
+      "scope_id": "P30-I25",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Keep the reset pardon strict and pay for it with a visible waiver"
     },
     "D-RPC-TERMINAL": {
       "alternatives": [
@@ -29077,6 +29095,32 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I25-W50",
       "updated_at": "2026-07-14T00:57:48.349815Z"
+    },
+    "P30-I25-W51": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W51-bucket-20260714T012057Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I25-W51",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I25-W51",
+      "updated_at": "2026-07-14T01:20:57.389168Z"
+    },
+    "P30-I25-W52": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W52-bucket-20260714T013345Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I25-W52",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I25-W52",
+      "updated_at": "2026-07-14T01:33:45.191261Z"
     }
   },
   "fleet_run": null,
@@ -31665,7 +31709,9 @@
         "P30-I25-W47",
         "P30-I25-W48",
         "P30-I25-W49",
-        "P30-I25-W50"
+        "P30-I25-W50",
+        "P30-I25-W51",
+        "P30-I25-W52"
       ]
     }
   },
@@ -32803,7 +32849,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T00:57:48.350296Z",
+  "updated_at": "2026-07-14T01:37:01.113390Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -137253,23 +137299,63 @@
       "outcome": null,
       "runtime_baseline": {
         "api_duration_ms": 2080022,
-        "cache_creation_input_tokens": 420074,
-        "cache_read_input_tokens": 78560728,
-        "captured_at": "2026-07-14T00:57:48.349790Z",
-        "cost_usd": 48.127469,
+        "cache_creation_input_tokens": 440078,
+        "cache_read_input_tokens": 88818545,
+        "captured_at": "2026-07-14T01:16:33.564608Z",
+        "cost_usd": 53.8290975,
         "harness": "claude-code",
-        "input_tokens": 598,
-        "measure_version": 4,
+        "input_tokens": 644,
+        "measure_version": 6,
         "model": "claude-opus-4-8",
-        "output_tokens": 185735,
+        "output_tokens": 200633,
         "session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
-        "shared_wave_count": null,
+        "shared_wave_count": 1,
         "total_duration_ms": 2080022
       },
-      "runtime_carry": null,
-      "runtime_latest": null,
+      "runtime_carry": {
+        "api_duration_ms": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cost_usd": 0.0,
+        "counter_resets": 1,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "sessions_folded": 0,
+        "total_duration_ms": 0
+      },
+      "runtime_latest": {
+        "api_duration_ms": 2080022,
+        "cache_creation_input_tokens": 440078,
+        "cache_read_input_tokens": 88818545,
+        "captured_at": "2026-07-14T01:16:33.454447Z",
+        "cost_usd": 53.8290975,
+        "harness": "claude-code",
+        "input_tokens": 644,
+        "measure_version": 6,
+        "model": "claude-opus-4-8",
+        "output_tokens": 200633,
+        "session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
+        "shared_wave_count": 1,
+        "total_duration_ms": 2080022
+      },
       "runtime_preference": null,
-      "sessions": {},
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cost_usd": 0.0,
+          "ended_at": "2026-07-14T01:16:33.454447Z",
+          "exit_status": 0,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "runtime": "claude-code",
+          "session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
+          "started_at": "2026-07-14T01:16:33.564608Z",
+          "subprocess_pid": null
+        }
+      },
       "status": "claimed",
       "success_criteria": [
         {
@@ -137346,6 +137432,430 @@
         }
       ],
       "title": "Close the clamp's own escape hatch",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W51": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
+      "claimed_at": "2026-07-14T01:20:57.366432Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Repair wave appended after the fifth audit proved the clamp inert on the common case with evidence from this repo's own transcripts",
+        "waived_at": "2026-07-14T01:20:56.122000Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The pathological turn_duration row is Claude closing out a turn the OPERATOR INTERRUPTED and its figure is that turn's wall clock which lies inside the transcript span so the W49 clamp is a no-op on it. This repo's own 343dbe7f transcript still books 76.26 hours and 152.5 EU through the shipped code. When the clamp does fire it substitutes the span which is measure version 1 the operator's clock idle included.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+        "tests/unit/test_transcript_counters.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "criterion": "turn_duration",
+            "file_scopes": [
+              "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+              "tests/unit/test_transcript_counters.py"
+            ],
+            "pattern": "turn_duration"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "substitutes",
+            "file_scopes": [
+              "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+              "tests/unit/test_transcript_counters.py"
+            ],
+            "pattern": "substitutes"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "definition",
+            "file_scopes": [
+              "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+              "tests/unit/test_transcript_counters.py"
+            ],
+            "pattern": "definition"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "GATE-03",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "exclusion",
+            "file_scopes": [
+              "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+              "tests/unit/test_transcript_counters.py"
+            ],
+            "pattern": "exclusion"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "GATE-04",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I25-W51",
+      "intent": {
+        "desired_outcome": "An interrupted turn contributes no runtime because its figure is unmeasurable and the aggregator never substitutes the operator's clock for a measurement",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Identify the closeout row of an interrupted turn by its immediately preceding interrupt signal and drop it from the sum",
+          "Report no duration rather than substituting the transcript span when the invariant still breaks",
+          "Bump the measure version since the definition changes again",
+          "Pin the guards on real-shaped transcripts at the ratio where real data lives rather than at one absurd point"
+        ],
+        "priority_rationale": "The shipped clamp helped exactly one transcript of six and that one was the fixture it was tested against. Real sessions in this repo still book 152.5 EU and 43.6 EU as clean calibratable data and the interrupted turn re-admits the twelve-hour permission stall that W43 claims to have killed.",
+        "problem": "The clamp bounds the fabrication with the fabrication because the interrupted turn's wall clock lies inside the transcript's own wall clock",
+        "risks": [
+          "Excluding an interrupted turn drops the real agent work done before the interrupt which is a bounded under-count against an unbounded fabrication"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-14T01:20:56.164823Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 2080022,
+        "cache_creation_input_tokens": 455776,
+        "cache_read_input_tokens": 92065397,
+        "captured_at": "2026-07-14T01:20:57.389130Z",
+        "cost_usd": 55.8898585,
+        "harness": "claude-code",
+        "input_tokens": 660,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 211844,
+        "session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
+        "shared_wave_count": null,
+        "total_duration_ms": 2080022
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
+          "id": "CR-01",
+          "kind": "converted",
+          "measurable_signal": "A turn_duration row whose immediately preceding row is an interrupt signal contributes no runtime because Claude's figure for an interrupted turn is that turn's wall clock and not its work",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "A turn_duration row whose immediately preceding row is an interrupt signal contributes no runtime because Claude's figure for an interrupted turn is that turn's wall clock and not its work",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "A turn_duration row whose immediately preceding row is an interrupt signal contributes no runtime because Claude's figure for an interrupted turn is that turn's wall clock and not its work",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
+          "id": "CR-02",
+          "kind": "converted",
+          "measurable_signal": "The aggregator never substitutes the transcript span for a measurement since the span is the operator's clock and shipping it as a measured figure is the first defect this module ever had",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The aggregator never substitutes the transcript span for a measurement since the span is the operator's clock and shipping it as a measured figure is the first defect this module ever had",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The aggregator never substitutes the transcript span for a measurement since the span is the operator's clock and shipping it as a measured figure is the first defect this module ever had",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-03"
+          ],
+          "id": "CR-03",
+          "kind": "converted",
+          "measurable_signal": "The measure version is bumped because the definition changes again so a baseline under the old rule re-origins",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The measure version is bumped because the definition changes again so a baseline under the old rule re-origins",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The measure version is bumped because the definition changes again so a baseline under the old rule re-origins",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-04"
+          ],
+          "id": "CR-04",
+          "kind": "converted",
+          "measurable_signal": "A guard drives the real shape where the closeout equals the span and turns red if the exclusion is removed rather than testing one absurd ratio the real data never reaches",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "A guard drives the real shape where the closeout equals the span and turns red if the exclusion is removed rather than testing one absurd ratio the real data never reaches",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "A guard drives the real shape where the closeout equals the span and turns red if the exclusion is removed rather than testing one absurd ratio the real data never reaches",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Exclude the interrupted turn instead of clamping it",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W52": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
+      "claimed_at": "2026-07-14T01:33:45.158807Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Repair wave appended after the fifth audit found the zero-runtime gate advisory for every wave in the iter",
+        "waived_at": "2026-07-14T01:33:43.979713Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The zero-EU gate did not gate any close in this iter. It reads the band-narrowed verify block so enforcement resolves False for every wave that is not in the UI band and the close takes the advisory warn branch. Separately the reset pardon keys on captured_at so the next Stop hook destroys it even when that capture reported nothing new which would strand every re-originated wave the day enforcement is turned on.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "tests/daemon/test_state_methods.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "criterion": "enforcement",
+            "file_scopes": [
+              "src/eawf/runtime/daemon/methods/state.py",
+              "tests/daemon/test_state_methods.py"
+            ],
+            "pattern": "enforcement"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "originated",
+            "file_scopes": [
+              "src/eawf/runtime/daemon/methods/state.py",
+              "tests/daemon/test_state_methods.py"
+            ],
+            "pattern": "originated"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "originated",
+            "file_scopes": [
+              "src/eawf/runtime/daemon/methods/state.py",
+              "tests/daemon/test_state_methods.py"
+            ],
+            "pattern": "originated"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "GATE-03",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I25-W52",
+      "intent": {
+        "desired_outcome": "The runtime gate enforces on the fleet opt-in rather than the UI band and the pardon survives a capture that reported nothing new while still dying when real work is captured",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Read the fleet verify block rather than the band-narrowed one for the runtime gate since the band exists for criteria enforcement and not for runtime capture",
+          "Key the reset pardon on whether a capture reported new counters rather than on when it arrived",
+          "Land a decision recording that the runtime gate is fleet-scoped"
+        ],
+        "priority_rationale": "A gate that cannot fail is not a gate. This one let a wave close on a figure the fifth audit proved was broken and told the operator it had passed. The pardon bug is the trap on the other side: turn the gate on and every re-originated wave becomes unclosable.",
+        "problem": "The zero-runtime gate is advisory for every wave in this iter and the reset pardon that keeps an honest reset from stranding a wave evaporates on the next Stop hook",
+        "risks": [
+          "Enforcing the gate fleet-wide can refuse a close whose capture path genuinely died which is the intended behaviour and the operator waiver remains the escape hatch"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-14T01:33:44.013924Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 2080022,
+        "cache_creation_input_tokens": 490221,
+        "cache_read_input_tokens": 109278616,
+        "captured_at": "2026-07-14T01:33:45.191231Z",
+        "cost_usd": 65.423793,
+        "harness": "claude-code",
+        "input_tokens": 730,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 235145,
+        "session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
+        "shared_wave_count": null,
+        "total_duration_ms": 2080022
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
+          "id": "CR-01",
+          "kind": "converted",
+          "measurable_signal": "The zero-runtime gate resolves its enforcement from the fleet verify block so it is live for every wave rather than only for a wave in the UI band",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The zero-runtime gate resolves its enforcement from the fleet verify block so it is live for every wave rather than only for a wave in the UI band",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The zero-runtime gate resolves its enforcement from the fleet verify block so it is live for every wave rather than only for a wave in the UI band",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
+          "id": "CR-02",
+          "kind": "converted",
+          "measurable_signal": "The reset pardon holds while no capture has reported counters beyond the re-originated baseline and dies as soon as one does so an honest reset cannot strand a wave and a stale reset cannot pardon a later silent zero",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The reset pardon holds while no capture has reported counters beyond the re-originated baseline and dies as soon as one does so an honest reset cannot strand a wave and a stale reset cannot pardon a l",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The reset pardon holds while no capture has reported counters beyond the re-originated baseline and dies as soon as one does so an honest reset cannot strand a wave and a stale reset cannot pardon a later silent zero",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-03"
+          ],
+          "id": "CR-03",
+          "kind": "converted",
+          "measurable_signal": "A test drives a re-originated wave through a capture that reports nothing new and asserts the close still succeeds and a test drives a capture that reports new counters and asserts the pardon is gone",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "A test drives a re-originated wave through a capture that reports nothing new and asserts the close still succeeds and a test drives a capture that reports new counters and asserts the pardon is gone",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "A test drives a re-originated wave through a capture that reports nothing new and asserts the close still succeeds and a test drives a capture that reports new counters and asserts the pardon is gone",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Give the zero-runtime gate teeth it can actually bite with",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
