@@ -33,7 +33,7 @@
   ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
   no action yet
-  n new · o ask · t steer · b broadcast · v override · a approve · p park · r follow-up · s snapshot · g run · x
+  n new · o ask · t queue · b broadcast · v override · a approve · p park · r follow-up · s snapshot · g run · x
   cancel
 
  ↑↓ select  ·  Enter open  ·  …  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit weekly burn: — no data•

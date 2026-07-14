@@ -34,7 +34,7 @@
   ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
   no action yet
-  n new · o ask · t steer · b broadcast · v override · a approve · p park · r follow-up · s snapshot · g run · x cancel
+  n new · o ask · t queue · b broadcast · v override · a approve · p park · r follow-up · s snapshot · g run · x cancel
 
  ↑↓ select  ·  Enter open  ·  d brief  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit                                                           weekly burn: — no data•
  1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch  ·  9 sandbox

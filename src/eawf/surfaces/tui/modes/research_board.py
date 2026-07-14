@@ -40,9 +40,9 @@ never fakes an outcome:
   no-checkpoint line and issues no RPC.
 * **Run queries + operator channels.** ``r`` (follow-up) / ``s`` (snapshot)
   query the live ``research.followup`` / ``research.snapshot`` RPCs for the
-  selected campaign; ``o`` / ``t`` / ``b`` / ``v`` push the add-question / steer
-  / broadcast / override operator inputs through their live RPCs. Each surfaces
-  the daemon's sent / rejected result.
+  selected campaign; ``o`` / ``t`` / ``b`` / ``v`` push the add-question /
+  queue-note / broadcast / override operator inputs through their live RPCs.
+  Each surfaces the daemon's sent / rejected result.
 
 Honest-empty is the COMMON path, not an edge case: a scope that has staged no
 campaign and logged no claim / open question renders the muted
@@ -221,15 +221,15 @@ _NEW_CAMPAIGN_METHOD: str = "research.stage_campaign"
 #: Daemon JSON-RPC methods the operator-channel keys route through -- the four
 #: campaign-fork channels the FA8 auto-run cockpit shares with the wave cockpit
 #: (one grammar): ``o`` (add-question) appends an :class:`OpenQuestion` row to
-#: the scope, ``t`` (steer) pushes an operator steer note into the running
-#: campaign, ``b`` (broadcast) fans a notice to every running round of the
+#: the scope, ``t`` (queue-note) queues an operator note for the campaign's
+#: next round, ``b`` (broadcast) fans a notice to every running round of the
 #: campaign, and ``v`` (override) forces an operator verdict onto the blocking
 #: fork. All four RPCs are live (P30-I18-W02 add-question + W04 steer /
 #: broadcast / override): each key collects its text through a modal and routes
 #: the committed note off the UI thread, surfacing the daemon's honest sent /
-#: rejected result rather than fabricating a row, a steer, a broadcast, or an
-#: override. The steer / broadcast / override channels thread the selected
-#: campaign id so the daemon lands the operator input against the running
+#: rejected result rather than fabricating a row, a queued note, a broadcast,
+#: or an override. The queue-note / broadcast / override channels thread the
+#: selected campaign id so the daemon lands the operator input against the
 #: campaign; the scope-wide add-question carries none.
 _ADD_QUESTION_METHOD: str = "research.add_question"
 _STEER_METHOD: str = "research.steer"
@@ -255,7 +255,7 @@ MODE_KEYS_ID: str = "research-mode-keys"
 #: repeats between it and the global-nav footer (which keeps the tree-nav +
 #: scope / palette / help / quit vocabulary).
 MODE_KEYS_LINE: str = (
-    "n new · o ask · t steer · b broadcast · v override · "
+    "n new · o ask · t queue · b broadcast · v override · "
     "a approve · p park · r follow-up · s snapshot · g run · x cancel"
 )
 
@@ -298,7 +298,7 @@ NEW_PENDING: str = "new: staging campaign..."
 #: (the canonical campaign-store mutator) so nothing was staged.
 NEW_NO_DAEMON: str = "new: daemon unavailable -- request not issued"
 
-#: Action-result line while an operator-channel RPC (add-question / steer) is in
+#: Action-result line while an operator-channel RPC (add-question / queue-note) is in
 #: flight off the UI thread; the line flips to the honest outcome once the
 #: worker returns. Formatted with the verb so each channel reads clearly.
 _CHANNEL_PENDING_TEMPLATE: str = "{verb}: sending..."
@@ -977,14 +977,14 @@ class OperatorNoteModal(ModalScreen["str | None"]):
     """One-field operator-channel modal (returns the entered note on commit).
 
     The board's operator-channel keys -- ``o`` (add-question) and ``t``
-    (steer) -- push a single free-text line into the running campaign, so each
+    (queue-note) -- collect a single free-text line for the campaign, so each
     opens this one-field modal: a labelled :class:`Input` whose ``Enter``
     commits the trimmed text (``Esc`` cancels, dismissing ``None`` so the board
     issues no RPC). A commit with an empty / whitespace-only line stays open
     with the :data:`EMPTY_NOTICE_TEMPLATE` inline notice so the operator never
     sends a blank note; the only dismiss-with-text path carries a usable line.
     The label + placeholder are supplied per channel so one modal serves both
-    the add-question and steer surfaces without a second widget tree.
+    the add-question and queue-note surfaces without a second widget tree.
     """
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -1042,7 +1042,7 @@ class OperatorNoteModal(ModalScreen["str | None"]):
             label: The muted field label above the input.
             placeholder: The input placeholder text.
             noun: The channel noun used in the empty-line notice (e.g.
-                ``"question"`` / ``"steer note"``).
+                ``"question"`` / ``"note"``).
         """
         super().__init__()
         self._title = title
@@ -2568,8 +2568,8 @@ class ResearchBoardModeScreen(ScopeScreen):
     (snapshot) route through the daemon-client seam to the live
     ``research.followup`` / ``research.snapshot`` RPCs for the selected
     campaign, surfacing the honest next-round / run-summary result. ``o``
-    (add-question), ``t`` (steer), ``b`` (broadcast), and ``v`` (override) are
-    the four FA8 operator-input campaign-fork channels: each collects a
+    (add-question), ``t`` (queue-note), ``b`` (broadcast), and ``v`` (override)
+    are the four FA8 operator-input campaign-fork channels: each collects a
     free-text line through a one-field :class:`OperatorNoteModal` and routes it
     off the UI thread to its live ``research.add_question`` / ``research.steer``
     / ``research.broadcast`` / ``research.override`` RPC, surfacing the daemon's
@@ -2657,7 +2657,7 @@ class ResearchBoardModeScreen(ScopeScreen):
     #: approve / ``p`` park route checkpoint resolution
     #: through the real needs_user RPCs; ``r`` follow-up / ``s`` snapshot are
     #: the honest-unavailable idle-contract keys. ``o`` (add-question), ``t``
-    #: (steer), ``b`` (broadcast), and ``v`` (override) are the four FA8
+    #: (queue-note), ``b`` (broadcast), and ``v`` (override) are the four FA8
     #: operator-input campaign-fork channels -- all FREE keys (no app-wide or
     #: in-pane collision; the app binds ``w/r/u i c q h j k l`` + digits and the
     #: pane keeps arrows primary for the tree), so adding them never displaces
@@ -2675,7 +2675,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         Binding("d", "open_brief", "brief", show=False),
         Binding("n", "new_campaign", "new", show=False),
         Binding("o", "add_question", "ask", show=False),
-        Binding("t", "steer", "steer", show=False),
+        Binding("t", "steer", "queue", show=False),
         Binding("b", "broadcast", "broadcast", show=False),
         Binding("v", "override", "override", show=False),
         Binding("a", "approve_checkpoint", "approve", show=False),
@@ -3272,34 +3272,35 @@ class ResearchBoardModeScreen(ScopeScreen):
         )
 
     def action_steer(self) -> None:
-        """Open the steer modal; commit pushes an operator steer note.
+        """Open the note modal; commit queues an operator note for the next round.
 
-        The ``t`` operator-channel key pushes a steer note into the running
-        campaign (the balanced-autonomy operator-input channel). Pushes a one-
-        field :class:`OperatorNoteModal` collecting the steer text; ``Esc``
-        cancels (the callback receives ``None`` and issues zero RPCs). A
-        committed note routes off the UI thread to the live ``research.steer``
-        RPC (P30-I18-W04) against the selected campaign, surfacing the daemon's
-        honest sent / rejected result rather than implying a steer landed.
+        The ``t`` operator-channel key queues a free-text note for the
+        campaign's NEXT round: the note lands on that round's record and never
+        reaches a running researcher's prompt. Pushes a one-field
+        :class:`OperatorNoteModal` collecting the note text; ``Esc`` cancels
+        (the callback receives ``None`` and issues zero RPCs). A committed note
+        routes off the UI thread to the live ``research.steer`` RPC against the
+        selected campaign, surfacing the daemon's honest sent / rejected result
+        rather than implying it reached the running round.
         """
         modal = OperatorNoteModal(
-            title="steer the campaign",
-            label="steer note",
+            title="queue note for next round",
+            label="note for next round",
             placeholder="prioritise the venues-and-flow domain next round",
-            noun="steer note",
+            noun="note",
         )
         self.app.push_screen(modal, self._steer_committed)
 
     def _steer_committed(self, note: str | None) -> None:
-        """Route a committed steer *note*, or no-op when cancelled.
+        """Route a committed queued *note*, or no-op when cancelled.
 
         Args:
-            note: The committed steer text, or ``None`` when the operator
+            note: The committed note text, or ``None`` when the operator
                 cancelled the modal (the board issues no RPC).
         """
         self._dispatch_channel(
             note=note,
-            verb="steer",
+            verb="queue note for next round",
             method=_STEER_METHOD,
             params_key="text",
             campaign_id=self._channel_campaign_id(),
@@ -3386,23 +3387,23 @@ class ResearchBoardModeScreen(ScopeScreen):
     ) -> None:
         """Dispatch an operator-channel *note* off the UI thread, honestly.
 
-        The shared dispatch for the ``o`` (add-question), ``t`` (steer), ``b``
-        (broadcast), and ``v`` (override) channels: a ``None`` *note* (``Esc``
-        cancel) issues no RPC at all. A committed note seeds the in-flight
-        pending line and dispatches the channel worker so the daemon round-trip
-        never blocks the UI thread; the worker flips the line to the honest
-        outcome once the call returns. The steer / broadcast / override channels
-        thread the selected campaign id so the daemon lands the input against the
-        running campaign.
+        The shared dispatch for the ``o`` (add-question), ``t`` (queue-note),
+        ``b`` (broadcast), and ``v`` (override) channels: a ``None`` *note*
+        (``Esc`` cancel) issues no RPC at all. A committed note seeds the
+        in-flight pending line and dispatches the channel worker so the daemon
+        round-trip never blocks the UI thread; the worker flips the line to the
+        honest outcome once the call returns. The queue-note / broadcast /
+        override channels thread the selected campaign id so the daemon lands
+        the input against the campaign.
 
         Args:
             note: The committed channel note, or ``None`` when cancelled.
-            verb: The channel verb (``"ask"`` / ``"steer"`` / ...) for the
-                result line + logs.
+            verb: The channel verb (``"ask"`` / ``"queue note for next round"``
+                / ...) for the result line + logs.
             method: The daemon JSON-RPC method name.
             params_key: The params key the note rides under in the RPC call.
-            campaign_id: The campaign the input targets (steer / broadcast /
-                override); ``None`` for the scope-wide add-question channel.
+            campaign_id: The campaign the input targets (queue-note / broadcast
+                / override); ``None`` for the scope-wide add-question channel.
         """
         if note is None:
             return
@@ -3479,7 +3480,8 @@ class ResearchBoardModeScreen(ScopeScreen):
             method: The daemon JSON-RPC method name.
             params_key: The params key the note rides under in the RPC call.
             campaign_id: The target campaign id threaded into the params for the
-                steer / broadcast / override channels; omitted for add-question.
+                queue-note / broadcast / override channels; omitted for
+                add-question.
 
         Returns:
             A content-markup result line describing the channel outcome.
@@ -3937,7 +3939,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         return node.campaign_id
 
     def _channel_campaign_id(self) -> str | None:
-        """Resolve the campaign an operator-channel input (steer / b / v) targets.
+        """Resolve the campaign an operator-channel input (queue-note / b / v) targets.
 
         The selected node's campaign id when a campaign sub-tree node is
         selected, else the first staged campaign on the board (the operator

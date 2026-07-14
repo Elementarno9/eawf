@@ -3240,7 +3240,7 @@ def test_research_board_operator_channel_keys_on_mode_key_line() -> None:
     from eawf.surfaces.tui.modes.research_board import MODE_KEYS_LINE
 
     hints = " ".join(ResearchBoardModeScreen.FOOTER_HINTS)
-    for chip in ("o ask", "t steer"):
+    for chip in ("o ask", "t queue"):
         assert chip in MODE_KEYS_LINE
         assert chip not in hints
 
@@ -3436,7 +3436,7 @@ def test_research_board_t_commit_routes_steer_rpc_honestly(
             await pilot.press("3")
             await settle_screen(pilot)
             assert isinstance(app.screen, ResearchBoardModeScreen)
-            await pilot.press("t")  # open the steer modal
+            await pilot.press("t")  # open the queue-note modal
             await settle_screen(pilot)
             modal = app.screen
             assert isinstance(modal, OperatorNoteModal)
@@ -3446,7 +3446,7 @@ def test_research_board_t_commit_routes_steer_rpc_honestly(
             board = app.screen
             assert isinstance(board, ResearchBoardModeScreen)
             toasts = "\n".join(toast_messages(app))
-            assert "steer: sent" in toasts
+            assert "queue note for next round: sent" in toasts
 
     asyncio.run(body())
     assert len(calls) == 1
@@ -3741,7 +3741,7 @@ def test_research_board_operator_input_keys_on_mode_key_line() -> None:
     ("key", "verb", "method", "params_key"),
     [
         ("o", "ask", "research.add_question", "title"),
-        ("t", "steer", "research.steer", "text"),
+        ("t", "queue note for next round", "research.steer", "text"),
         ("b", "broadcast", "research.broadcast", "notice"),
         ("v", "override", "research.override", "verdict"),
     ],

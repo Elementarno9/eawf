@@ -2027,12 +2027,15 @@ def run_campaign(
     can_fold_state = state_path.exists() and isinstance(ctx.wal_dir, Path)
 
     def _channel_notes() -> tuple[list[str], bool]:
-        """Fold the operator channel: return the active steer notes + paused bit.
+        """Fold the operator channel: return the queued notes + paused bit.
 
-        Read before each round so a mid-run steer / override lands on the NEXT
-        round's record -- the active queued steers + the effective locked
-        overrides shape the round's dispatch set (D-3), and a blocking input
-        soft-pauses the round (D-2, surfaced as the ``paused`` bit).
+        Read before each round is dispatched. The queued notes land on the
+        NEXT round's record (its ``steer_notes``) and never reach a running
+        researcher's prompt -- every researcher session is spawned before this
+        fold runs, so a note queued mid-round is only recorded against the
+        round that follows, not injected into the in-flight dispatch. A
+        blocking input soft-pauses the run (surfaced as the ``paused`` bit) so
+        the loop yields to the operator between rounds.
         """
         fold = fold_operator_channel(state_path, args.campaign_id)
         notes: list[str] = [
