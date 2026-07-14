@@ -48,9 +48,20 @@ The number called `api_duration_ms` was redefined four times inside this one ite
 | 1 | Whole-session wall-clock span, first row to last | Counts the operator reading, thinking, and sleeping. Inflated roughly 4x on this session's own transcript: 1102.7 min recorded against 284.2 min of work. |
 | 2 | Summed gaps between rows, dropping gaps over a 15-minute ceiling | The ceiling is a guess. A long tool run is dropped; a 14-minute nap is kept. |
 | 3 | Summed per-turn spans: everything inside a turn, nothing between turns | Still the wall clock. A turn *contains* the stall at a tool-permission prompt, where the agent waits on a human. This one booked **12.9 hours of the operator asleep at a prompt** as agent runtime. |
-| 4 | Claude's own `turn_duration` figure, per completed turn | Current. Claude measures its own turn and excludes the approval stall — a distinction nothing in the transcript can reconstruct, because an approval stall and a long-running tool have the identical shape. |
+| 4 | Claude's own `turn_duration` figure, per completed turn | Claude measures its own turn and excludes the approval stall — a distinction nothing in the transcript can reconstruct, because an approval stall and a long-running tool have the identical shape. But Claude's figure is not always a measure of *work*, and it had no ceiling: see below. |
+| 5 | The same sum, **clamped to the transcript's own wall-clock span** | Current. Whatever the agent did, it did inside the lifetime of the file that reported it. |
 
-Measure 4 deliberately has **no span fallback for the turn still in flight**: it reports zero for an unmeasured turn rather than a guess. The `turn_duration` row lands after the Stop hook has read the transcript, so a turn is counted at the *next* capture, not its own. That is why a wave must cross a Stop boundary between claim and close — not ceremony, but the structure of the measurement.
+The measure deliberately has **no span fallback for the turn still in flight**: it reports zero for an unmeasured turn rather than a guess. The `turn_duration` row lands after the Stop hook has read the transcript, so a turn is counted at the *next* capture, not its own. That is why a wave must cross a Stop boundary between claim and close — not ceremony, but the structure of the measurement. (This supersedes two of W43's criteria as written; Decision `D-W43-CRITERIA-SUPERSEDED` records why.)
+
+## The ceiling that was promised and never built
+
+W43's criterion said *"the reported duration never exceeds the session wall clock and a regression test pins that."* No clamp was written, and the test that claimed to pin it asserted `<=` over a fixture that already satisfied the bound — it passed against an aggregator that **doubled every duration**. The fourth fresh-context audit found it, and the defect it guards is real, not theoretical:
+
+Claude Code closes out the interrupted turn of a **resumed session** with its entire wall clock. A real transcript on this machine spans **6.083 seconds** and carries a single `turn_duration` row of **366,298,957 ms — 101.75 hours**. Fed to the production aggregator it returned exactly that: through the close arithmetic, **203.5 EU on one wave** (58 XL waves). And nothing downstream would have caught it — the zero-EU gate catches only zeros, and the incomparability check re-origins only on a *declared measure change* or a *decrease*. A fabricated hundred-hour increase is indistinguishable from a productive month, which is the same blind spot that banked 13 hours in the previous cycle, wearing a different trigger.
+
+W49 clamps the sum to the transcript's own span (measure 5) and warns rather than trimming in silence. The same real transcript now reports 6,083 ms. The guard drives that shape and fails the moment the clamp is deleted.
+
+**The recurring failure of this iter is not any one of these bugs. It is tests that are green over code that does not exist** — three times, on three different criteria, each caught only by a fresh-context reader who checked the call chain instead of the test name.
 
 ## What a counter reset means
 
@@ -68,6 +79,7 @@ Every EU figure this iter recorded measures the repair of the measure, not the w
 - **W34 is a zero from a process error**, not a capture failure: it was closed in the same turn it was claimed, so no Stop boundary fired and no capture ever ran for it.
 - **W35, W36 and W39-W42 are truncated by a measure re-origin.** Each closed on a floor, not a measure — the runtime accrued before the re-origin is gone.
 - **The fan-out duplicates are the largest distortion.** One `runtime.capture` is written to every wave in `current.active_wave_ids`, and each wave then differenced the whole session. W35 and W36 both recorded 0.3769 EU / $3.10; W39 through W42 all recorded 0.0419 EU. The runtime is real — it is one session's, counted N times. W46 fixed it forward (the snapshot records `shared_wave_count`, the delta divides by it, the divisor stays on the row), and the six waves closed after it each recorded 346,670 ms of a 2,080,022 ms session, six ways. It cannot retro-split a row already closed.
+- **A wave claimed mid-turn banks the whole turn.** The `turn_duration` row lands only when a turn ENDS, so a wave claimed mid-turn baselines at the pre-turn total and takes the entire turn — including the minutes before it existed. W43, W44 and W45 show it: claimed at 22:45 against a zero baseline, they each took all 34.7 minutes of a turn that began around 22:33. The error is bounded by one turn, but turns here run 34–94 minutes while these waves measure 6–40, so it can exceed the quantity being measured. Backlog B109 carries the fix; `calibration_excluded` contains the damage meanwhile.
 - **From W47 on, the row says so itself.** `ActualSummary.calibration_excluded` is set at close when the wave's runtime was re-originated or shared, so a calibration consumer skips it reading `state.json` alone rather than reading this document. Every wave closed in the last two cycles carries it.
 
 Two distortions below are NOT defects and are not excluded — they are properties of what is being billed:
