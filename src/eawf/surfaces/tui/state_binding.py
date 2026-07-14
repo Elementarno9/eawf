@@ -290,8 +290,8 @@ class StateBinding:
             self._daemon_probe_interval = DEFAULT_DAEMON_PROBE_INTERVAL_S
         self._last_mtime = 0.0
         # Subscription cursor + reconnect throttle (W04): the id of the last
-        # event the push stream delivered, resumed via ``since=`` on every
-        # (re)subscribe so a reconnect never re-requests the backlog; and the
+        # event the push stream delivered, resumed via ``since_event_id=`` on
+        # every (re)subscribe so a reconnect never re-requests the backlog; and the
         # monotonic timestamp of the last connect attempt so a repeatedly-
         # dropping stream reconnects on a bounded cadence, not per probe tick.
         self._last_event_id: str | None = None
@@ -472,9 +472,9 @@ class StateBinding:
         """
         params: dict[str, object] = {"kinds": [StoreKind.EVENT.value]}
         # Resume from the last delivered event so a reconnect continues the
-        # stream instead of re-requesting the full backlog (since=None).
+        # stream instead of re-requesting the full backlog (since_event_id=None).
         if self._last_event_id is not None:
-            params["since"] = self._last_event_id
+            params["since_event_id"] = self._last_event_id
         return params
 
     def _run_subscription(self, loop: asyncio.AbstractEventLoop) -> None:
