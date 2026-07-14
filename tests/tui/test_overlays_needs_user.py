@@ -39,6 +39,7 @@ def test_needs_user_defaults_to_first_option() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_needs_user(app, [])
             await pilot.pause()
             assert modal.selected == 0
@@ -62,6 +63,7 @@ def test_needs_user_down_then_enter_returns_second_label() -> None:
         sink: list[str | None] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _push_needs_user(app, sink)
             await pilot.pause()
             await pilot.press("down")
@@ -78,6 +80,7 @@ def test_needs_user_enter_on_default_returns_first_label() -> None:
         sink: list[str | None] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _push_needs_user(app, sink)
             await pilot.pause()
             await pilot.press("enter")
@@ -93,6 +96,7 @@ def test_needs_user_esc_defers_to_none() -> None:
         sink: list[str | None] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _push_needs_user(app, sink)
             await pilot.pause()
             await pilot.press("escape")
@@ -107,6 +111,7 @@ def test_needs_user_up_wraps_to_last_option() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_needs_user(app, [])
             await pilot.pause()
             await pilot.press("up")  # wraps 0 -> last (index 2)
@@ -123,6 +128,7 @@ def test_needs_user_renders_question() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_needs_user(app, [])
             await pilot.pause()
             question = modal.query_one(".needs-user-question", Static)
@@ -136,6 +142,7 @@ def test_open_needs_user_respects_cap() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             for _ in range(EaApp.MAX_MODAL_DEPTH):
                 app.push_modal(NeedsUserModal(_QUESTION))
                 await pilot.pause()

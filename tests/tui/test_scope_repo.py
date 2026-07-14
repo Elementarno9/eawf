@@ -49,6 +49,7 @@ def test_repo_screen_composes_chassis_and_quadrant() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             screen = app.screen
             assert isinstance(screen, RepoScreen)
             # Shared chassis.
@@ -69,6 +70,7 @@ def test_repo_screen_quadrant_pane_titles_present() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             rendered = app.export_screenshot()
             for title in ("ROADMAP", "STATUS", "GIT", "BACKLOG"):
                 assert title in rendered
@@ -86,6 +88,7 @@ def test_repo_screen_first_paint_renders_brand_and_data() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # Plain-text capture: the SVG export splits the two-tone
             # wordmark across text spans, so the contiguous brand pair
             # only survives in the text capture.
@@ -102,6 +105,7 @@ def test_repo_screen_roadmap_tree_binds_state() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             tree = app.screen.query_one(RoadmapTree)
             # The tree seeded from the app's reactive state on mount.
             assert tree.state is not None

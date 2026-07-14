@@ -98,6 +98,7 @@ def test_plan_preview_defaults_to_approve() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_plan(app, _PLAN, [])
             await pilot.pause()
             assert modal.selected == 0  # index 0 == "approve"
@@ -111,6 +112,7 @@ def test_plan_preview_enter_returns_approve() -> None:
         sink: list[str] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _push_plan(app, _PLAN, sink)
             await pilot.pause()
             await pilot.press("enter")
@@ -126,6 +128,7 @@ def test_plan_preview_right_then_enter_returns_edit() -> None:
         sink: list[str] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _push_plan(app, _PLAN, sink)
             await pilot.pause()
             await pilot.press("right")
@@ -142,6 +145,7 @@ def test_plan_preview_esc_returns_reject() -> None:
         sink: list[str] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _push_plan(app, _PLAN, sink)
             await pilot.pause()
             await pilot.press("escape")
@@ -156,6 +160,7 @@ def test_plan_preview_empty_plan_skips_approve() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_plan(app, _EMPTY_PLAN, [])
             await pilot.pause()
             # F14: a no-wave plan defaults to ``edit`` (approve disabled).
@@ -170,6 +175,7 @@ def test_plan_preview_empty_plan_enter_does_not_approve() -> None:
         sink: list[str] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_plan(app, _EMPTY_PLAN, sink)
             await pilot.pause()
             # Force the highlight onto approve, then Enter is suppressed.
@@ -189,6 +195,7 @@ def test_plan_preview_routes_through_push_modal_cap() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # Fill the stack to the cap, then the helper's push is rejected.
             for _ in range(EaApp.MAX_MODAL_DEPTH):
                 app.push_modal(PlanPreviewModal(_PLAN))
@@ -280,6 +287,7 @@ def test_plan_preview_renders_eu_rollup_row() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _push_plan(app, _PLAN, [])
             await pilot.pause()
             text = _rollup_text(app)
@@ -299,6 +307,7 @@ def test_plan_preview_renders_dropped_detail_when_present() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _push_plan(app, _PLAN_WITH_DROPPED, [])
             await pilot.pause()
             head = str(app.screen.query_one(".plan-dropped-head", Static).render())
@@ -326,6 +335,7 @@ def test_plan_preview_omits_dropped_detail_when_absent() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _push_plan(app, _PLAN, [])
             await pilot.pause()
             try:

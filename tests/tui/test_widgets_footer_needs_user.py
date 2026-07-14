@@ -86,6 +86,7 @@ def test_footer_badge_quiet_when_zero() -> None:
         app = _Harness()
         async with app.run_test(size=(120, 6)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             footer = app.query_one("#ftr", Footer)
             # Default count is 0 -> quiet (empty text, no attention class).
             cell = footer.query_one(".footer-needs-user", Static)
@@ -100,6 +101,7 @@ def test_footer_badge_attention_when_positive() -> None:
         app = _Harness()
         async with app.run_test(size=(120, 6)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             footer = app.query_one("#ftr", Footer)
             footer.pending_pauses = 2
             await pilot.pause()
@@ -116,6 +118,7 @@ def test_footer_badge_repaints_back_to_quiet_on_zero() -> None:
         app = _Harness()
         async with app.run_test(size=(120, 6)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             footer = app.query_one("#ftr", Footer)
             footer.pending_pauses = 4
             await pilot.pause()
@@ -165,6 +168,7 @@ def test_footer_badge_reflects_seeded_pause_count(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # The state refresh recomputes the cross-scope pause count.
             assert app.pending_pauses == 1
             footer = _scope_footer(app)
@@ -180,6 +184,7 @@ def test_footer_badge_quiet_with_no_pauses() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             assert app.pending_pauses == 0
             footer = _scope_footer(app)
             assert not footer.query_one(".footer-needs-user", Static).has_class("-attention")

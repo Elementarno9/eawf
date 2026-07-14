@@ -28,6 +28,7 @@ def test_audit_verb_opens_audit_running_modal() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # /audit takes no id — it audits the current scope.
             _handle_audit(app, "")
             await pilot.pause()
@@ -41,6 +42,7 @@ def test_audit_verb_with_arg_is_rejected_no_modal() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # A trailing free-text token is rejected (no URN-lookup
             # contract); the overlay must not open.
             _handle_audit(app, "urn:eawf:v1:repo:eawf")
@@ -57,6 +59,7 @@ def test_audit_verb_titles_with_scope_derived_id() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _handle_audit(app, "")
             await pilot.pause()
             modal = app.screen
@@ -78,6 +81,7 @@ def test_roadmap_propose_opens_plan_preview_modal() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             phase_id = next(iter(app.state.phases))  # type: ignore[union-attr]
             _handle_roadmap(app, f"propose {phase_id}")
             await pilot.pause()
@@ -91,6 +95,7 @@ def test_roadmap_non_propose_subverb_does_not_open_modal() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _handle_roadmap(app, "revise P26")
             await pilot.pause()
             # ``revise`` is unwired this wave — no modal pushed.
@@ -104,6 +109,7 @@ def test_roadmap_propose_without_phase_does_not_open_modal() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _handle_roadmap(app, "propose")
             await pilot.pause()
             assert app.modal_depth() == 0
@@ -118,6 +124,7 @@ def test_audit_verb_routes_through_push_modal_cap() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             empty = AuditProgress(audit_id="a", scope_label="s", checks=())
             for _ in range(EaApp.MAX_MODAL_DEPTH):
                 app.push_modal(AuditRunningModal(empty))

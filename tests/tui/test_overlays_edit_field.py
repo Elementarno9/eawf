@@ -46,6 +46,7 @@ def test_edit_seeds_input_from_current() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_edit(app, 2, [])
             await pilot.pause()
             assert modal.query_one("#edit-field-input", Input).value == "2"
@@ -59,6 +60,7 @@ def test_edit_enter_returns_coerced_value() -> None:
         sink: list[Any] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_edit(app, 1, sink)
             await pilot.pause()
             modal.query_one("#edit-field-input", Input).value = "4"
@@ -76,6 +78,7 @@ def test_edit_invalid_value_reports_inline_and_stays_open() -> None:
         sink: list[Any] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_edit(app, 1, sink)
             await pilot.pause()
             # Above the declared max of 5 — coercion must fail.
@@ -97,6 +100,7 @@ def test_edit_esc_cancels_with_none() -> None:
         sink: list[Any] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _push_edit(app, 1, sink)
             await pilot.pause()
             await pilot.press("escape")
@@ -111,6 +115,7 @@ def test_edit_meta_line_shows_range() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_edit(app, 1, [])
             await pilot.pause()
             meta = modal.query_one(".edit-field-meta", Static)

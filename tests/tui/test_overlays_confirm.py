@@ -29,6 +29,7 @@ def test_confirm_defaults_to_no() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_confirm(app, "Drop wave?", [])
             await pilot.pause()
             assert modal.selected == 0  # index 0 == "No"
@@ -42,6 +43,7 @@ def test_confirm_right_then_enter_returns_true() -> None:
         sink: list[bool | None] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_confirm(app, "Drop wave?", sink)
             await pilot.pause()
             await pilot.press("right")
@@ -60,6 +62,7 @@ def test_confirm_enter_on_default_returns_false() -> None:
         sink: list[bool | None] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _push_confirm(app, "Drop wave?", sink)
             await pilot.pause()
             await pilot.press("enter")
@@ -75,6 +78,7 @@ def test_confirm_esc_returns_false() -> None:
         sink: list[bool | None] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _push_confirm(app, "Drop wave?", sink)
             await pilot.pause()
             await pilot.press("escape")
@@ -89,6 +93,7 @@ def test_confirm_left_after_right_returns_to_no() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_confirm(app, "Drop wave?", [])
             await pilot.pause()
             await pilot.press("right")
@@ -104,6 +109,7 @@ def test_confirm_vim_alias_l_selects_yes() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_confirm(app, "Drop wave?", [])
             await pilot.pause()
             await pilot.press("l")
@@ -120,6 +126,7 @@ def test_confirm_renders_prompt() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_confirm(app, "Cherry-pick now?", [])
             await pilot.pause()
             prompt = modal.query_one(".confirm-prompt", Static)

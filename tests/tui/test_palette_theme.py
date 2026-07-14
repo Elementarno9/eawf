@@ -126,6 +126,7 @@ def test_apply_theme_swap_changes_theme_and_resolved_variables() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # Baseline: the dark Wong palette.
             assert app.theme == EA_DARK.name
             dark_accent = app.get_css_variables()["accent"]
@@ -151,6 +152,7 @@ def test_apply_theme_unknown_name_leaves_theme_unchanged() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             before = app.theme
             assert app.apply_theme("bogus") is False
             await pilot.pause()
@@ -169,6 +171,7 @@ def test_handle_theme_verb_swaps_cb_then_dark(_tmp_global_config: Path) -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _handle_theme(app, "cb")
             await pilot.pause()
             assert app.theme == EA_CB.name
@@ -187,6 +190,7 @@ def test_handle_theme_verb_rejects_unknown_with_warning_no_change(
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             before = app.theme
             app.notify = lambda message, *_a, **kw: notices.append(  # type: ignore[method-assign]
                 (message, kw.get("severity"))
@@ -211,6 +215,7 @@ def test_handle_theme_verb_persists_choice_through_layer_writer(
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _handle_theme(app, "cb")
             await pilot.pause()
 

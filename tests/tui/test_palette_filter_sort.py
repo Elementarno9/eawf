@@ -45,6 +45,7 @@ def test_handle_filter_backlog_calls_apply_filter() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             table = _backlog_table(app)
             table.apply_filter = calls.append  # type: ignore[assignment]
             _handle_filter(app, "backlog metrics")
@@ -59,6 +60,7 @@ def test_handle_filter_backlog_sets_filter_text_reactive() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             table = _backlog_table(app)
             _handle_filter(app, "backlog wire")
             await pilot.pause()
@@ -72,6 +74,7 @@ def test_handle_filter_backlog_empty_needle_clears_filter() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             table = _backlog_table(app)
             table.filter_text = "stale"
             _handle_filter(app, "backlog")
@@ -87,6 +90,7 @@ def test_handle_filter_unknown_pane_warns_no_change() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             table = _backlog_table(app)
             before = table.filter_text
             app.notify = lambda message, *_a, **kw: notices.append(  # type: ignore[method-assign]
@@ -109,6 +113,7 @@ def test_handle_filter_missing_pane_warns() -> None:
         app = _NoBacklogHarness()
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             assert all(not screen.query(BacklogTable) for screen in app.screen_stack)
             app.notify = lambda message, *_a, **kw: notices.append(  # type: ignore[method-assign]
                 (message, kw.get("severity"))
@@ -131,6 +136,7 @@ def test_handle_sort_backlog_calls_cycle_sort() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             table = _backlog_table(app)
             table.cycle_sort = lambda: calls.append(1)  # type: ignore[method-assign]
             _handle_sort(app, "backlog")
@@ -145,6 +151,7 @@ def test_handle_sort_backlog_advances_sort_key() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             table = _backlog_table(app)
             assert table.sort_key == SORT_KEYS[0]
             _handle_sort(app, "backlog")
@@ -160,6 +167,7 @@ def test_handle_sort_unknown_pane_warns_no_change() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             table = _backlog_table(app)
             before = table.sort_key
             app.notify = lambda message, *_a, **kw: notices.append(  # type: ignore[method-assign]
@@ -180,6 +188,7 @@ def test_handle_sort_empty_pane_warns() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.notify = lambda message, *_a, **kw: notices.append(  # type: ignore[method-assign]
                 (message, kw.get("severity"))
             )

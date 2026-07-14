@@ -345,6 +345,7 @@ def test_de_linked_segments_run_action_is_a_no_op_in_live_app() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             before = (app.nav_position, app._scope, app.current_mode)
             crumb = build_breadcrumb(
                 app.state,
@@ -542,6 +543,7 @@ def test_header_paints_brand_and_breadcrumb() -> None:
         app = _Harness()
         async with app.run_test(size=(80, 6)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             header = app.query_one("#hdr", Header)
             header.state = _load(_PHASE_ITER_WAVE)
             await pilot.pause()
@@ -561,6 +563,7 @@ def test_header_repaints_on_state_revision() -> None:
         app = _Harness()
         async with app.run_test(size=(80, 6)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             header = app.query_one("#hdr", Header)
             # Fresh frame falls back to the default code.
             assert DEFAULT_PROJECT_CODE in app.export_screenshot()
@@ -585,6 +588,7 @@ def test_header_render_returns_brand_after_assignment() -> None:
         app = _Harness()
         async with app.run_test(size=(80, 6)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             header = app.query_one("#hdr", Header)
             header.state = _load(_EMPTY_REPO)
             await pilot.pause()
@@ -613,6 +617,7 @@ def test_header_renders_crisp_glyph_and_mounts_no_seal_image() -> None:
         app = _Harness()
         async with app.run_test(size=(80, 6)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             header = app.query_one("#hdr", Header)
             header.state = _load(_EMPTY_REPO)
             await pilot.pause()
@@ -646,6 +651,7 @@ def test_app_resolves_breadcrumb_switch_scope_action() -> None:
         app = EaApp(scope="repo", state_path=_REF_FIXTURE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             assert await app.run_action("app.switch_scope('repo')") is True
 
     asyncio.run(body())
@@ -656,6 +662,7 @@ def test_app_resolves_breadcrumb_switch_mode_action() -> None:
         app = EaApp(scope="repo", state_path=_REF_FIXTURE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # home is a real mode -- the App still owns switch_mode('home') even
             # though the breadcrumb code segment no longer wires a click to it
             # (the action stays reachable by keybinding after the de-link).
@@ -669,6 +676,7 @@ def test_app_resolves_breadcrumb_phase_and_iter_ref_actions() -> None:
         app = EaApp(scope="repo", state_path=_REF_FIXTURE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             assert await app.run_action(f"app.open_phase_ref('{_PHASE}')") is True
             await pilot.pause()
             assert await app.run_action(f"app.open_iter_ref('{_ITER}')") is True
@@ -684,6 +692,7 @@ def test_app_bare_breadcrumb_action_against_header_does_not_resolve() -> None:
         app = EaApp(scope="repo", state_path=_REF_FIXTURE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             header = app.query(Header).first()
             handled = await app.run_action("switch_mode('home')", default_namespace=header)
             assert handled is False
@@ -699,6 +708,7 @@ def test_action_switch_mode_guards_against_stale_mode_name() -> None:
         app = EaApp(scope="repo", state_path=_REF_FIXTURE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             start_mode = app.current_mode
             await app.action_switch_mode("definitely_not_a_registered_mode")
             await pilot.pause()

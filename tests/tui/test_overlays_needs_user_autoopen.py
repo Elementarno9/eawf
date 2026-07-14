@@ -54,6 +54,7 @@ def test_pending_pause_auto_opens_modal(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             assert any(isinstance(screen, NeedsUserModal) for screen in app.screen_stack), (
                 "a pending pause for the active scope must auto-open NeedsUserModal"
             )
@@ -68,6 +69,7 @@ def test_pick_resolves_pause_with_chosen_label(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             await pilot.press("down")  # highlight "revise"
             await pilot.press("enter")
             await pilot.pause()
@@ -84,6 +86,7 @@ def test_defer_keeps_pause_open(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             await pilot.press("escape")  # defer
             await pilot.pause()
         # Esc defers — the pause is untouched, still open.
@@ -100,6 +103,7 @@ def test_resume_failure_shows_error_toast(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.notify = lambda message, *_a, **kw: notices.append(  # type: ignore[method-assign]
                 (message, kw.get("severity"))
             )
@@ -124,6 +128,7 @@ def test_other_scope_pause_does_not_auto_open(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             assert not any(isinstance(screen, NeedsUserModal) for screen in app.screen_stack), (
                 "a pause for a different scope must not auto-open"
             )

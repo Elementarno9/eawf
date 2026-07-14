@@ -75,6 +75,7 @@ def test_detail_modal_rows_get_hover_tooltip() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(
                 DetailModal(
                     DetailCard(title="refs", rows=(("ref", f"see {_WAVE_ID}"),)),
@@ -94,6 +95,7 @@ def test_app_reference_nav_stack_back_and_forward() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.action_open_wave_ref(_WAVE_ID)
             await pilot.pause()
             assert isinstance(app.screen, ReferenceModal)
@@ -131,6 +133,7 @@ def test_reference_history_stacks_are_bounded_rings() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             assert isinstance(app._reference_back_stack, deque)
             assert isinstance(app._reference_forward_stack, deque)
             assert app._reference_back_stack.maxlen == REFERENCE_HISTORY_MAX
@@ -146,6 +149,7 @@ def test_reference_back_on_empty_history_stops_clean() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # No navigation yet: both rings empty, no current reference.
             assert not app._reference_back_stack
             app.action_reference_back()
@@ -162,6 +166,7 @@ def test_reference_back_replaces_top_modal_in_place() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.action_open_wave_ref(_WAVE_ID)
             await pilot.pause()
             app.action_open_phase_ref("P01")
@@ -192,6 +197,7 @@ def test_goto_handler_opens_reference_modal() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _handle_goto(app, _WAVE_ID)
             await pilot.pause()
             assert isinstance(app.screen, ReferenceModal)
@@ -222,6 +228,7 @@ def test_modal_depth_skips_brief_viewer_but_counts_reference_modal() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # The brief viewer opts out of the cap, so it does not count.
             assert app.push_modal(BriefViewerScreen("# brief")) is True
             await pilot.pause()
@@ -246,6 +253,7 @@ def test_brief_plus_five_reference_drills_never_hits_cap() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # The criterion scenario: open a brief, then drill five references
             # off it. The brief is exempt, so the five drills sit at depth 5 --
             # one below the cap -- and every push succeeds with no cap toast.
@@ -268,6 +276,7 @@ def test_reference_drills_still_cap_without_brief_exemption() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # Counting overlays still cap at six: six reference drills fill the
             # stack and the seventh is rejected (the brief exemption does not
             # widen the cap for counting overlays, it just excludes the brief).

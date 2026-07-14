@@ -37,6 +37,7 @@ def test_palette_opens_on_slash_prefilled() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             await pilot.press("slash")
             await pilot.pause()
             assert isinstance(app.screen, CommandPalette)
@@ -52,6 +53,7 @@ def test_palette_seeds_full_verb_list_for_scope() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             await pilot.press("slash")
             await pilot.pause()
             option_list = app.screen.query_one(OptionList)
@@ -72,6 +74,7 @@ def test_palette_filters_as_operator_types() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             await pilot.press("slash")
             await pilot.press("t", "h", "e", "m", "e")
             await pilot.pause()
@@ -97,6 +100,7 @@ def test_palette_no_match_shows_frozen_prompt() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             await pilot.press("slash")
             await pilot.press("z", "z", "z", "z")
             await pilot.pause()
@@ -120,6 +124,7 @@ def test_palette_tab_autocompletes_to_highlighted() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             await pilot.press("slash")
             await pilot.press("t", "h", "e")
             await pilot.press("tab")
@@ -140,6 +145,7 @@ def test_palette_enter_runs_quit_verb() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             await pilot.press("slash")
             await pilot.press("q", "u", "i", "t")
             await pilot.press("enter")
@@ -155,6 +161,7 @@ def test_palette_enter_help_opens_help_and_closes_palette() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             await pilot.press("slash")
             await pilot.press("h", "e", "l", "p")
             await pilot.press("enter")
@@ -173,6 +180,7 @@ def test_palette_unknown_verb_keeps_palette_open() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             await pilot.press("slash")
             # Type a non-verb then submit; palette stays open.
             for char in "zztop":
@@ -189,6 +197,7 @@ def test_palette_empty_enter_dismisses() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             await pilot.press("slash")
             await pilot.pause()
             # Palette opens seeded with just "/"; Enter on the bare prefix
@@ -207,6 +216,7 @@ def test_palette_cleared_then_enter_dismisses() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             await pilot.press("slash")
             await pilot.pause()
             # Clear the seeded "/" to an empty input, then Enter dismisses.
@@ -230,6 +240,7 @@ def test_palette_esc_closes_without_running() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             await pilot.press("slash")
             await pilot.pause()
             await pilot.press("escape")
@@ -262,6 +273,7 @@ def test_palette_user_scope_hides_removed_placeholder_verbs(
         app = EaApp(scope="user", state_path=None)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             await pilot.press("slash")
             await pilot.press("w", "a", "v", "e")
             await pilot.pause()

@@ -56,6 +56,7 @@ def test_audit_failed_defaults_to_retry() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_audit_failed(app, [])
             await pilot.pause()
             assert modal.selected == 0  # index 0 == "retry"
@@ -68,6 +69,7 @@ def test_audit_failed_renders_all_five_actions() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_audit_failed(app, [])
             await pilot.pause()
             for index, action in enumerate(_EXPECTED_ACTIONS):
@@ -83,6 +85,7 @@ def test_audit_failed_enter_returns_retry() -> None:
         sink: list[str] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _push_audit_failed(app, sink)
             await pilot.pause()
             await pilot.press("enter")
@@ -98,6 +101,7 @@ def test_audit_failed_down_to_abandon_returns_abandon() -> None:
         sink: list[str] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _push_audit_failed(app, sink)
             await pilot.pause()
             # retry(0) -> split(1) -> land-partial(2) -> abandon(3)
@@ -116,6 +120,7 @@ def test_audit_failed_esc_returns_close() -> None:
         sink: list[str] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             _push_audit_failed(app, sink)
             await pilot.pause()
             await pilot.press("escape")
@@ -130,6 +135,7 @@ def test_audit_failed_up_wraps_to_scope_change() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = _push_audit_failed(app, [])
             await pilot.pause()
             await pilot.press("up")  # wraps 0 -> last (index 4 == scope-change)
@@ -144,6 +150,7 @@ def test_audit_failed_mark_dispatching_renders_d27_line() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = AuditFailedModal(_WAVE, runtime="claude-code")
             app.push_screen(modal)
             await pilot.pause()
@@ -160,6 +167,7 @@ def test_audit_failed_mark_closed_renders_terminal_line() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = AuditFailedModal(_WAVE)
             app.push_screen(modal)
             await pilot.pause()
@@ -178,6 +186,7 @@ def test_open_audit_failed_respects_cap() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             for _ in range(EaApp.MAX_MODAL_DEPTH):
                 app.push_modal(AuditFailedModal(_WAVE))
                 await pilot.pause()

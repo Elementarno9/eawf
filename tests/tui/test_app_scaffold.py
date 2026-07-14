@@ -617,6 +617,7 @@ def test_eaapp_degraded_banner_stays_mounted_and_toggles_visibility() -> None:
         app = EaApp(scope="repo", state_path=_EMPTY_REPO)
         async with app.run_test() as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             banner = app.screen.query_one(f"#{DEGRADED_BANNER_ID}")
             banner_id = id(banner)
             assert len(app.screen.query(f".{DEGRADED_BANNER_ID}")) == 1
@@ -662,6 +663,7 @@ def test_eaapp_degraded_banner_leads_with_fail_sigil_and_calm_copy() -> None:
         app = EaApp(scope="repo", state_path=_EMPTY_REPO)
         async with app.run_test() as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             await app._on_degraded(True)
             await pilot.pause()
             banner = app.screen.query_one(f"#{DEGRADED_BANNER_ID}")
@@ -695,6 +697,7 @@ def test_eaapp_healthy_mounts_neither_banner(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test() as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             assert app.degraded is False
             assert app.stale_schema is False
             degraded = app.screen.query(f"#{DEGRADED_BANNER_ID}")
@@ -730,6 +733,7 @@ def test_eaapp_first_paint_renders_brand() -> None:
         app = EaApp(scope="repo", state_path=_EMPTY_REPO)
         async with app.run_test() as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # The real RepoScreen now composes the shared chassis Header.
             header = app.screen.query_one(Header)
             assert BRAND in str(header.render())

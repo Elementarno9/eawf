@@ -159,6 +159,7 @@ def test_boundary_mounts_crash_frame_when_builder_raises() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             boundary = app.pane_boundary(builder=_exploding_builder, pane_id="roadmap")
             await app.screen.mount(boundary)
             await pilot.pause()
@@ -184,6 +185,7 @@ def test_one_pane_exception_does_not_escalate_to_app_panic() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             boundary = app.pane_boundary(builder=_exploding_builder, pane_id="roadmap")
             await app.screen.mount(boundary)
             await pilot.pause()
@@ -202,6 +204,7 @@ def test_neighbouring_panes_keep_rendering_when_one_pane_fails() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             healthy_left = app.pane_boundary(
                 builder=lambda: _healthy_builder("left pane"), pane_id="status"
             )
@@ -235,6 +238,7 @@ def test_healthy_pane_renders_no_boundary_crash_frame() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             boundary = app.pane_boundary(
                 builder=lambda: _healthy_builder("all good"), pane_id="status"
             )
@@ -255,6 +259,7 @@ def test_repo_production_wraps_roadmap_status_and_attention_panes() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             boundary_ids = {boundary.id for boundary in app.screen.query(PaneErrorBoundary)}
             assert {
                 "pane-boundary-roadmap",
@@ -277,6 +282,7 @@ def test_production_roadmap_render_exception_renders_crash_frame_not_panic(
         app.panic = lambda *renderables: panic_calls.append(renderables)  # type: ignore[method-assign]
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             exploding = app.screen.query("#roadmap-tree")
             if exploding:
                 exploding.first(_ExplodingRenderPane).render_lines(Region(0, 0, 40, 3))
@@ -314,6 +320,7 @@ def test_boundary_recovery_bindings_enable_only_when_crashed() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             healthy = app.pane_boundary(
                 builder=lambda: _healthy_builder("all good"), pane_id="status"
             )
@@ -346,6 +353,7 @@ def test_boundary_retry_key_rebuilds_the_content() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             boundary = app.pane_boundary(builder=_flaky_builder, pane_id="roadmap")
             await app.screen.mount(boundary)
             await pilot.pause()
@@ -376,6 +384,7 @@ def test_boundary_dismiss_key_clears_the_crash_frame() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             boundary = app.pane_boundary(builder=_exploding_builder, pane_id="roadmap")
             await app.screen.mount(boundary)
             await pilot.pause()
@@ -397,6 +406,7 @@ def test_boundary_view_log_key_switches_to_the_feed_mode() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             boundary = app.pane_boundary(builder=_exploding_builder, pane_id="roadmap")
             await app.screen.mount(boundary)
             await pilot.pause()
@@ -424,6 +434,7 @@ def test_boundary_handles_a_non_runtime_render_exception() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             boundary = app.pane_boundary(builder=_value_error_builder, pane_id="status")
             await app.screen.mount(boundary)
             await pilot.pause()

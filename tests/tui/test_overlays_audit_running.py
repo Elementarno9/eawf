@@ -74,6 +74,7 @@ def test_audit_running_renders_title_tally() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = AuditRunningModal(_PROGRESS)
             app.push_screen(modal)
             await pilot.pause()
@@ -90,6 +91,7 @@ def test_audit_running_update_progress_repaints() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = AuditRunningModal(_PROGRESS)
             app.push_screen(modal)
             await pilot.pause()
@@ -106,6 +108,7 @@ def test_audit_running_rows_render_glyphs() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = AuditRunningModal(_PROGRESS)
             app.push_screen(modal)
             await pilot.pause()
@@ -126,6 +129,7 @@ def test_audit_running_renders_block_progress_bar() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             modal = AuditRunningModal(_PROGRESS)
             app.push_screen(modal)
             await pilot.pause()
@@ -145,6 +149,7 @@ def test_audit_running_esc_minimises() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(AuditRunningModal(_PROGRESS))
             await pilot.pause()
             assert app.modal_depth() == 1
@@ -160,6 +165,7 @@ def test_open_audit_running_respects_cap() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             for _ in range(EaApp.MAX_MODAL_DEPTH):
                 app.push_modal(AuditRunningModal(_PROGRESS))
                 await pilot.pause()

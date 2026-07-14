@@ -307,6 +307,7 @@ def test_metrics_modal_mounts_seven_tiles() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(MetricsModal())
             await pilot.pause()
             assert isinstance(app.screen, MetricsModal)
@@ -382,6 +383,7 @@ def test_metrics_cost_tile_matches_dollar_tab_aggregate(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(MetricsModal())
             await pilot.pause()
             cost_tile = _text(app.screen.query_one("#tile-cost", Static))
@@ -397,6 +399,7 @@ def test_metrics_modal_heading_shows_window() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(MetricsModal(MetricsArgs(window="30d", scope_filter=None)))
             await pilot.pause()
             heading = _text(app.screen.query_one(".metrics-title", Static))
@@ -412,6 +415,7 @@ def test_metrics_verb_opens_modal_through_cap() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             handler = next(v.handler for v in VERBS if v.name == "/metrics")
             handler(app, "--window 90d")
             await pilot.pause()
@@ -427,6 +431,7 @@ def test_metrics_modal_esc_closes() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(MetricsModal())
             await pilot.pause()
             assert app.modal_depth() == 1
@@ -442,6 +447,7 @@ def test_metrics_modal_enter_opens_role_calibration_drilldown() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(MetricsModal())
             await pilot.pause()
             assert isinstance(app.screen, MetricsModal)
@@ -459,6 +465,7 @@ def test_metrics_modal_enter_opens_variance_drilldown() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(MetricsModal())
             await pilot.pause()
             assert isinstance(app.screen, MetricsModal)
@@ -487,6 +494,7 @@ def test_metrics_honest_line_has_top_margin() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(MetricsModal())
             await pilot.pause()
             honest = app.screen.query_one(".metrics-honest", Static)
@@ -573,6 +581,7 @@ def test_metrics_footer_is_honest_negative_until_capture() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(MetricsModal())
             await pilot.pause()
             footer = _text(app.screen.query_one("#metrics-honest", Static))
@@ -592,6 +601,7 @@ def test_metrics_footer_flips_to_capture_live(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(MetricsModal())
             await pilot.pause()
             footer = _text(app.screen.query_one("#metrics-honest", Static))

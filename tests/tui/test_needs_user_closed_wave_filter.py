@@ -62,6 +62,7 @@ def test_closed_wave_advisory_is_dropped_from_badge_and_inbox(tmp_path: Path) ->
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             assert app._all_open_pauses() == []
             assert app.pending_pauses == 0
 
@@ -76,6 +77,7 @@ def test_active_wave_advisory_is_kept(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             assert len(app._all_open_pauses()) == 1
             assert app.pending_pauses == 1
 

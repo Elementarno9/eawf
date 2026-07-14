@@ -274,6 +274,7 @@ def test_apply_theme_auto_uses_cached_light_logical() -> None:
         app._auto_logical = "light"
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             assert app.apply_theme("auto") is True
             await pilot.pause()
             assert app.theme == EA_LIGHT.name
@@ -289,6 +290,7 @@ def test_apply_theme_auto_uses_cached_dark_logical() -> None:
         app._auto_logical = "dark"
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             assert app.apply_theme("auto") is True
             await pilot.pause()
             assert app.theme == EA_DARK.name
@@ -305,6 +307,7 @@ def test_apply_theme_auto_returns_true_under_default_construction() -> None:
         assert app._auto_logical == "dark"
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             assert app.apply_theme("auto") is True
             await pilot.pause()
             assert app.theme == EA_DARK.name
@@ -404,6 +407,7 @@ def test_theme_poll_seeds_baseline_then_follows_flip(monkeypatch: pytest.MonkeyP
         app._auto_logical = "dark"
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             assert app.apply_theme("auto") is True
             await pilot.pause()
             assert app.theme == EA_DARK.name
@@ -435,6 +439,7 @@ def test_theme_poll_corrects_disagreeing_startup(monkeypatch: pytest.MonkeyPatch
         app._auto_logical = "dark"  # simulate the dark fallback of a failed probe
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.apply_theme("auto")
             await pilot.pause()
             assert app.theme == EA_DARK.name
@@ -454,6 +459,7 @@ def test_theme_poll_ignored_when_theme_not_auto(monkeypatch: pytest.MonkeyPatch)
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             assert app.apply_theme("dark") is True  # explicit, not auto
             await pilot.pause()
             monkeypatch.setattr("eawf.surfaces.tui.app.detect_os_appearance", lambda: "dark")
@@ -475,6 +481,7 @@ def test_theme_poll_none_appearance_is_noop(monkeypatch: pytest.MonkeyPatch) -> 
         app._auto_logical = "dark"
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.apply_theme("auto")
             await pilot.pause()
             before = app.theme

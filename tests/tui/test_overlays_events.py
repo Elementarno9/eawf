@@ -259,6 +259,7 @@ def test_events_modal_mounts_rows() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(EventsModal(_SAMPLE))
             await pilot.pause()
             assert isinstance(app.screen, EventsModal)
@@ -274,6 +275,7 @@ def test_events_modal_f_cycles_filter() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(EventsModal(_SAMPLE))
             await pilot.pause()
             await pilot.press("f")
@@ -290,6 +292,7 @@ def test_events_modal_empty_shows_note() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(EventsModal(()))
             await pilot.pause()
             assert app.screen.query_one("#events-list").query(".events-empty")
@@ -304,6 +307,7 @@ def test_events_verb_opens_modal_through_cap() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             handler = next(v.handler for v in VERBS if v.name == "/events")
             handler(app, "")
             await pilot.pause()
@@ -318,6 +322,7 @@ def test_events_modal_esc_closes() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(EventsModal(_SAMPLE))
             await pilot.pause()
             assert app.modal_depth() == 1
@@ -355,6 +360,7 @@ def test_events_hint_has_top_margin() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(EventsModal(_SAMPLE))
             await pilot.pause()
             hint = app.screen.query_one(".events-hint", Static)

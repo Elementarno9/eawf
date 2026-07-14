@@ -430,6 +430,7 @@ def test_emit_through_real_app_preserves_focus() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             focus_before = app.focused
             emitter = ToastEmitter("important")
             notes = emitter.emit(app, _base_state(), _wave_closed_state())

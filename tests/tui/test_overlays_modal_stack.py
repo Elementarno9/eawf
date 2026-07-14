@@ -61,6 +61,7 @@ def test_push_modals_to_cap_succeeds() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             results = []
             for _ in range(EaApp.MAX_MODAL_DEPTH):
                 results.append(app.push_modal(DetailModal(_CARD)))
@@ -76,6 +77,7 @@ def test_push_past_cap_rejected() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             for _ in range(EaApp.MAX_MODAL_DEPTH):
                 app.push_modal(DetailModal(_CARD))
                 await pilot.pause()
@@ -92,6 +94,7 @@ def test_cap_frees_after_pop() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             for _ in range(EaApp.MAX_MODAL_DEPTH):
                 app.push_modal(DetailModal(_CARD))
                 await pilot.pause()
@@ -113,6 +116,7 @@ def test_modal_depth_zero_on_scope_screen() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # The base scope screen is a plain Screen, not a ModalScreen.
             assert app.modal_depth() == 0
 
@@ -124,6 +128,7 @@ def test_palette_then_fill_then_cap() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # Open the palette via the keypress (one modal), then stack
             # drill-ins up to the cap and confirm the next push is rejected.
             await pilot.press("slash")
@@ -150,6 +155,7 @@ def test_duplicate_singleton_modal_is_deduped_to_one() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # A singleton overlay (ConfigModal) pushed twice keeps ONE on
             # the stack: the second push duplicates the top, so it no-ops.
             assert app.push_modal(ConfigModal()) is True
@@ -167,6 +173,7 @@ def test_distinct_singleton_modals_still_stack() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # Two *different* singletons coexist: the dedup is top-only by
             # class, so config then palette stacks to depth 2.
             assert app.push_modal(ConfigModal()) is True
@@ -187,6 +194,7 @@ def test_non_singleton_modal_stacks_duplicates() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # DetailModal does not opt into dedup, so legitimate repeat
             # drills (the same card from different contexts) still stack.
             results = [app.push_modal(DetailModal(_CARD)) for _ in range(3)]
@@ -202,6 +210,7 @@ def test_open_config_action_twice_keeps_one_modal() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # The end-to-end vector the W26 dedup targets: re-firing the
             # App-level config action (e.g. a double palette-verb dispatch)
             # must not stack a second identical ConfigModal.
@@ -237,6 +246,7 @@ def test_reopen_top_entity_leaves_stack_identity_and_length_unchanged() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             screen = _repo_scope_screen(app)
             # Drill into the wave entity once.
             screen._open_detail(_WAVE_ID)
@@ -265,6 +275,7 @@ def test_reopen_top_entity_mounts_no_toast() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             screen = _repo_scope_screen(app)
             screen._open_detail(_WAVE_ID)
             await pilot.pause()
@@ -282,6 +293,7 @@ def test_reopen_different_entity_still_stacks() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             screen = _repo_scope_screen(app)
             screen._open_detail(_WAVE_ID)
             await pilot.pause()
@@ -303,6 +315,7 @@ def test_reopen_same_entity_after_a_different_one_restacks() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             screen = _repo_scope_screen(app)
             # wave -> phase stacks two cards; re-drilling the wave is now a
             # DIFFERENT entity than the phase on top, so it stacks again (the
@@ -346,6 +359,7 @@ def test_push_modal_dedups_same_entity_on_top_to_one() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # A DetailModal carrying an entity id pushed twice keeps ONE: the
             # second push duplicates the top key, so the chokepoint no-ops it
             # and returns False without mutating the stack.
@@ -364,6 +378,7 @@ def test_push_modal_dedup_skip_mounts_no_toast() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             app.push_modal(_detail(_WAVE_ID))
             await pilot.pause()
             # The entity-key dedup-skip is a benign no-op: it is logged, not
@@ -380,6 +395,7 @@ def test_push_modal_different_entity_stacks() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             assert app.push_modal(_detail(_WAVE_ID)) is True
             await pilot.pause()
             # A DIFFERENT entity key is not a duplicate -- it stacks (+1).
@@ -398,6 +414,7 @@ def test_push_modal_none_dedupe_key_is_not_entity_deduped() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # A DetailModal built without an entity id carries ``dedupe_key is
             # None`` and so opts out of the entity dedup: repeat pushes stack.
             results = [app.push_modal(_detail(None)) for _ in range(3)]
@@ -413,6 +430,7 @@ def test_push_modal_same_entity_over_different_top_restacks() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            await app.workers.wait_for_complete()
             # wave -> phase stacks two; re-pushing the wave is a DIFFERENT key
             # than the phase on top, so it stacks again (the dedup is top-only,
             # not a global "already open anywhere" guard).
