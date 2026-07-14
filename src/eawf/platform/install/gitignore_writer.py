@@ -29,6 +29,14 @@ GITIGNORE_PATTERNS: tuple[str, ...] = (
     ".ea/telemetry.db",
     "*.db",
     ".ea/state.json.bak.*",
+    # The event store is the firehose, not the ledger: it accumulates one row
+    # per lifecycle mutation plus the raw stdout of every spawned agent, so it
+    # grows without bound and carries free text nobody typed. The evidence chain
+    # that decisions cite lives in the typed stores next to it (audit, decision,
+    # evidence, the agent reports), which stay committed. Tracking this one
+    # instead re-stores a multi-megabyte blob on every bookkeeping commit and
+    # points a raw-output channel at version control.
+    ".ea/store/event.jsonl",
 )
 
 

@@ -151,13 +151,18 @@ _STATE_ONLY_ALLOWED = (
     # State-bookkeeping commits therefore always need it riding along.
     ".secrets.baseline",
 )
-# Every per-kind JSONL under ``.ea/store/`` is a daemon-written, committed
-# store (event / audit / evidence / decision / flow / role reports / memory)
-# per the authority map's uniform treatment of ``.ea/store/*.jsonl``. They
-# all ride the state-bookkeeping surface: e.g. the deterministic close gate
-# appends ``evidence.jsonl`` rows as a wave closes, so a state commit carries
-# them alongside ``state.json`` + ``event.jsonl``. ``.ea/specs/`` carries the
-# in-band wave spec bodies authored as state.
+# The TYPED per-kind JSONLs under ``.ea/store/`` are daemon-written, committed
+# stores (audit / evidence / decision / flow / role reports / memory) per the
+# authority map. They ride the state-bookkeeping surface: e.g. the deterministic
+# close gate appends ``evidence.jsonl`` rows as a wave closes, so a state commit
+# carries them alongside ``state.json``. ``.ea/specs/`` carries the in-band wave
+# spec bodies authored as state.
+#
+# ``event.jsonl`` is the exception and is NOT committed (gitignored): it is the
+# firehose rather than the ledger — one row per mutation plus the raw stdout of
+# every spawned agent — so it grows without bound and carries free text nobody
+# typed. The prefix below still admits it if a repo chooses to track it; this
+# repo does not.
 _STATE_ONLY_PREFIXES = (".ea/store/", ".ea/specs/")
 
 # Bare ``[P##(-I##)?] docs:`` commits carry phase/iter-scoped

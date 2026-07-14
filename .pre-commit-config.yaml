@@ -29,10 +29,14 @@ repos:
         # canonical 40-char hex wave-commit SHAs + URNs that trigger the
         # Hex-High-Entropy plugin as false positives, and their line offsets
         # shift on every state mutation — refreshing the baseline per commit
-        # became loop noise. AGENTS rule 4 guarantees these files do not
-        # carry user secrets by design; the daemon (sole canonical mutator)
-        # owns their content.
-        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$|^\.ea/store/.*\.jsonl$'
+        # became loop noise.
+        #
+        # Only state.json is excluded now. The store JSONLs used to be too, on
+        # the premise that a daemon-written file cannot carry user secrets —
+        # which held until one began carrying the raw stdout of spawned agents.
+        # The event store is untracked entirely; the typed stores that remain
+        # are structured daemon-composed rows, so scanning them is cheap.
+        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$'
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.0.0

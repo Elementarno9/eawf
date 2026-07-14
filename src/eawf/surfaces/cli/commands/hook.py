@@ -667,18 +667,22 @@ def _staged_added_line_candidates(rel: str, *, cwd: Path) -> set[int]:
 def _is_state_bookkeeping_path(rel: str) -> bool:
     """Return ``True`` for daemon-managed bookkeeping files excluded from leak scans.
 
-    ``.ea/state.json`` + ``.ea/store/*.jsonl`` are the daemon's canonical
-    bookkeeping surface (AGENTS rule 4): their content is machine-written,
-    their line offsets churn on every mutation, and free-text fields
-    (backlog titles, outcomes) may legitimately carry home-directory
-    path-shaped placeholders. ``detect-secrets`` excludes the
-    same set for the same reasons, so the leak gates mirror it rather than
-    block every state-bookkeeping commit.
+    Only ``.ea/state.json`` is exempt. Its content is machine-written, its line
+    offsets churn on every mutation, and its free-text fields (backlog titles,
+    outcomes, rule prose) legitimately carry home-directory path SHAPES as
+    placeholders -- ``/Users/<name>`` in a rule that explains the leak lint is
+    not a leak.
+
+    The typed stores under ``.ea/store/`` are NOT exempt. They used to be, on the
+    premise that a daemon-written file cannot carry user secrets; that premise
+    held until a store began carrying the raw stdout of spawned agents, at which
+    point the exemption made the one file that could leak the one file nobody
+    scanned. The event store is now untracked entirely, and the typed stores that
+    remain (audit / decision / evidence / role reports) are structured rows the
+    daemon composes -- so scanning them costs nothing today and catches the next
+    free-text field somebody adds to one.
     """
-    norm = rel.replace("\\", "/")
-    if norm == ".ea/state.json":
-        return True
-    return norm.startswith(".ea/store/") and norm.endswith(".jsonl")
+    return rel.replace("\\", "/") == ".ea/state.json"
 
 
 def _is_generated_markdown_fixture_path(rel: str) -> bool:

@@ -16144,7 +16144,9 @@
   "claims": null,
   "current": {
     "active_session_ids": [],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I21-W46"
+    ],
     "iter_id": null,
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -27995,6 +27997,19 @@
       "scope_id": "P30-I21-W45",
       "updated_at": "2026-07-14T13:12:32.302293Z"
     },
+    "P30-I21-W46": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W46-bucket-20260714T141659Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I21-W46",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I21-W46",
+      "updated_at": "2026-07-14T14:16:59.338720Z"
+    },
     "P30-I22-W01": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I22-W01-bucket-20260701T234041Z",
@@ -32043,7 +32058,8 @@
         "P30-I21-W42",
         "P30-I21-W43",
         "P30-I21-W44",
-        "P30-I21-W45"
+        "P30-I21-W45",
+        "P30-I21-W46"
       ]
     },
     "P30-I22": {
@@ -33382,7 +33398,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T13:13:02.347213Z",
+  "updated_at": "2026-07-14T14:16:59.342116Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -117333,6 +117349,118 @@
         }
       ],
       "title": "Tell the truth about Windows in the release notes",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W46": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+      "claimed_at": "2026-07-14T14:16:59.279136Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Reactive security-repair wave appended at the ship gate; criteria authored from the PII leak the merge-readiness audit found",
+        "waived_at": "2026-07-14T14:16:58.453890Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The event store is the firehose, not the ledger: one row per lifecycle mutation plus the raw stdout of every spawned agent. It reached 6.4 MB over 1865 blob revisions in this phase alone (42 percent of the branch git weight), and because it carries free text nobody typed it put home paths and other private project names into a public repo. Nothing reads the committed copy. The typed stores beside it carry the evidence chain and stay committed.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".gitignore",
+        "src/eawf/platform/install/gitignore_writer.py",
+        "src/eawf/surfaces/cli/commands/hook.py",
+        "tools/commit_prefix_lint.py",
+        ".pre-commit-config.yaml",
+        "src/eawf/platform/profiles/data/core.yaml",
+        "AGENTS.md"
+      ],
+      "gates": [],
+      "id": "P30-I21-W46",
+      "intent": {
+        "desired_outcome": "The event store is local-only, the typed evidence stores stay committed, and the leak gates scan every store that remains in version control.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Gitignore the event store here and in the shipped init template",
+          "Drop the store JSONL exemption from the path and email leak gates and from detect-secrets",
+          "Correct the state-commit whitelist prose in the profile source and re-render AGENTS"
+        ],
+        "priority_rationale": "A free-text channel pointed at version control is a leak waiting to recur; the file it wrote to was also the one file every hygiene gate was told to ignore.",
+        "problem": "The committed event store carries raw agent stdout, so it leaked home paths and other project names into a public repo, and the leak gates were configured to skip exactly that file.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-14T14:16:58.510050Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 14523805,
+        "cache_creation_input_tokens": 637211,
+        "cache_read_input_tokens": 188863604,
+        "captured_at": "2026-07-14T14:16:59.338658Z",
+        "cost_usd": 107.220962,
+        "harness": "claude-code",
+        "input_tokens": 1040,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 256474,
+        "session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+        "shared_wave_count": null,
+        "total_duration_ms": 14523805
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The event store is gitignored in this repo and in the gitignore template eawf init writes so a spawned agent's raw stdout can no longer reach version control",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The event store is gitignored in this repo and in the gitignore template eawf init writes so a spawned agent's raw stdout can no longer reach version control",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "The path-leak email-leak and detect-secrets gates no longer exempt the stores under .ea/store so a future free-text field in a committed store is scanned rather than skipped",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The path-leak email-leak and detect-secrets gates no longer exempt the stores under .ea/store so a future free-text field in a committed store is scanned rather than skipped",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "The state-commit path whitelist prose names the typed stores and states that the event store is not among them",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The state-commit path whitelist prose names the typed stores and states that the event store is not among them",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Stop committing the event store",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null

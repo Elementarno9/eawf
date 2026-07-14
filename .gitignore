@@ -60,9 +60,19 @@ CLAUDE.md
 !.agents/plugins/
 !.agents/plugins/marketplace.json
 
-# .ea/ — state.json + config.yaml + store/*.jsonl are committed; locks +
+# .ea/ — state.json + config.yaml + the TYPED stores are committed; locks +
 # local scratch + manifest cache + instrument-probe cache + worktrees +
 # state migration backups are not.
+#
+# The event store is deliberately NOT committed. It is the firehose, not the
+# ledger: one row per lifecycle mutation plus the raw stdout of every spawned
+# agent, so it grows without bound (6.4 MB and 1865 blob revisions in P30
+# alone — 42% of the branch's git weight) and carries free text nobody typed,
+# which is how a machine path or another project's name reaches a public repo.
+# Nothing reads the committed copy: state.json is canonical, and the evidence
+# chain decisions cite lives in the typed stores beside it (audit, decision,
+# evidence, the agent reports), which stay committed and stay clean.
+.ea/store/event.jsonl
 .ea/locks/
 .ea/local/
 .ea/indexes/
