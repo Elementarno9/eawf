@@ -10455,6 +10455,21 @@
       "status": "done",
       "updated_at": "2026-07-14T14:41:12.993518Z"
     },
+    "P30-I21-W49": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I21-W49",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W49",
+      "model": null,
+      "scope_id": "P30-I21-W49",
+      "status": "done",
+      "updated_at": "2026-07-14T15:45:50.334321Z"
+    },
     "P30-I22-W01": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 12000,
@@ -28170,6 +28185,19 @@
       "scope_id": "P30-I21-W48",
       "updated_at": "2026-07-14T14:41:08.469287Z"
     },
+    "P30-I21-W49": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W49-bucket-20260714T154449Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I21-W49",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I21-W49",
+      "updated_at": "2026-07-14T15:44:49.835849Z"
+    },
     "P30-I22-W01": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I22-W01-bucket-20260701T234041Z",
@@ -32221,7 +32249,8 @@
         "P30-I21-W45",
         "P30-I21-W46",
         "P30-I21-W47",
-        "P30-I21-W48"
+        "P30-I21-W48",
+        "P30-I21-W49"
       ]
     },
     "P30-I22": {
@@ -33560,7 +33589,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T14:47:42.319238Z",
+  "updated_at": "2026-07-14T15:45:50.334520Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -118106,6 +118135,199 @@
         }
       ],
       "title": "Archive the wave specs of the closed phases",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W49": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+      "claimed_at": "2026-07-14T15:44:49.781912Z",
+      "closed_at": "2026-07-14T15:45:50.334321Z",
+      "commit": "58631893235d5dc3538bb96f8ca50709f661f652",
+      "criteria_floor_waiver": {
+        "reason": "Reactive CI-repair wave appended at the ship gate; criteria authored from the ubuntu failures on PR 29",
+        "waived_at": "2026-07-14T15:44:49.157703Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The local-only move changed the commit-prefix rule text, which re-renders AGENTS.md and drifts three goldens, and it narrowed the leak-gate exemption, which a test pinned to the old behaviour. Separately the close-lock split test inferred its invariant from a wall-clock budget on a disk write, so a loaded runner failed a test whose invariant was intact.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/golden/",
+        "tests/unit/test_lint_hooks.py",
+        "tests/daemon/test_close_lock_split.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "criterion": "scenario",
+            "file_scopes": [
+              "tests/golden/",
+              "tests/unit/test_lint_hooks.py",
+              "tests/daemon/test_close_lock_split.py"
+            ],
+            "pattern": "scenario"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "behaviour",
+            "file_scopes": [
+              "tests/golden/",
+              "tests/unit/test_lint_hooks.py",
+              "tests/daemon/test_close_lock_split.py"
+            ],
+            "pattern": "behaviour"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "completes",
+            "file_scopes": [
+              "tests/golden/",
+              "tests/unit/test_lint_hooks.py",
+              "tests/daemon/test_close_lock_split.py"
+            ],
+            "pattern": "completes"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "GATE-03",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W49",
+      "intent": {
+        "desired_outcome": "The goldens match the rendered rule text, the leak-gate test pins the new behaviour, and the lock-split test asserts the order it cares about rather than a disk-write budget.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Regenerate the AGENTS.md and scenario goldens the rule-text edit drifted",
+          "Repoint the leak-gate test at the narrowed exemption",
+          "Assert the lock is acquired after the pre-flight finishes rather than bounding the hold by wall clock"
+        ],
+        "priority_rationale": "A test that fails on a slow host without a regression teaches the team to ignore red, which is how a real regression ships.",
+        "problem": "Four CI failures are fallout from the event-store move (drifted goldens, a test pinning the old leak-gate exemption) and one is a timing assertion that fails on a slow runner without any regression.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-14T15:44:49.195656Z",
+      "outcome": "Goldens regenerated from the renderer; the leak-gate test pins the narrowed exemption; the lock-split test asserts order rather than a disk-write budget",
+      "runtime_baseline": {
+        "api_duration_ms": 16685409,
+        "cache_creation_input_tokens": 688010,
+        "cache_read_input_tokens": 219539391,
+        "captured_at": "2026-07-14T15:44:49.835807Z",
+        "cost_usd": 123.8142305,
+        "harness": "claude-code",
+        "input_tokens": 1132,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 286351,
+        "session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+        "shared_wave_count": null,
+        "total_duration_ms": 16685409
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
+          "id": "CR-01",
+          "kind": "converted",
+          "measurable_signal": "The AGENTS.md and scenario goldens match the rendered commit-prefix rule text so the render and its fixtures agree",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The AGENTS.md and scenario goldens match the rendered commit-prefix rule text so the render and its fixtures agree",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The AGENTS.md and scenario goldens match the rendered commit-prefix rule text so the render and its fixtures agree",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
+          "id": "CR-02",
+          "kind": "converted",
+          "measurable_signal": "The leak-gate test asserts that only state.json is exempt which is the behaviour the event-store move requires",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The leak-gate test asserts that only state.json is exempt which is the behaviour the event-store move requires",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The leak-gate test asserts that only state.json is exempt which is the behaviour the event-store move requires",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-03"
+          ],
+          "id": "CR-03",
+          "kind": "converted",
+          "measurable_signal": "The close-lock split test asserts that the lock is acquired after the pre-flight completes and turns red when the pre-flight runs under the lock",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The close-lock split test asserts that the lock is acquired after the pre-flight completes and turns red when the pre-flight runs under the lock",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The close-lock split test asserts that the lock is acquired after the pre-flight completes and turns red when the pre-flight runs under the lock",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Repair the CI fallout of the event-store move",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
