@@ -12089,6 +12089,51 @@
       "scope_id": "P30-I25-W49",
       "status": "done",
       "updated_at": "2026-07-14T00:31:15.882188Z"
+    },
+    "P30-I25-W50": {
+      "actual_cost_usd": 1.4580460000000006,
+      "actual_tokens": 12269,
+      "agent_runtime_eu": 0.0,
+      "attention_eu": null,
+      "calibration_excluded": true,
+      "current_store_record_id": "REC-P30-I25-W50",
+      "elapsed_eu": 0.0,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W50",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W50",
+      "status": "done",
+      "updated_at": "2026-07-14T10:15:08.131969Z"
+    },
+    "P30-I25-W51": {
+      "actual_cost_usd": 1.4580460000000006,
+      "actual_tokens": 12269,
+      "agent_runtime_eu": 0.0,
+      "attention_eu": null,
+      "calibration_excluded": true,
+      "current_store_record_id": "REC-P30-I25-W51",
+      "elapsed_eu": 0.0,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W51",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W51",
+      "status": "done",
+      "updated_at": "2026-07-14T10:15:56.164300Z"
+    },
+    "P30-I25-W52": {
+      "actual_cost_usd": 1.4580460000000006,
+      "actual_tokens": 12269,
+      "agent_runtime_eu": 0.0,
+      "attention_eu": null,
+      "calibration_excluded": true,
+      "current_store_record_id": "REC-P30-I25-W52",
+      "elapsed_eu": 0.0,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W52",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W52",
+      "status": "done",
+      "updated_at": "2026-07-14T10:15:57.237903Z"
     }
   },
   "agent_sessions": {
@@ -15827,11 +15872,7 @@
   "claims": null,
   "current": {
     "active_session_ids": [],
-    "active_wave_ids": [
-      "P30-I25-W50",
-      "P30-I25-W51",
-      "P30-I25-W52"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I25",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -32862,7 +32903,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T01:51:31.847467Z",
+  "updated_at": "2026-07-14T10:15:57.238167Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -137223,8 +137264,8 @@
       "blocks": [],
       "claim_session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
       "claimed_at": "2026-07-14T00:57:48.327569Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-14T10:15:08.131969Z",
+      "commit": "718a2cad9983c2f901ef7e768e5261993c5a0d7c",
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the clamp shipped in W49 was found to skip itself when the transcript carries fewer than two timestamps",
         "waived_at": "2026-07-14T00:57:47.102451Z",
@@ -137309,7 +137350,7 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-14T00:57:47.141820Z",
-      "outcome": null,
+      "outcome": "Fewer than two parseable timestamps now reports no duration; measure version bumped; guard test pins the resumed-file shape",
       "runtime_baseline": {
         "api_duration_ms": 2080022,
         "cache_creation_input_tokens": 510747,
@@ -137338,15 +137379,15 @@
       },
       "runtime_latest": {
         "api_duration_ms": 2080022,
-        "cache_creation_input_tokens": 510747,
-        "cache_read_input_tokens": 117573220,
-        "captured_at": "2026-07-14T01:48:50.284154Z",
-        "cost_usd": 70.19784,
+        "cache_creation_input_tokens": 531009,
+        "cache_read_input_tokens": 125090186,
+        "captured_at": "2026-07-14T02:13:41.632394Z",
+        "cost_usd": 74.571978,
         "harness": "claude-code",
-        "input_tokens": 762,
+        "input_tokens": 794,
         "measure_version": 7,
         "model": "claude-opus-4-8",
-        "output_tokens": 251998,
+        "output_tokens": 268513,
         "session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
         "shared_wave_count": 3,
         "total_duration_ms": 2080022
@@ -137355,13 +137396,13 @@
       "sessions": {
         "1": {
           "attempt": 1,
-          "cache_creation_input_tokens": 0,
-          "cache_read_input_tokens": 0,
-          "cost_usd": 0.0,
-          "ended_at": "2026-07-14T01:48:50.284154Z",
+          "cache_creation_input_tokens": 6754,
+          "cache_read_input_tokens": 2505655,
+          "cost_usd": 1.4580460000000006,
+          "ended_at": "2026-07-14T02:13:41.632394Z",
           "exit_status": 0,
-          "input_tokens": 0,
-          "output_tokens": 0,
+          "input_tokens": 10,
+          "output_tokens": 5505,
           "runtime": "claude-code",
           "session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
           "session_log_handle": "urn:eawf:v1:session-log:claude-code:d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
@@ -137369,7 +137410,7 @@
           "subprocess_pid": null
         }
       },
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -137446,7 +137487,7 @@
       ],
       "title": "Close the clamp's own escape hatch",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 12269,
       "worktree_id": null
     },
     "P30-I25-W51": {
@@ -137454,8 +137495,8 @@
       "blocks": [],
       "claim_session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
       "claimed_at": "2026-07-14T01:20:57.366432Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-14T10:15:56.164300Z",
+      "commit": "5221f192646f195226fbd94b9da50bceb1bba1b1",
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the fifth audit proved the clamp inert on the common case with evidence from this repo's own transcripts",
         "waived_at": "2026-07-14T01:20:56.122000Z",
@@ -137558,7 +137599,7 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-14T01:20:56.164823Z",
-      "outcome": null,
+      "outcome": "Interrupted-turn rows excluded from runtime; span substitution removed; measure version bumped; guard drives the real closeout shape",
       "runtime_baseline": {
         "api_duration_ms": 2080022,
         "cache_creation_input_tokens": 510747,
@@ -137587,15 +137628,15 @@
       },
       "runtime_latest": {
         "api_duration_ms": 2080022,
-        "cache_creation_input_tokens": 510747,
-        "cache_read_input_tokens": 117573220,
-        "captured_at": "2026-07-14T01:48:50.284154Z",
-        "cost_usd": 70.19784,
+        "cache_creation_input_tokens": 531009,
+        "cache_read_input_tokens": 125090186,
+        "captured_at": "2026-07-14T02:13:41.632394Z",
+        "cost_usd": 74.571978,
         "harness": "claude-code",
-        "input_tokens": 762,
+        "input_tokens": 794,
         "measure_version": 7,
         "model": "claude-opus-4-8",
-        "output_tokens": 251998,
+        "output_tokens": 268513,
         "session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
         "shared_wave_count": 3,
         "total_duration_ms": 2080022
@@ -137604,13 +137645,13 @@
       "sessions": {
         "1": {
           "attempt": 1,
-          "cache_creation_input_tokens": 0,
-          "cache_read_input_tokens": 0,
-          "cost_usd": 0.0,
-          "ended_at": "2026-07-14T01:48:50.284154Z",
+          "cache_creation_input_tokens": 6754,
+          "cache_read_input_tokens": 2505655,
+          "cost_usd": 1.4580460000000006,
+          "ended_at": "2026-07-14T02:13:41.632394Z",
           "exit_status": 0,
-          "input_tokens": 0,
-          "output_tokens": 0,
+          "input_tokens": 10,
+          "output_tokens": 5505,
           "runtime": "claude-code",
           "session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
           "session_log_handle": "urn:eawf:v1:session-log:claude-code:d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
@@ -137618,7 +137659,7 @@
           "subprocess_pid": null
         }
       },
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -137719,7 +137760,7 @@
       ],
       "title": "Exclude the interrupted turn instead of clamping it",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 12269,
       "worktree_id": null
     },
     "P30-I25-W52": {
@@ -137727,8 +137768,8 @@
       "blocks": [],
       "claim_session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
       "claimed_at": "2026-07-14T01:33:45.158807Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-14T10:15:57.237903Z",
+      "commit": "8363ba3f2d6db675b999f65dae99913290853f97",
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the fifth audit found the zero-runtime gate advisory for every wave in the iter",
         "waived_at": "2026-07-14T01:33:43.979713Z",
@@ -137813,7 +137854,7 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-14T01:33:44.013924Z",
-      "outcome": null,
+      "outcome": "Zero-runtime gate resolves enforcement from the fleet verify block; reset pardon made strict per D-RESET-PARDON-STRICT with B111 filed",
       "runtime_baseline": {
         "api_duration_ms": 2080022,
         "cache_creation_input_tokens": 510747,
@@ -137842,15 +137883,15 @@
       },
       "runtime_latest": {
         "api_duration_ms": 2080022,
-        "cache_creation_input_tokens": 510747,
-        "cache_read_input_tokens": 117573220,
-        "captured_at": "2026-07-14T01:48:50.284154Z",
-        "cost_usd": 70.19784,
+        "cache_creation_input_tokens": 531009,
+        "cache_read_input_tokens": 125090186,
+        "captured_at": "2026-07-14T02:13:41.632394Z",
+        "cost_usd": 74.571978,
         "harness": "claude-code",
-        "input_tokens": 762,
+        "input_tokens": 794,
         "measure_version": 7,
         "model": "claude-opus-4-8",
-        "output_tokens": 251998,
+        "output_tokens": 268513,
         "session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
         "shared_wave_count": 3,
         "total_duration_ms": 2080022
@@ -137859,13 +137900,13 @@
       "sessions": {
         "1": {
           "attempt": 1,
-          "cache_creation_input_tokens": 0,
-          "cache_read_input_tokens": 0,
-          "cost_usd": 0.0,
-          "ended_at": "2026-07-14T01:48:50.284154Z",
+          "cache_creation_input_tokens": 6754,
+          "cache_read_input_tokens": 2505655,
+          "cost_usd": 1.4580460000000006,
+          "ended_at": "2026-07-14T02:13:41.632394Z",
           "exit_status": 0,
-          "input_tokens": 0,
-          "output_tokens": 0,
+          "input_tokens": 10,
+          "output_tokens": 5505,
           "runtime": "claude-code",
           "session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
           "session_log_handle": "urn:eawf:v1:session-log:claude-code:d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
@@ -137873,7 +137914,7 @@
           "subprocess_pid": null
         }
       },
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -137950,7 +137991,7 @@
       ],
       "title": "Give the zero-runtime gate teeth it can actually bite with",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 12269,
       "worktree_id": null
     }
   },
