@@ -25,17 +25,20 @@ Two transcript quirks the aggregator must handle:
   ``type: "system"`` / ``subtype: "turn_duration"`` rows as a top-level
   ``durationMs``, not inside the assistant message -- and that row is written
   *after* the Stop hook has already run, so a hook-time read of a live session
-  sees no duration for the turn in flight. The row timestamps carry the rest, but
-  the first-to-last SPAN over them is the operator's wall clock, not the agent's
-  work: it counts every minute spent reading, and a wave left claimed overnight
-  would bank tens of EU for nothing. So the aggregator sums each TURN's span
-  instead (:func:`_turn_spans_ms`) -- a turn runs from an operator prompt to the
-  row before the next one -- and counts nothing between turns. Everything inside
-  a turn is agent runtime, including the minutes it sits blocked on a tool it
-  called; nothing outside one is. Both measures grow monotonically with the
-  transcript, so their maximum is monotonic too and a later capture never reports
-  a smaller duration than an earlier one -- which keeps the close-time delta
-  against the claim-time baseline non-negative without a re-origin.
+  sees no duration for the turn in flight. The aggregator sums those rows and
+  reports zero for the turn still running, rather than deriving a span of its own:
+  every derived measure tried here turned out to be the operator's wall clock in
+  disguise (see :data:`MEASURE_VERSION`, which documents all five), because a turn
+  CONTAINS the stall at a tool-permission prompt -- 12.9 hours of it, once -- and
+  nothing in the transcript distinguishes that stall from a long-running tool.
+  Claude measures its own turn and excludes the wait.
+- **Claude's figure still needs a ceiling.** It is not always a measure of work: a
+  resumed session's interrupted turn is closed out with its full wall clock, so a
+  transcript spanning six SECONDS can carry a ``turn_duration`` of 101.75 hours
+  (203.5 EU on one wave, and downstream nothing catches an inflation -- the close
+  path re-origins only on a declared measure change or a decrease). Whatever the
+  agent did, it did inside the transcript's own lifetime, so the sum is clamped to
+  that span (:func:`_transcript_span_ms`).
 
 Every read fails open: a missing, unreadable, or usage-free transcript yields
 ``None`` so the Stop hook stays non-blocking.
@@ -71,7 +74,11 @@ _HARNESS_ID = "claude-code"
 #:     (Still the wall clock: a turn contains the stall at a tool-permission
 #:     prompt, where the agent waits on a human -- 12.9 hours of it, once.)
 #: 4 = Claude's own `turn_duration` per completed turn, which excludes that stall.
-MEASURE_VERSION: int = 4
+#: 5 = the same sum, CLAMPED to the transcript's own wall-clock span. Claude's
+#:     figure is not always a measure of work: a resumed session's interrupted
+#:     turn is closed out with its entire wall clock, and one real transcript
+#:     spanning 6 seconds carries a turn_duration of 101.75 hours.
+MEASURE_VERSION: int = 5
 
 #: Optional override for the Claude projects root, used by tests to redirect
 #: transcript lookups away from the real ``~/.claude/`` tree.
@@ -215,21 +222,32 @@ def _row_timestamp(row: dict[str, Any]) -> datetime | None:
         return None
 
 
-def _is_operator_prompt(row: dict[str, Any]) -> bool:
-    """Return whether *row* is a fresh operator prompt -- the start of a turn.
+def _is_turn_duration_row(row: dict[str, Any]) -> bool:
+    """Return whether *row* is the ``turn_duration`` row Claude writes per turn.
 
-    Claude Code writes ``type: "user"`` rows for two different things: the
-    operator typing (text content), and a tool handing its result back mid-turn
-    (``tool_result`` content). Only the former starts a turn.
+    The sum reads ``durationMs`` ONLY off these rows. Adding it from any row that
+    happens to carry the field is correct today by luck of the schema -- no other
+    row type has one -- and silently inflates the measure the day a Claude Code
+    release puts a ``durationMs`` on some other row. Nothing downstream would
+    catch that: an inflated duration is an INCREASE, and the close path's
+    incomparability check only re-origins on a declared measure change or a
+    decrease.
     """
-    if row.get("type") != "user":
-        return False
-    content = (row.get("message") or {}).get("content")
-    if isinstance(content, str):
-        return bool(content)
-    if isinstance(content, list):
-        return any(isinstance(block, dict) and block.get("type") == "text" for block in content)
-    return False
+    return row.get("type") == "system" and row.get("subtype") == "turn_duration"
+
+
+def _transcript_span_ms(rows: list[dict[str, Any]]) -> int | None:
+    """Return the wall-clock span of *rows*, first timestamp to last, in ms.
+
+    This is the ceiling on agent runtime, not a measure of it: whatever the agent
+    did, it did inside the transcript's own lifetime. ``None`` when fewer than two
+    rows carry a parseable timestamp, in which case there is no span to clamp to.
+    """
+    stamps = [ts for ts in (_row_timestamp(row) for row in rows) if ts is not None]
+    if len(stamps) < 2:
+        return None
+    span = max(stamps) - min(stamps)
+    return max(0, int(span.total_seconds() * 1000))
 
 
 def _price(model: str | None, tally: _TokenTally) -> Decimal | None:
@@ -264,11 +282,12 @@ class _TranscriptScan:
 
     Attributes:
         tally: Per-class token totals, deduplicated by billed message.
-        duration_ms: Agent working time so far -- the larger of the turn-duration
-            sum and the idle-filtered row-gap sum (both monotonic, see the module
-            docstring).
-        turn_duration_ms: The turn-duration sum alone, kept for the debug log so
-            a zero (the Stop-hook race) is visible.
+        duration_ms: Agent working time so far -- the summed ``turn_duration``
+            rows, clamped to the transcript's own wall-clock span. This is the
+            measure; the two fields below exist so a clamp is visible rather than
+            silent.
+        turn_duration_ms: The unclamped turn-duration sum, kept for the debug log
+            so a zero (the Stop-hook race) and a clamp are both legible.
         model: The last billed model id seen, or ``None``.
         messages: How many distinct billed messages the tally covers.
     """
@@ -287,7 +306,8 @@ def _scan_rows(rows: list[dict[str, Any]]) -> _TranscriptScan:
     turn_duration_ms = 0
     model: str | None = None
     for row in rows:
-        turn_duration_ms += _non_negative_int(row.get("durationMs"))
+        if _is_turn_duration_row(row):
+            turn_duration_ms += _non_negative_int(row.get("durationMs"))
         message = row.get("message")
         if not isinstance(message, dict):
             continue
@@ -319,9 +339,30 @@ def _scan_rows(rows: list[dict[str, Any]]) -> _TranscriptScan:
     # figure lands, which reads as a counter reset and re-origins the wave. Nothing
     # is lost by waiting: the row arrives before the next capture, so the turn is
     # counted then. An unmeasured turn reports zero rather than a guess.
+    #
+    # Claude's own figure still needs a CEILING, because it is not always a measure
+    # of work. A resumed session's interrupted turn is closed out with its entire
+    # wall clock: one real transcript here spans 6.083 SECONDS and carries a single
+    # turn_duration row of 366,298,957 ms -- 101.75 hours, 203.5 EU on one wave.
+    # Whatever the agent did, it did inside the transcript's own lifetime, so the
+    # span is the bound. Clamping under-reports a turn that genuinely began in an
+    # earlier file; that error is bounded by the span and recoverable, where a
+    # fabricated hundred-hour delta is neither -- and nothing downstream catches
+    # it, since an inflation is an INCREASE and the close path only re-origins on a
+    # declared measure change or a decrease.
+    span_ms = _transcript_span_ms(rows)
+    duration_ms = turn_duration_ms if span_ms is None else min(turn_duration_ms, span_ms)
+    if span_ms is not None and turn_duration_ms > span_ms:
+        logger.warning(
+            f"_scan_rows turn_duration_ms={turn_duration_ms} span_ms={span_ms} "
+            f"duration_ms={duration_ms} status='clamped'; "
+            "the summed turn durations exceed the transcript's own lifetime -- "
+            "reporting the span (a resumed session closes its interrupted turn "
+            "with the full wall clock)"
+        )
     return _TranscriptScan(
         tally=tally,
-        duration_ms=turn_duration_ms,
+        duration_ms=duration_ms,
         turn_duration_ms=turn_duration_ms,
         model=model,
         messages=len(seen),
@@ -337,10 +378,10 @@ def aggregate_transcript_counters(transcript_path: Path | str | None) -> Runtime
 
     Returns:
         :class:`RuntimeCounters` stamped ``harness="claude-code"`` carrying the
-        session's cumulative agent working time (see :func:`_turn_spans_ms` --
-        the summed spans of its turns, NOT the session's wall-clock span),
-        per-class token tallies, billed model id, and the token-derived
-        ``cost_usd``. The transcript splits no
+        session's cumulative agent working time (Claude's own ``turn_duration``
+        per completed turn, clamped to the transcript's own wall-clock span -- see
+        :data:`MEASURE_VERSION`), per-class token tallies, billed model id, and the
+        token-derived ``cost_usd``. The transcript splits no
         model-API duration out of the total, so both ``api_duration_ms`` and
         ``total_duration_ms`` carry that one duration -- the same convention the
         headless spawn snapshot uses, which keeps the default API-duration EU

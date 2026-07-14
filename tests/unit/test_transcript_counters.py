@@ -361,7 +361,52 @@ def test_a_twelve_hour_wait_for_tool_approval_is_not_agent_runtime(tmp_path: Pat
 
 
 def test_duration_never_exceeds_the_session_wall_clock(tmp_path: Path) -> None:
-    """A measure that outruns the clock is measuring something that did not happen."""
+    """A measure that outruns the clock is measuring something that did not happen.
+
+    The shape here is REAL, not invented: a transcript on the machine that produced
+    this iter spans 6.083 seconds and carries a single ``turn_duration`` row of
+    366,298,957 ms -- 101.75 hours. Claude Code closes out the interrupted turn of a
+    resumed session with its entire wall clock, and the row lands in the new file
+    next to an ``agents_killed`` row. Through the close arithmetic that is 203.5 EU
+    on one wave, and nothing downstream catches it: an inflation is an INCREASE, and
+    the close path re-origins only on a declared measure change or a decrease.
+
+    The previous version of this test asserted ``<=`` over a fixture that already
+    satisfied the ceiling, against production code implementing no clamp at all --
+    it passed against an aggregator that DOUBLED every duration. This one fails the
+    moment the clamp is deleted.
+    """
+    rows = [
+        _prompt_row(at="2026-07-12T23:52:16.125Z"),
+        _assistant_row("msg_0001", at="2026-07-12T23:52:19.000Z"),
+        {
+            "type": "system",
+            "subtype": "agents_killed",
+            "timestamp": "2026-07-12T23:52:21.000Z",
+        },
+        _turn_duration_row(at="2026-07-12T23:52:21.810Z", ms=366_298_957),
+        _tool_result_row(at="2026-07-12T23:52:22.026Z"),
+    ]
+    path = tmp_path / "t.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    counters = aggregate_transcript_counters(path)
+    wall_clock_ms = 5_901  # 23:52:16.125 -> 23:52:22.026
+
+    assert counters is not None
+    # The claimed 101.75 hours is 60,000x the life of the transcript that reported
+    # it. Whatever the agent did, it did inside that lifetime.
+    assert counters.api_duration_ms == wall_clock_ms
+    assert counters.api_duration_ms <= wall_clock_ms
+
+
+def test_an_ordinary_session_is_not_clamped(tmp_path: Path) -> None:
+    """Boundary: the ceiling must not shave a session that is behaving.
+
+    Turns sum to 20 minutes inside a 40.5-minute transcript, so the clamp is
+    inactive and the measure passes through unchanged. A ceiling that quietly
+    rewrote honest data would be its own defect.
+    """
     rows = [
         _prompt_row(at="2026-07-13T09:00:00.000Z"),
         _assistant_row("msg_0001", at="2026-07-13T09:10:00.000Z"),
@@ -374,10 +419,39 @@ def test_duration_never_exceeds_the_session_wall_clock(tmp_path: Path) -> None:
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
     counters = aggregate_transcript_counters(path)
-    wall_clock_ms = 40 * 60_000 + 30_000
 
     assert counters is not None
-    assert counters.api_duration_ms <= wall_clock_ms
+    assert counters.api_duration_ms == 1_200_000  # both turns, in full
+
+
+def test_duration_is_read_only_off_the_turn_duration_rows(tmp_path: Path) -> None:
+    """A ``durationMs`` on any other row type is not the measure.
+
+    The sum used to add ``durationMs`` from EVERY row, which is correct today only
+    by luck of the schema -- no other row carries one. The day a Claude Code release
+    puts a duration on some other row (a ``stop_hook_summary`` row already exists),
+    the measure inflates, and per the ceiling test above nothing downstream catches
+    an inflation.
+    """
+    rows = [
+        _prompt_row(at="2026-07-13T09:00:00.000Z"),
+        _assistant_row("msg_0001", at="2026-07-13T09:10:00.000Z"),
+        _turn_duration_row(at="2026-07-13T09:10:30.000Z", ms=600_000),
+        # A future row type that happens to carry the field. It is not a turn.
+        {
+            "type": "system",
+            "subtype": "stop_hook_summary",
+            "timestamp": "2026-07-13T09:10:40.000Z",
+            "durationMs": 300_000,
+        },
+    ]
+    path = tmp_path / "t.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    counters = aggregate_transcript_counters(path)
+
+    assert counters is not None
+    assert counters.api_duration_ms == 600_000  # the turn only, not the hook row
 
 
 def test_summed_turn_durations_are_the_measure(tmp_path: Path) -> None:
