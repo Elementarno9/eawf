@@ -267,16 +267,21 @@ class RepoZoomMixin(_Base):
             ),
             id="zoom-quadrant",
         )
-        mount.mount(quadrant)
+        # AWAITED: the deferred passes below query for widgets inside the
+        # quadrant, so the mount must have completed before they run. An
+        # un-awaited mount races them, and on a slow host the focus pass wins,
+        # finds no tree, and no-ops -- leaving focus unset and the zoomed view
+        # dead to Enter and the arrow keys.
+        await mount.mount(quadrant)
         self.query_one(self.ZOOM_BROWSE_PANE, Vertical).display = False
         self._zoomed_code = repo_code
-        # Feed the focused repo's own state into the quadrant widgets after
-        # they mount: their seed-on-mount reads the app's workspace state,
-        # not the focused repo's, so override it once the widgets exist.
-        # Hiding the browse table above blurs the WorkspaceTable that had
-        # focus, leaving focus unset; the same deferred pass moves focus onto
-        # the quadrant's roadmap tree (its primary drill target) so Enter and
-        # the arrow keys land in the zoomed view instead of nowhere.
+        # Feed the focused repo's own state into the quadrant widgets: their
+        # seed-on-mount reads the app's workspace state, not the focused
+        # repo's, so override it now that the widgets exist. Hiding the browse
+        # table above blurs the WorkspaceTable that had focus, leaving focus
+        # unset; the same deferred pass moves focus onto the quadrant's roadmap
+        # tree (its primary drill target) so Enter and the arrow keys land in
+        # the zoomed view instead of nowhere.
         self.call_after_refresh(self._seed_quadrant, repo_state)
         self.call_after_refresh(self._focus_zoom_quadrant)
         # Paint the shared accent-dim focus tint once the panes mount, so the
@@ -400,8 +405,11 @@ class RepoZoomMixin(_Base):
         Run after the quadrant mounts (the browse table that held focus is
         hidden on zoom, blurring it). The roadmap tree is the top-left drill
         target, mirroring the repo scope's natural Enter target, so the
-        operator can navigate + drill the zoomed view immediately. A no-op
-        when the tree is not (yet) mounted.
+        operator can navigate + drill the zoomed view immediately.
+
+        The caller awaits the mount, so the tree exists by the time this runs;
+        the empty case is the crash-isolated pane boundary having rendered a
+        placeholder instead of a tree, not a mount that has not landed yet.
         """
         trees = list(self.query("#zoom-roadmap"))
         if trees:
