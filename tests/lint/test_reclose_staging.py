@@ -65,22 +65,31 @@ def test_runbook_drafts_the_exact_subject_and_descope() -> None:
 
 
 def test_repo_census_has_no_stray_pending_waves() -> None:
-    """CR-02: the re-close wave stays PENDING; no stray PENDING wave outside the repair iter.
+    """CR-02: the re-close wave carries the phase close; no stray PENDING wave.
 
-    The strict pre-I25 form asserted P30-I21-W22 was the *only* PENDING wave --
-    the "staged to ship" precondition. The v0.6.0 live smoke reopened the ship
-    path with the P30-I25 headless-lifecycle repair iter, so its still-open
-    waves are legitimately PENDING too. The invariant that still guards the ship
-    gate: no PENDING wave is *stray* (outside the re-close wave and the ACTIVE
-    iter), and the re-close wave is still on record to carry the phase close.
-    When I25 closes its waves leave the PENDING set and only P30-I21-W22 remains
-    -- the original strict census re-emerges without any edit here.
+    P30-I21-W22 is the re-close vehicle: it waits while the phase is ACTIVE and
+    closes in the same commit that closes the phase. Asserting it is PENDING
+    outright would redden the moment that commit lands -- and that commit is the
+    PR head CI runs against -- so the invariant is tied to the phase's status
+    instead. While P30 is ACTIVE the wave is still on record to carry the close
+    (PENDING, or CLAIMED in the close-commit window); once the phase is no longer
+    ACTIVE the wave must have actually closed, which catches a phase closed out
+    from under its own re-close vehicle.
+
+    The second half is unchanged: no PENDING wave is *stray* -- that is, outside
+    the re-close wave and the ACTIVE iter.
     """
     state = _state()
     active_iter = state["current"].get("iter_id")
     waves = state["waves"]
+    reclose_status = waves["P30-I21-W22"]["status"]
+    if state["phases"]["P30"]["status"] == "active":
+        assert reclose_status in {"pending", "claimed"}, (
+            "the re-close wave must still be on record to carry the phase close"
+        )
+    else:
+        assert reclose_status == "closed", "the phase closed without closing its re-close wave"
     pending = [wave_id for wave_id, wave in waves.items() if wave.get("status") == "pending"]
-    assert "P30-I21-W22" in pending, "the re-close wave must stay PENDING until the phase close"
     stray = [
         wave_id
         for wave_id in pending
@@ -90,12 +99,28 @@ def test_repo_census_has_no_stray_pending_waves() -> None:
 
 
 def test_changelog_carries_the_release_section() -> None:
-    """W22 G-02: the 0.6.0 heading, a bullet, and both migration notes."""
+    """W22 G-02 + W36: the 0.6.0 heading, a bullet, and a note per schema edge.
+
+    The release pre-flight requires a migration note for every ``schema_version``
+    edge the release ships. The edge list is DERIVED from the persisted schema
+    version rather than hardcoded, so the next bump that lands without a note
+    reddens here instead of surfacing to an upgrading repo -- which is exactly
+    how five edges (1.15 through 1.19) reached the ship gate undocumented.
+    """
     changelog = (_REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     assert re.search(r"^## \[0\.6\.0\]", changelog, re.M)
     section = changelog.split("## [0.6.0]", 1)[1].split("\n## [", 1)[0]
     assert re.search(r"^- ", section, re.M), "0.6.0 section has no bullets"
-    assert "1.13" in section and "1.14" in section, "missing schema migration notes"
+    # 1.8 is the schema v0.5.x shipped on; every edge from there to the
+    # persisted version is part of this release.
+    major, minor = (int(part) for part in _state()["schema_version"].split("."))
+    for target in range(9, minor + 1):
+        edge = f"{major}.{target - 1} -> {major}.{target}"
+        assert edge in section, f"0.6.0 ships schema edge {edge} with no migration note"
+    # The I25 entry described four lifecycle bugs long after the iter grew into
+    # the runtime-measurement repair; pin the two strands it actually shipped.
+    assert "calibration_excluded" in section, "the 0.6.0 notes omit the calibration exclusion"
+    assert "measure_version" in section, "the 0.6.0 notes omit the measure versioning"
 
 
 def test_fresh_deterministic_evidence_precondition() -> None:
