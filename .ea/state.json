@@ -31664,7 +31664,8 @@
         "P30-I21-W32",
         "P30-I21-W33",
         "P30-I21-W34",
-        "P30-I21-W35"
+        "P30-I21-W35",
+        "P30-I21-W36"
       ]
     },
     "P30-I22": {
@@ -33003,7 +33004,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T10:36:12.017852Z",
+  "updated_at": "2026-07-14T10:38:02.785912Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -115222,6 +115223,126 @@
         }
       ],
       "title": "Give scope-wide research questions their own topic-tree section",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W36": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Ship-prep documentation wave appended at the release gate; criteria are prose over a rendered artifact and gated by the existing reclose staging suite",
+        "waived_at": "2026-07-14T10:38:02.739434Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The release pre-flight requires a migration note for every schema_version edge since the last release. state.json is at 1.19 and CHANGELOG 0.6.0 documents only through 1.14, so five edges (the runtime-capture chain) ship undocumented. The I25 Fixed bullet is also stale: it describes four live-only bugs, but the iter closed 53 waves including the whole runtime-measurement repair.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "CHANGELOG.md"
+      ],
+      "gates": [],
+      "id": "P30-I21-W36",
+      "intent": {
+        "desired_outcome": "The 0.6.0 section documents every schema edge shipped since v0.5.4 and its Fixed entry describes what P30-I25 actually delivered.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add a migration note for each edge from 1.14 to 1.19 sourced from the migration step docstrings",
+          "Rewrite the I25 Fixed bullet to cover the runtime-measurement chain and the W53 calibration-exclusion repair",
+          "Re-run the reclose staging suite so the structural CHANGELOG gate still passes"
+        ],
+        "priority_rationale": "A release that bumps the persisted schema five times without a migration note leaves an upgrading repo no instruction; the phase-close gate reads the file, not the intent.",
+        "problem": "CHANGELOG 0.6.0 documents schema edges through 1.14 while state.json is at 1.19, so five edges ship with no migration note. The I25 release note is also stale at four bugs.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-14T10:38:02.785733Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "CHANGELOG 0.6.0 carries a migration note for every schema_version edge between the last release and 1.19 so an upgrading repo can see what each bump did and that eawf migrate advances it",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "CHANGELOG 0.6.0 carries a migration note for every schema_version edge between the last release and 1.19 so an upgrading repo can see what each bump did and that eawf migrate advances it",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "The I25 entry under Fixed describes the runtime-measurement chain and the calibration-exclusion repair rather than only the four original lifecycle bugs",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The I25 entry under Fixed describes the runtime-measurement chain and the calibration-exclusion repair rather than only the four original lifecycle bugs",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "The reclose staging suite still passes because the 0.6.0 heading",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The reclose staging suite still passes because the 0.6.0 heading",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "grandfathered legacy criterion",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "its bullets",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-05",
+          "kind": "legacy",
+          "measurable_signal": "and the 1.13 and 1.14 notes remain intact",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "and the 1.13 and 1.14 notes remain intact",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Complete the 0.6.0 release notes before the re-close",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
