@@ -16311,7 +16311,7 @@
   "current": {
     "active_session_ids": [],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P30-I26",
     "phase_id": "P30",
     "project_code": "EAWF",
     "track_id": null
@@ -32468,7 +32468,7 @@
       "intent": null,
       "opened_at": "2026-07-14T22:50:49.335464Z",
       "phase_id": "P30",
-      "status": "planned",
+      "status": "active",
       "title": "Release-integrity repair and v0.6.0 ship",
       "trigger": "none",
       "wave_ids": [
@@ -33656,7 +33656,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T23:03:48.201928Z",
+  "updated_at": "2026-07-14T23:04:10.464998Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
