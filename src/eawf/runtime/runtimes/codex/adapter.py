@@ -40,7 +40,6 @@ from eawf.runtime.runtimes.adapter import (
     ErrorClass,
     RuntimeAdapter,
     RuntimeSpawnError,
-    SessionResumeFailedError,
     SpawnResult,
 )
 from eawf.runtime.runtimes.cache_control import inject_cache_control
@@ -1065,22 +1064,19 @@ class CodexAdapter:
         session_id: str,
         prompt: str,
     ) -> SessionAttempt:
-        """Resume the session via ``codex exec resume <session-id>``.
+        """Session resume is not implemented; the daemon must not call this.
+
+        The ``session_resume`` capability is ``unsupported`` for codex
+        (see ``capabilities.yaml``): no real ``codex exec resume`` spawn
+        exists yet. Resume is deferred to P31. The signature keeps
+        ``SessionAttempt`` so callers still type-check against the
+        :class:`RuntimeAdapter` protocol.
 
         Raises:
-            SessionResumeFailedError: ``session_id`` is empty or otherwise
-                fails the daemon-side resume probe.
+            NotImplementedError: always — session resume is unimplemented.
         """
 
-        if not session_id:
-            raise SessionResumeFailedError(f"empty session id: {session_id!r}")
-        return SessionAttempt(
-            attempt=1,
-            runtime=self.id,
-            session_id=session_id,
-            session_log_handle=self.session_log_handle(session_id),
-            started_at=datetime.now(UTC),
-        )
+        raise NotImplementedError("codex session resume is not implemented")
 
     def session_log_handle(self, session_id: str) -> str:
         """Daemon-internal opaque handle for the session log.

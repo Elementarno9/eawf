@@ -77,15 +77,15 @@ capabilities:
   session_resume:
     description: >-
       Runtime supports session resume — re-attach to a prior session
-      handle and continue the turn history. Backs V8 hybrid session
-      reuse (C07a §5.4 + §5.8). OpenCode v0.3 marks this ``unsupported``
-      — the runtime ships ``--continue``/``--session``/``--fork``
-      surfaces but the eawf adapter holds the gate at ``False`` until
-      the documented session-log path catalog lands; the matrix
-      flips to ``supported`` in v0.4.
-    claude-code: supported    # claude --continue <session-id>
-    codex: supported          # codex resume <id> / codex exec resume <id>
-    opencode: unsupported     # adapter gates at False until v0.4
+      handle and continue the turn history. No runtime adapter
+      implements a real resume spawn today: ``continue_session`` raises
+      ``NotImplementedError`` (claude-code + codex) or
+      ``SessionResumeFailedError`` (opencode), and the daemon rejects
+      ``session_policy="continue"`` outright. All three cells are
+      ``unsupported`` until the resume spawn lands (deferred to P31).
+    claude-code: unsupported  # continue_session raises NotImplementedError
+    codex: unsupported        # continue_session raises NotImplementedError
+    opencode: unsupported     # continue_session raises SessionResumeFailedError
 
   cache_control:
     description: >-

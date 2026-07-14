@@ -4,10 +4,10 @@
 # operator answers (project_code, project_title) to produce
 # ``.ea/config.yaml``.
 #
-# Per C08 D10: reverse-engineering profile inherits research's evidence-
-# driven character; dispatch.session_policy_default = ``continue`` so the
-# decompilation context (working hypotheses about symbol meanings,
-# datatypes, control-flow shape) survives across wave dispatches.
+# dispatch.session_policy_default is ``fresh``: session resume
+# (``continue`` / ``hybrid``) is not implemented by any runtime adapter
+# yet, so every wave dispatch starts from a clean session. Real resume
+# is deferred to P31.
 #
 # Note: the ``re`` profile body is a name-only stub today (src/eawf/
 # profiles/data/re.yaml); operator may extend by writing
@@ -18,7 +18,7 @@ profiles:
 runtime:
   preference: [claude, codex]
 dispatch:
-  session_policy_default: continue
+  session_policy_default: fresh
 planning:
   approval: ask
   max_parallel_waves: 1

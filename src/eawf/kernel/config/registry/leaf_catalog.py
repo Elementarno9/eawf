@@ -427,9 +427,12 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         key="dispatch.session_policy_default",
         domain="dispatch",
         type="literal",
-        default="hybrid",
+        default="fresh",
         writable_layers=_WRITABLE_GWR,
-        choices=("fresh", "continue", "hybrid"),
+        # ``continue`` / ``hybrid`` require session resume, which no
+        # runtime adapter implements yet (deferred to P31); only
+        # ``fresh`` runs today, so the choice set is narrowed to it.
+        choices=("fresh",),
     ),
     LeafKey(
         key="dispatch.session_handle_ttl_seconds",

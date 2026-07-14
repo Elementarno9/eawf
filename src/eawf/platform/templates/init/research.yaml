@@ -3,17 +3,17 @@
 # Consumed by ``eawf init --template research``. Merged with operator
 # answers (project_code, project_title) to produce ``.ea/config.yaml``.
 #
-# Per C08 D10: research profile defaults dispatch.session_policy_default
-# to ``continue`` — research skills preserve session context across
-# attempts so the evidence chain (hypotheses + audits + decisions) stays
-# coherent within one investigative arc.
+# dispatch.session_policy_default is ``fresh``: session resume
+# (``continue`` / ``hybrid``) is not implemented by any runtime adapter
+# yet, so every wave dispatch starts from a clean session. Real resume
+# is deferred to P31.
 schema_version: "1.0"
 profiles:
   enabled: [core, research]
 runtime:
   preference: [claude, codex]
 dispatch:
-  session_policy_default: continue
+  session_policy_default: fresh
 planning:
   approval: ask
   max_parallel_waves: 2

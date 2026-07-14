@@ -233,9 +233,14 @@ def test_runtime_supports_maps_supported_and_partial_to_true() -> None:
     assert {"supported", "partial"} == SUPPORTED_CELLS
 
 
-def test_runtime_supports_claude_session_resume() -> None:
-    """Claude declares ``supported`` for session_resume."""
-    assert runtime_supports("claude-code", "session_resume") is True
+def test_runtime_supports_claude_and_codex_session_resume_are_false() -> None:
+    """claude-code + codex declare ``unsupported`` for session_resume.
+
+    No runtime adapter implements a real resume spawn (``continue_session``
+    raises ``NotImplementedError``); resume is deferred to P31.
+    """
+    assert runtime_supports("claude-code", "session_resume") is False
+    assert runtime_supports("codex", "session_resume") is False
 
 
 def test_runtime_supports_opencode_session_resume_is_false() -> None:
@@ -319,14 +324,15 @@ def test_detect_drift_missing_when_runtime_not_installed() -> None:
 
 
 def test_detect_drift_ok_when_evidence_present() -> None:
-    """OK row when probe flags match the ``supported`` declaration."""
-    # ``--continue`` + ``--allowedTools`` + ``--output-format`` cover the three
-    # capabilities with probe rules; the remaining rows have no probe rule and
-    # default to OK against the declared cell.
+    """OK row when probe flags match the declared cell for every capability."""
+    # ``--allowedTools`` + ``--output-format`` cover tool_use + streaming (both
+    # declared ``supported``). session_resume is declared ``unsupported``, so the
+    # absence of a ``--continue`` flag is expected and stays OK (not DRIFT); the
+    # remaining rows have no probe rule and default to OK against the declared cell.
     probe = _probe(
         "claude-code",
         installed=True,
-        flags=("--continue", "--allowedTools", "--output-format"),
+        flags=("--allowedTools", "--output-format"),
     )
     rows = detect_drift("claude-code", probe)
     assert {row.status for row in rows} <= {"OK"}
@@ -338,9 +344,10 @@ def test_detect_drift_flags_drift_on_missing_evidence() -> None:
     rows = detect_drift("claude-code", probe)
     drift_rows = [r for r in rows if r.status == "DRIFT"]
     drift_caps = {r.capability for r in drift_rows}
-    # session_resume + tool_use + streaming all have probe rules; none of the
-    # observed flags satisfy any rule.
-    assert drift_caps == {"session_resume", "tool_use", "streaming"}
+    # tool_use + streaming are declared ``supported`` and have probe rules; none
+    # of the observed flags satisfy either rule, so both drift. session_resume is
+    # declared ``unsupported`` — no evidence is expected, so it stays OK.
+    assert drift_caps == {"tool_use", "streaming"}
 
 
 def test_detect_drift_flags_drift_on_unexpected_evidence() -> None:

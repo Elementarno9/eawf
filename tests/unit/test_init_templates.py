@@ -71,10 +71,10 @@ def test_init_template_loads_and_validates(template_name: str) -> None:
     assert payload["profiles"]["enabled"], f"{template_name}: profiles.enabled must be non-empty"
 
 
-def test_research_template_dispatch_session_policy_is_continue() -> None:
-    """C08 D10: research → continue (evidence-driven session reuse)."""
+def test_research_template_dispatch_session_policy_is_fresh() -> None:
+    """research → fresh: session resume is unimplemented (deferred to P31)."""
     payload = load_init_template("research")
-    assert payload["dispatch"]["session_policy_default"] == "continue"
+    assert payload["dispatch"]["session_policy_default"] == "fresh"
 
 
 def test_engineering_template_dispatch_session_policy_is_fresh() -> None:
@@ -83,10 +83,10 @@ def test_engineering_template_dispatch_session_policy_is_fresh() -> None:
     assert payload["dispatch"]["session_policy_default"] == "fresh"
 
 
-def test_reverse_engineering_template_dispatch_session_policy_is_continue() -> None:
-    """C08 D10: reverse-engineering → continue (decompilation context)."""
+def test_reverse_engineering_template_dispatch_session_policy_is_fresh() -> None:
+    """reverse-engineering → fresh: session resume is unimplemented (deferred to P31)."""
     payload = load_init_template("reverse-engineering")
-    assert payload["dispatch"]["session_policy_default"] == "continue"
+    assert payload["dispatch"]["session_policy_default"] == "fresh"
 
 
 def test_research_template_enables_core_and_research_profiles() -> None:

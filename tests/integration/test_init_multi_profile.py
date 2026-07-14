@@ -96,14 +96,14 @@ def test_profiles_csv_rejects_unknown_profile(tmp_path: Path) -> None:
 # ---- --template surface ----------------------------------------------------
 
 
-def test_template_research_writes_continue_session_policy(tmp_path: Path) -> None:
-    """``--template research`` writes dispatch.session_policy_default: continue."""
+def test_template_research_writes_fresh_session_policy(tmp_path: Path) -> None:
+    """``--template research`` writes dispatch.session_policy_default: fresh."""
     res = _invoke(tmp_path, "--template", "research")
     assert res.exit_code == 0, res.stdout
 
     cfg = yaml.safe_load((tmp_path / ".ea" / "config.yaml").read_text(encoding="utf-8"))
     assert cfg["profiles"]["enabled"] == ["core", "research"]
-    assert cfg["dispatch"]["session_policy_default"] == "continue"
+    assert cfg["dispatch"]["session_policy_default"] == "fresh"
     assert cfg["planning"]["max_parallel_waves"] == 2
 
 
@@ -119,14 +119,14 @@ def test_template_engineering_writes_fresh_session_policy(tmp_path: Path) -> Non
     assert cfg["acceptance"]["commands"]["tests"] == "uv run pytest"
 
 
-def test_template_reverse_engineering_writes_continue_session_policy(tmp_path: Path) -> None:
-    """``--template reverse-engineering`` writes session_policy_default: continue."""
+def test_template_reverse_engineering_writes_fresh_session_policy(tmp_path: Path) -> None:
+    """``--template reverse-engineering`` writes session_policy_default: fresh."""
     res = _invoke(tmp_path, "--template", "reverse-engineering")
     assert res.exit_code == 0, res.stdout
 
     cfg = yaml.safe_load((tmp_path / ".ea" / "config.yaml").read_text(encoding="utf-8"))
     assert cfg["profiles"]["enabled"] == ["core", "research", "re"]
-    assert cfg["dispatch"]["session_policy_default"] == "continue"
+    assert cfg["dispatch"]["session_policy_default"] == "fresh"
     assert cfg["planning"]["max_parallel_waves"] == 1
 
 

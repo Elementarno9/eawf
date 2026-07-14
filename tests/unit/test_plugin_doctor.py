@@ -183,14 +183,16 @@ def test_check_capability_vs_probe_skipped_without_probes() -> None:
 
 
 def test_check_capability_vs_probe_clean_with_supporting_evidence() -> None:
-    """Probe carries every supported-cell flag → no drift."""
+    """Probe carries every supported-cell flag → no drift.
+
+    session_resume is now declared ``unsupported`` (deferred to P31), so the
+    probe deliberately omits ``--continue`` / ``--session-id`` / ``--resume`` —
+    their presence would flip the cell to DRIFT (unexpected evidence).
+    """
     probe = ProbeResult(
         runtime_id="claude-code",
         installed=True,
         observed_flags=(
-            "--continue",
-            "--session-id",
-            "--resume",
             "--allowedTools",
             "--allowed-tools",
             "--output-format",
@@ -206,8 +208,9 @@ def test_check_capability_vs_probe_clean_with_supporting_evidence() -> None:
 
 def test_check_capability_vs_probe_detects_drift() -> None:
     """Declared supported but probe carries no evidence → DRIFT finding."""
-    # Claude declares session_resume + tool_use + streaming as supported;
-    # an empty probe carries no flag evidence → three DRIFT rows.
+    # Claude declares tool_use + streaming as supported (session_resume is now
+    # ``unsupported``); an empty probe carries no flag evidence, so the two
+    # supported probe-checked rows fire DRIFT while session_resume stays OK.
     probe = ProbeResult(runtime_id="claude-code", installed=True, observed_flags=())
     report = check_capability_vs_probe(
         runtimes=("claude-code",),
@@ -217,7 +220,7 @@ def test_check_capability_vs_probe_detects_drift() -> None:
     # Each probe-checked capability with declared=supported but empty
     # observed_flags fires a finding.
     locations = {f.location for f in report.findings}
-    assert "session_resume" in locations or "tool_use" in locations
+    assert "tool_use" in locations
 
 
 def test_check_capability_vs_probe_reports_missing_probe() -> None:

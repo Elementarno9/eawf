@@ -168,7 +168,7 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
     # Dispatch defaults — the per-skill or per-profile manifest still
     # wins; these are the bottom-of-stack values.
     "dispatch": {
-        "session_policy_default": "hybrid",
+        "session_policy_default": "fresh",
         "session_handle_ttl_seconds": 86400,
         # Per-block token ceiling for injected role-tier dispatch blocks.
         # The renderer raises (never truncates) over the cap; the code

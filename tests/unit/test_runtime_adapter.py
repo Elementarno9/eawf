@@ -130,18 +130,20 @@ def test_claude_adapter_identity() -> None:
     a = ClaudeAdapter()
     assert a.id == "claude-code"
     assert a.cli_binary == "claude"
-    assert a.accepts_continue is True
+    # session_resume is ``unsupported`` (deferred to P31): no real resume spawn.
+    assert a.accepts_continue is False
     assert a.supports_cache_control is True
-    assert a.supports_continue() is True
+    assert a.supports_continue() is False
 
 
 def test_codex_adapter_identity() -> None:
     a = CodexAdapter()
     assert a.id == "codex"
     assert a.cli_binary == "codex"
-    assert a.accepts_continue is True
+    # session_resume is ``unsupported`` (deferred to P31): no real resume spawn.
+    assert a.accepts_continue is False
     assert a.supports_cache_control is False
-    assert a.supports_continue() is True
+    assert a.supports_continue() is False
 
 
 def test_opencode_adapter_identity() -> None:
@@ -254,10 +256,15 @@ def test_open_session_increments_attempt_counter() -> None:
 
 
 @pytest.mark.parametrize("adapter_cls", [ClaudeAdapter, CodexAdapter])
-def test_continue_session_empty_id_raises(adapter_cls: type) -> None:
+def test_continue_session_raises_not_implemented(adapter_cls: type) -> None:
+    """Session resume is unimplemented on claude-code + codex (deferred to P31).
+
+    ``continue_session`` refuses unconditionally with ``NotImplementedError``
+    rather than minting a ``SessionAttempt`` that never spawns a real resume.
+    """
     a = adapter_cls()
-    with pytest.raises(SessionResumeFailedError):
-        asyncio.run(a.continue_session("", "hello"))
+    with pytest.raises(NotImplementedError):
+        asyncio.run(a.continue_session("s-prior", "hello"))
 
 
 def test_opencode_continue_session_always_raises_v03() -> None:
@@ -265,13 +272,6 @@ def test_opencode_continue_session_always_raises_v03() -> None:
     a = OpenCodeAdapter()
     with pytest.raises(SessionResumeFailedError):
         asyncio.run(a.continue_session("some-session-id", "hello"))
-
-
-def test_claude_continue_session_returns_attempt() -> None:
-    a = ClaudeAdapter()
-    out = asyncio.run(a.continue_session("s-prior", "hello"))
-    assert out.session_id == "s-prior"
-    assert out.runtime == "claude-code"
 
 
 # ---------------------------------------------------------------------------
