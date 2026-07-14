@@ -2117,12 +2117,18 @@ def run_campaign(
     # linger ACTIVE forever (the stuck-active record the operator saw). Re-read
     # so an operator cancel mid-run wins; only an ACTIVE campaign converges.
     latest = read_latest_campaign(state_path, args.campaign_id)
+    terminal = latest.status if latest is not None else None
     if latest is not None and latest.status is CampaignStatus.ACTIVE:
         persist_campaign(state_path, latest.model_copy(update={"status": CampaignStatus.CONVERGED}))
+        terminal = CampaignStatus.CONVERGED
+    # Report the state the campaign actually reached, not the one this branch
+    # would have set: when an operator cancels mid-run the flip is skipped, and
+    # a hardcoded terminal=converged would log a convergence that never
+    # happened -- which is then read back as evidence that it did.
     logger.info(
         f"run_campaign campaign={args.campaign_id!r} rounds={loop.rounds_run} "
         f"halt={loop.halt_reason.value} checkpoints={len(loop.checkpoints)} "
-        f"claims={len(claim_ids)} terminal={CampaignStatus.CONVERGED.value}"
+        f"claims={len(claim_ids)} terminal={terminal.value if terminal else 'absent'}"
     )
     return RunCampaignResult(
         campaign_id=args.campaign_id,

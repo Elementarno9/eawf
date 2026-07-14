@@ -565,9 +565,9 @@ class ClaudeAdapter:
     ) -> SpawnResult:
         """Spawn a live ``claude -p`` subprocess and collect its result.
 
-        Runs ``claude -p <prompt> --output-format json --model <model>``
+        Runs ``claude -p <prompt> --output-format stream-json --model <model>``
         via :func:`asyncio.create_subprocess_exec`, captures stdout (the
-        usage JSON envelope) + stderr, and parses the outcome into a typed
+        streamed JSON envelopes) + stderr, and parses the outcome into a typed
         :class:`~eawf.runtime.runtimes.adapter.SpawnResult` (raw text +
         the token classes + pid + exit + the optional self-reported cost).
         The child is started in its own session / process group
@@ -611,8 +611,9 @@ class ClaudeAdapter:
         IT ARRIVES: the spawn drains stdout incrementally (via
         :func:`_collect_spawn_output`) rather than buffering the whole output
         to process exit, so a downstream wave can surface model output live.
-        With ``--output-format json`` claude emits a single envelope, so the
-        live stream is typically one chunk. The full stdout is still
+        With the ``--output-format stream-json`` default claude emits one
+        envelope per event, so the output streams during the run rather than
+        arriving as a single envelope at exit. The full stdout is still
         accumulated and fed to :func:`_parse_claude_result` unchanged, so with
         ``on_chunk=None`` the returned :class:`SpawnResult` is byte-equivalent
         to the buffered path.

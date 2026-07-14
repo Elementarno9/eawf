@@ -36,6 +36,7 @@ real subprocess is spawned.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
@@ -60,8 +61,15 @@ from eawf.kernel.spec.research_campaign import (
     stage_campaign,
 )
 from eawf.kernel.spec.round_loop import CheckpointPolicy, CheckpointTier
-from eawf.kernel.state.enums import ClaimStatus, OpenQuestionStatus, StoreKind, Urgency
+from eawf.kernel.state.enums import (
+    CampaignStatus,
+    ClaimStatus,
+    OpenQuestionStatus,
+    StoreKind,
+    Urgency,
+)
 from eawf.kernel.state.models import Claim
+from eawf.kernel.store.kinds.research_campaign import CampaignTombstone
 from eawf.kernel.store.paths import store_path
 from eawf.platform.artifacts.validation import validate_markdown_artifact
 from eawf.runtime.daemon import PROTOCOL_VERSION
@@ -71,6 +79,7 @@ from eawf.runtime.daemon.methods.research import (
     RunCampaignParams,
     add_question,
     create_campaign,
+    persist_campaign,
     persist_operator_input,
     read_campaign_rounds,
     read_latest_campaign,
@@ -436,6 +445,67 @@ def test_campaign_acceptance_saturation_halt_records_checkpoint(tmp_path: Path) 
         assert len(rounds) == 1
         assert rounds[0].saturated is True
         assert rounds[0].checkpoint is True
+
+    _run(body)
+
+
+def test_campaign_run_logs_the_terminal_state_it_actually_reached(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A campaign cancelled mid-run is not logged as a convergence.
+
+    The convergence flip is guarded on the campaign still being ACTIVE, so an
+    operator cancel mid-run correctly leaves the record CANCELLED. The
+    run-complete log line used to hardcode ``terminal=converged`` regardless,
+    which reports a convergence that never happened -- and a log line is read
+    back as evidence that it did.
+    """
+    ctx, state_path = _build_ctx(tmp_path)
+    campaign_id = "campaign-cancelled"
+
+    def _produce_empty(dispatch: StagedDispatch) -> Mapping[str, object]:
+        # The operator tombstones the campaign WHILE the round is in flight --
+        # the run started against an ACTIVE campaign, so this is the mid-run
+        # cancel the convergence flip is guarded against.
+        latest = read_latest_campaign(state_path, campaign_id)
+        assert latest is not None
+        if latest.status is CampaignStatus.ACTIVE:
+            persist_campaign(
+                state_path,
+                latest.model_copy(
+                    update={
+                        "status": CampaignStatus.CANCELLED,
+                        "tombstone": CampaignTombstone(
+                            cancelled_at=_now(), reason="operator abandoned it"
+                        ),
+                    }
+                ),
+            )
+        body = _agent_end_body(dispatch.domain, evidence_ref="evidence/x.md")
+        body["findings"] = []  # halt after one round
+        return body
+
+    async def body() -> None:
+        await create_campaign(ctx, _stage_params(campaign_id))
+        with caplog.at_level(logging.INFO, logger="eawf.runtime.daemon.methods.research"):
+            run_campaign(
+                ctx,
+                RunCampaignParams(campaign_id=campaign_id, round_budget=5),
+                produce_agent_end=_produce_empty,
+                checkpoint_policy=CheckpointPolicy(tier=CheckpointTier.ON_HALT),
+            )
+
+        # The cancel stands: the run does not resurrect the campaign...
+        final = read_latest_campaign(state_path, campaign_id)
+        assert final is not None
+        assert final.status is CampaignStatus.CANCELLED
+        # ...and the log line says so rather than claiming a convergence.
+        run_lines = [
+            rec.message for rec in caplog.records if "run_campaign campaign=" in rec.message
+        ]
+        assert run_lines, "no run-complete log line emitted"
+        assert "terminal=cancelled" in run_lines[-1]
+        assert "terminal=converged" not in run_lines[-1]
 
     _run(body)
 
