@@ -15773,7 +15773,9 @@
   "claims": null,
   "current": {
     "active_session_ids": [],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I25-W49"
+    ],
     "iter_id": "P30-I25",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -28993,6 +28995,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I25-W48",
       "updated_at": "2026-07-13T22:18:08.220168Z"
+    },
+    "P30-I25-W49": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W49-bucket-20260714T001344Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I25-W49",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I25-W49",
+      "updated_at": "2026-07-14T00:13:44.274743Z"
     }
   },
   "fleet_run": null,
@@ -31579,7 +31594,8 @@
         "P30-I25-W45",
         "P30-I25-W46",
         "P30-I25-W47",
-        "P30-I25-W48"
+        "P30-I25-W48",
+        "P30-I25-W49"
       ]
     }
   },
@@ -32717,7 +32733,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-13T23:31:54.949566Z",
+  "updated_at": "2026-07-14T00:13:44.275028Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -136798,6 +136814,239 @@
       "title": "Close the two idle contracts the third audit left standing",
       "token_budget": null,
       "tokens_consumed": 38831,
+      "worktree_id": null
+    },
+    "P30-I25-W49": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
+      "claimed_at": "2026-07-14T00:13:44.247931Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Repair wave appended after the fourth audit found the duration ceiling absent and its guard vacuous",
+        "waived_at": "2026-07-14T00:13:31.628979Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "A real transcript on this machine spans 6 seconds of wall clock and carries one turn_duration row of 366298957 ms (101.75 hours) because Claude Code closes an interrupted turn of a resumed session with its full wall clock. Fed to the production aggregator it books 203.5 EU on one wave. The criterion that promised a ceiling is guarded by a test that passes against an aggregator which doubles every duration.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+        "tests/unit/test_transcript_counters.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "criterion": "transcript",
+            "file_scopes": [
+              "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+              "tests/unit/test_transcript_counters.py"
+            ],
+            "pattern": "transcript"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "turn_duration",
+            "file_scopes": [
+              "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+              "tests/unit/test_transcript_counters.py"
+            ],
+            "pattern": "turn_duration"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "differenced",
+            "file_scopes": [
+              "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+              "tests/unit/test_transcript_counters.py"
+            ],
+            "pattern": "differenced"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "GATE-03",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "docstring",
+            "file_scopes": [
+              "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+              "tests/unit/test_transcript_counters.py"
+            ],
+            "pattern": "docstring"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "GATE-04",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I25-W49",
+      "intent": {
+        "desired_outcome": "The reported duration cannot exceed the span of the transcript it was read from and the guard fails when the clamp is deleted",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Clamp the summed turn durations to the transcript's own wall-clock span",
+          "Read durationMs only off the turn_duration rows rather than any row carrying the field",
+          "Bump the measure version since the clamp changes what the duration means",
+          "Drive the guard with a transcript of the real pathological shape and delete the helpers that no longer have a caller"
+        ],
+        "priority_rationale": "This is the fourth cycle of the same failure: a test green over a path that does not exist. The zero-EU gate catches only zeros and the incomparability check catches only a declared measure change or a decrease so a fabricated increase enters the calibration corpus as clean data.",
+        "problem": "The duration has no ceiling so a single pathological turn_duration row books hundreds of EU and nothing on the close path catches an increase",
+        "risks": [
+          "Clamping to the file span under-reports a resumed session whose turn began in an earlier file but an under-count is bounded and recoverable where a fabricated 101-hour delta is neither"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-14T00:13:31.681881Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 2080022,
+        "cache_creation_input_tokens": 372337,
+        "cache_read_input_tokens": 63851018,
+        "captured_at": "2026-07-14T00:13:44.274682Z",
+        "cost_usd": 39.507289,
+        "harness": "claude-code",
+        "input_tokens": 522,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 154232,
+        "session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
+        "shared_wave_count": null,
+        "total_duration_ms": 2080022
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
+          "id": "CR-01",
+          "kind": "converted",
+          "measurable_signal": "The reported duration never exceeds the span of the transcript it was read from and a test drives a real-shaped transcript that violates the ceiling so deleting the clamp turns it red",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The reported duration never exceeds the span of the transcript it was read from and a test drives a real-shaped transcript that violates the ceiling so deleting the clamp turns it red",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The reported duration never exceeds the span of the transcript it was read from and a test drives a real-shaped transcript that violates the ceiling so deleting the clamp turns it red",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
+          "id": "CR-02",
+          "kind": "converted",
+          "measurable_signal": "The duration sum reads only the turn_duration rows rather than every row that happens to carry a durationMs field",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The duration sum reads only the turn_duration rows rather than every row that happens to carry a durationMs field",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The duration sum reads only the turn_duration rows rather than every row that happens to carry a durationMs field",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-03"
+          ],
+          "id": "CR-03",
+          "kind": "converted",
+          "measurable_signal": "The measure version is bumped because the clamp changes what the duration means so a baseline taken under the old definition re-origins rather than being differenced",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The measure version is bumped because the clamp changes what the duration means so a baseline taken under the old definition re-origins rather than being differenced",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The measure version is bumped because the clamp changes what the duration means so a baseline taken under the old definition re-origins rather than being differenced",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-04"
+          ],
+          "id": "CR-04",
+          "kind": "converted",
+          "measurable_signal": "The module docstring describes the measure that actually ships and the helpers left without a caller are deleted",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The module docstring describes the measure that actually ships and the helpers left without a caller are deleted",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The module docstring describes the measure that actually ships and the helpers left without a caller are deleted",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Clamp the duration to the transcript it was read from",
+      "token_budget": null,
+      "tokens_consumed": 0,
       "worktree_id": null
     }
   },
