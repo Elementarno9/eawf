@@ -96,12 +96,6 @@ if TYPE_CHECKING:
 #: a too-narrow frame), matching the affordance-parity check's default.
 _SWEEP_SIZE: tuple[int, int] = (120, 40)
 
-#: The provenance stamp the sweep records its probe transcripts against. The
-#: sweep drives the live tree rather than a recorded build, so a fixed
-#: sentinel keeps the transcript provenance field populated without claiming
-#: a build SHA the live run does not carry.
-_SWEEP_COMMIT: str = "affordance-sweep-live"
-
 #: Mapping from a footer hint *token* (the text before the first space in a
 #: ``render_hint_label`` fragment) to the Textual key string(s) a press
 #: drives. Multi-glyph tokens (the arrow pairs, the three-letter scope
@@ -749,30 +743,35 @@ async def _advertised_keys_at(
     return ordered
 
 
-async def _probe_key_at(
+async def _unresolved_keys_at(
     *,
     scope: str,
     mode: str,
-    key: str,
+    keys: Sequence[str],
     state_path: Path | None,
     size: tuple[int, int],
-) -> ProbeStatus:
-    """Drive a single advertised *key* at *scope* + *mode* against a fresh mount.
+) -> list[str]:
+    """Mount once at *scope* + *mode* and return the *keys* that resolve to no binding.
 
-    Each key is probed against its OWN fresh app mount so a destructive
-    affordance (``q`` quit, a scope switch, a modal push) cannot bleed into
-    the next key's probe -- per-key isolation keeps the classification
-    deterministic and side-effect-free across the swept set.
+    The sweep branches only on whether an advertised key is UNRESOLVED --
+    absent from the active screen's :attr:`~textual.screen.Screen.active_bindings`
+    map -- which is a pure read of the resolved binding table taken with NO
+    key press. Reading the map once per cell (rather than pressing each key
+    against its own fresh mount) is both faster and safe: a destructive
+    advertised key (``q`` quit, ``w``/``r``/``u`` scope switch) would corrupt
+    the sweep if pressed, and the map already answers the only question the
+    sweep asks.
 
     Args:
-        scope: The nav scope to switch to before pressing the key.
-        mode: The mode name to switch to before pressing the key.
-        key: The Textual key string to drive.
+        scope: The nav scope to switch to before reading the binding map.
+        mode: The mode name to switch to before reading the binding map.
+        keys: The advertised Textual key strings to classify.
         state_path: The fixture ``state.json`` to bind, or ``None``.
         size: The Pilot terminal size.
 
     Returns:
-        The :class:`ProbeStatus` the key press classified.
+        The subset of *keys* absent from the active screen's binding map, in
+        the given order -- the dead affordances (:data:`ProbeStatus.UNRESOLVED`).
     """
     from eawf.surfaces.tui.app import EaApp
 
@@ -784,8 +783,7 @@ async def _probe_key_at(
         await settle_screen(pilot)
         await app.switch_mode(mode)
         await settle_screen(pilot)
-        transcript = await record_keypress_transcript(pilot, [key], source_commit=_SWEEP_COMMIT)
-    return transcript.outcomes[0].status
+        return [key for key in keys if not _key_resolves(app, key)]
 
 
 async def sweep_unresolved_affordances(
@@ -801,10 +799,19 @@ async def sweep_unresolved_affordances(
     an illegal corner (the portfolio ``user`` scope crossed with a single-scope
     data mode) is never probed -- it has no honest footer to advertise. For
     each legal cell it enumerates the mode's advertised footer keys
-    (:func:`_advertised_keys_at`) and drives each through the real key->Binding
-    path (:func:`_probe_key_at`), collecting every key whose press classifies
-    :data:`ProbeStatus.UNRESOLVED` -- the dead affordance the footer promises
-    but no :class:`~textual.binding.Binding` answers.
+    (:func:`_advertised_keys_at`) and classifies them against the resolved
+    binding map (:func:`_unresolved_keys_at`), collecting every advertised key
+    absent from that map (:data:`ProbeStatus.UNRESOLVED`) -- the dead
+    affordance the footer promises but no
+    :class:`~textual.binding.Binding` answers.
+
+    The sweep presses NOTHING: whether a key is UNRESOLVED is a pure
+    ``active_bindings`` read, and pressing would be both wasteful (a remount
+    per key) and unsafe (``q`` quits, ``w``/``r``/``u`` switch scope, either
+    corrupting the sweep). Each legal cell mounts exactly twice -- once to
+    enumerate the footer keys, once to read the binding map -- so the sweep's
+    mount budget is bounded at twice the legal-cell count rather than growing
+    with the advertised-key count.
 
     The returned set is the unresolved keys MINUS the documented
     :data:`DEFERRED_KEYS` allowlist, so a caller asserts the result is empty:
@@ -839,18 +846,19 @@ async def sweep_unresolved_affordances(
             keys = await _advertised_keys_at(
                 scope=scope, mode=spec.name, state_path=state_path, size=size
             )
-            for key in keys:
-                status = await _probe_key_at(
-                    scope=scope,
-                    mode=spec.name,
-                    key=key,
-                    state_path=state_path,
-                    size=size,
-                )
-                if status is ProbeStatus.UNRESOLVED:
-                    triple = f"{scope}/{spec.name}/{key}"
-                    if triple not in DEFERRED_KEYS:
-                        unresolved.append(triple)
+            if not keys:
+                continue
+            dead_keys = await _unresolved_keys_at(
+                scope=scope,
+                mode=spec.name,
+                keys=keys,
+                state_path=state_path,
+                size=size,
+            )
+            for key in dead_keys:
+                triple = f"{scope}/{spec.name}/{key}"
+                if triple not in DEFERRED_KEYS:
+                    unresolved.append(triple)
     return tuple(sorted(unresolved))
 
 

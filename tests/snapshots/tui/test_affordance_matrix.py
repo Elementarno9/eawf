@@ -261,6 +261,33 @@ def test_sweep_no_state_path_reports_zero_unresolved() -> None:
     assert unresolved == (), f"no-state sweep found unresolved keys: {', '.join(unresolved)}"
 
 
+def test_sweep_mounts_at_most_twice_per_legal_cell(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # W12 instrumentation guard: the sweep reads each cell's binding map once
+    # instead of pressing every advertised key against its own fresh mount, so
+    # the mount count is bounded at twice the legal-cell count (one mount to
+    # enumerate the footer, one to read the map) -- never once per advertised
+    # key (~250 mounts). Counting real EaApp.run_test entries proves the budget
+    # holds and, transitively, that no per-key press remount survives.
+    legal_cells = sum(len(legal_scopes_for_mode(spec.name)) for spec in MODE_REGISTRY)
+    mounts = 0
+    original_run_test = EaApp.run_test
+
+    def counting_run_test(self: EaApp, **kwargs: object) -> object:
+        nonlocal mounts
+        mounts += 1
+        return original_run_test(self, **kwargs)
+
+    monkeypatch.setattr(EaApp, "run_test", counting_run_test)
+    unresolved = asyncio.run(sweep_unresolved_affordances(state_path=_REPO_STATE))
+    assert mounts > 0, "sweep never mounted the app -- vacuous over an empty axis"
+    assert mounts <= 2 * legal_cells, (
+        f"sweep mounted {mounts} times over the 2x{legal_cells}-legal-cell budget"
+    )
+    assert unresolved == ()
+
+
 def test_sweep_deferred_keys_excluded_from_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
