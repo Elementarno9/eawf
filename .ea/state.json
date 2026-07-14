@@ -12074,6 +12074,21 @@
       "scope_id": "P30-I25-W48",
       "status": "done",
       "updated_at": "2026-07-13T23:08:58.773515Z"
+    },
+    "P30-I25-W49": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": 0.0,
+      "attention_eu": null,
+      "calibration_excluded": true,
+      "current_store_record_id": "REC-P30-I25-W49",
+      "elapsed_eu": 0.0,
+      "harness": "claude-code",
+      "id": "ACT-P30-I25-W49",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I25-W49",
+      "status": "done",
+      "updated_at": "2026-07-14T00:31:15.882188Z"
     }
   },
   "agent_sessions": {
@@ -15799,9 +15814,7 @@
   "claims": null,
   "current": {
     "active_session_ids": [],
-    "active_wave_ids": [
-      "P30-I25-W49"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I25",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -32774,7 +32787,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T00:28:09.089826Z",
+  "updated_at": "2026-07-14T00:31:15.882389Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -136862,8 +136875,8 @@
       "blocks": [],
       "claim_session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
       "claimed_at": "2026-07-14T00:13:44.247931Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-14T00:31:15.882188Z",
+      "commit": "5a6a31080141b047d094ad6ce9e5cee291052751",
       "criteria_floor_waiver": {
         "reason": "Repair wave appended after the fourth audit found the duration ceiling absent and its guard vacuous",
         "waived_at": "2026-07-14T00:13:31.628979Z",
@@ -136966,27 +136979,67 @@
       },
       "iter_id": "P30-I25",
       "opened_at": "2026-07-14T00:13:31.681881Z",
-      "outcome": null,
+      "outcome": "The duration is clamped to the span of the transcript it was read from so a resumed session's interrupted turn cannot book 101 hours from a 6-second file",
       "runtime_baseline": {
         "api_duration_ms": 2080022,
-        "cache_creation_input_tokens": 372337,
-        "cache_read_input_tokens": 63851018,
-        "captured_at": "2026-07-14T00:13:44.274682Z",
-        "cost_usd": 39.507289,
+        "cache_creation_input_tokens": 401485,
+        "cache_read_input_tokens": 74703192,
+        "captured_at": "2026-07-14T00:30:08.677833Z",
+        "cost_usd": 45.762376,
         "harness": "claude-code",
-        "input_tokens": 522,
-        "measure_version": 4,
+        "input_tokens": 576,
+        "measure_version": 5,
         "model": "claude-opus-4-8",
-        "output_tokens": 154232,
+        "output_tokens": 175722,
         "session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
-        "shared_wave_count": null,
+        "shared_wave_count": 1,
         "total_duration_ms": 2080022
       },
-      "runtime_carry": null,
-      "runtime_latest": null,
+      "runtime_carry": {
+        "api_duration_ms": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cost_usd": 0.0,
+        "counter_resets": 1,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "sessions_folded": 0,
+        "total_duration_ms": 0
+      },
+      "runtime_latest": {
+        "api_duration_ms": 2080022,
+        "cache_creation_input_tokens": 401485,
+        "cache_read_input_tokens": 74703192,
+        "captured_at": "2026-07-14T00:30:45.260188Z",
+        "cost_usd": 45.762376,
+        "harness": "claude-code",
+        "input_tokens": 576,
+        "measure_version": 5,
+        "model": "claude-opus-4-8",
+        "output_tokens": 175722,
+        "session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
+        "shared_wave_count": 1,
+        "total_duration_ms": 2080022
+      },
       "runtime_preference": null,
-      "sessions": {},
-      "status": "claimed",
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cost_usd": 0.0,
+          "ended_at": "2026-07-14T00:30:45.260188Z",
+          "exit_status": 0,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "runtime": "claude-code",
+          "session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
+          "started_at": "2026-07-14T00:30:08.677833Z",
+          "subprocess_pid": null
+        }
+      },
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
