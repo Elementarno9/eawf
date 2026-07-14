@@ -33129,7 +33129,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T11:10:59.436461Z",
+  "updated_at": "2026-07-14T11:15:00.372822Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -115651,7 +115651,42 @@
         "src/eawf/surfaces/cli/commands/research.py",
         "tests/unit/test_research_cli.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "criterion": "researcher",
+            "file_scopes": [
+              "src/eawf/surfaces/cli/commands/research.py",
+              "tests/unit/test_research_cli.py"
+            ],
+            "pattern": "researcher"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "dispatch_cost",
+            "file_scopes": [
+              "src/eawf/surfaces/cli/commands/research.py",
+              "tests/unit/test_research_cli.py"
+            ],
+            "pattern": "dispatch_cost"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I21-W37",
       "intent": {
         "desired_outcome": "eawf research status reports the researcher spend booked against the active campaigns, so the cost centre W15 created is readable by the operator.",
@@ -115692,29 +115727,49 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "eawf research status reports the summed researcher spend booked against the active campaigns in both its JSON body and its text line so the campaign cost centre is readable from an operator surface rather than only from a test",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "eawf research status reports the summed researcher spend booked against the active campaigns in both its JSON body and its text line so the campaign cost centre is readable from an operator surface ra",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "eawf research status reports the summed researcher spend booked against the active campaigns in both its JSON body and its text line so the campaign cost centre is readable from an operator surface rather than only from a test",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "A test drives the status handler over a campaign carrying a booked dispatch_cost event and asserts the reported cost is non-zero",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "A test drives the status handler over a campaign carrying a booked dispatch_cost event and asserts the reported cost is non-zero",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "A test drives the status handler over a campaign carrying a booked dispatch_cost event and asserts the reported cost is non-zero",
           "waiver_reason": null
         }
@@ -115744,7 +115799,38 @@
         "src/eawf/runtime/daemon/methods/research.py",
         "src/eawf/runtime/runtimes/claude/adapter.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "criterion": "convergence",
+            "file_scopes": [
+              "src/eawf/runtime/daemon/methods/research.py",
+              "src/eawf/runtime/runtimes/claude/adapter.py"
+            ],
+            "pattern": "convergence"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "path": "src/eawf/runtime/daemon/methods/research.py",
+            "pattern": "docstrings"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "regex_in_file",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I21-W38",
       "intent": {
         "desired_outcome": "The log line reports the terminal state the run actually reached, and the adapter docstrings name the format the code actually emits.",
@@ -115784,29 +115870,49 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "The research run-complete log line reports the terminal state the run actually reached so an operator cancel is not logged as a convergence",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The research run-complete log line reports the terminal state the run actually reached so an operator cancel is not logged as a convergence",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "The research run-complete log line reports the terminal state the run actually reached so an operator cancel is not logged as a convergence",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "The claude adapter docstrings name stream-json which is the format the code emits since W30 rather than the json default it replaced",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "regex_in_file",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The claude adapter docstrings name stream-json which is the format the code emits since W30 rather than the json default it replaced",
+            "observe": "emits",
+            "quantifier": "single"
+          },
           "text": "The claude adapter docstrings name stream-json which is the format the code emits since W30 rather than the json default it replaced",
           "waiver_reason": null
         }
