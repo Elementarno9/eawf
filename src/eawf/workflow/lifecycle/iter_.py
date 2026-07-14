@@ -61,6 +61,34 @@ _DEFAULT_DRIFT_BUDGET_EU: Final[float] = 3.5
 _DEFAULT_CHECKPOINT_MODE: Final[Literal["optimistic", "barrier"]] = "optimistic"
 
 
+def _active_sibling_iters(state: State, *, phase_id: str, exclude_id: str) -> list[str]:
+    """Return the ACTIVE iter ids under *phase_id*, excluding *exclude_id*.
+
+    The shared reader behind the concurrency guard (:func:`open_iter` /
+    :func:`activate_iter`) and the close-time repoint (:func:`close_iter`).
+    Ids come back in :func:`~eawf.kernel.state.ids.natural_key` order so the
+    guard names a stable offender and the repoint picks the lowest-numbered
+    survivor.
+
+    Args:
+        state: State holding the iter rows.
+        phase_id: Parent phase whose ACTIVE iters are collected.
+        exclude_id: Iter id to omit (the one being opened / activated /
+            closed).
+
+    Returns:
+        The ACTIVE sibling iter ids in natural-key order; empty when none.
+    """
+    return sorted(
+        (
+            iid
+            for iid, it in state.iters.items()
+            if iid != exclude_id and it.phase_id == phase_id and it.status is IterStatus.ACTIVE
+        ),
+        key=natural_key,
+    )
+
+
 def open_iter(
     state: State,
     *,
@@ -69,6 +97,7 @@ def open_iter(
     title: str,
     description: str | None = None,
     intent: IntentBrief | None = None,
+    allow_concurrent: bool = False,
 ) -> Iter:
     """Insert a new iter under *phase_id* with status ``active``.
 
@@ -82,10 +111,15 @@ def open_iter(
         intent: Optional typed :class:`IntentBrief`; persisted on
             :attr:`Iter.intent` for downstream renderers. Additive +
             replay-safe so on-disk iter rows without it re-validate.
+        allow_concurrent: When ``False`` (the default) opening a second
+            iter under a phase that already has an ACTIVE iter is refused;
+            pass ``True`` to override the single-active-iter guard.
 
     Raises:
         LifecycleError: if the phase is missing or not open, or if *iter_id*
             already exists.
+        ValueError: if another iter under *phase_id* is already ACTIVE and
+            *allow_concurrent* is not set.
     """
     phase = state.phases.get(phase_id)
     if phase is None:
@@ -94,6 +128,13 @@ def open_iter(
         raise LifecycleError(f"phase {phase_id!r} is not open (status={phase.status.value!r})")
     if iter_id in state.iters:
         raise LifecycleError(f"iter {iter_id!r} already exists")
+    if not allow_concurrent:
+        active = _active_sibling_iters(state, phase_id=phase_id, exclude_id=iter_id)
+        if active:
+            raise ValueError(
+                f"phase {phase_id!r} already has an active iter: {active[0]!r}; "
+                "pass allow_concurrent to override"
+            )
     check_title_clarity(title, entity_kind="iter", entity_id=iter_id)
     it = Iter(
         id=iter_id,
@@ -128,6 +169,13 @@ def close_iter(
     odr_blocking: bool = False,
 ) -> Iter:
     """Close an active iter. Rejects when child waves are still open.
+
+    When the closed iter is the current one, ``current.iter_id`` repoints to
+    the lowest-numbered remaining ACTIVE sibling iter of the same phase (in
+    :func:`~eawf.kernel.state.ids.natural_key` order); when no ACTIVE sibling
+    remains the pointer clears. This keeps a still-open sibling iter from
+    going invisible behind a null ``current.iter_id`` after a concurrent
+    close.
 
     Args:
         state: State to mutate in place.
@@ -204,7 +252,8 @@ def close_iter(
     it.audit_id = audit_id
     _record_iter_close_memory(state, it=it, audit_id=audit_id, closed_at=closed_at)
     if state.current.iter_id == iter_id:
-        state.current.iter_id = None
+        remaining = _active_sibling_iters(state, phase_id=it.phase_id, exclude_id=iter_id)
+        state.current.iter_id = remaining[0] if remaining else None
         state.current.active_wave_ids = []
     logger.info(f"close_iter id={iter_id} audit={audit_id}")
     return it
@@ -583,15 +632,24 @@ def set_iter_candidate_tag(state: State, *, iter_id: str, tag: str) -> Iter:
     return it
 
 
-def activate_iter(state: State, *, iter_id: str) -> Iter:
+def activate_iter(state: State, *, iter_id: str, allow_concurrent: bool = False) -> Iter:
     """Flip a planned iter to active.
 
     Updates ``current.iter_id``. The parent phase must already be ACTIVE
     (or PLANNED but in the middle of a coordinated activate sequence —
     callers responsible for ordering).
 
+    Args:
+        state: State to mutate in place.
+        iter_id: Canonical iter id (e.g. ``P03-I02``).
+        allow_concurrent: When ``False`` (the default) activating an iter
+            under a phase that already has another ACTIVE iter is refused;
+            pass ``True`` to override the single-active-iter guard.
+
     Raises:
         LifecycleError: when *iter_id* is unknown or not in PLANNED state.
+        ValueError: when another iter under the same phase is already ACTIVE
+            and *allow_concurrent* is not set.
     """
     it = state.iters.get(iter_id)
     if it is None:
@@ -607,6 +665,13 @@ def activate_iter(state: State, *, iter_id: str) -> Iter:
             f"iter {iter_id!r} has status {it.status.value!r}; only planned iters can activate"
         ),
     )
+    if not allow_concurrent:
+        active = _active_sibling_iters(state, phase_id=it.phase_id, exclude_id=iter_id)
+        if active:
+            raise ValueError(
+                f"phase {it.phase_id!r} already has an active iter: {active[0]!r}; "
+                "pass allow_concurrent to override"
+            )
     it.status = IterStatus.ACTIVE
     state.current.phase_id = it.phase_id
     state.current.iter_id = iter_id

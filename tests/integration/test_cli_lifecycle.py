@@ -541,11 +541,25 @@ def test_iter_plan_then_activate_flips_to_active(workspace: Path) -> None:
     runner.invoke(app, ["phase", "open", "--auto", "--title", "x"])
     runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "i"])
     assert runner.invoke(app, ["iter", "plan", "P01-I02", "--title", "Next"]).exit_code == 0
+    # A phase holds at most one ACTIVE iter (LC-6), so the running iter must
+    # close before the planned one activates.
+    assert runner.invoke(app, ["iter", "close", "P01-I01", "--audit", "AUD-1"]).exit_code == 0
     res = runner.invoke(app, ["iter", "activate", "P01-I02"])
     assert res.exit_code == 0, res.stdout
     state = _read_state(workspace)
     assert state["iters"]["P01-I02"]["status"] == "active"  # type: ignore[index]
     assert state["current"]["iter_id"] == "P01-I02"  # type: ignore[index]
+
+
+def test_iter_activate_second_active_iter_refused(workspace: Path) -> None:
+    _init_project(workspace)
+    runner.invoke(app, ["phase", "open", "--auto", "--title", "x"])
+    runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "i"])
+    assert runner.invoke(app, ["iter", "plan", "P01-I02", "--title", "Next"]).exit_code == 0
+    # P01-I01 is still ACTIVE: activating a second iter is refused (LC-6 guard).
+    res = runner.invoke(app, ["iter", "activate", "P01-I02"])
+    assert res.exit_code == 1, res.stdout
+    assert "already has an active iter" in res.stdout
 
 
 def test_iter_plan_invalid_id_exits_nonzero(workspace: Path) -> None:

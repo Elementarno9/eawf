@@ -27,6 +27,7 @@ from eawf.kernel.validate.invariants import (
     check_scope_consistency,
     check_wave_blocks_invariant,
 )
+from eawf.kernel.validate.strict import validate_state
 
 # ---- Fixture builders -------------------------------------------------------
 
@@ -239,6 +240,75 @@ def test_check_current_pointers_flags_iter_phase_mismatch() -> None:
     state = State.model_validate(payload)
     codes = _codes(check_current_pointers(state))
     assert "INV.CURRENT.ITER_PHASE_MISMATCH" in codes
+
+
+# ---- check_current_pointers: orphan-active iter (LC-6) ----------------------
+
+
+def test_check_current_pointers_flags_orphan_active_iter() -> None:
+    payload = _base_state_payload()
+    payload["phases"]["P01"] = _phase("P01")
+    payload["iters"]["P01-I01"] = _iter("P01-I01", phase_id="P01")
+    payload["current"]["phase_id"] = "P01"
+    payload["current"]["iter_id"] = None
+    state = State.model_validate(payload)
+    codes = _codes(check_current_pointers(state))
+    assert "INV.CURRENT.ITER_ORPHAN_ACTIVE" in codes
+
+
+def test_check_current_pointers_clean_when_current_iter_set() -> None:
+    payload = _base_state_payload()
+    payload["phases"]["P01"] = _phase("P01")
+    payload["iters"]["P01-I01"] = _iter("P01-I01", phase_id="P01")
+    payload["current"]["phase_id"] = "P01"
+    payload["current"]["iter_id"] = "P01-I01"
+    state = State.model_validate(payload)
+    assert "INV.CURRENT.ITER_ORPHAN_ACTIVE" not in _codes(check_current_pointers(state))
+
+
+def test_validate_state_flags_orphan_active_iter() -> None:
+    payload = _base_state_payload()
+    payload["phases"]["P01"] = _phase("P01")
+    payload["iters"]["P01-I01"] = _iter("P01-I01", phase_id="P01")
+    payload["current"]["phase_id"] = "P01"
+    payload["current"]["iter_id"] = None
+    report = validate_state(payload)
+    codes = {v.code for v in report.violations}
+    assert "INV.CURRENT.ITER_ORPHAN_ACTIVE" in codes
+
+
+# ---- check_current_pointers: multi-active iter (LC-6) -----------------------
+
+
+def test_check_current_pointers_flags_two_active_iters_under_one_phase() -> None:
+    payload = _base_state_payload()
+    payload["phases"]["P01"] = _phase("P01")
+    payload["iters"]["P01-I01"] = _iter("P01-I01", phase_id="P01")
+    payload["iters"]["P01-I02"] = _iter("P01-I02", phase_id="P01")
+    state = State.model_validate(payload)
+    codes = _codes(check_current_pointers(state))
+    assert "INV.LIFECYCLE.MULTI_ACTIVE_ITER" in codes
+
+
+def test_check_current_pointers_clean_single_active_iter() -> None:
+    payload = _base_state_payload()
+    payload["phases"]["P01"] = _phase("P01")
+    payload["iters"]["P01-I01"] = _iter("P01-I01", phase_id="P01")
+    payload["iters"]["P01-I02"] = _iter("P01-I02", phase_id="P01", status="planned")
+    state = State.model_validate(payload)
+    assert "INV.LIFECYCLE.MULTI_ACTIVE_ITER" not in _codes(check_current_pointers(state))
+
+
+def test_validate_state_flags_multi_active_iter() -> None:
+    payload = _base_state_payload()
+    payload["phases"]["P01"] = _phase("P01")
+    payload["iters"]["P01-I01"] = _iter("P01-I01", phase_id="P01")
+    payload["iters"]["P01-I02"] = _iter("P01-I02", phase_id="P01")
+    payload["current"]["phase_id"] = "P01"
+    payload["current"]["iter_id"] = "P01-I01"
+    report = validate_state(payload)
+    codes = {v.code for v in report.violations}
+    assert "INV.LIFECYCLE.MULTI_ACTIVE_ITER" in codes
 
 
 # ---- check_closure_rules ----------------------------------------------------

@@ -1241,6 +1241,73 @@ def test_activate_iter_non_planned_rejected() -> None:
         activate_iter(state, iter_id="P01-I01")
 
 
+# ---- Iter concurrency guard + close-time repoint (LC-6) ---------------------
+
+
+def test_open_iter_rejects_second_active_iter() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="first")
+    with pytest.raises(ValueError, match="already has an active iter"):
+        open_iter(state, iter_id="P01-I02", phase_id="P01", title="second")
+
+
+def test_open_iter_allows_second_active_iter_with_flag() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="first")
+    it = open_iter(state, iter_id="P01-I02", phase_id="P01", title="second", allow_concurrent=True)
+    assert it.status == IterStatus.ACTIVE
+    assert state.current.iter_id == "P01-I02"
+
+
+def _plan_two_iters_one_wave(state: State) -> None:
+    """Seed P01 with two PLANNED iters + one wave so activate_phase can fire."""
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i1")
+    plan_iter(state, iter_id="P01-I02", phase_id="P01", title="i2")
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["x"],
+        effort_bucket="M",
+        intent=make_intent(),
+    )
+    activate_phase(state, phase_id="P01")
+
+
+def test_activate_iter_rejects_second_active_iter() -> None:
+    state = _empty_state()
+    _plan_two_iters_one_wave(state)
+    activate_iter(state, iter_id="P01-I01")
+    with pytest.raises(ValueError, match="already has an active iter"):
+        activate_iter(state, iter_id="P01-I02")
+
+
+def test_activate_iter_allows_second_active_iter_with_flag() -> None:
+    state = _empty_state()
+    _plan_two_iters_one_wave(state)
+    activate_iter(state, iter_id="P01-I01")
+    it = activate_iter(state, iter_id="P01-I02", allow_concurrent=True)
+    assert it.status == IterStatus.ACTIVE
+    assert state.current.iter_id == "P01-I02"
+
+
+def test_close_iter_repoints_current_to_lowest_active_sibling() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="i1")
+    open_iter(state, iter_id="P01-I02", phase_id="P01", title="i2", allow_concurrent=True)
+    open_iter(state, iter_id="P01-I03", phase_id="P01", title="i3", allow_concurrent=True)
+    assert state.current.iter_id == "P01-I03"
+    close_iter(state, iter_id="P01-I03", audit_id="AUD-1")
+    # Repoints to the lowest-numbered remaining ACTIVE sibling, not to null.
+    assert state.current.iter_id == "P01-I01"
+    assert state.iters["P01-I02"].status == IterStatus.ACTIVE
+
+
 def test_edit_wave_plan_mutates_pending() -> None:
     state = _empty_state()
     plan_phase(state, phase_id="P01", title="t")

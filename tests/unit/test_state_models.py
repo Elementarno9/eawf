@@ -411,8 +411,9 @@ def test_edges_for_iter_empty_for_unknown_iter() -> None:
 def test_edges_for_iter_filters_by_iter_id() -> None:
     """edges_for_iter() excludes waves whose iter_id does not match."""
     state = _seed_chain()
-    # Open a second iter with one wave.
-    open_iter(state, iter_id="P01-I02", phase_id="P01", title="Iter2")
+    # Open a second iter with one wave; the graph-filter assertion needs two
+    # iters coexisting, so opt into the single-active-iter guard override.
+    open_iter(state, iter_id="P01-I02", phase_id="P01", title="Iter2", allow_concurrent=True)
     plan_wave(
         state,
         wave_id="P01-I02-W01",

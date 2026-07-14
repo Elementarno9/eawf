@@ -193,7 +193,9 @@ def test_build_ship_gate_drift_audit_coverage_is_spec_derived() -> None:
 def test_build_ship_gate_drift_audit_coverage_spans_all_phase_iters() -> None:
     # Coverage is phase-wide: closed waves under a second iter contribute too.
     state = _phase_with_closed_waves(plans=[(2, 2)])
-    open_iter(state, iter_id="P03-I02", phase_id="P03", title="i2")
+    # Coverage assertion needs a second iter coexisting under P03, so opt into
+    # the single-active-iter guard override.
+    open_iter(state, iter_id="P03-I02", phase_id="P03", title="i2", allow_concurrent=True)
     _add_closed_wave(
         state,
         wave_id="P03-I02-W01",

@@ -198,6 +198,17 @@ def check_current_pointers(state: State) -> Iterable[Violation]:
       ``planned`` or ``active``.
     - ``current.active_wave_ids`` must reference waves whose status is
       ``claimed`` or ``in_progress``.
+
+    The pointer must also stay COMPLETE against the open frontier -- the two
+    LC-6 completeness rules, delegated to :func:`_orphan_active_iter_violations`
+    and :func:`_multi_active_iter_violations`:
+
+    - orphan-active (``INV.CURRENT.ITER_ORPHAN_ACTIVE``): an ACTIVE iter under
+      ``current.phase_id`` while ``current.iter_id`` is null -- the stale iter
+      goes invisible to every current-pointer-driven surface.
+    - multi-active (``INV.LIFECYCLE.MULTI_ACTIVE_ITER``): more than one ACTIVE
+      iter under one phase -- ``current.iter_id`` can name at most one, so a
+      second active iter is structurally unreachable through the pointer.
     """
     cp = state.current
 
@@ -264,6 +275,59 @@ def check_current_pointers(state: State) -> Iterable[Violation]:
                 message=(
                     f"active wave {wave_id!r} has status "
                     f"{w.status.value!r}; expected claimed or in_progress"
+                ),
+            )
+
+    yield from _orphan_active_iter_violations(state)
+    yield from _multi_active_iter_violations(state)
+
+
+def _orphan_active_iter_violations(state: State) -> Iterable[Violation]:
+    """Yield ``INV.CURRENT.ITER_ORPHAN_ACTIVE`` for a null-pointer active iter.
+
+    A live phase whose ``current.iter_id`` pointer is null while one of its
+    iters is still ACTIVE is the LC-6 orphan-active hole: the stale iter goes
+    invisible to every current-pointer-driven surface even though it never
+    closed. Each such iter is flagged so ``eawf validate`` surfaces the drift
+    instead of letting the iter linger unseen. A completeness leg of
+    :func:`check_current_pointers`.
+    """
+    cp = state.current
+    if cp.phase_id is None or cp.iter_id is not None:
+        return
+    for iter_id, it in state.iters.items():
+        if it.phase_id == cp.phase_id and it.status == IterStatus.ACTIVE.value:
+            yield Violation(
+                code="INV.CURRENT.ITER_ORPHAN_ACTIVE",
+                path="/current/iter_id",
+                message=(
+                    f"iter {iter_id!r} is active under current.phase_id "
+                    f"{cp.phase_id!r} but current.iter_id is null"
+                ),
+            )
+
+
+def _multi_active_iter_violations(state: State) -> Iterable[Violation]:
+    """Yield ``INV.LIFECYCLE.MULTI_ACTIVE_ITER`` for a phase with >1 active iter.
+
+    A single phase must hold at most one ACTIVE iter at a time; a second
+    ACTIVE iter under the same phase is the LC-6 multi-active hole that let a
+    stale iter run in parallel undetected. Each offending phase is flagged
+    once, listing its ACTIVE iters in ``state.iters`` order. A completeness
+    leg of :func:`check_current_pointers`.
+    """
+    active_by_phase: dict[str, list[str]] = {}
+    for iter_id, it in state.iters.items():
+        if it.status == IterStatus.ACTIVE.value:
+            active_by_phase.setdefault(it.phase_id, []).append(iter_id)
+    for phase_id, iter_ids in active_by_phase.items():
+        if len(iter_ids) > 1:
+            yield Violation(
+                code="INV.LIFECYCLE.MULTI_ACTIVE_ITER",
+                path=f"/phases/{phase_id}",
+                message=(
+                    f"phase {phase_id!r} has {len(iter_ids)} active iters "
+                    f"{iter_ids!r}; expected at most one"
                 ),
             )
 
