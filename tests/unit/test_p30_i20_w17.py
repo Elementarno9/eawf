@@ -11,13 +11,11 @@ import tempfile
 from pathlib import Path
 
 import pytest
-import yaml
 from textual.app import App
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 
 from eawf.kernel.spec.common import GateSpec
-from eawf.kernel.spec.wave_body import WaveSpecBody
 from eawf.surfaces.tui.screens.overlays.init_wizard import (
     InitWizardContext,
     InitWizardModal,
@@ -42,7 +40,6 @@ _FAITHFUL_TUI_REL = f"{_FIXTURES_REL}/tui_round_1col_faithful.png"
 _SQUARE_TUI_REL = f"{_FIXTURES_REL}/tui_square_1col_divergent.png"
 #: Dotted path to the live PNG capture the image gate calls in live mode.
 _CAPTURE_PNG_SYNC = "eawf.surfaces.tui.snapshot.pilot_harness.capture_mockup_golden_screen_png_sync"
-_SPEC = _REPO_ROOT / ".ea" / "specs" / "P30" / "P30-I20" / "P30-I20-W17.md"
 _SIZE = (120, 44)
 _RESVG = "resvg"
 _HAS_RESVG = shutil.which(_RESVG) is not None
@@ -117,12 +114,33 @@ def _capture_live_init_wizard_png() -> bytes:
     return _render_svg_to_png(_capture_live_init_wizard_svg())
 
 
+#: The mockup gate this module exercises, as its own fixture.
+#:
+#: It used to be parsed out of the wave's spec markdown in ``.ea/specs/``. That
+#: coupled a permanent test to a TRANSIENT artifact: a wave spec is the
+#: authoring vehicle for a wave, and the spec lifecycle archives it out of the
+#: tree once its phase closes (the typed criteria + gates persist in
+#: ``state.json``; the body stays recoverable from git history). A test that
+#: reads one therefore breaks the moment the phase it belongs to is archived --
+#: which is a property of the calendar, not of the code under test. The gate is
+#: three fixture paths, so the test simply owns them.
+_GATE_BODY: dict[str, object] = {
+    "id": "G-01",
+    "criterion_id": "CR-01",
+    "kind": "mockup_golden_diff",
+    "args": {
+        "golden_path": f"{_FIXTURES_REL}/init_wizard_j1_actual_tui_screenshot.png",
+        "mockup_png": f"{_FIXTURES_REL}/init_wizard_j1_redesign_mockup.png",
+        "tui_png": f"{_FIXTURES_REL}/init_wizard_j1_actual_tui_screenshot.png",
+    },
+    "policy": "block",
+    "cadence": "every-wave",
+}
+
+
 def _load_spec_gate() -> GateSpec:
-    """Parse and return the committed P30-I20-W17 mockup gate row."""
-    body = _SPEC.read_text(encoding="utf-8")
-    block = body.split("```eawf-wave-body", 1)[1].split("```", 1)[0]
-    parsed = WaveSpecBody.from_mapping(yaml.safe_load(block))
-    return next(gate for gate in parsed.gates if gate.id == "G-01")
+    """Return the mockup gate row this module scores."""
+    return GateSpec.model_validate(_GATE_BODY)
 
 
 def _run_gate(gate: GateSpec) -> CheckResult:

@@ -16145,7 +16145,8 @@
   "current": {
     "active_session_ids": [],
     "active_wave_ids": [
-      "P30-I21-W46"
+      "P30-I21-W46",
+      "P30-I21-W47"
     ],
     "iter_id": null,
     "phase_id": "P30",
@@ -28010,6 +28011,19 @@
       "scope_id": "P30-I21-W46",
       "updated_at": "2026-07-14T14:16:59.338720Z"
     },
+    "P30-I21-W47": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W47-bucket-20260714T143412Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I21-W47",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I21-W47",
+      "updated_at": "2026-07-14T14:34:12.518666Z"
+    },
     "P30-I22-W01": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I22-W01-bucket-20260701T234041Z",
@@ -32059,7 +32073,8 @@
         "P30-I21-W43",
         "P30-I21-W44",
         "P30-I21-W45",
-        "P30-I21-W46"
+        "P30-I21-W46",
+        "P30-I21-W47"
       ]
     },
     "P30-I22": {
@@ -33398,7 +33413,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T14:16:59.342116Z",
+  "updated_at": "2026-07-14T14:39:55.217527Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -117378,7 +117393,74 @@
         "src/eawf/platform/profiles/data/core.yaml",
         "AGENTS.md"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "criterion": "gitignored",
+            "file_scopes": [
+              ".gitignore",
+              "src/eawf/platform/install/gitignore_writer.py",
+              "src/eawf/surfaces/cli/commands/hook.py",
+              "tools/commit_prefix_lint.py",
+              ".pre-commit-config.yaml",
+              "src/eawf/platform/profiles/data/core.yaml",
+              "AGENTS.md"
+            ],
+            "pattern": "gitignored"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "committed",
+            "file_scopes": [
+              ".gitignore",
+              "src/eawf/platform/install/gitignore_writer.py",
+              "src/eawf/surfaces/cli/commands/hook.py",
+              "tools/commit_prefix_lint.py",
+              ".pre-commit-config.yaml",
+              "src/eawf/platform/profiles/data/core.yaml",
+              "AGENTS.md"
+            ],
+            "pattern": "committed"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "whitelist",
+            "file_scopes": [
+              ".gitignore",
+              "src/eawf/platform/install/gitignore_writer.py",
+              "src/eawf/surfaces/cli/commands/hook.py",
+              "tools/commit_prefix_lint.py",
+              ".pre-commit-config.yaml",
+              "src/eawf/platform/profiles/data/core.yaml",
+              "AGENTS.md"
+            ],
+            "pattern": "whitelist"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "GATE-03",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I21-W46",
       "intent": {
         "desired_outcome": "The event store is local-only, the typed evidence stores stay committed, and the leak gates scan every store that remains in version control.",
@@ -117397,70 +117479,339 @@
       "opened_at": "2026-07-14T14:16:58.510050Z",
       "outcome": null,
       "runtime_baseline": {
-        "api_duration_ms": 14523805,
-        "cache_creation_input_tokens": 637211,
-        "cache_read_input_tokens": 188863604,
-        "captured_at": "2026-07-14T14:16:59.338658Z",
-        "cost_usd": 107.220962,
+        "api_duration_ms": 0,
+        "cache_creation_input_tokens": 90446,
+        "cache_read_input_tokens": 1006752,
+        "captured_at": "2026-07-14T14:38:05.133711Z",
+        "cost_usd": 1.667301,
         "harness": "claude-code",
-        "input_tokens": 1040,
-        "measure_version": 4,
+        "input_tokens": 28,
+        "measure_version": 7,
         "model": "claude-opus-4-8",
-        "output_tokens": 256474,
-        "session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
-        "shared_wave_count": null,
-        "total_duration_ms": 14523805
+        "output_tokens": 10373,
+        "session_id": "b827a777-4439-4242-b163-0d884be53d5b",
+        "shared_wave_count": 2,
+        "total_duration_ms": 0
       },
-      "runtime_carry": null,
-      "runtime_latest": null,
+      "runtime_carry": {
+        "api_duration_ms": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cost_usd": 0.0,
+        "counter_resets": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "sessions_folded": 1,
+        "total_duration_ms": 0
+      },
+      "runtime_latest": {
+        "api_duration_ms": 0,
+        "cache_creation_input_tokens": 90446,
+        "cache_read_input_tokens": 1006752,
+        "captured_at": "2026-07-14T14:38:05.058263Z",
+        "cost_usd": 1.667301,
+        "harness": "claude-code",
+        "input_tokens": 28,
+        "measure_version": 7,
+        "model": "claude-opus-4-8",
+        "output_tokens": 10373,
+        "session_id": "b827a777-4439-4242-b163-0d884be53d5b",
+        "shared_wave_count": 2,
+        "total_duration_ms": 0
+      },
       "runtime_preference": null,
-      "sessions": {},
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cost_usd": 0.0,
+          "ended_at": "2026-07-14T14:32:55.088232Z",
+          "exit_status": 0,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "runtime": "claude-code",
+          "session_id": "e267c798-b7d3-4133-a7ea-2512b8680e11",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:e267c798-b7d3-4133-a7ea-2512b8680e11",
+          "started_at": "2026-07-14T14:32:55.184436Z",
+          "subprocess_pid": null
+        },
+        "2": {
+          "attempt": 2,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cost_usd": 0.0,
+          "ended_at": "2026-07-14T14:38:05.058263Z",
+          "exit_status": 0,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "runtime": "claude-code",
+          "session_id": "b827a777-4439-4242-b163-0d884be53d5b",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:b827a777-4439-4242-b163-0d884be53d5b",
+          "started_at": "2026-07-14T14:38:05.133711Z",
+          "subprocess_pid": null
+        }
+      },
       "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "The event store is gitignored in this repo and in the gitignore template eawf init writes so a spawned agent's raw stdout can no longer reach version control",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The event store is gitignored in this repo and in the gitignore template eawf init writes so a spawned agent's raw stdout can no longer reach version control",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "The event store is gitignored in this repo and in the gitignore template eawf init writes so a spawned agent's raw stdout can no longer reach version control",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "The path-leak email-leak and detect-secrets gates no longer exempt the stores under .ea/store so a future free-text field in a committed store is scanned rather than skipped",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The path-leak email-leak and detect-secrets gates no longer exempt the stores under .ea/store so a future free-text field in a committed store is scanned rather than skipped",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "The path-leak email-leak and detect-secrets gates no longer exempt the stores under .ea/store so a future free-text field in a committed store is scanned rather than skipped",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-03"
+          ],
           "id": "CR-03",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "The state-commit path whitelist prose names the typed stores and states that the event store is not among them",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The state-commit path whitelist prose names the typed stores and states that the event store is not among them",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "The state-commit path whitelist prose names the typed stores and states that the event store is not among them",
           "waiver_reason": null
         }
       ],
       "title": "Stop committing the event store",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W47": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+      "claimed_at": "2026-07-14T14:34:12.454931Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Reactive CI-repair wave appended at the ship gate; criteria authored from the macos-26 WaitForScreenTimeout failure and gated by the TUI suite",
+        "waived_at": "2026-07-14T14:34:11.736367Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The TUI Pilot tests mount the full app, which offloads to background workers, then settle with pilot.pause alone. Pause is idle-based, so on a loaded runner the app never goes idle inside the window and the test dies on WaitForScreenTimeout. The repo already has settle_screen for exactly this and these files never used it. It reddened the release PR on macos-26.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/tui/"
+      ],
+      "gates": [
+        {
+          "args": {
+            "criterion": "background",
+            "file_scopes": [
+              "tests/tui/"
+            ],
+            "pattern": "background"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "intermediate",
+            "file_scopes": [
+              "tests/tui/"
+            ],
+            "pattern": "intermediate"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W47",
+      "intent": {
+        "desired_outcome": "A Pilot test waits for the workers it started, so it asserts what the app renders rather than how fast the runner was.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Await the worker queue after the mount pause in every TUI test that drives the full app",
+          "Confirm no test depended on asserting an un-drained intermediate state"
+        ],
+        "priority_rationale": "This is the same defect class as the zoom focus race: a test that only passes when it wins a race against its own app.",
+        "problem": "TUI Pilot tests settle with pilot.pause alone while the app's background workers are still running, so they pass or fail on how loaded the host is.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-14T14:34:11.784135Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 0,
+        "cache_creation_input_tokens": 90446,
+        "cache_read_input_tokens": 1006752,
+        "captured_at": "2026-07-14T14:38:05.134105Z",
+        "cost_usd": 1.667301,
+        "harness": "claude-code",
+        "input_tokens": 28,
+        "measure_version": 7,
+        "model": "claude-opus-4-8",
+        "output_tokens": 10373,
+        "session_id": "b827a777-4439-4242-b163-0d884be53d5b",
+        "shared_wave_count": 2,
+        "total_duration_ms": 0
+      },
+      "runtime_carry": {
+        "api_duration_ms": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cost_usd": 0.0,
+        "counter_resets": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "sessions_folded": 0,
+        "total_duration_ms": 0
+      },
+      "runtime_latest": {
+        "api_duration_ms": 0,
+        "cache_creation_input_tokens": 90446,
+        "cache_read_input_tokens": 1006752,
+        "captured_at": "2026-07-14T14:38:05.058263Z",
+        "cost_usd": 1.667301,
+        "harness": "claude-code",
+        "input_tokens": 28,
+        "measure_version": 7,
+        "model": "claude-opus-4-8",
+        "output_tokens": 10373,
+        "session_id": "b827a777-4439-4242-b163-0d884be53d5b",
+        "shared_wave_count": 2,
+        "total_duration_ms": 0
+      },
+      "runtime_preference": null,
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cost_usd": 0.0,
+          "ended_at": "2026-07-14T14:38:05.058263Z",
+          "exit_status": 0,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "runtime": "claude-code",
+          "session_id": "b827a777-4439-4242-b163-0d884be53d5b",
+          "session_log_handle": "urn:eawf:v1:session-log:claude-code:b827a777-4439-4242-b163-0d884be53d5b",
+          "started_at": "2026-07-14T14:38:05.134105Z",
+          "subprocess_pid": null
+        }
+      },
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
+          "id": "CR-01",
+          "kind": "converted",
+          "measurable_signal": "Every TUI Pilot test that mounts the full app awaits its background workers after the mount pause so a loaded runner cannot time it out",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "tui_pilot",
+            "object": "Every TUI Pilot test that mounts the full app awaits its background workers after the mount pause so a loaded runner cannot time it out",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "Every TUI Pilot test that mounts the full app awaits its background workers after the mount pause so a loaded runner cannot time it out",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
+          "id": "CR-02",
+          "kind": "converted",
+          "measurable_signal": "The full TUI suite passes with the drain in place which proves no test was asserting an un-drained intermediate state",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The full TUI suite passes with the drain in place which proves no test was asserting an un-drained intermediate state",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The full TUI suite passes with the drain in place which proves no test was asserting an un-drained intermediate state",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Drain the workers the Pilot tests race",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
