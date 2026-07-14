@@ -317,7 +317,16 @@ def _state_for_scope(state: State, *, scope: str | None) -> State:
 
 
 def _variance_rows(state: State, *, scope: str | None) -> list[VarianceWaveProjection]:
-    """Return all per-wave variance drill rows for the requested scope."""
+    """Return all per-wave variance drill rows for the requested scope.
+
+    An actual flagged :attr:`ActualSummary.calibration_excluded` is skipped, for
+    the same reason the bucket re-fit and the CLI variance metrics skip it: the
+    figure is a floor (a counter reset re-originated the wave) or a split (several
+    concurrent waves shared one session), so it measures the capture rather than
+    the pace. These rows feed both the aggregate M26 gauge and the per-bucket
+    variance table, which IS a reference class -- and they must agree with the CLI
+    metric computed off the same state, or the same number differs by surface.
+    """
     estimates = state.estimates or {}
     rows: list[VarianceWaveProjection] = []
     for wave in state.waves.values():
@@ -327,7 +336,7 @@ def _variance_rows(state: State, *, scope: str | None) -> list[VarianceWaveProje
             continue
         est = _estimate_for_wave(estimates, wave.id)
         act = _actual_for_wave(state, wave.id)
-        if est is None or act is None:
+        if est is None or act is None or act.calibration_excluded:
             continue
         delta = act.elapsed_eu - est.expected_eu
         variance_pct = delta / est.expected_eu * 100.0 if est.expected_eu > 0 else None

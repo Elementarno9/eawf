@@ -18,6 +18,7 @@ from eawf.observability.telemetry.metrics_projection import (
 )
 from eawf.observability.telemetry.models import TelemetryRuntimeSwitch, TelemetrySession
 from eawf.observability.telemetry.store import SqliteMetricsStore
+from eawf.workflow.estimation.metrics import compute_estimate_actual_variance
 
 pytestmark = pytest.mark.unit
 
@@ -336,6 +337,43 @@ def test_compute_metrics_projection_exposes_variance_by_bucket(tmp_path: Path) -
     assert buckets["M"].inside_pessimistic_share == pytest.approx(1.0)
     assert buckets["L"].inside_pessimistic_share == pytest.approx(0.0)
     assert buckets["L"].waves[0].wave_id == "P01-I01-W02"
+
+
+def test_metrics_projection_agrees_with_the_cli_metric_on_an_excluded_actual(
+    tmp_path: Path,
+) -> None:
+    """The projection and the CLI metric report the SAME number on the same state.
+
+    Both compute the M26 estimate-actual variance, but the operator reaches one
+    through ``eawf metrics variance`` and the other by opening the TUI metrics
+    overlay. An actual flagged ``calibration_excluded`` is a floor or a split, so
+    neither may count it -- and if only one of them drops it, the same typed
+    metric reports two different numbers depending on which surface you open.
+    """
+    state = _state()
+    # Re-key both ledgers by wave id so the two code paths resolve the SAME two
+    # rows: the projection resolves an estimate via a scope_id fallback that the
+    # CLI metric does not, and this test is about the exclusion, not that gap.
+    state.estimates = {row.scope_id: row for row in state.estimates.values()}
+    state.actuals = {row.scope_id: row for row in state.actuals.values()}
+    excluded = state.actuals["P01-I01-W01"]
+    state.actuals["P01-I01-W01"] = excluded.model_copy(
+        update={"calibration_excluded": True, "elapsed_eu": 50.0}
+    )
+
+    store = _seed_store(tmp_path)
+    try:
+        projection = compute_metrics_projection(state, store=store, window="7d", now=_NOW)
+    finally:
+        store.close()
+    cli_metric = compute_estimate_actual_variance(state)
+
+    # The excluded wave is M-bucket; only the untouched L-bucket wave survives.
+    assert {row.bucket.value for row in projection.variance_by_bucket} == {"L"}
+    assert projection.variance.sample_count == cli_metric.sample_count == 1
+    assert projection.variance.planned_eu == pytest.approx(cli_metric.planned_eu)
+    assert projection.variance.actual_eu == pytest.approx(cli_metric.actual_eu)
+    assert projection.variance.variance_pct == pytest.approx(cli_metric.variance_pct)
 
 
 def test_compute_metrics_projection_exposes_per_role_calibration(tmp_path: Path) -> None:
