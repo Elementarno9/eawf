@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -609,6 +610,28 @@ def _read_active_campaigns(state_path: Path) -> list[ResearchCampaignPayload]:
     return [p for p in latest.values() if p.status.value == "active"]
 
 
+def _read_active_campaign_cost(state_path: Path, active: list[ResearchCampaignPayload]) -> Decimal:
+    """Return the researcher spend booked against the ACTIVE campaigns.
+
+    A campaign books its researcher spend to its own cost centre rather than
+    to an execution wave, so the total is summed off the campaign-scoped
+    ``dispatch_cost`` events rather than off any wave's counters.
+
+    Args:
+        state_path: Path to the scope's ``state.json``.
+        active: The ACTIVE staged campaigns whose spend to total.
+
+    Returns:
+        The summed researcher spend in USD across *active*.
+    """
+    from eawf.runtime.daemon.methods.research import read_campaign_cost
+
+    return sum(
+        (read_campaign_cost(state_path, payload.campaign_id) for payload in active),
+        Decimal("0"),
+    )
+
+
 def _read_round_tallies(state_path: Path) -> tuple[int, int, bool]:
     """Return ``(rounds_run, checkpoints, saturated)`` off the round store."""
     from eawf.kernel.state.enums import StoreKind
@@ -681,6 +704,7 @@ def research_status(ctx: typer.Context) -> None:
         return
     rounds_run, checkpoints, saturated = _read_round_tallies(state_path)
     open_count, blocking = _read_question_counts(state_path)
+    cost_usd = _read_active_campaign_cost(state_path, active)
     domain_status = DomainProgressStatus.SATURATED if saturated else DomainProgressStatus.READY
     domains = tuple(
         DomainProgress(domain=dispatch.domain, status=domain_status)
@@ -700,11 +724,12 @@ def research_status(ctx: typer.Context) -> None:
             "checkpoints": checkpoints,
             "open_questions": open_count,
             "saturated": saturated,
+            "cost_usd": float(cost_usd),
         }
     }
     text = (
         f"campaign: {progress.kind.value} "
         f"(campaigns={len(active)}, rounds={rounds_run}, checkpoints={checkpoints}, "
-        f"open_questions={open_count})"
+        f"open_questions={open_count}, cost=${cost_usd:.2f})"
     )
     emit_json_or_text(body, text, flags=flags)

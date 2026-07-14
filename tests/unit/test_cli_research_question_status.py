@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -29,7 +30,11 @@ from eawf.kernel.spec.research_campaign import (
     ResearchProfileBlock,
     stage_campaign,
 )
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.events.dispatch_cost import DispatchCostPayload
 from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
+from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon.methods.research import (
     ResearchRoundPayload,
     persist_campaign,
@@ -320,3 +325,66 @@ def test_research_status_renders_campaign_round_checkpoint(tmp_path: Path) -> No
     assert "campaign: runnable" in text.stdout
     assert "rounds=1" in text.stdout
     assert "checkpoints=1" in text.stdout
+
+
+def _book_campaign_cost(workspace: Path, campaign_id: str, cost_usd: str) -> None:
+    """Book *cost_usd* against *campaign_id*'s cost centre.
+
+    Mirrors the campaign-scoped researcher dispatch: the ``dispatch_cost``
+    event scopes to the campaign, not to an execution wave.
+    """
+    state_path = workspace / ".ea" / "state.json"
+    payload = DispatchCostPayload(
+        timestamp=datetime(2026, 6, 11, 12, tzinfo=UTC),
+        wave_id=campaign_id,
+        attempt_id="ATT-1",
+        runtime="claude",
+        model="claude-opus-4-8",
+        input_tokens=10,
+        output_tokens=20,
+        cache_creation_input_tokens=0,
+        cache_read_input_tokens=0,
+        cost_usd=Decimal(cost_usd),
+        pricing_version="v1",
+    )
+    envelope = Envelope(
+        id="EV-cost-1",
+        kind=StoreKind.EVENT,
+        scope_id=campaign_id,
+        created_at=datetime(2026, 6, 11, 12, tzinfo=UTC),
+        summary=f"dispatch_cost wave={campaign_id} cost_usd={cost_usd}",
+        payload=payload.model_dump(mode="json"),
+    )
+    path = store_path(state_path, StoreKind.EVENT)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(envelope.model_dump_json() + "\n")
+
+
+def test_research_status_reports_the_booked_campaign_cost(tmp_path: Path) -> None:
+    """W37: the researcher spend a campaign books is readable from the CLI.
+
+    W15 gave the campaign its own cost centre and the spend lands on the real
+    path, but until now no production caller read it back -- the total was
+    queryable only from a test. The status surface reports it.
+    """
+    workspace = _make_workspace(tmp_path)
+    _seed_campaign_and_round(workspace)
+    _book_campaign_cost(workspace, "campaign-s", "1.25")
+
+    result = runner.invoke(app, ["--json", "-w", str(workspace), "research", "status"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["campaign"]["cost_usd"] == pytest.approx(1.25)
+
+    text = runner.invoke(app, ["-w", str(workspace), "research", "status"])
+    assert "cost=$1.25" in text.stdout
+
+
+def test_research_status_reports_zero_cost_when_nothing_booked(tmp_path: Path) -> None:
+    """Boundary: a staged campaign with no cost event reports 0, not an error."""
+    workspace = _make_workspace(tmp_path)
+    _seed_campaign_and_round(workspace)
+
+    result = runner.invoke(app, ["--json", "-w", str(workspace), "research", "status"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["campaign"]["cost_usd"] == pytest.approx(0.0)
