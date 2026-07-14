@@ -12374,6 +12374,21 @@
       "scope_id": "P30-I25-W53",
       "status": "done",
       "updated_at": "2026-07-14T10:35:07.711166Z"
+    },
+    "P30-I26-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I26-W01",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I26-W01",
+      "model": null,
+      "scope_id": "P30-I26-W01",
+      "status": "done",
+      "updated_at": "2026-07-14T23:21:29.621036Z"
     }
   },
   "agent_sessions": {
@@ -12711,6 +12726,20 @@
       "started_at": "2026-07-13T19:11:50.966645Z",
       "status": "stale",
       "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260714T232055Z-operator-generic": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260714T232055Z-operator-generic",
+      "role": "operator",
+      "runtime": "generic",
+      "scope_id": "P30",
+      "started_at": "2026-07-14T23:20:55.393121Z",
+      "status": "active",
+      "summary": null,
       "worktree_ids": []
     }
   },
@@ -16309,7 +16338,9 @@
   },
   "claims": null,
   "current": {
-    "active_session_ids": [],
+    "active_session_ids": [
+      "SES-20260714T232055Z-operator-generic"
+    ],
     "active_wave_ids": [],
     "iter_id": "P30-I26",
     "phase_id": "P30",
@@ -29850,6 +29881,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I25-W53",
       "updated_at": "2026-07-14T10:31:07.182638Z"
+    },
+    "P30-I26-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I26-W01-bucket-20260714T231925Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I26-W01",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I26-W01",
+      "updated_at": "2026-07-14T23:19:25.194672Z"
     }
   },
   "fleet_run": null,
@@ -33656,7 +33700,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T23:04:10.464998Z",
+  "updated_at": "2026-07-14T23:21:29.621199Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -141599,10 +141643,10 @@
       "blocks": [
         "P30-I26-W23"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "ops-p30-i26-finish",
+      "claimed_at": "2026-07-14T23:19:25.193208Z",
+      "closed_at": "2026-07-14T23:21:29.621036Z",
+      "commit": "dccef7af61d8d0d68a3cf5ff1bb39c0891755299",
       "criteria_floor_waiver": {
         "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
         "waived_at": "2026-07-14T22:57:18.214082Z",
@@ -141631,13 +141675,13 @@
       },
       "iter_id": "P30-I26",
       "opened_at": "2026-07-14T22:57:18.248141Z",
-      "outcome": null,
+      "outcome": "reconnect cursor renamed since->since_event_id (daemon SubscribeParams extra=forbid); gapless catch-up test added; 5 passed",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
