@@ -12695,6 +12695,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-13-A-P30-I20-W21-repair.md",
       "urn": "urn:eawf:v1:artifact:P30-I20-W21/ART-A-P30-I20-W21-repair"
     },
+    "ART-A-P30-I21-eval": {
+      "created_at": "2026-07-14T11:15:42.708795Z",
+      "id": "ART-A-P30-I21-eval",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-07-14-A-P30-I21-iter-close.md",
+      "urn": "urn:eawf:v1:artifact:P30-I21/ART-A-P30-I21-eval"
+    },
     "ART-A-P30-I24-eval": {
       "created_at": "2026-07-04T00:39:37.187395Z",
       "id": "ART-A-P30-I24-eval",
@@ -13407,6 +13417,17 @@
       "scope_id": "P30-I20-W21",
       "status": "complete",
       "verdict": "pass"
+    },
+    "A-P30-I21-eval": {
+      "check_results": [],
+      "created_at": "2026-07-14T11:15:43.399027Z",
+      "id": "A-P30-I21-eval",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A-P30-I21-eval",
+      "scope_id": "P30-I21",
+      "status": "complete",
+      "verdict": "minor"
     },
     "A-P30-I24-eval": {
       "check_results": [],
@@ -33129,7 +33150,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T11:15:00.372822Z",
+  "updated_at": "2026-07-14T11:15:43.399027Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
