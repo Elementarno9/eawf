@@ -170,10 +170,14 @@ class RoundHaltReason(StrEnum):
             :attr:`SaturationReport.saturated` bit was ``True``.
         ROUND_BUDGET: The loop spent its ``round_budget`` without
             saturating — the hard-ceiling termination guarantee.
+        CANCELLED: The caller's ``should_continue`` predicate went ``False``
+            between rounds — the campaign was cancelled while the run was in
+            flight, so the loop stops rather than spawning the next round.
     """
 
     SATURATED = "saturated"
     ROUND_BUDGET = "round_budget"
+    CANCELLED = "cancelled"
 
 
 class Checkpoint(BaseModel):
@@ -265,6 +269,7 @@ def run_round_loop(
     *,
     round_budget: int = DEFAULT_ROUND_BUDGET,
     checkpoint_policy: CheckpointPolicy | None = None,
+    should_continue: Callable[[], bool] | None = None,
 ) -> RoundLoopResult:
     """Drive a bounded research-campaign round loop until dry or out of budget.
 
@@ -298,6 +303,13 @@ def run_round_loop(
             defaults to a fresh :class:`CheckpointPolicy` (the
             :attr:`CheckpointTier.ON_HALT` tier — surface only the
             terminal halt).
+        should_continue: Optional predicate consulted BETWEEN rounds. When it
+            returns ``False`` the loop halts with
+            :attr:`RoundHaltReason.CANCELLED` instead of spawning the next
+            round, so a campaign cancelled in flight stops costing money. It is
+            never consulted before the first round, which keeps the
+            at-least-one-round guarantee that makes the terminal outcome
+            non-``None``. ``None`` means no cancellation check.
 
     Returns:
         A :class:`RoundLoopResult` with the rounds run, the halt reason,
@@ -317,6 +329,11 @@ def run_round_loop(
     halt_reason: RoundHaltReason | None = None
 
     while round_number < round_budget:
+        # Consulted only once a round has run, so the terminal outcome is always
+        # populated: a cancel cannot arrive before the run itself has started.
+        if round_number >= 1 and should_continue is not None and not should_continue():
+            halt_reason = RoundHaltReason.CANCELLED
+            break
         round_number += 1
         outcome = round_runner(round_number)
         saturated = outcome.saturation.saturated

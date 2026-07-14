@@ -30,7 +30,7 @@ from eawf.kernel.spec.research_campaign import (
     ResearchProfileBlock,
     stage_campaign,
 )
-from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.enums import CampaignStatus, StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.events.dispatch_cost import DispatchCostPayload
 from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
@@ -39,6 +39,7 @@ from eawf.runtime.daemon.methods.research import (
     ResearchRoundPayload,
     persist_campaign,
     persist_round,
+    read_latest_campaign,
 )
 from eawf.surfaces.cli.app import app
 
@@ -388,3 +389,34 @@ def test_research_status_reports_zero_cost_when_nothing_booked(tmp_path: Path) -
     result = runner.invoke(app, ["--json", "-w", str(workspace), "research", "status"])
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["campaign"]["cost_usd"] == pytest.approx(0.0)
+
+
+def test_research_status_still_reports_cost_after_the_campaign_goes_terminal(
+    tmp_path: Path,
+) -> None:
+    """A converged campaign does not take its bill with it.
+
+    The operator asks what a campaign cost AFTER it finishes, which is exactly
+    when it is no longer ACTIVE. Reading only ACTIVE campaigns would put the
+    booked spend back out of reach the moment the run completes -- the same gap
+    the cost surface was added to close.
+    """
+    workspace = _make_workspace(tmp_path)
+    _seed_campaign_and_round(workspace)
+    _book_campaign_cost(workspace, "campaign-s", "2.50")
+    # The run completes: the campaign flips to its terminal CONVERGED state.
+    state_path = workspace / ".ea" / "state.json"
+    staged = read_latest_campaign(state_path, "campaign-s")
+    assert staged is not None
+    persist_campaign(state_path, staged.model_copy(update={"status": CampaignStatus.CONVERGED}))
+
+    result = runner.invoke(app, ["--json", "-w", str(workspace), "research", "status"])
+    assert result.exit_code == 0, result.output
+    campaign = json.loads(result.stdout)["campaign"]
+    assert campaign["campaigns"] == 0
+    assert campaign["terminal"] == 1
+    assert campaign["cost_usd"] == pytest.approx(2.50)
+
+    text = runner.invoke(app, ["-w", str(workspace), "research", "status"])
+    assert "cost=$2.50" in text.stdout
+    assert "no research campaign staged" not in text.stdout

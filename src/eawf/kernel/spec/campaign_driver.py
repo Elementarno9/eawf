@@ -405,6 +405,7 @@ def drive_campaign(
     round_runner: Callable[[int], RoundOutcome] | None = None,
     round_budget: int = DEFAULT_ROUND_BUDGET,
     checkpoint_policy: CheckpointPolicy | None = None,
+    should_continue: Callable[[], bool] | None = None,
 ) -> CampaignDriveResult:
     """Dispatch a research campaign to the runner for its cockpit *level*.
 
@@ -438,6 +439,10 @@ def drive_campaign(
             :func:`run_live_rounds` apply its autonomous default. Ignored
             on Level 1 (no loop) and Level 2 (the supervised per-round
             cadence is fixed).
+        should_continue: Optional between-rounds cancellation predicate,
+            forwarded to the live branch's loop. ``False`` halts the run
+            before the next round spawns, so a cancelled campaign stops
+            paying for researchers it will never use.
 
     Returns:
         A :class:`CampaignDriveResult` carrying the level, the staged plan,
@@ -464,6 +469,7 @@ def drive_campaign(
             level=level,
             round_budget=round_budget,
             checkpoint_policy=checkpoint_policy,
+            should_continue=should_continue,
         )
         logger.info(
             f"drive_campaign level={level.value} branch=live "

@@ -591,8 +591,8 @@ def question_list(ctx: typer.Context) -> None:
     emit_json_or_text({"questions": rows}, text, flags=flags)
 
 
-def _read_active_campaigns(state_path: Path) -> list[ResearchCampaignPayload]:
-    """Return the scope's ACTIVE staged campaigns (latest-wins per id)."""
+def _read_campaigns(state_path: Path) -> list[ResearchCampaignPayload]:
+    """Return the scope's staged campaigns in any status (latest-wins per id)."""
     from eawf.kernel.state.enums import StoreKind
     from eawf.kernel.store.envelope import Envelope
     from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
@@ -607,29 +607,35 @@ def _read_active_campaigns(state_path: Path) -> list[ResearchCampaignPayload]:
             envelope = Envelope.model_validate_json(line)
             payload = ResearchCampaignPayload.model_validate(envelope.payload)
             latest[payload.campaign_id] = payload
-    return [p for p in latest.values() if p.status.value == "active"]
+    return list(latest.values())
 
 
-def _read_active_campaign_cost(state_path: Path, active: list[ResearchCampaignPayload]) -> Decimal:
-    """Return the researcher spend booked against the ACTIVE campaigns.
+def _read_active_campaigns(state_path: Path) -> list[ResearchCampaignPayload]:
+    """Return the scope's ACTIVE staged campaigns (latest-wins per id)."""
+    return [p for p in _read_campaigns(state_path) if p.status.value == "active"]
 
-    A campaign books its researcher spend to its own cost centre rather than
-    to an execution wave, so the total is summed off the campaign-scoped
-    ``dispatch_cost`` events rather than off any wave's counters.
+
+def _read_campaign_cost(state_path: Path, campaigns: list[ResearchCampaignPayload]) -> Decimal:
+    """Return the researcher spend booked against *campaigns*.
+
+    A campaign books its researcher spend to its own cost centre rather than to
+    an execution wave, so the total is summed off the campaign-scoped
+    ``dispatch_cost`` events rather than off any wave's counters. The spend of a
+    campaign that has CONVERGED or been CANCELLED counts the same as a running
+    one's: what a campaign cost is asked AFTER it finishes, not only while it
+    runs, so a terminal campaign must not take its bill with it.
 
     Args:
         state_path: Path to the scope's ``state.json``.
-        active: The ACTIVE staged campaigns whose spend to total.
+        campaigns: The staged campaigns whose spend to total, in any status.
 
     Returns:
-        The summed researcher spend in USD across *active*.
+        The summed researcher spend in USD across *campaigns*.
     """
-    from eawf.runtime.daemon.methods.research import read_campaign_cost
+    from eawf.runtime.daemon.methods.research import read_campaign_costs
 
-    return sum(
-        (read_campaign_cost(state_path, payload.campaign_id) for payload in active),
-        Decimal("0"),
-    )
+    totals = read_campaign_costs(state_path, [payload.campaign_id for payload in campaigns])
+    return sum(totals.values(), Decimal("0"))
 
 
 def _read_round_tallies(state_path: Path) -> tuple[int, int, bool]:
@@ -684,6 +690,11 @@ def research_status(ctx: typer.Context) -> None:
     :class:`~eawf.kernel.spec.operator_input.CampaignProgressState` answer to
     "can the campaign proceed") plus the per-campaign round + checkpoint tallies.
     Exits 0 with an honest "no campaign" line when the scope has staged none.
+
+    A scope whose campaigns have all reached a terminal state (CONVERGED or
+    CANCELLED) still reports what they cost: the operator asks what a campaign
+    spent after it finishes, not only while it runs, so a terminal campaign does
+    not take its bill with it.
     """
     from eawf.kernel.spec.operator_input import (
         CampaignProgressState,
@@ -698,13 +709,22 @@ def research_status(ctx: typer.Context) -> None:
         errors.emit_error(exc, flags=flags)
         return
 
-    active = _read_active_campaigns(state_path)
-    if not active:
+    campaigns = _read_campaigns(state_path)
+    if not campaigns:
         emit_json_or_text({"campaign": None}, "no research campaign staged", flags=flags)
+        return
+    cost_usd = _read_campaign_cost(state_path, campaigns)
+    active = [payload for payload in campaigns if payload.status.value == "active"]
+    if not active:
+        terminal = len(campaigns)
+        emit_json_or_text(
+            {"campaign": {"campaigns": 0, "terminal": terminal, "cost_usd": float(cost_usd)}},
+            f"campaign: none active ({terminal} terminal, cost=${cost_usd:.2f})",
+            flags=flags,
+        )
         return
     rounds_run, checkpoints, saturated = _read_round_tallies(state_path)
     open_count, blocking = _read_question_counts(state_path)
-    cost_usd = _read_active_campaign_cost(state_path, active)
     domain_status = DomainProgressStatus.SATURATED if saturated else DomainProgressStatus.READY
     domains = tuple(
         DomainProgress(domain=dispatch.domain, status=domain_status)

@@ -273,10 +273,10 @@ async def _drain_stream_chunked(
     out of a running buffer to fire ``on_chunk`` as each line arrives. The
     decoded line string keeps its trailing newline (matching what a
     ``readline`` loop would yield); a final partial line with no trailing
-    newline is emitted at EOF. With ``--output-format json`` claude emits a
-    single envelope, so the live stream is typically one chunk -- the framing
-    still fans it as a chunk so the seam behaves uniformly with the codex
-    JSONL lane. Decoding uses ``errors="replace"`` so a partial multi-byte
+    newline is emitted at EOF. With the ``--output-format stream-json`` default
+    claude emits one envelope per event, so the framing fans a chunk per line as
+    the run proceeds -- the same shape as the codex JSONL lane, which is what
+    lets one seam serve both. Decoding uses ``errors="replace"`` so a partial multi-byte
     sequence at a chunk boundary can never crash the live fan-out. The
     returned bytes are byte-equivalent to a full buffered read, so the
     existing parser sees the same input.

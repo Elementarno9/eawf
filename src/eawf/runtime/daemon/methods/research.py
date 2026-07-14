@@ -25,7 +25,7 @@ import logging
 import threading
 import time
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -1030,35 +1030,55 @@ def read_campaign_rounds(state_path: Path, campaign_id: str) -> list[ResearchRou
     return rounds
 
 
-def read_campaign_cost(state_path: Path, campaign_id: str) -> Decimal:
-    """Return the total researcher spend booked against *campaign_id* (W15).
+def read_campaign_costs(state_path: Path, campaign_ids: Collection[str]) -> dict[str, Decimal]:
+    """Return the researcher spend booked against each of *campaign_ids*.
 
-    Sums the ``cost_usd`` of every ``dispatch_cost`` event scoped to the
-    campaign in the event store -- the campaign's own cost centre, separate
-    from any execution wave's counters. Returns ``Decimal("0")`` when the store
-    is absent or carries no cost row for the campaign.
+    Sums the ``cost_usd`` of every ``dispatch_cost`` event scoped to a campaign
+    -- the campaign's own cost centre, separate from any execution wave's
+    counters. The event store is walked ONCE for the whole set, so totalling N
+    campaigns costs one pass rather than N.
+
+    Every id in *campaign_ids* appears in the result; one with no cost row maps
+    to ``Decimal("0")``, so a caller never has to distinguish "absent" from
+    "nothing spent".
+
+    Args:
+        state_path: Path to the scope's ``state.json``.
+        campaign_ids: The campaigns whose researcher spend to total.
+
+    Returns:
+        A mapping of campaign id to its summed researcher cost in USD.
+    """
+    totals: dict[str, Decimal] = {campaign_id: Decimal("0") for campaign_id in campaign_ids}
+    if not totals:
+        return totals
+    path = store_path(state_path, StoreKind.EVENT)
+    if not path.exists():
+        return totals
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        if not raw_line.strip():
+            continue
+        envelope = Envelope.model_validate_json(raw_line)
+        if envelope.scope_id not in totals:
+            continue
+        payload = envelope.payload
+        if isinstance(payload, dict) and payload.get("event_type") == "dispatch_cost":
+            totals[envelope.scope_id] += Decimal(str(payload.get("cost_usd", "0")))
+    return totals
+
+
+def read_campaign_cost(state_path: Path, campaign_id: str) -> Decimal:
+    """Return the total researcher spend booked against *campaign_id*.
 
     Args:
         state_path: Path to the scope's ``state.json``.
         campaign_id: The campaign whose researcher spend to total.
 
     Returns:
-        The summed campaign researcher cost in USD.
+        The summed campaign researcher cost in USD, or ``Decimal("0")`` when
+        the store is absent or carries no cost row for the campaign.
     """
-    path = store_path(state_path, StoreKind.EVENT)
-    if not path.exists():
-        return Decimal("0")
-    total = Decimal("0")
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        if not raw_line.strip():
-            continue
-        envelope = Envelope.model_validate_json(raw_line)
-        if envelope.scope_id != campaign_id:
-            continue
-        payload = envelope.payload
-        if isinstance(payload, dict) and payload.get("event_type") == "dispatch_cost":
-            total += Decimal(str(payload.get("cost_usd", "0")))
-    return total
+    return read_campaign_costs(state_path, [campaign_id])[campaign_id]
 
 
 class RunCampaignParams(BaseModel):
@@ -2082,6 +2102,18 @@ def run_campaign(
         if checkpoint_policy is not None
         else CheckpointPolicy(tier=CheckpointTier.ON_HALT)
     )
+
+    def _still_active() -> bool:
+        """Return whether the campaign is still ACTIVE, re-read from the store.
+
+        Consulted between rounds. Cancelling a campaign tombstones its record but
+        the loop holds the campaign it started with, so without this re-read a
+        cancel at round 1 of a five-round budget still spawns -- and pays for --
+        the researchers of rounds 2 through 5.
+        """
+        latest = read_latest_campaign(state_path, args.campaign_id)
+        return latest is not None and latest.status is CampaignStatus.ACTIVE
+
     result = drive_campaign(
         campaign.campaign.topic,
         campaign.config,
@@ -2089,6 +2121,7 @@ def run_campaign(
         round_runner=runner,
         round_budget=args.round_budget,
         checkpoint_policy=policy,
+        should_continue=_still_active,
     )
     loop = result.loop_result
     assert loop is not None  # a live drive always runs the loop

@@ -132,6 +132,7 @@ def run_live_rounds(
     level: CockpitLevel = CockpitLevel.LIVE,
     round_budget: int = DEFAULT_ROUND_BUDGET,
     checkpoint_policy: CheckpointPolicy | None = None,
+    should_continue: Callable[[], bool] | None = None,
 ) -> tuple[StagedCampaign, RoundLoopResult]:
     """Drive a live (Level 3+) research campaign: stage the plan, then run rounds.
 
@@ -176,6 +177,10 @@ def run_live_rounds(
             :attr:`~eawf.kernel.spec.round_loop.CheckpointTier.EVERY_ROUND`
             is rejected: that per-round pause is the Level-2 supervised
             cadence, not an autonomous one.
+        should_continue: Optional between-rounds cancellation predicate,
+            forwarded to :func:`run_round_loop`. ``False`` halts the run with
+            :attr:`~eawf.kernel.spec.round_loop.RoundHaltReason.CANCELLED`
+            before the next round spawns.
 
     Returns:
         A ``(staged_campaign, loop_result)`` pair: the Level-1 plan that was
@@ -210,6 +215,7 @@ def run_live_rounds(
         round_runner,
         round_budget=round_budget,
         checkpoint_policy=policy,
+        should_continue=should_continue,
     )
     logger.info(
         f"run_live_rounds level={level.value} domains={staged.domain_count} "

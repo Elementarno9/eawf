@@ -510,6 +510,59 @@ def test_campaign_run_logs_the_terminal_state_it_actually_reached(
     _run(body)
 
 
+def test_campaign_cancelled_mid_run_stops_spawning_researchers(tmp_path: Path) -> None:
+    """A cancelled campaign halts before the next round spawns.
+
+    The cancel verb tombstones the campaign record, but the loop holds the
+    campaign it started with. Without a between-rounds re-read, a cancel at
+    round 1 of a five-round budget still spawns -- and pays for -- the
+    researchers of rounds 2 through 5, and books their cost to a campaign the
+    operator has already abandoned. A cancel that does not stop the spending is
+    not a cancel.
+
+    The rounds here never saturate (every round returns a finding), so nothing
+    but the cancel can stop the loop before its budget runs out.
+    """
+    ctx, state_path = _build_ctx(tmp_path)
+    campaign_id = "campaign-halts"
+    spawned: list[str] = []
+
+    def _produce_and_cancel(dispatch: StagedDispatch) -> Mapping[str, object]:
+        spawned.append(dispatch.domain)
+        latest = read_latest_campaign(state_path, campaign_id)
+        assert latest is not None
+        if latest.status is CampaignStatus.ACTIVE:
+            persist_campaign(
+                state_path,
+                latest.model_copy(
+                    update={
+                        "status": CampaignStatus.CANCELLED,
+                        "tombstone": CampaignTombstone(
+                            cancelled_at=_now(), reason="operator abandoned it"
+                        ),
+                    }
+                ),
+            )
+        # A finding every round: the saturation reducer never declares it dry.
+        return _agent_end_body(dispatch.domain, evidence_ref="evidence/x.md")
+
+    async def body() -> None:
+        await create_campaign(ctx, _stage_params(campaign_id))
+        result = run_campaign(
+            ctx,
+            RunCampaignParams(campaign_id=campaign_id, round_budget=5),
+            produce_agent_end=_produce_and_cancel,
+            checkpoint_policy=CheckpointPolicy(tier=CheckpointTier.ON_HALT),
+        )
+
+        assert result["rounds_run"] == 1, "the cancelled campaign kept running rounds"
+        assert result["halt_reason"] == "cancelled"
+        # Two staged domains: round 1 spawned both and nothing spawned after.
+        assert spawned == ["market-structure", "pricing-models"]
+
+    _run(body)
+
+
 # --------------------------------------------------------------------------
 # Helpers: reconstruct survivor claims + a synthesis-artifact chassis body
 # --------------------------------------------------------------------------
