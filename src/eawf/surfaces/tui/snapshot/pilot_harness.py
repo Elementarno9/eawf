@@ -90,6 +90,64 @@ _DRIFT_DIFF_MAX_LINES: int = 200
 _POLL_BACKSTOP_MAX_CYCLES: int = 40
 
 
+async def quiesce_volatile_chrome(pilot: Pilot[object]) -> None:
+    """Freeze the two timer-driven chrome elements before a golden capture.
+
+    Two elements of the rendered chrome flip on wall-clock timers, not on
+    fixture state, so a capture holds whichever phase the host happened to be
+    in when the screen was read -- a coin flip decided by scheduler load, not
+    by what the pane renders. Both drove the lone red macos-15 CI job:
+
+    * **The daemon-degraded flip.** The read-only binder trips
+      ``app.degraded`` true ~1.5 s after mount when no daemon answers its
+      socket probe (the CI default). That top-docks the degraded banner OVER
+      the Header row -- :func:`normalize_snapshot` then drops the banner line,
+      so the captured frame loses the Header (brand ``Eä``) and a 40-row
+      golden reads back as 39 -- and flips every ``app.degraded``-reading pane
+      into its degraded notice. Forcing ``degraded`` back to ``False``,
+      re-syncing the banner (hidden), and refreshing the feed notices pins the
+      frame to the deterministic non-degraded shape every golden holds.
+    * **The footer heartbeat pulse.** The footer ``•`` dot blanks to a bare
+      space every 1.0 s pulse; a blank cell is rstripped by
+      :func:`capture_screen_text`, dropping the trailing bullet from the
+      footer row. :meth:`~eawf.surfaces.tui.widgets.heartbeat.Heartbeat.ack`
+      forces every heartbeat lit so the bullet is always present. (The prior
+      normalizer fix only collapsed the dim glyph, not the blank phase.)
+
+    One frame is pumped after the degraded revert so the banner-hide layout
+    pass and the pane-notice repaint land (the Header returns to row 0) before
+    the heartbeat is forced last -- with no further event-loop yield, so the
+    pulse timer cannot re-blank the dot between the ``ack`` and the caller's
+    capture.
+
+    Every guard is a soft ``getattr`` so a bare (non-``EaApp``) host under a
+    Pilot -- which carries none of these seams -- is a clean no-op.
+
+    Args:
+        pilot: The live :class:`~textual.pilot.Pilot` from ``app.run_test()``.
+    """
+    from eawf.surfaces.tui.widgets.heartbeat import Heartbeat
+
+    app = pilot.app
+    if hasattr(app, "degraded"):
+        app.degraded = False
+    sync_banner = getattr(app, "_sync_degraded_banner", None)
+    if callable(sync_banner):
+        sync_banner()
+    for listener in getattr(app, "_feed_listeners", ()):
+        refresh_notice = getattr(listener, "refresh_empty_notice", None)
+        if callable(refresh_notice):
+            refresh_notice()
+    # Pump one frame so the banner-hide layout + pane-notice repaint land
+    # before the heartbeat is forced.
+    await pilot.pause()
+    # Force every heartbeat lit LAST: no further await runs before the caller
+    # captures, so the 1.0 s pulse timer cannot toggle the dot back to blank
+    # between this ack and the capture.
+    for heartbeat in app.query(Heartbeat):
+        heartbeat.ack()
+
+
 async def settle_screen(pilot: Pilot[object]) -> str:
     """Pump the app until its rendered frame stabilises, return that frame.
 
@@ -99,15 +157,19 @@ async def settle_screen(pilot: Pilot[object]) -> str:
     therefore capture an in-between frame (state not yet bound → empty-
     scope placeholder), making a golden flaky under scheduler load. This
     helper pumps the message loop until two consecutive normalised
-    captures match (or :data:`_SETTLE_MAX_CYCLES` is reached), so the
-    snapshot + cast harness always captures the settled frame.
+    captures match (or :data:`_SETTLE_MAX_CYCLES` is reached), then
+    :func:`quiesce_volatile_chrome` freezes the two timer-driven chrome
+    elements (the daemon-degraded flip and the footer heartbeat pulse) and a
+    final frame is captured, so the returned text -- and the app state the
+    caller reads on any immediately-following sync capture -- is the settled,
+    quiesced frame.
 
     Args:
         pilot: The live :class:`~textual.pilot.Pilot` from
             ``app.run_test()``.
 
     Returns:
-        The settled, normalised screen text.
+        The settled, quiesced, normalised screen text.
     """
     # Drain background workers (e.g. the GitPane git probe, which now runs off
     # the event loop) before sampling so the capture reflects the post-worker
@@ -118,9 +180,12 @@ async def settle_screen(pilot: Pilot[object]) -> str:
         await pilot.pause()
         current = normalize_snapshot(capture_screen_text(pilot.app))
         if current == previous:
-            return current
+            break
         previous = current
-    return previous
+    # Freeze the timer-driven chrome (degraded banner + heartbeat pulse) so the
+    # final capture is phase-independent regardless of how slowly the host ran.
+    await quiesce_volatile_chrome(pilot)
+    return normalize_snapshot(capture_screen_text(pilot.app))
 
 
 async def push_state_revision(pilot: Pilot[object], new_state: State) -> str:
@@ -881,6 +946,7 @@ __all__ = [
     "normalize_snapshot",
     "probe_footer_key_response",
     "push_state_revision",
+    "quiesce_volatile_chrome",
     "resvg_available",
     "settle_screen",
     "tick_poll_backstop",
