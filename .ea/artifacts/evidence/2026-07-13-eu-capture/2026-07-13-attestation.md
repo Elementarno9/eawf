@@ -49,7 +49,9 @@ The number called `api_duration_ms` was redefined four times inside this one ite
 | 2 | Summed gaps between rows, dropping gaps over a 15-minute ceiling | The ceiling is a guess. A long tool run is dropped; a 14-minute nap is kept. |
 | 3 | Summed per-turn spans: everything inside a turn, nothing between turns | Still the wall clock. A turn *contains* the stall at a tool-permission prompt, where the agent waits on a human. This one booked **12.9 hours of the operator asleep at a prompt** as agent runtime. |
 | 4 | Claude's own `turn_duration` figure, per completed turn | Claude measures its own turn and excludes the approval stall — a distinction nothing in the transcript can reconstruct, because an approval stall and a long-running tool have the identical shape. But Claude's figure is not always a measure of *work*, and it had no ceiling: see below. |
-| 5 | The same sum, **clamped to the transcript's own wall-clock span** | Current. Whatever the agent did, it did inside the lifetime of the file that reported it. |
+| 5 | The same sum, clamped to the transcript's own wall-clock span | Wrong, and the mistake is instructive: it bounds the fabrication *with* the fabrication. |
+| 6 | The same clamp, applied even when the transcript shows no span | Version 5 skipped the clamp entirely when fewer than two rows carried a timestamp — the input most likely to be pathological. A door in the ceiling. |
+| 7 | The **interrupted turn is excluded**, and the span is never substituted | Current. An interrupted turn is not mis-measured; it is unmeasurable. |
 
 The measure deliberately has **no span fallback for the turn still in flight**: it reports zero for an unmeasured turn rather than a guess. The `turn_duration` row lands after the Stop hook has read the transcript, so a turn is counted at the *next* capture, not its own. That is why a wave must cross a Stop boundary between claim and close — not ceremony, but the structure of the measurement. (This supersedes two of W43's criteria as written; Decision `D-W43-CRITERIA-SUPERSEDED` records why.)
 
@@ -59,9 +61,32 @@ W43's criterion said *"the reported duration never exceeds the session wall cloc
 
 Claude Code closes out the interrupted turn of a **resumed session** with its entire wall clock. A real transcript on this machine spans **6.083 seconds** and carries a single `turn_duration` row of **366,298,957 ms — 101.75 hours**. Fed to the production aggregator it returned exactly that: through the close arithmetic, **203.5 EU on one wave** (58 XL waves). And nothing downstream would have caught it — the zero-EU gate catches only zeros, and the incomparability check re-origins only on a *declared measure change* or a *decrease*. A fabricated hundred-hour increase is indistinguishable from a productive month, which is the same blind spot that banked 13 hours in the previous cycle, wearing a different trigger.
 
-W49 clamps the sum to the transcript's own span (measure 5) and warns rather than trimming in silence. The same real transcript now reports 6,083 ms. The guard drives that shape and fails the moment the clamp is deleted.
+W49 clamped the sum to the transcript's own span, and W50 closed a door in that clamp. **Both were the wrong fix, and the fifth audit proved it with this repo's own data.**
 
-**The recurring failure of this iter is not any one of these bugs. It is tests that are green over code that does not exist** — three times, on three different criteria, each caught only by a fresh-context reader who checked the call chain instead of the test name.
+## The clamp bounded the fabrication with the fabrication
+
+The giant row is not a resumed-session artifact. It is Claude closing out a turn the **operator interrupted** — Esc — written into a live session, and its figure is that turn's *wall clock*. Claude's `turn_duration` excludes the operator's waiting only for a turn it **completes**; interrupt the turn instead, and every minute the operator was away is in the number. Which also means the clamp re-admitted the 12.9-hour permission stall that W43's own test claims to have killed.
+
+And a turn's wall clock necessarily lies *inside* the transcript's wall clock. So `min(sum, span)` is a **no-op** on exactly the case it was written for. Through the shipped clamp, this repo's own transcripts still booked:
+
+| transcript | closeout row | shipped by the clamp | EU |
+| --- | --- | --- | --- |
+| 343dbe7f | 76.26 h | 76.26 h (clamp inert) | **152.5** |
+| 0d3fbfc6 | 22.67 h | 21.80 h (clamp fired — and substituted the *wall clock*) | 43.6 |
+| c7001946 | 20.38 h | 19.06 h | 38.1 |
+| 68d5e6ee | 10.09 h | 10.18 h | 20.4 |
+
+The clamp helped exactly one transcript of six: the one its test fixture was built from. And when it *did* fire it substituted the transcript span — which is measure 1, "the operator's clock, idle included", the first defect this module ever had, now shipping under a v5 label where nothing downstream could tell it from a measurement.
+
+**W51** excludes the interrupted turn instead (measure 7). Claude marks the interrupt in the row immediately before the closeout — `system`/`agents_killed`, or an interruption marker when no background agents were running — and the rule is exact on real data: of 428 `turn_duration` rows across 330 transcripts, 16 have such a predecessor and 412 have none. After it: 152.5 EU → 0.0, 43.6 → 0.0, 38.1 → 0.0, and 68d5e6ee → 0.2 EU, which is the 5.4 minutes of genuinely completed turns inside it. The span is never substituted again: a sum that outruns its own transcript reports *no* duration, loudly.
+
+## The gate that could not fail
+
+The same audit found why none of this was caught at close time: `_runtime_zero_close_enforces` read the **band-narrowed** verify block, so enforcement resolved `False` for every wave outside the UI/UX band — every wave in this iter. The zero-runtime gate could not refuse anything, and reported a pass while doing it. **W52** scopes it to the fleet opt-in: the band scopes *criteria* enforcement, but every wave burns agent runtime and every wave's actual feeds the same corpus.
+
+The reset pardon keeps its strict rule, deliberately, and W52's own criterion asking otherwise is superseded (`D-RESET-PARDON-STRICT`). "An honest reset followed by a capture that measured nothing" and "a capture path that is alive but frozen" are byte-identical in `state.json`. Pardoning on frozen counters closes the second in silence — the original defect of this iter, where every wave recorded 0.0 EU for months and nobody noticed. Refusing it costs an explicit `--no-runtime` waiver, which is recorded and visible. A waiver is not silence.
+
+**The recurring failure of this iter is not any one of these bugs. It is tests that are green over code that does not exist** — and the sharpest instance is the clamp: it was mutation-verified, its guard failed when the production code was deleted, and it still fixed nothing, because the test drove the one shape (a 60,000× ratio) that real data never reaches while every real transcript sits at 1.0–1.07×. A guard is only as good as the input it drives. Four of the eight repair cycles were spent discovering that.
 
 ## What a counter reset means
 
