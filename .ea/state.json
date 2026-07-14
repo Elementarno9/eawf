@@ -16101,6 +16101,19 @@
       "status": "open",
       "title": "Pair a claim to the question it actually answers"
     },
+    "B117": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-14T14:41:41.037908Z",
+      "description": "tools/commit_prefix_lint.py validates the shape of a wave id in a commit subject but never checks that the wave exists in state.json. A commit can therefore attribute itself to a wave nobody planned, which is a phantom row in the ledger that git log --grep resolves and state.json does not. The lint has state.json available; it should reject an id that names no wave.",
+      "id": "B117",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "P30",
+      "status": "open",
+      "title": "Reject a commit prefix naming a wave that does not exist"
+    },
     "B70": {
       "closed_at": null,
       "commit": null,
@@ -33469,7 +33482,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T14:41:12.994257Z",
+  "updated_at": "2026-07-14T14:41:41.037908Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
