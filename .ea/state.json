@@ -15814,7 +15814,9 @@
   "claims": null,
   "current": {
     "active_session_ids": [],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I25-W50"
+    ],
     "iter_id": "P30-I25",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -29062,6 +29064,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I25-W49",
       "updated_at": "2026-07-14T00:13:44.274743Z"
+    },
+    "P30-I25-W50": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I25-W50-bucket-20260714T005748Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I25-W50",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I25-W50",
+      "updated_at": "2026-07-14T00:57:48.349815Z"
     }
   },
   "fleet_run": null,
@@ -31649,7 +31664,8 @@
         "P30-I25-W46",
         "P30-I25-W47",
         "P30-I25-W48",
-        "P30-I25-W49"
+        "P30-I25-W49",
+        "P30-I25-W50"
       ]
     }
   },
@@ -32787,7 +32803,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T00:31:15.882389Z",
+  "updated_at": "2026-07-14T00:57:48.350296Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -137139,6 +137155,197 @@
         }
       ],
       "title": "Clamp the duration to the transcript it was read from",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I25-W50": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
+      "claimed_at": "2026-07-14T00:57:48.327569Z",
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Repair wave appended after the clamp shipped in W49 was found to skip itself when the transcript carries fewer than two timestamps",
+        "waived_at": "2026-07-14T00:57:47.102451Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "W49 clamps the duration to the transcript's wall-clock span but computes no span when fewer than two rows carry a parseable timestamp and then applies no clamp at all. A resumed session's new file whose only timestamped row is the abandoned turn's takes that door: the same 366298957 ms row reports 101.75 hours and 203.5 EU exactly as before the clamp.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+        "tests/unit/test_transcript_counters.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "criterion": "timestamped",
+            "file_scopes": [
+              "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+              "tests/unit/test_transcript_counters.py"
+            ],
+            "pattern": "timestamped"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "duration",
+            "file_scopes": [
+              "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+              "tests/unit/test_transcript_counters.py"
+            ],
+            "pattern": "duration"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "Deleting",
+            "file_scopes": [
+              "src/eawf/runtime/runtimes/claude/transcript_counters.py",
+              "tests/unit/test_transcript_counters.py"
+            ],
+            "pattern": "Deleting"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "GATE-03",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I25-W50",
+      "intent": {
+        "desired_outcome": "A transcript that cannot demonstrate a lifetime cannot justify a duration and a test drives that shape so removing the rule turns it red",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Treat a transcript with fewer than two parseable timestamps as having no demonstrable lifetime so the clamp yields zero rather than being skipped",
+          "Bump the measure version since the rule changes what the duration means",
+          "Invert the test that pinned the unbounded no-timestamp path and add the resumed-file shape that exploits it"
+        ],
+        "priority_rationale": "The escape hatch reproduces the exact defect W49 was written to close and it was introduced by W49 itself. Every real turn writes several timestamped rows so nothing honest is lost by failing closed.",
+        "problem": "The clamp is skipped entirely when the transcript shows fewer than two timestamps so the pathological row passes straight through the fix meant to bound it",
+        "risks": [
+          "A corrupted or synthetic transcript that carries real durations but no timestamps now reports zero which is a bounded under-count where the alternative is an unbounded fabrication"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-14T00:57:47.141820Z",
+      "outcome": null,
+      "runtime_baseline": {
+        "api_duration_ms": 2080022,
+        "cache_creation_input_tokens": 420074,
+        "cache_read_input_tokens": 78560728,
+        "captured_at": "2026-07-14T00:57:48.349790Z",
+        "cost_usd": 48.127469,
+        "harness": "claude-code",
+        "input_tokens": 598,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 185735,
+        "session_id": "d18f8771-b27a-4b7f-b7f0-8a78087a0e97",
+        "shared_wave_count": null,
+        "total_duration_ms": 2080022
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
+          "id": "CR-01",
+          "kind": "converted",
+          "measurable_signal": "A transcript with fewer than two parseable timestamps reports no duration rather than an unclamped sum and a test drives a resumed-file shape whose only timestamped row is a 101 hour turn",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "A transcript with fewer than two parseable timestamps reports no duration rather than an unclamped sum and a test drives a resumed-file shape whose only timestamped row is a 101 hour turn",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "A transcript with fewer than two parseable timestamps reports no duration rather than an unclamped sum and a test drives a resumed-file shape whose only timestamped row is a 101 hour turn",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
+          "id": "CR-02",
+          "kind": "converted",
+          "measurable_signal": "The measure version is bumped because the rule changes what the duration means",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The measure version is bumped because the rule changes what the duration means",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The measure version is bumped because the rule changes what the duration means",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-03"
+          ],
+          "id": "CR-03",
+          "kind": "converted",
+          "measurable_signal": "Deleting the rule turns the guarding test red",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "Deleting the rule turns the guarding test red",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "Deleting the rule turns the guarding test red",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Close the clamp's own escape hatch",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
