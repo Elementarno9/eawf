@@ -78,7 +78,12 @@ _HARNESS_ID = "claude-code"
 #:     figure is not always a measure of work: a resumed session's interrupted
 #:     turn is closed out with its entire wall clock, and one real transcript
 #:     spanning 6 seconds carries a turn_duration of 101.75 hours.
-MEASURE_VERSION: int = 5
+#: 6 = the same clamp, applied even when the transcript shows no span. Version 5
+#:     SKIPPED the clamp when fewer than two rows carried a timestamp -- the one
+#:     input most likely to be the pathological resumed file -- so the ceiling had
+#:     a door in it. A transcript that cannot demonstrate a lifetime now justifies
+#:     no duration at all.
+MEASURE_VERSION: int = 6
 
 #: Optional override for the Claude projects root, used by tests to redirect
 #: transcript lookups away from the real ``~/.claude/`` tree.
@@ -236,16 +241,24 @@ def _is_turn_duration_row(row: dict[str, Any]) -> bool:
     return row.get("type") == "system" and row.get("subtype") == "turn_duration"
 
 
-def _transcript_span_ms(rows: list[dict[str, Any]]) -> int | None:
-    """Return the wall-clock span of *rows*, first timestamp to last, in ms.
+def _transcript_span_ms(rows: list[dict[str, Any]]) -> int:
+    """Return the lifetime *rows* can demonstrate, first timestamp to last, in ms.
 
     This is the ceiling on agent runtime, not a measure of it: whatever the agent
-    did, it did inside the transcript's own lifetime. ``None`` when fewer than two
-    rows carry a parseable timestamp, in which case there is no span to clamp to.
+    did, it did inside the transcript's own lifetime.
+
+    Fewer than two parseable timestamps means the transcript demonstrates NO
+    lifetime, and the ceiling is therefore zero -- not "absent". Returning
+    ``None`` here (as the first cut of the clamp did) skips the clamp entirely on
+    exactly the input most likely to be pathological: a resumed session's new file
+    whose only timestamped row is the abandoned turn's, which reports 101.75 hours
+    from a file that can prove it existed for no time at all. Failing closed costs
+    nothing honest -- a real turn writes an operator row, an assistant row, and a
+    ``turn_duration`` row, each timestamped -- and failing open costs 203.5 EU.
     """
     stamps = [ts for ts in (_row_timestamp(row) for row in rows) if ts is not None]
     if len(stamps) < 2:
-        return None
+        return 0
     span = max(stamps) - min(stamps)
     return max(0, int(span.total_seconds() * 1000))
 
@@ -351,8 +364,8 @@ def _scan_rows(rows: list[dict[str, Any]]) -> _TranscriptScan:
     # it, since an inflation is an INCREASE and the close path only re-origins on a
     # declared measure change or a decrease.
     span_ms = _transcript_span_ms(rows)
-    duration_ms = turn_duration_ms if span_ms is None else min(turn_duration_ms, span_ms)
-    if span_ms is not None and turn_duration_ms > span_ms:
+    duration_ms = min(turn_duration_ms, span_ms)
+    if turn_duration_ms > span_ms:
         logger.warning(
             f"_scan_rows turn_duration_ms={turn_duration_ms} span_ms={span_ms} "
             f"duration_ms={duration_ms} status='clamped'; "

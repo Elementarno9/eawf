@@ -70,9 +70,13 @@ def test_aggregate_dedupes_repeated_usage_rows(tmp_path: Path) -> None:
 
 
 def test_aggregate_sums_distinct_messages_and_durations(tmp_path: Path) -> None:
+    # Timestamped, because a real transcript's rows are: the duration is bounded by
+    # the lifetime the rows demonstrate, and rows that demonstrate none bound it to
+    # zero (see test_a_transcript_that_shows_no_lifetime_justifies_no_duration).
     rows = [
         {
             "type": "assistant",
+            "timestamp": "2026-07-13T09:00:00.000Z",
             "message": {
                 "id": "msg_01",
                 "model": "claude-opus-4-8",
@@ -81,14 +85,25 @@ def test_aggregate_sums_distinct_messages_and_durations(tmp_path: Path) -> None:
         },
         {
             "type": "assistant",
+            "timestamp": "2026-07-13T09:00:02.000Z",
             "message": {
                 "id": "msg_02",
                 "model": "claude-opus-4-8",
                 "usage": {"input_tokens": 5, "output_tokens": 7},
             },
         },
-        {"type": "system", "subtype": "turn_duration", "durationMs": 1_000},
-        {"type": "system", "subtype": "turn_duration", "durationMs": 2_500},
+        {
+            "type": "system",
+            "subtype": "turn_duration",
+            "timestamp": "2026-07-13T09:00:03.000Z",
+            "durationMs": 1_000,
+        },
+        {
+            "type": "system",
+            "subtype": "turn_duration",
+            "timestamp": "2026-07-13T09:00:10.000Z",
+            "durationMs": 2_500,
+        },
     ]
     path = tmp_path / "t.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
@@ -143,7 +158,15 @@ def test_duration_only_grows_as_turn_rows_land(tmp_path: Path) -> None:
     assert late.api_duration_ms >= early.api_duration_ms
 
 
-def test_duration_uses_turn_rows_when_rows_carry_no_timestamp(tmp_path: Path) -> None:
+def test_a_transcript_that_shows_no_lifetime_justifies_no_duration(tmp_path: Path) -> None:
+    """Rows carrying no timestamps demonstrate no lifetime, so they bound no runtime.
+
+    This test used to assert the OPPOSITE -- that a timestamp-free transcript still
+    reports its raw turn sum. That is the door the clamp was skipped through: with
+    fewer than two timestamps there is no span, and the first cut of the ceiling
+    (W49) responded by not clamping at all. The tokens still count; the duration
+    does not.
+    """
     rows = [
         {"type": "system", "subtype": "turn_duration", "durationMs": 7_000},
         {
@@ -161,7 +184,47 @@ def test_duration_uses_turn_rows_when_rows_carry_no_timestamp(tmp_path: Path) ->
     counters = aggregate_transcript_counters(path)
 
     assert counters is not None
-    assert counters.api_duration_ms == 7_000
+    assert counters.api_duration_ms == 0
+    assert counters.output_tokens == 5  # the tokens are still real
+
+
+def test_the_clamp_has_no_door_for_a_resumed_file_with_one_timestamp(tmp_path: Path) -> None:
+    """The exact shape that walked through W49's ceiling.
+
+    A resumed session's new file: Claude kills the abandoned agents and closes out
+    the interrupted turn with its full wall clock (366,298,957 ms = 101.75 hours,
+    the real value from a real transcript on this machine). If the only row bearing
+    a parseable timestamp is that turn row, W49 computed no span and applied no
+    clamp -- so the ceiling it shipped let through the very figure it was written to
+    stop: 203.5 EU on one wave.
+
+    Delete the ``< 2 stamps -> 0`` rule in ``_transcript_span_ms`` and this test
+    reports 101.75 hours again.
+    """
+    rows = [
+        {"type": "system", "subtype": "agents_killed"},
+        {
+            "type": "system",
+            "subtype": "turn_duration",
+            "timestamp": "2026-07-12T23:52:21.810Z",
+            "durationMs": 366_298_957,
+        },
+        {
+            "type": "assistant",
+            "message": {
+                "id": "msg_0001",
+                "model": "claude-opus-4-8",
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            },
+        },
+    ]
+    path = tmp_path / "t.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    counters = aggregate_transcript_counters(path)
+
+    assert counters is not None
+    assert counters.api_duration_ms == 0
 
 
 def test_aggregate_prices_cache_write_ttl_split(tmp_path: Path) -> None:

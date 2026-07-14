@@ -42,9 +42,13 @@ def _write_transcript(tmp_path: Path, *, cwd: Path) -> None:
     """Write a two-message transcript for ``_SESSION`` under *cwd*'s project dir."""
     project = tmp_path / "projects" / str(cwd).replace("/", "-").replace(".", "-")
     project.mkdir(parents=True, exist_ok=True)
+    # Timestamped, and spanning the turn it reports: the duration is bounded by the
+    # lifetime the rows demonstrate, so a turn of 61s needs a transcript that lived
+    # at least that long (P30-I25-W50).
     rows = [
         {
             "type": "assistant",
+            "timestamp": "2026-07-13T09:00:00.000Z",
             "message": {
                 "id": "msg_0001",
                 "model": "claude-opus-4-8",
@@ -56,7 +60,12 @@ def _write_transcript(tmp_path: Path, *, cwd: Path) -> None:
                 },
             },
         },
-        {"type": "system", "subtype": "turn_duration", "durationMs": 61_000},
+        {
+            "type": "system",
+            "subtype": "turn_duration",
+            "timestamp": "2026-07-13T09:01:05.000Z",
+            "durationMs": 61_000,
+        },
     ]
     (project / f"{_SESSION}.jsonl").write_text(
         "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8"
