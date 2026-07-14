@@ -10410,6 +10410,51 @@
       "status": "done",
       "updated_at": "2026-07-14T13:13:02.346944Z"
     },
+    "P30-I21-W46": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": 0.0,
+      "attention_eu": null,
+      "calibration_excluded": true,
+      "current_store_record_id": "REC-P30-I21-W46",
+      "elapsed_eu": 0.0,
+      "harness": "claude-code",
+      "id": "ACT-P30-I21-W46",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I21-W46",
+      "status": "done",
+      "updated_at": "2026-07-14T14:41:10.280988Z"
+    },
+    "P30-I21-W47": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": 0.0,
+      "attention_eu": null,
+      "calibration_excluded": true,
+      "current_store_record_id": "REC-P30-I21-W47",
+      "elapsed_eu": 0.0,
+      "harness": "claude-code",
+      "id": "ACT-P30-I21-W47",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I21-W47",
+      "status": "done",
+      "updated_at": "2026-07-14T14:41:11.670750Z"
+    },
+    "P30-I21-W48": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I21-W48",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W48",
+      "model": null,
+      "scope_id": "P30-I21-W48",
+      "status": "done",
+      "updated_at": "2026-07-14T14:41:12.993518Z"
+    },
     "P30-I22-W01": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 12000,
@@ -16144,10 +16189,7 @@
   "claims": null,
   "current": {
     "active_session_ids": [],
-    "active_wave_ids": [
-      "P30-I21-W46",
-      "P30-I21-W47"
-    ],
+    "active_wave_ids": [],
     "iter_id": null,
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -28024,6 +28066,19 @@
       "scope_id": "P30-I21-W47",
       "updated_at": "2026-07-14T14:34:12.518666Z"
     },
+    "P30-I21-W48": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W48-bucket-20260714T144108Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I21-W48",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I21-W48",
+      "updated_at": "2026-07-14T14:41:08.469287Z"
+    },
     "P30-I22-W01": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I22-W01-bucket-20260701T234041Z",
@@ -32074,7 +32129,8 @@
         "P30-I21-W44",
         "P30-I21-W45",
         "P30-I21-W46",
-        "P30-I21-W47"
+        "P30-I21-W47",
+        "P30-I21-W48"
       ]
     },
     "P30-I22": {
@@ -33413,7 +33469,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T14:39:55.217527Z",
+  "updated_at": "2026-07-14T14:41:12.994257Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -117373,8 +117429,8 @@
       "blocks": [],
       "claim_session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
       "claimed_at": "2026-07-14T14:16:59.279136Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-14T14:41:10.280988Z",
+      "commit": "09e40a3bd0dda7e09042c2a9c9c608c983bd1ed3",
       "criteria_floor_waiver": {
         "reason": "Reactive security-repair wave appended at the ship gate; criteria authored from the PII leak the merge-readiness audit found",
         "waived_at": "2026-07-14T14:16:58.453890Z",
@@ -117477,7 +117533,7 @@
       },
       "iter_id": "P30-I21",
       "opened_at": "2026-07-14T14:16:58.510050Z",
-      "outcome": null,
+      "outcome": "The event store is gitignored here and in the shipped init template; the leak gates no longer exempt the stores under .ea/store",
       "runtime_baseline": {
         "api_duration_ms": 0,
         "cache_creation_input_tokens": 90446,
@@ -117552,7 +117608,7 @@
           "subprocess_pid": null
         }
       },
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -117637,8 +117693,8 @@
       "blocks": [],
       "claim_session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
       "claimed_at": "2026-07-14T14:34:12.454931Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-14T14:41:11.670750Z",
+      "commit": "bb6e07e4b26a2b1c68c7dddc192cece4d7ced9f9",
       "criteria_floor_waiver": {
         "reason": "Reactive CI-repair wave appended at the ship gate; criteria authored from the macos-26 WaitForScreenTimeout failure and gated by the TUI suite",
         "waived_at": "2026-07-14T14:34:11.736367Z",
@@ -117700,7 +117756,7 @@
       },
       "iter_id": "P30-I21",
       "opened_at": "2026-07-14T14:34:11.784135Z",
-      "outcome": null,
+      "outcome": "Every full-app Pilot test awaits its worker queue after the mount pause; the full TUI suite passes (2591)",
       "runtime_baseline": {
         "api_duration_ms": 0,
         "cache_creation_input_tokens": 90446,
@@ -117760,7 +117816,7 @@
           "subprocess_pid": null
         }
       },
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -117812,6 +117868,153 @@
         }
       ],
       "title": "Drain the workers the Pilot tests race",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W48": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+      "claimed_at": "2026-07-14T14:41:08.409502Z",
+      "closed_at": "2026-07-14T14:41:12.993518Z",
+      "commit": "b40ae3d198d9f2f065a99b9cbeb97afc96c8a330",
+      "criteria_floor_waiver": {
+        "reason": "Ship-prep hygiene wave appended at the release gate; criteria are prose over the tree and the suite",
+        "waived_at": "2026-07-14T14:41:05.970176Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "A wave spec is the authoring vehicle for a wave, not its record: the criteria and gates it declares persist typed on the wave in state.json and the body stays recoverable from git history. The archive cascade has existed since P30-I14 and had never run, so 211 spec files accumulated across two phases. The spec-lifecycle machinery was itself an idle contract.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/specs/",
+        "tests/unit/test_p30_i20_w17.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "criterion": "recoverable",
+            "file_scopes": [
+              ".ea/specs/",
+              "tests/unit/test_p30_i20_w17.py"
+            ],
+            "pattern": "recoverable"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "archiving",
+            "file_scopes": [
+              ".ea/specs/",
+              "tests/unit/test_p30_i20_w17.py"
+            ],
+            "pattern": "archiving"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W48",
+      "intent": {
+        "desired_outcome": "A closed phase leaves no wave specs in the tree, and no test is coupled to one.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Run the archive cascade over the closed phases and remove the specs it has no cache row for",
+          "Decouple the one test that parsed a live spec for its gate row"
+        ],
+        "priority_rationale": "The tree grows by roughly 180 spec files per phase, and the machinery to prevent that was already built and idle.",
+        "problem": "211 wave specs accumulated in the tree across two closed phases because the archive cascade built in P30-I14 was never invoked.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-14T14:41:06.022562Z",
+      "outcome": "211 wave specs of the closed phases archived out of the tree; the one test that parsed a live spec now owns its gate fixture",
+      "runtime_baseline": {
+        "api_duration_ms": 14523805,
+        "cache_creation_input_tokens": 685416,
+        "cache_read_input_tokens": 216778975,
+        "captured_at": "2026-07-14T14:41:08.469238Z",
+        "cost_usd": 122.3592925,
+        "harness": "claude-code",
+        "input_tokens": 1124,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 284401,
+        "session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+        "shared_wave_count": null,
+        "total_duration_ms": 14523805
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
+          "id": "CR-01",
+          "kind": "converted",
+          "measurable_signal": "No wave spec of a closed phase remains tracked in the tree while the typed criteria and gates stay in state.json and the bodies stay recoverable from git history",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "No wave spec of a closed phase remains tracked in the tree while the typed criteria and gates stay in state.json and the bodies stay recoverable from git history",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "No wave spec of a closed phase remains tracked in the tree while the typed criteria and gates stay in state.json and the bodies stay recoverable from git history",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
+          "id": "CR-02",
+          "kind": "converted",
+          "measurable_signal": "No test reads a live spec file so archiving a phase cannot redden the suite",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "No test reads a live spec file so archiving a phase cannot redden the suite",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "No test reads a live spec file so archiving a phase cannot redden the suite",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Archive the wave specs of the closed phases",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
