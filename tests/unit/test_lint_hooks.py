@@ -284,12 +284,21 @@ def test_email_leak_lint_skips_action_version_ref(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
 
 
-def test_is_state_bookkeeping_path_excludes_daemon_files() -> None:
+def test_is_state_bookkeeping_path_exempts_only_state_json() -> None:
+    """Only state.json is exempt from the leak scans; the stores are NOT.
+
+    The stores used to be exempt too, on the premise that a daemon-written file
+    cannot carry user secrets. That held until one began carrying the raw stdout
+    of spawned agents -- at which point the one file that could leak was the one
+    file nobody scanned, and a home path reached a public repo. state.json keeps
+    its exemption because its path-SHAPED hits are placeholders in rule prose
+    that explains this very lint.
+    """
     from eawf.surfaces.cli.commands.hook import _is_state_bookkeeping_path
 
     assert _is_state_bookkeeping_path(".ea/state.json")
-    assert _is_state_bookkeeping_path(".ea/store/event.jsonl")
-    assert _is_state_bookkeeping_path(".ea/store/audit.jsonl")
+    assert not _is_state_bookkeeping_path(".ea/store/event.jsonl")
+    assert not _is_state_bookkeeping_path(".ea/store/audit.jsonl")
     assert not _is_state_bookkeeping_path("src/eawf/surfaces/cli/app.py")
     assert not _is_state_bookkeeping_path(".ea/profile.yaml")
 

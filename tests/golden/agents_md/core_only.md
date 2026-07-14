@@ -177,7 +177,7 @@ Before opening or resuming a phase, iter, or wave, verify the current branch is 
 If the working tree is dirty, preserve the dirty/untracked work before rebasing. If the branch intentionally remains behind or forked, record the reason in the plan or handoff before dispatching worktrees or starting new commits.
 
 <!-- END EAWF:managed id=branch-currency -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.4 hash=8861652ed32d60e0 -->
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.4 hash=0b9a685f80a18068 -->
 ### Commit prefix
 
 ``[P<NN>(-I<NN>)?(-W<NN>|-CORE)?] <type>: <summary>`` — types: ``feat``, ``fix``, ``chore``, ``docs``, ``refactor``, ``test``, ``build``, ``perf``, ``ci``, ``revert``, ``state``.
@@ -185,7 +185,7 @@ If the working tree is dirty, preserve the dirty/untracked work before rebasing.
 Subject grammar (post-P26-W23 + P28-W66 bare-conventional form):
 
 - **Planned wave deliverable** — ``[P<NN>-W<NN>] <type>:`` (or ``[P<NN>-I<NN>-W<NN>] <type>:`` when iter ≥ I02). The ``-W<NN>`` suffix declares the wave the commit advances.
-- **State-bookkeeping** — ``[P<NN>] state:`` (or ``[P<NN>-I<NN>] state:`` when iter ≥ I02). The ``state`` conventional-commit type IS the semantic signal for phase- scope bookkeeping; no suffix needed. Allowed paths: ``.ea/state.json``, ``.ea/store/event.jsonl``, ``.ea/store/audit.jsonl``, ``.secrets.baseline``, and ``.ea/specs/**``.
+- **State-bookkeeping** — ``[P<NN>] state:`` (or ``[P<NN>-I<NN>] state:`` when iter ≥ I02). The ``state`` conventional-commit type IS the semantic signal for phase- scope bookkeeping; no suffix needed. Allowed paths: ``.ea/state.json``, the typed stores under ``.ea/store/`` (``audit.jsonl``, ``decision.jsonl``, ``evidence.jsonl``, the role reports), ``.secrets.baseline``, and ``.ea/specs/**``. ``.ea/store/event.jsonl`` is NOT among them: the event store is the firehose (one row per lifecycle mutation plus every spawned agent's raw stdout), so it is gitignored and stays on the machine that produced it.
 - **Legacy ``-CORE`` alias** — ``[P<NN>-CORE] state:`` (or the iter variant) remains valid for back-compat with pre-P26-W23 commits. New bookkeeping commits MAY drop the ``-CORE`` suffix; the lint accepts both forms identically.
 - **Phase/iter-scoped artifact docs** — ``[P<NN>] docs:`` (or ``[P<NN>-I<NN>] docs:``) for documentation artifacts no single wave owns (closure audits, promoted research / decision / incident briefs). Restricted to ``.ea/artifacts/**``; wave-produced docs use the ``[P<NN>-W<NN>] docs:`` form.
 - **Bare conventional-commits (out-of-phase)** — ``<type>: <summary>`` with NO bracket prefix. Accepted ONLY when ``state.current.phase_id`` is ``None`` (no ACTIVE phase) — e.g. the pre-flight chore commit between phase close and the next ``/roadmap propose``. Rejected when a phase is ACTIVE so lifecycle bookkeeping stays attributable. Enforced by ``tools/commit_prefix_lint.py``.

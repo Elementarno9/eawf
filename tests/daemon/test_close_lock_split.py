@@ -168,16 +168,27 @@ def _retitle_mutation() -> dict[str, Any]:
     }
 
 
+#: How long the stubbed pre-flight sleeps, standing in for the minutes-long
+#: deterministic gates + floor pack. The assertions compare against THIS rather
+#: than a hardcoded wall-clock budget, so the test states the invariant (the
+#: gates run outside the lock) instead of a guess about how fast the host writes.
+_PREFLIGHT_SLEEP_S = 0.8
+
+
 def _run(body: Callable[[], Coroutine[Any, Any, None]]) -> None:
     asyncio.run(body())
 
 
 class _LockHoldRecorder:
-    """Wraps portalock.acquire to record each hold's wall-clock duration."""
+    """Wraps portalock.acquire to record each hold's duration AND when it began."""
 
     def __init__(self, real_acquire: Any) -> None:
         self._real = real_acquire
         self.holds: list[float] = []
+        #: Monotonic timestamp of each ``acquire`` entry, so a caller can assert
+        #: the lock was taken AFTER the pre-flight finished rather than inferring
+        #: it from how long the hold lasted.
+        self.acquired_at: list[float] = []
 
     def __call__(self, path: Path, timeout: float = 5.0) -> Any:
         recorder = self
@@ -186,6 +197,7 @@ class _LockHoldRecorder:
             def __enter__(self) -> Any:
                 self._inner = recorder._real(path, timeout=timeout)
                 self._entered = time.monotonic()
+                recorder.acquired_at.append(self._entered)
                 return self._inner.__enter__()
 
             def __exit__(self, *exc: Any) -> Any:
@@ -198,12 +210,18 @@ class _LockHoldRecorder:
 def test_close_lock_hold_bounded_by_commit_not_gate_runtime(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """CR-01: a slow (0.8s) pre-flight never extends the state-lock hold.
+    """CR-01: a slow (0.8s) pre-flight never runs inside the state-lock hold.
 
-    The pre-flight seam sleeps 0.8s (standing in for the minutes-long
-    deterministic gates + floor pack); the recorded lock hold must stay
-    bounded by the ms-scale commit tail (< 0.4s), proving the shell-outs
-    run BEFORE ``portalock.acquire``.
+    The property under test is an ORDER: the shell-outs finish BEFORE
+    ``portalock.acquire`` is entered, so the lock hold covers only the commit
+    tail. Asserting that order directly is what makes this test honest.
+
+    It used to infer the order from a duration -- "the hold must be under 0.4s"
+    -- which is a wall-clock budget on a disk write, not a statement about the
+    split. A loaded runner that takes 0.6s to fsync then fails a test whose
+    invariant is perfectly intact, and the message blames a regression that did
+    not happen. The timing bound survives only as a loose backstop against the
+    hold swallowing the pre-flight entirely.
     """
     from eawf.runtime.daemon.methods import state as daemon_state
     from eawf.runtime.lock import portalock
@@ -213,8 +231,11 @@ def test_close_lock_hold_bounded_by_commit_not_gate_runtime(
     _write_state(state_path)
     ctx = _build_ctx(tmp_path, state_path)
 
+    preflight_done: list[float] = []
+
     async def _slow_preflight(*args: Any, **kwargs: Any) -> ClosePreflight:
-        await asyncio.sleep(0.8)
+        await asyncio.sleep(_PREFLIGHT_SLEEP_S)
+        preflight_done.append(time.monotonic())
         return ClosePreflight(evidence=[], readiness=None)
 
     monkeypatch.setattr(daemon_state, "run_close_preflight", _slow_preflight)
@@ -228,9 +249,14 @@ def test_close_lock_hold_bounded_by_commit_not_gate_runtime(
 
     _run(body)
     assert recorder.holds, "the commit phase never acquired the state lock"
-    assert max(recorder.holds) < 0.4, (
-        f"lock hold {max(recorder.holds):.2f}s is bounded by the gate runtime, "
-        "not the commit tail — the split regressed"
+    assert preflight_done, "the pre-flight seam never ran"
+    assert min(recorder.acquired_at) >= preflight_done[0], (
+        "the state lock was acquired BEFORE the pre-flight finished — the "
+        "gates are running under the lock and the split regressed"
+    )
+    assert max(recorder.holds) < _PREFLIGHT_SLEEP_S, (
+        f"lock hold {max(recorder.holds):.2f}s reaches the pre-flight sleep "
+        f"({_PREFLIGHT_SLEEP_S}s) — the gate runtime is inside the hold"
     )
 
 
