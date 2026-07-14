@@ -15784,6 +15784,45 @@
       "status": "open",
       "title": "Detect a regression in the interrupt-marker contract"
     },
+    "B112": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-14T10:30:29.840661Z",
+      "description": "W02 CR-04 asked for a per-wave in-flight guard spanning claim through dispatch through persist. What shipped is a post-hoc terminal re-read under the state lock which drops an attempt landing after close but does not prevent a dispatch racing a close-on-behalf during the unlocked spawn. The wave outcome records the deferral; this row records it in state.",
+      "id": "B112",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "P30",
+      "status": "open",
+      "title": "Guard the dispatch in-flight window across the unlocked spawn"
+    },
+    "B113": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-14T10:30:30.538003Z",
+      "description": "W06 CR-05 pins the four lifecycle invariants with tests/e2e/test_lifecycle_consistency.py, whose live drive is skipped unless EAWF_LIVE_E2E is set. The default-run assertions exercise in-memory helper logic rather than the daemon, so in CI the invariants are attested by the paid drive alone. A stubbed-adapter driver through fleet plus state.mutate would make CR-01 through CR-04 falsifiable on every run.",
+      "id": "B113",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "P30",
+      "status": "open",
+      "title": "Give the cross-runtime lifecycle invariants a spawn-free driver"
+    },
+    "B114": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-14T10:30:31.243423Z",
+      "description": "P30-I25-W41 is CLOSED with an outcome but carries no Wave.commit and has no matching wave-prefixed commit on the branch: its two deliverables landed under sibling wave commits (cd31b63d, ff6a6a8f). The work is present; the provenance is not derivable by git log --grep, which is how wave_sha resolves an unpinned wave. Pin the SHA or record the absorption.",
+      "id": "B114",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "P30",
+      "status": "open",
+      "title": "Reconcile the P30-I25-W41 commit-less ledger row"
+    },
     "B70": {
       "closed_at": null,
       "commit": null,
@@ -31765,7 +31804,8 @@
         "P30-I25-W49",
         "P30-I25-W50",
         "P30-I25-W51",
-        "P30-I25-W52"
+        "P30-I25-W52",
+        "P30-I25-W53"
       ]
     }
   },
@@ -32903,7 +32943,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T10:15:57.238167Z",
+  "updated_at": "2026-07-14T10:30:31.243423Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -137992,6 +138032,144 @@
       "title": "Give the zero-runtime gate teeth it can actually bite with",
       "token_budget": null,
       "tokens_consumed": 12269,
+      "worktree_id": null
+    },
+    "P30-I25-W53": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "criteria_floor_waiver": {
+        "reason": "Reactive audit-repair wave appended at iter close; criteria authored as prose from the auditor finding and gated by the guarding tests named in CR-04",
+        "waived_at": "2026-07-14T10:29:53.575515Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "W47 added ActualSummary.calibration_excluded and the close path writes it, but no consumer reads it: the bucket re-fit and the two estimate-quality metrics still ingest every flagged row. Six I25 actuals carry the flag AND pass every filter calibrate_buckets applies, so a shared-session split figure re-fits the buckets it should not touch. The exclusion is a document until a consumer honours it.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/estimation/buckets.py",
+        "src/eawf/workflow/estimation/metrics.py",
+        "tests/unit/test_estimation_buckets.py",
+        "tests/unit/test_estimation_metrics.py"
+      ],
+      "gates": [],
+      "id": "P30-I25-W53",
+      "intent": {
+        "desired_outcome": "Every consumer that treats an actual as a reference class skips an excluded row; weekly burn keeps counting it because the row is real spend.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Filter calibration_excluded in _bucket_actuals so the re-fit never ingests a re-originated or shared-session figure",
+          "Skip an excluded actual in compute_eu_variance and compute_estimate_actual_variance",
+          "Leave compute_weekly_burn counting the row since burn measures spend not estimate quality",
+          "Add a guarding test per consumer driving an otherwise fully qualifying excluded row"
+        ],
+        "priority_rationale": "The flag, the migration and the Decision all shipped this iter; with no reader the exclusion lives in a document, the exact contract-idleness the phase promised never to ship again.",
+        "problem": "The close path writes calibration_excluded and nobody reads it. Six flagged I25 rows still re-fit the effort buckets and still move both estimate-quality metrics.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I25",
+      "opened_at": "2026-07-14T10:29:53.619602Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "calibrate_buckets drops an actual whose calibration_excluded is true even when it is CLOSED",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "calibrate_buckets drops an actual whose calibration_excluded is true even when it is CLOSED",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "grandfathered legacy criterion",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "bucketed",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "in-window and carries positive elapsed_eu",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "in-window and carries positive elapsed_eu",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "The two estimate-quality metrics compute_eu_variance and compute_estimate_actual_variance skip a calibration-excluded actual so a re-originated or shared-session figure cannot move the precision or M26 variance headline",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The two estimate-quality metrics compute_eu_variance and compute_estimate_actual_variance skip a calibration-excluded actual so a re-originated or shared-session figure cannot move the precision or M26 variance headline",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-05",
+          "kind": "legacy",
+          "measurable_signal": "compute_weekly_burn keeps counting an excluded actual because the row is real spend and only its use as a reference class is disqualified",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "compute_weekly_burn keeps counting an excluded actual because the row is real spend and only its use as a reference class is disqualified",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-06",
+          "kind": "legacy",
+          "measurable_signal": "A test asserts each of the three consumers on a row that is excluded and otherwise fully qualifying and turns red if the filter is removed",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A test asserts each of the three consumers on a row that is excluded and otherwise fully qualifying and turns red if the filter is removed",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Make the calibration exclusion bite in the re-fit",
+      "token_budget": null,
+      "tokens_consumed": 0,
       "worktree_id": null
     }
   },
