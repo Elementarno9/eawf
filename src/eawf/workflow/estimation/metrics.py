@@ -433,11 +433,13 @@ def compute_eu_variance(state: State) -> EuVarianceMetric:
     1. ``wave.status == WaveStatus.CLOSED``.
     2. ``state.estimates`` contains an entry for ``wave.id``.
     3. ``state.actuals`` contains an entry for ``wave.id`` with non-None
-       ``elapsed_eu``.
+       ``elapsed_eu`` that is not flagged ``calibration_excluded``.
 
     The delta is ``actual.elapsed_eu - estimate.expected_eu``. Negative
     deltas mean the wave finished faster than expected; positive deltas
-    mean it ran over.
+    mean it ran over. An excluded actual is dropped because the metric
+    scores the ESTIMATE against a measured pace, and a re-originated or
+    shared-session figure is a measurement artefact rather than a pace.
     """
     estimates = state.estimates or {}
     deltas: list[float] = []
@@ -447,7 +449,7 @@ def compute_eu_variance(state: State) -> EuVarianceMetric:
             continue
         est = estimates.get(wave.id)
         act = resolve_wave_actual(state, wave.id)
-        if est is None or act is None:
+        if est is None or act is None or act.calibration_excluded:
             continue
         delta = act.elapsed_eu - est.expected_eu
         deltas.append(delta)
@@ -478,13 +480,17 @@ def compute_estimate_actual_variance(state: State) -> EstimateActualVarianceMetr
 
     1. ``wave.status == WaveStatus.CLOSED``.
     2. ``state.estimates`` carries an entry for ``wave.id``.
-    3. ``state.actuals`` carries an entry for ``wave.id``.
+    3. ``state.actuals`` carries an entry for ``wave.id`` that is not
+       flagged ``calibration_excluded``.
 
     The variance is the aggregate ``(sum actual_eu - sum planned_eu) / sum
     planned_eu * 100`` over the contributing waves. The aggregate form (sum
     of actuals vs sum of estimates) — rather than a mean of per-wave ratios
     — keeps a single large over-run from being diluted by many small waves,
     matching the ship-gate's "did the phase as a whole run over?" question.
+    An excluded actual is dropped for the same reason the re-fit drops it:
+    the figure is a floor or a split, so folding it into the numerator
+    reports a measurement artefact as an over- or under-run.
 
     A positive percentage means the work ran over the estimate; a negative
     percentage means it finished under. ``variance_pct`` is ``None`` when no
@@ -506,7 +512,7 @@ def compute_estimate_actual_variance(state: State) -> EstimateActualVarianceMetr
             continue
         est = estimates.get(wave.id)
         act = resolve_wave_actual(state, wave.id)
-        if est is None or act is None:
+        if est is None or act is None or act.calibration_excluded:
             continue
         planned_eu += est.expected_eu
         actual_eu += act.elapsed_eu
@@ -621,6 +627,12 @@ def compute_weekly_burn(state: State, *, now: datetime | None = None) -> WeeklyB
     ``state.project`` is ``None`` or the operator has not set
     ``weekly_eu_target``, ``target_eu`` is ``None`` and the TUI footer
     short-circuits to "no burn line".
+
+    A ``calibration_excluded`` actual still counts here, unlike in the
+    bucket re-fit and the estimate-quality metrics. Burn measures SPEND,
+    and an excluded row is real spend — the flag disqualifies the figure
+    as a reference class for estimating future work, not as a record of
+    work already done.
 
     Args:
         state: Loaded typed :class:`State` snapshot.

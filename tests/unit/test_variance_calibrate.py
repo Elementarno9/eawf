@@ -43,6 +43,7 @@ from eawf.workflow.estimation.buckets import (
 from eawf.workflow.estimation.metrics import (
     EstimateActualVarianceMetric,
     compute_estimate_actual_variance,
+    compute_weekly_burn,
 )
 
 runner = CliRunner()
@@ -126,7 +127,13 @@ def _estimate(*, wave_id: str, expected_eu: float) -> EstimateSummary:
     )
 
 
-def _actual(*, wave_id: str, elapsed_eu: float, updated_at: datetime = _T0) -> ActualSummary:
+def _actual(
+    *,
+    wave_id: str,
+    elapsed_eu: float,
+    updated_at: datetime = _T0,
+    calibration_excluded: bool = False,
+) -> ActualSummary:
     return ActualSummary(
         id=f"ACT-{wave_id}",
         scope_id=wave_id,
@@ -134,6 +141,7 @@ def _actual(*, wave_id: str, elapsed_eu: float, updated_at: datetime = _T0) -> A
         elapsed_eu=elapsed_eu,
         current_store_record_id=f"REC-{wave_id}",
         updated_at=updated_at,
+        calibration_excluded=calibration_excluded,
     )
 
 
@@ -198,6 +206,50 @@ def test_compute_estimate_actual_variance_aggregates_over_waves() -> None:
     # planned=2.0, actual=4.0 -> (4-2)/2 * 100 = 100 %
     assert result.sample_count == 2
     assert result.variance_pct == pytest.approx(100.0)
+
+
+def test_compute_estimate_actual_variance_drops_a_calibration_excluded_actual() -> None:
+    """An excluded actual cannot move the M26 headline.
+
+    Both waves are CLOSED with an estimate and an actual, so only the
+    exclusion flag separates them. The excluded row ran 4 EU over; if the
+    filter is removed the aggregate variance stops being 0 %.
+    """
+    state = _empty_state()
+    clean = _wave(wave_id="P01-I01-W01")
+    excluded = _wave(wave_id="P01-I01-W02")
+    for wave in (clean, excluded):
+        state.waves[wave.id] = wave
+    state.estimates = {
+        clean.id: _estimate(wave_id=clean.id, expected_eu=1.0),
+        excluded.id: _estimate(wave_id=excluded.id, expected_eu=1.0),
+    }
+    state.actuals = {
+        clean.id: _actual(wave_id=clean.id, elapsed_eu=1.0),
+        excluded.id: _actual(wave_id=excluded.id, elapsed_eu=5.0, calibration_excluded=True),
+    }
+
+    result = compute_estimate_actual_variance(state)
+    assert result.sample_count == 1
+    assert result.planned_eu == pytest.approx(1.0)
+    assert result.actual_eu == pytest.approx(1.0)
+    assert result.variance_pct == pytest.approx(0.0)
+
+
+def test_compute_weekly_burn_counts_a_calibration_excluded_actual() -> None:
+    """Burn measures spend, so an excluded row still counts toward it.
+
+    The flag disqualifies the figure as a reference class for estimating
+    future work, not as a record of work already done — the mirror of the
+    two estimate-quality metrics, which drop the same row.
+    """
+    state = _empty_state()
+    wave = _wave(wave_id="P01-I01-W01")
+    state.waves[wave.id] = wave
+    state.actuals = {wave.id: _actual(wave_id=wave.id, elapsed_eu=3.0, calibration_excluded=True)}
+
+    result = compute_weekly_burn(state, now=_T0)
+    assert result.consumed_eu == pytest.approx(3.0)
 
 
 def test_compute_estimate_actual_variance_excludes_non_closed_and_missing() -> None:

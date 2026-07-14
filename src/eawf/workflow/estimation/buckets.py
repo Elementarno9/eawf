@@ -259,6 +259,15 @@ def _bucket_actuals(state: State, *, now: datetime) -> dict[EffortBucket, list[f
     the auto-actual, so a wave with telemetry contributes its real pace as
     the B069 recalibration input.
 
+    An actual flagged :attr:`ActualSummary.calibration_excluded` is skipped
+    even when it clears every other filter. The flag marks a figure that was
+    measured but is not a reference class — a counter reset re-originated the
+    wave (so the figure is a floor, not a measure) or several concurrent waves
+    shared one session (so the figure is a split, and the split is an
+    approximation whenever the concurrency moved mid-span). Re-fitting a
+    bucket against either one moves the estimate by the measurement artefact
+    rather than by the pace.
+
     Args:
         state: Loaded typed :class:`State` snapshot (read-only).
         now: Window anchor (UTC) — actuals before ``now - window`` are
@@ -274,7 +283,7 @@ def _bucket_actuals(state: State, *, now: datetime) -> dict[EffortBucket, list[f
         if wave.status != WaveStatus.CLOSED or wave.effort_bucket is None:
             continue
         act = actuals.get(wave.id)
-        if act is None or act.elapsed_eu <= 0:
+        if act is None or act.elapsed_eu <= 0 or act.calibration_excluded:
             continue
         if not (window_start <= act.updated_at <= now):
             continue

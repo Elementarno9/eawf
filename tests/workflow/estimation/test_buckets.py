@@ -91,7 +91,13 @@ def _wave(
     )
 
 
-def _actual(*, wave_id: str, elapsed_eu: float, updated_at: datetime = _T0) -> ActualSummary:
+def _actual(
+    *,
+    wave_id: str,
+    elapsed_eu: float,
+    updated_at: datetime = _T0,
+    calibration_excluded: bool = False,
+) -> ActualSummary:
     """Return a completed actual row for *wave_id*."""
     return ActualSummary(
         id=f"ACT-{wave_id}",
@@ -100,6 +106,7 @@ def _actual(*, wave_id: str, elapsed_eu: float, updated_at: datetime = _T0) -> A
         elapsed_eu=elapsed_eu,
         current_store_record_id=f"REC-{wave_id}",
         updated_at=updated_at,
+        calibration_excluded=calibration_excluded,
     )
 
 
@@ -134,6 +141,36 @@ def test_calibrate_buckets_populates_fitted_pessimistic_eu() -> None:
     report = calibrate_buckets(state, now=_T0)
     row = next(row for row in report.buckets if row.bucket == EffortBucket.M)
 
+    assert row.fitted_eu == pytest.approx(3.0)
+    assert row.fitted_pessimistic_eu == pytest.approx(5.0)
+
+
+def test_calibrate_buckets_drops_a_calibration_excluded_actual() -> None:
+    """An excluded actual clears every other filter and still never re-fits.
+
+    The row is CLOSED, bucketed, inside the window and carries positive
+    elapsed EU — the four conditions the re-fit tests — so only the
+    exclusion flag can keep it out. Its EU is far off the clean samples'
+    centroid, which is what makes the assertion falsify when the filter
+    is removed.
+    """
+    state = _state_with_samples((1.0, 2.0, 3.0, 4.0, 5.0))
+    excluded_id = "P01-I01-W99"
+    state.waves[excluded_id] = _wave(
+        wave_id=excluded_id,
+        effort_bucket=EffortBucket.M,
+        status=WaveStatus.CLOSED,
+    )
+    state.actuals[excluded_id] = _actual(
+        wave_id=excluded_id,
+        elapsed_eu=100.0,
+        calibration_excluded=True,
+    )
+
+    report = calibrate_buckets(state, now=_T0)
+    row = next(row for row in report.buckets if row.bucket == EffortBucket.M)
+
+    assert row.sample_count == 5
     assert row.fitted_eu == pytest.approx(3.0)
     assert row.fitted_pessimistic_eu == pytest.approx(5.0)
 

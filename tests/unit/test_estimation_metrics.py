@@ -147,7 +147,9 @@ def _estimate(*, wave_id: str, expected_eu: float, pessimistic_eu: float) -> Est
     )
 
 
-def _actual(*, wave_id: str, elapsed_eu: float) -> ActualSummary:
+def _actual(
+    *, wave_id: str, elapsed_eu: float, calibration_excluded: bool = False
+) -> ActualSummary:
     return ActualSummary(
         id=f"ACT-{wave_id}",
         scope_id=wave_id,
@@ -155,6 +157,7 @@ def _actual(*, wave_id: str, elapsed_eu: float) -> ActualSummary:
         elapsed_eu=elapsed_eu,
         current_store_record_id=f"REC-{wave_id}",
         updated_at=_T0,
+        calibration_excluded=calibration_excluded,
     )
 
 
@@ -218,6 +221,34 @@ def test_compute_eu_variance_excludes_non_closed_waves() -> None:
     result = compute_eu_variance(state)
     assert result.sample_count == 1
     assert result.mean_delta_eu == pytest.approx(0.5)
+
+
+def test_compute_eu_variance_drops_a_calibration_excluded_actual() -> None:
+    """An excluded actual cannot move the precision headline.
+
+    Both waves are CLOSED and carry an estimate and an actual, so only the
+    exclusion flag separates them. The excluded row sits far outside the
+    pessimistic band; if the filter is removed both the mean delta and the
+    inside-pessimistic share change.
+    """
+    state = _empty_state()
+    clean = _wave(wave_id="P01-I01-W01")
+    excluded = _wave(wave_id="P01-I01-W02")
+    state.waves[clean.id] = clean
+    state.waves[excluded.id] = excluded
+    state.estimates = {
+        clean.id: _estimate(wave_id=clean.id, expected_eu=1.0, pessimistic_eu=2.0),
+        excluded.id: _estimate(wave_id=excluded.id, expected_eu=1.0, pessimistic_eu=2.0),
+    }
+    state.actuals = {
+        clean.id: _actual(wave_id=clean.id, elapsed_eu=1.5),
+        excluded.id: _actual(wave_id=excluded.id, elapsed_eu=50.0, calibration_excluded=True),
+    }
+
+    result = compute_eu_variance(state)
+    assert result.sample_count == 1
+    assert result.mean_delta_eu == pytest.approx(0.5)
+    assert result.inside_pessimistic_share == pytest.approx(1.0)
 
 
 def test_compute_eu_variance_excludes_missing_estimate_or_actual() -> None:
