@@ -10305,6 +10305,111 @@
       "status": "done",
       "updated_at": "2026-07-14T11:10:53.209438Z"
     },
+    "P30-I21-W39": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I21-W39",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W39",
+      "model": null,
+      "scope_id": "P30-I21-W39",
+      "status": "done",
+      "updated_at": "2026-07-14T13:00:22.436956Z"
+    },
+    "P30-I21-W40": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I21-W40",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W40",
+      "model": null,
+      "scope_id": "P30-I21-W40",
+      "status": "done",
+      "updated_at": "2026-07-14T13:00:23.737590Z"
+    },
+    "P30-I21-W41": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I21-W41",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W41",
+      "model": null,
+      "scope_id": "P30-I21-W41",
+      "status": "done",
+      "updated_at": "2026-07-14T13:03:41.196836Z"
+    },
+    "P30-I21-W42": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I21-W42",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W42",
+      "model": null,
+      "scope_id": "P30-I21-W42",
+      "status": "done",
+      "updated_at": "2026-07-14T13:09:13.192654Z"
+    },
+    "P30-I21-W43": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I21-W43",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W43",
+      "model": null,
+      "scope_id": "P30-I21-W43",
+      "status": "done",
+      "updated_at": "2026-07-14T13:01:26.277171Z"
+    },
+    "P30-I21-W44": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I21-W44",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W44",
+      "model": null,
+      "scope_id": "P30-I21-W44",
+      "status": "done",
+      "updated_at": "2026-07-14T13:01:27.565025Z"
+    },
+    "P30-I21-W45": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I21-W45",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W45",
+      "model": null,
+      "scope_id": "P30-I21-W45",
+      "status": "done",
+      "updated_at": "2026-07-14T13:13:02.346944Z"
+    },
     "P30-I22-W01": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 12000,
@@ -16383,9 +16488,38 @@
       "obsoleted_at": null,
       "rationale": "The win32 SID-verify path has never run a real win32 round-trip (ZD-R10 / harm-register H12: validate on real win32 or explicitly de-scope). The v0.6.0 release notes mark Windows support experimental/de-scoped; real-host validation moves to the P31 daemon re-architecture remainder. The W36 re-close runbook carries the release-notes line-item.",
       "scope_id": "P30-I23-W02",
+      "status": "superseded",
+      "superseded_by": "D-WINDOWS-REALHOST",
+      "title": "De-scope Windows in v0.6.0 notes; real win32 validation in P31"
+    },
+    "D-WINDOWS-REALHOST": {
+      "alternatives": [
+        "Keep the de-scope and ship Windows as known-broken (rejected: the transport now passes on a real host, so the de-scope would itself become the false claim)",
+        "Cut Windows from v0.6.0 (rejected: it works; removing a working platform to avoid revisiting a decision is backwards)"
+      ],
+      "consequences": [],
+      "created_at": "2026-07-14T13:11:50.714385Z",
+      "description": null,
+      "id": "D-WINDOWS-REALHOST",
+      "obsoleted_at": null,
+      "rationale": "D-WINDOWS-DESCOPE deferred Windows because the win32 SID-verify path had never run a real win32 round-trip. The first real run proved the suspicion: the transport shipped six defects, each a call that could not have succeeded once. ImpersonateNamedPipeClient and EqualSid were invoked through modules that do not define them, so the peer-SID check raised AttributeError on every verified connection and the worker closed the pipe; because the daemon's own ping is SID-verified, cold start could never complete. The readiness probe truth-tested a pywin32 call that returns None on success, so it reported every healthy pipe as unready. The listener returned from start before binding the first pipe instance. stop left subscription feeds on the bus. A design test asserted a win32 BOOL is the False singleton. With those fixed the win32 set passes on a real Windows host (65 passed, 4 skipped), so the de-scope premise no longer holds. This row also supersedes D-WINDOWS-VALIDATED, a placeholder a probe command created in error.",
+      "scope_id": "P30",
       "status": "active",
       "superseded_by": null,
-      "title": "De-scope Windows in v0.6.0 notes; real win32 validation in P31"
+      "title": "Windows real-host validation discharged; win32 transport passes"
+    },
+    "D-WINDOWS-VALIDATED": {
+      "alternatives": [],
+      "consequences": [],
+      "created_at": "2026-07-14T13:11:13.519599Z",
+      "description": null,
+      "id": "D-WINDOWS-VALIDATED",
+      "obsoleted_at": null,
+      "rationale": "test",
+      "scope_id": "P30",
+      "status": "superseded",
+      "superseded_by": "D-WINDOWS-REALHOST",
+      "title": "Windows real-host validation is discharged"
     },
     "D-WINPIPE-01": {
       "alternatives": [
@@ -27770,6 +27904,97 @@
       "scope_id": "P30-I21-W38",
       "updated_at": "2026-07-14T11:06:41.150276Z"
     },
+    "P30-I21-W39": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W39-bucket-20260714T130016Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I21-W39",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I21-W39",
+      "updated_at": "2026-07-14T13:00:16.390276Z"
+    },
+    "P30-I21-W40": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W40-bucket-20260714T130017Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I21-W40",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I21-W40",
+      "updated_at": "2026-07-14T13:00:17.951933Z"
+    },
+    "P30-I21-W41": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W41-bucket-20260714T130018Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I21-W41",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I21-W41",
+      "updated_at": "2026-07-14T13:00:18.700874Z"
+    },
+    "P30-I21-W42": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W42-bucket-20260714T130019Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I21-W42",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I21-W42",
+      "updated_at": "2026-07-14T13:00:19.397211Z"
+    },
+    "P30-I21-W43": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W43-bucket-20260714T130020Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I21-W43",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I21-W43",
+      "updated_at": "2026-07-14T13:00:20.136581Z"
+    },
+    "P30-I21-W44": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W44-bucket-20260714T130021Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I21-W44",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I21-W44",
+      "updated_at": "2026-07-14T13:00:21.050751Z"
+    },
+    "P30-I21-W45": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W45-bucket-20260714T131232Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I21-W45",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I21-W45",
+      "updated_at": "2026-07-14T13:12:32.302293Z"
+    },
     "P30-I22-W01": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I22-W01-bucket-20260701T234041Z",
@@ -31813,7 +32038,12 @@
         "P30-I21-W37",
         "P30-I21-W38",
         "P30-I21-W39",
-        "P30-I21-W40"
+        "P30-I21-W40",
+        "P30-I21-W41",
+        "P30-I21-W42",
+        "P30-I21-W43",
+        "P30-I21-W44",
+        "P30-I21-W45"
       ]
     },
     "P30-I22": {
@@ -33152,7 +33382,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T11:30:28.104874Z",
+  "updated_at": "2026-07-14T13:13:02.347213Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -115948,10 +116178,10 @@
     "P30-I21-W39": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+      "claimed_at": "2026-07-14T13:00:16.350435Z",
+      "closed_at": "2026-07-14T13:00:22.436956Z",
+      "commit": "fd321053247f383416cd311515960bfafd7ffee3",
       "criteria_floor_waiver": {
         "reason": "Reactive review-repair wave appended at the ship gate; criteria authored from the PR reviewer blocker and gated by the named test",
         "waived_at": "2026-07-14T11:30:10.858187Z",
@@ -115965,7 +116195,42 @@
         "src/eawf/observability/telemetry/metrics_projection.py",
         "tests/unit/test_metrics_projection.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "criterion": "calibration",
+            "file_scopes": [
+              "src/eawf/observability/telemetry/metrics_projection.py",
+              "tests/unit/test_metrics_projection.py"
+            ],
+            "pattern": "calibration"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "compute_estimate_actual_variance",
+            "file_scopes": [
+              "src/eawf/observability/telemetry/metrics_projection.py",
+              "tests/unit/test_metrics_projection.py"
+            ],
+            "pattern": "compute_estimate_actual_variance"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I21-W39",
       "intent": {
         "desired_outcome": "Every surface that treats an actual as a reference class reports the same number, and the release note that says so is true.",
@@ -115981,39 +116246,73 @@
       },
       "iter_id": "P30-I21",
       "opened_at": "2026-07-14T11:30:10.912461Z",
-      "outcome": null,
-      "runtime_baseline": null,
+      "outcome": "The telemetry variance projection skips a calibration-excluded actual, so the CLI metric and the TUI overlay report the same M26 number",
+      "runtime_baseline": {
+        "api_duration_ms": 13455267,
+        "cache_creation_input_tokens": 537630,
+        "cache_read_input_tokens": 137647689,
+        "captured_at": "2026-07-14T13:00:16.390224Z",
+        "cost_usd": 79.2387895,
+        "harness": "claude-code",
+        "input_tokens": 864,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 201373,
+        "session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+        "shared_wave_count": null,
+        "total_duration_ms": 13455267
+      },
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "The telemetry variance projection skips a calibration-excluded actual so its aggregate and per-bucket rows agree with the CLI metric on the same state",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The telemetry variance projection skips a calibration-excluded actual so its aggregate and per-bucket rows agree with the CLI metric on the same state",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "The telemetry variance projection skips a calibration-excluded actual so its aggregate and per-bucket rows agree with the CLI metric on the same state",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "A test drives both the projection and compute_estimate_actual_variance over a state carrying an excluded row and asserts they report the same sample count and variance",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "A test drives both the projection and compute_estimate_actual_variance over a state carrying an excluded row and asserts they report the same sample count and variance",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "A test drives both the projection and compute_estimate_actual_variance over a state carrying an excluded row and asserts they report the same sample count and variance",
           "waiver_reason": null
         }
@@ -116026,10 +116325,10 @@
     "P30-I21-W40": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+      "claimed_at": "2026-07-14T13:00:17.917467Z",
+      "closed_at": "2026-07-14T13:00:23.737590Z",
+      "commit": "d5ec83410f91e05a0d4609cab4226a7c8e06fc3b",
       "criteria_floor_waiver": {
         "reason": "Reactive review-repair wave appended at the ship gate; criteria authored from the PR reviewer should-fix findings and gated by the acceptance and CLI suites",
         "waived_at": "2026-07-14T11:30:28.058952Z",
@@ -116046,7 +116345,68 @@
         "tests/daemon/test_research_campaign_acceptance.py",
         "tests/unit/test_cli_research_question_status.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "criterion": "researcher",
+            "file_scopes": [
+              "src/eawf/runtime/daemon/methods/research.py",
+              "src/eawf/surfaces/cli/commands/research.py",
+              "src/eawf/runtime/runtimes/claude/adapter.py",
+              "tests/daemon/test_research_campaign_acceptance.py",
+              "tests/unit/test_cli_research_question_status.py"
+            ],
+            "pattern": "researcher"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "researcher",
+            "file_scopes": [
+              "src/eawf/runtime/daemon/methods/research.py",
+              "src/eawf/surfaces/cli/commands/research.py",
+              "src/eawf/runtime/runtimes/claude/adapter.py",
+              "tests/daemon/test_research_campaign_acceptance.py",
+              "tests/unit/test_cli_research_question_status.py"
+            ],
+            "pattern": "researcher"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "docstring",
+            "file_scopes": [
+              "src/eawf/runtime/daemon/methods/research.py",
+              "src/eawf/surfaces/cli/commands/research.py",
+              "src/eawf/runtime/runtimes/claude/adapter.py",
+              "tests/daemon/test_research_campaign_acceptance.py",
+              "tests/unit/test_cli_research_question_status.py"
+            ],
+            "pattern": "docstring"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "GATE-03",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I21-W40",
       "intent": {
         "desired_outcome": "A cancelled campaign halts before the next round spawns, and its booked spend stays readable after the campaign leaves ACTIVE.",
@@ -116063,58 +116423,916 @@
       },
       "iter_id": "P30-I21",
       "opened_at": "2026-07-14T11:30:28.104616Z",
-      "outcome": null,
-      "runtime_baseline": null,
+      "outcome": "A cancelled campaign halts before the next round spawns; its booked spend stays readable after it leaves ACTIVE; the event store is walked once per set",
+      "runtime_baseline": {
+        "api_duration_ms": 13455267,
+        "cache_creation_input_tokens": 537630,
+        "cache_read_input_tokens": 137647689,
+        "captured_at": "2026-07-14T13:00:17.951881Z",
+        "cost_usd": 79.2387895,
+        "harness": "claude-code",
+        "input_tokens": 864,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 201373,
+        "session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+        "shared_wave_count": null,
+        "total_duration_ms": 13455267
+      },
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "A campaign cancelled mid-run halts before the next round spawns so no further researcher is paid for and no further cost books against it",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "A campaign cancelled mid-run halts before the next round spawns so no further researcher is paid for and no further cost books against it",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "A campaign cancelled mid-run halts before the next round spawns so no further researcher is paid for and no further cost books against it",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "The researcher spend booked against a campaign stays readable from an operator surface after the campaign reaches a terminal state rather than only while it is ACTIVE",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The researcher spend booked against a campaign stays readable from an operator surface after the campaign reaches a terminal state rather than only while it is ACTIVE",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "The researcher spend booked against a campaign stays readable from an operator surface after the campaign reaches a terminal state rather than only while it is ACTIVE",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-03"
+          ],
           "id": "CR-03",
-          "kind": "legacy",
+          "kind": "converted",
           "measurable_signal": "The stream-json docstring on the chunked drain helper no longer claims the live stream is typically one chunk",
-          "oracle_tier": null,
+          "oracle_tier": 1,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The stream-json docstring on the chunked drain helper no longer claims the live stream is typically one chunk",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
           "text": "The stream-json docstring on the chunked drain helper no longer claims the live stream is typically one chunk",
           "waiver_reason": null
         }
       ],
       "title": "Make a cancelled campaign actually stop spending",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W41": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+      "claimed_at": "2026-07-14T13:00:18.671238Z",
+      "closed_at": "2026-07-14T13:03:41.196836Z",
+      "commit": "2d5404762966bfbb5be8096bca4519d4bf00d810",
+      "criteria_floor_waiver": {
+        "reason": "Reactive CI-repair wave appended at the ship gate; criteria authored from the ubuntu-24.04 snapshot failure and gated by the normalizer test",
+        "waived_at": "2026-07-14T11:42:30.492295Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The DISPATCH band running dot and the footer heartbeat pulse on a timer, so a captured frame contains whichever phase the timer happened to be in when the screen was read. Every committed golden was captured mid-lit-phase; the first CI run of this branch caught the dim phase on ubuntu-24.04 and reddened test_status_pane_selective_absence_snapshot. The frame has a third volatile cell that the normalizer never neutralized.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/render/snapshot_normalize.py",
+        "tests/unit/test_snapshot_normalize.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "criterion": "normalizes",
+            "file_scopes": [
+              "src/eawf/surfaces/render/snapshot_normalize.py",
+              "tests/unit/test_snapshot_normalize.py"
+            ],
+            "pattern": "normalizes"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "normalizer",
+            "file_scopes": [
+              "src/eawf/surfaces/render/snapshot_normalize.py",
+              "tests/unit/test_snapshot_normalize.py"
+            ],
+            "pattern": "normalizer"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W41",
+      "intent": {
+        "desired_outcome": "A captured frame normalizes to one pulse phase, so a golden asserts what the pane renders rather than how fast the host ran.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Neutralize the dim pulse glyph in the pure snapshot normalizer alongside the clock and the daemon banner",
+          "Correct the docstring claim that everything else in the frame derives from fixture state",
+          "Add a test that a dim-phase capture normalizes to the same text as a lit-phase one"
+        ],
+        "priority_rationale": "A golden that depends on the host's speed is a flake that will redden CI at random forever, and it reddened the release PR on its first run.",
+        "problem": "The pulse glyph is timer-driven, so a snapshot capture is a coin flip between the bright and dim dot. The goldens all hold the bright one, so a slow runner reddens them.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-14T11:42:30.528088Z",
+      "outcome": "The dim pulse glyph normalizes to the bright one, so a golden no longer depends on when the timer fired",
+      "runtime_baseline": {
+        "api_duration_ms": 13455267,
+        "cache_creation_input_tokens": 537630,
+        "cache_read_input_tokens": 137647689,
+        "captured_at": "2026-07-14T13:00:18.700826Z",
+        "cost_usd": 79.2387895,
+        "harness": "claude-code",
+        "input_tokens": 864,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 201373,
+        "session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+        "shared_wave_count": null,
+        "total_duration_ms": 13455267
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
+          "id": "CR-01",
+          "kind": "converted",
+          "measurable_signal": "A frame captured on the dim pulse phase normalizes to the same text as one captured on the bright phase so a golden no longer depends on when the timer fired",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "golden",
+            "object": "A frame captured on the dim pulse phase normalizes to the same text as one captured on the bright phase so a golden no longer depends on when the timer fired",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "A frame captured on the dim pulse phase normalizes to the same text as one captured on the bright phase so a golden no longer depends on when the timer fired",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
+          "id": "CR-02",
+          "kind": "converted",
+          "measurable_signal": "The normalizer documents the pulse dot as a volatile cell alongside the wall clock and the daemon banner rather than claiming the rest of the frame is a pure function of fixture state",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The normalizer documents the pulse dot as a volatile cell alongside the wall clock and the daemon banner rather than claiming the rest of the frame is a pure function of fixture state",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The normalizer documents the pulse dot as a volatile cell alongside the wall clock and the daemon banner rather than claiming the rest of the frame is a pure function of fixture state",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Stop the pulse phase drifting a golden on a slow runner",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W42": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+      "claimed_at": "2026-07-14T13:00:19.367847Z",
+      "closed_at": "2026-07-14T13:09:13.192654Z",
+      "commit": "b662ae8f106aaa4f045ff48042cf1566a40e9c83",
+      "criteria_floor_waiver": {
+        "reason": "Reactive CI-repair wave appended at the ship gate; criteria authored from the macos-26 zoom-focus failure and gated by the existing zoom regression suite",
+        "waived_at": "2026-07-14T11:43:57.819766Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Entering a workspace zoom mounts the quadrant without awaiting it, then schedules the seed and focus passes on the next refresh. On a slow host the deferred focus pass wins the race, finds no tree, and silently no-ops -- leaving focus unset and the zoomed view dead to Enter and the arrow keys, the exact defect the focus fix was written to cure. It reddened the release PR on macos-26.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/scopes/_zoom.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "criterion": "deferred",
+            "file_scopes": [
+              "src/eawf/surfaces/tui/scopes/_zoom.py"
+            ],
+            "pattern": "deferred"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "regression",
+            "file_scopes": [
+              "src/eawf/surfaces/tui/scopes/_zoom.py"
+            ],
+            "pattern": "regression"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W42",
+      "intent": {
+        "desired_outcome": "The quadrant exists before the seed and focus passes run, so zoom always lands focus on the roadmap tree regardless of host speed.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Await the quadrant mount before scheduling the deferred seed and focus passes",
+          "Correct the comment that describes the unmounted tree as an expected state"
+        ],
+        "priority_rationale": "A focus race that only fires on a slow machine is a flake in CI and a dead keyboard for the operator; it is the same bug the fix it replaces claimed to close.",
+        "problem": "The quadrant mount is not awaited, so the deferred focus pass can run before the roadmap tree exists and no-ops. Focus stays unset and the zoomed view does not respond to Enter or the arrows.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-14T11:43:57.865114Z",
+      "outcome": "The zoom quadrant mount is awaited, so the focus pass cannot run before the tree exists and silently no-op",
+      "runtime_baseline": {
+        "api_duration_ms": 13455267,
+        "cache_creation_input_tokens": 537630,
+        "cache_read_input_tokens": 137647689,
+        "captured_at": "2026-07-14T13:00:19.397179Z",
+        "cost_usd": 79.2387895,
+        "harness": "claude-code",
+        "input_tokens": 864,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 201373,
+        "session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+        "shared_wave_count": null,
+        "total_duration_ms": 13455267
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
+          "id": "CR-01",
+          "kind": "converted",
+          "measurable_signal": "The zoom mount is awaited so the roadmap tree exists before the deferred focus pass runs and focus cannot silently land on nothing",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The zoom mount is awaited so the roadmap tree exists before the deferred focus pass runs and focus cannot silently land on nothing",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The zoom mount is awaited so the roadmap tree exists before the deferred focus pass runs and focus cannot silently land on nothing",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
+          "id": "CR-02",
+          "kind": "converted",
+          "measurable_signal": "The zoom focus regression test passes without depending on how fast the host mounts the quadrant",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The zoom focus regression test passes without depending on how fast the host mounts the quadrant",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The zoom focus regression test passes without depending on how fast the host mounts the quadrant",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Await the zoom mount so focus cannot land on nothing",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W43": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+      "claimed_at": "2026-07-14T13:00:20.105552Z",
+      "closed_at": "2026-07-14T13:01:26.277171Z",
+      "commit": "545c8a83e0874611f09aa87116c1a6eb46f0d86d",
+      "criteria_floor_waiver": {
+        "reason": "Reactive CI-repair wave appended at the ship gate; criteria authored from the windows-latest transport failures and gated by the win32 test set which runs only on Windows CI",
+        "waived_at": "2026-07-14T12:43:52.793517Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The pipe server's start spawns a listener thread and returns, so the first CreateNamedPipe happens asynchronously. A client that connects before it lands gets ERROR_FILE_NOT_FOUND, the readiness probe reports not-ready, and a subscription gets nothing. On a developer machine the thread wins the race; on the windows-latest runner it loses, which is why the whole win32 transport set went red on the release PR.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/windows_pipe.py",
+        "tests/daemon/test_windows_pipe_design_only.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "criterion": "ERROR_FILE_NOT_FOUND",
+            "file_scopes": [
+              "src/eawf/runtime/daemon/windows_pipe.py",
+              "tests/daemon/test_windows_pipe_design_only.py"
+            ],
+            "pattern": "ERROR_FILE_NOT_FOUND"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "listening",
+            "file_scopes": [
+              "src/eawf/runtime/daemon/windows_pipe.py",
+              "tests/daemon/test_windows_pipe_design_only.py"
+            ],
+            "pattern": "listening"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "attributes",
+            "file_scopes": [
+              "src/eawf/runtime/daemon/windows_pipe.py",
+              "tests/daemon/test_windows_pipe_design_only.py"
+            ],
+            "pattern": "attributes"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "GATE-03",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W43",
+      "intent": {
+        "desired_outcome": "start returns only once the pipe is bound and connectable, so the transport does not depend on winning a thread race.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Signal a bind event after the first CreateNamedPipe succeeds and have start wait on it",
+          "Fail start loudly when the listener cannot bind rather than returning a server nobody can reach",
+          "Fix the design-only assertion that compares a pywin32 int against False by identity"
+        ],
+        "priority_rationale": "The whole win32 test set fails on a real Windows runner because of this race, and the release notes claim the transport is CI-verified.",
+        "problem": "start returns before the listener thread creates the first pipe instance, so a client can connect to a pipe that does not exist yet and the readiness probe can report a bound pipe as absent.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-14T12:43:52.841361Z",
+      "outcome": "The pipe server binds the first instance before start returns, and raises when it cannot bind",
+      "runtime_baseline": {
+        "api_duration_ms": 13455267,
+        "cache_creation_input_tokens": 537630,
+        "cache_read_input_tokens": 137647689,
+        "captured_at": "2026-07-14T13:00:20.136537Z",
+        "cost_usd": 79.2387895,
+        "harness": "claude-code",
+        "input_tokens": 864,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 201373,
+        "session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+        "shared_wave_count": null,
+        "total_duration_ms": 13455267
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
+          "id": "CR-01",
+          "kind": "converted",
+          "measurable_signal": "The pipe server start returns only after the listener has bound the first pipe instance so a client connecting immediately afterwards finds the pipe rather than ERROR_FILE_NOT_FOUND",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The pipe server start returns only after the listener has bound the first pipe instance so a client connecting immediately afterwards finds the pipe rather than ERROR_FILE_NOT_FOUND",
+            "observe": "returns",
+            "quantifier": "single"
+          },
+          "text": "The pipe server start returns only after the listener has bound the first pipe instance so a client connecting immediately afterwards finds the pipe rather than ERROR_FILE_NOT_FOUND",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
+          "id": "CR-02",
+          "kind": "converted",
+          "measurable_signal": "A listener that cannot bind surfaces the failure from start rather than leaving a server that is listening in name only",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "A listener that cannot bind surfaces the failure from start rather than leaving a server that is listening in name only",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "A listener that cannot bind surfaces the failure from start rather than leaving a server that is listening in name only",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-03"
+          ],
+          "id": "CR-03",
+          "kind": "converted",
+          "measurable_signal": "The design-only security-attributes test compares the pywin32 inherit-handle value by equality rather than asserting an int is the False singleton",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The design-only security-attributes test compares the pywin32 inherit-handle value by equality rather than asserting an int is the False singleton",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The design-only security-attributes test compares the pywin32 inherit-handle value by equality rather than asserting an int is the False singleton",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Bind the Windows pipe before start returns",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W44": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+      "claimed_at": "2026-07-14T13:00:21.017890Z",
+      "closed_at": "2026-07-14T13:01:27.565025Z",
+      "commit": "29afbdcaed4ca3dd9e8667cf0da8f898145cdf71",
+      "criteria_floor_waiver": {
+        "reason": "Reactive CI-repair wave appended at the ship gate; criteria authored from the windows-latest failures and gated by the win32 test set which runs only on Windows CI",
+        "waived_at": "2026-07-14T12:52:37.823968Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "With the bind race gone, the win32 set exposes three defects that no code path could ever have survived: the SID check calls ImpersonateNamedPipeClient through win32pipe, which does not define it, so it AttributeErrors on the first verified connection; the readiness probe truth-tests a pywin32 call that returns None on success, so it reports every healthy pipe as unready; and stop leaves subscription feeds registered on the bus until a streamer wakes from a five second heartbeat.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/windows_pipe.py",
+        "src/eawf/runtime/daemon/windows_security.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "criterion": "ImpersonateNamedPipeClient",
+            "file_scopes": [
+              "src/eawf/runtime/daemon/windows_pipe.py",
+              "src/eawf/runtime/daemon/windows_security.py"
+            ],
+            "pattern": "ImpersonateNamedPipeClient"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "WaitNamedPipe",
+            "file_scopes": [
+              "src/eawf/runtime/daemon/windows_pipe.py",
+              "src/eawf/runtime/daemon/windows_security.py"
+            ],
+            "pattern": "WaitNamedPipe"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "subscriptions",
+            "file_scopes": [
+              "src/eawf/runtime/daemon/windows_pipe.py",
+              "src/eawf/runtime/daemon/windows_security.py"
+            ],
+            "pattern": "subscriptions"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "GATE-03",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W44",
+      "intent": {
+        "desired_outcome": "The peer SID check runs, the readiness probe answers True for a bound pipe, and a stopped daemon holds no subscriptions.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Call ImpersonateNamedPipeClient on win32security where it is defined",
+          "Treat a returning WaitNamedPipe as ready rather than truth-testing its None",
+          "Close the live subscription feeds in stop instead of waiting on the streamer heartbeat"
+        ],
+        "priority_rationale": "These are not edge cases: the SID check has never executed, so the second gate of the pipe security model is decorative, and the readiness probe is the gate the daemon cold start polls.",
+        "problem": "The SID check calls a function through the wrong pywin32 module, the readiness probe truth-tests a None-returning call so it is always False, and stop does not unregister subscription feeds.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-14T12:52:37.876674Z",
+      "outcome": "The SID check calls the functions that exist, the readiness probe reads pywin32 return semantics correctly, and stop unregisters its feeds; the win32 set passes on a real Windows host (65 passed)",
+      "runtime_baseline": {
+        "api_duration_ms": 13455267,
+        "cache_creation_input_tokens": 537630,
+        "cache_read_input_tokens": 137647689,
+        "captured_at": "2026-07-14T13:00:21.050709Z",
+        "cost_usd": 79.2387895,
+        "harness": "claude-code",
+        "input_tokens": 864,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 201373,
+        "session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+        "shared_wave_count": null,
+        "total_duration_ms": 13455267
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
+          "id": "CR-01",
+          "kind": "converted",
+          "measurable_signal": "The peer SID verification calls ImpersonateNamedPipeClient on the module that defines it so the check actually executes instead of raising AttributeError on its first connection",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The peer SID verification calls ImpersonateNamedPipeClient on the module that defines it so the check actually executes instead of raising AttributeError on its first connection",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The peer SID verification calls ImpersonateNamedPipeClient on the module that defines it so the check actually executes instead of raising AttributeError on its first connection",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
+          "id": "CR-02",
+          "kind": "converted",
+          "measurable_signal": "The readiness probe reports a bound pipe as ready because it treats a returning WaitNamedPipe as success rather than truth-testing the None it returns",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The readiness probe reports a bound pipe as ready because it treats a returning WaitNamedPipe as success rather than truth-testing the None it returns",
+            "observe": "returns",
+            "quantifier": "single"
+          },
+          "text": "The readiness probe reports a bound pipe as ready because it treats a returning WaitNamedPipe as success rather than truth-testing the None it returns",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-03"
+          ],
+          "id": "CR-03",
+          "kind": "converted",
+          "measurable_signal": "Stopping the server unregisters its live subscription feeds so a stopped daemon holds no subscriptions rather than keeping them until a streamer heartbeat expires",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "Stopping the server unregisters its live subscription feeds so a stopped daemon holds no subscriptions rather than keeping them until a streamer heartbeat expires",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "Stopping the server unregisters its live subscription feeds so a stopped daemon holds no subscriptions rather than keeping them until a streamer heartbeat expires",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fix the three win32 calls that never once ran",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W45": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+      "claimed_at": "2026-07-14T13:12:32.253395Z",
+      "closed_at": "2026-07-14T13:13:02.346944Z",
+      "commit": "f3caeff7318fa3471b725491c1a2b0e3a6623920",
+      "criteria_floor_waiver": {
+        "reason": "Ship-prep documentation wave appended at the release gate; criteria are prose over the rendered notes and the decision ledger",
+        "waived_at": "2026-07-14T12:59:11.662414Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The 0.6.0 notes claimed the Windows daemon transport was verified by a windows-latest CI job. That job had never passed: the win32 set failed six ways on a real Windows host. It passes now, so the claim is finally true, but the notes still owe the reader an account of what was broken and the de-scope decision that assumed it would stay broken is now stale.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "CHANGELOG.md"
+      ],
+      "gates": [
+        {
+          "args": {
+            "criterion": "describing",
+            "file_scopes": [
+              "CHANGELOG.md"
+            ],
+            "pattern": "describing"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "GATE-01",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "criterion": "validation",
+            "file_scopes": [
+              "CHANGELOG.md"
+            ],
+            "pattern": "validation"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "GATE-02",
+          "kind": "criterion_in_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I21-W45",
+      "intent": {
+        "desired_outcome": "The notes record what the Windows transport actually did and now does, and the decision ledger reflects that real-host validation happened.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add a Fixed entry describing the six win32 defects and the fact the transport now passes on a real Windows host",
+          "Land a decision recording that real-host validation is discharged and superseding the de-scope"
+        ],
+        "priority_rationale": "The false CI-verified claim is the same class of shipped falsehood this iter has already retired twice; a green run is not a licence to leave the record wrong.",
+        "problem": "The release notes asserted a CI-verified Windows transport while the win32 job was red, and the de-scope decision that predicted this is now discharged by a green run.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-14T12:59:11.735004Z",
+      "outcome": "The 0.6.0 notes record the six win32 defects and that the transport now passes on a real Windows host; D-WINDOWS-REALHOST supersedes the de-scope",
+      "runtime_baseline": {
+        "api_duration_ms": 13455267,
+        "cache_creation_input_tokens": 548471,
+        "cache_read_input_tokens": 147460338,
+        "captured_at": "2026-07-14T13:12:32.302241Z",
+        "cost_usd": 84.409129,
+        "harness": "claude-code",
+        "input_tokens": 900,
+        "measure_version": 4,
+        "model": "claude-opus-4-8",
+        "output_tokens": 207590,
+        "session_id": "30f683b4-388a-4c04-89f4-612b7fe60362",
+        "shared_wave_count": null,
+        "total_duration_ms": 13455267
+      },
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-01"
+          ],
+          "id": "CR-01",
+          "kind": "converted",
+          "measurable_signal": "The 0.6.0 notes carry an entry describing the six win32 defects the transport shipped with and stating that the win32 set now passes on a real Windows host",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "The 0.6.0 notes carry an entry describing the six win32 defects the transport shipped with and stating that the win32 set now passes on a real Windows host",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "The 0.6.0 notes carry an entry describing the six win32 defects the transport shipped with and stating that the win32 set now passes on a real Windows host",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "GATE-02"
+          ],
+          "id": "CR-02",
+          "kind": "converted",
+          "measurable_signal": "A decision records that real-host Windows validation is discharged and supersedes the de-scope that assumed it was not",
+          "oracle_tier": 1,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "criterion_in_diff",
+            "jury_reason": null,
+            "locus": "source",
+            "object": "A decision records that real-host Windows validation is discharged and supersedes the de-scope that assumed it was not",
+            "observe": "file_matches",
+            "quantifier": "single"
+          },
+          "text": "A decision records that real-host Windows validation is discharged and supersedes the de-scope that assumed it was not",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Tell the truth about Windows in the release notes",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
