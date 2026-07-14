@@ -16114,6 +16114,84 @@
       "status": "open",
       "title": "Reject a commit prefix naming a wave that does not exist"
     },
+    "B118": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-14T14:45:53.460444Z",
+      "description": "The zero-EU close gate has one call site: the daemon state.mutate handler. The in-process close (used under EAWF_DAEMONLESS, and on a transport-fallback when the daemon RPC fails) runs the deterministic and verdict gates but never the zero-runtime check, so it closes a wave with elapsed_eu=0.0 behind a stderr advisory. Same class as the band-narrowed gate W52 was written to close: a gate that does not fire on every path is not a gate.",
+      "id": "B118",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "P30",
+      "status": "open",
+      "title": "Enforce the zero-runtime close gate on the in-process close path"
+    },
+    "B119": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-14T14:46:39.036071Z",
+      "description": "Spend accrues only when a lane finishes, and the cap is tested at the claim gate and between finished lanes, so an in-flight lane is never measured against it. One lane that burns 200 USD over hours under a 5 USD cap is never killed: the run records the overshoot, then stops claiming. hard_halt reaps the other lanes, never the one that blew the cap. Probe in-flight spend with a per-lane deadline, or rename the caps as claim gates -- the arm modal presents usd_cap as a spend cap.",
+      "id": "B119",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "P30",
+      "status": "open",
+      "title": "Make the fleet spend cap bound spend, not just claims"
+    },
+    "B120": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-14T14:47:42.319238Z",
+      "description": "Two defects that likely stop the jail launching on Linux; unverified, the dev host is macOS. env_scrub pins TMPDIR to /private/tmp unconditionally, a macOS-only path, and Node (the claude CLI) returns it verbatim, so a Linux spawn hits ENOENT on its first temp write. jail.py also emits --tmpfs for every credential-deny entry, including .npmrc which is a FILE and ~/.aws which usually does not exist: bwrap fails ENOTDIR on a file and EROFS on an absent path, exiting before the agent starts.",
+      "id": "B120",
+      "intent": null,
+      "priority": "P0",
+      "resolution": null,
+      "scope_id": "P30",
+      "status": "open",
+      "title": "Fix the Linux sandbox: TMPDIR pin and the bwrap tmpfs masks"
+    },
+    "B121": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-14T14:47:27.992547Z",
+      "description": "command_exit_zero runs subprocess.run(argv) with the daemon's full environment and no argv validation. Two of three producers validate at construction, but the /audit skill builds the CheckSpec straight from its criterion_checks arg, which is free-form agent-supplied input -- so a crafted argv runs with AWS, GH_TOKEN and ANTHROPIC_API_KEY in the child env. This phase moved these gates onto the live close path. Call validate_gate_argv in the builder and use build_child_env.",
+      "id": "B121",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "P30",
+      "status": "open",
+      "title": "Validate the argv of an audit-DSL command gate and scrub its env"
+    },
+    "B122": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-14T14:45:56.527617Z",
+      "description": "start_egress_proxy, egress_socket_env and classify_egress have zero production callers, while the macOS seatbelt profile explicitly emits allow network and allow system-socket, so a jailed agent has unrestricted outbound. The jail's own comment defers this to P31 honestly, but the dispatch runner still describes the sandbox boundary as including an egress proxy. Either wire it or correct the module prose that implies it is live.",
+      "id": "B122",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "P30",
+      "status": "open",
+      "title": "Wire the egress proxy or stop implying it is enforced"
+    },
+    "B123": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-14T14:47:28.942789Z",
+      "description": "Local-only trades away cross-machine continuity: a clone starts with an empty Feed and no telemetry history. Restore it explicitly rather than by tracking the firehose. export bundles the machine-local artifacts (event store, telemetry db, spec cache, .ea/local drafts) into an archive; import merges them back, deduplicating append-only stores by envelope id and refusing to clobber state.json. The archive carries absolute paths and raw agent output, so it is private by construction.",
+      "id": "B123",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "P30",
+      "status": "open",
+      "title": "Add eawf export and import for the local-only artifacts"
+    },
     "B70": {
       "closed_at": null,
       "commit": null,
@@ -33482,7 +33560,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T14:41:41.037908Z",
+  "updated_at": "2026-07-14T14:47:42.319238Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
