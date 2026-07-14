@@ -15685,6 +15685,32 @@
       "status": "open",
       "title": "Find out how P30-I24 closed with an ODR of zero while the gate was armed"
     },
+    "B109": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-14T00:28:09.089826Z",
+      "description": "Claude writes its turn_duration row only when a turn ENDS so a wave claimed mid-turn baselines at the pre-turn total and banks the entire turn including the part before it existed. W43-W45 show it live: claimed against a zero baseline they took all 34.7 minutes of a turn that began 12 minutes earlier. Bounded by one turn but turns run 34-94 minutes while these waves measure 6-40 so it can exceed the measured quantity. Attribute a turn to the waves active during it.",
+      "id": "B109",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "P30",
+      "status": "open",
+      "title": "Stop a wave claimed mid-turn from banking the whole turn"
+    },
+    "B110": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-14T00:27:53.148101Z",
+      "description": "The claim path (_capture_runtime_baseline in workflow/lifecycle/wave.py) is the one runtime-snapshot writer that does not record shared_wave_count so a baseline carries null and the divisor is recovered from the latest snapshot alone. Harmless today because shared_wave_divisor takes the max across both snapshots but P30-I25-W46 CR-01 asks that a snapshot record the concurrency it was captured under and this one does not. The daemon claim path knows the active-wave count; thread it through.",
+      "id": "B110",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "P30",
+      "status": "open",
+      "title": "Stamp the concurrent-wave count on the claim-time baseline"
+    },
     "B70": {
       "closed_at": null,
       "commit": null,
@@ -16076,6 +16102,21 @@
       "status": "active",
       "superseded_by": null,
       "title": "TUI adopts Textual MODES chassis (digit-keyed full-screen modes)"
+    },
+    "D-W43-CRITERIA-SUPERSEDED": {
+      "alternatives": [
+        "Reopen W43 and edit its criteria (rejected: reopening a closed wave to rewrite the contract it was judged against destroys the audit trail that caught the gap)"
+      ],
+      "consequences": [],
+      "created_at": "2026-07-14T00:27:53.896298Z",
+      "description": null,
+      "id": "D-W43-CRITERIA-SUPERSEDED",
+      "obsoleted_at": null,
+      "rationale": "P30-I25-W43 shipped two criteria that the delivered code deliberately does not satisfy and the wave is CLOSED so its criteria are immutable. CR-02 promised that the turn still in flight falls back to its row span. The implementation dropped the fallback on purpose: spanning the in-flight turn charges that turn's approval stalls back into the measure and makes the duration DROP when Claude's smaller figure lands which reads as a counter reset and re-origins the wave. It reports zero for an unmeasured turn rather than a guess and the turn is counted at the next capture. CR-03 promised that rows are ordered by timestamp before being grouped into turns. There is no sorting and no grouping because the measure no longer derives turn spans at all; it sums the turn_duration rows Claude writes and a sum is order-independent so the goal holds vacuously. Both departures are improvements on the criteria as written and both were verified by audit 4. This decision records the supersession so a reader comparing the wave contract to the code finds the reason in state rather than concluding the wave under-delivered. The duration ceiling that CR-04 promised was genuinely absent and is repaired by W49 rather than superseded here.",
+      "scope_id": "P30-I25",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Record that the delivered turn measure supersedes two of W43's criteria"
     },
     "D-WINDOWS-DESCOPE": {
       "alternatives": [
@@ -32733,7 +32774,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-14T00:13:44.275028Z",
+  "updated_at": "2026-07-14T00:28:09.089826Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
