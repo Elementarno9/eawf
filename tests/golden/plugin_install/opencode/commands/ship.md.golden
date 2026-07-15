@@ -48,7 +48,7 @@ read off real history rather than recomputed.
    `eawf iter close P<NN>-I<MM>` + `eawf phase close P<NN>` (no
    other touched files). The operator merges that commit to end the
    phase. This is the final instance of the per-close bookkeeping rule
-   the iter followed throughout: After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + event store) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close.
+   the iter followed throughout: After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + the typed stores under `.ea/store/`, e.g. audit/decision/evidence) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close. The event store (`.ea/store/event.jsonl`) is gitignored — it is the raw-stdout firehose; never `git add -f` it.
 
 ## Options
 

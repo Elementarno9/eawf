@@ -21,7 +21,7 @@ description: "Run /research → /prep → /audit → /polish → /ship sequentia
    ask the operator via `AskUserQuestion` whether to proceed —
    options: `proceed` / `skip-next` / `stop`. When `true`, advance
    without a prompt. Between a wave close and the next stage:
-   After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + event store) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close.
+   After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + the typed stores under `.ea/store/`, e.g. audit/decision/evidence) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close. The event store (`.ea/store/event.jsonl`) is gitignored — it is the raw-stdout firehose; never `git add -f` it.
 3. On any non-`ok` status (`blocked`, `needs_user`, `failed`,
    `partial`), short-circuit with the failing step's repair commands.
 

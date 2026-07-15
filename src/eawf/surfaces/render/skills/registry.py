@@ -74,9 +74,11 @@ _GOTCHA_NO_EAWF_IN_WORKTREE = (
 
 _GOTCHA_STATE_BOOKKEEPING = (
     "After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping "
-    "(state.json + event store) BEFORE dispatching the next subagent — an "
+    "(state.json + the typed stores under `.ea/store/`, e.g. "
+    "audit/decision/evidence) BEFORE dispatching the next subagent — an "
     "inline subagent's checkout can revert uncommitted state, silently "
-    "dropping the close."
+    "dropping the close. The event store (`.ea/store/event.jsonl`) is "
+    "gitignored — it is the raw-stdout firehose; never `git add -f` it."
 )
 
 _GOTCHA_FULL_TREE_GAUNTLET = (

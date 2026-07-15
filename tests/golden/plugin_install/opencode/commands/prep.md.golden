@@ -55,7 +55,7 @@ PLANNED-queue state:
 5. **Land, reconcile, then record each finished wave.** For each
    sequential wave, run inline; cherry-pick parallel-wave commits in
    between as they finish. Before close: reconcile the wave's declared `file_scopes` against the executor report's `files_changed` and run `eawf wave update --files <real>` while the wave is still CLAIMED — `update --files` is rejected on CLOSED waves. Then:
-   After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + event store) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close.
+   After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + the typed stores under `.ea/store/`, e.g. audit/decision/evidence) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close. The event store (`.ea/store/event.jsonl`) is gitignored — it is the raw-stdout firehose; never `git add -f` it.
 6. Validate the rendered plan with `eawf plan show --md`; wave tags
    and bucket roll-ups must match state.
 
