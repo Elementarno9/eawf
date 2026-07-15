@@ -20,7 +20,25 @@ inside their own fixtures.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+
+_TIER_DIR = Path(__file__).parent
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Tag every test collected under ``tests/integration/`` with the ``integration`` marker.
+
+    The marker is derived from the directory, not a per-file
+    ``@pytest.mark.integration`` decorator. Pytest calls each conftest's
+    copy of this hook with the full collected set, so it marks only the
+    items whose path is beneath this tier directory -- tier membership is
+    a property of WHERE a test lives, with no per-file edit.
+    """
+    for item in items:
+        if _TIER_DIR in item.path.parents:
+            item.add_marker("integration")
 
 
 @pytest.fixture(autouse=True)

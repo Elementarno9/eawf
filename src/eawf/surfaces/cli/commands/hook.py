@@ -1365,6 +1365,62 @@ def eawf023_artifact_placement(
     )
 
 
+def _git_tracked_unit_tests(*, cwd: Path) -> list[str]:
+    """Return git-tracked ``tests/unit/**/*.py`` paths under ``cwd``.
+
+    The EAWF024 test-tier gate scans the whole tracked unit-test tree
+    (not a staged delta) so a mislabeled unit test reds CI regardless of
+    which files the commit touched. A failed git invocation yields an
+    empty list (fail-open) -- the authoritative backstop is the same gate
+    on the next clean run.
+    """
+    proc = subprocess.run(
+        ["git", "ls-files", "tests/unit/**/*.py", "tests/unit/*.py"],
+        cwd=cwd,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if proc.returncode != 0:
+        return []
+    return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+
+@hook_app.command(name="eawf024-test-tier-contract")
+def eawf024_test_tier_contract(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+) -> None:
+    """Reject non-unit imports in the ``tests/unit/`` tier.
+
+    Walks the git-tracked ``tests/unit/**/*.py`` set (or an explicit file
+    list, for tests) and runs the EAWF024 rule: a unit-tier test must not
+    import ``subprocess``, ``textual``, or ``CliRunner`` (each marks a
+    slower integration/TUI test mislabeled into the unit tier). An
+    offending import may carry a line-level ``# noqa: EAWF024`` waiver for
+    a deliberate fixture. The scan covers the whole tracked unit tree (not
+    a staged delta) so a mislabeled test reds CI regardless of which files
+    the commit touched. Exits 1 on a violation, 0 when clean.
+    """
+    from eawf.platform.lint.eawf024_test_tier_contract import check_source, is_unit_tier_path
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    paths = files if files else _git_tracked_unit_tests(cwd=cwd)
+    unit_paths = [rel for rel in paths if is_unit_tier_path(rel)]
+    rows, scanned = _scan_python_rows(
+        unit_paths, cwd=cwd, check=lambda src, rel: check_source(src, filename=rel)
+    )
+    _emit_static_lint_result(
+        hook_name="eawf024-test-tier-contract",
+        rows=rows,
+        scanned=scanned,
+        flags=flags,
+        blocking=True,
+    )
+
+
 def _staged_added_lines(rel: str, *, cwd: Path) -> list[tuple[int, str]]:
     """Return ``(1-based new lineno, text)`` for lines the staged diff added.
 

@@ -129,6 +129,7 @@ addopts = "-ra --strict-markers --strict-config -m 'not eval'"
 markers = [
     "unit: fast in-process unit tests",
     "integration: integration tests crossing module boundaries",
+    "tui: Textual TUI tests that mount widgets",
     "property: Hypothesis-driven property tests",
     "golden: golden-output regression tests",
     "slow: long-running tests",
@@ -177,7 +178,8 @@ ignore = []
 # math-explainer facet-presence + citation-resolution rule; EAWF020 is the
 # changelog-laconic-bullet rule (renumbered from the original EAWF016 so the
 # title-clarity rule could take 016 per the doc-clarity code map); EAWF023 is
-# the artifact-placement + mandatory date-stem rule.
+# the artifact-placement + mandatory date-stem rule; EAWF024 is the test-tier
+# contract (a tests/unit/ file must not import subprocess/textual/CliRunner).
 external = [
     "EAWF001",
     "EAWF002",
@@ -194,6 +196,7 @@ external = [
     "EAWF019",
     "EAWF020",
     "EAWF023",
+    "EAWF024",
 ]
 
 [tool.ruff.lint.mccabe]
@@ -256,7 +259,8 @@ max-complexity = 10
 # EAWF011 cognitive-complexity gate, EAWF016 entity-title-clarity, EAWF017
 # inline-reference tabulation, EAWF018 structure-smell advisory, EAWF019
 # math-explainer facet-presence + citation-resolution, EAWF020
-# changelog-laconic-bullet, EAWF023 artifact-placement + date-stem). Ruff carries
+# changelog-laconic-bullet, EAWF023 artifact-placement + date-stem, EAWF024
+# test-tier contract). Ruff carries
 # no ``EAWF`` plugin, so these checks read their config from this table rather
 # than ``[tool.ruff.lint]``. ``enabled`` is the rule allow-list a pre-commit
 # dispatcher iterates; per-rule knobs live in the sub-tables (EAWF010 /
@@ -273,6 +277,7 @@ enabled = [
     "EAWF019",
     "EAWF020",
     "EAWF023",
+    "EAWF024",
 ]
 
 [tool.eawf.lint.eawf018]

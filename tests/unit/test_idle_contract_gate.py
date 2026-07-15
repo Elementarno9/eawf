@@ -277,6 +277,29 @@ def test_eawf023_artifact_placement_gate_reds_when_helper_toothless(mod) -> None
     assert result.failure is mod.GateFailure.EAWF023_ARTIFACT_PLACEMENT_IDLE
 
 
+def test_eawf024_test_tier_gate_passes_on_live_check(mod) -> None:
+    result = mod.check_eawf024_test_tier_wired()
+    assert result.passed is True
+
+
+def test_eawf024_test_tier_gate_calls_check_with_good_and_bad(mod) -> None:
+    calls: list[str] = []
+
+    def _check(source: str) -> list[object]:
+        calls.append(source)
+        return [object()] if "subprocess" in source else []
+
+    result = mod.check_eawf024_test_tier_wired(check_source_fn=_check)
+    assert result.passed is True
+    assert calls == [mod._EAWF024_GOOD_SOURCE, mod._EAWF024_BAD_SOURCE]
+
+
+def test_eawf024_test_tier_gate_reds_when_check_toothless(mod) -> None:
+    result = mod.check_eawf024_test_tier_wired(check_source_fn=lambda _source: [])
+    assert result.passed is False
+    assert result.failure is mod.GateFailure.EAWF024_TEST_TIER_IDLE
+
+
 def test_coverage_gate_helpers_wired_passes(mod) -> None:
     result = mod.check_coverage_gate_helpers_wired()
     assert result.passed is True

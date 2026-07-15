@@ -343,6 +343,21 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
+      - id: eawf024-test-tier-contract
+        name: eawf024-test-tier-contract
+        entry: uv run eawf hook eawf024-test-tier-contract
+        language: system
+        # EAWF024 over the whole git-tracked tests/unit/**/*.py tree: a
+        # unit-tier test must not import subprocess, textual, or CliRunner
+        # (each marks a slower integration/TUI test mislabeled into the unit
+        # tier). A deliberate fixture may carry a line-level '# noqa: EAWF024'
+        # waiver. Scans the full tracked unit tree (not a staged delta) so a
+        # mislabeled test is caught regardless of which files the commit
+        # touched -- so always-run with no file filter. BLOCKS: a violation
+        # fails the commit.
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
       - id: plugin-doctor-drift
         name: plugin-doctor-drift
         entry: uv run eawf hook plugin-doctor-drift

@@ -574,6 +574,8 @@ def test_plugin_doctor_drift_skip_json(tmp_path: Path) -> None:
         "eawf014-no-manual-wrap",
         "eawf015-ears-advisory",
         "eawf019-math-facets",
+        "eawf023-artifact-placement",
+        "eawf024-test-tier-contract",
         "plugin-doctor-drift",
     ],
 )
@@ -709,5 +711,62 @@ def test_eawf011_cognitive_complexity_skips_unparseable(tmp_path: Path) -> None:
     broken.write_text("def (:\n", encoding="utf-8")
     result = runner.invoke(
         app, ["hook", "eawf011-cognitive-complexity", str(broken), "--max-complexity", "2"]
+    )
+    assert result.exit_code == 0, result.stdout
+
+
+# --- eawf024-test-tier-contract -------------------------------------------
+
+
+def test_eawf024_test_tier_cli_blocks_on_planted_unit_import(tmp_path: Path) -> None:
+    # A planted tests/unit file importing subprocess+textual+CliRunner is a
+    # mislabeled non-unit test; the gate must flag it. The path must be under
+    # tests/unit/ for the dispatcher's tier predicate to include it.
+    planted = tmp_path / "tests" / "unit" / "test_planted.py"
+    planted.parent.mkdir(parents=True)
+    planted.write_text(
+        "import subprocess\nimport textual\nfrom typer.testing import CliRunner\n",
+        encoding="utf-8",
+    )
+    result = runner.invoke(
+        app,
+        ["-w", str(tmp_path), "hook", "eawf024-test-tier-contract", "tests/unit/test_planted.py"],
+    )
+    assert result.exit_code == 1, result.stdout
+    assert "EAWF024" in result.stdout
+
+
+def test_eawf024_test_tier_cli_clean_unit_file_exits_zero(tmp_path: Path) -> None:
+    ok = tmp_path / "tests" / "unit" / "test_ok.py"
+    ok.parent.mkdir(parents=True)
+    ok.write_text("import json\n\nx = json.dumps({})\n", encoding="utf-8")
+    result = runner.invoke(
+        app, ["-w", str(tmp_path), "hook", "eawf024-test-tier-contract", "tests/unit/test_ok.py"]
+    )
+    assert result.exit_code == 0, result.stdout
+    assert "clean" in result.stdout.lower()
+
+
+def test_eawf024_test_tier_cli_honours_noqa_waiver(tmp_path: Path) -> None:
+    waived = tmp_path / "tests" / "unit" / "test_waived.py"
+    waived.parent.mkdir(parents=True)
+    waived.write_text("import subprocess  # noqa: EAWF024 fixture\n", encoding="utf-8")
+    result = runner.invoke(
+        app,
+        ["-w", str(tmp_path), "hook", "eawf024-test-tier-contract", "tests/unit/test_waived.py"],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert "clean" in result.stdout.lower()
+
+
+def test_eawf024_test_tier_cli_ignores_non_unit_path(tmp_path: Path) -> None:
+    # An integration-tier file importing subprocess is legitimate; the
+    # dispatcher's tier predicate excludes any path outside tests/unit/.
+    integ = tmp_path / "tests" / "integration" / "test_it.py"
+    integ.parent.mkdir(parents=True)
+    integ.write_text("import subprocess\n", encoding="utf-8")
+    result = runner.invoke(
+        app,
+        ["-w", str(tmp_path), "hook", "eawf024-test-tier-contract", "tests/integration/test_it.py"],
     )
     assert result.exit_code == 0, result.stdout

@@ -158,6 +158,7 @@ import pydantic
 from eawf.kernel.spec.common import OracleTier, _tier_for_gate_kind
 from eawf.kernel.state.enums import EffortBucket, ProjectStatus, ScopeKind, WaveStatus
 from eawf.kernel.state.models import CurrentPointers, Project, State, Wave
+from eawf.platform.lint import eawf024_test_tier_contract as eawf024
 from eawf.platform.lint.eawf023_artifact_placement import check_artifact_path
 from eawf.platform.profiles.loader import list_profiles, load_profile
 from eawf.platform.profiles.models import ProfileBody, VerifyBlock
@@ -228,6 +229,7 @@ class GateFailure(StrEnum):
     CAMPAIGN_CLAIM_FOLD_IDLE = "campaign_claim_fold_idle"
     CAMPAIGN_CARRYOVER_PRUNE_IDLE = "campaign_carryover_prune_idle"
     EAWF023_ARTIFACT_PLACEMENT_IDLE = "eawf023_artifact_placement_idle"
+    EAWF024_TEST_TIER_IDLE = "eawf024_test_tier_idle"
     COVERAGE_GATE_IDLE = "coverage_gate_idle"
     CAMPAIGN_PRODUCER_STUB_IDLE = "campaign_producer_stub_idle"
 
@@ -1259,6 +1261,59 @@ def check_eawf023_artifact_placement_wired(
             "EAWF023 artifact-placement helper is idle or toothless: "
             f"good={good!r} bad={bad!r}; check_artifact_path must be called by "
             "the always-on idle gate and must reject a non-canonical kind"
+        ),
+    )
+
+
+#: A conforming unit-test snippet (imports nothing banned) used as the
+#: positive control for the EAWF024 test-tier check.
+_EAWF024_GOOD_SOURCE = "from __future__ import annotations\n\nimport json\n\nx = json.dumps({})\n"
+
+#: A violating unit-test snippet (imports subprocess + textual + CliRunner)
+#: used as the negative control for the EAWF024 test-tier check.
+_EAWF024_BAD_SOURCE = "import subprocess\nimport textual\nfrom typer.testing import CliRunner\n"
+
+
+def check_eawf024_test_tier_wired(
+    *,
+    check_source_fn: Callable[[str], list[object]] = eawf024.check_source,
+) -> GateResult:
+    """Assert the EAWF024 test-tier check flags a non-unit import.
+
+    The EAWF024 hook scopes its scan to the git-tracked ``tests/unit/``
+    tree, but the meta-gate tracks the pure content check too. This row
+    calls :func:`check_source` directly against a clean snippet and a
+    snippet importing ``subprocess`` / ``textual`` / ``CliRunner``,
+    proving the check has a live non-test call-site and rejects a
+    mislabeled unit test.
+
+    Args:
+        check_source_fn: Content-only test-tier checker. Defaults to the
+            live :func:`eawf.platform.lint.eawf024_test_tier_contract.check_source`.
+
+    Returns:
+        A :class:`GateResult` that passes only when the clean snippet
+        yields no finding and the banned-import snippet yields at least
+        one finding.
+    """
+    good = check_source_fn(_EAWF024_GOOD_SOURCE)
+    bad = check_source_fn(_EAWF024_BAD_SOURCE)
+    if not good and bad:
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                "idle-contract gate: ok (EAWF024 check_source has a live gate "
+                "call-site and flags a non-unit import)"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.EAWF024_TEST_TIER_IDLE,
+        message=(
+            "EAWF024 test-tier check is idle or toothless: "
+            f"good={good!r} bad={bad!r}; check_source must be called by the "
+            "always-on idle gate and must reject a subprocess/textual/CliRunner import"
         ),
     )
 
@@ -2591,6 +2646,7 @@ def main(argv: list[str]) -> int:
     # P30-I20 honest-close rows: close the meta-gate holes for EAWF023's
     # single-path helper and the coverage-gate private matcher/runner.
     failed |= _report_result(check_eawf023_artifact_placement_wired())
+    failed |= _report_result(check_eawf024_test_tier_wired())
     failed |= _report_result(check_coverage_gate_helpers_wired())
 
     failed |= _report_result(check_runtime_gate_is_not_idle())
