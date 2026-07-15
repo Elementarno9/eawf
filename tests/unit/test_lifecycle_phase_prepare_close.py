@@ -437,7 +437,7 @@ def test_prepare_close_accepts_release_preflight_check_when_required() -> None:
             {
                 "name": "release-preflight",
                 "passed": True,
-                "details": "phase-release.yaml ships; ci.yaml release-readiness matrix job",
+                "details": "phase-release.yaml ships; ci.yaml main test job runs release tests",
             }
         ],
     )
