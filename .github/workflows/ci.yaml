@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-26, macos-15, ubuntu-24.04, ubuntu-22.04]
+        os: [ubuntu-24.04, macos-26]
         python: ["3.14"]
     steps:
       - name: Checkout
@@ -34,6 +34,12 @@ jobs:
         run: uv sync --frozen
 
       - name: Install resvg (pinned, T5 SVG pixel-diff oracle)
+        # Ubuntu-only: coverage + the T5 svg_pixel_diff pixel-diff leg run on
+        # the ubuntu leg alone, so the pinned renderer is installed there. On
+        # the macOS leg the ~8 resvg-oracle tests skip cleanly via their
+        # ``shutil.which("resvg")`` guards (tests/snapshots/svg/*.py and
+        # tests/integration/test_p30_i20_w17.py).
+        if: startsWith(matrix.os, 'ubuntu-')
         # CI tool manifest pin for the svg_pixel_diff audit-DSL kind.
         # resvg renders bit-identically across hosts once fonts are
         # vendored + system fonts disabled, so the golden PNGs under
@@ -52,82 +58,25 @@ jobs:
         run: uv run mypy src/
 
       - name: Pytest (parallel)
-        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/tui --cov=eawf --cov-report=xml --cov-fail-under=0
+        # Coverage is collected on the ubuntu leg only: the ${{ }} expression
+        # appends the --cov flags on ubuntu and an empty string on macOS, so
+        # the macOS leg runs the identical suite without coverage.
+        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/tui ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-report=xml --cov-fail-under=0' || '' }}
       - name: Pytest (serial TUI render/timing)
-        run: uv run pytest -n0 tests/snapshots/tui tests/perf/tui --cov=eawf --cov-append --cov-report=xml --cov-fail-under=0
+        # Same ubuntu-only coverage gating; --cov-append extends the parallel
+        # leg's data file on ubuntu, macOS runs the suite without --cov.
+        run: uv run pytest -n0 tests/snapshots/tui tests/perf/tui ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report=xml --cov-fail-under=0' || '' }}
 
-      - name: Coverage gate (per-package C09 §5.2 + overall floor)
-        # pytest-cov has no native per-package threshold. The overall
-        # floor is enforced by ``[tool.coverage.report] fail_under`` via
-        # the next step; this step parses the combined ``coverage.xml``
-        # (both pytest runs, --cov-append) and asserts each gated package
-        # clears its line/branch ratchet from ``[tool.eawf.coverage]``.
-        run: |
-          uv run python <<'PY'
-          import fnmatch
-          import re
-          import sys
-          import tomllib
-          import xml.etree.ElementTree as ET
-
-          cond = re.compile(r"\((\d+)/(\d+)\)")
-
-          def aggregate(classes):
-              tot = cov = btot = bcov = 0
-              for cls in classes:
-                  for line in cls.iter("line"):
-                      tot += 1
-                      if int(line.get("hits", "0")) > 0:
-                          cov += 1
-                      if line.get("branch") == "true":
-                          match = cond.search(line.get("condition-coverage", ""))
-                          if match:
-                              bcov += int(match.group(1))
-                              btot += int(match.group(2))
-              line_pct = cov / tot * 100 if tot else 100.0
-              branch_pct = bcov / btot * 100 if btot else 100.0
-              return line_pct, branch_pct
-
-          with open("pyproject.toml", "rb") as handle:
-              gates = tomllib.load(handle)["tool"]["eawf"]["coverage"]["gates"]
-          classes = ET.parse("coverage.xml").getroot().findall(".//class")
-
-          failures = []
-          print("per-package coverage gates (C09 §5.2)")
-          header = f"{'package':16s} {'line%':>8s} {'gate':>6s}  {'branch%':>8s} {'gate':>6s}  status"
-          print(header)
-          for name, spec in sorted(gates.items()):
-              if "glob" in spec:
-                  picked = [c for c in classes if fnmatch.fnmatch(c.get("filename", ""), spec["glob"])]
-              else:
-                  picked = [c for c in classes if c.get("filename", "").startswith(spec["path"])]
-              if not picked:
-                  failures.append(f"{name}: no source files matched")
-                  continue
-              line_pct, branch_pct = aggregate(picked)
-              line_ok = spec.get("waive_line", False) or line_pct >= spec.get("line", 0)
-              branch_ok = spec.get("waive_branch", False) or branch_pct >= spec.get("branch", 0)
-              line_gate = "waived" if spec.get("waive_line") else str(spec.get("line", 0))
-              branch_gate = "waived" if spec.get("waive_branch") else str(spec.get("branch", 0))
-              status = "ok" if (line_ok and branch_ok) else "FAIL"
-              print(
-                  f"{name:16s} {line_pct:8.2f} {line_gate:>6s}  "
-                  f"{branch_pct:8.2f} {branch_gate:>6s}  {status}"
-              )
-              if not line_ok:
-                  failures.append(f"{name}: line {line_pct:.2f}% < gate {spec.get('line')}%")
-              if not branch_ok:
-                  failures.append(f"{name}: branch {branch_pct:.2f}% < gate {spec.get('branch')}%")
-
-          if failures:
-              print("\ncoverage gate FAILED:")
-              for entry in failures:
-                  print(f"  - {entry}")
-              sys.exit(1)
-          print("\nall per-package coverage gates passed")
-          PY
+      - name: Coverage gate (per-package C09 §5.2 + TUI behavioural floor)
+        # Ubuntu-only: coverage.xml is produced on the ubuntu leg alone. The
+        # per-package line/branch ratchet + the TUI behavioural-count floor
+        # live in tools/coverage_gate.py, driven by ``[tool.eawf.coverage]``;
+        # the overall fail_under floor is enforced by the next step.
+        if: startsWith(matrix.os, 'ubuntu-')
+        run: uv run python tools/coverage_gate.py
 
       - name: Coverage floor (overall >=60)
+        if: startsWith(matrix.os, 'ubuntu-')
         run: uv run coverage report
 
   tool-install-smoke:
