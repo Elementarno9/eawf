@@ -25,8 +25,9 @@ def test_doctor_clean_after_install(tmp_path: Path) -> None:
     assert report.clean is True
     assert not report.drifted
     assert not report.missing
-    # Total ok count = skills + agents + hooks + settings.
-    assert len(report.ok) == (len(SKILL_REGISTRY) + len(AGENT_REGISTRY) + len(HOOK_REGISTRY) + 1)
+    # Total ok count = skills + agents + installed (handler-backed) hooks + settings.
+    installed_hooks = sum(1 for spec in HOOK_REGISTRY if spec.has_handler)
+    assert len(report.ok) == (len(SKILL_REGISTRY) + len(AGENT_REGISTRY) + installed_hooks + 1)
 
 
 def test_doctor_detects_skill_drift(tmp_path: Path) -> None:
@@ -48,19 +49,20 @@ def test_doctor_detects_agent_drift(tmp_path: Path) -> None:
 
 def test_doctor_detects_hook_drift(tmp_path: Path) -> None:
     install_plugin(tmp_path)
-    path = tmp_path / ".claude" / "hooks" / "post_commit.sh"
+    # session_end is the only handler-backed (installed) hook.
+    path = tmp_path / ".claude" / "hooks" / "session_end.sh"
     path.write_text(path.read_text() + "\n# drift\n")
     report = doctor_plugin(tmp_path)
-    assert any(e.region_id == "plugin.claude.hook.post_commit" for e in report.drifted)
+    assert any(e.region_id == "plugin.claude.hook.session_end" for e in report.drifted)
 
 
-def test_doctor_detects_missing_agent_end_hook(tmp_path: Path) -> None:
+def test_doctor_detects_missing_session_end_hook(tmp_path: Path) -> None:
     install_plugin(tmp_path)
-    path = tmp_path / ".claude" / "hooks" / "agent_end.sh"
+    path = tmp_path / ".claude" / "hooks" / "session_end.sh"
     path.unlink()
     report = doctor_plugin(tmp_path)
     assert report.clean is False
-    assert any(e.region_id == "plugin.claude.hook.agent_end" for e in report.missing)
+    assert any(e.region_id == "plugin.claude.hook.session_end" for e in report.missing)
 
 
 def test_doctor_detects_missing_file(tmp_path: Path) -> None:

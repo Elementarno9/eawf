@@ -309,7 +309,7 @@ def package_plugin(
     hook_deltas: list[FileDelta] = []
     for hook_spec in HOOK_REGISTRY:
         path = plugin_root / "hooks" / f"{codex_hook_name(hook_spec.event_type)}.sh"
-        payload = render_hook_sh(hook_spec.event_type).encode("utf-8")
+        payload = render_hook_sh(hook_spec.event_type, runtime="codex").encode("utf-8")
         action = _classify(path, payload)
         if not dry_run:
             _ensure_dir(path.parent)

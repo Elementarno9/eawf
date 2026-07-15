@@ -132,6 +132,46 @@ def _run_rendered_wrapper(
         return capture.read_bytes()
 
 
+@_needs_bash
+def test_wrapper_bootstraps_uv_from_stripped_path() -> None:
+    """A hook fired with a stripped PATH still resolves ``uv`` (no exit 127).
+
+    Simulates a git-worktree / GUI-launched session whose PATH omits the uv
+    install dir. The wrapper's PATH bootstrap appends ``$HOME/.local/bin`` (and
+    peers), so a ``uv`` living only there is found, resolved to an absolute
+    path, and the payload reaches it instead of dying with command-not-found.
+    """
+    assert _BASH is not None
+    script = render_hook_sh(HookEventType.SESSION_END)
+    with tempfile.TemporaryDirectory() as raw:
+        tmp = Path(raw)
+        home = tmp / "home"
+        (home / ".local" / "bin").mkdir(parents=True)
+        wrapper = tmp / "session_end.sh"
+        wrapper.write_text(script, encoding="utf-8")
+        capture = tmp / "forwarded_stdin"
+        # A fake uv ONLY in a bootstrap dir, deliberately absent from PATH.
+        uv_shim = home / ".local" / "bin" / "uv"
+        uv_shim.write_text('#!/usr/bin/env bash\ncat > "$EAWF_TEST_CAPTURE"\n', encoding="utf-8")
+        uv_shim.chmod(0o755)
+        env = {
+            "PATH": "/usr/bin:/bin",  # stripped: no uv anywhere on it
+            "HOME": str(home),
+            "EAWF_TEST_CAPTURE": str(capture),
+        }
+        result = subprocess.run(
+            [_BASH, str(wrapper)],
+            input=b'{"session_id":"stripped-path"}',
+            env=env,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr.decode("utf-8", "replace")
+        assert capture.exists(), "bootstrap failed to resolve uv from a stripped PATH"
+        assert capture.read_bytes() == b'{"session_id":"stripped-path"}'
+
+
 class _RecordingClient:
     """Daemon-client stand-in recording every RPC the hook issues."""
 

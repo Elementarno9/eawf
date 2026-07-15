@@ -35,75 +35,11 @@
       }
     ],
     "generated_at": "1970-01-01T00:00:00+00:00",
-    "hash": "e50cc1250decd5f1",
+    "hash": "4b9e34028d58d7b1",
     "hooks": [
-      {
-        "event_type": "pre_commit",
-        "path": ".claude/hooks/pre_commit.sh"
-      },
-      {
-        "event_type": "post_commit",
-        "path": ".claude/hooks/post_commit.sh"
-      },
-      {
-        "event_type": "pre_push",
-        "path": ".claude/hooks/pre_push.sh"
-      },
-      {
-        "event_type": "post_push",
-        "path": ".claude/hooks/post_push.sh"
-      },
-      {
-        "event_type": "pre_audit",
-        "path": ".claude/hooks/pre_audit.sh"
-      },
-      {
-        "event_type": "post_audit",
-        "path": ".claude/hooks/post_audit.sh"
-      },
-      {
-        "event_type": "session_start",
-        "path": ".claude/hooks/session_start.sh"
-      },
       {
         "event_type": "session_end",
         "path": ".claude/hooks/session_end.sh"
-      },
-      {
-        "event_type": "wave_open",
-        "path": ".claude/hooks/wave_open.sh"
-      },
-      {
-        "event_type": "wave_close",
-        "path": ".claude/hooks/wave_close.sh"
-      },
-      {
-        "event_type": "iter_open",
-        "path": ".claude/hooks/iter_open.sh"
-      },
-      {
-        "event_type": "iter_close",
-        "path": ".claude/hooks/iter_close.sh"
-      },
-      {
-        "event_type": "phase_open",
-        "path": ".claude/hooks/phase_open.sh"
-      },
-      {
-        "event_type": "phase_close",
-        "path": ".claude/hooks/phase_close.sh"
-      },
-      {
-        "event_type": "agent_end",
-        "path": ".claude/hooks/agent_end.sh"
-      },
-      {
-        "event_type": "subagent_stop",
-        "path": ".claude/hooks/subagent_stop.sh"
-      },
-      {
-        "event_type": "pre_compact",
-        "path": ".claude/hooks/pre_compact.sh"
       }
     ],
     "skills": [
@@ -219,84 +155,11 @@
     "version": "0.6.0"
   },
   "hooks": {
-    "PostToolUse": [
-      {
-        "hooks": [
-          {
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/post_commit.sh",
-            "type": "command"
-          }
-        ],
-        "matcher": "Bash"
-      },
-      {
-        "hooks": [
-          {
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/post_push.sh",
-            "type": "command"
-          }
-        ],
-        "matcher": "Bash"
-      }
-    ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre_compact.sh",
-            "type": "command"
-          }
-        ],
-        "matcher": ""
-      }
-    ],
-    "PreToolUse": [
-      {
-        "hooks": [
-          {
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre_commit.sh",
-            "type": "command"
-          }
-        ],
-        "matcher": "Bash"
-      },
-      {
-        "hooks": [
-          {
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre_push.sh",
-            "type": "command"
-          }
-        ],
-        "matcher": "Bash"
-      }
-    ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session_start.sh",
-            "type": "command"
-          }
-        ],
-        "matcher": ""
-      }
-    ],
     "Stop": [
       {
         "hooks": [
           {
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session_end.sh",
-            "type": "command"
-          }
-        ],
-        "matcher": ""
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/subagent_stop.sh",
             "type": "command"
           }
         ],

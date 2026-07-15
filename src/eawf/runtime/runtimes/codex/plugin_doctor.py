@@ -172,7 +172,7 @@ def doctor_plugin(
             _hook_target(plugin_root, hook_spec),
             region_id=f"plugin.codex.hook.{hook_spec.event_type.value}",
             kind="hook",
-            expected_body=render_hook_sh(hook_spec.event_type).encode("utf-8"),
+            expected_body=render_hook_sh(hook_spec.event_type, runtime="codex").encode("utf-8"),
             ok=ok,
             drifted=drifted,
             missing=missing,

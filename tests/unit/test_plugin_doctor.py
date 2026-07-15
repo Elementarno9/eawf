@@ -162,11 +162,12 @@ def test_check_registry_vs_disk_detects_hand_edit(tmp_path: Path) -> None:
 def test_check_registry_vs_disk_detects_missing_file(tmp_path: Path) -> None:
     """A deleted rendered file fires a missing finding."""
     install_plugin(tmp_path)
-    hook = tmp_path / ".claude" / "hooks" / "agent_end.sh"
+    # session_end is the only installed (handler-backed) hook.
+    hook = tmp_path / ".claude" / "hooks" / "session_end.sh"
     hook.unlink()
     report = check_registry_vs_disk(tmp_path, runtimes=("claude-code",))
     assert report.clean is False
-    assert any("agent_end" in f.location for f in report.findings)
+    assert any("session_end" in f.location for f in report.findings)
 
 
 # ---------------------------------------------------------------------------

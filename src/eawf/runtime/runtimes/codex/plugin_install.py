@@ -479,7 +479,7 @@ def _persist_manifest(
         )
     for hook_spec in HOOK_REGISTRY:
         path = _hook_target(plugin_root, hook_spec)
-        body = render_hook_sh(hook_spec.event_type).encode("utf-8")
+        body = render_hook_sh(hook_spec.event_type, runtime="codex").encode("utf-8")
         region_id = f"plugin.codex.hook.{hook_spec.event_type.value}"
         new_generated[f"{path.as_posix()}::{region_id}"] = ManifestEntry(
             target=path.as_posix(),
@@ -588,7 +588,7 @@ def install_plugin(
     hook_deltas = [
         _write_managed_file(
             _hook_target(plugin_root, hook_spec),
-            render_hook_sh(hook_spec.event_type).encode("utf-8"),
+            render_hook_sh(hook_spec.event_type, runtime="codex").encode("utf-8"),
             force=force,
             dry_run=dry_run,
             chmod_mode=_HOOK_FILE_MODE,

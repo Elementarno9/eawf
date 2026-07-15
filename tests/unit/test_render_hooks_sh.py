@@ -31,6 +31,28 @@ def test_render_hook_sh_pipes_to_eawf_hook_run() -> None:
     assert "--runtime claude" in output
 
 
+def test_render_hook_sh_codex_runtime_sets_runtime_codex() -> None:
+    """``runtime="codex"`` bakes ``--runtime codex`` — never the Claude value."""
+    output = render_hook_sh(HookEventType.SESSION_END, runtime="codex")
+    assert "eawf hook run session_end --runtime codex" in output
+    assert "--runtime claude" not in output
+
+
+def test_render_hook_sh_bootstraps_path_and_resolves_uv() -> None:
+    """The wrapper resolves an absolute ``uv`` and bootstraps PATH for worktrees.
+
+    A hook fired from a git worktree can inherit a stripped PATH; without the
+    bootstrap the bare ``uv`` dies with exit 127. The wrapper prepares PATH and
+    resolves ``uv`` to an absolute path before the final ``exec``.
+    """
+    output = render_hook_sh(HookEventType.SESSION_END)
+    assert "command -v uv" in output
+    assert "export PATH" in output
+    assert ".local/bin" in output
+    # The exec uses the resolved interpreter, not a bare ``uv``.
+    assert 'exec "${_eawf_uv}" run eawf hook run session_end' in output
+
+
 def test_render_hook_sh_synthesises_json_payload_keys() -> None:
     """The wrapper emits a JSON payload with the documented key set."""
     output = render_hook_sh(HookEventType.SESSION_START)

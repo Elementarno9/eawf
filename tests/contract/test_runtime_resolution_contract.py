@@ -22,11 +22,14 @@ the three surfaces so a registry/installer drift fails fast.
 One known gap is asserted with :func:`pytest.xfail`: the matrix marks
 ``skills`` (the OpenCode skill surface) ``supported`` for OpenCode and
 OpenCode's installer does emit per-skill commands, **but** OpenCode emits
-no hook wrappers at all — Claude and Codex both emit one ``.sh`` per
-:class:`~eawf.runtime.hooks.event.HookEventType`, OpenCode emits zero. The
-hook-parity contract therefore fails on OpenCode today; the xfail
-documents the gap so closing it (an OpenCode hook surface) flips the
-test to ``XPASS`` and forces a deliberate removal of the marker.
+no hook wrappers at all. Codex emits one ``.sh`` per
+:class:`~eawf.runtime.hooks.event.HookEventType`; Claude emits a wrapper
+only for handler-backed events (``HookSpec.has_handler`` — today just
+``SESSION_END``) so it never wires the session to an idle no-op script;
+OpenCode emits zero. The OpenCode hook-parity contract therefore fails
+today; the xfail documents the gap so closing it (an OpenCode hook
+surface) flips the test to ``XPASS`` and forces a deliberate removal of
+the marker.
 """
 
 from __future__ import annotations
@@ -65,6 +68,12 @@ def _all_agent_roles() -> set[str]:
 
 def _all_hook_event_values() -> set[str]:
     return {spec.event_type.value for spec in HOOK_REGISTRY}
+
+
+def _handler_backed_hook_values() -> set[str]:
+    """Events the Claude installer actually wires — only these have a real
+    runner-registered handler; the rest would be idle no-op wrappers."""
+    return {spec.event_type.value for spec in HOOK_REGISTRY if spec.has_handler}
 
 
 def _claude_paths(tmp_path: Path) -> Mapping[str, Path]:
@@ -215,15 +224,21 @@ def test_codex_installer_emits_every_agent(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_claude_installer_emits_every_hook(tmp_path: Path) -> None:
-    """Claude emits one ``.sh`` wrapper per :class:`HookEventType`."""
+def test_claude_installer_emits_only_handler_backed_hooks(tmp_path: Path) -> None:
+    """Claude emits a ``.sh`` wrapper only for handler-backed events.
+
+    Every other :class:`HookEventType` would render an idle wrapper (exit 0,
+    empty result list), so the installer subscribes only events with a real
+    runner-registered handler — today just ``SESSION_END``.
+    """
     paths = _claude_paths(tmp_path)
     emitted = {
         region.removeprefix("plugin.claude.hook.")
         for region in paths
         if region.startswith("plugin.claude.hook.")
     }
-    assert emitted == _all_hook_event_values()
+    assert emitted == _handler_backed_hook_values()
+    assert emitted == {"session_end"}
 
 
 def test_codex_installer_emits_every_hook(tmp_path: Path) -> None:

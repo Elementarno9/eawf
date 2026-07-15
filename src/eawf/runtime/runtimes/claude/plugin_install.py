@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Any
 
 import eawf
+from eawf.runtime.hooks.event import HookEventType
 from eawf.runtime.runtimes.claude.hook_map import PLUGIN_HOOK_REGISTRY
 from eawf.surfaces.render._atomic import atomic_write_text
 from eawf.surfaces.render.agents import (
@@ -73,6 +74,17 @@ _HOOK_FILE_MODE: int = 0o755
 # caller does not pin one. 1970-01-01T00:00:00Z makes idempotence trivial:
 # two installs minutes apart produce byte-identical settings.json.
 _DEFAULT_TIMESTAMP: str = "1970-01-01T00:00:00+00:00"
+
+# The installer wires Claude Code only to hooks whose event has a real
+# runner-registered handler. Every other HookEventType renders an idle
+# wrapper that exits 0 with an empty result list, so installing it would
+# subscribe the operator's session to a no-op script (and paint a false-green
+# "hooks:<n>" in the statusline). SESSION_END (runtime.capture) is the sole
+# handler-backed event today — see HookSpec.has_handler.
+_INSTALLED_HOOKS: tuple[HookSpec, ...] = tuple(spec for spec in HOOK_REGISTRY if spec.has_handler)
+_INSTALLED_EVENTS: frozenset[HookEventType] = frozenset(
+    spec.event_type for spec in _INSTALLED_HOOKS
+)
 
 
 @dataclass(frozen=True)
@@ -216,7 +228,7 @@ def _render_managed_block(timestamp: str) -> dict[str, Any]:
     agents_payload = [{"name": spec.role, "version": spec.version} for spec in AGENT_REGISTRY]
     hooks_payload = [
         {"event_type": spec.event_type.value, "path": f".claude/hooks/{spec.event_type.value}.sh"}
-        for spec in HOOK_REGISTRY
+        for spec in _INSTALLED_HOOKS
     ]
     body: dict[str, Any] = {
         "version": _PLUGIN_VERSION,
@@ -256,6 +268,11 @@ def _eawf_settings_hooks() -> dict[str, list[dict[str, Any]]]:
     """
     grouped: dict[str, list[dict[str, Any]]] = {}
     for spec in PLUGIN_HOOK_REGISTRY:
+        if spec.event_type not in _INSTALLED_EVENTS:
+            # Skip the handler-less events (pre/post commit+push, session_start,
+            # subagent_stop, pre_compact): wiring CC to their no-op wrappers is
+            # the idle-contract this installer stops emitting.
+            continue
         command = f"$CLAUDE_PROJECT_DIR/.claude/hooks/{spec.event_type.value}.sh"
         grouped.setdefault(spec.cc_event, []).append(
             {"matcher": spec.matcher, "hooks": [{"type": "command", "command": command}]}
@@ -362,7 +379,7 @@ def _build_manifest(
         own_targets.add(_skill_target(target_dir, skill_spec).as_posix())
     for agent_spec in AGENT_REGISTRY:
         own_targets.add(_agent_target(target_dir, agent_spec).as_posix())
-    for hook_spec in HOOK_REGISTRY:
+    for hook_spec in _INSTALLED_HOOKS:
         own_targets.add(_hook_target(target_dir, hook_spec).as_posix())
     own_targets.add(_settings_target(target_dir).as_posix())
 
@@ -394,7 +411,7 @@ def _build_manifest(
             generator=_GENERATOR,
             generated_at=timestamp,
         )
-    for hook_spec in HOOK_REGISTRY:
+    for hook_spec in _INSTALLED_HOOKS:
         path = _hook_target(target_dir, hook_spec)
         body = render_hook_sh(hook_spec.event_type)
         new_generated[f"{path.as_posix()}::plugin.claude.hook.{hook_spec.event_type.value}"] = (
@@ -449,7 +466,7 @@ def _check_for_drift(target_dir: Path, manifest: Manifest, *, force: bool) -> No
         own_paths.append(_skill_target(target_dir, skill_spec))
     for agent_spec in AGENT_REGISTRY:
         own_paths.append(_agent_target(target_dir, agent_spec))
-    for hook_spec in HOOK_REGISTRY:
+    for hook_spec in _INSTALLED_HOOKS:
         own_paths.append(_hook_target(target_dir, hook_spec))
     # settings.json is patched, not rewritten — drift is checked against
     # the recorded hash of the LAST rendered bytes, not against the
@@ -551,8 +568,8 @@ def install_plugin(
             atomic_write_text(path, payload.decode("utf-8"))
         agent_deltas.append(FileDelta(path=path, action=action))
 
-    # Render hooks.
-    for hook_spec in HOOK_REGISTRY:
+    # Render hooks (only handler-backed events; see _INSTALLED_HOOKS).
+    for hook_spec in _INSTALLED_HOOKS:
         path = _hook_target(target_dir, hook_spec)
         payload = render_hook_sh(hook_spec.event_type).encode("utf-8")
         action = _classify(path, payload)
@@ -619,7 +636,7 @@ def expected_paths(target_dir: Path) -> tuple[Mapping[str, Path], Path]:
         paths[f"plugin.claude.skill.{spec.skill_name}"] = _skill_target(target_dir, spec)
     for agent_spec in AGENT_REGISTRY:
         paths[f"plugin.claude.agent.{agent_spec.role}"] = _agent_target(target_dir, agent_spec)
-    for hook_spec in HOOK_REGISTRY:
+    for hook_spec in _INSTALLED_HOOKS:
         paths[f"plugin.claude.hook.{hook_spec.event_type.value}"] = _hook_target(
             target_dir, hook_spec
         )

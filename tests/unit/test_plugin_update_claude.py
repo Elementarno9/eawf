@@ -54,7 +54,8 @@ def test_update_plugin_aborts_on_hand_edit_in_agent(tmp_path: Path) -> None:
 def test_update_plugin_aborts_on_hand_edit_in_hook(tmp_path: Path) -> None:
     """Hand-edit in a hook script also aborts."""
     install_plugin(tmp_path)
-    hook_path = tmp_path / ".claude" / "hooks" / "pre_commit.sh"
+    # session_end is the only installed (handler-backed) hook.
+    hook_path = tmp_path / ".claude" / "hooks" / "session_end.sh"
     hook_path.write_text(hook_path.read_text() + "\n# user-edit\n")
     with pytest.raises(IntegrityViolation):
         update_plugin(tmp_path)

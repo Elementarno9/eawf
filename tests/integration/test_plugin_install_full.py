@@ -59,7 +59,9 @@ def test_plugin_install_via_cli_writes_tree(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
     assert (tmp_path / ".claude" / "skills" / "research" / "SKILL.md").exists()
     assert (tmp_path / ".claude" / "agents" / "executor.md").exists()
-    assert (tmp_path / ".claude" / "hooks" / "pre_commit.sh").exists()
+    # Only the handler-backed hook is installed; the idle no-op events are gone.
+    assert (tmp_path / ".claude" / "hooks" / "session_end.sh").exists()
+    assert not (tmp_path / ".claude" / "hooks" / "pre_commit.sh").exists()
     settings = tmp_path / ".claude" / "settings.json"
     parsed = json.loads(settings.read_text(encoding="utf-8"))
     assert "__eawf_managed" in parsed

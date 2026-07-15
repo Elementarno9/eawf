@@ -36,7 +36,13 @@ repos:
         # which held until one began carrying the raw stdout of spawned agents.
         # The event store is untracked entirely; the typed stores that remain
         # are structured daemon-composed rows, so scanning them is cheap.
-        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$'
+        #
+        # The claude plugin_install golden settings.json carries a blake2b
+        # content hash in __eawf_managed that trips the Hex-High-Entropy plugin
+        # and re-rolls whenever the managed body changes (same loop noise as
+        # state.json). It is deterministic render output with no user secrets,
+        # so it is excluded rather than baselined per regeneration.
+        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$|^tests/golden/plugin_install/claude/settings\.json$'
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.0.0

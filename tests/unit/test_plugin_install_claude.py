@@ -40,9 +40,16 @@ def _all_agent_paths(target_dir: Path) -> list[Path]:
     return [target_dir / ".claude" / "agents" / f"{s.role}.md" for s in AGENT_REGISTRY]
 
 
+def _installed_hook_specs() -> list:
+    """Only handler-backed events (SESSION_END) are installed; the rest would
+    be idle no-op wrappers, so the installer no longer writes them to disk."""
+    return [spec for spec in HOOK_REGISTRY if spec.has_handler]
+
+
 def _all_hook_paths(target_dir: Path) -> list[Path]:
     return [
-        target_dir / ".claude" / "hooks" / f"{spec.event_type.value}.sh" for spec in HOOK_REGISTRY
+        target_dir / ".claude" / "hooks" / f"{spec.event_type.value}.sh"
+        for spec in _installed_hook_specs()
     ]
 
 
@@ -52,7 +59,7 @@ def test_install_plugin_writes_full_tree(tmp_path: Path) -> None:
     assert isinstance(result, InstallResult)
     assert len(result.skills) == len(SKILL_REGISTRY)
     assert len(result.agents) == len(AGENT_REGISTRY)
-    assert len(result.hooks) == len(HOOK_REGISTRY)
+    assert len(result.hooks) == len(_installed_hook_specs())
     assert result.settings is not None and result.settings.action == "created"
     assert result.mcp_config is not None and result.mcp_config.action == "created"
     # Every file exists on disk.
@@ -170,7 +177,9 @@ def test_install_plugin_persists_manifest(tmp_path: Path) -> None:
     region_ids = {entry["region_id"] for entry in body["generated"].values()}
     assert "plugin.claude.skill.research" in region_ids
     assert "plugin.claude.agent.researcher" in region_ids
-    assert "plugin.claude.hook.pre_commit" in region_ids
+    # Only the handler-backed hook is tracked; the idle no-op events are gone.
+    assert "plugin.claude.hook.session_end" in region_ids
+    assert "plugin.claude.hook.pre_commit" not in region_ids
     assert "plugin.claude.settings" in region_ids
 
 
@@ -201,11 +210,30 @@ def test_install_plugin_renders_skill_md_with_correct_frontmatter(tmp_path: Path
 
 
 def test_install_plugin_renders_hook_with_correct_event(tmp_path: Path) -> None:
-    """Spot check: the rendered hook script targets the right event."""
+    """Spot check: the rendered (handler-backed) hook script targets the right event."""
     install_plugin(tmp_path)
-    pre_commit = (tmp_path / ".claude" / "hooks" / "pre_commit.sh").read_text(encoding="utf-8")
-    assert "eawf hook run pre_commit" in pre_commit
-    assert "--runtime claude" in pre_commit
+    session_end = (tmp_path / ".claude" / "hooks" / "session_end.sh").read_text(encoding="utf-8")
+    assert "eawf hook run session_end" in session_end
+    assert "--runtime claude" in session_end
+
+
+def test_install_plugin_omits_handler_less_hooks(tmp_path: Path) -> None:
+    """Only SESSION_END is installed; every handler-less event is absent on disk."""
+    install_plugin(tmp_path)
+    hooks_dir = tmp_path / ".claude" / "hooks"
+    on_disk = {p.name for p in hooks_dir.iterdir()}
+    assert on_disk == {"session_end.sh"}
+    for event in (
+        "pre_commit",
+        "post_commit",
+        "pre_push",
+        "post_push",
+        "session_start",
+        "subagent_stop",
+        "pre_compact",
+        "agent_end",
+    ):
+        assert not (hooks_dir / f"{event}.sh").exists(), f"idle hook wired: {event}"
 
 
 def test_install_plugin_returns_paths_under_target_dir(tmp_path: Path) -> None:

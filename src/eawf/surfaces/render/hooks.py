@@ -1,7 +1,12 @@
-"""Render Claude Code bash hook wrappers for Eä events.
+"""Render bash hook wrappers for Eä events.
 
-Per Phase 4 W05, ``eawf plugin install claude`` emits one
-``.claude/hooks/<event>.sh`` per :class:`~eawf.runtime.hooks.event.HookEventType`.
+:func:`render_hook_sh` is a pure renderer: it produces the wrapper script
+for any :class:`~eawf.runtime.hooks.event.HookEventType`. Which events an
+installer actually writes to disk is the installer's decision — the Claude
+installer subscribes only handler-backed events (:attr:`HookSpec.has_handler`,
+today just ``SESSION_END``), while the Codex installer renders every event
+with ``runtime="codex"``.
+
 The output is a small POSIX-bash wrapper that:
 
 1. Reads the JSON document Claude Code delivers on stdin and forwards it
@@ -14,8 +19,9 @@ The output is a small POSIX-bash wrapper that:
    <eawf-event>, "args": [<arg1>, <arg2>, <arg3>, <arg4>]}`` from up to
    four positional arguments (``$1..$4``).
 3. Pipes the payload to ``uv run eawf hook run <event_type> --runtime
-   claude``. The CLI's exit code (0 ok, 9 blocked) is the wrapper's
-   exit code.
+   <runtime>`` (``<runtime>`` is ``claude`` by default, ``codex`` for the
+   Codex install/doctor/package surfaces). The CLI's exit code (0 ok, 9
+   blocked) is the wrapper's exit code.
 
 The read is fail-open: a hook that dies breaks the operator's session,
 so an unreadable / empty stdin degrades to the positional-arg fallback
@@ -61,11 +67,20 @@ class HookSpec:
             into the synthesised payload's ``hook_event_name`` field.
             Mirrors the Claude Code hooks reference values so the
             router (W04) dispatches correctly.
+        has_handler: ``True`` when a runner-registered handler actually
+            consumes this event. Only :data:`HookEventType.SESSION_END`
+            has one — ``runtime.capture``, wired by
+            :func:`eawf.runtime.hooks.runner.register_runtime_capture_hooks`.
+            Every other event's wrapper exits ``0`` with an empty result
+            list (an idle contract), so the Claude installer subscribes
+            only handler-backed events and never wires the operator's
+            session to a no-op script.
         version: Schema version pin (``"1.0"``).
     """
 
     event_type: HookEventType
     claude_event_name: str
+    has_handler: bool = False
     version: str = "1.0"
 
 
@@ -82,13 +97,18 @@ def _load_environment() -> Environment:
     return env
 
 
-def render_hook_sh(event_type: HookEventType) -> str:
-    """Render a Claude Code bash hook wrapper for *event_type*.
+def render_hook_sh(event_type: HookEventType, *, runtime: str = "claude") -> str:
+    """Render a bash hook wrapper for *event_type* under *runtime*.
 
     Args:
         event_type: A :class:`HookEventType` member. The wrapper's
             ``eawf hook run`` argument is the event's lowercase value
             (``HookEventType.PRE_COMMIT.value == "pre_commit"``).
+        runtime: The ``--runtime`` value baked into the wrapper's
+            ``eawf hook run`` invocation. Defaults to ``"claude"``; the
+            Codex installer/doctor/packager pass ``"codex"`` so a
+            Codex-hosted hook routes through the Codex payload translator
+            rather than the Claude one.
 
     Returns:
         The rendered bash script, terminated by ``\\n``. Callers are
@@ -104,6 +124,7 @@ def render_hook_sh(event_type: HookEventType) -> str:
     rendered = template.render(
         event_type=spec.event_type.value,
         claude_event_name=spec.claude_event_name,
+        runtime=runtime,
     )
     if not rendered.endswith("\n"):
         rendered = rendered + "\n"
@@ -147,7 +168,11 @@ HOOK_REGISTRY: tuple[HookSpec, ...] = (
     HookSpec(event_type=HookEventType.PRE_AUDIT, claude_event_name="pre_audit"),
     HookSpec(event_type=HookEventType.POST_AUDIT, claude_event_name="post_audit"),
     HookSpec(event_type=HookEventType.SESSION_START, claude_event_name="SessionStart"),
-    HookSpec(event_type=HookEventType.SESSION_END, claude_event_name="SessionEnd"),
+    HookSpec(
+        event_type=HookEventType.SESSION_END,
+        claude_event_name="SessionEnd",
+        has_handler=True,
+    ),
     HookSpec(event_type=HookEventType.WAVE_OPEN, claude_event_name="wave_open"),
     HookSpec(event_type=HookEventType.WAVE_CLOSE, claude_event_name="wave_close"),
     HookSpec(event_type=HookEventType.ITER_OPEN, claude_event_name="iter_open"),

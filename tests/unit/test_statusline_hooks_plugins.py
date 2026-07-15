@@ -27,7 +27,10 @@ def test_state_without_plugins_returns_zero(tmp_path: Path) -> None:
     state_path = _seed_state(tmp_path, {})
     seg = hooks_plugins.build({}, state_path)
     assert seg.text == "hooks:0 plugins:0"
-    assert seg.status == "ok"
+    # The count is informational only (no hook exit code is read), so the
+    # segment must not claim health it never measured.
+    assert seg.status != "ok"
+    assert seg.status == "degraded"
 
 
 def test_state_counts_plugins(tmp_path: Path) -> None:
