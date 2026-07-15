@@ -148,7 +148,7 @@ async def quiesce_volatile_chrome(pilot: Pilot[object]) -> None:
         heartbeat.ack()
 
 
-async def settle_screen(pilot: Pilot[object]) -> str:
+async def settle_screen(pilot: Pilot[object], *, quiesce: bool = True) -> str:
     """Pump the app until its rendered frame stabilises, return that frame.
 
     The read-only state binder loads ``state.json`` and pushes it into
@@ -184,7 +184,10 @@ async def settle_screen(pilot: Pilot[object]) -> str:
         previous = current
     # Freeze the timer-driven chrome (degraded banner + heartbeat pulse) so the
     # final capture is phase-independent regardless of how slowly the host ran.
-    await quiesce_volatile_chrome(pilot)
+    # A behavioural test that deliberately drives the degraded state passes
+    # quiesce=False so the forced degraded=False revert does not erase it.
+    if quiesce:
+        await quiesce_volatile_chrome(pilot)
     return normalize_snapshot(capture_screen_text(pilot.app))
 
 

@@ -326,9 +326,9 @@ def test_feed_seeds_file_tail_and_shows_disconnected_badge_daemonless(tmp_path: 
             await settle_screen(pilot)
             # Force the daemonless (degraded) state, as the socket probe would.
             await app._on_degraded(True)
-            await settle_screen(pilot)
+            await settle_screen(pilot, quiesce=False)
             await pilot.press(_FEED_DIGIT)
-            await settle_screen(pilot)
+            await settle_screen(pilot, quiesce=False)
             pane = app.screen
             assert isinstance(pane, FeedModeScreen)
             # Both on-disk tail rows render (no unconditional empty state).

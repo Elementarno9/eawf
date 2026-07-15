@@ -398,7 +398,7 @@ def test_feed_pane_degraded_shows_honest_message() -> None:
             await settle_screen(pilot)
             # Flip degraded through the same hook the binder drives.
             await app._on_degraded(True)
-            await settle_screen(pilot)
+            await settle_screen(pilot, quiesce=False)
             frame = normalize_snapshot(capture_screen_text(app))
             assert FEED_EMPTY_DEGRADED in frame
             assert FEED_EMPTY_LIVE not in frame
