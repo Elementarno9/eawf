@@ -29,7 +29,7 @@ from eawf.kernel.state.enums import WaveStatus, WorktreeStatus
 from eawf.kernel.state.models import Iter, State, Wave
 from eawf.runtime.worktree.autoland import wave_autoland
 from eawf.runtime.worktree.create import create_worktree
-from tests.unit.test_worktree_create import _claimed_state, _make_repo
+from tests.integration.test_worktree_create import _claimed_state, _make_repo
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None,

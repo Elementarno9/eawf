@@ -27,7 +27,7 @@ from eawf.runtime.worktree.wave_land import (
     wave_land_batch,
 )
 from eawf.surfaces.cli import errors as cli_errors
-from tests.unit.test_worktree_create import _claimed_state, _make_repo
+from tests.integration.test_worktree_create import _claimed_state, _make_repo
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None,

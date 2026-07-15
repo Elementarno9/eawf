@@ -48,9 +48,9 @@ jobs:
         # Asserts (a) the per-OS service templates land inside the wheel
         # under ``eawf/_data/service_templates/`` and (b) the wheel stays
         # under the ``[tool.eawf.bundle] wheel_max_bytes`` ceiling. Same
-        # assertions as ``tests/unit/test_packaging.py`` but run against
+        # assertions as ``tests/integration/test_packaging.py`` but run against
         # the release build so a packaging regression reds the pipeline.
-        run: uv run pytest -q tests/unit/test_packaging.py
+        run: uv run pytest -q tests/integration/test_packaging.py
 
       - name: Validate dist (twine check)
         # Gate the artifacts on ``twine check`` before they can be
