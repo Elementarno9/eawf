@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import pytest
 
@@ -57,6 +57,8 @@ from eawf.surfaces.tui.modes.registry import MODE_REGISTRY
 from eawf.surfaces.tui.snapshot.behaviour_probe import (
     DEFERRED_KEYS,
     ProbeStatus,
+    _advertised_keys_at,
+    _unresolved_keys_at,
     record_keypress_transcript,
     sweep_unresolved_affordances,
 )
@@ -65,7 +67,6 @@ from eawf.workflow.audit_dsl import CheckSpec
 from eawf.workflow.audit_dsl.kinds import affordance_parity as ap_module
 from eawf.workflow.audit_dsl.kinds.affordance_parity import (
     _advertised_keys,
-    _probe_key,
     check_affordance_parity,
 )
 
@@ -129,20 +130,23 @@ def test_mode_advertises_at_least_one_resolving_key(mode: str) -> None:
 @pytest.mark.parametrize("mode", _MODE_NAMES)
 def test_every_advertised_key_in_mode_resolves(mode: str) -> None:
     # The matrix cell for one mode: enumerate the mode's advertised footer
-    # keys, drive each through the real key->Binding path (per-key fresh
-    # mount + settle_screen so a destructive key cannot bleed into the next),
-    # and assert NONE classify UNRESOLVED -- every advertised key resolves to
-    # a binding. NO_OP is allowed (a resolving binding is a present
-    # affordance); only UNRESOLVED is a dead affordance.
-    async def body() -> dict[str, ProbeStatus]:
-        keys = await _advertised_keys(mode=mode, state_path=_REPO_STATE, size=_SIZE)
-        statuses: dict[str, ProbeStatus] = {}
-        for key in keys:
-            statuses[key] = await _probe_key(mode=mode, key=key, state_path=_REPO_STATE, size=_SIZE)
-        return statuses
+    # keys, then classify each against the resolved binding map -- a pure,
+    # press-free ``active_bindings`` read (the W12 sweep path). An UNRESOLVED
+    # key is one absent from the map (the advertised-but-dead affordance); a
+    # resolving binding IS a present affordance (NO_OP is allowed), so the
+    # cell passes iff no advertised key is unresolved. The press-free read
+    # mounts twice per cell (enumerate + read) instead of pressing every
+    # advertised key against its own fresh mount (~1 mount per advertised
+    # key), and gives the identical UNRESOLVED verdict the driver would.
+    async def body() -> list[str]:
+        keys = await _advertised_keys_at(
+            scope="repo", mode=mode, state_path=_REPO_STATE, size=_SIZE
+        )
+        return await _unresolved_keys_at(
+            scope="repo", mode=mode, keys=keys, state_path=_REPO_STATE, size=_SIZE
+        )
 
-    statuses = asyncio.run(body())
-    dead = [key for key, status in statuses.items() if status is ProbeStatus.UNRESOLVED]
+    dead = asyncio.run(body())
     assert not dead, f"mode {mode!r} advertises unresolved key(s): {', '.join(dead)}"
 
 
@@ -220,13 +224,48 @@ def test_matrix_fails_when_footer_advertises_a_dead_key(
 # --------------------------------------------------------------------------
 
 
-def test_sweep_reports_zero_unresolved_keys() -> None:
+class _SweepRun(NamedTuple):
+    """One shared ``_REPO_STATE`` sweep: its result, mount count, cell budget."""
+
+    result: tuple[str, ...]
+    mounts: int
+    legal_cells: int
+
+
+@pytest.fixture(scope="module")
+def repo_state_sweep() -> _SweepRun:
+    """Run the ``_REPO_STATE`` sweep ONCE (under a mount counter) for reuse.
+
+    The sweep mounts ~2x per legal cell; the result-is-green assert and the
+    mount-budget assert are two independent reads of the SAME sweep, so a
+    single module-scoped run feeds both instead of remounting the whole
+    matrix twice. Counting real ``EaApp.run_test`` entries captures the
+    mount budget the guard test asserts.
+    """
+    legal_cells = sum(len(legal_scopes_for_mode(spec.name)) for spec in MODE_REGISTRY)
+    mounts = 0
+    original_run_test = EaApp.run_test
+
+    def counting_run_test(self: EaApp, **kwargs: object) -> object:
+        nonlocal mounts
+        mounts += 1
+        return original_run_test(self, **kwargs)
+
+    # Module-scoped patch (a plain ``monkeypatch`` fixture is function-scoped
+    # and would ScopeMismatch here); the context auto-restores run_test.
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(EaApp, "run_test", counting_run_test)
+        result = asyncio.run(sweep_unresolved_affordances(state_path=_REPO_STATE))
+    return _SweepRun(result=result, mounts=mounts, legal_cells=legal_cells)
+
+
+def test_sweep_reports_zero_unresolved_keys(repo_state_sweep: _SweepRun) -> None:
     # The W12 gate: drive every legal (scope, mode) cell's advertised footer
     # keys through the real key->Binding path and assert NONE resolve to no
     # binding (outside the documented DEFERRED_KEYS allowlist). A footer that
     # newly advertises a dead key surfaces here as a "<scope>/<mode>/<key>"
     # triple; a green sweep is the empty tuple.
-    unresolved = asyncio.run(sweep_unresolved_affordances(state_path=_REPO_STATE))
+    unresolved = repo_state_sweep.result
     assert unresolved == (), f"sweep found unresolved advertised keys: {', '.join(unresolved)}"
 
 
@@ -261,26 +300,16 @@ def test_sweep_no_state_path_reports_zero_unresolved() -> None:
     assert unresolved == (), f"no-state sweep found unresolved keys: {', '.join(unresolved)}"
 
 
-def test_sweep_mounts_at_most_twice_per_legal_cell(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_sweep_mounts_at_most_twice_per_legal_cell(repo_state_sweep: _SweepRun) -> None:
     # W12 instrumentation guard: the sweep reads each cell's binding map once
     # instead of pressing every advertised key against its own fresh mount, so
     # the mount count is bounded at twice the legal-cell count (one mount to
     # enumerate the footer, one to read the map) -- never once per advertised
     # key (~250 mounts). Counting real EaApp.run_test entries proves the budget
     # holds and, transitively, that no per-key press remount survives.
-    legal_cells = sum(len(legal_scopes_for_mode(spec.name)) for spec in MODE_REGISTRY)
-    mounts = 0
-    original_run_test = EaApp.run_test
-
-    def counting_run_test(self: EaApp, **kwargs: object) -> object:
-        nonlocal mounts
-        mounts += 1
-        return original_run_test(self, **kwargs)
-
-    monkeypatch.setattr(EaApp, "run_test", counting_run_test)
-    unresolved = asyncio.run(sweep_unresolved_affordances(state_path=_REPO_STATE))
+    mounts = repo_state_sweep.mounts
+    legal_cells = repo_state_sweep.legal_cells
+    unresolved = repo_state_sweep.result
     assert mounts > 0, "sweep never mounted the app -- vacuous over an empty axis"
     assert mounts <= 2 * legal_cells, (
         f"sweep mounted {mounts} times over the 2x{legal_cells}-legal-cell budget"

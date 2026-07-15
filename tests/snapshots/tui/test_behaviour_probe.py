@@ -222,6 +222,10 @@ def test_flow_terminal_state_open_close_modal_round_trips() -> None:
 
 
 def test_flow_terminal_state_is_deterministic_across_runs() -> None:
+    # Load-bearing double mount: determinism is proven only by driving two
+    # INDEPENDENT fresh mounts through the same key sequence and asserting the
+    # terminal state matches, so the second remount is the assertion, not
+    # collapsible to one.
     first = _terminal_state(["2", "1"])
     second = _terminal_state(["2", "1"])
     assert first == second

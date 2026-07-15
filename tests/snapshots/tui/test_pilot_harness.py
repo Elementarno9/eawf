@@ -110,6 +110,9 @@ def test_capture_screen_text_trims_trailing_blank_rows() -> None:
 
 
 def test_capture_screen_text_deterministic_across_runs() -> None:
+    # Load-bearing double mount: determinism is proven only by capturing two
+    # INDEPENDENT fresh mounts and asserting they render byte-identically, so
+    # the second remount is the assertion itself, not collapsible to one.
     async def snap() -> str:
         app = EaApp(scope="repo", state_path=_REPO_STATE)
         async with app.run_test(size=_SIZE) as pilot:
