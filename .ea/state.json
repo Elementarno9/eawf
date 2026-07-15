@@ -12390,6 +12390,21 @@
       "status": "done",
       "updated_at": "2026-07-14T23:21:29.621036Z"
     },
+    "P30-I26-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I26-W02",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I26-W02",
+      "model": null,
+      "scope_id": "P30-I26-W02",
+      "status": "done",
+      "updated_at": "2026-07-15T01:53:21.942747Z"
+    },
     "P30-I26-W03": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -12420,6 +12435,21 @@
       "status": "done",
       "updated_at": "2026-07-15T00:36:39.561716Z"
     },
+    "P30-I26-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I26-W05",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I26-W05",
+      "model": null,
+      "scope_id": "P30-I26-W05",
+      "status": "done",
+      "updated_at": "2026-07-15T01:54:28.871050Z"
+    },
     "P30-I26-W06": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -12434,6 +12464,21 @@
       "scope_id": "P30-I26-W06",
       "status": "done",
       "updated_at": "2026-07-15T00:49:38.960612Z"
+    },
+    "P30-I26-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I26-W07",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I26-W07",
+      "model": null,
+      "scope_id": "P30-I26-W07",
+      "status": "done",
+      "updated_at": "2026-07-15T02:04:19.872635Z"
     },
     "P30-I26-W10": {
       "actual_cost_usd": 0.0,
@@ -12465,6 +12510,21 @@
       "status": "done",
       "updated_at": "2026-07-15T01:06:14.589545Z"
     },
+    "P30-I26-W12": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": true,
+      "current_store_record_id": "REC-P30-I26-W12",
+      "elapsed_eu": 0.0,
+      "harness": "claude-code",
+      "id": "ACT-P30-I26-W12",
+      "model": "claude-opus-4-8",
+      "scope_id": "P30-I26-W12",
+      "status": "done",
+      "updated_at": "2026-07-15T02:09:07.168414Z"
+    },
     "P30-I26-W13": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -12479,6 +12539,21 @@
       "scope_id": "P30-I26-W13",
       "status": "done",
       "updated_at": "2026-07-14T23:27:35.742987Z"
+    },
+    "P30-I26-W24": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I26-W24",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I26-W24",
+      "model": null,
+      "scope_id": "P30-I26-W24",
+      "status": "done",
+      "updated_at": "2026-07-15T02:22:15.614008Z"
     }
   },
   "agent_sessions": {
@@ -12970,6 +13045,118 @@
       "started_at": "2026-07-15T01:09:49.782194Z",
       "status": "stale",
       "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260715T014429Z-auditor-claude": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-07-15T01:44:33.353765Z",
+      "id": "SES-20260715T014429Z-auditor-claude",
+      "role": "auditor",
+      "runtime": "claude",
+      "scope_id": "P30-I26-W07",
+      "started_at": "2026-07-15T01:44:29.686181Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260715T014429Z-operator-generic": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-07-15T01:44:33.354858Z",
+      "id": "SES-20260715T014429Z-operator-generic",
+      "role": "operator",
+      "runtime": "generic",
+      "scope_id": "P30",
+      "started_at": "2026-07-15T01:44:29.105904Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260715T014430Z-auditor-claude": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-07-15T01:44:33.355452Z",
+      "id": "SES-20260715T014430Z-auditor-claude",
+      "role": "auditor",
+      "runtime": "claude",
+      "scope_id": "P30-I26-W12",
+      "started_at": "2026-07-15T01:44:30.885792Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260715T014750Z-operator-generic": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-07-15T01:47:52.654096Z",
+      "id": "SES-20260715T014750Z-operator-generic",
+      "role": "operator",
+      "runtime": "generic",
+      "scope_id": "P30",
+      "started_at": "2026-07-15T01:47:50.928328Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260715T015356Z-operator-generic": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-07-15T01:53:57.322225Z",
+      "id": "SES-20260715T015356Z-operator-generic",
+      "role": "operator",
+      "runtime": "generic",
+      "scope_id": "P30",
+      "started_at": "2026-07-15T01:53:56.059588Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260715T015459Z-operator-generic": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-07-15T01:57:56.542867Z",
+      "id": "SES-20260715T015459Z-operator-generic",
+      "role": "operator",
+      "runtime": "generic",
+      "scope_id": "P30",
+      "started_at": "2026-07-15T01:54:59.998165Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260715T020420Z-operator-generic": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-07-15T02:11:11.133125Z",
+      "id": "SES-20260715T020420Z-operator-generic",
+      "role": "operator",
+      "runtime": "generic",
+      "scope_id": "P30",
+      "started_at": "2026-07-15T02:04:20.615903Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260715T021319Z-operator-generic": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260715T021319Z-operator-generic",
+      "role": "operator",
+      "runtime": "generic",
+      "scope_id": "P30",
+      "started_at": "2026-07-15T02:13:19.713625Z",
+      "status": "active",
+      "summary": null,
       "worktree_ids": []
     }
   },
@@ -16568,10 +16755,10 @@
   },
   "claims": null,
   "current": {
-    "active_session_ids": [],
-    "active_wave_ids": [
-      "P30-I26-W12"
+    "active_session_ids": [
+      "SES-20260715T021319Z-operator-generic"
     ],
+    "active_wave_ids": [],
     "iter_id": "P30-I26",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -30125,6 +30312,19 @@
       "scope_id": "P30-I26-W01",
       "updated_at": "2026-07-14T23:19:25.194672Z"
     },
+    "P30-I26-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I26-W02-bucket-20260715T014432Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I26-W02",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I26-W02",
+      "updated_at": "2026-07-15T01:44:32.162641Z"
+    },
     "P30-I26-W03": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I26-W03-bucket-20260715T010747Z",
@@ -30151,6 +30351,19 @@
       "scope_id": "P30-I26-W04",
       "updated_at": "2026-07-15T00:36:38.719417Z"
     },
+    "P30-I26-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I26-W05-bucket-20260715T015322Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I26-W05",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I26-W05",
+      "updated_at": "2026-07-15T01:53:22.801348Z"
+    },
     "P30-I26-W06": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I26-W06-bucket-20260715T004314Z",
@@ -30163,6 +30376,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I26-W06",
       "updated_at": "2026-07-15T00:43:14.718348Z"
+    },
+    "P30-I26-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I26-W07-bucket-20260715T015324Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I26-W07",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I26-W07",
+      "updated_at": "2026-07-15T01:53:24.214396Z"
     },
     "P30-I26-W10": {
       "confidence": "low",
@@ -30215,6 +30441,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I26-W13",
       "updated_at": "2026-07-14T23:27:34.809873Z"
+    },
+    "P30-I26-W24": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I26-W24-bucket-20260715T015326Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I26-W24",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I26-W24",
+      "updated_at": "2026-07-15T01:53:26.918010Z"
     }
   },
   "fleet_run": null,
@@ -34021,7 +34260,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-15T01:38:47.891009Z",
+  "updated_at": "2026-07-15T02:22:15.614263Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -142058,10 +142297,10 @@
         "P30-I26-W08",
         "P30-I26-W23"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "ops-p30-i26-finish",
+      "claimed_at": "2026-07-15T01:44:32.136258Z",
+      "closed_at": "2026-07-15T01:53:21.942747Z",
+      "commit": "7b99277f4cba985917ed2990c61d2bc8a8b5071d",
       "criteria_floor_waiver": {
         "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
         "waived_at": "2026-07-14T22:57:18.804978Z",
@@ -142089,13 +142328,13 @@
       },
       "iter_id": "P30-I26",
       "opened_at": "2026-07-14T22:57:18.838675Z",
-      "outcome": null,
+      "outcome": "watch pause relabelled 'pause new dispatches'; ACTIVE precondition dropped; agent.kill preserved",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -142370,10 +142609,10 @@
       "blocks": [
         "P30-I26-W23"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "ops-p30-i26-finish",
+      "claimed_at": "2026-07-15T01:53:22.777081Z",
+      "closed_at": "2026-07-15T01:54:28.871050Z",
+      "commit": "74b3c5f305bcef9fa4d56ceae67770083ca52c85",
       "criteria_floor_waiver": {
         "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
         "waived_at": "2026-07-14T22:57:20.723225Z",
@@ -142402,13 +142641,13 @@
       },
       "iter_id": "P30-I26",
       "opened_at": "2026-07-14T22:57:20.759800Z",
-      "outcome": null,
+      "outcome": "event-store commit instruction corrected; goldens regenerated; 81 golden tests green",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -142557,10 +142796,10 @@
       "blocks": [
         "P30-I26-W23"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "ops-p30-i26-finish",
+      "claimed_at": "2026-07-15T01:53:24.194292Z",
+      "closed_at": "2026-07-15T02:04:19.872635Z",
+      "commit": "1830f3270d56593e47451e3d91af9f319b879da5",
       "criteria_floor_waiver": {
         "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
         "waived_at": "2026-07-14T22:57:21.949453Z",
@@ -142591,13 +142830,13 @@
       },
       "iter_id": "P30-I26",
       "opened_at": "2026-07-14T22:57:21.986457Z",
-      "outcome": null,
+      "outcome": "synth reports mint BLOCKED not PASS; report_source authored|synthesized; auditor verdict pass",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -143077,8 +143316,8 @@
       ],
       "claim_session_id": "ops-p30-i26-finish",
       "claimed_at": "2026-07-14T23:33:09.586325Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-07-15T02:09:07.168414Z",
+      "commit": "2e130bb645a5c4fd7cc8b6680fece943b74daca6",
       "criteria_floor_waiver": {
         "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
         "waived_at": "2026-07-14T22:57:24.509180Z",
@@ -143107,7 +143346,7 @@
       },
       "iter_id": "P30-I26",
       "opened_at": "2026-07-14T22:57:24.544343Z",
-      "outcome": null,
+      "outcome": "affordance sweep press-free; 313s->42s; auditor verdict pass-with-followups",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": {
@@ -143127,7 +143366,7 @@
       },
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -144358,10 +144597,10 @@
       "blocks": [
         "P30-I26-W23"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "ops-p30-i26-finish",
+      "claimed_at": "2026-07-15T01:53:26.896297Z",
+      "closed_at": "2026-07-15T02:22:15.614008Z",
+      "commit": "5decff5cdc425919cbe3f9d21765f88181c1ebf6",
       "criteria_floor_waiver": {
         "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
         "waived_at": "2026-07-14T22:57:31.214175Z",
@@ -144393,13 +144632,13 @@
       },
       "iter_id": "P30-I26",
       "opened_at": "2026-07-14T22:57:31.248873Z",
-      "outcome": null,
+      "outcome": "degraded banner bottom-docked; header visible daemon-down; snapshot test added",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
