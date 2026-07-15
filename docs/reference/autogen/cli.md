@@ -276,6 +276,7 @@ Dispatch hook events through the Eä hook runner.
 | `eawf018-structure-smell` | Warn on block-bloat structure smells in Markdown and docstrings without blocking. |
 | `eawf019-math-facets` | Reject math-explainer claims missing a facet, an unresolved citation, or a dead gate. |
 | `eawf023-artifact-placement` | Reject misplaced or date-stem-less artifacts under ``.ea/artifacts/``. |
+| `eawf024-test-tier-contract` | Reject non-unit imports in the ``tests/unit/`` tier. |
 | `email-leak-lint` | Reject email addresses outside the canonical author/no-reply allowlist. |
 | `log-format-lint` | Run the EAWF001 log-format rule over changed library modules. |
 | `path-leak-lint` | Reject home-directory path literals (macOS, Windows, and Linux home roots). |
