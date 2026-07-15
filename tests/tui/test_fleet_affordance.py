@@ -401,6 +401,11 @@ def test_e1_degraded_banner_surfaces_over_a_daemon_down_mid_run(tmp_path: Path) 
     its hidden class and renders the FAIL-led "daemon unreachable" copy -- over
     the still-draining cockpit, so the lost transport reads honestly rather than
     a frozen-but-live cockpit.
+
+    Since W24 the banner bottom-docks (it no longer covers the header), and the
+    golden-suite quiesce forces ``degraded=False`` at settle -- which would erase
+    the very banner under assertion -- so the degraded frame is driven with
+    ``quiesce=False`` and the surfaced banner is confirmed to sit below row 0.
     """
     state_path = _write_state(tmp_path, _fleet_state(fleet_run=_draining_run()))
 
@@ -412,14 +417,18 @@ def test_e1_degraded_banner_surfaces_over_a_daemon_down_mid_run(tmp_path: Path) 
             await settle_screen(pilot)
             assert isinstance(app.screen, AutopilotModeScreen)
             # Flip the degraded reactive as the binder would on a daemon drop.
+            # quiesce=False so the settle revert does not erase the banner.
             await app._on_degraded(True)
-            await settle_screen(pilot)
+            await settle_screen(pilot, quiesce=False)
             banner = app.screen.query(f"#{DEGRADED_BANNER_ID}").first(Static)
             # The banner is shown (no hidden class) and carries the E1 copy.
             assert not banner.has_class(DEGRADED_BANNER_HIDDEN_CLASS)
             rendered = str(banner.render())
             assert _FAIL_SIGIL in rendered
             assert "daemon unreachable" in rendered
+            # W24: the banner bottom-docks below the header rather than covering
+            # it, so the surfaced banner occupies a positive screen row.
+            assert banner.region.y > 0
             # The cockpit pane is still mounted underneath (the run did not vanish).
             assert isinstance(app.screen, AutopilotModeScreen)
 
@@ -432,6 +441,9 @@ def test_e1_degraded_banner_clears_when_transport_recovers(tmp_path: Path) -> No
     The recovery boundary of the degraded path: once the binder reports the
     transport restored, the banner re-acquires its hidden class and clears its
     text rather than lingering as a stale alarm.
+
+    Both flips settle with ``quiesce=False`` so the golden-suite quiesce (which
+    forces ``degraded=False``) does not pre-empt the recovery this test drives.
     """
     state_path = _write_state(tmp_path, _fleet_state(fleet_run=_draining_run()))
 
@@ -442,11 +454,11 @@ def test_e1_degraded_banner_clears_when_transport_recovers(tmp_path: Path) -> No
             await pilot.press(_AUTOPILOT_DIGIT)
             await settle_screen(pilot)
             await app._on_degraded(True)
-            await settle_screen(pilot)
+            await settle_screen(pilot, quiesce=False)
             banner = app.screen.query(f"#{DEGRADED_BANNER_ID}").first(Static)
             assert not banner.has_class(DEGRADED_BANNER_HIDDEN_CLASS)
             await app._on_degraded(False)
-            await settle_screen(pilot)
+            await settle_screen(pilot, quiesce=False)
             assert banner.has_class(DEGRADED_BANNER_HIDDEN_CLASS)
 
     asyncio.run(body())
