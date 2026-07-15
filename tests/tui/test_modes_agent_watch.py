@@ -58,7 +58,6 @@ from eawf.surfaces.tui.modes.agent_watch import (
     LOG_NO_HANDLE,
     PAUSE_NO_DAEMON,
     PAUSE_NO_TARGET,
-    PAUSE_NOT_ACTIVE_TEMPLATE,
     SESSION_PICKER_ID,
     SESSION_PICKER_ROW_CLASS,
     WATCH_EMPTY_ID,
@@ -957,8 +956,9 @@ def test_agent_watch_session_keys_resolve_to_live_bindings() -> None:
     """Every advertised FA4 session key resolves to a live Binding (parity).
 
     The affordance-parity contract: each of the advertised session keys --
-    ``k`` (kill), ``x`` (the kill alias), ``space`` (pause), ``l`` (open the
-    browsable session roster), ``v`` (view log), ``Esc`` (back) -- maps to a
+    ``k`` (kill), ``x`` (the kill alias), ``space`` (pause new dispatches),
+    ``l`` (open the browsable session roster), ``v`` (view log), ``Esc`` (back)
+    -- maps to a
     concrete :class:`~textual.binding.Binding` whose action method exists on the
     screen, so no advertised key is a dead affordance.
     """
@@ -1281,10 +1281,10 @@ def _state_with_logged_wave(*, handle: str = "urn:eawf:v1:session-log:claude:abc
 
 
 def test_agent_watch_pause_no_target_surfaces_honest_line(tmp_path: Path) -> None:
-    """``space`` on an honest-empty scope (no session) says there is nothing to pause.
+    """``space`` on an honest-empty scope (no session) says there is no session in view.
 
-    With no dispatched session the pause key has no lane to act on, so it
-    surfaces the honest "no session to pause" toast without reaching the daemon.
+    With no dispatched session the pause key has no lane to act from, so it
+    surfaces the honest "no session in view" toast without reaching the daemon.
     """
     state_path = _write_state(tmp_path, _state())
 
@@ -1893,17 +1893,28 @@ def test_watch_cancel_on_closed_session_is_inert(
     asyncio.run(body())
 
 
-def test_watch_pause_on_closed_session_is_inert(
+def test_watch_pause_on_closed_session_still_pauses_dispatches(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Pause on a finished session surfaces the honest toast, no RPC."""
+    """``space`` on a finished session still pauses NEW dispatches repo-wide.
+
+    ``agent.pause`` is targetless -- it toggles the repo-wide ``dispatch_paused``
+    next-claim flag, not the watched lane's child -- so a terminal watch target
+    no longer gates it. Watching a CLOSED session and pressing ``space`` fires
+    ``agent.pause`` and surfaces the honest "pause new dispatches: paused" toast
+    rather than the old per-session "nothing to pause" line.
+    """
     closed = _session("S-1", status=AgentSessionStatus.CLOSED)
     state_path = _write_state(tmp_path, _state(sessions={"S-1": closed}))
+    calls: list[tuple[str, dict[str, object]]] = []
 
     async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
         app = EaApp(scope="repo", state_path=state_path)
-        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _recording_client(calls, response={"paused": True}))
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
             await pilot.press(_WATCH_DIGIT)
@@ -1913,6 +1924,8 @@ def test_watch_pause_on_closed_session_is_inert(
             await pilot.press("space")
             await settle_screen(pilot)
             toasts = "\n".join(toast_messages(app))
-            assert PAUSE_NOT_ACTIVE_TEMPLATE.format(status="closed") in toasts
+            assert "pause new dispatches: paused" in toasts
 
     asyncio.run(body())
+    # The repo-wide pause fired despite the watched session being terminal.
+    assert calls and calls[0][0] == "agent.pause"

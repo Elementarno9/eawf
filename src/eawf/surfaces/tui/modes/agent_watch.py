@@ -48,8 +48,10 @@ Per-session keys (the FA4 zoom controls)
 The zoom advertises four session keys: ``k`` confirm-gated kills this lane
 (the ``agent.kill`` RPC, gated behind a
 :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal` so a
-destructive stop is never one keystroke), ``space`` pauses / resumes this
-lane (the ``agent.pause`` / ``agent.resume`` RPC), ``l`` views the watched
+destructive stop is never one keystroke), ``space`` pauses / resumes NEW
+dispatches repo-wide (the ``agent.pause`` / ``agent.resume`` RPC toggles the
+``dispatch_paused`` next-claim flag; it does NOT stop the watched lane's
+running child -- ``k`` is the truthful per-agent stop), ``l`` views the watched
 session's log, and ``Esc`` leaves the zoom. Every advertised key resolves to
 a live :class:`~textual.binding.Binding` (affordance parity).
 
@@ -170,9 +172,6 @@ CANCEL_NO_TARGET: str = "cancel: no session to cancel"
 #: finished stream is a replay, so there is no child process to stop.
 CANCEL_NOT_ACTIVE_TEMPLATE: str = "cancel: session already {status} -- nothing to stop"
 
-#: Result line when pause targets a session that is no longer ACTIVE.
-PAUSE_NOT_ACTIVE_TEMPLATE: str = "pause: session already {status} -- nothing to pause"
-
 #: Idle line replacing the cancel prompt when the watched session is terminal:
 #: the stream is a recorded replay, so advertising a kill would be dishonest.
 WATCH_REPLAY_TEMPLATE: str = "session {status} -- replaying its recorded stream"
@@ -215,18 +214,18 @@ _KILL_METHOD: str = "agent.kill"
 #: Graceful SIGTERM signal the ``k`` key sends -- the soft ladder entry.
 _SIGNAL_TERM: str = "term"
 
-#: Daemon JSON-RPC methods the ``space`` (pause / resume this lane) key routes
-#: through. ``agent.pause`` persists ``dispatch_paused = True`` (a deliberate
-#: stop that blocks the next claim); ``agent.resume`` clears it. The flag picks
-#: which method fires.
+#: Daemon JSON-RPC methods the ``space`` (pause / resume NEW dispatches) key
+#: routes through. ``agent.pause`` persists ``dispatch_paused = True`` (a
+#: deliberate repo-wide stop that blocks the NEXT claim, not the running child);
+#: ``agent.resume`` clears it. The flag picks which method fires.
 _PAUSE_RPC: str = "agent.pause"
 _RESUME_RPC: str = "agent.resume"
 
 #: Result line when the pause / resume request could not reach the daemon.
-PAUSE_NO_DAEMON: str = "pause: daemon unavailable -- request not issued"
+PAUSE_NO_DAEMON: str = "pause new dispatches: daemon unavailable -- request not issued"
 
-#: Result line when there is no session to pause.
-PAUSE_NO_TARGET: str = "pause: no session to pause"
+#: Result line when there is no watched session in view to act from.
+PAUSE_NO_TARGET: str = "pause new dispatches: no session in view"
 
 #: Result line when the log-view key has no session to view a log for.
 LOG_NO_TARGET: str = "log: no session to view a log for"
@@ -2541,7 +2540,9 @@ class AgentWatchModeScreen(ScopeScreen):
 
     #: ``up`` / ``down`` scroll the stream; the FA4 session key ``x`` (cancel
     #: this lane, confirm-gated, with ``k`` as a legacy alias), ``space``
-    #: (pause / resume this lane), ``l`` (open the browsable session roster so
+    #: (pause / resume NEW dispatches repo-wide -- the running child keeps
+    #: spending; ``x`` / ``k`` is the per-agent stop), ``l`` (open the browsable
+    #: session roster so
     #: the operator can step to a DIFFERENT agent -- never trapped on the
     #: auto-targeted one), ``v`` (view this session's log), and ``Esc`` (leave
     #: the zoom -- back to the roster whenever a browsable session remains) act
@@ -2560,7 +2561,7 @@ class AgentWatchModeScreen(ScopeScreen):
         Binding("end", "scroll_end", "end", show=False),
         Binding("k", "cancel_session", "kill", show=False),
         Binding("x", "cancel_session", "kill", show=False),
-        Binding("space", "pause_session", "pause", show=False),
+        Binding("space", "pause_session", "pause new dispatches", show=False),
         Binding("l", "open_roster", "list", show=False),
         Binding("g", "toggle_grid", "grid", show=False),
         Binding("v", "view_log", "view log", show=False),
@@ -2583,7 +2584,7 @@ class AgentWatchModeScreen(ScopeScreen):
     #: as ``l`` / ``v``.
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = (
         render_hint_label("x", "cancel"),
-        render_hint_label("space", "pause"),
+        render_hint_label("space", "pause new dispatches"),
         render_hint_label("Esc", "back"),
         render_hint_label("w/r/u", "scope"),
         render_hint_label("/", "palette"),
@@ -3379,27 +3380,25 @@ class AgentWatchModeScreen(ScopeScreen):
         self._push_overlay(ConfirmModal(prompt), _on_confirm)
 
     def action_pause_session(self) -> None:
-        """Pause / resume the watched lane through the real daemon RPC (``space``).
+        """Pause / resume NEW dispatches repo-wide via the daemon RPC (``space``).
 
         Reads the current
         :attr:`~eawf.kernel.state.models.State.dispatch_paused` flag and issues
         ``agent.resume`` when already paused, else ``agent.pause`` -- a
         deliberate operator stop the daemon persists and
-        :func:`eawf.workflow.lifecycle.wave.claim_wave` reads to block the next
-        claim. Pause is non-destructive (no confirm). With no target there is
-        nothing to pause, and a non-ACTIVE target has nothing running to
-        pause — both are surfaced honestly without an RPC; otherwise the
-        toast carries the persisted verdict, or the honest unavailable line
-        when the daemon is unreachable.
+        :func:`eawf.workflow.lifecycle.wave.claim_wave` reads to block the NEXT
+        claim. The RPC is targetless: it does NOT stop the watched lane's
+        running child (``x`` / ``k`` is the truthful per-agent stop), so the
+        watched session's status never gates it -- a terminal session may still
+        pause the frontier. Pause is non-destructive (no confirm). With no
+        watched session in view there is no lane to act from, so the honest
+        no-session toast surfaces without an RPC; otherwise the toast carries
+        the persisted verdict, or the honest unavailable line when the daemon
+        is unreachable.
         """
         target = self.target
         if target is None:
             self._set_result(f"[$warn]{PAUSE_NO_TARGET}[/]")
-            return
-        if target.status is not AgentSessionStatus.ACTIVE:
-            line = f"pause: session already {target.status.value} -- nothing to pause"
-            self._set_result(f"[$muted]{line}[/]")
-            logger.info(f"action_pause_session not_active status={target.status.value}")
             return
         result_line = self._issue_pause()
         self._set_result(result_line)
@@ -3563,13 +3562,13 @@ class AgentWatchModeScreen(ScopeScreen):
                 result = client.call(method, {})
         except DaemonRpcError as exc:
             logger.debug(f"_issue_pause daemon_rejected method={method!r} message={exc.message!r}")
-            return "[$warn]pause: daemon rejected request[/]"
+            return "[$warn]pause new dispatches: daemon rejected request[/]"
         except (OSError, RuntimeError, TimeoutError) as exc:
             logger.debug(f"_issue_pause daemon_fallback method={method!r} cause={exc!r}")
             return unavailable
         now_paused = bool(result.get("paused", not paused))
         verb = "paused" if now_paused else "resumed"
-        return f"[$ok]pause: {verb}[/]"
+        return f"[$ok]pause new dispatches: {verb}[/]"
 
     def _currently_paused(self) -> bool:
         """Return the bound state's ``dispatch_paused`` flag (``False`` if unbound).
@@ -3886,7 +3885,6 @@ __all__ = [
     "LANE_SELECTED_CLASS",
     "LOG_NO_HANDLE",
     "LOG_NO_TARGET",
-    "PAUSE_NOT_ACTIVE_TEMPLATE",
     "PAUSE_NO_DAEMON",
     "PAUSE_NO_TARGET",
     "ROLLUP_EMPTY_NOTICE",
