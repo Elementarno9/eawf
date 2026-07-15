@@ -13,6 +13,7 @@ jobs:
   test:
     name: ${{ matrix.os }} / py${{ matrix.python }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -89,6 +90,7 @@ jobs:
     # broke `uv tool install`). This job builds the wheel and exercises the
     # CLI in a runtime-only environment so that class of break reds the PR.
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -125,6 +127,7 @@ jobs:
     # ci.yaml release-readiness matrix job: pins the release automation
     # contracts that phase close and post-merge tagging depend on.
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -164,6 +167,7 @@ jobs:
     name: Snapshot pairing gate
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -192,6 +196,7 @@ jobs:
     # the Vale leg fails open. PR-only: the gate scans the PR's changed .md.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -233,6 +238,7 @@ jobs:
     if: github.event_name == 'pull_request'
     continue-on-error: true
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -326,6 +332,7 @@ jobs:
     # a regression in the pipe transport or common CLI path reds PRs and
     # protected branch pushes.
     runs-on: windows-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4

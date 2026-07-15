@@ -24,6 +24,7 @@ jobs:
     name: Tag phase release
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Checkout merge commit
         uses: actions/checkout@v4

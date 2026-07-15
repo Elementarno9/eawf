@@ -15,6 +15,7 @@ jobs:
   ast-grep-floor:
     name: ast-grep visible floor
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4

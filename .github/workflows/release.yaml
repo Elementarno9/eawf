@@ -26,6 +26,7 @@ jobs:
   build-wheel:
     name: Build wheel + sdist (dry-run)
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -91,6 +92,9 @@ jobs:
     # for it, then asserts success. A `workflow_dispatch` dry-run skips it.
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
+    # Above the 30-min (SECONDS + 1800) in-flight-CI wait loop below, so the
+    # job's own timeout never fires before its internal deadline.
+    timeout-minutes: 35
     permissions:
       actions: read # read the CI workflow's run conclusion for this SHA
     steps:
@@ -133,6 +137,7 @@ jobs:
     # both tag-push and `workflow_dispatch` dry-runs so a broken install reds
     # the pipeline early.
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
@@ -181,6 +186,7 @@ jobs:
     # trusted-publisher environment to be configured in the repo settings.
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     environment: pypi-publish
     permissions:
       id-token: write # PyPI trusted-publisher OIDC; no API token in repo secrets
