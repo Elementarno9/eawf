@@ -71,7 +71,11 @@ def test_phase_04_end_to_end(
     assert result.exit_code == 0, result.stdout
     assert (repo / ".claude" / "skills" / "research" / "SKILL.md").exists()
     assert (repo / ".claude" / "agents" / "executor.md").exists()
-    assert (repo / ".claude" / "hooks" / "pre_commit.sh").exists()
+    # W09 deleted the seven no-op hook wrappers; the installer now wires only
+    # handler-backed events, so session_end.sh is the sole rendered hook and
+    # the retired pre_commit.sh wrapper is no longer produced.
+    assert (repo / ".claude" / "hooks" / "session_end.sh").exists()
+    assert not (repo / ".claude" / "hooks" / "pre_commit.sh").exists()
     settings = json.loads((repo / ".claude" / "settings.json").read_text(encoding="utf-8"))
     assert "__eawf_managed" in settings
 
