@@ -64,17 +64,26 @@ def test_runbook_drafts_the_exact_subject_and_descope() -> None:
     assert "de-scoped" in body or "de-scope" in body
 
 
-def test_repo_census_has_no_stray_pending_waves() -> None:
-    """CR-02: the re-close wave carries the phase close; no stray PENDING wave.
+#: The phase-close vehicle after the I26 reconcile. The original re-close wave
+#: (P30-I21-W22) was claimed + closed in the I26 Step-1 reconcile, and the
+#: phase-close ceremony moved onto P30-I26-W23.
+_RECLOSE_WAVE = "P30-I26-W23"
+_SUPERSEDED_RECLOSE_WAVE = "P30-I21-W22"
 
-    P30-I21-W22 is the re-close vehicle: it waits while the phase is ACTIVE and
-    closes in the same commit that closes the phase. Asserting it is PENDING
-    outright would redden the moment that commit lands -- and that commit is the
-    PR head CI runs against -- so the invariant is tied to the phase's status
-    instead. While P30 is ACTIVE the wave is still on record to carry the close
-    (PENDING, or CLAIMED in the close-commit window); once the phase is no longer
-    ACTIVE the wave must have actually closed, which catches a phase closed out
-    from under its own re-close vehicle.
+
+def test_repo_census_has_no_stray_pending_waves() -> None:
+    """CR-02 (I26 reconcile): the re-close wave carries the close; no stray PENDING wave.
+
+    The I26 reconcile closed the original re-close vehicle (P30-I21-W22) in its
+    Step 1 and moved the phase-close ceremony onto P30-I26-W23. That wave now
+    waits while the phase is ACTIVE and closes in the same commit that closes the
+    phase. Asserting it is PENDING outright would redden the moment that commit
+    lands -- and that commit is the PR head CI runs against -- so the invariant is
+    tied to the phase's status instead. While P30 is ACTIVE the wave is still on
+    record to carry the close (PENDING, or CLAIMED in the close-commit window);
+    once the phase is no longer ACTIVE the wave must have actually closed, which
+    catches a phase closed out from under its own re-close vehicle. The superseded
+    P30-I21-W22 must already be CLOSED.
 
     The second half is unchanged: no PENDING wave is *stray* -- that is, outside
     the re-close wave and the ACTIVE iter.
@@ -82,7 +91,10 @@ def test_repo_census_has_no_stray_pending_waves() -> None:
     state = _state()
     active_iter = state["current"].get("iter_id")
     waves = state["waves"]
-    reclose_status = waves["P30-I21-W22"]["status"]
+    assert waves[_SUPERSEDED_RECLOSE_WAVE]["status"] == "closed", (
+        "the I26 reconcile must have closed the superseded re-close wave"
+    )
+    reclose_status = waves[_RECLOSE_WAVE]["status"]
     if state["phases"]["P30"]["status"] == "active":
         assert reclose_status in {"pending", "claimed"}, (
             "the re-close wave must still be on record to carry the phase close"
@@ -93,7 +105,7 @@ def test_repo_census_has_no_stray_pending_waves() -> None:
     stray = [
         wave_id
         for wave_id in pending
-        if wave_id != "P30-I21-W22" and waves[wave_id].get("iter_id") != active_iter
+        if wave_id != _RECLOSE_WAVE and waves[wave_id].get("iter_id") != active_iter
     ]
     assert not stray, f"stray PENDING waves outside the ACTIVE repair iter {active_iter!r}: {stray}"
 
