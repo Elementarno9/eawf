@@ -4,16 +4,19 @@ The snapshot harness freezes two timer-driven chrome elements before every
 golden capture so a slow host cannot drift a golden:
 
 * the daemon-degraded flip -- ``app.degraded`` trips true ~1.5 s after mount
-  when no daemon answers, top-docking the degraded banner OVER the Header row
-  (``normalize_snapshot`` then drops the banner line, losing the ``Eä`` brand
-  and shrinking a 40-row frame to 39); and
+  when no daemon answers, surfacing the bottom-docked degraded banner over the
+  footer's burn row (``normalize_snapshot`` then drops the banner line,
+  shrinking a 40-row frame to 39); and
 * the footer heartbeat pulse -- the ``•`` dot blanks to a bare space every
   1.0 s, and ``capture_screen_text`` rstrips the blank cell, dropping the
   trailing bullet.
 
-These tests force both elements into their volatile phase and assert the
-harness capture is byte-identical to the settled non-degraded frame -- the
-regression that reddened the macos-15 CI job the goldens were captured on.
+Since W24 the degraded banner bottom-docks (it used to ``dock: top`` and cover
+the ``Eä`` header on row 0); the header now survives the degraded flip, so
+these tests also assert the brand stays present while degraded. They force both
+volatile elements into their phase and assert the harness capture is
+byte-identical to the settled non-degraded frame -- the regression that
+reddened the macos-15 CI job the goldens were captured on.
 """
 
 from __future__ import annotations
@@ -37,8 +40,8 @@ from eawf.surfaces.tui.widgets.heartbeat import Heartbeat
 
 #: The real banner-sync method, captured at import BEFORE the autouse conftest
 #: fixture (``_suppress_daemon_degraded_banner``) no-ops it for the golden
-#: suite. The CI-1 test restores it so the degraded banner genuinely mounts and
-#: covers the Header -- the exact condition the quiesce must reverse.
+#: suite. The CI-1 test restores it so the degraded banner genuinely mounts
+#: (bottom-docked) -- the exact condition the quiesce must reverse.
 _REAL_SYNC_DEGRADED_BANNER = EaApp._sync_degraded_banner
 
 _REPO_STATE = (
@@ -61,8 +64,8 @@ def _blank_every_heartbeat(app: App[object]) -> None:
 def test_quiesce_reverts_degraded_flip_and_heartbeat_blank(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Restore the real banner sync so the degraded flip actually top-docks the
-    # banner over the Header (the autouse fixture otherwise suppresses it).
+    # Restore the real banner sync so the degraded flip actually mounts the
+    # (bottom-docked) banner (the autouse fixture otherwise suppresses it).
     monkeypatch.setattr(EaApp, "_sync_degraded_banner", _REAL_SYNC_DEGRADED_BANNER)
 
     async def body() -> None:
@@ -77,15 +80,17 @@ def test_quiesce_reverts_degraded_flip_and_heartbeat_blank(
             assert len(baseline.splitlines()) == 40
 
             # Force both volatile elements into the phase a slow CI host holds:
-            # degraded flipped true (banner covers the Header) + heartbeat blank.
+            # degraded flipped true (bottom-docked banner over the footer burn
+            # row) + heartbeat blank.
             await app._on_degraded(True)
             _blank_every_heartbeat(app)
             await pilot.pause()
             drifted = normalize_snapshot(capture_screen_text(app))
-            # Pre-condition proof: the un-quiesced capture LOST the Header (the
-            # banner covers it, then normalize drops the banner line) and the
-            # footer bullet -- exactly the macos-15 drift.
-            assert "Eä" not in drifted
+            # Pre-condition proof: the un-quiesced capture keeps the Header (W24
+            # bottom-docked the banner, so the brand survives the degraded flip),
+            # but normalize drops the banner line + the blanked heartbeat bullet
+            # is rstripped -- shrinking the frame to 39 rows (the macos-15 drift).
+            assert "Eä" in drifted
             assert "•" not in drifted
             assert len(drifted.splitlines()) == 39
 

@@ -162,10 +162,18 @@ Heartbeat.-degraded {
     text-style: bold;
 }
 
-/* --- degraded banner (mtime-poll fallback active) --- */
+/* --- degraded banner (mtime-poll fallback active) ---
+   Docked to the BOTTOM (above the footer), NOT the top: a top dock stacked the
+   banner ahead of the Header on row 0 and squeezed the brand + breadcrumb +
+   runtime row off the top of the screen, so a daemon-down operator lost the
+   whole header. Mirroring the stale-schema banner's bottom dock keeps the
+   header on row 0 while this transport-critical banner stays clearly surfaced
+   just above the footer. Hidden (non-degraded) it collapses to a zero-size
+   region via the visibility rule below, so it costs no row when the daemon is
+   reachable. */
 .degraded-banner {
     height: 1;
-    dock: top;
+    dock: bottom;
     background: $err;
     color: $text;
     text-style: bold;
@@ -179,8 +187,9 @@ Heartbeat.-degraded {
 /* --- stale-schema banner (bound state trails the live daemon schema) ---
    Docked to the BOTTOM (above the footer), not the top: the brand +
    breadcrumb header must stay on row 0, so the informational staleness
-   banner never covers it (unlike the transport-critical degraded banner,
-   which docks top). */
+   banner never covers it. The transport-critical degraded banner docks
+   bottom for the same reason -- when both are active they stack above the
+   footer and the header is preserved. */
 .stale-schema-banner {
     height: 1;
     dock: bottom;
