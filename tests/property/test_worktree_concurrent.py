@@ -182,6 +182,7 @@ def _create_in_thread(
         return 1, f"{type(exc).__name__}: {exc}"
 
 
+@pytest.mark.slow
 @pytest.mark.property
 @given(claimer_count=st.integers(min_value=2, max_value=8))
 @settings(

@@ -59,6 +59,7 @@ _EU_MINUTES = st.sampled_from([Decimal("15"), Decimal("30"), Decimal("60")])
 _DECIMAL_EPSILON = Decimal("1e-25")
 
 
+@pytest.mark.slow
 @settings(max_examples=200, deadline=None)
 @given(
     raw_minutes=_RAW_MINUTES,
@@ -83,6 +84,7 @@ def test_expected_eu_round_trips_via_minutes(
     assert delta <= _DECIMAL_EPSILON * (Decimal(1) + abs(central * raw_minutes))
 
 
+@pytest.mark.slow
 @settings(max_examples=200, deadline=None)
 @given(
     raw_minutes=_RAW_MINUTES,
@@ -101,6 +103,7 @@ def test_pessimistic_eu_round_trips_via_minutes(
     assert delta <= _DECIMAL_EPSILON * (Decimal(1) + abs(pessim * raw_minutes))
 
 
+@pytest.mark.slow
 @settings(max_examples=100, deadline=None)
 @given(
     duration_seconds=st.integers(min_value=0, max_value=86_400),
@@ -124,6 +127,7 @@ def test_segment_open_stop_round_trip_within_quantum(
     assert abs(actual_eu - expected_eu_value) <= quantum
 
 
+@pytest.mark.slow
 @settings(max_examples=100, deadline=None)
 @given(
     duration_seconds=st.integers(min_value=0, max_value=3_600),

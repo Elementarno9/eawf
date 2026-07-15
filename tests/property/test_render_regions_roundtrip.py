@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -31,6 +32,7 @@ surrounding = st.text(
 )
 
 
+@pytest.mark.slow
 @given(text=surrounding, region_id=ids, body=bodies)
 @settings(max_examples=200, deadline=None)
 def test_replace_region_roundtrip(text: str, region_id: str, body: str) -> None:
@@ -41,6 +43,7 @@ def test_replace_region_roundtrip(text: str, region_id: str, body: str) -> None:
     assert region.declared_hash == regions.compute_hash(body)
 
 
+@pytest.mark.slow
 @given(text=surrounding, region_id=ids, body=bodies)
 @settings(max_examples=200, deadline=None)
 def test_replace_idempotent(text: str, region_id: str, body: str) -> None:
@@ -49,6 +52,7 @@ def test_replace_idempotent(text: str, region_id: str, body: str) -> None:
     assert once == twice
 
 
+@pytest.mark.slow
 @given(region_id=ids, body=bodies)
 @settings(max_examples=200, deadline=None)
 def test_replace_changes_body(region_id: str, body: str) -> None:

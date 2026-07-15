@@ -60,6 +60,7 @@ def _make_state(server_id: str, env_ref: str) -> McpServer:
     )
 
 
+@pytest.mark.slow
 @given(env_var_name=_NAME_STRATEGY, secret_value=_SECRET_STRATEGY)
 @settings(
     max_examples=100,

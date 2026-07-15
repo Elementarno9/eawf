@@ -20,6 +20,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -199,6 +200,7 @@ def typed_envelopes_dict_body(draw: st.DrawFn) -> OutputEnvelope:
     )
 
 
+@pytest.mark.slow
 @given(env=typed_envelopes_string_body())
 @settings(max_examples=150, deadline=None)
 def test_typed_envelope_roundtrip_eq_string_body(env: OutputEnvelope) -> None:
@@ -211,6 +213,7 @@ def test_typed_envelope_roundtrip_eq_string_body(env: OutputEnvelope) -> None:
     assert parsed == env
 
 
+@pytest.mark.slow
 @given(env=typed_envelopes_string_body())
 @settings(max_examples=150, deadline=None)
 def test_typed_envelope_roundtrip_byte_stable_string_body(env: OutputEnvelope) -> None:
@@ -220,6 +223,7 @@ def test_typed_envelope_roundtrip_byte_stable_string_body(env: OutputEnvelope) -
     assert md1 == md2
 
 
+@pytest.mark.slow
 @given(env=typed_envelopes_dict_body())
 @settings(max_examples=150, deadline=None)
 def test_typed_envelope_roundtrip_eq_dict_body(env: OutputEnvelope) -> None:

@@ -36,6 +36,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -124,6 +125,7 @@ _ACTIONS = st.lists(
 )
 
 
+@pytest.mark.slow
 @settings(max_examples=300, deadline=None)
 @given(actions=_ACTIONS)
 def test_reference_history_ring_never_exceeds_cap(
@@ -143,6 +145,7 @@ def test_reference_history_ring_never_exceeds_cap(
         assert len(model.forward) <= REFERENCE_HISTORY_MAX
 
 
+@pytest.mark.slow
 @settings(max_examples=200, deadline=None)
 @given(
     targets=st.lists(

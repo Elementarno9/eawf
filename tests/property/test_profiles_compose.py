@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import cast
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -90,6 +91,7 @@ def _profile_list_strategy() -> st.SearchStrategy[list[ProfileBody]]:
 # Properties -----------------------------------------------------------------
 
 
+@pytest.mark.slow
 @given(profiles=_profile_list_strategy())
 @settings(max_examples=80, deadline=None)
 def test_compose_idempotent(profiles: list[ProfileBody]) -> None:
@@ -123,6 +125,7 @@ def test_compose_idempotent(profiles: list[ProfileBody]) -> None:
     }
 
 
+@pytest.mark.slow
 @given(profiles=_profile_list_strategy())
 @settings(max_examples=80, deadline=None)
 def test_compose_associative_for_pure_dict_profiles(
@@ -150,6 +153,7 @@ def test_compose_associative_for_pure_dict_profiles(
     assert fwd_kinds == swp_kinds
 
 
+@pytest.mark.slow
 @given(profiles=_profile_list_strategy())
 @settings(max_examples=80, deadline=None)
 def test_compose_provenance_complete(profiles: list[ProfileBody]) -> None:

@@ -124,6 +124,7 @@ def isolated_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return repo
 
 
+@pytest.mark.slow
 @given(
     kill_at=st.integers(min_value=0, max_value=len(_CORE_FLOW_ORDER) - 1),
     tamper=st.sampled_from(["none", "state", "git", "profile"]),

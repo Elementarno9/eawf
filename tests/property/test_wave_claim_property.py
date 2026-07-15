@@ -154,6 +154,7 @@ def _claim_in_thread(
         return 5
 
 
+@pytest.mark.slow
 @pytest.mark.property
 @given(claimer_count=st.integers(min_value=2, max_value=8))
 @settings(

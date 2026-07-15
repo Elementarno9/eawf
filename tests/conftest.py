@@ -8,9 +8,27 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
+import hypothesis
 import pytest
 
 from eawf.kernel.spec.intent import IntentBrief
+
+# --- Hypothesis CI example-budget profile (P30-I26-W22) --------------------
+#
+# ``register_profile("ci", ...)`` gives CI a low ``max_examples`` budget so
+# the Hypothesis-governed property tests -- the ones that do NOT pin their own
+# ``@settings(max_examples=...)`` -- run far fewer examples and the property
+# suite's wall-clock drops. Tests that DO pin an example count keep it; the
+# ``slow`` pytest marker is what deselects those heavy property tests under CI
+# instead. The ``dev`` profile is a stock-default copy so local ``pytest``
+# behaviour is unchanged beyond the profile registration itself.
+# ``HYPOTHESIS_PROFILE`` overrides the auto-selection when explicitly set.
+
+hypothesis.settings.register_profile("dev", hypothesis.settings())
+hypothesis.settings.register_profile("ci", hypothesis.settings(max_examples=25))
+hypothesis.settings.load_profile(
+    os.environ.get("HYPOTHESIS_PROFILE") or ("ci" if os.environ.get("CI") else "dev")
+)
 
 # --- suite daemon runtime-dir isolation (P30-I23-W14) ----------------------
 #

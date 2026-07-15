@@ -132,7 +132,7 @@ markers = [
     "tui: Textual TUI tests that mount widgets",
     "property: Hypothesis-driven property tests",
     "golden: golden-output regression tests",
-    "slow: long-running tests",
+    "slow: long-running tests (heavy Hypothesis property tests; deselect under CI with -m 'not slow')",
     "acceptance: phase-gate end-to-end acceptance scenarios",
     "eval: skill-dispatch golden-envelope regression suite (opt-in)",
     "golden_scenarios: end-to-end lifecycle golden-tree scenarios",

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -168,6 +169,7 @@ def envelopes(draw: st.DrawFn) -> OutputEnvelope:
     )
 
 
+@pytest.mark.slow
 @given(env=envelopes())
 @settings(max_examples=150, deadline=None)
 def test_envelope_roundtrip_eq(env: OutputEnvelope) -> None:
@@ -180,6 +182,7 @@ def test_envelope_roundtrip_eq(env: OutputEnvelope) -> None:
     assert parsed == env
 
 
+@pytest.mark.slow
 @given(env=envelopes())
 @settings(max_examples=150, deadline=None)
 def test_envelope_roundtrip_byte_stable(env: OutputEnvelope) -> None:

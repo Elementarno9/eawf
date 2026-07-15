@@ -28,6 +28,7 @@ json_value = st.recursive(
 )
 
 
+@pytest.mark.slow
 @given(payload=st.dictionaries(st.text(min_size=1, max_size=8), json_value, max_size=4))
 @settings(max_examples=300, deadline=None)
 def test_round_trip(tmp_path_factory: pytest.TempPathFactory, payload: dict) -> None:  # type: ignore[type-arg]

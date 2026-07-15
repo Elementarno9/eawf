@@ -115,6 +115,7 @@ def _define_goal_in_thread(
         return 4
 
 
+@pytest.mark.slow
 @pytest.mark.property
 @given(claimer_count=st.integers(min_value=2, max_value=8))
 @settings(
