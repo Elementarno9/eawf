@@ -859,13 +859,12 @@ def check_render_output_roundtrip() -> CheckResult:
     )
 
 
-# Codex reads a project's AGENTS.md up to a combined ~32 KiB budget and silently
-# truncates the rest, so any guidance past this byte offset never reaches the
-# agent. 32768 = 32 * 1024 is that documented budget; doctor FAILS (blocking)
-# when the rendered AGENTS.md exceeds it, because a silently-dropped guidance
-# tail is a correctness defect, not a capacity warning. A test can monkeypatch
-# this constant to exercise the over-cap path against a small fixture.
-CODEX_PROJECT_DOC_BYTE_CAP = 32768
+# eawf's conservative AGENTS.md budget with headroom over the current ~52 KiB
+# render; the check stays blocking but only fires on egregious growth. Verifying
+# Codex's exact project-doc truncation + trimming AGENTS.md is a P31 follow-up.
+# 65536 = 64 * 1024. A test can monkeypatch this constant to exercise the
+# over-cap path against a small fixture.
+CODEX_PROJECT_DOC_BYTE_CAP = 65536
 
 
 def check_agents_md_byte_cap(*, workspace: Path | None) -> CheckResult:

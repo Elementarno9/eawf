@@ -101,6 +101,7 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
         "launchd_agent",
         "runtime_dir_size",
         "render_output_roundtrip",
+        "agents_md_byte_cap",
         "project_record_present",
         "git_state_drift",
         "plugin_cross_scope_dup",

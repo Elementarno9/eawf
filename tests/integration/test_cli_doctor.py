@@ -97,6 +97,7 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "launchd_agent",
         "runtime_dir_size",
         "render_output_roundtrip",
+        "agents_md_byte_cap",
         "project_record_present",
         "plugin_cross_scope_dup",
         "git_state_drift",
