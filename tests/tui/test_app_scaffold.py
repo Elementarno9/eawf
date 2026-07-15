@@ -445,12 +445,12 @@ def test_state_binding_reconnects_when_push_stream_ends(
 
     asyncio.run(body())
     # W04: the first subscribe carries no cursor; the reconnect resumes from the
-    # last delivered event id (since=EV-live) so it does not re-request backlog.
+    # last delivered event id (since_event_id=EV-live) so it does not re-request backlog.
     # W25: neither subscribe narrows by scope_id (fleet events are wave-scoped).
     first = ("state.subscribe", {"kinds": ["event"]})
     reconnect = (
         "state.subscribe",
-        {"kinds": ["event"], "since": "EV-live"},
+        {"kinds": ["event"], "since_event_id": "EV-live"},
     )
     assert calls == [first, reconnect]
     assert seen_events
