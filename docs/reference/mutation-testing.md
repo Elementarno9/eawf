@@ -2,9 +2,11 @@
 
 Mutation testing for the four load-bearing "core" packages — `state/`, `lifecycle/`, `daemon/`, `validate/`. It complements the coverage gates: coverage proves a line *ran*, mutation testing proves a test would *fail* if that line were broken. The campaign runs as a **publish-not-block** CI job; the documented score target is **>= 70%**.
 
+> **Removed (2026-07-15) — pending a real owner.** The `mutation-core` job in `.github/workflows/ci.yaml` and the `[tool.mutmut]` config block in `pyproject.toml` were deleted. The job was publish-not-block (never a merge gate), its source-rewriting sandbox never ran this tree's suite end to end (see [Sandbox caveats](#sandbox-caveats)) so it published no reliable score, and it had no maintainer. The rest of this page is kept as a rebuild reference: restore `[tool.mutmut]` plus the CI job in one change once someone owns the sandbox fix.
+
 ## How it works
 
-[mutmut](https://mutmut.readthedocs.io/) rewrites small pieces of source (a `+` becomes `-`, a `>` becomes `>=`, a return value is replaced) one mutation at a time, then runs the test suite against each mutant. A mutant the suite catches is **killed**; one the suite still passes against **survived** — a survivor marks a behaviour no test pins down.
+mutmut [1] rewrites small pieces of source (a `+` becomes `-`, a `>` becomes `>=`, a return value is replaced) one mutation at a time, then runs the test suite against each mutant. A mutant the suite catches is **killed**; one the suite still passes against **survived** — a survivor marks a behaviour no test pins down.
 
 Configuration lives in `[tool.mutmut]` in `pyproject.toml`:
 
@@ -73,3 +75,9 @@ A surviving mutant is a missing or weak assertion. The fix is a test, not a conf
 3. Add or strengthen a test so the mutated behaviour fails, then re-run.
 
 Never weaken `do_not_mutate` or drop a package from `paths_to_mutate` to raise the score — that hides the gap instead of closing it.
+
+## References
+
+| Ref | Source |
+|---|---|
+| [1] | [mutmut documentation](https://mutmut.readthedocs.io/) |
