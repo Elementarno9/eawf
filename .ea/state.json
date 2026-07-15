@@ -12705,6 +12705,21 @@
       "status": "done",
       "updated_at": "2026-07-15T04:34:35.002243Z"
     },
+    "P30-I26-W23": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P30-I26-W23",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I26-W23",
+      "model": null,
+      "scope_id": "P30-I26-W23",
+      "status": "done",
+      "updated_at": "2026-07-15T04:38:56.497740Z"
+    },
     "P30-I26-W24": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13342,14 +13357,14 @@
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-07-15T04:38:56.093896Z",
       "id": "SES-20260715T042147Z-operator-generic",
       "role": "operator",
       "runtime": "generic",
       "scope_id": "P30",
       "started_at": "2026-07-15T04:21:47.352941Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -13954,6 +13969,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-10-A61-P30-i04-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P30-I04/ART-A61-P30-i04"
     },
+    "ART-P30-I22-ship": {
+      "created_at": "2026-07-15T04:38:18.217966Z",
+      "id": "ART-P30-I22-ship",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/store/audit.jsonl#A-P30-I22-ship",
+      "urn": "urn:eawf:v1:artifact:P30/ART-P30-I22-ship"
+    },
     "ART-audit-2026-05-28-p28-i03-deep-audit": {
       "created_at": "2026-05-28T17:20:28.291247Z",
       "id": "ART-audit-2026-05-28-p28-i03-deep-audit",
@@ -14247,6 +14272,17 @@
       "scope_id": "P30-I21",
       "status": "complete",
       "verdict": "minor"
+    },
+    "A-P30-I22-ship": {
+      "check_results": [],
+      "created_at": "2026-07-15T04:38:18.945357Z",
+      "id": "A-P30-I22-ship",
+      "integrity_results": [],
+      "kind": "ship-gate",
+      "report_artifact_id": "ART-P30-I22-ship",
+      "scope_id": "P30",
+      "status": "complete",
+      "verdict": "pass"
     },
     "A-P30-I24-eval": {
       "check_results": [],
@@ -17039,12 +17075,10 @@
   },
   "claims": null,
   "current": {
-    "active_session_ids": [
-      "SES-20260715T042147Z-operator-generic"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [],
-    "iter_id": "P30-I26",
-    "phase_id": "P30",
+    "iter_id": null,
+    "phase_id": null,
     "project_code": "EAWF",
     "track_id": null
   },
@@ -30869,6 +30903,19 @@
       "scope_id": "P30-I26-W22",
       "updated_at": "2026-07-15T04:34:34.107952Z"
     },
+    "P30-I26-W23": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I26-W23-bucket-20260715T043854Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I26-W23",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I26-W23",
+      "updated_at": "2026-07-15T04:38:54.848989Z"
+    },
     "P30-I26-W24": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I26-W24-bucket-20260715T015326Z",
@@ -33490,16 +33537,16 @@
       ]
     },
     "P30-I26": {
-      "audit_id": null,
+      "audit_id": "A-P30-I22-ship",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-07-15T04:39:56.294608Z",
       "description": "Frozen release-integrity iter that closes P30 as v0.6.0: reconcile the stale I21 lifecycle state, relabel or disable eight truth defects, delete seven no-op hooks, fix the degraded-banner CI blocker, land the measured test-suite reorg and CI-cost rework, then ship.",
       "estimate_id": null,
       "id": "P30-I26",
       "intent": null,
       "opened_at": "2026-07-14T22:50:49.335464Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Release-integrity repair and v0.6.0 ship",
       "trigger": "none",
       "wave_ids": [
@@ -33971,6 +34018,17 @@
       "status": "active",
       "store_record_id": "MEM-P30-I25-close-A-P30-I25-eval",
       "summary": "iter P30-I25 closed with audit A-P30-I25-eval; waves closed=53; outcomes P30-I25-W01: Runtime-generic close-on-report resolution pinned for codex + claude (parametrized watcher te... | P30-I25-W02: R3 fixed: _persist_live_session_attempt re-reads wave.status under the lock and drops the att... | P30-I25-W03: R4 fixed: _Loop._reap_orphan_claims at the drained-run seam fails each CLAIMED/IN_PROGRESS wa...",
+      "tier": "working"
+    },
+    "MEM-P30-I26-close-A-P30-I22-ship": {
+      "confidence": "high",
+      "id": "MEM-P30-I26-close-A-P30-I22-ship",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-07-15T04:39:56.294608Z",
+      "scope_id": "P30-I26",
+      "status": "active",
+      "store_record_id": "MEM-P30-I26-close-A-P30-I22-ship",
+      "summary": "iter P30-I26 closed with audit A-P30-I22-ship; waves closed=24; outcomes P30-I26-W01: reconnect cursor renamed since->since_event_id (daemon SubscribeParams extra=forbid); gapless... | P30-I26-W02: watch pause relabelled 'pause new dispatches'; ACTIVE precondition dropped; agent.kill preserved | P30-I26-W03: research steer relabelled 'queue note for next round'; auditor verdict pass; 151 tests green",
       "tier": "working"
     }
   },
@@ -34604,8 +34662,8 @@
       "track_id": null
     },
     "P30": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A-P30-I22-ship",
+      "closed_at": "2026-07-15T04:41:07.434049Z",
       "depends_on": [],
       "description": "v0.6. P29 built the machinery (3 spawn adapters, full sandbox, oracle tiers, the cross-vendor jury, metering, 8 audit-DSL kinds) but left most idle. P30 validates, calibrates, wires-on, and surfaces it across 15 iters.",
       "id": "P30",
@@ -34648,7 +34706,7 @@
         "2026-06-08-p30-pre-promotion-checklist",
         "2026-06-09-p30-coverage-finalization"
       ],
-      "status": "active",
+      "status": "closed",
       "title": "The binding pass — turn on what P29 built, prove it fires",
       "track_id": null
     }
@@ -34687,7 +34745,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-15T04:37:29.158576Z",
+  "updated_at": "2026-07-15T04:41:07.434294Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -144921,10 +144979,10 @@
     "P30-I26-W23": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "ops-p30-i26-finish",
+      "claimed_at": "2026-07-15T04:38:54.813905Z",
+      "closed_at": "2026-07-15T04:38:56.497740Z",
+      "commit": "2fd93a87e7fe7c8275351ce570f8e99f5691e49b",
       "criteria_floor_waiver": {
         "reason": "Falsifiable criteria + verification commands specified in .ea/local/research/2026-07-15-p30-i26-finish-plan.md; typed IntentBrief attached",
         "waived_at": "2026-07-14T22:57:31.813088Z",
@@ -144977,13 +145035,13 @@
       },
       "iter_id": "P30-I26",
       "opened_at": "2026-07-14T22:57:31.849757Z",
-      "outcome": null,
+      "outcome": "ship-gate audit A-P30-I22-ship minted (ship-gate, pass); full suite green on branch; phase-close ceremony rides the co-closing commit",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
