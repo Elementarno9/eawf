@@ -16988,6 +16988,32 @@
       "status": "open",
       "title": "Relabel the remaining research-steer honesty gaps"
     },
+    "B132": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-21T12:01:06.229556Z",
+      "description": "enable_profile validates against KNOWN_PROFILES, which _build_known_profiles derives from list_profiles() without a workspace argument - builtin bundle only. A new-id profile under .ea/profiles/ is discoverable by the loader union but cannot be enabled via the CLI. Pass the workspace root through the enable path so overlay ids resolve.",
+      "id": "B132",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "config profile enable rejects workspace-overlay profile ids"
+    },
+    "B133": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-21T12:01:07.017649Z",
+      "description": "sync composes via load_profile(p) with no workspace argument (sync.py ~line 278; known-ids check ~line 222 likewise), so .ea/profiles/ overlay render_blocks never reach AGENTS.md and a same-id overlay cannot override builtin render content. Thread the target workspace into list_profiles/load_profile in the sync path.",
+      "id": "B133",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "eawf sync ignores workspace profile overlays when composing"
+    },
     "B70": {
       "closed_at": null,
       "commit": null,
@@ -34745,7 +34771,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-15T04:41:07.434294Z",
+  "updated_at": "2026-07-21T12:01:07.017649Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
