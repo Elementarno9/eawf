@@ -2,7 +2,7 @@ acceptance:
   commands:
     build: null
     lint: null
-    tests: null
+    tests: just test
     typecheck: null
   required_before_ship:
   - state

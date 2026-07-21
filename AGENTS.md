@@ -568,3 +568,19 @@ Use named arguments over positional when a function takes three or more paramete
 Read each call site of a function with arity of three or more: arguments are passed by keyword. A function whose name implies a value but returns ``None`` on the happy path is reworked. mypy (``uv run mypy src/``) backs the explicit-return contract via full type hints.
 
 <!-- END EAWF:managed id=code-craft-explicit-over-implicit -->
+<!-- BEGIN EAWF:managed id=lean-wave-verification version=1.0 hash=6aba94ef59c31230 -->
+### Rationale
+
+Running the full test suite plus a fresh-context audit on every wave costs 10-30 minutes per wave and serializes iter execution, while the close gate's risk weighting already reserves the mandatory auditor for the high-risk band (L/XL effort, judgment roles, security scope, plus a 1-in-4 sample of mechanical waves). Verifying at the batch boundary — one exact-head pass per iter — catches integration defects at the same point the v0.7 target delivery model does (the exact-head Batch audit), for a fraction of the wall-clock.
+
+
+### Mechanism
+
+Wave success criteria name targeted tests only (``uv run pytest <touched paths>``) — never the full suite. A mechanical wave (S/M effort, executor role, non-security) closes on criteria + evidence alone; do not spawn a per-wave auditor beyond what the close gate itself requires. The full suite (the repo's acceptance ``tests`` command) and the single fresh-context audit run once per iter, at iter close, in this order: polish -> full suite -> one exact-head audit over the iter diff -> close. Any code change after that audit invalidates it; rerun the audit once. Nonblocking audit findings become backlog items (``eawf backlog add``), never new waves on the closing iter; a blocker gets one repair wave appended to the same iter, affected tests, and one re-audit; a second repair cycle stops the iter for an operator split/defer decision. Exceptions that keep the wave-level full-tree gauntlet: persisted-schema / migration waves and security-scoped waves.
+
+
+### Verification
+
+A closed mechanical wave shows no full-suite run and no unforced auditor session in its evidence; the iter close shows exactly one full-suite run and one audit bound to the closing head SHA. Audit findings resolve to backlog rows or a single appended repair wave — an iter that needed a second repair cycle was stopped and split, not extended.
+
+<!-- END EAWF:managed id=lean-wave-verification -->
