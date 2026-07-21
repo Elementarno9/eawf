@@ -12,6 +12,9 @@ plus a pointer to the decisions that ratified them:
 - **ADR pointer** — names Decision D10 (one-PR-per-phase cadence) + D07
   (rebase-merge) and the canonical ``docs/architecture/workflow.md`` reference
   so the divergence is auditable and reversible.
+- **lean wave verification** — targeted tests per wave; the full suite plus
+  the single fresh-context audit run once per iter at close (batch-boundary
+  verification, mirroring the v0.7 exact-head Batch audit).
 
 The contracts under test mirror the W02 ``quality`` profile suite:
 
@@ -44,6 +47,7 @@ _DIVERGENCE_BLOCK_IDS = {
     "agent-driven-phase-equals-release",
     "agent-driven-large-phase-pr",
     "agent-driven-cadence-adr-pointer",
+    "lean-wave-verification",
 }
 
 
@@ -52,7 +56,7 @@ def test_agent_driven_profile_loads_and_validates() -> None:
     body = load_profile(_PROFILE_ID)
     assert isinstance(body, ProfileBody)
     assert body.name == _PROFILE_ID
-    assert body.version == "1.0"
+    assert body.version == "1.1"
     # The cadence profile carries no state extensions or instrument needs.
     assert body.state_extensions.fields_required == []
     assert body.instrument_requirements == []
