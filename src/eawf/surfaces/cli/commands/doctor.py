@@ -734,9 +734,13 @@ def doctor(
         _maybe_clear_cache(effective_flags.workspace)
 
     try:
+        reserved_config_result = doctor_checks.check_reserved_config_keys(
+            workspace=effective_flags.workspace
+        )
         results = doctor_checks.run_all(
             workspace=effective_flags.workspace,
             reprobe=reprobe,
+            reserved_config_result=reserved_config_result,
         )
     except UserError as exc:
         emit_error(exc, flags=effective_flags)

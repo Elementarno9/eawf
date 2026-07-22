@@ -119,6 +119,58 @@ def test_set_overrides_built_in_via_repo_layer(repo_root: Path) -> None:
     assert body == {"key": "estimation.eu_minutes", "value": 60, "source": "repo"}
 
 
+# --- config unset ----------------------------------------------------------
+
+
+def test_unset_removes_known_repo_leaf_and_prunes_parent(repo_root: Path) -> None:
+    config_path = repo_root / ".ea" / "config.yaml"
+    config_path.write_text("audit:\n  fix_safe: true\nvcs:\n  auto_commit: false\n")
+
+    result = runner.invoke(
+        app,
+        ["--json", "config", "unset", "audit.fix_safe", "--scope", "repo"],
+        env={"EAWF_DAEMONLESS": "1"},
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["removed"] is True
+    assert yaml.safe_load(config_path.read_text()) == {"vcs": {"auto_commit": False}}
+
+
+def test_unset_absent_known_leaf_is_noop(repo_root: Path) -> None:
+    config_path = repo_root / ".ea" / "config.yaml"
+    config_path.write_text("vcs:\n  auto_commit: false\n")
+    before = config_path.read_bytes()
+
+    result = runner.invoke(
+        app,
+        ["--json", "config", "unset", "audit.fix_safe", "--scope", "repo"],
+        env={"EAWF_DAEMONLESS": "1"},
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["removed"] is False
+    assert config_path.read_bytes() == before
+
+
+def test_unset_rejects_unknown_or_locked_leaf(repo_root: Path) -> None:
+    unknown = runner.invoke(
+        app,
+        ["config", "unset", "not.real", "--scope", "repo"],
+        env={"EAWF_DAEMONLESS": "1"},
+    )
+    locked = runner.invoke(
+        app,
+        ["config", "unset", "schema_version", "--scope", "repo"],
+        env={"EAWF_DAEMONLESS": "1"},
+    )
+
+    assert unknown.exit_code == 1
+    assert "unknown config key" in unknown.output
+    assert locked.exit_code == 1
+    assert "not writable from the repo" in locked.output
+
+
 # --- built-in is read-only --------------------------------------------------
 
 
@@ -184,6 +236,30 @@ def test_validate_exits_4_when_required_section_overwritten_with_scalar(
     (repo_root / ".ea" / "config.yaml").write_text("planning: not_a_mapping\n", encoding="utf-8")
     result = runner.invoke(app, ["config", "validate"])
     assert result.exit_code == 2, result.output
+
+
+def test_validate_rejects_unknown_verify_waiver_mode(repo_root: Path) -> None:
+    (repo_root / ".ea" / "config.yaml").write_text(
+        "verify:\n  waiver_mode: Disable\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["config", "validate"])
+
+    assert result.exit_code == 2, result.output
+    assert "waiver_mode" in result.output
+
+
+def test_validate_rejects_non_string_verify_waiver_mode(repo_root: Path) -> None:
+    (repo_root / ".ea" / "config.yaml").write_text(
+        "verify:\n  waiver_mode: true\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["config", "validate"])
+
+    assert result.exit_code == 2, result.output
+    assert "waiver_mode" in result.output
 
 
 # --- profile enable ---------------------------------------------------------

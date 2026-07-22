@@ -54,6 +54,7 @@ logger = logging.getLogger(__name__)
 _RAW_RPC_MUTATING_PREFIXES: tuple[str, ...] = (
     "state.mutate",
     "config.set_layer_value",
+    "config.unset_layer_value",
     "registry.update",
     "spec.init",
     "spec.promote",

@@ -26,8 +26,8 @@ runner = CliRunner()
 
 
 @pytest.fixture(autouse=True)
-def _no_supervised_agent(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Stub the launchd/systemd detector so the host's real agent never leaks in."""
+def _sandbox_host_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep host daemon and global config state out of doctor tests."""
     from eawf.runtime.daemon.service_install import SupervisedAgentReport
 
     report = SupervisedAgentReport(
@@ -42,6 +42,10 @@ def _no_supervised_agent(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "eawf.runtime.daemon.service_install.detect_supervised_agent",
         lambda *_a, **_k: report,
+    )
+    monkeypatch.setattr(
+        "eawf.kernel.config.layered.global_config_path",
+        lambda: tmp_path / "global-config.yaml",
     )
 
 
@@ -89,6 +93,7 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "tools_available",
         "state_present",
         "config_resolves",
+        "reserved_config_key",
         "manifest_in_sync",
         "mcp_drift",
         "state_scale_ceiling",
@@ -102,6 +107,46 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "plugin_cross_scope_dup",
         "git_state_drift",
     }
+
+
+def test_doctor_real_yaml_fails_truthy_reserved_auto_accept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
+    monkeypatch.chdir(tmp_path)
+    _seed_state(tmp_path)
+    (tmp_path / ".ea" / "config.yaml").write_text(
+        "flow:\n  auto_accept:\n    prep: true\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["--json", "-w", str(tmp_path), "doctor"])
+
+    assert result.exit_code == 1, result.output
+    body = json.loads(result.output)
+    finding = next(check for check in body["checks"] if check["name"] == "reserved_config_key")
+    assert finding["status"] == "fail"
+    assert "flow.auto_accept.prep" in finding["detail"]
+
+
+def test_doctor_real_yaml_warns_benign_reserved_value(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
+    monkeypatch.chdir(tmp_path)
+    _seed_state(tmp_path)
+    (tmp_path / ".ea" / "config.yaml").write_text(
+        "flow:\n  max_repair_cycles: 2\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["--json", "-w", str(tmp_path), "doctor"])
+
+    assert result.exit_code == 0, result.output
+    body = json.loads(result.output)
+    finding = next(check for check in body["checks"] if check["name"] == "reserved_config_key")
+    assert finding["status"] == "warn"
+    assert "flow.max_repair_cycles=2 (repo)" in finding["detail"]
 
 
 def test_doctor_reprobe_clears_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

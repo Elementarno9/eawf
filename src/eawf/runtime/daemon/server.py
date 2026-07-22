@@ -33,7 +33,7 @@ import orjson
 
 # Import to ensure handlers register before dispatch runs.
 import eawf.runtime.daemon.methods.agent
-import eawf.runtime.daemon.methods.config  # registers config.read / set_layer_value / list_layers
+import eawf.runtime.daemon.methods.config  # registers config read/write methods
 import eawf.runtime.daemon.methods.daemon
 import eawf.runtime.daemon.methods.event
 import eawf.runtime.daemon.methods.evidence  # registers evidence.append (P28-I01-W04)

@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.surfaces.tui.app import EaApp, _persisted_theme
+from eawf.surfaces.tui.app import EaApp, _persisted_glyphs, _persisted_theme
 from eawf.surfaces.tui.palette.verbs import _handle_theme
 from eawf.surfaces.tui.theme import EA_CB, EA_DARK, EA_LIGHT, resolve_theme_name
 
@@ -246,6 +246,21 @@ def test_persisted_theme_ignores_unrecognised_persisted_value(
 
     _save_value_to_layer(target_path=_tmp_global_config, key="ui.theme", value="not-a-theme")
     assert _persisted_theme() == "dark"
+
+
+def test_persisted_ui_consumers_honor_explicit_repo_anchor(
+    tmp_path: Path, _tmp_global_config: Path
+) -> None:
+    repo = tmp_path / "repo"
+    config_path = repo / ".ea" / "config.yaml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        "ui:\n  glyphs: ascii\n  theme: light\n",
+        encoding="utf-8",
+    )
+
+    assert _persisted_glyphs(repo) == "ascii"
+    assert _persisted_theme(repo) == "light"
 
 
 # --------------------------------------------------------------------------

@@ -533,7 +533,7 @@ def test_eaapp_render_mode_falls_back_to_ascii_on_font_no_braille(
     # MOUNT probes coverage; FONT_NO_BRAILLE flips render_mode to ascii and
     # rerenders every mounted bar as #/-.
     monkeypatch.setenv("FONT_NO_BRAILLE", "1")
-    monkeypatch.setattr(eaapp_mod, "_persisted_glyphs", lambda: "auto")
+    monkeypatch.setattr(eaapp_mod, "_persisted_glyphs", lambda _repo_root=None: "auto")
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_EMPTY_REPO)
@@ -552,7 +552,7 @@ def test_eaapp_render_mode_unicode_when_coverage_ok(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("FONT_NO_BRAILLE", raising=False)
-    monkeypatch.setattr(eaapp_mod, "_persisted_glyphs", lambda: "auto")
+    monkeypatch.setattr(eaapp_mod, "_persisted_glyphs", lambda _repo_root=None: "auto")
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_EMPTY_REPO)
@@ -572,7 +572,7 @@ def test_eaapp_render_mode_ascii_when_glyphs_ascii(
 ) -> None:
     # ui.glyphs=ascii pins ascii even when the coverage probe would pass.
     monkeypatch.delenv("FONT_NO_BRAILLE", raising=False)
-    monkeypatch.setattr(eaapp_mod, "_persisted_glyphs", lambda: "ascii")
+    monkeypatch.setattr(eaapp_mod, "_persisted_glyphs", lambda _repo_root=None: "ascii")
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_EMPTY_REPO)

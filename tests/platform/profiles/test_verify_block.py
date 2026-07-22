@@ -31,7 +31,11 @@ from eawf.platform.profiles import (
 )
 from eawf.workflow.lifecycle.waivers import DEFAULT_WAIVER_MODE, resolve_waiver_mode
 from eawf.workflow.verify.compile import compile_floor_pack
-from eawf.workflow.verify.readiness import _merge_verify_blocks, resolve_wave_verify_block
+from eawf.workflow.verify.readiness import (
+    _merge_verify_blocks,
+    _overlay_repo_verify_leaves,
+    resolve_wave_verify_block,
+)
 
 # ---- AuditCadence 5-value enum ---------------------------------------------
 
@@ -807,6 +811,96 @@ def test_merge_verify_blocks_preserves_the_odr_dials_and_jury_authority() -> Non
     assert merged.jury_authority == authority
 
 
+def test_merge_verify_blocks_or_folds_iter_audit_requirement() -> None:
+    merged = _merge_verify_blocks(
+        [
+            VerifyBlock(require_iter_audit_accepted=True),
+            VerifyBlock(require_iter_audit_accepted=False),
+        ]
+    )
+
+    assert merged is not None
+    assert merged.require_iter_audit_accepted is True
+
+
+@pytest.mark.parametrize(
+    "blocks",
+    [
+        [VerifyBlock(waiver_mode="disabled"), VerifyBlock(waiver_mode="A")],
+        [VerifyBlock(waiver_mode="C"), VerifyBlock(waiver_mode="disabled")],
+    ],
+)
+def test_merge_verify_blocks_disabled_waiver_is_absorbing(blocks: list[VerifyBlock]) -> None:
+    merged = _merge_verify_blocks(blocks)
+
+    assert merged is not None
+    assert merged.waiver_mode == "disabled"
+
+
+def test_overlay_repo_verify_leaves_preserves_profile_values_when_defaults_are_builtin() -> None:
+    block = VerifyBlock(waiver_mode="C", juror_wall_clock_seconds=1800.0)
+    merged = {
+        "verify": {
+            "odr_blocking": False,
+            "require_iter_audit_accepted": False,
+            "waiver_mode": "B",
+        }
+    }
+    source_map = {
+        "verify.odr_blocking": "built-in",
+        "verify.require_iter_audit_accepted": "built-in",
+        "verify.waiver_mode": "built-in",
+    }
+
+    resolved = _overlay_repo_verify_leaves(block, merged, source_map=source_map)
+
+    assert resolved is not None
+    assert resolved.waiver_mode == "C"
+    assert resolved.juror_wall_clock_seconds == pytest.approx(1800.0)
+
+
+def test_overlay_repo_verify_leaves_tightens_audit_and_disables_waivers() -> None:
+    block = VerifyBlock(require_iter_audit_accepted=False, waiver_mode="A")
+    merged = {
+        "verify": {
+            "odr_blocking": False,
+            "require_iter_audit_accepted": True,
+            "waiver_mode": "disabled",
+        }
+    }
+    source_map = {
+        "verify.odr_blocking": "built-in",
+        "verify.require_iter_audit_accepted": "repo",
+        "verify.waiver_mode": "repo",
+    }
+
+    resolved = _overlay_repo_verify_leaves(block, merged, source_map=source_map)
+
+    assert resolved is not None
+    assert resolved.require_iter_audit_accepted is True
+    assert resolved.waiver_mode == "disabled"
+
+
+def test_overlay_repo_verify_leaves_cannot_loosen_disabled_profile() -> None:
+    block = VerifyBlock(waiver_mode="disabled")
+    merged = {
+        "verify": {
+            "odr_blocking": False,
+            "require_iter_audit_accepted": False,
+            "waiver_mode": "A",
+        }
+    }
+
+    resolved = _overlay_repo_verify_leaves(
+        block,
+        merged,
+        source_map={"verify.waiver_mode": "repo"},
+    )
+
+    assert resolved is not None
+    assert resolved.waiver_mode == "disabled"
+
+
 def test_merge_verify_blocks_covers_every_field_on_the_model() -> None:
     """No field may be added to VerifyBlock without being merged.
 
@@ -828,6 +922,7 @@ def test_merge_verify_blocks_covers_every_field_on_the_model() -> None:
         jury_vendors=["claude"],
         odr_floor=0.55,
         odr_blocking=True,
+        require_iter_audit_accepted=True,
         jury_authority=JuryAuthorityConfig(min_labeled_waves=42),
         checkpoint=CheckpointBlock(checkpoint_mode="barrier"),
     )

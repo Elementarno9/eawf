@@ -31,7 +31,7 @@ from pydantic import ValidationError
 from eawf.kernel.config import layered
 from eawf.kernel.config.defaults import BUILT_IN_DEFAULTS
 from eawf.kernel.config.layered import LAYER_ORDER, merge_config
-from eawf.kernel.config.schema import EstimationConfig
+from eawf.kernel.config.schema import EstimationConfig, VerifyConfig
 
 
 @pytest.fixture(autouse=True)
@@ -116,6 +116,16 @@ def test_only_builtin_layer_contributes_for_empty_stack() -> None:
         "cadence": "manual",
         "agent_driven": "per-phase",
     }
+    assert merged["verify"] == {
+        "juror_wall_clock_seconds": 600.0,
+        "odr_blocking": False,
+        "require_iter_audit_accepted": False,
+        "waiver_mode": "B",
+    }
+    assert sources["verify.juror_wall_clock_seconds"] == "built-in"
+    assert sources["verify.odr_blocking"] == "built-in"
+    assert sources["verify.require_iter_audit_accepted"] == "built-in"
+    assert sources["verify.waiver_mode"] == "built-in"
 
 
 # --- Layer precedence -------------------------------------------------------
@@ -154,6 +164,43 @@ def test_repo_overrides_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     merged, sources = merge_config(workspace=workspace, repo=repo, env={}, cli_overrides={})
     assert merged["planning"]["approval"] == "repo"
     assert sources["planning.approval"] == "repo"
+
+
+def test_verify_strict_leaves_report_source_layer(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _write_yaml(
+        repo / ".ea" / "config.yaml",
+        (
+            "verify:\n"
+            "  juror_wall_clock_seconds: 900\n"
+            "  odr_blocking: true\n"
+            "  require_iter_audit_accepted: true\n"
+            "  waiver_mode: disabled\n"
+        ),
+    )
+
+    merged, sources = merge_config(workspace=None, repo=repo, env={}, cli_overrides={})
+
+    verify = VerifyConfig.model_validate(merged["verify"])
+    assert verify.juror_wall_clock_seconds == pytest.approx(900.0)
+    assert verify.odr_blocking is True
+    assert verify.require_iter_audit_accepted is True
+    assert verify.waiver_mode == "disabled"
+    assert sources["verify.juror_wall_clock_seconds"] == "repo"
+    assert sources["verify.odr_blocking"] == "repo"
+    assert sources["verify.require_iter_audit_accepted"] == "repo"
+    assert sources["verify.waiver_mode"] == "repo"
+
+
+@pytest.mark.parametrize("value", ["disable", "DISABLED", 1, True, None])
+def test_verify_config_rejects_invalid_waiver_mode(value: object) -> None:
+    with pytest.raises(ValidationError):
+        VerifyConfig.model_validate({"waiver_mode": value})
+
+
+def test_verify_config_rejects_unknown_field() -> None:
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        VerifyConfig.model_validate({"require_iter_audit_acceptd": True})
 
 
 def test_local_overrides_repo(tmp_path: Path) -> None:

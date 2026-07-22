@@ -229,7 +229,10 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
     # default keeps the floor advisory); a layer can only tighten -- the
     # overlay ORs onto the profile block, never loosens it.
     "verify": {
+        "juror_wall_clock_seconds": 600.0,
         "odr_blocking": False,
+        "require_iter_audit_accepted": False,
+        "waiver_mode": "B",
     },
     "prose": {
         "level": "standard",

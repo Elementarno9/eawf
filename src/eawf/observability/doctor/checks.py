@@ -37,8 +37,9 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from eawf.kernel.config.layered import merge_config
+from eawf.kernel.config.layered import get_dotted, merge_config
 from eawf.kernel.config.profile import KNOWN_PROFILES
+from eawf.kernel.config.registry import LEAF_KEY_REGISTRY
 from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.platform.install.instrument_probe import probe
 from eawf.surfaces.render.agents_md import measure_agents_md_byte_cap
@@ -282,6 +283,72 @@ def check_config_resolves(*, workspace: Path | None) -> CheckResult:
         name="config_resolves",
         status="ok",
         detail=f"{len(enabled_profiles)} profile(s) enabled",
+    )
+
+
+def _reserved_value_is_unsupported(key: str, value: object) -> bool:
+    """Return whether a reserved value claims unsafe automation behaviour."""
+    return (
+        (key == "planning.auto_plan" and value is True)
+        or (key == "planning.approval" and value == "auto")
+        or (key == "audit.fix_safe" and value is True)
+        or (key.startswith("flow.auto_accept.") and value is True)
+    )
+
+
+def check_reserved_config_keys(*, workspace: Path | None) -> CheckResult:
+    """Report explicitly configured leaves that have no production effect."""
+    anchor = _resolve_anchor(workspace)
+    if anchor is None:
+        return CheckResult(
+            name="reserved_config_key",
+            status="ok",
+            detail="no workspace anchor; no reserved repo config to inspect",
+        )
+    try:
+        merged, sources = merge_config(repo=anchor, workspace=anchor)
+    except Exception as exc:
+        return CheckResult(
+            name="reserved_config_key",
+            status="warn",
+            detail=f"reserved config inspection skipped: {exc}",
+        )
+
+    configured: list[tuple[str, object, str]] = []
+    for key, entry in LEAF_KEY_REGISTRY.items():
+        source = sources.get(key)
+        if not entry.reserved or source is None or source == "built-in":
+            continue
+        try:
+            value = get_dotted(merged, key)
+        except KeyError:
+            continue
+        configured.append((key, value, source))
+
+    if not configured:
+        return CheckResult(
+            name="reserved_config_key",
+            status="ok",
+            detail="no reserved config keys explicitly set",
+        )
+
+    rendered = ", ".join(f"{key}={value!r} ({source})" for key, value, source in configured)
+    unsupported = [
+        key for key, value, _source in configured if _reserved_value_is_unsupported(key, value)
+    ]
+    if unsupported:
+        return CheckResult(
+            name="reserved_config_key",
+            status="fail",
+            detail=(
+                f"unsupported auto-approval or auditor mutation setting(s): "
+                f"{', '.join(unsupported)}; reserved values have no effect; configured: {rendered}"
+            ),
+        )
+    return CheckResult(
+        name="reserved_config_key",
+        status="warn",
+        detail=f"reserved config value(s) have no effect: {rendered}",
     )
 
 
@@ -979,6 +1046,7 @@ def run_all(
     profile_ids: list[str] | None = None,
     reprobe: bool = False,
     cache_path: Path | None = None,
+    reserved_config_result: CheckResult | None = None,
 ) -> list[CheckResult]:
     """Run every doctor check and return the result list.
 
@@ -1010,6 +1078,11 @@ def run_all(
         ),
         check_state_present(workspace=workspace),
         check_config_resolves(workspace=workspace),
+        (
+            reserved_config_result
+            if reserved_config_result is not None
+            else check_reserved_config_keys(workspace=workspace)
+        ),
         check_manifest_in_sync(workspace=anchor),
         check_mcp_drift(workspace=anchor),
         check_state_scale_ceiling(workspace=anchor),

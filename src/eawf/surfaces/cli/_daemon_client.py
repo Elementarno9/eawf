@@ -382,6 +382,25 @@ class DaemonClient:
             params["repo_root"] = repo_root
         return self.call("config.set_layer_value", params)
 
+    def config_unset_layer_value(
+        self,
+        *,
+        layer: str,
+        key_path: list[str],
+        idempotency_key: str | None = None,
+        repo_root: str | None = None,
+    ) -> dict[str, Any]:
+        """Proxy a layered-config removal through ``config.unset_layer_value``."""
+        params: dict[str, Any] = {
+            "layer": layer,
+            "key_path": list(key_path),
+        }
+        if idempotency_key is not None:
+            params["idempotency_key"] = idempotency_key
+        if repo_root is not None:
+            params["repo_root"] = repo_root
+        return self.call("config.unset_layer_value", params)
+
     def registry_update(
         self,
         *,

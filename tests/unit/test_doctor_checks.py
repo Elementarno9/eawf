@@ -112,6 +112,125 @@ def test_check_config_resolves_unknown_profile_warns(
     assert "bogus" in (result.detail or "")
 
 
+def test_check_reserved_config_keys_without_workspace_is_ok(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    result = checks.check_reserved_config_keys(workspace=None)
+
+    assert result.name == "reserved_config_key"
+    assert result.status == "ok"
+    assert "no workspace anchor" in (result.detail or "")
+
+
+def test_check_reserved_config_keys_without_explicit_value_is_ok(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "eawf.observability.doctor.checks.merge_config",
+        lambda **_: ({"planning": {"auto_plan": False}}, {"planning.auto_plan": "built-in"}),
+    )
+
+    result = checks.check_reserved_config_keys(workspace=tmp_path)
+
+    assert result.status == "ok"
+    assert "no reserved config keys explicitly set" in (result.detail or "")
+
+
+@pytest.mark.parametrize(
+    ("key", "config", "value"),
+    [
+        ("planning.auto_plan", {"planning": {"auto_plan": True}}, True),
+        ("planning.approval", {"planning": {"approval": "auto"}}, "auto"),
+        ("audit.fix_safe", {"audit": {"fix_safe": True}}, True),
+        ("flow.auto_accept.audit", {"flow": {"auto_accept": {"audit": True}}}, True),
+        ("flow.auto_accept.polish", {"flow": {"auto_accept": {"polish": True}}}, True),
+        ("flow.auto_accept.prep", {"flow": {"auto_accept": {"prep": True}}}, True),
+        ("flow.auto_accept.research", {"flow": {"auto_accept": {"research": True}}}, True),
+        ("flow.auto_accept.review", {"flow": {"auto_accept": {"review": True}}}, True),
+        ("flow.auto_accept.ship", {"flow": {"auto_accept": {"ship": True}}}, True),
+    ],
+)
+def test_check_reserved_config_keys_fails_unsafe_automation_claims(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    key: str,
+    config: dict[str, object],
+    value: object,
+) -> None:
+    monkeypatch.setattr(
+        "eawf.observability.doctor.checks.merge_config",
+        lambda **_: (config, {key: "repo"}),
+    )
+
+    result = checks.check_reserved_config_keys(workspace=tmp_path)
+
+    assert result.status == "fail"
+    assert key in (result.detail or "")
+    assert repr(value) in (result.detail or "")
+    assert "have no effect" in (result.detail or "")
+
+
+def test_check_reserved_config_keys_warns_for_other_explicit_reserved_value(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "eawf.observability.doctor.checks.merge_config",
+        lambda **_: (
+            {"flow": {"max_repair_cycles": 3}},
+            {"flow.max_repair_cycles": "repo"},
+        ),
+    )
+
+    result = checks.check_reserved_config_keys(workspace=tmp_path)
+
+    assert result.status == "warn"
+    assert "flow.max_repair_cycles=3 (repo)" in (result.detail or "")
+    assert "have no effect" in (result.detail or "")
+
+
+def test_check_reserved_config_keys_reports_all_unsafe_repo_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "eawf.observability.doctor.checks.merge_config",
+        lambda **_: (
+            {
+                "audit": {"fix_safe": True},
+                "planning": {"auto_plan": True},
+            },
+            {
+                "audit.fix_safe": "repo",
+                "planning.auto_plan": "repo",
+            },
+        ),
+    )
+
+    result = checks.check_reserved_config_keys(workspace=tmp_path)
+
+    assert result.status == "fail"
+    assert "audit.fix_safe" in (result.detail or "")
+    assert "planning.auto_plan" in (result.detail or "")
+
+
+def test_check_reserved_config_keys_warns_when_merge_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def raise_merge_error(**_: object) -> tuple[dict[str, object], dict[str, str]]:
+        raise ValueError("broken overlay")
+
+    monkeypatch.setattr(
+        "eawf.observability.doctor.checks.merge_config",
+        raise_merge_error,
+    )
+
+    result = checks.check_reserved_config_keys(workspace=tmp_path)
+
+    assert result.status == "warn"
+    assert "broken overlay" in (result.detail or "")
+
+
 def _stub_state_with_wave_count(monkeypatch: pytest.MonkeyPatch, count: int) -> None:
     """Force ``check_state_scale_ceiling`` to see a state of *count* waves.
 
@@ -225,11 +344,12 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.setenv("EAWF_RUNTIME_DIR", str(tmp_path / "eawfd"))
     monkeypatch.chdir(tmp_path)
     results = checks.run_all(workspace=tmp_path)
-    assert len(results) == 12
+    assert len(results) == 13
     assert {r.name for r in results} == {
         "tools_available",
         "state_present",
         "config_resolves",
+        "reserved_config_key",
         "manifest_in_sync",
         "mcp_drift",
         "state_scale_ceiling",

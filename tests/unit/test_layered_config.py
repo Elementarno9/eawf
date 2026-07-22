@@ -13,6 +13,7 @@ Covers the wave's success criteria 1, 2, and 3:
 
 from __future__ import annotations
 
+import pydoc
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -26,8 +27,10 @@ from eawf.kernel.config.layered import (
     branch_config_path,
     merge_config,
     resolve_runtime_tier_models,
+    unset_dotted,
 )
 from eawf.kernel.config.registry import (
+    CONFIG_REGISTRY,
     LEAF_KEY_REGISTRY,
     LeafKey,
     is_known_leaf_key,
@@ -336,6 +339,85 @@ def test_leaf_key_registry_includes_canonical_c08_keys() -> None:
     assert "project.default_subproject" not in LEAF_KEY_REGISTRY
 
 
+def test_behavioral_config_leaves_have_exactly_one_binding() -> None:
+    """Every interactive and hooks policy leaf is consumed or explicitly reserved."""
+    behavior_keys = {entry.key for entry in CONFIG_REGISTRY} | {
+        key for key in LEAF_KEY_REGISTRY if key.startswith("hooks.")
+    }
+    for key in behavior_keys:
+        entry = leaf_key_lookup(key)
+        assert (entry.consumer is not None) ^ entry.reserved, key
+
+
+_EXPECTED_CONFIG_CONSUMERS: dict[str, str] = {
+    "audit.default_level": "eawf.workflow.skills.audit._resolve_level",
+    "daemon.proxy_enabled": "eawf.surfaces.cli._mutation._proxy_enabled",
+    "dispatch.role_tier_token_cap": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
+    "estimation.eu_basis": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
+    "estimation.eu_minutes": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
+    "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_enforce",
+    "prep.auto_resume": "eawf.workflow.skills.prep.PrepSkill._resolve_auto_resume",
+    "research.agent_count": "eawf.workflow.skills.research.ResearchSkill._resolve_agents",
+    "research.default_depth": "eawf.workflow.skills.research.ResearchSkill._resolve_depth",
+    "ship.gauntlet": "eawf.workflow.skills.ship._resolve_gauntlet",
+    "telemetry.db_kind": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
+    "telemetry.enabled": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
+    "ui.glyphs": "eawf.surfaces.tui.app._persisted_glyphs",
+    "ui.theme": "eawf.surfaces.tui.app._persisted_theme",
+    "vcs.conventions.release.cadence": (
+        "eawf.runtime.vcs.coauthor.requires_phase_release_preflight"
+    ),
+    "verify.waiver_mode": "eawf.workflow.lifecycle.waivers.resolve_waiver_mode",
+}
+
+_EXPECTED_CATALOG_ONLY_CONSUMERS: dict[str, str] = {
+    "verify.juror_wall_clock_seconds": (
+        "eawf.workflow.verify.readiness._overlay_repo_verify_leaves"
+    ),
+    "verify.odr_blocking": "eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
+}
+
+
+def test_config_consumer_set_is_exact_and_importable() -> None:
+    """Every claimed consumer names the exact callable that reads or applies the leaf."""
+    actual = {
+        key: entry.consumer
+        for key, entry in LEAF_KEY_REGISTRY.items()
+        if entry.consumer is not None
+    }
+
+    expected = _EXPECTED_CONFIG_CONSUMERS | _EXPECTED_CATALOG_ONLY_CONSUMERS
+    assert actual == expected
+    assert len(actual) == 18
+    assert {
+        key: value for key, value in actual.items() if key in {row.key for row in CONFIG_REGISTRY}
+    } == _EXPECTED_CONFIG_CONSUMERS
+    for key, consumer in actual.items():
+        resolved = pydoc.locate(consumer)
+        assert resolved is not None, (key, consumer)
+        assert callable(resolved), (key, consumer, resolved)
+
+
+def test_reserved_config_leaf_set_is_exact() -> None:
+    behavior_keys = {entry.key for entry in CONFIG_REGISTRY} | {
+        key for key in LEAF_KEY_REGISTRY if key.startswith("hooks.")
+    }
+    expected = behavior_keys - _EXPECTED_CONFIG_CONSUMERS.keys()
+    reserved = {key for key, entry in LEAF_KEY_REGISTRY.items() if entry.reserved}
+
+    assert len(expected) == 65
+    assert reserved == expected
+    assert {
+        "audit.fix_safe",
+        "flow.max_repair_cycles",
+        "planning.approval",
+        "planning.auto_plan",
+        "planning.max_parallel_waves",
+        "ship.require_audit_pass",
+        "verify.require_iter_audit_accepted",
+    } <= reserved
+
+
 def test_leaf_key_lookup_known_key_returns_entry() -> None:
     entry = leaf_key_lookup("runtime.preference")
     assert isinstance(entry, LeafKey)
@@ -393,6 +475,38 @@ def test_leaf_key_choices_empty_rejected() -> None:
             writable_layers=(),
             choices=(),
         )
+
+
+def test_leaf_key_rejects_consumer_and_reserved_together() -> None:
+    with pytest.raises(ValueError, match="both consumer and reserved"):
+        LeafKey(
+            key="bogus.behavior",
+            domain="example",
+            type="bool",
+            default=False,
+            consumer="example.consume",
+            reserved=True,
+        )
+
+
+def test_unset_dotted_removes_leaf_and_prunes_empty_maps() -> None:
+    payload = {"verify": {"waiver_mode": "B"}, "planning": {"max_parallel_waves": 4}}
+
+    assert unset_dotted(payload, ["verify", "waiver_mode"]) is True
+    assert payload == {"planning": {"max_parallel_waves": 4}}
+
+
+def test_unset_dotted_absent_path_is_noop() -> None:
+    payload = {"planning": {"max_parallel_waves": 4}}
+    before = dict(payload)
+
+    assert unset_dotted(payload, ["verify", "waiver_mode"]) is False
+    assert payload == before
+
+
+def test_unset_dotted_rejects_empty_path() -> None:
+    with pytest.raises(ValueError, match="at least one segment"):
+        unset_dotted({}, [])
 
 
 def test_runtime_preference_writable_in_every_runtime_layer() -> None:

@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 
 
 #: Closed mode literal for waiver linkage policy. See module docstring.
-WaiverMode = Literal["A", "B", "C"]
+WaiverMode = Literal["A", "B", "C", "disabled"]
 
 
 #: Default waiver mode applied when ``profile.verify.waiver_mode`` is
@@ -153,6 +153,8 @@ def resolve_waiver_mode(
         return "B"
     if value == "C":
         return "C"
+    if value == "disabled":
+        return "disabled"
     if value is not None:
         logger.warning(
             f"resolve_waiver_mode status='unknown-value' value={value!r} "
