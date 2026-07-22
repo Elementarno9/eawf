@@ -6,7 +6,7 @@
       │  Configuration                                                                                           │
       │  ≡ save layer: repo  (L cycles: global local)                                                            │
       │                                                                                                          │
-      │   flow  planning  preferences  prose  research  runtime  ship  statusline  telemetry  ui  vcs  worktree  │
+      │   flow  planning  preferences  prose  research  runtime  ship  statusline  telemetry  ui  vcs  verify    │
       │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
       │  >  runtime.adapter_catalog.claude.enabled   [bool]         <true>                                       │
       │     runtime.adapter_catalog.codex.enabled    [bool]         <false>                                      │
