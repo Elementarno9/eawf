@@ -123,6 +123,7 @@ def _commit_golden_mutation(repo: Path, *, subject: str) -> str:
         "[P27-W19] test: snapshot update agents_md",  # pre-I02 bare-phase form
         "[P30-I02-CORE] test: regen goldens",  # legacy bookkeeping alias
         "[P100-I100-W100] test: 3-digit ids parse",  # widened-grammar boundary
+        "test: snapshot update agent_report",  # out-of-phase bare conventional form
     ],
 )
 def test_is_paired_accepts_wave_form_test_subjects(subject: str) -> None:
@@ -136,7 +137,8 @@ def test_is_paired_accepts_wave_form_test_subjects(subject: str) -> None:
         "[P30-I15] test: missing wave/CORE suffix",  # no -W## / -CORE
         "[P30-W00] test: zero wave index rejected",  # 1-based reject
         "[P30-I00-W06] test: zero iter index rejected",  # 1-based reject
-        "test: bare conventional, no scope tag",  # no bracket prefix
+        "feat: bare conventional wrong type",
+        "test:",  # missing summary
     ],
 )
 def test_is_paired_rejects_non_wave_form_subjects(subject: str) -> None:
@@ -299,6 +301,19 @@ def test_paired_golden_mutation_passes_the_gate(
     assert _GATE.find_unpaired(base, "HEAD") == []
     rc = _GATE.main(["snapshot_pairing_gate.py", base, "HEAD"])
     assert rc == 0
+
+
+def test_bare_paired_golden_mutation_passes_the_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Out-of-phase bare ``test:`` commits satisfy the pairing contract."""
+    repo = _init_repo(tmp_path / "bare-paired")
+    base = _git(repo, "rev-list", "--max-parents=0", "HEAD")
+    _commit_golden_mutation(repo, subject="test: snapshot update agent_report")
+    monkeypatch.chdir(repo)
+
+    assert _GATE.find_unpaired(base, "HEAD") == []
+    assert _GATE.main(["snapshot_pairing_gate.py", base, "HEAD"]) == 0
 
 
 def test_pure_golden_addition_is_exempt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

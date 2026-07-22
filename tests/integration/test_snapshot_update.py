@@ -448,10 +448,11 @@ def test_gate_rejects_w00_in_paired_subject(gate: Any) -> None:
 
 
 def test_gate_accepts_iter_and_core_variants(gate: Any) -> None:
-    """Iter variant + legacy CORE alias both satisfy the pairing grammar."""
+    """Iter, legacy CORE, and out-of-phase forms satisfy pairing grammar."""
     assert gate.is_paired("[P27-I02-W03] test: snapshot update spec") is True
     assert gate.is_paired("[P27-CORE] test: snapshot update agents_md") is True
     assert gate.is_paired("[P27-I02-CORE] test: snapshot update tui") is True
+    assert gate.is_paired("test: snapshot update tui") is True
 
 
 def test_gate_rejects_non_test_type(gate: Any) -> None:
@@ -459,6 +460,8 @@ def test_gate_rejects_non_test_type(gate: Any) -> None:
     assert gate.is_paired("[P27-W19] feat: x") is False
     assert gate.is_paired("[P27-W19] fix: x") is False
     assert gate.is_paired("[P27-W19] chore: x") is False
+    assert gate.is_paired("feat: x") is False
+    assert gate.is_paired("test:") is False
 
 
 def test_gate_main_no_base_is_noop(gate: Any) -> None:
