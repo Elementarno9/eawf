@@ -61,7 +61,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.config.schema import EuBasis
 from eawf.kernel.spec.auq_bridge import WaveFrontierItem, compute_ready_frontier
-from eawf.kernel.state.enums import RiskTier, StoreKind, WaveStatus
+from eawf.kernel.state.enums import AgentSessionRole, RiskTier, StoreKind, WaveStatus
 from eawf.kernel.state.models import (
     FleetCounters,
     FleetFork,
@@ -76,7 +76,11 @@ from eawf.kernel.state.models import (
 )
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.kinds.agent_report import AgentReportBody, AgentReportPayload
+from eawf.kernel.store.kinds.agent_report import (
+    AgentReportBody,
+    AgentReportPayload,
+    store_kind_for_role,
+)
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.paths import store_path
 from eawf.observability.eval.jury_validation import BlockAuthority
@@ -106,7 +110,6 @@ from eawf.workflow.evidence._io import load_state
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.spec import WAVE_TRANSITIONS, validate_transition
 from eawf.workflow.lifecycle.wave import (
-    claim_wave,
     close_wave,
     compute_runtime_delta,
     fail_wave,
@@ -597,14 +600,11 @@ def _dispatch_paused(ctx: MethodContext) -> bool:
 
 
 def _default_spawner(ctx: MethodContext, wave_id: str) -> LaneDispatch:
-    """Claim then live-dispatch *wave_id*, returning the lane dispatch outcome.
+    """Live-dispatch *wave_id* through the canonical claim transaction.
 
-    The daemon-wired default: claim the wave through the pure-functional
-    :func:`eawf.workflow.lifecycle.wave.claim_wave` transition (under the state
-    portalock, out-of-order since parallel siblings of one dep-frontier are
-    claimed at once), then issue an ``agent.dispatch`` spawn=True for it. The
-    claim + the dispatch's own session registration both persist through the
-    daemon canonical writer.
+    ``agent.dispatch`` owns the session-start + claim transaction. Fleet passes
+    ``out_of_order=True`` because same-frontier siblings dispatch in parallel;
+    that flag relaxes sibling ordering only and never bypasses session guards.
 
     The live ``agent.dispatch`` handler is async; the synchronous loop drives
     it on a fresh event loop in a worker thread so the loop never nests an
@@ -628,15 +628,7 @@ def _default_spawner(ctx: MethodContext, wave_id: str) -> LaneDispatch:
         spawned child's pgid (``None`` on a plan-only dispatch), and the
         dispatch attempt.
     """
-    claim_session_id = f"fleet-drive-{wave_id}"
-    if ctx.state_path is not None:
-        state_path = Path(ctx.state_path)
-        with portalock.acquire(state_path, timeout=5.0):
-            state = load_state(state_path)
-            claim_wave(state, wave_id=wave_id, session_id=claim_session_id, out_of_order=True)
-            state.updated_at = datetime.now(UTC)
-            atomic_write_json_locked(state_path, state.model_dump(mode="json"))
-    plan = _run_dispatch_threaded(ctx, wave_id)
+    plan = _run_dispatch_threaded(ctx, wave_id, out_of_order=True)
     # The child is its own group leader, so its pgid equals the surfaced child
     # pid; a plan-only dispatch surfaces ``pid==0`` (no subprocess) -> no pgid.
     pid = plan.get("pid")
@@ -648,7 +640,12 @@ def _default_spawner(ctx: MethodContext, wave_id: str) -> LaneDispatch:
     )
 
 
-def _run_dispatch_threaded(ctx: MethodContext, wave_id: str) -> dict[str, Any]:
+def _run_dispatch_threaded(
+    ctx: MethodContext,
+    wave_id: str,
+    *,
+    out_of_order: bool,
+) -> dict[str, Any]:
     """Run the async ``agent.dispatch`` spawn=True handler off a worker thread.
 
     The fleet loop is synchronous, so it cannot ``await`` the async dispatch
@@ -659,6 +656,7 @@ def _run_dispatch_threaded(ctx: MethodContext, wave_id: str) -> dict[str, Any]:
     Args:
         ctx: Daemon method context threaded into the dispatch handler.
         wave_id: ``W<NN>`` wave to dispatch spawn=True.
+        out_of_order: Explicit same-frontier sibling-order relaxation.
 
     Returns:
         The dispatch plan dict the handler returned.
@@ -668,7 +666,10 @@ def _run_dispatch_threaded(ctx: MethodContext, wave_id: str) -> dict[str, Any]:
     from eawf.runtime.daemon.methods.agent import dispatch as _agent_dispatch
 
     async def _dispatch() -> dict[str, Any]:
-        return await _agent_dispatch(ctx, {"wave_id": wave_id, "spawn": True})
+        return await _agent_dispatch(
+            ctx,
+            {"wave_id": wave_id, "spawn": True, "out_of_order": out_of_order},
+        )
 
     def _run() -> dict[str, Any]:
         return asyncio.run(_dispatch())
@@ -1005,31 +1006,37 @@ def _status_terminal_outcome(wave: Any) -> LaneOutcome | None:
 
 
 def _wave_has_close_ready_report(state_path: Path, wave_id: str) -> bool:
-    """Return whether *wave_id* has a persisted close-ready executor report.
+    """Return whether *wave_id* has a persisted close-ready bound-role report.
 
-    The headless live-spawn dispatch persists the spawned agent's
-    :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody` and runs
-    :func:`~eawf.workflow.verify.dispatch_close.verify_close_readiness` (it raises
-    on a FAIL / BLOCKED verdict, so a body persisted on the dispatch path is
-    close-ready by construction). The liveness watcher consults this on the
-    dead-pgid stall path: a SANDBOXED headless agent runs to completion in the
-    synchronous dispatch but cannot run ``eawf wave close`` itself, so its wave
-    stays IN_PROGRESS with a dead process. A persisted close-ready report is the
-    evidence the agent SUCCEEDED -- the watcher then resolves the lane ``"closed"``
-    (DL-5 still applies downstream in :meth:`_Loop._finish_lane`) rather than
-    forking an otherwise-successful wave. Reads the LATEST executor-report row
-    for the wave; a missing store / unreadable row / no matching row is ``False``
-    (the lane forks as a genuine stall).
+    The live claim session is authoritative for role, including an OPERATOR
+    override of a specialist wave. When no session row is recoverable, the wave
+    role (or executor default) selects the report store. Matching uses the
+    report header's ``base_id`` because specialist/operator bodies use distinct
+    target fields and cannot be matched through ``ExecutorReportBody.wave_id``.
+    A missing/unreadable state or store, or no matching row, returns ``False``.
 
     Args:
-        state_path: Path to ``state.json`` (the report store resolves under its
-            sibling ``store/``).
-        wave_id: ``W<NN>`` wave whose latest executor report to check.
+        state_path: Path to ``state.json``.
+        wave_id: Wave whose latest role-specific report to check.
 
     Returns:
-        ``True`` when the wave's latest executor report passes close-readiness.
+        ``True`` when the latest bound-role report passes close-readiness.
     """
-    path = store_path(state_path, StoreKind.EXECUTOR_REPORT)
+    try:
+        state = load_state(state_path)
+    except (OSError, ValueError) as exc:
+        logger.debug(f"_wave_has_close_ready_report wave={wave_id} state_failed cause={exc!r}")
+        return False
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        return False
+    session = (
+        state.agent_sessions.get(wave.claim_session_id)
+        if wave.claim_session_id is not None
+        else None
+    )
+    role = session.role if session is not None else wave.agent_role or AgentSessionRole.EXECUTOR
+    path = store_path(state_path, store_kind_for_role(role))
     if not path.exists():
         return False
     latest: AgentReportBody | None = None
@@ -1037,21 +1044,17 @@ def _wave_has_close_ready_report(state_path: Path, wave_id: str) -> bool:
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
-            body = AgentReportPayload.model_validate(
-                Envelope.model_validate_json(line).payload
-            ).body
-            if getattr(body, "wave_id", None) == wave_id:
-                latest = body
+            payload = AgentReportPayload.model_validate(Envelope.model_validate_json(line).payload)
+            if payload.header.base_id == wave_id and payload.header.role is role:
+                latest = payload.body
     except (OSError, ValueError) as exc:
         logger.debug(f"_wave_has_close_ready_report wave={wave_id} read_failed cause={exc!r}")
         return False
     if latest is None:
         return False
     try:
-        from eawf.workflow.evidence._io import load_state
-
         typed_count, teeth_bit = evidence_rung_inputs(
-            load_state(state_path), wave_id, repo_root=state_path.parent.parent
+            state, wave_id, repo_root=state_path.parent.parent
         )
     except (OSError, ValueError, KeyError) as exc:
         logger.debug(f"_wave_has_close_ready_report wave={wave_id} rung4_skip cause={exc!r}")

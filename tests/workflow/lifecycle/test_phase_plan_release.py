@@ -28,7 +28,8 @@ from eawf.kernel.state.models import CurrentPointers, Phase, Project, State
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.iter_ import open_iter
 from eawf.workflow.lifecycle.phase import edit_phase_plan, open_phase
-from eawf.workflow.lifecycle.wave import claim_wave, plan_wave, release_wave
+from eawf.workflow.lifecycle.wave import plan_wave, release_wave
+from tests._session_helpers import claim_wave_with_session as claim_wave
 from tests.conftest import make_intent
 
 

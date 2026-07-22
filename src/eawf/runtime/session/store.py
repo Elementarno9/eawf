@@ -12,6 +12,7 @@ session whose ``(scope_id, runtime)`` pair already has an ``ACTIVE`` entry in
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -36,9 +37,113 @@ class SessionNotFound(LookupError):  # noqa: N818 — domain-specific name prefe
 
 
 def _next_session_id(now: datetime, runtime: str, role: AgentSessionRole) -> str:
-    """Return ``SES-<UTC-yyyymmddTHHMMSSZ>-<role>`` suffixed with runtime tag."""
-    stamp = now.strftime("%Y%m%dT%H%M%SZ")
-    return f"SES-{stamp}-{role.value}-{runtime}"
+    """Return a time-sortable, collision-resistant session id.
+
+    Shape: ``SES-<UTC-yyyymmddTHHMMSS.ffffffZ>-<role>-<runtime>-<uuid4>``.
+
+    Two properties matter and they pull in opposite directions, so both are
+    encoded explicitly:
+
+    - **Sortable.** The leading UTC stamp is fixed-width and zero-padded down to
+      microseconds, so lexicographic order over ids equals chronological order.
+    - **Collision-resistant.** A stamp alone is not unique: the previous
+      second-resolution stamp made two sessions started in the same second
+      produce the SAME id, and ``state.agent_sessions[sid] = session`` is a
+      plain dict assignment, so the second start silently OVERWROTE the first
+      row (and its ``session.start`` event id collided too). Microseconds narrow
+      the window but do not close it -- a frozen/coarse clock, or two daemon
+      threads inside one tick, still collide -- so a full random UUID4 suffix
+      carries the uniqueness and the stamp carries only the ordering.
+
+    Args:
+        now: The session-start instant (UTC).
+        runtime: Runtime adapter id recorded on the session row.
+        role: The session's :class:`AgentSessionRole`.
+
+    Returns:
+        The generated session id.
+    """
+    stamp = now.strftime("%Y%m%dT%H%M%S.%fZ")
+    return f"SES-{stamp}-{role.value}-{runtime}-{uuid.uuid4()}"
+
+
+def build_event(
+    *,
+    event_id: str,
+    event_type: str,
+    actor: str,
+    command: str,
+    args_hash: str,
+    status: str,
+    message: str,
+    scope_id: str | None,
+    occurred_at: datetime,
+    before_state_version: str | None = None,
+    after_state_version: str | None = None,
+    artifact_ids: list[str] | None = None,
+) -> Envelope:
+    """Build (but do not append) a single EVENT envelope.
+
+    Split out of :func:`append_event` so a caller that must not leave a durable
+    trace behind a FAILED transaction can construct the envelope inside the
+    transaction and append it only after the state write commits. See
+    :func:`stage_session`.
+
+    Args:
+        event_id: Stable ID for the event row.
+        event_type: Free-string event category (``session.start``, …).
+        actor: Identity emitting the event (session ID or ``"cli"``).
+        command: CLI command that produced this event.
+        args_hash: Hash of the CLI args (for replay).
+        status: Free-string status (``"ok"``, ``"error"``, …).
+        message: Human-readable message body.
+        scope_id: Optional scope ID anchor.
+        occurred_at: Event timestamp (also envelope ``created_at``).
+        before_state_version / after_state_version: Optional state pointers.
+        artifact_ids: Optional list of related artifact IDs.
+
+    Returns:
+        The constructed :class:`Envelope`.
+    """
+    payload = EventPayload(
+        timestamp=occurred_at,
+        event_type=event_type,
+        actor=actor,
+        command=command,
+        args_hash=args_hash,
+        before_state_version=before_state_version,
+        after_state_version=after_state_version,
+        status=status,
+        message=message,
+    )
+    return Envelope(
+        id=event_id,
+        kind=StoreKind.EVENT,
+        scope_id=scope_id,
+        created_at=occurred_at,
+        updated_at=None,
+        summary=message[:480],
+        payload=payload.model_dump(mode="json"),
+        blob_refs=[],
+        artifact_ids=list(artifact_ids or []),
+    )
+
+
+def commit_event(events_path: Path, envelope: Envelope) -> Envelope:
+    """Append an envelope built by :func:`build_event` to *events_path*.
+
+    Args:
+        events_path: Path to ``events.jsonl``.
+        envelope: The envelope to append.
+
+    Returns:
+        The appended envelope (for call-site chaining).
+    """
+    _append_canonical(events_path, envelope)
+    logger.info(
+        f"events store appended id={envelope.id} kind={envelope.kind.value} path={events_path}"
+    )
+    return envelope
 
 
 def append_event(
@@ -76,27 +181,19 @@ def append_event(
     Returns:
         The constructed :class:`Envelope`.
     """
-    payload = EventPayload(
-        timestamp=occurred_at,
+    env = build_event(
+        event_id=event_id,
         event_type=event_type,
         actor=actor,
         command=command,
         args_hash=args_hash,
-        before_state_version=before_state_version,
-        after_state_version=after_state_version,
         status=status,
         message=message,
-    )
-    env = Envelope(
-        id=event_id,
-        kind=StoreKind.EVENT,
         scope_id=scope_id,
-        created_at=occurred_at,
-        updated_at=None,
-        summary=message[:480],
-        payload=payload.model_dump(mode="json"),
-        blob_refs=[],
-        artifact_ids=list(artifact_ids or []),
+        occurred_at=occurred_at,
+        before_state_version=before_state_version,
+        after_state_version=after_state_version,
+        artifact_ids=artifact_ids,
     )
     _append_canonical(events_path, env)
     logger.info(f"events store appended id={event_id} type={event_type} path={events_path}")
@@ -123,16 +220,33 @@ class SessionResult:
     event: Envelope
 
 
-def start_session(
+def stage_session(
     *,
     state: State,
-    events_path: Path,
     role: AgentSessionRole,
     scope_id: str,
     runtime: str,
     now: datetime | None = None,
 ) -> SessionResult:
-    """Open a new ``ACTIVE`` session under *(scope_id, runtime)*.
+    """Write a new ``ACTIVE`` session into *state* without appending its event.
+
+    The transactional half of :func:`start_session`. The session row + the
+    ``current.active_session_ids`` pointer land in the in-memory *state*, and
+    the ``session.start`` envelope is BUILT but not written, so a caller that
+    goes on to reject the surrounding transaction (an H02 claim guard, say)
+    simply drops the state object and leaves no durable trace: no session row,
+    no index entry, no start event. The caller appends the returned envelope
+    with :func:`commit_event` only after its state write commits.
+
+    Args:
+        state: State mutated in place with the new session row.
+        role: The session role.
+        scope_id: Scope the session anchors to (wave / iter / phase / project).
+        runtime: Runtime adapter id recorded on the row.
+        now: Session-start instant; defaults to ``datetime.now(UTC)``.
+
+    Returns:
+        The staged session plus its un-appended ``session.start`` envelope.
 
     Raises:
         SessionConflict: When an active session already exists for the pair.
@@ -160,8 +274,7 @@ def start_session(
     if sid not in state.current.active_session_ids:
         state.current.active_session_ids = [*state.current.active_session_ids, sid]
 
-    event = append_event(
-        events_path=events_path,
+    event = build_event(
         event_id=f"{sid}-start",
         event_type="session.start",
         actor=sid,
@@ -172,8 +285,32 @@ def start_session(
         scope_id=scope_id,
         occurred_at=moment,
     )
-    logger.info(f"start_session id={sid} scope={scope_id} runtime={runtime}")
+    logger.info(f"stage_session id={sid} scope={scope_id} runtime={runtime}")
     return SessionResult(session=session, event=event)
+
+
+def start_session(
+    *,
+    state: State,
+    events_path: Path,
+    role: AgentSessionRole,
+    scope_id: str,
+    runtime: str,
+    now: datetime | None = None,
+) -> SessionResult:
+    """Open a new ``ACTIVE`` session under *(scope_id, runtime)*.
+
+    :func:`stage_session` followed by an immediate event append -- the
+    non-transactional surface every standalone caller (``eawf session start``,
+    the jury / verdict paths) wants.
+
+    Raises:
+        SessionConflict: When an active session already exists for the pair.
+    """
+    staged = stage_session(state=state, role=role, scope_id=scope_id, runtime=runtime, now=now)
+    commit_event(events_path, staged.event)
+    logger.info(f"start_session id={staged.session.id} scope={scope_id} runtime={runtime}")
+    return staged
 
 
 def checkpoint(

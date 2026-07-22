@@ -14,13 +14,15 @@ from datetime import UTC, datetime
 import pytest
 
 from eawf.kernel.state.enums import (
+    AgentSessionRole,
+    AgentSessionStatus,
     EffortBucket,
     ProjectStatus,
     ScopeKind,
     WaveStatus,
 )
-from eawf.kernel.state.models import CurrentPointers, Project, State
-from eawf.workflow.lifecycle._errors import LifecycleError
+from eawf.kernel.state.models import AgentSession, CurrentPointers, Project, State
+from eawf.workflow.lifecycle._errors import LifecycleError, LifecycleGuardError
 from eawf.workflow.lifecycle.iter_ import open_iter
 from eawf.workflow.lifecycle.phase import open_phase
 from eawf.workflow.lifecycle.wave import claim_wave, plan_wave
@@ -61,7 +63,30 @@ def _seed_wave_state() -> State:
     state = _empty_state()
     open_phase(state, phase_id="P01", title="x")
     open_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    _add_session(state)
     return state
+
+
+def _add_session(
+    state: State,
+    *,
+    session_id: str = "SES-1",
+    role: AgentSessionRole = AgentSessionRole.EXECUTOR,
+    scope_id: str = "QR",
+    status: AgentSessionStatus = AgentSessionStatus.ACTIVE,
+) -> AgentSession:
+    session = AgentSession(
+        id=session_id,
+        role=role,
+        runtime="claude",
+        scope_id=scope_id,
+        status=status,
+        started_at=datetime.now(UTC),
+    )
+    state.agent_sessions[session_id] = session
+    if status is AgentSessionStatus.ACTIVE:
+        state.current.active_session_ids.append(session_id)
+    return session
 
 
 def test_claim_wave_rejects_when_effort_bucket_none() -> None:
@@ -110,6 +135,30 @@ def test_claim_wave_succeeds_when_effort_bucket_set() -> None:
     assert w.claim_session_id == "SES-1"
     assert w.effort_bucket == EffortBucket.XS
     assert "P01-I01-W01" in state.current.active_wave_ids
+    assert state.agent_sessions["SES-1"].claimed_wave_ids == ["P01-I01-W01"]
+
+
+@pytest.mark.parametrize(
+    "scope_id",
+    ["P01-I01-W01", "P01-I01", "P01", "QR"],
+)
+def test_claim_wave_accepts_every_scope_in_parent_chain(scope_id: str) -> None:
+    """Wave, iter, phase, and project anchors all authorize one claim."""
+    state = _seed_wave_state()
+    state.agent_sessions["SES-1"].scope_id = scope_id
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+
+    wave = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    assert wave.claim_session_id == "SES-1"
 
 
 def test_claim_wave_stamps_claimed_at_on_first_claim() -> None:
@@ -154,3 +203,196 @@ def test_claim_wave_preserves_claimed_at_on_idempotent_reclaim() -> None:
     assert original is not None
     again = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     assert again.claimed_at == original
+
+
+def test_claim_wave_rejects_unknown_session_without_mutation() -> None:
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    before = state.model_dump_json()
+
+    with pytest.raises(LifecycleGuardError) as exc_info:
+        claim_wave(state, wave_id="P01-I01-W01", session_id="SES-MISSING")
+
+    assert exc_info.value.code == "claim_session_not_found"
+    assert state.model_dump_json() == before
+
+
+def test_claim_wave_rejects_inactive_session_without_mutation() -> None:
+    state = _seed_wave_state()
+    state.agent_sessions["SES-1"].status = AgentSessionStatus.STALE
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    before = state.model_dump_json()
+
+    with pytest.raises(LifecycleGuardError) as exc_info:
+        claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    assert exc_info.value.code == "claim_session_not_active"
+    assert state.model_dump_json() == before
+
+
+def test_claim_wave_rejects_wrong_scope_without_mutation() -> None:
+    state = _seed_wave_state()
+    state.agent_sessions["SES-1"].scope_id = "P99"
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    before = state.model_dump_json()
+
+    with pytest.raises(LifecycleGuardError) as exc_info:
+        claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    assert exc_info.value.code == "claim_session_scope_mismatch"
+    assert state.model_dump_json() == before
+
+
+def test_claim_wave_rejects_wrong_role_but_allows_operator_override() -> None:
+    state = _seed_wave_state()
+    wave = plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        agent_role=AgentSessionRole.REVIEWER,
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    before = state.model_dump_json()
+    with pytest.raises(LifecycleGuardError) as exc_info:
+        claim_wave(state, wave_id=wave.id, session_id="SES-1")
+    assert exc_info.value.code == "claim_session_role_mismatch"
+    assert state.model_dump_json() == before
+
+    operator = _add_session(
+        state,
+        session_id="SES-OP",
+        role=AgentSessionRole.OPERATOR,
+        scope_id="P01",
+    )
+    claimed = claim_wave(state, wave_id=wave.id, session_id=operator.id)
+    assert claimed.claim_session_id == operator.id
+    assert operator.claimed_wave_ids == [wave.id]
+
+
+def test_claim_wave_project_session_reuses_across_compatible_waves() -> None:
+    state = _seed_wave_state()
+    for wave_id in ("P01-I01-W01", "P01-I01-W02"):
+        plan_wave(
+            state,
+            wave_id=wave_id,
+            iter_id="P01-I01",
+            title=wave_id,
+            file_scopes=["src/"],
+            effort_bucket=EffortBucket.M,
+            intent=make_intent(),
+        )
+
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    claim_wave(state, wave_id="P01-I01-W02", session_id="SES-1")
+
+    assert state.agent_sessions["SES-1"].claimed_wave_ids == [
+        "P01-I01-W01",
+        "P01-I01-W02",
+    ]
+
+
+def test_claim_wave_scoped_session_cannot_reuse_on_sibling() -> None:
+    state = _seed_wave_state()
+    state.agent_sessions["SES-1"].scope_id = "P01-I01-W01"
+    for wave_id in ("P01-I01-W01", "P01-I01-W02"):
+        plan_wave(
+            state,
+            wave_id=wave_id,
+            iter_id="P01-I01",
+            title=wave_id,
+            file_scopes=["src/"],
+            effort_bucket=EffortBucket.M,
+            intent=make_intent(),
+        )
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    before = state.model_dump_json()
+
+    with pytest.raises(LifecycleGuardError) as exc_info:
+        claim_wave(state, wave_id="P01-I01-W02", session_id="SES-1")
+
+    assert exc_info.value.code == "claim_session_scope_mismatch"
+    assert state.model_dump_json() == before
+
+
+def test_claim_wave_reverse_binding_blocks_cross_role_reuse_without_session_index() -> None:
+    """Historical wave binding remains authoritative when session index is empty."""
+    state = _seed_wave_state()
+    state.agent_sessions["SES-1"].role = AgentSessionRole.AUDITOR
+    first = plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="review",
+        file_scopes=["src/"],
+        agent_role=AgentSessionRole.REVIEWER,
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    second = plan_wave(
+        state,
+        wave_id="P01-I01-W02",
+        iter_id="P01-I01",
+        title="audit",
+        file_scopes=["src/"],
+        agent_role=AgentSessionRole.AUDITOR,
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    first.claim_session_id = "SES-1"
+    assert state.agent_sessions["SES-1"].claimed_wave_ids == []
+    before = state.model_dump_json()
+
+    with pytest.raises(LifecycleGuardError) as exc_info:
+        claim_wave(state, wave_id=second.id, session_id="SES-1", out_of_order=True)
+
+    assert exc_info.value.code == "claim_session_role_mismatch"
+    assert state.model_dump_json() == before
+
+
+def test_claim_wave_idempotent_reuse_requires_active_bound_session() -> None:
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    state.agent_sessions["SES-1"].status = AgentSessionStatus.STALE
+    before = state.model_dump_json()
+
+    with pytest.raises(LifecycleGuardError) as exc_info:
+        claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    assert exc_info.value.code == "claim_session_not_active"
+    assert state.model_dump_json() == before

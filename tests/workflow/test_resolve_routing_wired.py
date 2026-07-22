@@ -84,12 +84,28 @@ def _load_gate_module() -> Any:
 # --------------------------------------------------------------------------- #
 
 
-def _executor_report_json(*, wave_id: str = _WAVE_ID) -> str:
-    """A schema-valid ``ExecutorReportBody`` JSON the stub spawn returns."""
+def _report_json(*, role: str, wave_id: str = _WAVE_ID) -> str:
+    """A canonical-invariant-valid role report JSON for the routing probe."""
     import json
 
-    return json.dumps(
-        {
+    if role == "reviewer":
+        body: dict[str, object] = {
+            "role": "reviewer",
+            "verdict": "pass",
+            "confidence": "high",
+            "summary": "reviewer verified the routed wave",
+            "target_id": wave_id,
+            "findings": [],
+            "coverage_refs": [
+                {
+                    "kind": "artifact",
+                    "ref": "tests/workflow/test_resolve_routing_wired.py:1",
+                    "note": "routing probe",
+                }
+            ],
+        }
+    else:
+        body = {
             "role": "executor",
             "verdict": "pass",
             "confidence": "high",
@@ -97,9 +113,10 @@ def _executor_report_json(*, wave_id: str = _WAVE_ID) -> str:
             "wave_id": wave_id,
             "files_changed": ["src/eawf/runtime/daemon/methods/agent.py"],
             "tests_run": ["uv run pytest tests/workflow -q"],
+            "commit_sha": "abc1234",
             "outcome": "wired resolve_routing into live dispatch",
         }
-    )
+    return json.dumps(body)
 
 
 class _RecordingAdapter:
@@ -113,8 +130,9 @@ class _RecordingAdapter:
     id = "claude-code"
     cli_binary = "claude"
 
-    def __init__(self) -> None:
+    def __init__(self, *, role: str) -> None:
         self.models: list[str] = []
+        self.role = role
 
     async def spawn_session(
         self,
@@ -138,7 +156,7 @@ class _RecordingAdapter:
             resolved_model=None,
             subprocess_pid=_STUB_PID,
             exit_status=0,
-            text=_executor_report_json(),
+            text=_report_json(role=self.role),
             input_tokens=100,
             output_tokens=42,
             cache_creation_input_tokens=80,
@@ -179,7 +197,7 @@ def _state_payload(*, agent_role: str | None, effort_bucket: str | None) -> dict
             "track_id": None,
             "phase_id": "P30",
             "iter_id": "P30-I10",
-            "active_wave_ids": [_WAVE_ID],
+            "active_wave_ids": [],
             "active_session_ids": [],
         },
         "workspace": None,
@@ -214,7 +232,7 @@ def _state_payload(*, agent_role: str | None, effort_bucket: str | None) -> dict
                 "id": _WAVE_ID,
                 "iter_id": "P30-I10",
                 "title": "Wire resolve_routing into live spawn",
-                "status": "claimed",
+                "status": "pending",
                 "deps": [],
                 "blocks": [],
                 "file_scopes": ["src/eawf/runtime/daemon/methods/agent.py"],
@@ -237,7 +255,7 @@ def _state_payload(*, agent_role: str | None, effort_bucket: str | None) -> dict
                 "tokens_consumed": 0,
                 "outcome": None,
                 "opened_at": "2026-06-11T00:00:00Z",
-                "claimed_at": "2026-06-11T00:00:00Z",
+                "claimed_at": None,
                 "closed_at": None,
                 "runtime_preference": ["claude-code"],
             }
@@ -294,7 +312,7 @@ def _dispatch_model(
     """Drive one live spawn and return the model the routing selected for it."""
     state_path = _write_state(tmp_path, agent_role=agent_role, effort_bucket=effort_bucket)
     event_path = tmp_path / ".ea" / "store" / "event.jsonl"
-    adapter = _RecordingAdapter()
+    adapter = _RecordingAdapter(role=agent_role or "executor")
     _patch_adapter(monkeypatch, adapter)
     ctx = _ctx(state_path, event_path=event_path)
     _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
@@ -348,15 +366,15 @@ def test_two_distinct_roles_dispatch_with_distinct_models(
     assert {executor_model, reviewer_model} == {"claude-sonnet-4-6", "claude-opus-4-8"}
 
 
-def test_live_dispatch_falls_back_to_documented_default_when_role_omitted(
+def test_live_dispatch_falls_back_to_executor_default_when_role_omitted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A wave omitting role + effort falls back to the documented exec/M default.
+    """A wave omitting role falls back to executor with its required M bucket.
 
-    The live path defaults an unmapped wave to the executor / medium-effort
-    routing inputs, which resolve to the sonnet (mid) tier.
+    Claim lifecycle requires an explicit effort bucket, while routing defaults
+    the omitted role to executor; executor/M resolves to the sonnet tier.
     """
-    model = _dispatch_model(tmp_path, monkeypatch, agent_role=None, effort_bucket=None)
+    model = _dispatch_model(tmp_path, monkeypatch, agent_role=None, effort_bucket="M")
     from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 
     assert model == resolve_routing(AgentSessionRole.EXECUTOR, EffortBucket.M).model

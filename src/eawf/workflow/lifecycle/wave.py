@@ -38,6 +38,7 @@ from eawf.kernel.state.models import (
 )
 from eawf.observability.telemetry.join import _duration_ms_to_eu, _tokens_to_eu
 from eawf.workflow.estimation.buckets import default_estimate_summary
+from eawf.workflow.lifecycle._claim_session import validate_claim_session as validate_claim_session
 from eawf.workflow.lifecycle._errors import (
     LifecycleError,
     check_criteria_floor,
@@ -75,19 +76,18 @@ _WORK_TOKEN_FIELDS: tuple[str, ...] = (
 )
 
 
-def _claim_session_counters(session_id: str) -> RuntimeCounters | None:
-    """Return the claiming session's cumulative runtime counters, when readable.
+def _claim_session_counters(runtime_session_id: str) -> RuntimeCounters | None:
+    """Return a vendor runtime session's cumulative counters, when readable.
 
-    The transcript is the primary source: every Claude Code session writes one,
-    so a wave claimed from an ordinary session has counters to baseline against.
-    The statusline runtime-counter sidecar stays a fallback for an operator whose
-    statusline IS ``eawf statusline`` (it writes the sidecar) but whose transcript
-    does not resolve.
+    The transcript is the primary source. The statusline runtime-counter
+    sidecar stays a fallback for an operator whose statusline is
+    ``eawf statusline`` but whose transcript does not resolve. Callers must
+    supply a vendor runtime session id explicitly; an EAWF
+    :class:`AgentSession` id never enters this lookup.
 
     Args:
-        session_id: Claim session id, used to resolve both the session
-            transcript and the session-keyed statusline cache the sidecar lives
-            beside.
+        runtime_session_id: Vendor session id used to resolve both the runtime
+            transcript and its session-keyed statusline cache.
 
     Returns:
         The session's cumulative :class:`RuntimeCounters`, or ``None`` when
@@ -103,16 +103,18 @@ def _claim_session_counters(session_id: str) -> RuntimeCounters | None:
         transcript_path_for_session,
     )
 
-    transcript = transcript_path_for_session(session_id, cwd=Path.cwd())
+    transcript = transcript_path_for_session(runtime_session_id, cwd=Path.cwd())
     counters = aggregate_transcript_counters(transcript)
     if counters is not None:
         return counters
-    sidecar = RuntimeCounterSidecar(sidecar_path_for_statusline_cache(cache_path_for(session_id)))
+    sidecar = RuntimeCounterSidecar(
+        sidecar_path_for_statusline_cache(cache_path_for(runtime_session_id))
+    )
     return sidecar.read()
 
 
-def _capture_runtime_baseline(session_id: str) -> RuntimeBaseline | None:
-    """Return a claim-time runtime snapshot of the claiming session.
+def _capture_runtime_baseline(runtime_session_id: str) -> RuntimeBaseline | None:
+    """Return a claim-time snapshot for an explicit vendor runtime session.
 
     Converts the session's cumulative counters (see
     :func:`_claim_session_counters`) into a baseline stamped at claim time.
@@ -122,9 +124,10 @@ def _capture_runtime_baseline(session_id: str) -> RuntimeBaseline | None:
     zero baseline.
 
     Args:
-        session_id: Claim session id whose counters the baseline snapshots.
+        runtime_session_id: Vendor runtime session id whose counters the
+            baseline snapshots. This is never an EAWF ``AgentSession.id``.
     """
-    counters = _claim_session_counters(session_id)
+    counters = _claim_session_counters(runtime_session_id)
     if counters is None:
         return None
     return RuntimeBaseline(
@@ -137,7 +140,7 @@ def _capture_runtime_baseline(session_id: str) -> RuntimeBaseline | None:
         cache_read_input_tokens=counters.cache_read_input_tokens,
         harness=counters.harness,
         model=counters.model,
-        session_id=session_id,
+        session_id=runtime_session_id,
         measure_version=counters.measure_version,
         captured_at=datetime.now(UTC),
     )
@@ -825,13 +828,19 @@ def claim_wave(
     (idempotent). Re-claiming with a *different* session is rejected so the
     sibling-lock + status check delivers exactly-once semantics.
 
+    *session_id* must name a live :class:`~eawf.kernel.state.models.AgentSession`
+    row: :func:`validate_claim_session` runs immediately before the first
+    mutation, so an unknown / non-ACTIVE / wrong-role / wrong-scope session
+    rejects with a stable guard code and leaves the state untouched. A
+    successful claim adds the wave to the session's ``claimed_wave_ids`` in
+    the same mutation, so wave binding and session index are written together.
+
     On the first claim the wave's ``claimed_at`` work-start fact is
-    stamped (``datetime.now(UTC)``), and any available runtime sidecar
-    counters are captured into ``runtime_baseline``. ``claimed_at`` is the
+    stamped (``datetime.now(UTC)``). ``claimed_at`` is the
     anchor the elapsed-clock consumers use instead of ``opened_at``
     (plan/creation time), so a wave planned hours before it is claimed does
-    not inflate its elapsed clock. Existing ``claimed_at`` and
-    ``runtime_baseline`` values are preserved on re-entry.
+    not inflate its elapsed clock. An existing ``claimed_at`` is preserved on
+    re-entry.
 
     P19-W02 dep + monotonic gates:
 
@@ -864,11 +873,19 @@ def claim_wave(
             PENDING (without ``out_of_order``), or dispatch is paused
             (``state.dispatch_paused`` is ``True``) — the pause gate
             blocks regardless of ``out_of_order``.
+        LifecycleGuardError: when the claiming session does not exist, is
+            not ACTIVE, carries the wrong role, or is scoped outside the
+            wave's own scope chain (see :func:`validate_claim_session`).
     """
     wave = state.waves.get(wave_id)
     if wave is None:
         raise LifecycleError(f"unknown wave {wave_id!r}")
     if wave.status == WaveStatus.CLAIMED and wave.claim_session_id == session_id:
+        # Idempotent re-entry still re-checks the binding: a wave claimed
+        # hours ago whose session has since gone STALE must not be re-entered
+        # (and then dispatched) on a dead session -- reuse is allowed only
+        # while the bound session is still ACTIVE.
+        validate_claim_session(state, wave, session_id)
         logger.debug(f"claim_wave idempotent id={wave_id} session={session_id}")
         return wave
     if wave.status != WaveStatus.PENDING:
@@ -908,8 +925,17 @@ def claim_wave(
         },
     )
     validate_transition(WAVE_TRANSITIONS, WaveStatus.PENDING, WaveStatus.CLAIMED, guard_ctx)
+    # Identity gate — the last check before the first mutation, so a rejected
+    # claim leaves the state byte-identical (no status flip, no claimed_at
+    # stamp, no active-wave pointer, no session index entry, no estimate row).
+    session = validate_claim_session(state, wave, session_id)
     wave.status = WaveStatus.CLAIMED
     wave.claim_session_id = session_id
+    # The session's claimed-wave index moves with the wave's own binding, in
+    # the same in-memory mutation the caller persists in one write: the two
+    # halves of the claim can never disagree on disk.
+    if wave_id not in session.claimed_wave_ids:
+        session.claimed_wave_ids = [*session.claimed_wave_ids, wave_id]
     # Stamp the work-start fact on the first claim only. opened_at is
     # plan/creation time; claimed_at is when work actually begins, so the
     # elapsed-clock consumers can anchor on it instead of inflating from
@@ -917,8 +943,14 @@ def claim_wave(
     # a re-entry never re-bases the clock to a later wall-clock.
     if wave.claimed_at is None:
         wave.claimed_at = datetime.now(UTC)
-    if wave.runtime_baseline is None:
-        wave.runtime_baseline = _capture_runtime_baseline(session_id)
+    # No claim-time vendor-counter capture. ``session_id`` names an EAWF
+    # AgentSession, NOT a Claude / Codex / OpenCode session, so resolving a
+    # transcript or statusline sidecar by it read a foreign namespace and
+    # stamped whatever happened to collide as this wave's origin. Until the
+    # v0.7 schema adds ``runtime_session_id`` there is no honest mapping, and
+    # absence is honest: the live-spawn path stamps a matched
+    # baseline/latest pair of its own, and the interactive capture path
+    # re-origins a missing baseline on its first capture.
     if wave_id not in state.current.active_wave_ids:
         state.current.active_wave_ids.append(wave_id)
     # Lifecycle guard: a wave must never run under a PLANNED iter, so the

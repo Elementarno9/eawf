@@ -693,7 +693,11 @@ def test_default_spawner_derives_pgid_from_plan_pid(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(
         fleet_mod,
         "_run_dispatch_threaded",
-        lambda c, wid: {"session_id": "ses-live", "pid": 54321, "attempt": 2},
+        lambda c, wid, *, out_of_order: {
+            "session_id": "ses-live",
+            "pid": 54321,
+            "attempt": 2,
+        },
     )
     live = _default_spawner(ctx, "P30-I12-W02")
     assert live.session_id == "ses-live"
@@ -704,7 +708,11 @@ def test_default_spawner_derives_pgid_from_plan_pid(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(
         fleet_mod,
         "_run_dispatch_threaded",
-        lambda c, wid: {"session_id": "ses-plan", "pid": 0, "attempt": 1},
+        lambda c, wid, *, out_of_order: {
+            "session_id": "ses-plan",
+            "pid": 0,
+            "attempt": 1,
+        },
     )
     plan_only = _default_spawner(ctx, "P30-I12-W02")
     assert plan_only.session_id == "ses-plan"

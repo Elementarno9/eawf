@@ -24,7 +24,7 @@ events.
 
 The opt-in **live-spawn** path (``spawn=True``) closes the seam the
 hand-fed-outcome path left open: instead of the caller hand-feeding a
-metered outcome, the daemon registers an executor
+metered outcome, the daemon registers a role-matched
 :class:`~eawf.kernel.state.models.AgentSession` through the canonical
 state writer, renders the dispatch prompt, resolves the runtime adapter,
 and ``await``s its :meth:`~eawf.runtime.runtimes.adapter.RuntimeAdapter.spawn_session`
@@ -32,7 +32,7 @@ and ``await``s its :meth:`~eawf.runtime.runtimes.adapter.RuntimeAdapter.spawn_se
 spawn's :class:`~eawf.runtime.runtimes.adapter.SpawnResult` is priced via
 :func:`eawf.runtime.runtimes.metering.price_spawn_result`, then
 :func:`run_dispatch` is driven with the **registered session id** so its
-``agent_end`` executor-report emit fires. The returned
+role-specific ``agent_end`` report emit fires. The returned
 :class:`DispatchPlan` carries the real captured ``pid`` and the
 registered session id. ``spawn=False`` (default) keeps the plan-only and
 hand-fed-outcome paths byte-unchanged.
@@ -56,13 +56,14 @@ import logging
 import time
 import uuid
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Annotated, Any, Literal, cast
 
 import orjson
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter
 
 from eawf.kernel.config.layered import merge_config, resolve_runtime_tier_models
 from eawf.kernel.state.enums import (
@@ -84,14 +85,29 @@ from eawf.kernel.state.models import (
     RuntimeLatest,
     SessionAttempt,
     State,
+    Wave,
 )
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.kinds.agent_report import AgentReportFollowup, ExecutorReportBody
+from eawf.kernel.store.kinds.agent_report import (
+    AgentReportBody,
+    AgentReportEvidenceRef,
+    AgentReportFollowup,
+    AgentReportHeader,
+    AgentReportPayload,
+    AuditorReportBody,
+    CriterionVerdict,
+    OperatorReportBody,
+    ReviewerReportBody,
+    body_class_for_role,
+    report_record_id,
+    store_kind_for_role,
+)
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.kinds.events.base import RuntimeTriple
 from eawf.kernel.store.paths import store_path
+from eawf.kernel.validate.invariants import check_agent_report_invariants
 from eawf.observability.telemetry.models import RuntimeErrorClass
 from eawf.observability.telemetry.pricing import PRICING_VERSION
 from eawf.platform.scrub.scan import rewrite_text
@@ -104,7 +120,12 @@ from eawf.runtime.daemon.dispatch_runner import (
     emit_agent_output_chunk,
     run_dispatch,
 )
-from eawf.runtime.daemon.methods import MethodContext, note_cross_root_serve, register
+from eawf.runtime.daemon.methods import (
+    DaemonValidationError,
+    MethodContext,
+    note_cross_root_serve,
+    register,
+)
 from eawf.runtime.daemon.methods.fleet import kill_lane
 from eawf.runtime.lock import portalock
 from eawf.runtime.runtimes.adapter import ErrorClass, RuntimeSpawnError, SpawnResult
@@ -114,12 +135,15 @@ from eawf.runtime.runtimes.metering import price_spawn_result
 from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.runtime.runtimes.selector import select_adapter
 from eawf.runtime.sandbox.policy import resolve_denied_tools
-from eawf.runtime.session.store import SessionConflict, start_session
+from eawf.runtime.session.store import build_event, commit_event, stage_session
 from eawf.workflow.dispatch.llm_assist import LLMAssistError, assist_with_schema
 from eawf.workflow.dispatch.renderer import render_dispatch_envelope, resolve_role_blocks
 from eawf.workflow.dispatch.retry import spawn_with_retry
 from eawf.workflow.dispatch.routing import resolve_routing, runtime_model_for_decision
 from eawf.workflow.evidence._io import load_state
+from eawf.workflow.lifecycle._claim_session import CLAIM_SESSION_NOT_FOUND
+from eawf.workflow.lifecycle._errors import LifecycleError, LifecycleGuardError
+from eawf.workflow.lifecycle.wave import claim_wave, validate_claim_session
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +158,18 @@ class LiveSpawnError(RuntimeError):
     + session-start event sink). A live spawn requested without them fails
     fast rather than silently degrading to the plan-only path.
     """
+
+
+@dataclass(frozen=True)
+class _LiveClaim:
+    """Session/runtime binding committed before a live spawn begins."""
+
+    session_id: str
+    runtime: str
+    model: str
+    role: AgentSessionRole
+    scope_id: str
+    started_at: datetime
 
 
 #: Wave statuses that carry no out-edge -- a wave that has reached one of
@@ -268,6 +304,8 @@ class DispatchParams(BaseModel):
             ``(agent_role, effort_bucket)`` via
             :func:`eawf.workflow.dispatch.routing.resolve_routing`. Ignored
             unless *spawn* is ``True``.
+        out_of_order: Internal fleet flag that relaxes sibling ordering only;
+            all session guards still run in the canonical claim transaction.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -278,6 +316,7 @@ class DispatchParams(BaseModel):
     outcome: DispatchOutcome | None = None
     spawn: bool = False
     model: str | None = None
+    out_of_order: bool = False
 
 
 class DispatchPlan(BaseModel):
@@ -599,37 +638,106 @@ def _build_plan(
 
 
 #: Default routing inputs when a dispatched wave omits ``agent_role`` /
-#: ``effort_bucket``. The live-spawn lane is the executor lane, and a
-#: medium-effort default keeps the resolved model on the mid pricing tier
-#: rather than the costlier Opus tier when the wave carries no effort hint.
+#: ``effort_bucket``. An untyped live-spawn wave defaults to executor, and a
+#: medium-effort default keeps the resolved model on the mid pricing tier rather
+#: than the costlier Opus tier when the wave carries no effort hint.
 _DEFAULT_SPAWN_ROLE: AgentSessionRole = AgentSessionRole.EXECUTOR
 _DEFAULT_SPAWN_EFFORT: EffortBucket = EffortBucket.M
 
 
-def _validate_executor_body(raw: object) -> ExecutorReportBody:
-    """Force the spawned executor's JSON-decoded output to an ``ExecutorReportBody``.
+def _validate_report_body(raw: object, *, role: AgentSessionRole) -> AgentReportBody:
+    """Force spawned output to the report-body schema for *role*.
 
     The forced-schema validator the live-spawn lane hands
     :func:`~eawf.workflow.dispatch.llm_assist.assist_with_schema`. The
-    executor lane forces the narrow
-    :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody`
-    (rather than the whole ``agent_end`` union) so a spawn that emits a
-    non-executor body — or omits the executor-required ``wave_id`` /
-    ``outcome`` — is rejected and re-asked, not silently accepted as a
-    different role's body.
+    session role selects one narrow body class rather than the whole
+    ``agent_end`` union. A spawn that emits a different role or omits a
+    role-required field is rejected and re-asked, never persisted under a
+    mismatched session.
 
     Args:
         raw: JSON-decoded spawn output (the assist loop decodes the
             ``text`` before handing it here).
 
     Returns:
-        The validated :class:`ExecutorReportBody`.
+        The validated role-specific :class:`AgentReportBody`.
 
     Raises:
-        pydantic.ValidationError: When *raw* does not satisfy the executor
+        pydantic.ValidationError: When *raw* does not satisfy the selected
             report-body schema (the assist loop catches this to re-ask).
     """
-    return ExecutorReportBody.model_validate(raw)
+    body_class = body_class_for_role(role)
+    return cast(AgentReportBody, body_class.model_validate(raw))
+
+
+def _candidate_report_envelope(
+    body: AgentReportBody,
+    *,
+    role: AgentSessionRole,
+    wave_id: str,
+    session_id: str,
+    session_scope_id: str,
+    runtime: str,
+    generated_at: datetime,
+) -> Envelope:
+    """Build an unpersisted report envelope for canonical invariant checks."""
+    report_id = report_record_id(role=role, base_id=wave_id, attempt=1)
+    header = AgentReportHeader(
+        report_id=report_id,
+        role=role,
+        session_id=session_id,
+        scope_id=session_scope_id,
+        base_id=wave_id,
+        attempt=1,
+        runtime=runtime,
+        generated_at=generated_at,
+        summary=body.summary[:500],
+    )
+    payload = AgentReportPayload(header=header, body=body)
+    return Envelope(
+        id=report_id,
+        kind=store_kind_for_role(role),
+        scope_id=session_scope_id,
+        created_at=generated_at,
+        summary=header.summary,
+        payload=payload.model_dump(mode="json"),
+    )
+
+
+def _validate_live_report_body(
+    raw: object,
+    *,
+    state: State,
+    role: AgentSessionRole,
+    wave_id: str,
+    session_id: str,
+    session_scope_id: str,
+    runtime: str,
+    generated_at: datetime,
+) -> AgentReportBody:
+    """Validate schema plus canonical report invariants before persistence."""
+
+    def _check(body: AgentReportBody) -> AgentReportBody:
+        envelope = _candidate_report_envelope(
+            body,
+            role=role,
+            wave_id=wave_id,
+            session_id=session_id,
+            session_scope_id=session_scope_id,
+            runtime=runtime,
+            generated_at=generated_at,
+        )
+        violations = list(check_agent_report_invariants(state, [envelope]))
+        if violations:
+            detail = "; ".join(f"{violation.code}: {violation.message}" for violation in violations)
+            raise ValueError(f"agent report invariant failed: {detail}")
+        return body
+
+    body = _validate_report_body(raw, role=role)
+    validator: TypeAdapter[AgentReportBody] = TypeAdapter(
+        Annotated[AgentReportBody, AfterValidator(_check)]
+    )
+    return validator.validate_python(body)
 
 
 def _resolve_spawn_model(
@@ -681,6 +789,23 @@ def _resolve_spawn_model(
         f"effort={effort.value} runtime={triple!r} tier_model={decision.model!r} model={model!r}"
     )
     return model
+
+
+def _preflight_spawn_model(
+    state_path: Path,
+    *,
+    wave_id: str,
+    runtime: str,
+    override: str | None,
+) -> str:
+    """Validate the adapter and resolve its model without mutating state."""
+    select_adapter(runtime)
+    return _resolve_spawn_model(
+        state_path,
+        wave_id=wave_id,
+        runtime=runtime,
+        override=override,
+    )
 
 
 def _resolve_budget_enforce(state_path: Path) -> EnforceMode:
@@ -795,7 +920,6 @@ def _persist_live_session_attempt(
     wave_id: str,
     requested_runtime: str,
     serving_runtime: str,
-    session_id: str,
     session_log_handle: str,
     spawn_result: SpawnResult,
     pid: int,
@@ -859,7 +983,10 @@ def _persist_live_session_attempt(
         session_attempt = SessionAttempt(
             attempt=attempt,
             runtime=serving_runtime,
-            session_id=session_id,
+            # SessionAttempt is runtime provenance. The EAWF ``SES-*`` claim
+            # id belongs on Wave.claim_session_id and report headers; this row
+            # records the vendor/runtime session disclosed by the spawn.
+            session_id=spawn_result.session_id,
             session_log_handle=session_log_handle,
             started_at=spawn_result.started_at,
             ended_at=spawn_result.ended_at,
@@ -903,17 +1030,91 @@ def _persist_live_session_attempt(
     return attempt, annotation, session_attempt
 
 
+def _restore_dispatch_session(
+    state: State,
+    *,
+    wave_id: str,
+    session_id: str,
+    runtime: str,
+    role: AgentSessionRole,
+    scope_id: str,
+    started_at: datetime,
+) -> bool:
+    """Restore one validated claim session and its forward wave index."""
+    changed = False
+    session = state.agent_sessions.get(session_id)
+    if session is None:
+        session = AgentSession(
+            id=session_id,
+            role=role,
+            runtime=runtime,
+            scope_id=scope_id,
+            status=AgentSessionStatus.ACTIVE,
+            claimed_wave_ids=[wave_id],
+            started_at=started_at,
+        )
+        state.agent_sessions[session_id] = session
+        changed = True
+    else:
+        if session.role is not role:
+            session.role = role
+            changed = True
+        if session.runtime != runtime:
+            session.runtime = runtime
+            changed = True
+        if session.scope_id != scope_id:
+            session.scope_id = scope_id
+            changed = True
+        if session.status is not AgentSessionStatus.ACTIVE:
+            session.status = AgentSessionStatus.ACTIVE
+            session.ended_at = None
+            changed = True
+        if wave_id not in session.claimed_wave_ids:
+            session.claimed_wave_ids.append(wave_id)
+            changed = True
+    if session_id not in state.current.active_session_ids:
+        state.current.active_session_ids = [*state.current.active_session_ids, session_id]
+        changed = True
+    return changed
+
+
+def _restore_dispatch_wave(
+    state: State,
+    *,
+    wave: Wave,
+    session_id: str,
+    claimed_at: datetime,
+) -> bool:
+    """Restore a dispatched wave's status, binding, and active index."""
+    changed = False
+    if wave.id not in state.current.active_wave_ids:
+        state.current.active_wave_ids = [*state.current.active_wave_ids, wave.id]
+        changed = True
+    if wave.status is WaveStatus.PENDING:
+        wave.status = WaveStatus.IN_PROGRESS
+        changed = True
+    if wave.claim_session_id != session_id:
+        wave.claim_session_id = session_id
+        changed = True
+    if wave.claimed_at is None:
+        wave.claimed_at = claimed_at
+        changed = True
+    return changed
+
+
 def _reassert_dispatch_state(
     ctx: MethodContext,
     *,
     wave_id: str,
     session_id: str,
-    serving_runtime: str,
-    started_at: datetime,
+    session_runtime: str,
+    session_role: AgentSessionRole,
+    session_scope_id: str,
+    session_started_at: datetime,
 ) -> None:
     """Restore daemon-owned dispatch rows a jailed agent reverted mid-spawn (W10).
 
-    The daemon writes the claim, the executor-session registration, and the
+    The daemon writes the claim, the role-matched session registration, and the
     phase-active pointer into the repo-tracked ``.ea/state.json`` BEFORE the
     spawn. A sandboxed executor that runs ``git checkout -- .ea/`` to drop
     out-of-scope changes reverts those uncommitted rows, so the post-spawn
@@ -926,9 +1127,11 @@ def _reassert_dispatch_state(
     Args:
         ctx: Daemon method context carrying the bound ``state_path``.
         wave_id: The dispatched wave whose rows are re-asserted.
-        session_id: The executor session id the close resolves.
-        serving_runtime: The runtime the accepted spawn ran on.
-        started_at: The spawn start instant, stamped on a reconstructed session.
+        session_id: The bound session id the close resolves.
+        session_runtime: Runtime recorded on the validated claim session.
+        session_role: Role recorded on the validated claim session.
+        session_scope_id: Scope recorded on the validated claim session.
+        session_started_at: Original start instant of the claim session.
     """
     if ctx.state_path is None:
         return
@@ -940,29 +1143,22 @@ def _reassert_dispatch_state(
             # Unknown wave, or close-on-behalf already resolved it terminally --
             # do not resurrect a wave the daemon lawfully finished.
             return
-        changed = False
-        if session_id not in state.agent_sessions:
-            state.agent_sessions[session_id] = AgentSession(
-                id=session_id,
-                role=wave.agent_role or AgentSessionRole.EXECUTOR,
-                runtime=serving_runtime,
-                scope_id=wave_id,
-                status=AgentSessionStatus.ACTIVE,
-                claimed_wave_ids=[wave_id],
-                started_at=started_at,
-            )
-            if session_id not in state.current.active_session_ids:
-                state.current.active_session_ids = [
-                    *state.current.active_session_ids,
-                    session_id,
-                ]
-            changed = True
-        if wave.status is WaveStatus.PENDING:
-            # The claim was reverted to the committed (pre-claim) status; the
-            # dispatch is underway, so re-assert IN_PROGRESS with the claim id.
-            wave.status = WaveStatus.IN_PROGRESS
-            wave.claim_session_id = wave.claim_session_id or session_id
-            changed = True
+        session_changed = _restore_dispatch_session(
+            state,
+            wave_id=wave_id,
+            session_id=session_id,
+            runtime=session_runtime,
+            role=session_role,
+            scope_id=session_scope_id,
+            started_at=session_started_at,
+        )
+        wave_changed = _restore_dispatch_wave(
+            state,
+            wave=wave,
+            session_id=session_id,
+            claimed_at=session_started_at,
+        )
+        changed = session_changed or wave_changed
         iter_row = state.iters.get(wave.iter_id)
         phase_id = iter_row.phase_id if iter_row is not None else None
         if phase_id is not None and state.current.phase_id != phase_id:
@@ -978,170 +1174,237 @@ def _reassert_dispatch_state(
             )
 
 
-def _register_executor_session(
+def _claim_live_session(
     ctx: MethodContext,
     *,
     wave_id: str,
     runtime: str,
-) -> str:
-    """Register (or reuse) an ACTIVE executor session for *wave_id*.
+    out_of_order: bool,
+    model_override: str | None = None,
+) -> _LiveClaim:
+    """Commit one live session + wave claim transaction before spawning.
 
-    Opens a new :class:`~eawf.kernel.state.models.AgentSession` with role
-    :attr:`~eawf.kernel.state.enums.AgentSessionRole.EXECUTOR`,
-    ``scope_id=wave_id``, and the resolved *runtime* via
-    :func:`eawf.runtime.session.store.start_session`, persisting it through
-    the daemon canonical state writer (``portalock`` + locked atomic
-    write, mirroring :func:`~eawf.runtime.daemon.dispatch_runner._mark_wave_in_progress`).
-    The session-start event is appended to ``event.jsonl`` by the store.
-
-    When an ACTIVE session already exists for ``(wave_id, runtime)`` the
-    store raises :class:`~eawf.runtime.session.store.SessionConflict`; this
-    helper catches it and reuses the existing session id rather than
-    surfacing the error, so a re-dispatch of the same lane threads the
-    live ``agent_end`` report onto the already-open session.
+    A PENDING wave stages a wave-scoped ACTIVE session and claims with that
+    exact id under one state lock and one atomic state write. Session-start and
+    claim events append only after the state commit, so any lifecycle or H02
+    guard rejection leaves both state and event stores byte-identical. A
+    CLAIMED/IN_PROGRESS wave may be redispatched only through its ACTIVE bound
+    session; no missing, stale, or different session is silently substituted.
 
     Args:
-        ctx: Daemon method context — supplies ``state_path`` + ``event_path``.
-        wave_id: ``W<NN>`` wave the executor session scopes to.
-        runtime: Resolved runtime adapter id (plugin spelling) recorded on
-            the session row.
+        ctx: Daemon method context carrying canonical state/event paths.
+        wave_id: Wave to bind before live process creation.
+        runtime: Resolved runtime for a newly staged session.
+        out_of_order: Whether sibling-order relaxation was explicitly requested.
+        model_override: Optional explicit model id resolved before any mutation.
 
     Returns:
-        The canonical :class:`~eawf.kernel.state.models.AgentSession` id to
-        thread into the dispatch runner.
+        The committed session id, authoritative runtime, and session role.
 
     Raises:
-        LiveSpawnError: When ``ctx.state_path`` or ``ctx.event_path`` is
-            unset (the live spawn cannot register a session without both).
+        LiveSpawnError: When state/event paths are unavailable.
+        LifecycleError: When a lifecycle or claim-session guard rejects.
     """
     if ctx.state_path is None or ctx.event_path is None:
         raise LiveSpawnError(f"live spawn requires state_path + event_path for wave: {wave_id!r}")
     state_path = Path(ctx.state_path)
-    events_path = Path(ctx.event_path)
+    event_path = Path(ctx.event_path)
+    staged_event: Envelope | None = None
+    claim_event: Envelope | None = None
+    before_version = ""
+    after_version = ""
     with portalock.acquire(state_path, timeout=5.0):
         state = load_state(state_path)
         before_version = state_version(state.model_dump(mode="json"))
-        try:
-            result = start_session(
+        wave = state.waves.get(wave_id)
+        if wave is None:
+            raise LifecycleError(f"unknown wave {wave_id!r}")
+
+        if wave.status in {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}:
+            session_id = wave.claim_session_id
+            if session_id is None:
+                raise LifecycleGuardError(
+                    CLAIM_SESSION_NOT_FOUND,
+                    wave_id,
+                    f"cannot dispatch wave {wave_id!r}: claimed wave has no bound session",
+                )
+            session = validate_claim_session(state, wave, session_id)
+            model = _preflight_spawn_model(
+                state_path,
+                wave_id=wave_id,
+                runtime=session.runtime,
+                override=model_override,
+            )
+            logger.info(
+                f"_claim_live_session reuse wave={wave_id} runtime={session.runtime!r} "
+                f"session={session.id!r}"
+            )
+            return _LiveClaim(
+                session_id=session.id,
+                runtime=session.runtime,
+                model=model,
+                role=session.role,
+                scope_id=session.scope_id,
+                started_at=session.started_at,
+            )
+
+        required_role = wave.agent_role or AgentSessionRole.EXECUTOR
+        model = _preflight_spawn_model(
+            state_path,
+            wave_id=wave_id,
+            runtime=runtime,
+            override=model_override,
+        )
+        active = next(
+            (
+                session
+                for session in state.agent_sessions.values()
+                if session.scope_id == wave_id
+                and session.runtime == runtime
+                and session.status is AgentSessionStatus.ACTIVE
+            ),
+            None,
+        )
+        if active is None:
+            staged = stage_session(
                 state=state,
-                events_path=events_path,
-                role=AgentSessionRole.EXECUTOR,
+                role=required_role,
                 scope_id=wave_id,
                 runtime=runtime,
             )
-        except SessionConflict as exc:
-            # An ACTIVE executor session already scopes this (wave, runtime)
-            # pair. Reuse it so the live report threads onto the open session
-            # rather than failing the re-dispatch. No state write is needed.
-            existing = _find_active_executor(state, wave_id=wave_id, runtime=runtime)
-            if existing is None:
-                raise LiveSpawnError(
-                    f"session conflict but no active executor session found: {wave_id!r}"
-                ) from exc
-            logger.info(
-                f"_register_executor_session reuse wave={wave_id} "
-                f"runtime={runtime!r} session={existing!r}"
-            )
-            return existing
-        session_id = result.session.id
+            session = staged.session
+            staged_event = staged.event
+        else:
+            session = active
+
+        claim_wave(
+            state,
+            wave_id=wave_id,
+            session_id=session.id,
+            out_of_order=out_of_order,
+        )
         state.updated_at = datetime.now(UTC)
         new_payload = state.model_dump(mode="json")
         after_version = state_version(new_payload)
+        claimed_at = state.waves[wave_id].claimed_at or datetime.now(UTC)
+        claim_event = build_event(
+            event_id=f"EV-{uuid.uuid4().hex}",
+            event_type="wave.claim",
+            actor=session.id,
+            command="dispatch wave",
+            args_hash="",
+            status="ok",
+            message=f"wave {wave_id} claimed by session {session.id}",
+            scope_id=wave_id,
+            occurred_at=claimed_at,
+            before_state_version=before_version,
+            after_state_version=after_version,
+        )
         atomic_write_json_locked(state_path, new_payload)
+
+    if staged_event is not None:
+        commit_event(event_path, staged_event)
+    assert claim_event is not None
+    commit_event(event_path, claim_event)
     logger.info(
-        f"_register_executor_session wave={wave_id} runtime={runtime!r} "
-        f"session={session_id!r} before={before_version} after={after_version}"
+        f"_claim_live_session wave={wave_id} runtime={session.runtime!r} "
+        f"session={session.id!r} before={before_version} after={after_version}"
     )
-    return session_id
-
-
-def _find_active_executor(state: State, *, wave_id: str, runtime: str) -> str | None:
-    """Return the id of an ACTIVE executor session for the pair, or ``None``.
-
-    Mirrors the ``(scope_id, runtime)`` uniqueness key the session store
-    enforces, narrowed to the executor role so the live-spawn reuse path
-    resolves the exact session the store's
-    :class:`~eawf.runtime.session.store.SessionConflict` refers to.
-
-    Args:
-        state: Validated state snapshot carrying ``agent_sessions``.
-        wave_id: The session scope id to match.
-        runtime: The session runtime to match (plugin spelling).
-
-    Returns:
-        The matching session id, or ``None`` when no ACTIVE executor
-        session scopes the pair.
-    """
-    for sess in state.agent_sessions.values():
-        if (
-            sess.role is AgentSessionRole.EXECUTOR
-            and sess.scope_id == wave_id
-            and sess.runtime == runtime
-            and sess.status is AgentSessionStatus.ACTIVE
-        ):
-            return sess.id
-    return None
+    return _LiveClaim(
+        session_id=session.id,
+        runtime=session.runtime,
+        model=model,
+        role=session.role,
+        scope_id=session.scope_id,
+        started_at=session.started_at,
+    )
 
 
 async def _bind_or_synthesize_report(
     accepted: SpawnResult,
     *,
+    state: State,
+    binding: _LiveClaim,
     wave_id: str,
     prompt: str,
     serving_runtime: str,
     spawn_once: Callable[[str], Awaitable[SpawnResult]],
-) -> ExecutorReportBody:
+) -> AgentReportBody:
     """Bind the spawned agent's output to a report body, synthesizing on exhaustion.
 
-    Wraps :func:`_bind_executor_report`: on report-schema exhaustion the bind
+    Wraps :func:`_bind_role_report`: on report-schema exhaustion the bind
     raises :class:`~eawf.workflow.dispatch.llm_assist.LLMAssistError` (the model
     answered in prose), which would strand the wave -- ``run_dispatch`` never
     runs, so the dispatch-cost emit + EU accrual never fire even though the
     spawn already spent real cost. The synth fallback mints a typed BLOCKED body
-    (marked ``report_source=synthesized``) so the dispatch always completes and
-    the degrade is auditable -- never a green PASS, since a synthesized body was
-    not authored by the agent (see :func:`_synthesize_executor_report`).
+    (marked ``report_source=synthesized``) matching the session role so the
+    dispatch always completes and the degrade is auditable -- never a green
+    PASS, since a synthesized body was not authored by the agent (see
+    :func:`_synthesize_role_report`).
 
     Returns:
-        The bound :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody`,
-        or the synthesized body when the assist loop exhausted its ceiling.
+        The bound role-specific :class:`AgentReportBody`, or a synthesized
+        body of the same role when the assist loop exhausted its ceiling.
     """
     try:
-        return await _bind_executor_report(
+        return await _bind_role_report(
             accepted,
+            state=state,
+            binding=binding,
+            wave_id=wave_id,
             prompt=prompt,
             serving_runtime=serving_runtime,
             spawn_once=spawn_once,
         )
     except LLMAssistError as exc:
-        body = _synthesize_executor_report(accepted, wave_id=wave_id, exc=exc)
+        body = _synthesize_role_report(
+            accepted,
+            wave_id=wave_id,
+            role=binding.role,
+            phase_id=state.iters[state.waves[wave_id].iter_id].phase_id,
+            exc=exc,
+        )
+        body = _validate_live_report_body(
+            body.model_dump(mode="json"),
+            state=state,
+            role=binding.role,
+            wave_id=wave_id,
+            session_id=binding.session_id,
+            session_scope_id=binding.scope_id,
+            runtime=serving_runtime,
+            generated_at=binding.started_at,
+        )
         logger.info(
-            f"_spawn_and_dispatch wave={wave_id} status=synth-fallback "
+            f"_spawn_and_dispatch wave={wave_id} role={binding.role.value} "
+            f"status=synth-fallback "
             f"attempts={exc.attempts} reason={exc.failures[-1].reason!r}"
         )
         return body
 
 
-async def _bind_executor_report(
+async def _bind_role_report(
     accepted: SpawnResult,
     *,
+    state: State,
+    binding: _LiveClaim,
+    wave_id: str,
     prompt: str,
     serving_runtime: str,
     spawn_once: Callable[[str], Awaitable[SpawnResult]],
-) -> ExecutorReportBody:
-    """Bind the spawned executor's real output to a validated report body.
+) -> AgentReportBody:
+    """Bind a spawned agent's real output to its role-specific report body.
 
     Drives :func:`~eawf.workflow.dispatch.llm_assist.assist_with_schema`
     over the spawned agent's OWN ``text`` to populate an
-    :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody`,
+    role-specific :class:`~eawf.kernel.store.kinds.agent_report.AgentReportBody`,
     replacing the runner's synthetic placeholder. The first assist spawn
     reuses *accepted* (the already-completed, already-priced spawn) so the
     initial attempt is not double-spawned; each subsequent re-ask drives a
     fresh spawn of the correction prompt via *spawn_once* on the serving
     runtime. The assist loop's correction notice names the validation
     failure, and on ceiling-exhaustion the loop raises
-    :class:`~eawf.workflow.dispatch.llm_assist.LLMAssistError` — no
-    synthetic body is ever persisted on a parse failure.
+    :class:`~eawf.workflow.dispatch.llm_assist.LLMAssistError`; the caller
+    converts that terminal failure into a role-matched BLOCKED synth body.
 
     Args:
         accepted: The already-completed spawn whose ``text`` is validated
@@ -1154,13 +1417,13 @@ async def _bind_executor_report(
             runtime for a re-ask prompt.
 
     Returns:
-        The validated :class:`ExecutorReportBody` parsed from the agent's
-        own output.
+        The validated role-specific report body parsed from the agent's own
+        output.
 
     Raises:
         eawf.workflow.dispatch.llm_assist.LLMAssistError: When every spawn
             (the reused initial plus the re-asks, up to the loop's ceiling)
-            produced output that failed the executor report-body schema.
+            produced output that failed the selected report-body schema.
     """
     spawns = 0
 
@@ -1177,21 +1440,28 @@ async def _bind_executor_report(
     result = await assist_with_schema(
         prompt,
         spawn=_assist_spawn,
-        validator=_validate_executor_body,
+        validator=lambda raw: _validate_live_report_body(
+            raw,
+            state=state,
+            role=binding.role,
+            wave_id=wave_id,
+            session_id=binding.session_id,
+            session_scope_id=binding.scope_id,
+            runtime=serving_runtime,
+            generated_at=binding.started_at,
+        ),
     )
     body = result.body
     logger.info(
-        f"_bind_executor_report runtime={serving_runtime!r} "
+        f"_bind_role_report runtime={serving_runtime!r} role={binding.role.value} "
         f"attempts={result.attempts_used} verdict={body.verdict.value}"
     )
-    # The forced validator is ExecutorReportBody, so the assist loop's body
-    # is by construction an executor body; narrow for the typed return.
-    if not isinstance(body, ExecutorReportBody):  # pragma: no cover - validator forces this
-        raise TypeError(f"assist returned non-executor body: {body.role!r}")
+    if body.role != binding.role.value:  # pragma: no cover - role validator forces this
+        raise TypeError(f"assist returned body role {body.role!r}; expected {binding.role.value!r}")
     return body
 
 
-def _redact_report_body(body: ExecutorReportBody) -> ExecutorReportBody:
+def _redact_report_body(body: AgentReportBody) -> AgentReportBody:
     """Redact local/sensitive tokens from a headless report body's text.
 
     A headless agent's report prose may name an absolute path or another
@@ -1208,10 +1478,10 @@ def _redact_report_body(body: ExecutorReportBody) -> ExecutorReportBody:
     pass through unchanged.
 
     Args:
-        body: The bound (or synthesized) executor report body.
+        body: The bound (or synthesized) role-specific report body.
 
     Returns:
-        A new :class:`ExecutorReportBody` with local tokens rewritten.
+        A new role-specific report body with local tokens rewritten.
     """
 
     def _walk(value: object) -> object:
@@ -1224,23 +1494,29 @@ def _redact_report_body(body: ExecutorReportBody) -> ExecutorReportBody:
         return value
 
     redacted = _walk(body.model_dump(mode="json"))
-    return ExecutorReportBody.model_validate(redacted)
+    return _validate_report_body(redacted, role=AgentSessionRole(body.role))
 
 
-def _synthesize_executor_report(
-    accepted: SpawnResult, *, wave_id: str, exc: LLMAssistError
-) -> ExecutorReportBody:
-    """Synthesize a typed executor body when the assist loop exhausts its re-asks.
+def _synthesize_role_report(
+    accepted: SpawnResult,
+    *,
+    wave_id: str,
+    role: AgentSessionRole,
+    phase_id: str,
+    exc: LLMAssistError,
+) -> AgentReportBody:
+    """Synthesize a typed role body when the assist loop exhausts its re-asks.
 
     The safety net for the headless dispatch path: when the spawned agent's
-    output never validates against the executor report schema (a model that
+    output never validates against the role's report schema (a model that
     answers in prose re-asks to the ceiling and raises
     :class:`~eawf.workflow.dispatch.llm_assist.LLMAssistError`), the wave would
     otherwise hang -- :func:`run_dispatch` never runs, so the dispatch-cost emit
     and EU accrual never fire even though the spawn already spent real cost.
     Rather than let the exception escape, this builds a typed
-    :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody` from the
-    accepted spawn's observable outcome signals so the dispatch always completes.
+    role-specific :class:`AgentReportBody` from the accepted spawn's observable
+    outcome signals so the dispatch always completes without violating the
+    session/body role invariant.
 
     The verdict is ALWAYS :attr:`AgentReportVerdict.BLOCKED`, mirroring the
     researcher synth path (:func:`~eawf.runtime.daemon.methods.research._bind_researcher_body`):
@@ -1263,8 +1539,8 @@ def _synthesize_executor_report(
             the synthesized prose + the follow-up).
 
     Returns:
-        A typed :class:`ExecutorReportBody` carrying the BLOCKED synth verdict,
-        LOW confidence, ``report_source=synthesized``, and one parse-failure
+        A typed role-specific body carrying the BLOCKED synth verdict, LOW
+        confidence, ``report_source=synthesized``, and one parse-failure
         follow-up.
     """
     # A synthesized body was never authored by the agent, so it is a degrade,
@@ -1275,15 +1551,15 @@ def _synthesize_executor_report(
     # Bound to the executor body's outcome cap (1000); the summary cap (4000)
     # is wider, so a string that fits outcome fits both.
     outcome = (
-        f"synthesized executor report: agent output failed report-body validation "
+        f"synthesized {role.value} report: agent output failed report-body validation "
         f"after {exc.attempts} attempt(s) (last reason: {last_reason}); "
         f"spawn exit_status={accepted.exit_status}"
-    )[:1000]
+    )[:500]
     # The executor body's commit_sha is min_length=7-or-None, so the builder
     # cannot mint an empty placeholder; pass a 7-char sentinel to satisfy the
     # builder, then drop it to None below (no commit landed on this path).
     built = _build_completion_body(
-        role=AgentSessionRole.EXECUTOR,
+        role=role,
         wave_id=wave_id,
         commit_sha="0000000",
         outcome=outcome,
@@ -1292,29 +1568,46 @@ def _synthesize_executor_report(
         verdict=verdict,
         confidence=Confidence.LOW,
     )
-    # The EXECUTOR role forces an ExecutorReportBody; narrow for the typed copy.
-    if not isinstance(built, ExecutorReportBody):  # pragma: no cover - role forces this
-        raise TypeError(f"completion builder returned non-executor body: {built.role!r}")
-    # Drop the sentinel commit_sha (no commit landed) and attach the
-    # parse-failure follow-up so the degrade is auditable.
+    if built.role != role.value:  # pragma: no cover - builder routes by role
+        raise TypeError(f"completion builder returned body role: {built.role!r}")
+    # Attach the parse-failure follow-up so every role's degrade is auditable.
+    # Canonical report invariants still apply to synthesized rows: executor
+    # keeps the explicit sentinel commit, auditor/reviewer carry one grounded
+    # failure/coverage row, and operator points at the wave's parent phase.
     followup = AgentReportFollowup(
-        title="executor output failed report-body validation; report synthesized",
-        owner_role=AgentSessionRole.EXECUTOR,
+        title=f"{role.value} output failed report-body validation; report synthesized",
+        owner_role=role,
         priority="P1",
         detail=(
-            f"the spawned executor answered with output that failed the "
-            f"ExecutorReportBody schema after {exc.attempts} attempt(s) "
+            f"the spawned {role.value} answered with output that failed its "
+            f"report-body schema after {exc.attempts} attempt(s) "
             f"(last reason: {last_reason}); the report body was synthesized from "
             f"the spawn exit status so cost + EU still accrue"
         )[:500],
     )
-    return built.model_copy(
-        update={
-            "commit_sha": None,
-            "followups": [followup],
-            "report_source": ReportSource.SYNTHESIZED,
-        }
+    updates: dict[str, object] = {
+        "followups": [followup],
+        "report_source": ReportSource.SYNTHESIZED,
+    }
+    evidence_ref = AgentReportEvidenceRef(
+        kind="store_record",
+        ref=f"wave:{wave_id}",
+        note="report-body validation exhausted",
     )
+    if isinstance(built, AuditorReportBody):
+        updates["criteria"] = [
+            CriterionVerdict(
+                criterion="agent output satisfies the typed report contract",
+                passed=False,
+                evidence_refs=[evidence_ref],
+            )
+        ]
+    elif isinstance(built, ReviewerReportBody):
+        updates["coverage_refs"] = [evidence_ref]
+    elif isinstance(built, OperatorReportBody):
+        updates["phase_id"] = phase_id
+        updates["completed_wave_ids"] = []
+    return built.model_copy(update=updates)
 
 
 async def _spawn_and_dispatch(
@@ -1324,23 +1617,24 @@ async def _spawn_and_dispatch(
     runtime: str,
     model_override: str | None,
     trace_request_id: str | None,
+    out_of_order: bool,
 ) -> DispatchPlan:
     """Run the live-spawn dispatch path and return the resulting plan.
 
-    Registers the executor session, renders the prompt, resolves sandbox policy
-    and retry preferences, spawns behind the runtime floor, validates the
-    executor's own output into a report body, persists the wave-local attempt
-    row, then drives :func:`run_dispatch` with the live pid/pgid and config
-    enforcement mode.
+    Registers a session matching the wave role, renders the prompt, resolves
+    sandbox policy and retry preferences, spawns behind the runtime floor,
+    validates the agent's own output into the matching role report body,
+    persists the wave-local attempt row, then drives :func:`run_dispatch` with
+    the live pid/pgid and config enforcement mode.
 
     On report-schema exhaustion the spawned agent's output never validates
-    against the executor report body (e.g. a model that answers in prose).
+    against the session role's report body (e.g. a model that answers in prose).
     Rather than let :class:`~eawf.workflow.dispatch.llm_assist.LLMAssistError`
     escape -- which would strand the wave with cost already spent but
     :func:`run_dispatch` never run -- the path synthesizes a typed BLOCKED
-    :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody`
-    (``report_source=synthesized``, see :func:`_synthesize_executor_report`) so
-    the dispatch always completes and the dispatch-cost + EU accrual still fire.
+    role-specific :class:`~eawf.kernel.store.kinds.agent_report.AgentReportBody`
+    (``report_source=synthesized``, see :func:`_synthesize_role_report`) so the
+    dispatch always completes and the dispatch-cost + EU accrual still fire.
     The BLOCKED verdict then blocks the close: a synthesized body is never closed
     green, because the agent never authored a passing report.
 
@@ -1354,6 +1648,7 @@ async def _spawn_and_dispatch(
             model is resolved from the wave's routing inputs.
         trace_request_id: Optional daemon RPC request id for the §5.8
             correlation chain.
+        out_of_order: Explicit sibling-order relaxation for fleet dispatch.
 
     Returns:
         A :class:`DispatchPlan` carrying the real captured ``pid``, the
@@ -1369,23 +1664,32 @@ async def _spawn_and_dispatch(
         raise LiveSpawnError(f"live spawn requires state_path + event_path for wave: {wave_id!r}")
     state_path = Path(ctx.state_path)
 
-    # 1. Register the executor session (canonical state writer) so the
-    # dispatch runner has a session row to use as report authority.
-    session_id = _register_executor_session(ctx, wave_id=wave_id, runtime=runtime)
-
-    # 2. Resolve the per-runtime model for the first spawn + render the prompt.
-    # The model is selected for the resolved runtime so a codex / opencode spawn
-    # runs its own vendor's model rather than a claude id the foreign CLI
-    # rejects. A V5 switch re-resolves the model for the switched runtime inside
-    # the spawn closure (below), so each runtime always spawns its own model.
-    model = _resolve_spawn_model(
-        state_path, wave_id=wave_id, runtime=runtime, override=model_override
+    # 1. Resolve the authoritative runtime + model, register/reuse the live
+    # session, and claim the wave under one lock + one state write. Adapter/model
+    # preflight runs inside the transaction before its first mutation, so an
+    # invalid runtime cannot orphan a session, wave claim, or event. Nothing
+    # below may render a worktree or spawn a process until this commits.
+    binding = _claim_live_session(
+        ctx,
+        wave_id=wave_id,
+        runtime=runtime,
+        out_of_order=out_of_order,
+        model_override=model_override,
     )
+    session_id = binding.session_id
+    runtime = binding.runtime
+    model = binding.model
+
+    # 2. Render the prompt. The model was selected for the resolved runtime so
+    # a codex / opencode spawn runs its own vendor's model rather than a claude
+    # id the foreign CLI rejects. A V5 switch re-resolves the model for the
+    # switched runtime inside the spawn closure (below), so each runtime always
+    # spawns its own model.
     state = load_state(state_path)
     # The live-spawn path reads the spawned model's final message as a JSON
-    # ExecutorReportBody, so render the headless prompt: it pins the report
-    # schema + an output-only-JSON instruction so the model emits a parseable
-    # body on the first try rather than answering in prose.
+    # role-specific report body, so render the headless prompt: it pins the
+    # report schema + an output-only-JSON instruction so the model emits a
+    # parseable body on the first try rather than answering in prose.
     role_tier = resolve_role_blocks(state_path.parent.parent)
     envelope = render_dispatch_envelope(
         state,
@@ -1395,6 +1699,7 @@ async def _spawn_and_dispatch(
         role_blocks=role_tier.role_blocks,
         role_tier_token_cap=role_tier.token_cap,
         headless=True,
+        role_override=binding.role,
     )
 
     # 3. Resolve the per-wave sandbox deny-list (wave-scoped + global
@@ -1515,13 +1820,12 @@ async def _spawn_and_dispatch(
         cache_read_input_tokens=metered.cache_read_input_tokens,
     )
 
-    # 7. Bind the spawned agent's OWN output to a validated ExecutorReportBody
+    # 7. Bind the spawned agent's OWN output to its validated role report body
     # through the bounded re-ask loop. The first assist spawn reuses the
     # already-completed accepted spawn_result (no double-spawn of the initial
     # attempt); each re-ask drives a fresh spawn of the correction prompt on
     # the serving runtime. On ceiling-exhaustion the loop raises LLMAssistError
-    # and NO synthetic body is persisted — the report carries the agent's
-    # words or nothing.
+    # and the wrapper mints a role-matched BLOCKED synth body.
     serving_model = spawn_result.model
 
     async def _spawn_correction(reask_prompt: str) -> SpawnResult:
@@ -1542,6 +1846,8 @@ async def _spawn_and_dispatch(
     # always completes (see _bind_or_synthesize_report).
     report_body = await _bind_or_synthesize_report(
         spawn_result,
+        state=state,
+        binding=binding,
         wave_id=wave_id,
         prompt=envelope.prompt,
         serving_runtime=serving_runtime,
@@ -1557,7 +1863,6 @@ async def _spawn_and_dispatch(
         wave_id=wave_id,
         requested_runtime=runtime,
         serving_runtime=serving_runtime,
-        session_id=session_id,
         session_log_handle=adapter.session_log_handle(spawn_result.session_id),
         spawn_result=spawn_result,
         pid=pid,
@@ -1596,14 +1901,16 @@ async def _spawn_and_dispatch(
         ctx,
         wave_id=wave_id,
         session_id=session_id,
-        serving_runtime=serving_runtime,
-        started_at=spawn_result.started_at,
+        session_runtime=binding.runtime,
+        session_role=binding.role,
+        session_scope_id=binding.scope_id,
+        session_started_at=binding.started_at,
     )
     enforce = _resolve_budget_enforce(state_path)
 
     # 8. Drive the runner with the registered session id + the validated body
-    # so the ``agent_end`` executor-report emit persists the agent's own
-    # outcome / files_changed / verdict. The serving runtime is the one the
+    # so the role-specific ``agent_end`` emit persists the agent's own outcome
+    # and verdict. The serving runtime is the one the
     # accepted spawn ran on (a V5 switch may have moved it).
     runtime_triple = _runtime_triple(serving_runtime)
     result: DispatchResult = run_dispatch(
@@ -1643,6 +1950,26 @@ async def _spawn_and_dispatch(
     )
 
 
+async def _dispatch_live(
+    ctx: MethodContext,
+    *,
+    args: DispatchParams,
+    runtime: str,
+) -> DispatchPlan:
+    """Run live dispatch and map lifecycle guards to daemon validation."""
+    try:
+        return await _spawn_and_dispatch(
+            ctx,
+            wave_id=args.wave_id,
+            runtime=runtime,
+            model_override=args.model,
+            trace_request_id=None,
+            out_of_order=args.out_of_order,
+        )
+    except LifecycleError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+
+
 @register("agent.dispatch")
 async def dispatch(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Build a fresh-dispatch plan and emit its C09 events for the wave.
@@ -1659,13 +1986,13 @@ async def dispatch(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]
     tests) the method stays plan-only.
 
     When ``spawn=True`` the method takes the live-spawn path instead
-    (:func:`_spawn_and_dispatch`): it registers an executor
+    (:func:`_spawn_and_dispatch`): it registers a role-matched
     :class:`~eawf.kernel.state.models.AgentSession`, renders the prompt,
     resolves the runtime adapter, ``await``s its
     :meth:`~eawf.runtime.runtimes.adapter.RuntimeAdapter.spawn_session`
     (jailed argv + scrubbed env -- the safety floor), prices the spawn,
     and drives the dispatch runner with the registered session id so the
-    ``agent_end`` executor-report emit fires. The returned plan carries
+    role-specific ``agent_end`` report emit fires. The returned plan carries
     the real captured ``pid`` + the registered session id.
 
     On the plan-only and hand-fed-outcome paths the plan is not persisted
@@ -1748,13 +2075,7 @@ async def dispatch(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]
         # Live-spawn path (stores already asserted above): register a session
         # + spawn for real behind the floor + drive the runner with the
         # session id so the agent_end report emit fires.
-        plan = await _spawn_and_dispatch(
-            ctx,
-            wave_id=args.wave_id,
-            runtime=runtime,
-            model_override=args.model,
-            trace_request_id=None,
-        )
+        plan = await _dispatch_live(ctx, args=args, runtime=runtime)
         logger.info(
             f"dispatch wave={args.wave_id!r} runtime={runtime!r} spawn=live "
             f"pid={plan.pid} session={plan.session_id!r} events={len(plan.event_ids)}"

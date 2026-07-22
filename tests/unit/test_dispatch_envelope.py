@@ -27,7 +27,13 @@ from datetime import UTC, datetime
 
 import pytest
 
-from eawf.kernel.state.enums import McpRisk, McpStatus, ProjectStatus, ScopeKind
+from eawf.kernel.state.enums import (
+    AgentSessionRole,
+    McpRisk,
+    McpStatus,
+    ProjectStatus,
+    ScopeKind,
+)
 from eawf.kernel.state.models import CurrentPointers, McpGrant, McpServer, Project, State
 from eawf.runtime.sandbox.policy import SandboxPolicy
 from eawf.workflow.dispatch import render_dispatch_envelope, render_wave_prompt
@@ -548,9 +554,32 @@ def test_render_dispatch_envelope_interactive_executor_byte_equal_to_default() -
     assert interactive.prompt == render_wave_prompt(state, "P01-I01-W01")
 
 
-def test_render_dispatch_envelope_headless_non_executor_omits_report_output() -> None:
-    """Headless adds the block only for executor waves, not other roles."""
+def test_render_dispatch_envelope_headless_non_executor_pins_role_schema() -> None:
+    """Headless specialist envelope pins its own role body schema."""
     state = _empty_state()
     _seed_wave_with_role(state, role="auditor")
     envelope = render_dispatch_envelope(state, "P01-I01-W01", "claude-code", headless=True)
-    assert "## Report output" not in envelope.prompt
+    assert "## Report output" in envelope.prompt
+    assert '"const": "auditor"' in envelope.prompt
+    assert '"title": "AuditorReportBody"' in envelope.prompt
+    assert "typed auditor report" in envelope.prompt
+
+
+def test_render_dispatch_envelope_role_override_replaces_wave_role_everywhere() -> None:
+    """An operator override controls contract, workflow, and output schema."""
+    state = _empty_state()
+    _seed_wave_with_role(state, role="auditor")
+    envelope = render_dispatch_envelope(
+        state,
+        "P01-I01-W01",
+        "claude-code",
+        headless=True,
+        role_override=AgentSessionRole.OPERATOR,
+    )
+    assert envelope.role_contract is not None
+    assert envelope.role_contract.role == "operator"
+    assert "- agent_role: operator" in envelope.prompt
+    assert "typed operator report" in envelope.prompt
+    assert '"title": "OperatorReportBody"' in envelope.prompt
+    assert "parent phase `P01`" in envelope.prompt
+    assert "typed auditor report" not in envelope.prompt

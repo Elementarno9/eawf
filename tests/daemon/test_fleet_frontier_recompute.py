@@ -29,7 +29,8 @@ from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.fleet import LaneDispatch, LaneOutcome, arm_drive
 from eawf.runtime.lock import portalock
 from eawf.workflow.evidence._io import load_state
-from eawf.workflow.lifecycle.wave import claim_wave, close_wave
+from eawf.workflow.lifecycle.wave import close_wave
+from tests._session_helpers import claim_wave_with_session as claim_wave
 
 pytestmark = pytest.mark.integration
 

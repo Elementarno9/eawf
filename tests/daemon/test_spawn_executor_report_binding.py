@@ -94,6 +94,7 @@ def _valid_executor_json() -> str:
             "wave_id": _WAVE_ID,
             "files_changed": _REAL_FILES,
             "tests_run": ["uv run pytest tests/daemon -q"],
+            "commit_sha": "abc1234",
             "outcome": _REAL_OUTCOME,
         }
     )
@@ -178,7 +179,7 @@ def _state_payload() -> dict[str, Any]:
             "track_id": None,
             "phase_id": "P30",
             "iter_id": "P30-I06",
-            "active_wave_ids": [_WAVE_ID],
+            "active_wave_ids": [],
             "active_session_ids": [],
         },
         "workspace": None,
@@ -213,7 +214,7 @@ def _state_payload() -> dict[str, Any]:
                 "id": _WAVE_ID,
                 "iter_id": "P30-I06",
                 "title": "Bind spawned executor output to the report",
-                "status": "claimed",
+                "status": "pending",
                 "deps": [],
                 "blocks": [],
                 "file_scopes": ["src/eawf/runtime/daemon/methods/agent.py"],
@@ -236,7 +237,7 @@ def _state_payload() -> dict[str, Any]:
                 "tokens_consumed": 0,
                 "outcome": None,
                 "opened_at": "2026-06-10T00:00:00Z",
-                "claimed_at": "2026-06-10T00:00:00Z",
+                "claimed_at": None,
                 "closed_at": None,
                 "runtime_preference": ["claude-code"],
             }
@@ -415,8 +416,9 @@ def test_spawn_invalid_body_synthesizes_blocked_not_pass_on_exit_zero(
     # One auditable parse-failure follow-up is present.
     assert len(body.followups) == 1
     assert "synthesized" in body.followups[0].title
-    # No commit landed on the synthesized path.
-    assert body.commit_sha is None
+    # Synthesized rows retain the explicit sentinel required by the canonical
+    # executor-report invariant; the BLOCKED verdict prevents a green close.
+    assert body.commit_sha == "0000000"
     # The keystone: cost accrued (run_dispatch ran) rather than the wave hanging
     # on an escaped LLMAssistError.
     assert _dispatch_cost_event_count(event_path) == 1

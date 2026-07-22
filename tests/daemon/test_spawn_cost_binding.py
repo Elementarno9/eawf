@@ -85,6 +85,7 @@ def _executor_report_json(*, wave_id: str = _WAVE_ID) -> str:
             "wave_id": wave_id,
             "files_changed": ["src/eawf/observability/telemetry/pricing.py"],
             "tests_run": ["uv run pytest tests/daemon -q"],
+            "commit_sha": "abc1234",
             "outcome": "proved the spawn cost is real, not $0",
         }
     )
@@ -187,7 +188,7 @@ def _state_payload() -> dict[str, Any]:
             "track_id": None,
             "phase_id": "P30",
             "iter_id": "P30-I06",
-            "active_wave_ids": [_WAVE_ID],
+            "active_wave_ids": [],
             "active_session_ids": [],
         },
         "workspace": None,
@@ -222,7 +223,7 @@ def _state_payload() -> dict[str, Any]:
                 "id": _WAVE_ID,
                 "iter_id": "P30-I06",
                 "title": "Spawn cost binding proof",
-                "status": "claimed",
+                "status": "pending",
                 "deps": [],
                 "blocks": [],
                 "file_scopes": ["src/eawf/observability/telemetry/pricing.py"],
@@ -245,7 +246,7 @@ def _state_payload() -> dict[str, Any]:
                 "tokens_consumed": 0,
                 "outcome": None,
                 "opened_at": "2026-06-10T00:00:00Z",
-                "claimed_at": "2026-06-10T00:00:00Z",
+                "claimed_at": None,
                 "closed_at": None,
                 "runtime_preference": ["claude-code"],
             }

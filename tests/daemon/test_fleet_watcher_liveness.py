@@ -27,10 +27,23 @@ from typing import Any
 
 import pytest
 
-from eawf.kernel.state.enums import AgentReportVerdict, Confidence, WaveStatus
+from eawf.kernel.state.enums import (
+    AgentReportVerdict,
+    AgentSessionRole,
+    Confidence,
+    WaveStatus,
+)
 from eawf.kernel.state.models import FleetLane, State
 from eawf.kernel.state.writer import atomic_write_json_locked
-from eawf.kernel.store.kinds.agent_report import ExecutorReportBody
+from eawf.kernel.store.kinds.agent_report import (
+    AgentReportBody,
+    AgentReportEvidenceRef,
+    AuditorReportBody,
+    CriterionVerdict,
+    ExecutorReportBody,
+    OperatorReportBody,
+    ReviewerReportBody,
+)
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.fleet import build_liveness_watcher
 from eawf.runtime.lock import portalock
@@ -43,7 +56,13 @@ _WAVE_ID = "P30-I17-W01"
 _FROZEN_TS = "2026-06-11T00:00:00Z"
 
 
-def _state_payload(*, status: str = "in_progress", runtime: str = "codex") -> dict[str, Any]:
+def _state_payload(
+    *,
+    status: str = "in_progress",
+    runtime: str = "codex",
+    session_role: AgentSessionRole = AgentSessionRole.EXECUTOR,
+    wave_role: AgentSessionRole | None = None,
+) -> dict[str, Any]:
     return {
         "schema_version": "1.0",
         "scope_kind": "repo",
@@ -105,7 +124,7 @@ def _state_payload(*, status: str = "in_progress", runtime: str = "codex") -> di
                 "blocks": [],
                 "file_scopes": [],
                 "success_criteria": [],
-                "agent_role": "executor",
+                "agent_role": (wave_role or session_role).value,
                 "effort_bucket": "M",
                 "claim_session_id": "ses-x",
                 "worktree_id": None,
@@ -120,7 +139,7 @@ def _state_payload(*, status: str = "in_progress", runtime: str = "codex") -> di
         "agent_sessions": {
             "ses-x": {
                 "id": "ses-x",
-                "role": "executor",
+                "role": session_role.value,
                 "runtime": runtime,
                 "scope_id": _WAVE_ID,
                 "status": "active",
@@ -138,8 +157,22 @@ def _state_payload(*, status: str = "in_progress", runtime: str = "codex") -> di
     }
 
 
-def _write_state(tmp_path: Path, *, status: str = "in_progress", runtime: str = "codex") -> Path:
-    state = State.model_validate(_state_payload(status=status, runtime=runtime))
+def _write_state(
+    tmp_path: Path,
+    *,
+    status: str = "in_progress",
+    runtime: str = "codex",
+    session_role: AgentSessionRole = AgentSessionRole.EXECUTOR,
+    wave_role: AgentSessionRole | None = None,
+) -> Path:
+    state = State.model_validate(
+        _state_payload(
+            status=status,
+            runtime=runtime,
+            session_role=session_role,
+            wave_role=wave_role,
+        )
+    )
     state_dir = tmp_path / ".ea"
     state_dir.mkdir()
     path = state_dir / "state.json"
@@ -349,21 +382,67 @@ def test_dead_lane_that_flips_closed_within_grace_does_not_fork(tmp_path: Path) 
 # ---- W49: a dead lane with a close-ready report resolves CLOSED, not forked ---
 
 
-def _write_report(state_path: Path, *, verdict: AgentReportVerdict) -> None:
-    """Append an executor report for the watched wave to the report store."""
+def _role_report_body(
+    role: AgentSessionRole,
+    *,
+    verdict: AgentReportVerdict,
+) -> AgentReportBody:
+    """Return one canonical-invariant-valid report for a watched lane."""
+    common = {
+        "verdict": verdict,
+        "confidence": Confidence.MEDIUM,
+        "summary": f"{role.value} completed the watched wave",
+    }
+    evidence = AgentReportEvidenceRef(
+        kind="artifact",
+        ref="tests/daemon/test_fleet_watcher_liveness.py:1",
+        note="close-ready role report",
+    )
+    if role is AgentSessionRole.AUDITOR:
+        return AuditorReportBody(
+            **common,
+            target_id=_WAVE_ID,
+            criteria=[
+                CriterionVerdict(
+                    criterion="watched lane completed",
+                    passed=True,
+                    evidence_refs=[evidence],
+                )
+            ],
+        )
+    if role is AgentSessionRole.REVIEWER:
+        return ReviewerReportBody(
+            **common,
+            target_id=_WAVE_ID,
+            coverage_refs=[evidence],
+        )
+    if role is AgentSessionRole.OPERATOR:
+        return OperatorReportBody(
+            **common,
+            phase_id="P30",
+            completed_wave_ids=[_WAVE_ID],
+        )
+    return ExecutorReportBody(
+        **common,
+        wave_id=_WAVE_ID,
+        outcome="greeting.txt written",
+        commit_sha="abc1234",
+    )
+
+
+def _write_report(
+    state_path: Path,
+    *,
+    verdict: AgentReportVerdict,
+    role: AgentSessionRole = AgentSessionRole.EXECUTOR,
+) -> None:
+    """Append a role-specific report for the watched wave."""
     append_agent_report(
         state=load_state(state_path),
         state_path=state_path,
         session_id="ses-x",
         base_id=_WAVE_ID,
-        body=ExecutorReportBody(
-            role="executor",
-            verdict=verdict,
-            confidence=Confidence.MEDIUM,
-            summary="greeting created",
-            wave_id=_WAVE_ID,
-            outcome="greeting.txt written",
-        ),
+        body=_role_report_body(role, verdict=verdict),
     )
 
 
@@ -387,6 +466,37 @@ def test_dead_lane_with_close_ready_report_resolves_closed(tmp_path: Path) -> No
         sleep=lambda _s: None,
     )
     assert watcher(ctx, _lane()) == "closed"
+
+
+@pytest.mark.parametrize(
+    ("role", "wave_role"),
+    [
+        (AgentSessionRole.AUDITOR, AgentSessionRole.AUDITOR),
+        (AgentSessionRole.REVIEWER, AgentSessionRole.REVIEWER),
+        (AgentSessionRole.OPERATOR, AgentSessionRole.AUDITOR),
+    ],
+)
+def test_dead_specialist_or_operator_lane_terminalizes_on_role_report(
+    tmp_path: Path,
+    role: AgentSessionRole,
+    wave_role: AgentSessionRole,
+) -> None:
+    """Auditor, reviewer, and operator lanes use their own report store."""
+    state_path = _write_state(tmp_path, session_role=role, wave_role=wave_role)
+    _write_report(
+        state_path,
+        verdict=AgentReportVerdict.PASS_WITH_FOLLOWUPS,
+        role=role,
+    )
+    watcher = build_liveness_watcher(
+        is_alive=lambda pgid: False,
+        stall_deadline=30.0,
+        poll_seconds=0.0,
+        clock=_Clock(step=10.0),
+        sleep=lambda _s: None,
+    )
+
+    assert watcher(_ctx(state_path), _lane()) == "closed"
 
 
 @pytest.mark.parametrize("runtime", ["codex", "claude-code"])

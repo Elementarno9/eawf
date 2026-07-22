@@ -8,7 +8,7 @@ single :class:`LifecycleError` type without importing one another.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from eawf.kernel.spec.common import CriterionSpec
@@ -19,6 +19,52 @@ class LifecycleError(Exception):
 
     The CLI layer catches this and remaps to the appropriate exit code.
     """
+
+
+ClaimSessionGuardCode = Literal[
+    "claim_session_not_found",
+    "claim_session_not_active",
+    "claim_session_scope_mismatch",
+    "claim_session_role_mismatch",
+]
+
+
+class LifecycleGuardError(LifecycleError):
+    """A lifecycle rejection carrying a stable machine-readable guard code.
+
+    Plain :class:`LifecycleError` messages are operator prose: they move
+    whenever the wording is improved, so no caller can key off them. A guard
+    that a downstream consumer must be able to PROVE it hit (the H02
+    claim-session guards, whose whole point is that a stale or wrong-scope
+    session cannot claim) needs a stable identifier instead. ``code`` is that
+    identifier; ``scope_id`` names the entity the rejection is about (the wave
+    id for a claim guard) so a structured daemon log line can be filtered
+    without parsing the message.
+
+    Because it subclasses :class:`LifecycleError`, every existing
+    ``except LifecycleError`` site keeps catching it unchanged; the daemon
+    mutation boundary adds a narrower clause ahead of that one so a guard
+    rejection surfaces as ``-32002 validation_failed`` rather than the generic
+    ``-32602 invalid params``.
+
+    Attributes:
+        code: Stable snake_case guard code (e.g. ``claim_session_not_found``).
+        scope_id: The entity id the rejection anchors to.
+        message: The operator-facing message (also the exception ``str``).
+    """
+
+    def __init__(self, code: ClaimSessionGuardCode, scope_id: str, message: str) -> None:
+        """Build a coded guard rejection anchored to one lifecycle scope.
+
+        Args:
+            code: Stable claim-session guard identifier.
+            scope_id: Lifecycle entity the guard rejected.
+            message: Human-readable rejection detail.
+        """
+        super().__init__(f"{code}: {message}")
+        self.code = code
+        self.scope_id = scope_id
+        self.message = message
 
 
 def check_title_clarity(title: str, *, entity_kind: str, entity_id: str) -> None:

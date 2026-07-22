@@ -396,10 +396,10 @@ def _ctx_args(args: dict[str, Any]) -> SkillContext:
     return ctx
 
 
-def _claim_action(env: object) -> str:
-    """Return the emitted ``eawf wave claim`` action from the envelope footer."""
+def _dispatch_actions(env: object) -> list[str]:
+    """Return concrete ``eawf dispatch wave`` actions from the footer."""
     actions = env.footer.next_valid_actions  # type: ignore[attr-defined]
-    return next(a for a in actions if a.startswith("eawf wave claim"))
+    return [a for a in actions if a.startswith("eawf dispatch wave")]
 
 
 def test_prep_auto_resume_default_leads_with_dispatch_resume(state_dir: Path) -> None:
@@ -408,7 +408,7 @@ def test_prep_auto_resume_default_leads_with_dispatch_resume(state_dir: Path) ->
     env = run_skill(PrepSkill(), _ctx_args({"iter_id": "P03-I02"}))
     actions = list(env.footer.next_valid_actions)
     assert actions[0] == "eawf dispatch resume"
-    assert any(a.startswith("eawf wave claim P03-I02") for a in actions)
+    assert _dispatch_actions(env) == ["eawf dispatch wave P03-I02-W01"]
 
 
 def test_prep_auto_resume_false_omits_dispatch_resume(state_dir: Path) -> None:
@@ -417,28 +417,53 @@ def test_prep_auto_resume_false_omits_dispatch_resume(state_dir: Path) -> None:
     env = run_skill(PrepSkill(), _ctx_args({"iter_id": "P03-I02", "auto_resume": False}))
     actions = list(env.footer.next_valid_actions)
     assert "eawf dispatch resume" not in actions
-    assert actions[0].startswith("eawf wave claim P03-I02")
+    assert actions[0] == "eawf dispatch wave P03-I02-W01"
 
 
-def test_prep_out_of_order_flag_rides_the_claim_command(state_dir: Path) -> None:
-    """``--out-of-order`` makes the emitted claim command carry the flag."""
+def test_prep_dispatch_action_has_no_internal_claim_flags(state_dir: Path) -> None:
+    """Operator actions never expose daemon-internal claim options."""
     _write_state(state_dir)
-    env = run_skill(PrepSkill(), _ctx_args({"iter_id": "P03-I02", "out_of_order": True}))
-    assert "--out-of-order" in _claim_action(env)
+    env = run_skill(
+        PrepSkill(),
+        _ctx_args(
+            {
+                "iter_id": "P03-I02",
+                "out_of_order": True,
+                "runtime": "codex",
+            }
+        ),
+    )
+    assert _dispatch_actions(env) == ["eawf dispatch wave P03-I02-W01"]
 
 
-def test_prep_out_of_order_default_omits_flag(state_dir: Path) -> None:
-    """Default (no ``--out-of-order``) leaves the claim command flag-free."""
-    _write_state(state_dir)
+def test_prep_dispatches_only_dependency_ready_frontier(state_dir: Path) -> None:
+    """Concrete actions include every ready root and omit blocked descendants."""
+    _write_state(
+        state_dir,
+        waves=[
+            _wave("P03-I02-W01", "P03-I02", "pending"),
+            _wave("P03-I02-W02", "P03-I02", "pending"),
+            _wave(
+                "P03-I02-W03",
+                "P03-I02",
+                "pending",
+                deps=["P03-I02-W01"],
+            ),
+            _wave("P03-I02-W04", "P03-I02", "closed"),
+            _wave(
+                "P03-I02-W05",
+                "P03-I02",
+                "pending",
+                deps=["P03-I02-W04"],
+            ),
+        ],
+    )
     env = run_skill(PrepSkill(), _ctx_args({"iter_id": "P03-I02"}))
-    assert "--out-of-order" not in _claim_action(env)
-
-
-def test_prep_runtime_override_rides_the_claim_command(state_dir: Path) -> None:
-    """``--runtime`` threads the ladder override onto the emitted claim command."""
-    _write_state(state_dir)
-    env = run_skill(PrepSkill(), _ctx_args({"iter_id": "P03-I02", "runtime": "codex"}))
-    assert "--runtime codex" in _claim_action(env)
+    assert _dispatch_actions(env) == [
+        "eawf dispatch wave P03-I02-W01",
+        "eawf dispatch wave P03-I02-W02",
+        "eawf dispatch wave P03-I02-W05",
+    ]
 
 
 def test_prep_ceremony_valid_recorded_no_warning(state_dir: Path) -> None:

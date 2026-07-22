@@ -765,6 +765,8 @@ def wave_claim_cmd(
         )
         return
 
+    committed_claim_session_id: list[str] = []
+
     def _claim_with_budget_gate(state: State) -> None:
         wave = state.waves.get(wave_id)
         if (
@@ -782,6 +784,10 @@ def wave_claim_cmd(
             session_id=session,
             out_of_order=out_of_order,
         )
+        claim_session_id = state.waves[wave_id].claim_session_id
+        if claim_session_id is None:  # pragma: no cover - transition guarantees it
+            raise RuntimeError(f"claimed wave has no session binding: {wave_id!r}")
+        committed_claim_session_id[:] = [claim_session_id]
 
     _run_mutation(
         ctx,
@@ -801,6 +807,7 @@ def wave_claim_cmd(
             "out_of_order": out_of_order,
         },
         mutate=_claim_with_budget_gate,
+        extras_factory=lambda: {"claim_session_id": committed_claim_session_id[0]},
         mutation_kind=MutationKind.WAVE_CLAIM,
         params={
             "wave_id": wave_id,

@@ -46,7 +46,6 @@ from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.workflow.lifecycle.transitions import (
-    claim_wave,
     open_iter,
     open_phase,
     plan_wave,
@@ -59,6 +58,7 @@ from eawf.workflow.lifecycle.waivers import (
     apply_waiver,
     resolve_waiver_mode,
 )
+from tests._session_helpers import claim_wave_with_session as claim_wave
 from tests.conftest import make_intent
 
 WAVE_ID = "P01-I01-W01"

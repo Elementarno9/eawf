@@ -45,7 +45,7 @@ from eawf.kernel.store.paths import store_path
 from eawf.observability.telemetry.join import DEFAULT_TOKENS_PER_EU
 from eawf.runtime.daemon import PROTOCOL_VERSION, recovery, wal
 from eawf.runtime.daemon.bus import EventBus
-from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.state import digest, mutate, read
 from eawf.runtime.daemon.wal import WalStatus
 
@@ -1110,10 +1110,19 @@ def test_mutate_phase_close_requires_close_audit_before_write(tmp_path: Path) ->
 
 
 def test_mutate_wave_claim_publishes_wave_claimed_event_kind(tmp_path: Path) -> None:
-    """WAVE_CLAIM envelope carries ``event_kind='wave_claimed'``."""
+    """WAVE_CLAIM event binds the validated session without fake auth."""
     payload = _build_state_payload(wave_status="pending")
     payload["waves"]["P24-I01-W09"]["effort_bucket"] = "M"  # type: ignore[index]
     payload["waves"]["P24-I01-W09"]["file_scopes"] = ["src/"]  # type: ignore[index]
+    payload["agent_sessions"]["SES-2"] = {  # type: ignore[index]
+        "id": "SES-2",
+        "role": "executor",
+        "runtime": "test",
+        "scope_id": "P24-I01-W09",
+        "status": "active",
+        "started_at": _now().isoformat(),
+    }
+    payload["current"]["active_session_ids"] = ["SES-2"]  # type: ignore[index]
     ctx, _state_path, event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
     bus = ctx.bus
     assert isinstance(bus, EventBus)
@@ -1133,12 +1142,50 @@ def test_mutate_wave_claim_publishes_wave_claimed_event_kind(tmp_path: Path) -> 
         result: dict[str, Any] = await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         envelope_payload = result["event"]["payload"]
         assert envelope_payload["event_kind"] == "wave_claimed"
+        assert envelope_payload["actor"] == "daemon"
+        assert envelope_payload["extras"] == {"claim_session_id": "SES-2"}
         rows = event_path.read_text().strip().splitlines()
         assert len(rows) == 1
         on_disk = orjson.loads(rows[0])
         assert on_disk["payload"]["event_kind"] == "wave_claimed"
+        assert on_disk["payload"]["actor"] == "daemon"
+        assert on_disk["payload"]["extras"] == {"claim_session_id": "SES-2"}
         assert len(sub.queue) == 1
         assert sub.queue[0].payload["event_kind"] == "wave_claimed"
+        assert sub.queue[0].payload["actor"] == "daemon"
+        assert sub.queue[0].payload["extras"] == {"claim_session_id": "SES-2"}
+
+    _run(body)
+
+
+def test_mutate_wave_claim_missing_session_preserves_state_and_event_store(
+    tmp_path: Path,
+) -> None:
+    """Advanced daemon claim exposes the stable code and writes nothing."""
+    payload = _build_state_payload(wave_status="pending")
+    payload["waves"]["P24-I01-W09"]["effort_bucket"] = "M"  # type: ignore[index]
+    payload["waves"]["P24-I01-W09"]["file_scopes"] = ["src/"]  # type: ignore[index]
+    ctx, state_path, event_path, _wal_dir = _build_ctx(
+        tmp_path=tmp_path,
+        state_payload=payload,
+    )
+    before = state_path.read_bytes()
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLAIM,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "wave_id": "P24-I01-W09",
+            "session_id": "SES-missing",
+            "out_of_order": False,
+        },
+    )
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="claim_session_not_found"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        assert state_path.read_bytes() == before
+        assert not event_path.exists() or not event_path.read_bytes()
 
     _run(body)
 

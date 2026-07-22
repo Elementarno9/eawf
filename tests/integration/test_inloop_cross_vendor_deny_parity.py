@@ -99,6 +99,7 @@ def _executor_answer(wave_id: str) -> str:
             "wave_id": wave_id,
             "files_changed": ["src/eawf/runtime/daemon/methods/fleet.py"],
             "tests_run": ["uv run pytest tests/integration -q"],
+            "commit_sha": "abc1234",
             "outcome": "spawned through the in-loop cross-vendor dispatch path",
         }
     )

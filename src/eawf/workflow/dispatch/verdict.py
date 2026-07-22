@@ -663,7 +663,8 @@ def _resolve_auditor_session(
     exists, so the store raises
     :class:`~eawf.runtime.session.store.SessionConflict`; this helper catches
     it and reuses the existing auditor session as the author -- mirroring
-    :func:`eawf.runtime.daemon.methods.agent._register_executor_session`.
+    active-session reuse in
+    :func:`eawf.runtime.daemon.methods.agent._claim_live_session`.
     Reusing the auditor session keeps the verdict author fresh-context
     relative to the executor (it is never the executor's session) while the
     report layer still records attempt 2 as a distinct append.

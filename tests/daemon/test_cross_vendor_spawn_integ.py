@@ -67,6 +67,7 @@ _EXECUTOR_ANSWER = json.dumps(
         "wave_id": _WAVE_ID,
         "files_changed": ["src/eawf/runtime/daemon/methods/agent.py"],
         "tests_run": ["uv run pytest tests/daemon -q"],
+        "commit_sha": "abc1234",
         "outcome": "spawned through the real adapter and bound the report",
     }
 )
@@ -213,7 +214,7 @@ def _state_payload(*, runtime: str, effort_bucket: str) -> dict[str, Any]:
             "track_id": None,
             "phase_id": "P29",
             "iter_id": "P29-I04",
-            "active_wave_ids": [_WAVE_ID],
+            "active_wave_ids": [],
             "active_session_ids": [],
         },
         "workspace": None,
@@ -248,7 +249,7 @@ def _state_payload(*, runtime: str, effort_bucket: str) -> dict[str, Any]:
                 "id": _WAVE_ID,
                 "iter_id": "P29-I04",
                 "title": "Cross-vendor spawn",
-                "status": "claimed",
+                "status": "pending",
                 "deps": [],
                 "blocks": [],
                 "file_scopes": ["src/eawf/runtime/daemon/methods/agent.py"],
@@ -271,7 +272,7 @@ def _state_payload(*, runtime: str, effort_bucket: str) -> dict[str, Any]:
                 "tokens_consumed": 0,
                 "outcome": None,
                 "opened_at": "2026-06-01T00:00:00Z",
-                "claimed_at": "2026-06-01T00:00:00Z",
+                "claimed_at": None,
                 "closed_at": None,
                 "runtime_preference": [runtime],
             }

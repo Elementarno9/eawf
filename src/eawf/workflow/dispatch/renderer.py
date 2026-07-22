@@ -242,6 +242,7 @@ def render_dispatch_envelope(
     role_blocks: Mapping[str, str] | None = None,
     role_tier_token_cap: int = DEFAULT_ROLE_TIER_TOKEN_CAP,
     headless: bool = False,
+    role_override: AgentSessionRole | None = None,
 ) -> DispatchEnvelope:
     """Return a typed :class:`DispatchEnvelope` for *wave_id* and *runtime*.
 
@@ -276,12 +277,15 @@ def render_dispatch_envelope(
             :data:`~eawf.platform.render_block.DEFAULT_ROLE_TIER_TOKEN_CAP`.
         headless: ``True`` for the live-spawn (daemon) dispatch path, whose
             downstream reads the spawned model's final message as a JSON
-            ``ExecutorReportBody``. When set and the wave's ``agent_role`` is
-            ``executor``, the rendered prompt carries a trailing
-            ``## Report output`` section pinning the report-body JSON schema
-            so the model emits a parseable report on the first try. ``False``
-            (default) keeps the prompt byte-equivalent to the interactive
-            render an operator-facing Claude Code session sees.
+            role-specific report body. When set and the wave carries an
+            ``agent_role``, the rendered prompt carries a trailing ``## Report
+            output`` section pinning that role's JSON schema so the model emits
+            a parseable report on the first try. ``False`` (default) keeps the
+            prompt byte-equivalent to the interactive render an operator-facing
+            Claude Code session sees.
+        role_override: Authoritative live-session role. When supplied, the
+            prompt tags, role contract, workflow, and headless report schema
+            use it instead of ``Wave.agent_role``.
 
     Returns:
         :class:`DispatchEnvelope` with ``runtime``, ``wave_id``,
@@ -310,6 +314,7 @@ def render_dispatch_envelope(
         repo_root=repo_root,
         role_blocks=role_blocks,
         role_tier_token_cap=role_tier_token_cap,
+        role_override=role_override,
     )
     prompt = _render_spec_prompt(
         state, spec, wave_id=wave_id, repo_root=repo_root, headless=headless
@@ -563,6 +568,7 @@ def build_subagent_spec(
     repo_root: Path | None = None,
     role_blocks: Mapping[str, str] | None = None,
     role_tier_token_cap: int = DEFAULT_ROLE_TIER_TOKEN_CAP,
+    role_override: AgentSessionRole | None = None,
 ) -> SubagentSpec:
     """Project *state* + *wave_id* into a typed :class:`SubagentSpec`.
 
@@ -587,6 +593,8 @@ def build_subagent_spec(
         role_tier_token_cap: Maximum token weight one injected role-tier
             block may carry; defaults to
             :data:`~eawf.platform.render_block.DEFAULT_ROLE_TIER_TOKEN_CAP`.
+        role_override: Authoritative live-session role. When supplied, it
+            replaces the wave role throughout the rendered dispatch contract.
 
     Returns:
         A fully-populated :class:`SubagentSpec`.
@@ -602,14 +610,17 @@ def build_subagent_spec(
         raise KeyError(f"unknown wave: {wave_id!r}")
 
     scope_id = _resolve_scope_for_wave(state, wave)
+    parent_iter = state.iters[wave.iter_id]
+    effective_role = role_override or wave.agent_role
 
     spec = SubagentSpec(
         wave_id=wave.id,
         iter_id=wave.iter_id,
+        phase_id=parent_iter.phase_id,
         title=wave.title,
         description=wave.description,
         scope_id=scope_id,
-        agent_role=wave.agent_role.value if wave.agent_role else None,
+        agent_role=effective_role.value if effective_role else None,
         effort_bucket=wave.effort_bucket.value if wave.effort_bucket else None,
         success_criteria=[c.text for c in wave.success_criteria],
         file_scopes=list(wave.file_scopes),
@@ -621,7 +632,11 @@ def build_subagent_spec(
         worktree=_build_worktree(state, wave),
         estimate=_build_estimate(state, wave),
         role_contract=_build_role_contract_for_wave(
-            state, wave, role_blocks=role_blocks, role_tier_token_cap=role_tier_token_cap
+            state,
+            wave,
+            role_blocks=role_blocks,
+            role_tier_token_cap=role_tier_token_cap,
+            role_override=role_override,
         ),
     )
     logger.debug(
@@ -663,6 +678,7 @@ def _build_role_contract_for_wave(
     *,
     role_blocks: Mapping[str, str] | None = None,
     role_tier_token_cap: int = DEFAULT_ROLE_TIER_TOKEN_CAP,
+    role_override: AgentSessionRole | None = None,
 ) -> RoleContract | None:
     """Return the wave's :class:`RoleContract`, or ``None`` when no role set.
 
@@ -683,11 +699,13 @@ def _build_role_contract_for_wave(
         RoleTierBudgetError: when the wave's role-tier block exceeds
             ``role_tier_token_cap`` tokens.
     """
-    if wave.agent_role is None:
+    effective_role = role_override or wave.agent_role
+    if effective_role is None:
         return None
-    role_value = _as_agent_session_role(wave.agent_role).value
+    role = _as_agent_session_role(effective_role)
+    role_value = role.value
     try:
-        role_spec = get_role_spec(_as_agent_session_role(wave.agent_role))
+        role_spec = get_role_spec(role)
     except KeyError:
         return None
     role_block_body = role_blocks.get(role_value) if role_blocks is not None else None
@@ -720,6 +738,7 @@ def render_wave_prompt(
     repo_root: Path | None = None,
     role_blocks: Mapping[str, str] | None = None,
     role_tier_token_cap: int = DEFAULT_ROLE_TIER_TOKEN_CAP,
+    role_override: AgentSessionRole | None = None,
 ) -> str:
     """Return the Markdown prompt for *wave_id*.
 
@@ -749,6 +768,8 @@ def render_wave_prompt(
             prompt byte-equivalent to the pre-W41 renderer.
         role_tier_token_cap: Maximum token weight one injected role-tier
             block may carry; forwarded to :func:`build_subagent_spec`.
+        role_override: Optional authoritative role forwarded to
+            :func:`build_subagent_spec`.
 
     Returns:
         A single string containing the full Markdown prompt. The
@@ -768,6 +789,7 @@ def render_wave_prompt(
         repo_root=repo_root,
         role_blocks=role_blocks,
         role_tier_token_cap=role_tier_token_cap,
+        role_override=role_override,
     )
     return _render_spec_prompt(state, spec, wave_id=wave_id, repo_root=repo_root)
 

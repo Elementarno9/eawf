@@ -34,7 +34,7 @@ from typing import NamedTuple
 
 from eawf.kernel.spec.roadmap_plan import RoadmapPlan, RoadmapPlanWave
 from eawf.kernel.state.models import CriteriaFloorWaiver, State
-from eawf.workflow.lifecycle._errors import LifecycleError
+from eawf.workflow.lifecycle._errors import LifecycleError, LifecycleGuardError
 from eawf.workflow.lifecycle.iter_ import (
     activate_iter,
     close_iter,
@@ -69,6 +69,7 @@ from eawf.workflow.lifecycle.wave import (
     remove_wave_plan,
     set_wave_deps,
     start_wave,
+    validate_claim_session,
 )
 
 
@@ -185,6 +186,7 @@ def _roadmap_waves_in_dep_order(plan: RoadmapPlan) -> list[tuple[str, RoadmapPla
 
 __all__ = [
     "LifecycleError",
+    "LifecycleGuardError",
     "PlannedRoadmap",
     "activate_iter",
     "activate_phase",
@@ -214,4 +216,5 @@ __all__ = [
     "set_wave_deps",
     "start_wave",
     "switch_track",
+    "validate_claim_session",
 ]

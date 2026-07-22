@@ -52,7 +52,6 @@ from eawf.workflow.lifecycle.transitions import (
     activate_phase,
     add_track,
     archive_phase,
-    claim_wave,
     close_iter,
     close_phase,
     close_wave,
@@ -70,6 +69,7 @@ from eawf.workflow.lifecycle.transitions import (
     start_wave,
     switch_track,
 )
+from tests._session_helpers import claim_wave_with_session as claim_wave
 from tests.conftest import make_intent
 
 

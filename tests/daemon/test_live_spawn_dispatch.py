@@ -41,16 +41,18 @@ import pytest
 
 from eawf import __version__
 from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
+from eawf.kernel.state.models import AgentSession
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.kinds.agent_report import AgentReportPayload
+from eawf.kernel.store.kinds.agent_report import AgentReportPayload, store_kind_for_role
 from eawf.kernel.store.paths import store_path
 from eawf.observability.telemetry.pricing import lookup_pricing
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.dispatch_runner import AGENT_OUTPUT_EVENT_TYPE
-from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.agent import (
     LiveSpawnError,
+    _claim_live_session,
     _persist_live_session_attempt,
     dispatch,
     kill,
@@ -85,9 +87,82 @@ def _executor_report_json(*, wave_id: str = _WAVE_ID, verdict: str = "pass") -> 
             "wave_id": wave_id,
             "files_changed": ["src/eawf/runtime/daemon/methods/agent.py"],
             "tests_run": ["uv run pytest tests/daemon -q"],
+            "commit_sha": "abc1234",
             "outcome": "bound the spawned executor output to the report body",
         }
     )
+
+
+def _role_report_json(role: AgentSessionRole) -> str:
+    """Return one valid authored report body for a specialist *role*."""
+    common: dict[str, Any] = {
+        "role": role.value,
+        "verdict": "pass",
+        "confidence": "high",
+        "summary": f"{role.value} completed the assigned wave",
+        "evidence_refs": [
+            {
+                "kind": "artifact",
+                "ref": "tests/daemon/test_live_spawn_dispatch.py:1",
+                "note": "CR-01",
+            }
+        ],
+        "followups": [],
+    }
+    role_fields: dict[AgentSessionRole, dict[str, Any]] = {
+        AgentSessionRole.RESEARCHER: {
+            "question": "What evidence resolves this wave?",
+            "findings": ["the dispatch report path is role-correct"],
+            "alternatives": [],
+            "recommendation": "retain the role-matched report binding",
+        },
+        AgentSessionRole.PLANNER: {
+            "objective": "plan the dispatched wave",
+            "waves": [],
+            "risks": [],
+        },
+        AgentSessionRole.AUDITOR: {
+            "target_id": _WAVE_ID,
+            "criteria": [
+                {
+                    "criterion": "CR-01",
+                    "passed": True,
+                    "evidence_refs": common["evidence_refs"],
+                }
+            ],
+            "refutations": [],
+        },
+        AgentSessionRole.REVIEWER: {
+            "target_id": _WAVE_ID,
+            "findings": [],
+            "coverage_refs": common["evidence_refs"],
+        },
+        AgentSessionRole.POLISHER: {
+            "scope_id": _WAVE_ID,
+            "changes": [],
+            "deferred_items": [],
+        },
+        AgentSessionRole.OPERATOR: {
+            "phase_id": "P29",
+            "completed_wave_ids": [_WAVE_ID],
+            "decisions": [],
+            "next_actions": [],
+        },
+        AgentSessionRole.DOMAIN_SPECIALIST: {
+            "domain": "workflow",
+            "assessment": "the role-specific dispatch contract is satisfied",
+            "recommendations": [],
+        },
+    }
+    common.update(role_fields[role])
+    return json.dumps(common)
+
+
+def _authored_report_json(role: AgentSessionRole) -> str:
+    """Return a valid report body for any live-dispatch role."""
+    if role is AgentSessionRole.EXECUTOR:
+        return _executor_report_json()
+    return _role_report_json(role)
 
 
 # --------------------------------------------------------------------------- #
@@ -107,10 +182,16 @@ class _StubAdapter:
     id = "claude-code"
     cli_binary = "claude"
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        report_text: str | None = None,
+        report_texts: Sequence[str] | None = None,
+    ) -> None:
         self.spawn_calls = 0
         self.prompts: list[str] = []
         self.models: list[str] = []
+        self.report_texts = list(report_texts or [report_text or _executor_report_json()])
 
     async def spawn_session(
         self,
@@ -129,7 +210,7 @@ class _StubAdapter:
         self.models.append(model)
         if on_spawn is not None:
             on_spawn(_STUB_PID)
-        text = _executor_report_json()
+        text = self.report_texts[min(self.spawn_calls - 1, len(self.report_texts) - 1)]
         if on_chunk is not None:
             # Mirror the real adapter's live-streaming seam: fan each stdout line
             # to the chunk callback as it "arrives" so the W45 chunk producer is
@@ -161,17 +242,18 @@ class _StubAdapter:
 def _state_payload(
     *,
     agent_role: str = "executor",
-    effort_bucket: str = "L",
+    effort_bucket: str | None = "L",
     token_budget: int | None = None,
-    wave_status: str = "claimed",
+    wave_status: str = "pending",
 ) -> dict[str, Any]:
     """A minimal valid State with the full phase -> iter -> wave chain.
 
     The chain is required because the live path renders the dispatch
     envelope, which walks wave -> iter -> phase -> scope. The wave starts
-    CLAIMED so the runner's head transition flips it to IN_PROGRESS, and
-    ``agent_sessions`` starts empty so the live path registers the executor
-    session itself. ``wave_status`` overrides the wave's status (e.g.
+    PENDING so live dispatch creates and binds its session atomically before
+    the runner's head transition flips it to IN_PROGRESS. ``agent_sessions``
+    starts empty so the live path registers the executor session itself.
+    ``wave_status`` overrides the wave's status (e.g.
     ``"closed"`` to model close-on-behalf having already closed the wave).
     """
     return {
@@ -194,7 +276,7 @@ def _state_payload(
             "track_id": None,
             "phase_id": "P29",
             "iter_id": "P29-I04",
-            "active_wave_ids": [_WAVE_ID],
+            "active_wave_ids": ([_WAVE_ID] if wave_status in {"claimed", "in_progress"} else []),
             "active_session_ids": [],
         },
         "workspace": None,
@@ -252,7 +334,9 @@ def _state_payload(
                 "tokens_consumed": 0,
                 "outcome": None,
                 "opened_at": "2026-06-01T00:00:00Z",
-                "claimed_at": "2026-06-01T00:00:00Z",
+                "claimed_at": (
+                    "2026-06-01T00:00:00Z" if wave_status in {"claimed", "in_progress"} else None
+                ),
                 "closed_at": None,
                 "runtime_preference": ["claude-code"],
             }
@@ -347,11 +431,315 @@ def test_dispatch_spawn_registers_executor_session(
     assert session.role is AgentSessionRole.EXECUTOR
     assert session.scope_id == _WAVE_ID
     assert session.status is AgentSessionStatus.ACTIVE
+    assert session.claimed_wave_ids == [_WAVE_ID]
     # The plan's session id is the registered AgentSession id (not a cosmetic UUID).
     assert result["session_id"] == session.id
     assert session.id in state.current.active_session_ids
+    assert state.waves[_WAVE_ID].claim_session_id == session.id
     # The adapter spawn was driven exactly once.
     assert adapter.spawn_calls == 1
+    events = _read_envelopes(event_path)
+    assert [event.payload["event_type"] for event in events[:2]] == [
+        "session.start",
+        "wave.claim",
+    ]
+    assert events[1].payload["actor"] == session.id
+
+
+def test_dispatch_claim_failure_leaves_no_session_wave_or_event(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A rejection after staging a session rolls the whole live claim back."""
+    state_path = _write_state(tmp_path, effort_bucket=None)
+    before = state_path.read_bytes()
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    adapter = _StubAdapter()
+    _patch_adapter(monkeypatch, adapter)
+    ctx = _ctx(state_path, event_path=event_path)
+
+    with pytest.raises(DaemonValidationError, match="has no effort_bucket"):
+        _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+
+    assert state_path.read_bytes() == before
+    assert not event_path.exists()
+    assert adapter.spawn_calls == 0
+
+
+def test_dispatch_unknown_runtime_rejects_before_session_claim_or_event(tmp_path: Path) -> None:
+    """Adapter preflight rejects a bogus runtime with no durable orphan."""
+    state_path = _write_state(tmp_path)
+    before = state_path.read_bytes()
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    ctx = _ctx(state_path, event_path=event_path)
+
+    with pytest.raises(ValueError, match="unknown runtime"):
+        _run(
+            dispatch(
+                ctx,
+                {"wave_id": _WAVE_ID, "runtime": "bogus-runtime", "spawn": True},
+            )
+        )
+
+    assert state_path.read_bytes() == before
+    assert not event_path.exists()
+
+
+def test_dispatch_model_resolution_rejects_before_session_claim_or_event(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Model preflight failure leaves state/events byte-identical and never spawns."""
+    state_path = _write_state(tmp_path)
+    before = state_path.read_bytes()
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    adapter = _StubAdapter()
+    _patch_adapter(monkeypatch, adapter)
+
+    def _fail_model(*args: Any, **kwargs: Any) -> str:
+        raise ValueError("model resolution failed")
+
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.agent._resolve_spawn_model",
+        _fail_model,
+    )
+    ctx = _ctx(state_path, event_path=event_path)
+
+    with pytest.raises(ValueError, match="model resolution failed"):
+        _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+
+    assert state_path.read_bytes() == before
+    assert not event_path.exists()
+    assert adapter.spawn_calls == 0
+
+
+def test_live_claim_transaction_uses_specialist_wave_role(tmp_path: Path) -> None:
+    """Canonical transaction creates AUDITOR, never unconditional EXECUTOR."""
+    state_path = _write_state(tmp_path, agent_role="auditor")
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    ctx = _ctx(state_path, event_path=event_path)
+
+    binding = _claim_live_session(
+        ctx,
+        wave_id=_WAVE_ID,
+        runtime="claude-code",
+        out_of_order=False,
+    )
+
+    state = load_state(state_path)
+    session = state.agent_sessions[binding.session_id]
+    assert binding.role is AgentSessionRole.AUDITOR
+    assert session.role is AgentSessionRole.AUDITOR
+    assert session.claimed_wave_ids == [_WAVE_ID]
+    assert state.waves[_WAVE_ID].claim_session_id == session.id
+
+
+@pytest.mark.parametrize(
+    "role",
+    [
+        AgentSessionRole.RESEARCHER,
+        AgentSessionRole.PLANNER,
+        AgentSessionRole.AUDITOR,
+        AgentSessionRole.REVIEWER,
+        AgentSessionRole.POLISHER,
+        AgentSessionRole.OPERATOR,
+        AgentSessionRole.DOMAIN_SPECIALIST,
+    ],
+)
+def test_dispatch_spawn_emits_role_correct_specialist_report(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    role: AgentSessionRole,
+) -> None:
+    """Full specialist dispatch binds and emits under its session role."""
+    state_path = _write_state(tmp_path, agent_role=role.value)
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    adapter = _StubAdapter(report_text=_role_report_json(role))
+    _patch_adapter(monkeypatch, adapter)
+    ctx = _ctx(state_path, event_path=event_path)
+
+    result: dict[str, Any] = _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+
+    state = load_state(state_path)
+    session = state.agent_sessions[result["session_id"]]
+    assert session.role is role
+    assert state.waves[_WAVE_ID].claim_session_id == session.id
+
+    report_path = store_path(state_path, store_kind_for_role(role))
+    rows = _read_envelopes(report_path)
+    assert len(rows) == 1
+    payload = AgentReportPayload.model_validate(rows[0].payload)
+    assert payload.header.role is role
+    assert payload.header.session_id == session.id
+    assert payload.body.role == role.value
+    assert payload.body.verdict.value == "pass"
+    assert _executor_report_rows(state_path) == []
+
+    assert adapter.spawn_calls == 1
+    assert "## Report output" in adapter.prompts[0]
+    assert role.value in adapter.prompts[0]
+    assert f"typed {role.value} report" in adapter.prompts[0]
+
+
+@pytest.mark.parametrize(
+    ("role", "invalid_field", "invalid_value", "violation_code"),
+    [
+        (
+            AgentSessionRole.EXECUTOR,
+            "commit_sha",
+            None,
+            "INV.AGENT_REPORT.EXECUTOR_COMMIT_MISSING",
+        ),
+        (
+            AgentSessionRole.AUDITOR,
+            "criteria",
+            [],
+            "INV.AGENT_REPORT.AUDITOR_CRITERIA_MISSING",
+        ),
+        (
+            AgentSessionRole.REVIEWER,
+            "coverage_refs",
+            [],
+            "INV.AGENT_REPORT.REVIEWER_COVERAGE_MISSING",
+        ),
+        (
+            AgentSessionRole.OPERATOR,
+            "phase_id",
+            _WAVE_ID,
+            "INV.AGENT_REPORT.OPERATOR_PHASE_MISSING",
+        ),
+    ],
+)
+def test_dispatch_reasks_canonical_invariant_failure_before_persisting(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    role: AgentSessionRole,
+    invalid_field: str,
+    invalid_value: object,
+    violation_code: str,
+) -> None:
+    """Schema-valid but invariant-invalid role bodies are never persisted."""
+    state_path = _write_state(tmp_path, agent_role=role.value)
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    invalid = json.loads(_authored_report_json(role))
+    invalid[invalid_field] = invalid_value
+    adapter = _StubAdapter(
+        report_texts=[
+            json.dumps(invalid),
+            _authored_report_json(role),
+        ]
+    )
+    _patch_adapter(monkeypatch, adapter)
+
+    _run(dispatch(_ctx(state_path, event_path=event_path), {"wave_id": _WAVE_ID, "spawn": True}))
+
+    assert adapter.spawn_calls == 2
+    assert "Output correction required" in adapter.prompts[1]
+    assert violation_code in adapter.prompts[1]
+    rows = _read_envelopes(store_path(state_path, store_kind_for_role(role)))
+    assert len(rows) == 1
+    body = AgentReportPayload.model_validate(rows[0].payload).body
+    assert body.role == role.value
+    assert body.report_source.value == "authored"
+
+
+def test_dispatch_operator_override_uses_operator_prompt_validator_and_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An operator session over an auditor wave stays operator end to end."""
+    state_path = _write_state(tmp_path, agent_role="auditor", wave_status="claimed")
+    state = load_state(state_path)
+    session_id = "SES-operator-override"
+    state.agent_sessions[session_id] = AgentSession(
+        id=session_id,
+        role=AgentSessionRole.OPERATOR,
+        runtime="claude-code",
+        scope_id=_WAVE_ID,
+        status=AgentSessionStatus.ACTIVE,
+        claimed_wave_ids=[_WAVE_ID],
+        started_at=_T0,
+    )
+    state.current.active_session_ids.append(session_id)
+    state.waves[_WAVE_ID].claim_session_id = session_id
+    state_path.write_text(state.model_dump_json(), encoding="utf-8")
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    adapter = _StubAdapter(report_text=_role_report_json(AgentSessionRole.OPERATOR))
+    _patch_adapter(monkeypatch, adapter)
+
+    result: dict[str, Any] = _run(
+        dispatch(_ctx(state_path, event_path=event_path), {"wave_id": _WAVE_ID, "spawn": True})
+    )
+
+    assert result["session_id"] == session_id
+    assert adapter.spawn_calls == 1
+    prompt = adapter.prompts[0]
+    assert "- agent_role: operator" in prompt
+    assert "- role: operator" in prompt
+    assert "typed operator report" in prompt
+    assert "parent phase `P29`" in prompt
+    assert "typed auditor report" not in prompt
+
+    report_path = store_path(state_path, StoreKind.OPERATOR_REPORT)
+    rows = _read_envelopes(report_path)
+    assert len(rows) == 1
+    payload = AgentReportPayload.model_validate(rows[0].payload)
+    assert payload.header.role is AgentSessionRole.OPERATOR
+    assert payload.body.role == "operator"
+    assert payload.body.phase_id == "P29"
+    assert payload.body.report_source.value == "authored"
+    assert not store_path(state_path, StoreKind.AUDITOR_REPORT).exists()
+
+
+def test_dispatch_claimed_wave_without_bound_session_rejects_before_spawn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Historical CLAIMED row missing its binding cannot gain a new session."""
+    state_path = _write_state(tmp_path, wave_status="claimed")
+    before = state_path.read_bytes()
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    adapter = _StubAdapter()
+    _patch_adapter(monkeypatch, adapter)
+    ctx = _ctx(state_path, event_path=event_path)
+
+    with pytest.raises(DaemonValidationError, match="claim_session_not_found"):
+        _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+
+    assert state_path.read_bytes() == before
+    assert not event_path.exists()
+    assert adapter.spawn_calls == 0
+
+
+def test_dispatch_claimed_wave_with_stale_bound_session_rejects_before_spawn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Live redispatch refuses a stale session already bound to the wave."""
+    state_path = _write_state(tmp_path, wave_status="claimed")
+    state = load_state(state_path)
+    session_id = "SES-stale-bound"
+    state.agent_sessions[session_id] = AgentSession(
+        id=session_id,
+        role=AgentSessionRole.EXECUTOR,
+        runtime="claude-code",
+        scope_id=_WAVE_ID,
+        status=AgentSessionStatus.STALE,
+        claimed_wave_ids=[_WAVE_ID],
+        started_at=_T0,
+        ended_at=_T1,
+    )
+    state.waves[_WAVE_ID].claim_session_id = session_id
+    state_path.write_text(state.model_dump_json(), encoding="utf-8")
+    before = state_path.read_bytes()
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    adapter = _StubAdapter()
+    _patch_adapter(monkeypatch, adapter)
+    ctx = _ctx(state_path, event_path=event_path)
+
+    with pytest.raises(DaemonValidationError, match="claim_session_not_active"):
+        _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+
+    assert state_path.read_bytes() == before
+    assert not event_path.exists()
+    assert adapter.spawn_calls == 0
 
 
 def test_dispatch_spawn_emits_executor_report_unidling_run_dispatch(
@@ -432,7 +820,10 @@ def test_dispatch_spawn_persists_session_attempt_pid(
     wave = load_state(state_path).waves[_WAVE_ID]
     attempt = wave.sessions[result["attempt"]]
     assert attempt.subprocess_pid == _STUB_PID
+    assert attempt.session_id == "sess-live-abc123"
+    assert attempt.session_id != result["session_id"]
     assert result["session_attempt"]["subprocess_pid"] == _STUB_PID
+    assert result["session_attempt"]["session_id"] == "sess-live-abc123"
     assert wave.dispatch_history[-1].attempt == result["attempt"]
 
 
@@ -944,7 +1335,6 @@ def test_persist_live_session_attempt_drops_when_wave_terminal(
         wave_id=_WAVE_ID,
         requested_runtime=runtime,
         serving_runtime=runtime,
-        session_id="sess-late-xyz789",
         session_log_handle=f"urn:eawf:v1:session-log:{runtime}:sess-late-xyz789",
         spawn_result=_terminal_spawn_result(runtime=runtime),
         pid=_STUB_PID,
@@ -982,8 +1372,7 @@ def test_persist_live_session_attempt_persists_when_wave_active(
         wave_id=_WAVE_ID,
         requested_runtime=runtime,
         serving_runtime=runtime,
-        session_id="sess-live-ok",
-        session_log_handle=f"urn:eawf:v1:session-log:{runtime}:sess-live-ok",
+        session_log_handle=f"urn:eawf:v1:session-log:{runtime}:sess-late-xyz789",
         spawn_result=_terminal_spawn_result(runtime=runtime),
         pid=_STUB_PID,
     )
@@ -993,7 +1382,7 @@ def test_persist_live_session_attempt_persists_when_wave_active(
     assert attempt == 1
     wave = load_state(state_path).waves[_WAVE_ID]
     assert set(wave.sessions) == {1}
-    assert wave.sessions[1].session_id == "sess-live-ok"
+    assert wave.sessions[1].session_id == "sess-late-xyz789"
     # The persisted attempt's cost matches the returned session-attempt row.
     assert wave.sessions[1].cost_usd == pytest.approx(float(session_attempt.cost_usd))
     # A headless runtime fires no runtime.capture RPC, so the persist credits
