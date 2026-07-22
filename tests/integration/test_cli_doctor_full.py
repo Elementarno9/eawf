@@ -29,8 +29,8 @@ runner = CliRunner()
 
 
 @pytest.fixture(autouse=True)
-def _no_supervised_agent(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Stub the launchd/systemd detector so the host's real agent never leaks in."""
+def _sandbox_host_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep host daemon and global config state out of doctor tests."""
     from eawf.runtime.daemon.service_install import SupervisedAgentReport
 
     report = SupervisedAgentReport(
@@ -45,6 +45,10 @@ def _no_supervised_agent(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "eawf.runtime.daemon.service_install.detect_supervised_agent",
         lambda *_a, **_k: report,
+    )
+    monkeypatch.setattr(
+        "eawf.kernel.config.layered.global_config_path",
+        lambda: tmp_path / "global-config.yaml",
     )
 
 
@@ -93,6 +97,7 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
         "tools_available",
         "state_present",
         "config_resolves",
+        "reserved_config_key",
         "manifest_in_sync",
         "mcp_drift",
         "state_scale_ceiling",

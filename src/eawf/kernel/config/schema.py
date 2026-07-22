@@ -12,6 +12,7 @@ from eawf.kernel.state.enums import EffortBucket
 CommitSubjectStyle = Literal["bracket", "trailer"]
 ReleaseCadence = Literal["manual", "per-phase"]
 AgentDrivenReleasePolicy = Literal["manual", "per-phase"]
+VerifyWaiverMode = Literal["A", "B", "C", "disabled"]
 
 
 class SolutionBias(StrEnum):
@@ -144,6 +145,22 @@ class PreferencesConfig(BaseModel):
     solution_bias: SolutionBias = SolutionBias.BALANCED
     scope_size: EffortBucket = EffortBucket.M
     auto_choose: AutoChoose = AutoChoose.OFF
+
+
+class VerifyConfig(BaseModel):
+    """Strict layered-config contract for the ``verify`` section.
+
+    Gate booleans are tighten-only when profile and repo values compose. The
+    profile resolver owns that cross-layer fold; this model owns value shape
+    and rejects misspelled waiver modes before lifecycle code sees them.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    odr_blocking: bool = False
+    require_iter_audit_accepted: bool = False
+    waiver_mode: VerifyWaiverMode = "B"
+    juror_wall_clock_seconds: float = Field(default=600.0, gt=0.0)
 
 
 class ProseLevel(StrEnum):
@@ -352,6 +369,8 @@ __all__ = [
     "SolutionBias",
     "VcsConventionsConfig",
     "VcsReleaseConventionsConfig",
+    "VerifyConfig",
+    "VerifyWaiverMode",
     "assert_prose_not_weaker_than",
     "prose_level_rank",
 ]

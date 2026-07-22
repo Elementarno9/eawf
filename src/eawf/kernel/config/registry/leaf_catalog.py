@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from eawf.kernel.config.registry.config_keys import CONFIG_REGISTRY
 from eawf.kernel.config.registry.leaf_keys import (
     _WRITABLE_ALL_DURABLE,
     _WRITABLE_GWR,
@@ -38,7 +39,7 @@ from eawf.kernel.config.registry.leaf_keys import (
 from eawf.kernel.spec.research import DEFAULT_RESEARCH_DEPTH, RESEARCH_DEPTH_VALUES
 
 # Catalog data table — declaration-ordered by domain section for review.
-_LEAF_KEYS: tuple[LeafKey, ...] = (
+_DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
     # --- top-level + schema ------------------------------------------------
     LeafKey(
         key="schema_version",
@@ -585,6 +586,7 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         type="literal",
         default="ask",
         writable_layers=_WRITABLE_GWR,
+        description="Reserved for compatibility; roadmap approval remains explicit.",
         choices=("ask", "auto", "never"),
     ),
     LeafKey(
@@ -602,6 +604,33 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         default=False,
         writable_layers=_WRITABLE_GWR,
         description="Repo opt-in: a below-floor Oracle-Determinism-Ratio refuses iter close.",
+        consumer="eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
+    ),
+    LeafKey(
+        key="verify.require_iter_audit_accepted",
+        domain="verify",
+        type="bool",
+        default=False,
+        writable_layers=_WRITABLE_GWR,
+        description="Require a completed accepted audit before iter close.",
+    ),
+    LeafKey(
+        key="verify.waiver_mode",
+        domain="verify",
+        type="literal",
+        default="B",
+        writable_layers=_WRITABLE_GWR,
+        description="Operator waiver policy; disabled is an absorbing composition value.",
+        choices=("A", "B", "C", "disabled"),
+    ),
+    LeafKey(
+        key="verify.juror_wall_clock_seconds",
+        domain="verify",
+        type="float",
+        default=600.0,
+        writable_layers=_WRITABLE_GWR,
+        description="Wall-clock ceiling for close-time auditor and juror runs.",
+        consumer="eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
     ),
     LeafKey(
         key="planning.require_research_for_unknowns",
@@ -616,6 +645,7 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         type="bool",
         default=False,
         writable_layers=_WRITABLE_GWR,
+        description="Reserved for compatibility; /prep always presents the plan gate.",
     ),
     # --- preferences -------------------------------------------------------
     LeafKey(
@@ -841,6 +871,7 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         type="bool",
         default=False,
         writable_layers=_WRITABLE_GWR,
+        description="Reserved for compatibility; /audit never mutates source automatically.",
     ),
     LeafKey(
         key="audit.flaky_retry_count",
@@ -865,6 +896,7 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         type="bool",
         default=True,
         writable_layers=_WRITABLE_GWR,
+        description="Reserved for compatibility; this value does not gate ship.",
     ),
     LeafKey(
         key="ship.require_memory_review",
@@ -1011,7 +1043,7 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         type="int",
         default=3,
         writable_layers=_WRITABLE_GWR,
-        description="Stop re-entering a failing flow stage past this many repair cycles.",
+        description="Reserved for compatibility; this value does not bound repair execution.",
     ),
     # --- prep --------------------------------------------------------------
     LeafKey(
@@ -1379,6 +1411,7 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         type="str",
         default="mixed_strict",
         writable_layers=_WRITABLE_GWR,
+        description="Reserved hook policy; accepted for compatibility but not enforced.",
     ),
     LeafKey(
         key="hooks.timeout_seconds",
@@ -1386,6 +1419,7 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         type="int",
         default=30,
         writable_layers=_WRITABLE_GWR,
+        description="Reserved hook policy; accepted for compatibility but not enforced.",
     ),
     LeafKey(
         key="hooks.enabled",
@@ -1393,6 +1427,7 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         type="list_str",
         default=(),
         writable_layers=_WRITABLE_GWR,
+        description="Reserved hook policy; accepted for compatibility but not enforced.",
     ),
     LeafKey(
         key="hooks.fail_closed",
@@ -1400,6 +1435,7 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         type="list_str",
         default=(),
         writable_layers=_WRITABLE_GWR,
+        description="Reserved hook policy; accepted for compatibility but not enforced.",
     ),
     LeafKey(
         key="hooks.fail_open",
@@ -1407,6 +1443,7 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         type="list_str",
         default=(),
         writable_layers=_WRITABLE_GWR,
+        description="Reserved hook policy; accepted for compatibility but not enforced.",
     ),
     LeafKey(
         key="hooks.ask_on_fail",
@@ -1414,6 +1451,7 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         type="list_str",
         default=(),
         writable_layers=_WRITABLE_GWR,
+        description="Reserved hook policy; accepted for compatibility but not enforced.",
     ),
     # --- mcp ---------------------------------------------------------------
     LeafKey(
@@ -1550,6 +1588,62 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
     ),
 )
+
+
+_CONSUMER_BY_KEY: dict[str, str] = {
+    "audit.default_level": "eawf.workflow.skills.audit._resolve_level",
+    "daemon.proxy_enabled": "eawf.surfaces.cli._mutation._proxy_enabled",
+    "dispatch.role_tier_token_cap": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
+    "estimation.eu_basis": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
+    "estimation.eu_minutes": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
+    "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_enforce",
+    "prep.auto_resume": "eawf.workflow.skills.prep.PrepSkill._resolve_auto_resume",
+    "research.agent_count": "eawf.workflow.skills.research.ResearchSkill._resolve_agents",
+    "research.default_depth": "eawf.workflow.skills.research.ResearchSkill._resolve_depth",
+    "ship.gauntlet": "eawf.workflow.skills.ship._resolve_gauntlet",
+    "telemetry.db_kind": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
+    "telemetry.enabled": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
+    "ui.glyphs": "eawf.surfaces.tui.app._persisted_glyphs",
+    "ui.theme": "eawf.surfaces.tui.app._persisted_theme",
+    "vcs.conventions.release.cadence": (
+        "eawf.runtime.vcs.coauthor.requires_phase_release_preflight"
+    ),
+    "verify.waiver_mode": "eawf.workflow.lifecycle.waivers.resolve_waiver_mode",
+}
+
+_INTERACTIVE_KEYS = {entry.key for entry in CONFIG_REGISTRY}
+_HOOK_POLICY_KEYS = {entry.key for entry in _DECLARED_LEAF_KEYS if entry.key.startswith("hooks.")}
+_BEHAVIOR_KEYS = _INTERACTIVE_KEYS | _HOOK_POLICY_KEYS
+_RESERVED_BEHAVIOR_KEYS: frozenset[str] = frozenset(_BEHAVIOR_KEYS - _CONSUMER_BY_KEY.keys())
+
+
+def _bind_behavior_metadata(entry: LeafKey) -> LeafKey:
+    """Attach the audited consumer-or-reserved classification to *entry*."""
+    if entry.key in _RESERVED_BEHAVIOR_KEYS:
+        return entry.model_copy(update={"consumer": None, "reserved": True})
+    consumer = _CONSUMER_BY_KEY.get(entry.key)
+    if consumer is not None:
+        return entry.model_copy(update={"consumer": consumer, "reserved": False})
+    return entry
+
+
+_LEAF_KEYS: tuple[LeafKey, ...] = tuple(
+    _bind_behavior_metadata(entry) for entry in _DECLARED_LEAF_KEYS
+)
+
+_DECLARED_KEYS = {entry.key for entry in _LEAF_KEYS}
+assert not (_BEHAVIOR_KEYS - _DECLARED_KEYS), (
+    f"interactive config keys missing from leaf catalog: {sorted(_BEHAVIOR_KEYS - _DECLARED_KEYS)}"
+)
+assert not (_CONSUMER_BY_KEY.keys() - _BEHAVIOR_KEYS), (
+    f"consumer binding targets non-behaviour leaf: "
+    f"{sorted(_CONSUMER_BY_KEY.keys() - _BEHAVIOR_KEYS)}"
+)
+assert all(
+    (entry.consumer is not None) ^ entry.reserved
+    for entry in _LEAF_KEYS
+    if entry.key in _BEHAVIOR_KEYS
+), "every interactive and hooks.* leaf must declare exactly one consumer or reserved=true"
 
 
 # Public read-only mapping. The dict shape is convenient for dotted-key

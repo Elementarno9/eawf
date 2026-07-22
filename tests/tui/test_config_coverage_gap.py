@@ -52,10 +52,10 @@ _NON_SCALAR_TYPES: frozenset[str] = frozenset({"list_str", "list_any", "mapping"
 #: it. Bumping these is the *intended* signal when a leaf key is added or
 #: curated -- a silent drift fails the snapshot assertions below.
 _GAP_SNAPSHOT: Mapping[str, int] = {
-    "total": 128,
+    "total": 129,
     "locked": 4,
     "structural": 31,
-    "cli_only": 93,
+    "cli_only": 94,
 }
 
 

@@ -465,7 +465,7 @@ ScopeName = Literal["repo", "workspace", "user"]
 _breadcrumb = build_breadcrumb
 
 
-def _persisted_theme() -> str:
+def _persisted_theme(repo_root: Path | None = None) -> str:
     """Read the persisted ``ui.theme`` logical name from layered config.
 
     Reads through the same :func:`~eawf.kernel.config.layered.merge_config` path
@@ -475,6 +475,11 @@ def _persisted_theme() -> str:
     not a recognised logical name all degrade to :data:`DEFAULT_THEME` —
     the swap is a cosmetic preference, never a launch-blocking read.
 
+    Args:
+        repo_root: Optional repository anchor. Canonical repo-scope launches
+            pass the root derived from ``.ea/state.json``; user/workspace
+            fallback launches intentionally resolve only global + env layers.
+
     Returns:
         The persisted logical theme name, or :data:`DEFAULT_THEME` when
         none is persisted / the persisted value is unrecognised.
@@ -482,7 +487,7 @@ def _persisted_theme() -> str:
     from eawf.kernel.config.layered import get_dotted, merge_config
 
     try:
-        merged, _sources = merge_config()
+        merged, _sources = merge_config(repo=repo_root)
         value = get_dotted(merged, "ui.theme")
     except (KeyError, OSError, ValueError) as exc:
         logger.debug(f"_persisted_theme fallback exc={exc!r}")
@@ -500,7 +505,7 @@ _GLYPHS_DEFAULT = "auto"
 _GLYPHS_CHOICES = ("auto", "ascii", "unicode")
 
 
-def _persisted_glyphs() -> str:
+def _persisted_glyphs(repo_root: Path | None = None) -> str:
     """Read the persisted ``ui.glyphs`` policy from layered config.
 
     Reads through the same :func:`~eawf.kernel.config.layered.merge_config` path
@@ -509,6 +514,11 @@ def _persisted_glyphs() -> str:
     value degrades to ``"auto"`` — glyph selection is cosmetic, never a
     launch-blocking read.
 
+    Args:
+        repo_root: Optional repository anchor. Canonical repo-scope launches
+            pass the root derived from ``.ea/state.json``; user/workspace
+            fallback launches intentionally resolve only global + env layers.
+
     Returns:
         One of ``"auto"`` / ``"ascii"`` / ``"unicode"``; ``"auto"`` when
         none is persisted or the persisted value is unrecognised.
@@ -516,7 +526,7 @@ def _persisted_glyphs() -> str:
     from eawf.kernel.config.layered import get_dotted, merge_config
 
     try:
-        merged, _sources = merge_config()
+        merged, _sources = merge_config(repo=repo_root)
         value = get_dotted(merged, "ui.glyphs")
     except (KeyError, OSError, ValueError) as exc:
         logger.debug(f"_persisted_glyphs fallback exc={exc!r}")
@@ -525,6 +535,13 @@ def _persisted_glyphs() -> str:
         return value
     logger.debug(f"_persisted_glyphs unrecognised value={value!r}")
     return _GLYPHS_DEFAULT
+
+
+def _repo_config_root(scope: ScopeName, state_path: Path | None) -> Path | None:
+    """Return the repo anchor for a canonical repo-scope state path."""
+    if scope != "repo" or state_path is None or state_path.parent.name != ".ea":
+        return None
+    return state_path.parent.parent
 
 
 def probe_braille_coverage() -> bool:
@@ -799,11 +816,12 @@ class EaApp(App[None]):
         self._reference_back_stack: deque[ReferenceTarget] = deque(maxlen=REFERENCE_HISTORY_MAX)
         self._reference_forward_stack: deque[ReferenceTarget] = deque(maxlen=REFERENCE_HISTORY_MAX)
         self._current_reference: ReferenceTarget | None = None
+        repo_config_root = _repo_config_root(scope, state_path)
         # The persisted ``ui.glyphs`` policy (auto/ascii/unicode). Read
         # once here, off the same layered-config path /config writes; the
         # MOUNT-time coverage probe combines it with FONT_NO_BRAILLE to
         # resolve the initial render_mode. Cosmetic, never launch-blocking.
-        self._glyphs_policy: str = _persisted_glyphs()
+        self._glyphs_policy: str = _persisted_glyphs(repo_config_root)
         # Detect the auto theme's terminal background ONCE here, before
         # .run() captures stdin: the OSC 11 query needs the live TTY, and
         # Textual's input parser owns stdin for the whole run — a mid-run
@@ -829,7 +847,7 @@ class EaApp(App[None]):
         # the migrated $accent/$ok/$status-* vars undefined.
         for theme in EA_THEMES:
             self.register_theme(theme)
-        self.apply_theme(_persisted_theme())
+        self.apply_theme(_persisted_theme(repo_config_root))
         # Bind the initial on-disk state SYNCHRONOUSLY here, before the Home
         # mode composes its scope screen + attention band. ``on_mount`` is
         # async and only binds real state after ``await connect()``, but the

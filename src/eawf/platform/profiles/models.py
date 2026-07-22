@@ -312,6 +312,9 @@ class VerifyBlock(BaseModel):
             profile keeps the advisory-only ODR behaviour; a profile opts
             in only after its legacy sub-floor criteria have been drained,
             otherwise every iter close would block on the un-drained floor.
+        require_iter_audit_accepted: When ``True``, iter close requires a
+            completed accepted audit row. This gate is tighten-only across
+            profile and repo composition.
         jury_authority: The trust floors a cross-vendor jury must clear to
             earn BLOCKING authority at the close gate (a
             :class:`JuryAuthorityConfig`). Until the jury's validation report
@@ -335,7 +338,7 @@ class VerifyBlock(BaseModel):
     timeout_class_seconds: dict[Literal["quick", "standard", "slow", "very_slow"], int] | None = (
         None
     )
-    waiver_mode: Literal["A", "B", "C"] = "B"
+    waiver_mode: Literal["A", "B", "C", "disabled"] = "B"
     enforce: bool = False
     cross_vendor_jury: bool = False
     #: Wall-clock ceiling (seconds) for every close-time juror / auditor
@@ -348,6 +351,7 @@ class VerifyBlock(BaseModel):
     jury_vendors: list[str] = Field(default_factory=lambda: ["claude", "codex", "opencode"])
     odr_floor: float = Field(default=0.80, ge=0.0, le=1.0)
     odr_blocking: bool = False
+    require_iter_audit_accepted: bool = False
     jury_authority: JuryAuthorityConfig = Field(default_factory=JuryAuthorityConfig)
     checkpoint: CheckpointBlock = Field(default_factory=CheckpointBlock)
 

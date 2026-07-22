@@ -577,3 +577,39 @@ def get_dotted(
             raise KeyError(dotted)
         cur = cur[part]
     return cur
+
+
+def unset_dotted(payload: dict[str, Any], key_path: list[str]) -> bool:
+    """Remove one nested config leaf and prune empty ancestor mappings.
+
+    Args:
+        payload: Mutable single-layer config mapping.
+        key_path: Non-empty dotted-key segments.
+
+    Returns:
+        ``True`` when the leaf existed and was removed; ``False`` when the
+        path was absent or crossed a non-mapping value.
+
+    Raises:
+        ValueError: When *key_path* is empty.
+    """
+    if not key_path:
+        raise ValueError("key_path must contain at least one segment")
+    current = payload
+    ancestors: list[tuple[dict[str, Any], str]] = []
+    for segment in key_path[:-1]:
+        child = current.get(segment)
+        if not isinstance(child, dict):
+            return False
+        ancestors.append((current, segment))
+        current = child
+    leaf = key_path[-1]
+    if leaf not in current:
+        return False
+    del current[leaf]
+    for parent, segment in reversed(ancestors):
+        child = parent.get(segment)
+        if not isinstance(child, dict) or child:
+            break
+        del parent[segment]
+    return True

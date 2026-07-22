@@ -115,6 +115,11 @@ class VcsConfig(BaseModel):
     coauthor: CoauthorConfig = Field(default_factory=CoauthorConfig)
 
 
+def requires_phase_release_preflight(config: VcsConfig) -> bool:
+    """Return whether the configured release cadence gates phase close."""
+    return config.conventions.release.cadence == "per-phase"
+
+
 def _normalise_runtime(value: str) -> str:
     return value.strip().casefold().replace("_", "-")
 

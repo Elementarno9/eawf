@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator, model_validator
 
 #: Narrow Literal of supported leaf-key value shapes. Mirrors the YAML
 #: scalars the loader writes; ``mapping`` covers dict-typed leaves
@@ -57,6 +57,10 @@ class LeafKey(BaseModel):
         description: One-line human-readable summary.
         choices: Allowed values for ``literal``-typed leaves; ``None``
             for other shapes.
+        consumer: Importable module or qualified symbol that consumes this
+            leaf's behaviour. ``None`` for non-behavioural and reserved leaves.
+        reserved: Whether the leaf is accepted only for compatibility and has
+            no production behaviour. A leaf cannot be both consumed and reserved.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -68,6 +72,8 @@ class LeafKey(BaseModel):
     writable_layers: tuple[str, ...] = ()
     description: str = ""
     choices: tuple[str, ...] | None = None
+    consumer: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)] | None = None
+    reserved: bool = False
 
     @field_validator("writable_layers")
     @classmethod
@@ -95,6 +101,13 @@ class LeafKey(BaseModel):
         if value is not None and not value:
             raise ValueError("choices must be non-empty when set")
         return value
+
+    @model_validator(mode="after")
+    def _validate_behavior_binding(self) -> LeafKey:
+        """Reject contradictory consumed-and-reserved metadata."""
+        if self.consumer is not None and self.reserved:
+            raise ValueError("config leaf cannot declare both consumer and reserved")
+        return self
 
 
 # Layer shorthands (read by every row below; reduces line-noise).

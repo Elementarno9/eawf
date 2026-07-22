@@ -55,14 +55,14 @@ def _wrap_no_return(_value: object) -> None:
 def _phase_close_requires_release_preflight(ctx: typer.Context) -> bool:
     """Return whether release cadence config gates ``phase close``."""
     from eawf.kernel.config.layered import merge_config
-    from eawf.runtime.vcs.coauthor import VcsConfig
+    from eawf.runtime.vcs.coauthor import VcsConfig, requires_phase_release_preflight
 
     flags: GlobalFlags = ctx.obj
     state_path = resolve_state_path(flags.workspace)
     anchor = state_path.parent.parent
     merged, _sources = merge_config(repo=anchor, workspace=anchor)
     vcs_config = VcsConfig.model_validate(merged.get("vcs", {}))
-    return vcs_config.conventions.release.cadence == "per-phase"
+    return requires_phase_release_preflight(vcs_config)
 
 
 def _phase_close_project_root(flags: GlobalFlags) -> Path:

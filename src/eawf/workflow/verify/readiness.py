@@ -53,6 +53,7 @@ from typing import Any, Literal
 
 import orjson
 
+from eawf.kernel.config.schema import VerifyConfig
 from eawf.kernel.spec.common import GRANDFATHERED_KIND, CriterionSpec, GateSpec
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State, Wave
@@ -512,10 +513,13 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
     Union-merges the list-valued fields (``floor_checks`` concatenated;
     ``argv_allowlist`` / ``uiux_bands`` / ``jury_vendors`` deduplicated,
     first-occurrence order preserved), OR-folds the boolean gating bits
-    (``enforce`` / ``cross_vendor_jury`` / ``odr_blocking``), and takes the last
-    contributor's scalar dials (``waiver_mode``, ``timeout_class_seconds``,
+    (``enforce`` / ``cross_vendor_jury`` / ``odr_blocking`` /
+    ``require_iter_audit_accepted``), and takes the last contributor's scalar
+    dials (``timeout_class_seconds``,
     ``juror_wall_clock_seconds``, ``odr_floor``, ``jury_authority``,
-    ``checkpoint``). Because the scalar dials are last-contributor-wins, a
+    ``checkpoint``). ``waiver_mode`` is last-contributor-wins unless any
+    contributor disables waivers, which is absorbing. Because the other
+    scalar dials are last-contributor-wins, a
     downstream profile that sets ``checkpoint.checkpoint_mode: barrier`` overrides
     an upstream ``optimistic`` block. The merged ``enforce`` is the *fleet*
     opt-in; band-conditional resolution (:func:`resolve_wave_verify_block`)
@@ -542,7 +546,11 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
     seen_vendors: set[str] = set()
     timeout_class_seconds: dict[Literal["quick", "standard", "slow", "very_slow"], int] = {}
     has_timeout_overrides = False
-    waiver_mode: Literal["A", "B", "C"] = "B"
+    waiver_mode: Literal["A", "B", "C", "disabled"] = (
+        "disabled"
+        if any(block.waiver_mode == "disabled" for block in blocks)
+        else blocks[-1].waiver_mode
+    )
     checkpoint = blocks[-1].checkpoint
     juror_wall_clock_seconds = blocks[-1].juror_wall_clock_seconds
     odr_floor = blocks[-1].odr_floor
@@ -550,6 +558,7 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
     enforce = False
     cross_vendor_jury = False
     odr_blocking = False
+    require_iter_audit_accepted = False
     for block in blocks:
         floor_checks.extend(block.floor_checks)
         for argv_head in block.argv_allowlist:
@@ -570,10 +579,12 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
         if block.timeout_class_seconds is not None:
             has_timeout_overrides = True
             timeout_class_seconds.update(block.timeout_class_seconds)
-        waiver_mode = block.waiver_mode
         enforce = enforce or block.enforce
         cross_vendor_jury = cross_vendor_jury or block.cross_vendor_jury
         odr_blocking = odr_blocking or block.odr_blocking
+        require_iter_audit_accepted = (
+            require_iter_audit_accepted or block.require_iter_audit_accepted
+        )
     return VerifyBlock(
         floor_checks=floor_checks,
         argv_allowlist=argv_allowlist,
@@ -586,6 +597,7 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
         jury_vendors=jury_vendors,
         odr_floor=odr_floor,
         odr_blocking=odr_blocking,
+        require_iter_audit_accepted=require_iter_audit_accepted,
         jury_authority=jury_authority,
         checkpoint=checkpoint,
     )
@@ -628,7 +640,7 @@ def _load_active_verify_block(
 
     anchor = _config_root_for_readiness(config_root, repo_root)
     try:
-        merged, _sources = merge_config(workspace=anchor, repo=anchor)
+        merged, sources = merge_config(workspace=anchor, repo=anchor)
     except (OSError, ValueError, KeyError) as exc:
         logger.warning(f"_load_active_verify_block status=skip err={exc!s}")
         return None
@@ -661,11 +673,14 @@ def _load_active_verify_block(
         if body.verify is not None:
             blocks.append(body.verify)
     merged_block = _merge_verify_blocks(blocks)
-    return _overlay_repo_verify_leaves(merged_block, merged)
+    return _overlay_repo_verify_leaves(merged_block, merged, source_map=sources)
 
 
 def _overlay_repo_verify_leaves(
-    block: VerifyBlock | None, merged_config: dict[str, Any]
+    block: VerifyBlock | None,
+    merged_config: dict[str, Any],
+    *,
+    source_map: dict[str, str] | None = None,
 ) -> VerifyBlock | None:
     """Fold the repo-layer ``verify:`` leaves onto *block*.
 
@@ -682,16 +697,35 @@ def _overlay_repo_verify_leaves(
     as behaviour that did not exist. A killed auditor writes no verdict, and the
     close gate reads "no verdict" as a refusal, so the wave could never close.
     """
-    if block is None:
-        return None
     verify_section = merged_config.get("verify")
     if not isinstance(verify_section, dict):
         return block
-    updates: dict[str, Any] = {}
-    if verify_section.get("odr_blocking") is True and not block.odr_blocking:
-        updates["odr_blocking"] = True
     wall_clock = verify_section.get("juror_wall_clock_seconds")
-    if isinstance(wall_clock, int | float) and not isinstance(wall_clock, bool) and wall_clock > 0:
+    schema_section = {
+        key: value for key, value in verify_section.items() if key != "juror_wall_clock_seconds"
+    }
+    repo_verify = VerifyConfig.model_validate(schema_section)
+    if block is None:
+        block = VerifyBlock()
+
+    def explicitly_supplied(key: str) -> bool:
+        if source_map is None:
+            return key in verify_section
+        return source_map.get(f"verify.{key}") not in {None, "built-in"}
+
+    updates: dict[str, Any] = {}
+    if repo_verify.odr_blocking and not block.odr_blocking:
+        updates["odr_blocking"] = True
+    if repo_verify.require_iter_audit_accepted and not block.require_iter_audit_accepted:
+        updates["require_iter_audit_accepted"] = True
+    if explicitly_supplied("waiver_mode") and block.waiver_mode != "disabled":
+        updates["waiver_mode"] = repo_verify.waiver_mode
+    if (
+        explicitly_supplied("juror_wall_clock_seconds")
+        and isinstance(wall_clock, int | float)
+        and not isinstance(wall_clock, bool)
+        and wall_clock > 0
+    ):
         updates["juror_wall_clock_seconds"] = float(wall_clock)
     if not updates:
         return block

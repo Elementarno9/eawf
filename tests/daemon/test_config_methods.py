@@ -7,6 +7,8 @@ Covers:
   subsequent :func:`config.read` reflects the new value.
 * :func:`config.set_layer_value` publishes a ``config_updated`` envelope
   on the subscription bus.
+* :func:`config.unset_layer_value` removes known writable leaves, prunes
+  empty mappings, and emits no envelope for an absent leaf.
 * Idempotency: a repeat call with the same key returns the cached
   envelope verbatim with ``idempotent_replay=True``.
 * Concurrent writers serialise via portalock (race-free interleave).
@@ -27,12 +29,14 @@ from typing import Any
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from eawf import __version__
 from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.kinds.config_updated import ConfigUpdatedPayload
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
-from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods import MethodContext, registered_methods
 from eawf.runtime.daemon.methods.config import (
     clear_wave_overlay,
     get_wave_overlay,
@@ -40,6 +44,7 @@ from eawf.runtime.daemon.methods.config import (
     read,
     set_layer_value,
     set_wave_value,
+    unset_layer_value,
 )
 
 pytestmark = pytest.mark.unit
@@ -446,6 +451,173 @@ def test_set_layer_value_allows_leaf_writable_from_target_layer(tmp_path: Path) 
         assert result["value"] is True
         assert result["layer"] == "repo"
         assert config_yaml.exists()
+
+    _run(body)
+
+
+# ---- config.unset_layer_value ---------------------------------------------
+
+
+def test_unset_layer_value_is_registered_rpc() -> None:
+    assert "config.unset_layer_value" in registered_methods()
+
+
+def test_config_updated_payload_defaults_legacy_events_to_set() -> None:
+    payload = ConfigUpdatedPayload(
+        layer="repo",
+        layer_path=".ea/config.yaml",
+        key_path=["vcs", "auto_commit"],
+        value=True,
+    )
+
+    assert payload.operation == "set"
+
+
+def test_config_updated_payload_rejects_unknown_operation() -> None:
+    with pytest.raises(ValidationError):
+        ConfigUpdatedPayload.model_validate(
+            {
+                "layer": "repo",
+                "layer_path": ".ea/config.yaml",
+                "key_path": ["vcs", "auto_commit"],
+                "value": True,
+                "operation": "delete",
+            }
+        )
+
+
+def test_unset_layer_value_removes_leaf_and_prunes_empty_parent(tmp_path: Path) -> None:
+    ctx, repo = _build_ctx(tmp_path=tmp_path)
+    config_yaml = repo / ".ea" / "config.yaml"
+    config_yaml.write_text("audit:\n  fix_safe: true\nvcs:\n  auto_commit: false\n")
+    bus = ctx.bus
+    assert isinstance(bus, EventBus)
+    sub = bus.register(connection_id="cfg-unset")
+
+    async def body() -> None:
+        result = await unset_layer_value(
+            ctx,
+            {"layer": "repo", "key_path": ["audit", "fix_safe"]},
+        )
+        assert result["removed"] is True
+        assert result["envelope"]["payload"]["operation"] == "unset"
+        assert result["envelope"]["payload"]["value"] is None
+        assert len(sub.queue) == 1
+        envelope = sub.queue[0]
+        assert envelope.kind is StoreKind.CONFIG_UPDATED
+        payload = ConfigUpdatedPayload.model_validate(envelope.payload)
+        assert payload.operation == "unset"
+        assert payload.key_path == ["audit", "fix_safe"]
+        assert payload.value is None
+
+    _run(body)
+
+    assert yaml.safe_load(config_yaml.read_text()) == {"vcs": {"auto_commit": False}}
+
+
+def test_unset_layer_value_absent_is_noop_without_envelope(tmp_path: Path) -> None:
+    ctx, repo = _build_ctx(tmp_path=tmp_path)
+    config_yaml = repo / ".ea" / "config.yaml"
+    config_yaml.write_text("vcs:\n  auto_commit: false\n")
+    before = config_yaml.read_bytes()
+    bus = ctx.bus
+    assert isinstance(bus, EventBus)
+    sub = bus.register(connection_id="cfg-unset-noop")
+
+    async def body() -> None:
+        result = await unset_layer_value(
+            ctx,
+            {"layer": "repo", "key_path": ["audit", "fix_safe"]},
+        )
+        assert result["removed"] is False
+        assert result["envelope"] is None
+
+    _run(body)
+
+    assert config_yaml.read_bytes() == before
+    assert not sub.queue
+
+
+def test_unset_layer_value_missing_file_is_noop(tmp_path: Path) -> None:
+    ctx, repo = _build_ctx(tmp_path=tmp_path)
+    config_yaml = repo / ".ea" / "config.yaml"
+
+    async def body() -> None:
+        result = await unset_layer_value(
+            ctx,
+            {"layer": "repo", "key_path": ["audit", "fix_safe"]},
+        )
+        assert result["removed"] is False
+        assert result["envelope"] is None
+
+    _run(body)
+
+    assert not config_yaml.exists()
+
+
+def test_unset_layer_value_rejects_empty_key_path(tmp_path: Path) -> None:
+    ctx, _repo = _build_ctx(tmp_path=tmp_path)
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match="validation_failed"):
+            await unset_layer_value(ctx, {"layer": "repo", "key_path": []})
+
+    _run(body)
+
+
+def test_unset_layer_value_rejects_unknown_leaf(tmp_path: Path) -> None:
+    ctx, _repo = _build_ctx(tmp_path=tmp_path)
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match="unknown config key"):
+            await unset_layer_value(
+                ctx,
+                {"layer": "repo", "key_path": ["not", "a", "leaf"]},
+            )
+
+    _run(body)
+
+
+def test_unset_layer_value_rejects_nonwritable_layer(tmp_path: Path) -> None:
+    ctx, _repo = _build_ctx(tmp_path=tmp_path)
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match="not writable from the repo"):
+            await unset_layer_value(
+                ctx,
+                {"layer": "repo", "key_path": ["schema_version"]},
+            )
+
+    _run(body)
+
+
+def test_unset_layer_value_idempotency_replays_result(tmp_path: Path) -> None:
+    ctx, repo = _build_ctx(tmp_path=tmp_path)
+    config_yaml = repo / ".ea" / "config.yaml"
+    config_yaml.write_text("audit:\n  fix_safe: true\n")
+
+    async def body() -> None:
+        first = await unset_layer_value(
+            ctx,
+            {
+                "layer": "repo",
+                "key_path": ["audit", "fix_safe"],
+                "idempotency_key": "unset-1",
+            },
+        )
+        second = await unset_layer_value(
+            ctx,
+            {
+                "layer": "repo",
+                "key_path": ["audit", "fix_safe"],
+                "idempotency_key": "unset-1",
+            },
+        )
+        assert first["removed"] is True
+        assert first["idempotent_replay"] is False
+        assert second["removed"] is True
+        assert second["idempotent_replay"] is True
+        assert second["envelope"]["id"] == first["envelope"]["id"]
 
     _run(body)
 

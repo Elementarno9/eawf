@@ -1,8 +1,8 @@
 """ConfigUpdatedPayload — typed body for ``StoreKind.CONFIG_UPDATED`` envelopes.
 
-Emitted by the daemon's ``config.set_layer_value`` RPC after a
-layered-config YAML write lands (P24-W10). Subscribers (TUI config
-pane, watchers, hot-reload hooks) filter on
+Emitted by the daemon's ``config.set_layer_value`` and
+``config.unset_layer_value`` RPCs after a layered-config YAML mutation
+lands. Subscribers (TUI config pane, watchers, hot-reload hooks) filter on
 ``Envelope.kind == config_updated`` and re-read the affected layer.
 
 Per the C02 §5.13 envelope contract the payload is a typed Pydantic
@@ -12,7 +12,7 @@ explicit schema bump, not silent drift.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -22,16 +22,18 @@ class ConfigUpdatedPayload(BaseModel):
 
     Attributes:
         layer: Canonical writable-layer label
-            (``global`` | ``workspace`` | ``repo`` | ``local``).
+            (``global`` | ``workspace`` | ``repo`` | ``branch`` | ``local``).
         layer_path: Absolute on-disk path of the YAML layer that
             received the write — repo-relative-like; subscribers
             normalise as needed.
-        key_path: Dotted key segments that were set (list form keeps
+        key_path: Dotted key segments that were changed (list form keeps
             the wire encoding unambiguous when a segment contains
             ``.``).
-        value: Typed value that was written. ``Any`` because the
-            registry-validated config schema covers scalar +
-            list/dict types.
+        value: Typed value that was written, or ``None`` for an unset.
+            ``Any`` because the registry-validated config schema covers
+            scalar + list/dict types.
+        operation: Whether the leaf was set or removed. Defaults to ``set``
+            so envelopes written before the unset surface remain valid.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -40,3 +42,4 @@ class ConfigUpdatedPayload(BaseModel):
     layer_path: str = Field(min_length=1)
     key_path: list[str] = Field(min_length=1)
     value: Any
+    operation: Literal["set", "unset"] = "set"

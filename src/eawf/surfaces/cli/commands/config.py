@@ -1,10 +1,12 @@
-"""``eawf config`` Typer sub-app — get/set/validate/profile enable.
+"""``eawf config`` Typer sub-app — get/set/unset/validate/profile enable.
 
 Per ``docs/architecture/cli-surface.md``:
 
 - ``eawf config get <key> [--scope]``           → merged value + source layer
 - ``eawf config set <key> <value> --scope L``   → write to layer L (built-in
                                                     is read-only)
+- ``eawf config unset <key> --scope L``         → remove from layer L and
+                                                    prune empty maps
 - ``eawf config validate [--scope]``            → run merged config through
                                                     the minimal Pydantic
                                                     schema; exit 4 on
@@ -25,9 +27,9 @@ Exit-code mapping (per W00 plan / ``cli/exit_codes.py``):
 - ``4``: ``VALIDATION_FAILED`` — malformed YAML in any layer or schema
         rejection during ``validate``.
 
-Daemon-internal note (P24-W10): :func:`_save_value_to_layer` is the
-sole CLI-side mutator for layered YAML; since W10 it dispatches
-through the daemon's ``config.set_layer_value`` RPC when
+Daemon-internal note: :func:`_save_value_to_layer` and
+:func:`_unset_value_from_layer` are the CLI-side mutators for layered
+YAML. They dispatch through the daemon's config RPCs when
 ``daemon.proxy_enabled=True`` (the new default). The in-process arm
 is retained as the V1 carve-out fallback (CI / read-only one-shot /
 recovery shell / ``EAWF_DAEMONLESS=1``). After v0.5 the in-process
@@ -49,7 +51,7 @@ import typer
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError as PydValidationError
 
-from eawf.kernel.config.schema import EstimationConfig
+from eawf.kernel.config.schema import EstimationConfig, VerifyConfig
 from eawf.kernel.fsync import fsync_parent_dir
 from eawf.runtime.lock import portalock
 from eawf.runtime.vcs.coauthor import VcsConfig
@@ -141,10 +143,7 @@ class _ConfigSchema(BaseModel):
     telemetry: dict[str, Any] = Field(default_factory=dict)
     dispatch: dict[str, Any] = Field(default_factory=dict)
     language: dict[str, Any] = Field(default_factory=dict)
-    # ``verify`` carries the verify-spine repo-layer knobs (odr_blocking).
-    # Value-shape validation lives in the leaf catalog; the composed schema
-    # only needs to accept the section (P30-I23-W25).
-    verify: dict[str, Any] = Field(default_factory=dict)
+    verify: VerifyConfig = Field(default_factory=VerifyConfig)
     # ``preferences`` carries the operator-preference knobs (solution_bias,
     # scope_size, auto_choose). Value-shape validation lives in the leaf
     # catalog + PreferencesConfig; the composed schema only needs to accept
@@ -367,6 +366,61 @@ def _save_value_to_layer(
         _atomic_write_yaml(target_path, existing)
 
 
+def _unset_value_from_layer(
+    *,
+    target_path: Path,
+    key: str,
+    layer: str,
+    repo_root: Path | None = None,
+) -> dict[str, Any]:
+    """Remove *key* through the canonical daemon writer or V1 fallback."""
+    from eawf.kernel.config.registry import leaf_key_lookup
+
+    entry = leaf_key_lookup(key)
+    if layer not in entry.writable_layers:
+        raise ValueError(f"leaf {key!r} is not writable from the {layer} layer")
+
+    if _daemon_proxy_enabled():
+        from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+        from eawf.surfaces.cli._mutation import _daemon_reachable
+
+        if not _daemon_reachable():
+            raise StateConflict(
+                "daemon_required: daemon.proxy_enabled=true but the daemon is unreachable; "
+                "run `eawf daemon start` or set EAWF_DAEMONLESS=1 for the V1 carve-out",
+                kind="IntegrityViolation",
+            )
+        try:
+            with DaemonClient() as client:
+                return client.config_unset_layer_value(
+                    layer=layer,
+                    key_path=key.split("."),
+                    repo_root=str(repo_root) if repo_root is not None else None,
+                )
+        except DaemonRpcError as exc:
+            if exc.code != -32601:
+                raise
+            logger.debug("_unset_value_from_layer daemon-rpc method-not-found; fallback")
+
+    from eawf.kernel.config.layered import unset_dotted
+    from eawf.kernel.config.loader import load_yaml_layer
+
+    key_path = key.split(".")
+    with portalock.acquire(target_path):
+        existing = load_yaml_layer(target_path)
+        removed = unset_dotted(existing, key_path)
+        if removed:
+            _atomic_write_yaml(target_path, existing)
+    return {
+        "layer": layer,
+        "layer_path": str(target_path),
+        "key_path": key_path,
+        "removed": removed,
+        "envelope": None,
+        "idempotent_replay": False,
+    }
+
+
 # --- Subcommands ------------------------------------------------------------
 
 
@@ -483,6 +537,75 @@ def config_set(
         "path": str(target_path),
     }
     text = f"set {key} = {coerced!r}  (scope: {scope}, path: {target_path})"
+    emit_json_or_text(payload, text, flags=flags)
+
+
+@config_app.command("unset")
+def config_unset(
+    ctx: typer.Context,
+    key: Annotated[str, typer.Argument(help="Dotted config key.")],
+    scope: Annotated[
+        str,
+        typer.Option(
+            "--scope",
+            help=("Layer to remove from (global | workspace | repo | local)."),
+        ),
+    ] = "repo",
+) -> None:
+    """Remove *key* from one layer without changing lower-precedence values."""
+    import yaml
+
+    from eawf.kernel.config.layered import WRITABLE_LAYERS, layer_path
+
+    flags: GlobalFlags = ctx.obj
+    repo, workspace = _resolve_anchors(flags)
+    if scope == "built-in":
+        emit_error(
+            UserError("layer 'built-in' is read-only", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+    if scope not in WRITABLE_LAYERS:
+        emit_error(
+            UserError(
+                f"unknown or non-writable scope {scope!r}; choose from {list(WRITABLE_LAYERS)}",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+        return
+    try:
+        target_path = layer_path(scope, workspace=workspace, repo=repo)
+        mutation_root = workspace if scope == "workspace" and workspace is not None else repo
+        result = _unset_value_from_layer(
+            target_path=target_path,
+            key=key,
+            layer=scope,
+            repo_root=mutation_root,
+        )
+    except ValueError as exc:
+        emit_error(UserError(str(exc), kind="InvalidInput"), flags=flags)
+        return
+    except ValidationError as exc:
+        emit_error(exc, flags=flags)
+        return
+    except yaml.YAMLError as exc:
+        emit_error(ValidationError(f"config layer is not valid YAML: {exc}"), flags=flags)
+        return
+    except OSError as exc:
+        emit_error(
+            UserError(f"cannot read or write {target_path}: {exc}", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+
+    payload = {
+        "key": key,
+        "scope": scope,
+        "path": str(target_path),
+        "removed": result["removed"],
+    }
+    text = f"unset {key} (scope: {scope}, removed: {result['removed']})"
     emit_json_or_text(payload, text, flags=flags)
 
 

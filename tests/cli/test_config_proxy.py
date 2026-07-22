@@ -39,6 +39,8 @@ class _FakeConfigClient:
 
     last_args: dict[str, Any] | None = None
     call_count: int = 0
+    unset_last_args: dict[str, Any] | None = None
+    unset_call_count: int = 0
 
     def __init__(self, *_args: Any, **_kwargs: Any) -> None:
         pass
@@ -72,6 +74,30 @@ class _FakeConfigClient:
             "key_path": list(key_path),
             "value": value,
             "envelope": {"id": "CFG-stub-1", "kind": "config_updated"},
+            "idempotent_replay": False,
+        }
+
+    def config_unset_layer_value(
+        self,
+        *,
+        layer: str,
+        key_path: list[str],
+        idempotency_key: str | None = None,
+        repo_root: str | None = None,
+    ) -> dict[str, Any]:
+        _FakeConfigClient.unset_last_args = {
+            "layer": layer,
+            "key_path": list(key_path),
+            "idempotency_key": idempotency_key,
+            "repo_root": repo_root,
+        }
+        _FakeConfigClient.unset_call_count += 1
+        return {
+            "layer": layer,
+            "layer_path": "fake-path",
+            "key_path": list(key_path),
+            "removed": True,
+            "envelope": {"id": "CFG-stub-unset", "kind": "config_updated"},
             "idempotent_replay": False,
         }
 
@@ -236,3 +262,91 @@ def test_layer_label_for_path_unmapped_returns_none(tmp_path: Path) -> None:
     weird.parent.mkdir(parents=True)
     weird.write_text("")
     assert config_cmd._layer_label_for_path(weird) is None
+
+
+# ---- config unset proxy + daemonless fallback -----------------------------
+
+
+def test_unset_value_from_layer_proxies_through_daemon(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = tmp_path / "repo"
+    config_yaml = repo / ".ea" / "config.yaml"
+    config_yaml.parent.mkdir(parents=True)
+    monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
+    monkeypatch.setattr(config_cmd, "_daemon_proxy_enabled", lambda: True)
+    monkeypatch.setattr("eawf.surfaces.cli._mutation._daemon_reachable", lambda: True)
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeConfigClient)
+    _FakeConfigClient.unset_last_args = None
+    _FakeConfigClient.unset_call_count = 0
+
+    result = config_cmd._unset_value_from_layer(
+        target_path=config_yaml,
+        key="audit.fix_safe",
+        layer="repo",
+        repo_root=repo,
+    )
+
+    assert result["removed"] is True
+    assert _FakeConfigClient.unset_call_count == 1
+    assert _FakeConfigClient.unset_last_args == {
+        "layer": "repo",
+        "key_path": ["audit", "fix_safe"],
+        "idempotency_key": None,
+        "repo_root": str(repo),
+    }
+    assert not config_yaml.exists()
+
+
+def test_unset_value_from_layer_daemonless_prunes_empty_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_yaml = tmp_path / "repo" / ".ea" / "config.yaml"
+    config_yaml.parent.mkdir(parents=True)
+    config_yaml.write_text("audit:\n  fix_safe: true\nvcs:\n  auto_commit: false\n")
+    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
+
+    result = config_cmd._unset_value_from_layer(
+        target_path=config_yaml,
+        key="audit.fix_safe",
+        layer="repo",
+    )
+
+    assert result["removed"] is True
+    assert result["envelope"] is None
+    assert yaml.safe_load(config_yaml.read_text()) == {"vcs": {"auto_commit": False}}
+
+
+def test_unset_value_from_layer_absent_is_noop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_yaml = tmp_path / "repo" / ".ea" / "config.yaml"
+    config_yaml.parent.mkdir(parents=True)
+    config_yaml.write_text("vcs:\n  auto_commit: false\n")
+    before = config_yaml.read_bytes()
+    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
+
+    result = config_cmd._unset_value_from_layer(
+        target_path=config_yaml,
+        key="audit.fix_safe",
+        layer="repo",
+    )
+
+    assert result["removed"] is False
+    assert config_yaml.read_bytes() == before
+
+
+def test_unset_value_from_layer_rejects_unknown_or_locked_leaf(tmp_path: Path) -> None:
+    config_yaml = tmp_path / "repo" / ".ea" / "config.yaml"
+    with pytest.raises(ValueError, match="unknown config key"):
+        config_cmd._unset_value_from_layer(
+            target_path=config_yaml,
+            key="not.real",
+            layer="repo",
+        )
+    with pytest.raises(ValueError, match="not writable from the repo"):
+        config_cmd._unset_value_from_layer(
+            target_path=config_yaml,
+            key="schema_version",
+            layer="repo",
+        )

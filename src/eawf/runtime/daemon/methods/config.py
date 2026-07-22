@@ -1,4 +1,4 @@
-"""``config.*`` JSON-RPC methods: read / set_layer_value / list_layers
+"""``config.*`` JSON-RPC methods: read / set_layer_value / unset_layer_value / list_layers
 plus wave-layer overlay management (set_wave_value /
 clear_wave_overlay / get_wave_overlay).
 
@@ -20,11 +20,11 @@ Algorithm — mirrors the W09 ``state.mutate`` lifecycle for symmetry:
    ``idempotent_replay=True`` flipped on.
 2. ``portalock(target_path, timeout=5)`` — defense-in-depth (rule 4
    V1 retains portalocker inside the daemon mutator path).
-3. Read + parse the YAML layer; deep-set the dotted key.
-4. Atomic-rename write (tempfile → fsync → rename + parent dir fsync).
+3. Read + parse the YAML layer; deep-set or remove the dotted key.
+4. Atomic-rename changed YAML (tempfile → fsync → rename + parent dir fsync).
 5. Build a canonical ``StoreKind.CONFIG_UPDATED`` envelope + publish on
    the subscription bus so TUI / watchers see the change.
-6. Cache the result; return ``{layer, key_path, value, envelope}``.
+6. Cache the result; return the typed mutation result.
 
 This module owns the layered-config writer surface only; the registry
 writer lives next door in :mod:`eawf.runtime.daemon.methods.registry`.
@@ -40,7 +40,7 @@ import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -50,6 +50,7 @@ from eawf.kernel.config.layered import (
     global_config_path,
     local_config_path,
     repo_config_path,
+    unset_dotted,
     workspace_config_path,
 )
 from eawf.kernel.config.loader import load_yaml_layer
@@ -143,6 +144,17 @@ class SetLayerValueParams(BaseModel):
     repo_root: str | None = None
 
 
+class UnsetLayerValueParams(BaseModel):
+    """Params for :func:`unset_layer_value`."""
+
+    model_config = ConfigDict(extra="forbid")
+    layer: str
+    key_path: list[str] = Field(min_length=1)
+    branch: str | None = None
+    idempotency_key: str | None = None
+    repo_root: str | None = None
+
+
 class SetWaveValueParams(BaseModel):
     """Params for :func:`set_wave_value`.
 
@@ -202,6 +214,18 @@ class SetLayerValueResult(BaseModel):
     key_path: list[str]
     value: Any
     envelope: dict[str, Any]
+    idempotent_replay: bool = False
+
+
+class UnsetLayerValueResult(BaseModel):
+    """Result of :func:`unset_layer_value`."""
+
+    model_config = ConfigDict(extra="forbid")
+    layer: str
+    layer_path: str
+    key_path: list[str]
+    removed: bool
+    envelope: dict[str, Any] | None = None
     idempotent_replay: bool = False
 
 
@@ -399,6 +423,7 @@ def _build_envelope(
     layer_path: Path,
     key_path: list[str],
     value: Any,
+    operation: Literal["set", "unset"] = "set",
 ) -> Envelope:
     """Build the canonical ``CONFIG_UPDATED`` envelope.
 
@@ -408,12 +433,13 @@ def _build_envelope(
     """
     now = datetime.now(UTC)
     dotted = ".".join(key_path)
-    summary = f"config.set_layer_value layer={layer} key={dotted}"
+    summary = f"config.{operation}_layer_value layer={layer} key={dotted}"
     payload: dict[str, Any] = {
         "layer": layer,
         "layer_path": str(layer_path),
         "key_path": list(key_path),
         "value": value,
+        "operation": operation,
     }
     return Envelope(
         schema_version="1.0",
@@ -563,6 +589,89 @@ async def set_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[st
                 idempotent_replay=False,
             ).model_dump(mode="json")
 
+            if args.idempotency_key is not None:
+                cache[args.idempotency_key] = _CachedConfigMutation(
+                    result=result,
+                    cached_at=time.monotonic(),
+                )
+            return result
+    finally:
+        ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
+
+
+@register("config.unset_layer_value")
+async def unset_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Remove one dotted-key value from a YAML layer.
+
+    Unknown or non-writable leaves reject before the file lock. Removing an
+    absent leaf is an idempotent no-op: no write and no update envelope.
+    """
+    try:
+        args = UnsetLayerValueParams.model_validate(params)
+    except ValidationError as exc:
+        raise ValueError(f"validation_failed: {exc}") from exc
+
+    if args.layer == "built-in":
+        raise ValueError("validation_failed: layer 'built-in' is read-only")
+    if args.layer == "wave":
+        raise ValueError("validation_failed: layer 'wave' is daemon-RAM-only")
+
+    dotted = ".".join(args.key_path)
+    entry = leaf_key_lookup(dotted)
+    state_path = _resolve_state_anchor(repo_root=args.repo_root, ctx=ctx)
+    target = _resolve_layer_path(args.layer, state_path=state_path, branch=args.branch)
+    if args.layer not in entry.writable_layers:
+        raise ValueError(
+            f"validation_failed: leaf {dotted!r} is not writable from the {args.layer} layer"
+        )
+
+    cache = _idempotency_cache(ctx)
+    now_mono = time.monotonic()
+    _evict_expired(cache, now=now_mono)
+    if args.idempotency_key is not None:
+        cached = cache.get(args.idempotency_key)
+        if cached is not None and hasattr(cached, "result"):
+            result = dict(cached.result)
+            result["idempotent_replay"] = True
+            logger.info(
+                f"unset_layer_value idempotent_replay layer={args.layer} "
+                f"key_path={args.key_path} key={args.idempotency_key!r}"
+            )
+            return result
+
+    from eawf.runtime.lock import portalock
+
+    ctx.in_flight_mutations += 1
+    try:
+        with portalock.acquire(target, timeout=5.0):
+            existing = load_yaml_layer(target)
+            removed = unset_dotted(existing, list(args.key_path))
+            envelope: Envelope | None = None
+            if removed:
+                _atomic_write_yaml(target, existing)
+                envelope = _build_envelope(
+                    layer=args.layer,
+                    layer_path=target,
+                    key_path=list(args.key_path),
+                    value=None,
+                    operation="unset",
+                )
+                if ctx.bus is not None and hasattr(ctx.bus, "publish"):
+                    ctx.bus.publish(envelope)
+                ctx.last_event_id = envelope.id
+
+            logger.info(
+                f"unset_layer_value ok layer={args.layer} key_path={args.key_path} "
+                f"removed={removed}"
+            )
+            result = UnsetLayerValueResult(
+                layer=args.layer,
+                layer_path=str(target),
+                key_path=list(args.key_path),
+                removed=removed,
+                envelope=envelope.model_dump(mode="json") if envelope is not None else None,
+                idempotent_replay=False,
+            ).model_dump(mode="json")
             if args.idempotency_key is not None:
                 cache[args.idempotency_key] = _CachedConfigMutation(
                     result=result,
@@ -744,4 +853,5 @@ __all__ = [
     "read",
     "set_layer_value",
     "set_wave_value",
+    "unset_layer_value",
 ]
