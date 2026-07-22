@@ -422,6 +422,7 @@ def commit_mutation(
         written_at=datetime.now(UTC),
         before_state_version=before_version,
         after_state_version=after_version,
+        state_path=str(state_path),
     )
     wal.write_pending(wal_dir, record)
     # ``write_state_unlocked`` fsyncs state.json — the point of no return.

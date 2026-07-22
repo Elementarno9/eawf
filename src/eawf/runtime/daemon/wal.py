@@ -110,6 +110,11 @@ class WalRecord(BaseModel):
         after_state_version: Digest / version string of ``state.json``
             after the mutation applied. Recorded so replay can match
             on-disk state against the WAL.
+        state_path: Absolute path of the ``state.json`` the mutation
+            targeted, or ``None`` for records written before the daemon
+            served multiple repo roots. Replay routes the envelope to the
+            record's own repo (event log derived from this path); ``None``
+            falls back to the caller-supplied boot-root paths.
         poison_reason: Reason text injected by :func:`mark_poisoned`
             when the record is moved under ``poisoned/``.
         prev_digest: :attr:`digest` of the record that precedes this one
@@ -133,6 +138,7 @@ class WalRecord(BaseModel):
     written_at: UtcDatetime
     before_state_version: str
     after_state_version: str
+    state_path: str | None = None
     poison_reason: str | None = None
     prev_digest: str = WAL_CHAIN_GENESIS
     digest: str | None = None
@@ -179,7 +185,14 @@ def compute_record_digest(record: WalRecord) -> str:
     Returns:
         The 64-char hex SHA-256 digest over the canonical content bytes.
     """
-    payload = record.model_dump(mode="json", exclude=_DIGEST_EXCLUDED_FIELDS)
+    excluded = _DIGEST_EXCLUDED_FIELDS
+    if record.state_path is None:
+        # Records written before the multi-root field existed carry no
+        # state_path; excluding the None keeps their stored digests
+        # verifying unchanged. A record WITH a state_path digests it, so
+        # a tampered root (either direction) still fails verification.
+        excluded = _DIGEST_EXCLUDED_FIELDS | {"state_path"}
+    payload = record.model_dump(mode="json", exclude=excluded)
     canonical = orjson.dumps(payload, option=orjson.OPT_SORT_KEYS)
     return hashlib.sha256(canonical).hexdigest()
 

@@ -29,6 +29,8 @@ from pathlib import Path
 import orjson
 from pydantic import BaseModel, ConfigDict
 
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.wal import WalRecord, WalStatus
 
@@ -113,8 +115,12 @@ def replay_wal(wal_dir: Path, state_path: Path, event_path: Path) -> ReplayRepor
         state_path: Path to ``state.json``. Read only; replay never
             mutates state (the on-disk state already reflects every
             ``.applied.json`` record by the outcome-WAL invariant).
-        event_path: Path to ``event.jsonl``. Replay appends any
-            envelope whose id is absent from the log.
+        event_path: Path to ``event.jsonl`` used for records that carry
+            no :attr:`WalRecord.state_path` (pre-multi-root rows).
+            A record WITH a ``state_path`` replays into its own repo's
+            event log (derived via :func:`store_path`) so a multi-root
+            daemon crash never contaminates the boot root's log with
+            another repo's envelopes.
 
     Returns:
         :class:`ReplayReport` summarising counts. Idempotent on
@@ -145,8 +151,10 @@ def replay_wal(wal_dir: Path, state_path: Path, event_path: Path) -> ReplayRepor
             f"reason={_REASON_DAEMON_CRASHED_PRE_APPLY}"
         )
 
-    # Step 2: applied → maybe replay event row → fsynced.
-    known_ids = _existing_envelope_ids(event_path)
+    # Step 2: applied → maybe replay event row → fsynced. Event-log id
+    # sets are loaded lazily per target log so a multi-root WAL only
+    # scans the logs its records actually touch.
+    known_ids_by_log: dict[Path, set[str]] = {}
     for path in wal.list_records(wal_dir, status=WalStatus.APPLIED):
         record_id = _record_id_from_path(path)
         if record_id is None:
@@ -171,9 +179,11 @@ def replay_wal(wal_dir: Path, state_path: Path, event_path: Path) -> ReplayRepor
                 f"reason={wal.WAL_DIGEST_MISMATCH_REASON}"
             )
             continue
+        record_event_path = _record_event_path(record, default=event_path)
+        known_ids = _known_ids_for(record_event_path, known_ids_by_log)
         envelope_id = record.envelope.id
         if envelope_id not in known_ids:
-            _append_event_fsynced(event_path, record)
+            _append_event_fsynced(record_event_path, record)
             known_ids.add(envelope_id)
             replayed_event_count += 1
             logger.info(
@@ -207,6 +217,27 @@ def replay_wal(wal_dir: Path, state_path: Path, event_path: Path) -> ReplayRepor
         f"poisoned={report.poisoned_count} replayed={report.replayed_event_count}"
     )
     return report
+
+
+def _known_ids_for(log_path: Path, cache: dict[Path, set[str]]) -> set[str]:
+    """Return the envelope-id set for *log_path*, scanning it once per replay."""
+    ids = cache.get(log_path)
+    if ids is None:
+        ids = _existing_envelope_ids(log_path)
+        cache[log_path] = ids
+    return ids
+
+
+def _record_event_path(record: WalRecord, *, default: Path) -> Path:
+    """Return the event log the record's envelope belongs to.
+
+    A record stamped with its target :attr:`WalRecord.state_path` routes
+    to that repo's ``event.jsonl``; a legacy record (``state_path is
+    None``) falls back to the caller-supplied boot-root log.
+    """
+    if record.state_path is None:
+        return default
+    return store_path(Path(record.state_path), StoreKind.EVENT)
 
 
 def _record_id_from_path(path: Path) -> str | None:

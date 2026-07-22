@@ -118,8 +118,8 @@ from eawf.runtime.daemon.methods import (
     VALIDATION_FAILED,
     DaemonValidationError,
     MethodContext,
+    note_cross_root_serve,
     register,
-    require_bound_state_root,
 )
 from eawf.runtime.daemon.wal import WalRecord
 from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
@@ -511,7 +511,7 @@ def _resolve_mutator_paths(
         RuntimeError: When the state path cannot be resolved or
             ``ctx.wal_dir`` is unset.
     """
-    require_bound_state_root(ctx, repo_root=repo_root, command="state mutation")
+    note_cross_root_serve(ctx, repo_root=repo_root, command="state mutation")
     state_path = _resolve_state_path(repo_root=repo_root, ctx=ctx)
     if repo_root:
         event_path = store_path(state_path, StoreKind.EVENT)
@@ -524,6 +524,23 @@ def _resolve_mutator_paths(
     if not isinstance(ctx.wal_dir, Path):
         raise RuntimeError("wal_dir not configured on daemon context")
     return state_path, event_path, ctx.wal_dir
+
+
+def _bus_for_root(ctx: MethodContext, state_path: Path) -> Any | None:
+    """Return the publishable bus iff *state_path* is the daemon's boot root.
+
+    Live subscribers attach to the boot root's stream only; a mutation
+    served for another repo root appends to that repo's own event log but
+    must not leak its envelopes onto the boot root's bus. Returns ``None``
+    when the bus is absent, has no ``publish``, or the target root differs
+    from the bound root.
+    """
+    bus = ctx.bus
+    if bus is None or not hasattr(bus, "publish"):
+        return None
+    if ctx.state_path is not None and Path(state_path).resolve() != Path(ctx.state_path).resolve():
+        return None
+    return bus
 
 
 # ---- State payload helpers --------------------------------------------------
@@ -2543,6 +2560,7 @@ def _publish_wave_elapsed_updates(
     *,
     ctx: MethodContext,
     state: State,
+    state_path: Path,
     event_path: Path,
     version: str,
     now: datetime,
@@ -2555,6 +2573,7 @@ def _publish_wave_elapsed_updates(
     (no work-start fact) is skipped, so no elapsed update fires for it.
     """
     cache = _wave_elapsed_cache(ctx)
+    bus = _bus_for_root(ctx, state_path)
     for wave in state.waves.values():
         if wave.status not in _WAVE_ELAPSED_ACTIVE_STATUSES or wave.claimed_at is None:
             continue
@@ -2562,9 +2581,12 @@ def _publish_wave_elapsed_updates(
         if elapsed_seconds < 60.0:
             continue
         elapsed_minute = int(elapsed_seconds // 60)
-        if cache.get(wave.id) == elapsed_minute:
+        # Wave ids repeat across repos (every repo has a P01-W01), so the
+        # dedup cache is keyed per root as well.
+        cache_key = f"{state_path}:{wave.id}"
+        if cache.get(cache_key) == elapsed_minute:
             continue
-        cache[wave.id] = elapsed_minute
+        cache[cache_key] = elapsed_minute
         elapsed_minutes = elapsed_seconds / 60.0
         envelope = _build_wave_elapsed_envelope(
             wave_id=wave.id,
@@ -2575,8 +2597,8 @@ def _publish_wave_elapsed_updates(
             after_version=version,
         )
         append_envelope(event_path, envelope)
-        if ctx.bus is not None and hasattr(ctx.bus, "publish"):
-            ctx.bus.publish(envelope)
+        if bus is not None:
+            bus.publish(envelope)
         ctx.last_event_id = envelope.id
         logger.info(f"wave_elapsed_update wave={wave.id!r} minute={elapsed_minute}")
 
@@ -3287,14 +3309,16 @@ def _commit_worktree_state(
                 written_at=datetime.now(UTC),
                 before_state_version=before_version,
                 after_state_version=after_version,
+                state_path=str(state_path),
             )
             wal.write_pending(wal_path, record)
             atomic_write_json_locked(state_path, new_payload)
             wal.mark_applied(wal_path, record_id)
             append_envelope(event_path, envelope)
             wal.mark_fsynced(wal_path, record_id)
-            if ctx.bus is not None and hasattr(ctx.bus, "publish"):
-                ctx.bus.publish(envelope)
+            bus = _bus_for_root(ctx, state_path)
+            if bus is not None:
+                bus.publish(envelope)
             ctx.last_event_id = envelope.id
             logger.info(
                 f"_commit_worktree_state command={command!r} scope_id={scope_id!r} "
@@ -3376,6 +3400,7 @@ async def digest(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         _publish_wave_elapsed_updates(
             ctx=ctx,
             state=state,
+            state_path=state_path,
             event_path=event_path,
             version=version,
             now=datetime.now(UTC),
@@ -3480,14 +3505,16 @@ async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[st
                 written_at=datetime.now(UTC),
                 before_state_version=before_version,
                 after_state_version=after_version,
+                state_path=str(state_path),
             )
             wal.write_pending(wal_path, record)
             atomic_write_json_locked(state_path, new_payload)
             wal.mark_applied(wal_path, record_id)
             append_envelope(event_path, envelope)
             wal.mark_fsynced(wal_path, record_id)
-            if ctx.bus is not None and hasattr(ctx.bus, "publish"):
-                ctx.bus.publish(envelope)
+            bus = _bus_for_root(ctx, state_path)
+            if bus is not None:
+                bus.publish(envelope)
             ctx.last_event_id = envelope.id
             logger.info(
                 f"runtime_capture active_count={len(active_wave_ids)} "
@@ -3544,11 +3571,15 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
     mutation = args.mutation
     idempotency_key = args.idempotency_key or mutation.idempotency_key
+    # Cache entries are namespaced per state root: the machine-global daemon
+    # serves many repos and a bare client key must not replay another
+    # repo's result. The WAL record keeps the raw key (wire contract).
+    cache_key = f"{state_path}:{idempotency_key}" if idempotency_key is not None else None
     cache = _idempotency_cache(ctx)
     now_mono = time.monotonic()
     _evict_expired(cache, now=now_mono)
-    if idempotency_key is not None:
-        cached = cache.get(idempotency_key)
+    if cache_key is not None:
+        cached = cache.get(cache_key)
         if cached is not None:
             result = dict(cached.result)
             result["idempotent_replay"] = True
@@ -3572,6 +3603,7 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 ctx,
                 mutation=mutation,
                 idempotency_key=idempotency_key,
+                cache_key=cache_key,
                 cache=cache,
                 state_path=state_path,
                 event_path=event_path,
@@ -3697,6 +3729,7 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 written_at=datetime.now(UTC),
                 before_state_version=before_version,
                 after_state_version=after_version,
+                state_path=str(state_path),
             )
             wal.write_pending(wal_path, record)
 
@@ -3721,10 +3754,11 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             # pipeline is no longer write-idle: the trust scorecard reads
             # these ``deterministic`` / ``pass`` rows to label the wave
             # ``verified``. Empty on every advisory / non-enforcing close.
-            if ctx.bus is not None and hasattr(ctx.bus, "publish"):
-                ctx.bus.publish(envelope)
+            bus = _bus_for_root(ctx, state_path)
+            if bus is not None:
+                bus.publish(envelope)
                 if drift_envelope is not None:
-                    ctx.bus.publish(drift_envelope)
+                    bus.publish(drift_envelope)
             ctx.last_event_id = envelope.id
 
             logger.info(
@@ -3739,8 +3773,8 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 idempotent_replay=False,
             ).model_dump(mode="json")
 
-            if idempotency_key is not None:
-                cache[idempotency_key] = _CachedMutation(
+            if cache_key is not None:
+                cache[cache_key] = _CachedMutation(
                     result=result,
                     cached_at=time.monotonic(),
                 )
@@ -3761,6 +3795,7 @@ async def _mutate_wave_close(
     *,
     mutation: Mutation,
     idempotency_key: str | None,
+    cache_key: str | None,
     cache: dict[str, _CachedMutation],
     state_path: Path,
     event_path: Path,
@@ -3793,7 +3828,10 @@ async def _mutate_wave_close(
     Args:
         ctx: Server context.
         mutation: The WAVE_CLOSE mutation.
-        idempotency_key: Optional retry key (already cache-missed).
+        idempotency_key: Optional raw client retry key, stamped on the WAL
+            record (wire contract).
+        cache_key: Root-namespaced cache key (``<state_path>:<key>``), or
+            ``None`` when no idempotency key was supplied.
         cache: The daemon idempotency cache to populate on success.
         state_path: Path to ``state.json``.
         event_path: Path to the event JSONL store.
@@ -3967,6 +4005,7 @@ async def _mutate_wave_close(
                 written_at=datetime.now(UTC),
                 before_state_version=before_version,
                 after_state_version=after_version,
+                state_path=str(state_path),
             )
             wal.write_pending(wal_path, record)
             atomic_write_json_locked(state_path, new_payload)
@@ -3981,11 +4020,12 @@ async def _mutate_wave_close(
     # ---- Phase 3: post-lock tail --------------------------------------------
     if wave_close_evidence:
         _append_close_evidence(wave_close_evidence, state_path=state_path)
-    if ctx.bus is not None and hasattr(ctx.bus, "publish"):
-        ctx.bus.publish(envelope)
+    bus = _bus_for_root(ctx, state_path)
+    if bus is not None:
+        bus.publish(envelope)
         if drift_envelope is not None:
-            ctx.bus.publish(drift_envelope)
-    _retract_closed_wave_advisories(state_path, wave_id=wave_id, bus=ctx.bus)
+            bus.publish(drift_envelope)
+    _retract_closed_wave_advisories(state_path, wave_id=wave_id, bus=bus)
     ctx.last_event_id = envelope.id
 
     logger.info(
@@ -3999,8 +4039,8 @@ async def _mutate_wave_close(
         after_version=after_version,
         idempotent_replay=False,
     ).model_dump(mode="json")
-    if idempotency_key is not None:
-        cache[idempotency_key] = _CachedMutation(
+    if cache_key is not None:
+        cache[cache_key] = _CachedMutation(
             result=result,
             cached_at=time.monotonic(),
         )

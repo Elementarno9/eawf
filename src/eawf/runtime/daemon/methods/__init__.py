@@ -172,32 +172,33 @@ class MethodContext:
         self.last_activity = time.monotonic()
 
 
-def require_bound_state_root(
+def note_cross_root_serve(
     ctx: MethodContext,
     *,
     repo_root: str | None,
     command: str,
 ) -> None:
-    """Refuse a mutation whose intended state root is not the daemon's.
+    """Log when a mutation targets a state root other than the boot root.
 
-    The EP3 guard (P30-I23-W11): the machine-global daemon accepted a
-    per-request ``repo_root`` with a silent fallback, so a daemon bound to
-    one repo's state served mutations aimed at another and wrote the wrong
-    ``state.json``. A mutation-bearing method calls this first; when the
-    caller's intended root differs from the daemon-bound root the request
-    is REFUSED with a typed error naming BOTH paths. Read-only methods
-    keep the fallback (a mis-anchored read is recoverable; a mis-anchored
-    write is corruption).
+    Multi-root serve (supersedes the EP3 refusal from P30-I23-W11): a
+    mutation carrying an explicit ``repo_root`` is honoured against THAT
+    root — the mutator path resolves state / event / WAL routing from the
+    request, the WAL record is stamped with the target ``state_path`` so
+    crash replay routes per record, and the idempotency cache is
+    namespaced per root. The EP3 incident (a daemon bound to a
+    smoke-fixture state wrote the wrong repo's ``state.json``) was caused
+    by the OMITTED-``repo_root`` boot-anchor fallback, not by explicit
+    routing; the omitted shape still resolves to the bound root with the
+    one-shot ``daemon_anchor_fallback`` warning.
+
+    Cross-root serves are logged at INFO so the daemon log shows which
+    repos the machine-global process wrote for.
 
     Args:
         ctx: Server context carrying the daemon-bound ``state_path``.
         repo_root: The caller's intended repo root, or ``None`` (the
-            legacy omitted-param shape, which resolves to the bound root
-            and passes).
-        command: Operator-facing command name for the error message.
-
-    Raises:
-        DaemonValidationError: When the resolved roots differ.
+            legacy omitted-param shape, which resolves to the bound root).
+        command: Operator-facing command name for the log line.
     """
     if not repo_root or ctx.state_path is None:
         return
@@ -206,11 +207,7 @@ def require_bound_state_root(
     intended = (Path(repo_root) / ".ea" / "state.json").resolve()
     bound = Path(ctx.state_path).resolve()
     if intended != bound:
-        raise DaemonValidationError(
-            f"validation_failed: wrong-state-root: {command} targets {intended} "
-            f"but this daemon is bound to {bound}; run the command against the "
-            "daemon bound to that repo (or restart the daemon there)"
-        )
+        logger.info(f"cross_root_serve command={command!r} target={str(intended)!r}")
 
 
 Handler = Callable[[MethodContext, dict[str, Any]], Awaitable[dict[str, Any]]]
