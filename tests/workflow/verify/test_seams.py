@@ -42,7 +42,6 @@ from eawf.kernel.state.models import (
 from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.kernel.store.paths import store_path
 from eawf.workflow.lifecycle.transitions import (
-    claim_wave,
     open_iter,
     open_phase,
     plan_wave,
@@ -50,6 +49,12 @@ from eawf.workflow.lifecycle.transitions import (
 from eawf.workflow.verify import readiness as readiness_mod
 from eawf.workflow.verify.models import CloseReadiness
 from tests._criteria_helpers import legacy_criteria
+from tests._session_helpers import (
+    claim_wave_with_session as claim_wave,
+)
+from tests._session_helpers import (
+    seed_active_session_on_disk,
+)
 from tests.conftest import make_floor_waiver, make_intent
 
 WAVE_ID = "P01-I01-W01"
@@ -158,6 +163,7 @@ def test_close_and_pin_calls_compute_after_close_wave(
         ).exit_code
         == 0
     )
+    seed_active_session_on_disk(state_path, session_id="SES-1")
     assert runner.invoke(app, ["wave", "claim", WAVE_ID, "--session", "SES-1"]).exit_code == 0
 
     # Patch the two functions in the CLI handler module (their import

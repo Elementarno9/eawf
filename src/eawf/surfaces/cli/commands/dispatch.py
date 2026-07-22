@@ -169,7 +169,7 @@ def _spawn_wave(*, wave_id: str, flags: GlobalFlags, model: str | None = None) -
     handler surfaces a proper error envelope rather than a faked spawned line.
 
     The live spawn is daemon-only — there is no in-process fallback, because a
-    daemonless caller has no daemon to register the executor session or fork
+    daemonless caller has no daemon to register the role-matched session or fork
     the child. ``escalate_mutation`` raises a typed
     :class:`~eawf.surfaces.cli.errors.UserError` for a daemonless request before
     any wire traffic, so the verb never reports a spawn that did not happen.
@@ -234,9 +234,9 @@ def dispatch_wave(
     """Spawn + dispatch a wave headlessly via the daemon's ``agent.dispatch``.
 
     Sends an ``agent.dispatch`` request with ``spawn=True`` + the wave id, so
-    the daemon registers an executor session, renders the prompt, resolves the
-    runtime adapter, and forks the child behind the safety floor. Reports the
-    captured child pid + the serving runtime the daemon returned.
+    the daemon registers a session matching the wave role, renders the prompt,
+    resolves the runtime adapter, and forks the child behind the safety floor.
+    Reports the captured child pid + the serving runtime the daemon returned.
 
     The live spawn is daemon-only: ``--daemonless`` / ``EAWF_DAEMONLESS=1`` is
     rejected (no daemon = no spawn), and any daemon error — including the

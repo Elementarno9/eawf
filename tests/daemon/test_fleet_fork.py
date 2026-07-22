@@ -48,7 +48,7 @@ from eawf.runtime.daemon.methods.fleet import (
 from eawf.runtime.lock import portalock
 from eawf.workflow.evidence._io import load_state
 from eawf.workflow.lifecycle._errors import LifecycleError
-from eawf.workflow.lifecycle.wave import claim_wave
+from tests._session_helpers import claim_wave_with_session as claim_wave
 
 pytestmark = pytest.mark.integration
 

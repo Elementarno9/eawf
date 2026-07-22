@@ -65,6 +65,7 @@ def _executor_report_json() -> str:
             "wave_id": _WAVE_ID,
             "files_changed": ["src/eawf/runtime/daemon/methods/agent.py"],
             "tests_run": ["uv run pytest tests/daemon -q"],
+            "commit_sha": "abc1234",
             "outcome": "applied the wave-scoped deny-list to the spawn",
         }
     )
@@ -164,7 +165,7 @@ def _state_payload(*, sandbox_policies: dict[str, dict[str, Any]] | None = None)
             "track_id": None,
             "phase_id": "P29",
             "iter_id": "P29-I04",
-            "active_wave_ids": [_WAVE_ID],
+            "active_wave_ids": [],
             "active_session_ids": [],
         },
         "workspace": None,
@@ -199,7 +200,7 @@ def _state_payload(*, sandbox_policies: dict[str, dict[str, Any]] | None = None)
                 "id": _WAVE_ID,
                 "iter_id": "P29-I04",
                 "title": "Thread deny-list into spawn argv",
-                "status": "claimed",
+                "status": "pending",
                 "deps": [],
                 "blocks": [],
                 "file_scopes": ["src/eawf/runtime/daemon/methods/agent.py"],
@@ -222,7 +223,7 @@ def _state_payload(*, sandbox_policies: dict[str, dict[str, Any]] | None = None)
                 "tokens_consumed": 0,
                 "outcome": None,
                 "opened_at": "2026-06-01T00:00:00Z",
-                "claimed_at": "2026-06-01T00:00:00Z",
+                "claimed_at": None,
                 "closed_at": None,
                 "runtime_preference": ["claude-code"],
             }

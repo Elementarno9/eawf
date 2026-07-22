@@ -19,7 +19,12 @@ scope walk); the model layer stays pure data + formatting.
 
 from __future__ import annotations
 
+import json
+
 from pydantic import BaseModel, ConfigDict, Field
+
+from eawf.kernel.state.enums import AgentSessionRole
+from eawf.kernel.store.kinds.agent_report import body_class_for_role
 
 
 class RoleTierBudgetError(ValueError):
@@ -251,6 +256,9 @@ class SubagentSpec(_SpecModel):
         wave_id: The dispatched wave id.
         iter_id: The wave's parent iter id (rendered into the scope
             rationale verbatim, matching the legacy ``wave.iter_id``).
+        phase_id: The wave's parent phase id. Headless operator dispatches
+            use this as the authoritative ``OperatorReportBody.phase_id``;
+            ``None`` is retained for manually-built legacy specs.
         title: The wave title (rendered into the ``# Wave ...`` header).
         description: The wave's optional long-form purpose (the ≤500-char
             field split off the bounded ≤72-char ``title``). Rendered as a
@@ -287,6 +295,7 @@ class SubagentSpec(_SpecModel):
 
     wave_id: str
     iter_id: str
+    phase_id: str | None = None
     title: str
     description: str | None = None
     scope_id: str
@@ -389,6 +398,7 @@ class SubagentSpec(_SpecModel):
 
     def _render_workflow(self, *, headless: bool = False) -> str:
         commit_prefix = _commit_prefix_for_wave(self.wave_id, self.iter_id)
+        report_role = self.agent_role or AgentSessionRole.EXECUTOR.value
         # Both dispatch shapes end report-then-stop: the worktree agent never
         # runs an eawf command (a shared daemon + checkout make any invocation
         # a cross-tree hazard), so the close is never the agent's to run. The
@@ -424,7 +434,7 @@ class SubagentSpec(_SpecModel):
             f"4. Commit with prefix `{commit_prefix} <type>: <summary>` "
             "(3-6 bullet body) and the recognized Claude or Codex "
             "`Co-Authored-By` trailer.\n"
-            "5. Emit the typed executor report as your final message; " + tally_owner + ".\n"
+            f"5. Emit the typed {report_role} report as your final message; {tally_owner}.\n"
             "6. Stop after the report. Take no further action — the close "
             "is run for you, never by you."
         )
@@ -486,35 +496,82 @@ class SubagentSpec(_SpecModel):
     def _render_report_output(self) -> str | None:
         """Return the headless ``## Report output`` section, or ``None``.
 
-        Only the HEADLESS executor dispatch path emits this section. The
+        Every HEADLESS role dispatch path emits this section. The
         live-spawn daemon path reads the spawned model's final message as a
-        JSON ``ExecutorReportBody`` (``json.loads(spawn.text)`` then schema
-        validation), so a model that answers in prose fails validation. The
-        section pins the exact JSON schema -- field names, enum values, and
-        the dispatched wave id -- plus a strict "output ONLY this JSON"
-        instruction so the model emits a valid body on the first try.
+        role-specific JSON body (``json.loads(spawn.text)`` then schema
+        validation), so a model that answers in prose or under the wrong role
+        fails validation. The section pins the exact role schema plus a strict
+        "output ONLY this JSON" instruction so the model emits a valid body on
+        the first try.
 
-        Returns ``None`` for any non-executor role since only the executor
-        report body drives the live-spawn parse; the caller already gates
-        the whole section on the ``headless`` flag, so the interactive
-        render stays byte-equivalent.
+        The executor branch preserves its compact existing schema text. Other
+        roles render their Pydantic JSON Schema, keeping the output contract
+        coupled to the canonical body class. ``None`` is reserved for an
+        unspecified role; the caller already gates the whole section on the
+        ``headless`` flag, so interactive rendering stays byte-equivalent.
         """
-        if self.agent_role != "executor":
+        if self.agent_role is None:
             return None
-        schema = (
-            '{"role": "executor", '
-            '"verdict": "pass|pass-with-followups|fail|blocked", '
-            '"confidence": "high|medium|low", '
-            '"summary": "<=4000 chars", '
-            f'"wave_id": "{self.wave_id}", '
-            '"outcome": "1-1000 chars", '
-            '"files_changed": [], '
-            '"tests_run": [], '
-            '"commit_sha": null, '
-            '"evidence_refs": [{"kind": "artifact", "ref": "<file:line or gate cmd>", '
-            '"note": "<criterion id>"}], '
-            '"followups": []}'
-        )
+        role = AgentSessionRole(self.agent_role)
+        if role is AgentSessionRole.EXECUTOR:
+            schema = (
+                '{"role": "executor", '
+                '"verdict": "pass|pass-with-followups|fail|blocked", '
+                '"confidence": "high|medium|low", '
+                '"summary": "<=4000 chars", '
+                f'"wave_id": "{self.wave_id}", '
+                '"outcome": "1-1000 chars", '
+                '"files_changed": [], '
+                '"tests_run": [], '
+                '"commit_sha": "<7+ char commit SHA>", '
+                '"evidence_refs": [{"kind": "artifact", '
+                '"ref": "<file:line or gate cmd>", '
+                '"note": "<criterion id>"}], '
+                '"followups": []}'
+            )
+            role_instruction = (
+                f"Set `wave_id` to `{self.wave_id}` exactly. `verdict` is one of "
+                "`pass`, `pass-with-followups`, `fail`, `blocked`; `confidence` "
+                "is one of `high`, `medium`, `low`. `summary` and `outcome` are "
+                "required non-empty strings. `files_changed` and `tests_run` are "
+                "arrays of plain strings. `commit_sha` is REQUIRED and must name "
+                "the landed commit using at least 7 characters. `evidence_refs` is "
+                "REQUIRED: exactly one "
+                "object per success criterion, each `{kind, ref, note}` where "
+                "`kind` is one of `audit`, `artifact`, `decision`, `store_record`, "
+                "`external_url`; `ref` is the evidence itself (a gate command plus "
+                "its exit code, a file:line where the behaviour is wired, or a "
+                "store URN); `note` names the criterion id it evidences. "
+                "`followups` stays an empty array unless you carry named follow-ups."
+            )
+        else:
+            body_class = body_class_for_role(role)
+            schema = json.dumps(body_class.model_json_schema(), indent=2, sort_keys=True)
+            target_instruction = (
+                f"Use `{self.wave_id}` for the role-specific target, scope, or "
+                "domain identifier when the schema requires one."
+            )
+            if role is AgentSessionRole.AUDITOR:
+                target_instruction = (
+                    f"Set `target_id` to `{self.wave_id}` exactly and provide a "
+                    "non-empty `criteria` list covering the audited success criteria."
+                )
+            elif role is AgentSessionRole.REVIEWER:
+                target_instruction = (
+                    f"Set `target_id` to `{self.wave_id}` exactly and provide a "
+                    "non-empty `coverage_refs` list."
+                )
+            elif role is AgentSessionRole.OPERATOR:
+                phase_id = self.phase_id or _phase_wave_segments(self.wave_id)[0]
+                target_instruction = (
+                    f"Set `phase_id` to the parent phase `{phase_id}` exactly. "
+                    "Every `completed_wave_ids` entry must belong to that phase."
+                )
+            role_instruction = (
+                f"Set `role` to `{role.value}` exactly. {target_instruction} "
+                "`verdict` is one of `pass`, `pass-with-followups`, `fail`, "
+                "`blocked`; `confidence` is one of `high`, `medium`, `low`."
+            )
         return (
             "## Report output\n"
             "\n"
@@ -524,18 +581,7 @@ class SubagentSpec(_SpecModel):
             "\n"
             f"{schema}\n"
             "\n"
-            f"Set `wave_id` to `{self.wave_id}` exactly. `verdict` is one of "
-            "`pass`, `pass-with-followups`, `fail`, `blocked`; `confidence` "
-            "is one of `high`, `medium`, `low`. `summary` and `outcome` are "
-            "required non-empty strings. `files_changed` and `tests_run` are "
-            "arrays of plain strings. `evidence_refs` is REQUIRED: exactly one "
-            "object per success criterion, each `{kind, ref, note}` where "
-            "`kind` is one of `audit`, `artifact`, `decision`, `store_record`, "
-            "`external_url`; `ref` is the evidence itself (a gate command plus "
-            "its exit code, a file:line where the behaviour is wired, or a "
-            "store URN); `note` names the criterion id it evidences. "
-            "`followups` stays an empty array unless you carry named "
-            "follow-ups."
+            f"{role_instruction}"
         )
 
     def _render_stop_conditions(self) -> str | None:
@@ -560,11 +606,11 @@ class SubagentSpec(_SpecModel):
         (omitted when unset), wave tags, scope, dependencies, decisions,
         hypotheses, recent audits, references (omitted when empty), working
         tree, workflow, out of scope, estimate, stop conditions (omitted
-        when empty) — joined by a blank line. When *headless* and the wave's
-        ``agent_role`` is ``executor``, a trailing ``## Report output``
-        section pins the ``ExecutorReportBody`` JSON schema so the spawned
-        model emits a parseable report body (the live-spawn path
-        ``json.loads``-es the final message and schema-validates it). Both
+        when empty) — joined by a blank line. When *headless* and the wave has
+        an ``agent_role``, a trailing ``## Report output`` section pins that
+        role's report-body JSON schema so the spawned model emits a parseable
+        report body (the live-spawn path ``json.loads``-es the final message
+        and schema-validates it). Both
         shapes share the report-then-stop ``## Workflow`` tail (step 5 emits
         the typed report, step 6 stops): the agent never self-closes. The
         step-5 text names the token-tally owner per path -- the dispatching

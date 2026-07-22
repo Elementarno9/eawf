@@ -25,12 +25,12 @@ from eawf.kernel.state import wave_graph
 from eawf.kernel.state.enums import ProjectStatus, ScopeKind, WaveStatus
 from eawf.kernel.state.models import CurrentPointers, Principal, Project, RuntimeLatest, State
 from eawf.workflow.lifecycle.transitions import (
-    claim_wave,
     close_wave,
     open_iter,
     open_phase,
     plan_wave,
 )
+from tests._session_helpers import claim_wave_with_session as claim_wave
 from tests.conftest import make_intent
 
 

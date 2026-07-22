@@ -47,13 +47,13 @@ from eawf.workflow.estimation.metrics import compute_estimate_actual_variance
 from eawf.workflow.lifecycle import wave as wave_lifecycle
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.transitions import (
-    claim_wave,
     close_wave,
     open_iter,
     open_phase,
     plan_wave,
 )
 from eawf.workflow.lifecycle.wave import compute_runtime_delta
+from tests._session_helpers import claim_wave_with_session as claim_wave
 from tests.conftest import make_intent
 
 
@@ -167,16 +167,11 @@ def test_claim_wave_no_bucket_rejects_before_estimate() -> None:
     assert not (state.estimates or {})
 
 
-def test_claim_wave_captures_runtime_baseline_from_real_sidecar(
+def test_claim_wave_does_not_treat_eawf_session_as_vendor_runtime_id(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Claim reads the session-keyed sidecar and stamps a real baseline.
-
-    Exercises the production read path end-to-end (no monkeypatch of the
-    capture helper): a sidecar written for the claim session is read back
-    and converted into the stamped baseline.
-    """
+    """Claim never looks up vendor counters by the EAWF session id."""
     from eawf.runtime.runtime_counter_sidecar import (
         RuntimeCounterSidecar,
         sidecar_path_for_statusline_cache,
@@ -203,13 +198,7 @@ def test_claim_wave_captures_runtime_baseline_from_real_sidecar(
     _seed_wave(state, effort_bucket=EffortBucket.M)
     wave = claim_wave(state, wave_id="P01-I01-W01", session_id=session_id)
 
-    assert wave.runtime_baseline is not None
-    assert wave.runtime_baseline.api_duration_ms == 100
-    assert wave.runtime_baseline.total_duration_ms == 125
-    assert wave.runtime_baseline.cost_usd == pytest.approx(0.25)
-    assert wave.runtime_baseline.input_tokens == 10
-    assert wave.runtime_baseline.cache_read_input_tokens == 7
-    assert wave.runtime_baseline.captured_at is not None
+    assert wave.runtime_baseline is None
 
 
 def test_claim_wave_runtime_baseline_none_when_sidecar_missing(
@@ -226,39 +215,18 @@ def test_claim_wave_runtime_baseline_none_when_sidecar_missing(
     assert wave.runtime_baseline is None
 
 
-def test_claim_wave_preserves_runtime_baseline_on_idempotent_reclaim(
+def test_claim_wave_never_calls_vendor_counter_capture(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A same-session re-claim does not re-snapshot runtime counters."""
+    """EAWF session binding cannot drive the vendor-counter lookup seam."""
     state = _empty_state()
     _seed_wave(state, effort_bucket=EffortBucket.M)
-    first_baseline = RuntimeBaseline(
-        api_duration_ms=100,
-        total_duration_ms=125,
-        cost_usd=0.25,
-        input_tokens=10,
-        output_tokens=20,
-        cache_creation_input_tokens=3,
-        cache_read_input_tokens=7,
-        captured_at=datetime(2026, 6, 10, 12, 0, tzinfo=UTC),
-    )
-    second_baseline = RuntimeBaseline(
-        api_duration_ms=999,
-        total_duration_ms=999,
-        cost_usd=9.99,
-        input_tokens=999,
-        output_tokens=999,
-        cache_creation_input_tokens=999,
-        cache_read_input_tokens=999,
-        captured_at=datetime(2026, 6, 10, 13, 0, tzinfo=UTC),
-    )
-    captures = [first_baseline, second_baseline]
     calls = 0
 
-    def capture(session_id: str) -> RuntimeBaseline:
+    def capture(runtime_session_id: str) -> RuntimeBaseline:
         nonlocal calls
         calls += 1
-        return captures[calls - 1]
+        raise AssertionError(f"unexpected vendor counter lookup: {runtime_session_id}")
 
     monkeypatch.setattr(wave_lifecycle, "_capture_runtime_baseline", capture)
 
@@ -266,9 +234,9 @@ def test_claim_wave_preserves_runtime_baseline_on_idempotent_reclaim(
     original_claimed_at = first.claimed_at
     again = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
 
-    assert calls == 1
+    assert calls == 0
     assert again.claimed_at == original_claimed_at
-    assert again.runtime_baseline == first_baseline
+    assert again.runtime_baseline is None
 
 
 # ---- close_wave upserts ActualSummary (P28-I02-W03 token-only auto-actual) ---

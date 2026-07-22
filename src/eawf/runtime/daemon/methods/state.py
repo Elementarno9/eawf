@@ -125,6 +125,7 @@ from eawf.runtime.daemon.wal import WalRecord
 from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
 from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
+    LifecycleGuardError,
     activate_phase,
     add_track,
     archive_phase,
@@ -3548,11 +3549,11 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         RuntimeError: when ``ctx.state_path``, ``ctx.event_path``, or
             ``ctx.wal_dir`` is missing.
         DaemonValidationError: when the mutation body fails the typed
-            contract, a *closure-kind* lifecycle guard rejects the
-            mutation, or the post-mutation state fails schema / invariant
-            validation; mapped to ``-32002 validation_failed`` by the
-            server. Non-closure lifecycle-guard rejections raise a plain
-            ``ValueError`` (``-32602 INVALID_PARAMS``) so the exit code
+            contract, a closure-kind or coded claim-session lifecycle guard
+            rejects the mutation, or the post-mutation state fails schema /
+            invariant validation; mapped to ``-32002 validation_failed`` by
+            the server. Other non-closure lifecycle-guard rejections raise a
+            plain ``ValueError`` (``-32602 INVALID_PARAMS``) so the exit code
             matches the in-process fallback.
     """
     try:
@@ -3642,6 +3643,8 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
             try:
                 apply_func(state, mutation)
+            except LifecycleGuardError as exc:
+                raise DaemonValidationError(f"validation_failed: {exc}") from exc
             except LifecycleError as exc:
                 # Closure-kind (*_CLOSE) rejections surface as -32002
                 # (ValidationError, exit 2); every other lifecycle-guard
@@ -3700,6 +3703,18 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             # extras dict so the envelope shape stays uniform.
             extras: dict[str, str | int | float | bool] = {}
             drift_extras: dict[str, str | int | float | bool] = {}
+            if mutation.kind is MutationKind.WAVE_CLAIM:
+                claimed_wave_id = str(mutation.params["wave_id"])
+                claim_session_id = state.waves[claimed_wave_id].claim_session_id
+                if claim_session_id is None:  # pragma: no cover - claim transition guarantees it
+                    raise DaemonValidationError(
+                        f"validation_failed: claimed wave has no session: {claimed_wave_id!r}"
+                    )
+                # The daemon executed the mutation, so actor remains ``daemon``.
+                # This additive reference records which already-validated live
+                # session gained the wave without claiming that session
+                # authenticated the state.mutate request.
+                extras["claim_session_id"] = claim_session_id
 
             envelope = _build_event_envelope(
                 mutation=mutation,

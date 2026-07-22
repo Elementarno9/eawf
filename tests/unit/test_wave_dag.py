@@ -17,12 +17,12 @@ from eawf.kernel.state.enums import ProjectStatus, ScopeKind
 from eawf.kernel.state.models import CurrentPointers, Project, State
 from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
-    claim_wave,
     close_wave,
     open_iter,
     open_phase,
     plan_wave,
 )
+from tests._session_helpers import claim_wave_with_session as claim_wave
 from tests.conftest import make_intent
 
 

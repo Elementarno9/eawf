@@ -51,7 +51,6 @@ from eawf.workflow.audit_dsl.kinds.transition_coverage import (
     table_edges,
 )
 from eawf.workflow.lifecycle.transitions import (
-    claim_wave,
     open_iter,
     open_phase,
     plan_wave,
@@ -59,6 +58,12 @@ from eawf.workflow.lifecycle.transitions import (
 from eawf.workflow.verify import readiness as readiness_mod
 from eawf.workflow.verify.models import CloseReadiness
 from tests._criteria_helpers import legacy_criteria
+from tests._session_helpers import (
+    claim_wave_with_session as claim_wave,
+)
+from tests._session_helpers import (
+    seed_active_session_on_disk,
+)
 from tests.conftest import make_floor_waiver, make_intent
 
 WAVE_ID = "P01-I01-W01"
@@ -1148,6 +1153,7 @@ def test_seams_dont_block_on_failing_deterministic_gate(
         ).exit_code
         == 0
     )
+    seed_active_session_on_disk(state_path, session_id="SES-w08")
     assert runner.invoke(app, ["wave", "claim", WAVE_ID, "--session", "SES-w08"]).exit_code == 0
 
     # Inject a deterministic criterion + failing gate at the live

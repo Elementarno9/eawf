@@ -133,6 +133,19 @@ def _init_project(workspace: Path) -> None:
         ["project", "init", "QR", "--title", "Quant", "--domains", "quant"],
     )
     assert res.exit_code == 0
+    state_path = workspace / ".ea" / "state.json"
+    state = orjson.loads(state_path.read_bytes())
+    for session_id in ("S", "SES-1"):
+        state["agent_sessions"][session_id] = {
+            "id": session_id,
+            "role": "executor",
+            "runtime": "generic",
+            "scope_id": "QR",
+            "status": "active",
+            "started_at": "2026-01-01T00:00:00Z",
+        }
+        state["current"]["active_session_ids"].append(session_id)
+    state_path.write_bytes(orjson.dumps(state, option=orjson.OPT_INDENT_2))
 
 
 def test_track_add_then_switch(workspace: Path) -> None:
@@ -698,6 +711,45 @@ def test_wave_claim_happy(workspace: Path) -> None:
     assert res.exit_code == 0, res.stdout
 
 
+def test_wave_claim_daemonless_event_records_committed_session_reference(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fallback claim event carries the post-mutation session binding."""
+    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
+    _bootstrap_to_iter(workspace)
+    runner.invoke(
+        app,
+        [
+            "wave",
+            "plan",
+            "P01-I01",
+            "--id",
+            "P01-I01-W01",
+            "--title",
+            "x",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+        ],
+    )
+
+    res = runner.invoke(
+        app,
+        ["--json", "wave", "claim", "P01-I01-W01", "--session", "SES-1"],
+    )
+
+    assert res.exit_code == 0, res.stdout
+    state = _read_state(workspace)
+    assert state["waves"]["P01-I01-W01"]["claim_session_id"] == "SES-1"  # type: ignore[index]
+    event_path = workspace / ".ea" / "store" / "event.jsonl"
+    events = [json.loads(line) for line in event_path.read_text(encoding="utf-8").splitlines()]
+    claims = [row for row in events if row["payload"]["command"] == "wave claim"]
+    assert len(claims) == 1
+    assert claims[0]["payload"]["extras"] == {"claim_session_id": "SES-1"}
+
+
 def test_wave_claim_invalid_policy_exits_3(workspace: Path) -> None:
     _bootstrap_to_iter(workspace)
     runner.invoke(
@@ -1167,10 +1219,7 @@ def test_wave_update_files_empty_files_list_exits_3(workspace: Path) -> None:
 
 def test_full_lifecycle_emits_events(workspace: Path) -> None:
     """Complete project init → wave close path; events.jsonl gets one record per mutation."""
-    runner.invoke(
-        app,
-        ["project", "init", "QR", "--title", "Quant", "--domains", "quant"],
-    )
+    _init_project(workspace)
     runner.invoke(app, ["phase", "open", "--auto", "--title", "Bootstrap"])
     runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "Iter1"])
     runner.invoke(

@@ -416,7 +416,7 @@ def test_render_headless_executor_emits_report_output_schema() -> None:
     assert '"outcome": "1-1000 chars"' in out
     assert '"files_changed": []' in out
     assert '"tests_run": []' in out
-    assert '"commit_sha": null' in out
+    assert '"commit_sha": "<7+ char commit SHA>"' in out
     assert '"evidence_refs": [{"kind": "artifact"' in out
     assert '"followups": []' in out
     # The dispatched wave id is injected into the schema, not a placeholder.
@@ -427,6 +427,7 @@ def test_render_headless_executor_emits_report_output_schema() -> None:
     # with {evidence_kind, notes}, which fails AgentReportEvidenceRef and
     # forces the slow re-ask loop). evidence_refs + followups must stay [].
     assert "`evidence_refs` is REQUIRED: exactly one object per success criterion" in out
+    assert "`commit_sha` is REQUIRED" in out
 
 
 def test_render_interactive_executor_omits_report_output_schema() -> None:
@@ -442,10 +443,26 @@ def test_render_headless_default_matches_interactive_for_executor() -> None:
     assert spec.render() == spec.render(headless=False)
 
 
-def test_render_headless_non_executor_omits_report_output() -> None:
-    """Headless only adds the section for the executor role, not others."""
+def test_render_headless_non_executor_emits_its_role_schema() -> None:
+    """Headless specialist output is pinned to its own typed body."""
     out = _minimal_spec(agent_role="auditor", file_scopes=["src/"]).render(headless=True)
-    assert "## Report output" not in out
+    assert "## Report output" in out
+    assert '"const": "auditor"' in out
+    assert '"title": "AuditorReportBody"' in out
+    assert '"target_id"' in out
+    assert "typed auditor report" in out
+
+
+def test_render_headless_operator_pins_parent_phase_not_wave_id() -> None:
+    """Operator output instructions name the actual parent phase."""
+    out = _minimal_spec(
+        agent_role="operator",
+        phase_id="P01",
+        file_scopes=["src/"],
+    ).render(headless=True)
+    assert '"title": "OperatorReportBody"' in out
+    assert "Set `phase_id` to the parent phase `P01` exactly" in out
+    assert "phase `P01-I01-W01`" not in out
 
 
 def test_render_headless_unspecified_role_omits_report_output() -> None:

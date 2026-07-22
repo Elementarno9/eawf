@@ -47,7 +47,7 @@ def _state_payload() -> dict[str, Any]:
             "track_id": None,
             "phase_id": "P28",
             "iter_id": "P28-I03",
-            "active_wave_ids": [],
+            "active_wave_ids": [_WAVE_ID],
             "active_session_ids": [_SESSION_ID],
         },
         "workspace": None,
@@ -95,6 +95,7 @@ def _state_payload() -> dict[str, Any]:
                 "tokens_consumed": 0,
                 "outcome": None,
                 "opened_at": "2026-05-28T00:00:00Z",
+                "claimed_at": "2026-05-28T00:00:00Z",
                 "closed_at": None,
             }
         },
@@ -129,11 +130,13 @@ def _reverted_payload() -> dict[str, Any]:
     """
     payload = copy.deepcopy(_state_payload())
     payload["agent_sessions"] = {}
+    payload["current"]["active_wave_ids"] = []
     payload["current"]["active_session_ids"] = []
     payload["current"]["phase_id"] = None
     payload["current"]["iter_id"] = None
     payload["waves"][_WAVE_ID]["status"] = "pending"
     payload["waves"][_WAVE_ID]["claim_session_id"] = None
+    payload["waves"][_WAVE_ID]["claimed_at"] = None
     return payload
 
 
@@ -166,8 +169,10 @@ def test_reassert_restores_reverted_session_claim_and_phase(tmp_path: Path) -> N
         _ctx(state_path),
         wave_id=_WAVE_ID,
         session_id=_SESSION_ID,
-        serving_runtime="codex",
-        started_at=_STARTED_AT,
+        session_runtime="codex",
+        session_role=AgentSessionRole.EXECUTOR,
+        session_scope_id=_WAVE_ID,
+        session_started_at=_STARTED_AT,
     )
 
     reloaded = State.model_validate_json(state_path.read_text(encoding="utf-8"))
@@ -181,6 +186,7 @@ def test_reassert_restores_reverted_session_claim_and_phase(tmp_path: Path) -> N
     # Claim re-asserted: the wave is back on the in-flight track.
     assert reloaded.waves[_WAVE_ID].status is WaveStatus.IN_PROGRESS
     assert reloaded.waves[_WAVE_ID].claim_session_id == _SESSION_ID
+    assert _WAVE_ID in reloaded.current.active_wave_ids
     # Phase-active pointer restored from the wave's iter.
     assert reloaded.current.phase_id == "P28"
     assert reloaded.current.iter_id == "P28-I03"
@@ -195,8 +201,10 @@ def test_reassert_is_noop_on_healthy_state(tmp_path: Path) -> None:
         _ctx(state_path),
         wave_id=_WAVE_ID,
         session_id=_SESSION_ID,
-        serving_runtime="codex",
-        started_at=_STARTED_AT,
+        session_runtime="codex",
+        session_role=AgentSessionRole.EXECUTOR,
+        session_scope_id=_WAVE_ID,
+        session_started_at=_STARTED_AT,
     )
 
     assert state_path.read_text(encoding="utf-8") == before
@@ -212,10 +220,63 @@ def test_reassert_does_not_resurrect_a_terminal_wave(tmp_path: Path) -> None:
         _ctx(state_path),
         wave_id=_WAVE_ID,
         session_id=_SESSION_ID,
-        serving_runtime="codex",
-        started_at=_STARTED_AT,
+        session_runtime="codex",
+        session_role=AgentSessionRole.EXECUTOR,
+        session_scope_id=_WAVE_ID,
+        session_started_at=_STARTED_AT,
     )
 
     reloaded = State.model_validate_json(state_path.read_text(encoding="utf-8"))
     assert reloaded.waves[_WAVE_ID].status is WaveStatus.CLOSED
     assert _SESSION_ID not in reloaded.agent_sessions
+
+
+def test_reassert_rebuilds_missing_operator_session_without_wave_role_substitution(
+    tmp_path: Path,
+) -> None:
+    """A missing operator binding returns as OPERATOR, not the wave specialist."""
+    payload = _reverted_payload()
+    payload["waves"][_WAVE_ID]["agent_role"] = "reviewer"
+    state_path = _write(payload, tmp_path)
+
+    _reassert_dispatch_state(
+        _ctx(state_path),
+        wave_id=_WAVE_ID,
+        session_id=_SESSION_ID,
+        session_runtime="codex",
+        session_role=AgentSessionRole.OPERATOR,
+        session_scope_id="P28",
+        session_started_at=_STARTED_AT,
+    )
+
+    reloaded = State.model_validate_json(state_path.read_text(encoding="utf-8"))
+    session = reloaded.agent_sessions[_SESSION_ID]
+    assert session.role is AgentSessionRole.OPERATOR
+    assert session.scope_id == "P28"
+    assert session.claimed_wave_ids == [_WAVE_ID]
+    assert reloaded.waves[_WAVE_ID].claim_session_id == _SESSION_ID
+
+
+def test_reassert_repairs_existing_session_claimed_wave_index(tmp_path: Path) -> None:
+    """Reverse-only binding regains the session's forward claimed-wave index."""
+    payload = _state_payload()
+    payload["waves"][_WAVE_ID]["agent_role"] = "reviewer"
+    payload["agent_sessions"][_SESSION_ID]["role"] = "operator"
+    payload["agent_sessions"][_SESSION_ID]["scope_id"] = "P28"
+    payload["agent_sessions"][_SESSION_ID]["claimed_wave_ids"] = []
+    state_path = _write(payload, tmp_path)
+
+    _reassert_dispatch_state(
+        _ctx(state_path),
+        wave_id=_WAVE_ID,
+        session_id=_SESSION_ID,
+        session_runtime="codex",
+        session_role=AgentSessionRole.OPERATOR,
+        session_scope_id="P28",
+        session_started_at=_STARTED_AT,
+    )
+
+    reloaded = State.model_validate_json(state_path.read_text(encoding="utf-8"))
+    session = reloaded.agent_sessions[_SESSION_ID]
+    assert session.role is AgentSessionRole.OPERATOR
+    assert session.claimed_wave_ids == [_WAVE_ID]

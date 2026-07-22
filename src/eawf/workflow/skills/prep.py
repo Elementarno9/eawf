@@ -185,6 +185,13 @@ def _build_dag_from_phase(phase: Phase, state: State) -> tuple[list[PrepDagTask]
     """
     from eawf.workflow.estimation.buckets import wave_estimate_eu
 
+    pending_wave_ids = {
+        wave_id
+        for iter_id in phase.iter_ids
+        if (iter_record := state.iters.get(iter_id)) is not None
+        for wave_id in iter_record.wave_ids
+        if (wave := state.waves.get(wave_id)) is not None and wave.status is WaveStatus.PENDING
+    }
     dag: list[PrepDagTask] = []
     waves: list[PrepWave] = []
     for iter_id in phase.iter_ids:
@@ -201,7 +208,7 @@ def _build_dag_from_phase(phase: Phase, state: State) -> tuple[list[PrepDagTask]
             dag.append(
                 PrepDagTask(
                     task_id=wave.id,
-                    deps=list(wave.deps),
+                    deps=[dep_id for dep_id in wave.deps if dep_id in pending_wave_ids],
                     file_scope=list(wave.file_scopes),
                     commands=[],
                     evidence=[],
@@ -265,13 +272,13 @@ class _PrepInputs:
         phase_id: The resolved target phase id, or ``None``.
         phase: The resolved :class:`Phase` record, or ``None``.
         auto_resume: When ``True`` (``prep.auto_resume`` default), the emitted
-            claim actions lead with ``eawf dispatch resume`` (SKH-8a gotcha i).
-        out_of_order: When ``True`` (``--out-of-order``), the emitted claim
-            command carries ``--out-of-order`` (gotcha ii).
+            dispatch actions lead with ``eawf dispatch resume`` (SKH-8a gotcha i).
+        out_of_order: Whether the planner selected out-of-order execution;
+            recorded in the trace but handled inside daemon dispatch.
         ceremony: The ``--ceremony`` override (``lite`` / ``full``), or ``None``
             to keep the compute_ceremony recommendation.
-        runtime: The ``--runtime`` batch-ladder override id, or ``None`` for
-            the ladder head.
+        runtime: The requested batch-ladder runtime, recorded in the trace;
+            concrete operator actions leave runtime selection to dispatch.
         warnings: Advisory warnings folded into the envelope footer (e.g. an
             out-of-set ``--ceremony`` token).
     """
@@ -380,24 +387,39 @@ class PrepSkill(SkillAction):
         return candidate or None
 
     def _next_actions(self, inputs: _PrepInputs) -> list[str]:
-        """Build the emitted ``next_valid_actions`` reflecting the claim options.
+        """Build concrete dispatch actions for the dependency-ready frontier.
 
         ``auto_resume`` leads with ``eawf dispatch resume`` (gotcha i); the
-        claim command carries ``--out-of-order`` (gotcha ii) and ``--runtime``
-        when those overrides are set. The canonical plan / audit follow-ups
-        trail the claim row.
+        canonical plan/audit follow-ups trail one ``eawf dispatch wave`` action
+        per concrete ready wave. No iter id or unresolved session placeholder
+        is executable as a claim command.
         """
         actions: list[str] = []
         if inputs.auto_resume:
             actions.append("eawf dispatch resume")
-        claim = f"eawf wave claim {inputs.iter_id}"
-        if inputs.out_of_order:
-            claim = f"{claim} --out-of-order"
-        if inputs.runtime is not None:
-            claim = f"{claim} --runtime {inputs.runtime}"
-        actions.append(claim)
+        actions.extend(f"eawf dispatch wave {wave_id}" for wave_id in self._frontier(inputs))
         actions.extend(_PREP_NEXT_ACTIONS)
         return actions
+
+    def _frontier(self, inputs: _PrepInputs) -> list[str]:
+        """Return PENDING target-iter waves whose dependencies are CLOSED."""
+        if inputs.state is None:
+            return []
+        iter_row = inputs.state.iters.get(inputs.iter_id)
+        if iter_row is None:
+            return []
+        frontier: list[str] = []
+        for wave_id in iter_row.wave_ids:
+            wave = inputs.state.waves.get(wave_id)
+            if wave is None or wave.status is not WaveStatus.PENDING:
+                continue
+            if all(
+                dep_id in inputs.state.waves
+                and inputs.state.waves[dep_id].status is WaveStatus.CLOSED
+                for dep_id in wave.deps
+            ):
+                frontier.append(wave_id)
+        return frontier
 
     def _validate(self, run: ActionRun, inputs: _PrepInputs) -> SkillResult | None:
         phase = inputs.phase

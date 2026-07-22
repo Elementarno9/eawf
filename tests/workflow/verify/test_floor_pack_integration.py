@@ -32,13 +32,13 @@ from eawf.platform.profiles.models import FloorCheck, VerifyBlock
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
 from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
-    claim_wave,
     open_iter,
     open_phase,
     plan_wave,
 )
 from eawf.workflow.verify import readiness as readiness_mod
 from tests._criteria_helpers import legacy_criteria
+from tests._session_helpers import claim_wave_with_session as claim_wave
 from tests.conftest import make_floor_waiver, make_intent
 
 WAVE_ID = "P01-I01-W01"

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
@@ -79,6 +80,39 @@ def test_start_session_creates_active_record(tmp_path: Path) -> None:
     assert len(lines) == 1
     parsed = json.loads(lines[0])
     assert parsed["payload"]["event_type"] == "session.start"
+
+
+def test_start_session_fixed_clock_ids_and_events_remain_unique(tmp_path: Path) -> None:
+    """A frozen clock still yields ten full-UUID session and event ids."""
+    state = _make_state()
+    events = tmp_path / "events.jsonl"
+    frozen = datetime(2026, 5, 8, 10, 11, 12, 345678, tzinfo=UTC)
+
+    results = [
+        start_session(
+            state=state,
+            events_path=events,
+            role=AgentSessionRole.EXECUTOR,
+            scope_id=f"QR-SCOPE-{index}",
+            runtime="claude",
+            now=frozen,
+        )
+        for index in range(10)
+    ]
+
+    session_ids = [result.session.id for result in results]
+    event_ids = [result.event.id for result in results]
+    assert len(set(session_ids)) == 10
+    assert len(set(event_ids)) == 10
+    assert len(state.agent_sessions) == 10
+    stored_event_ids = {
+        json.loads(line)["id"]
+        for line in events.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
+    assert stored_event_ids == set(event_ids)
+    assert all("20260508T101112.345678Z" in session_id for session_id in session_ids)
+    assert all(str(UUID(session_id[-36:])) == session_id[-36:] for session_id in session_ids)
 
 
 def test_start_session_rejects_duplicate_scope_runtime(tmp_path: Path) -> None:

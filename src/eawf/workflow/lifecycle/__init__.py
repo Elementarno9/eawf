@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
+    LifecycleGuardError,
     activate_iter,
     activate_phase,
     add_track,
@@ -39,10 +40,12 @@ from eawf.workflow.lifecycle.transitions import (
     set_iter_candidate_tag,
     set_wave_deps,
     switch_track,
+    validate_claim_session,
 )
 
 __all__ = [
     "LifecycleError",
+    "LifecycleGuardError",
     "activate_iter",
     "activate_phase",
     "add_track",
@@ -64,4 +67,5 @@ __all__ = [
     "set_iter_candidate_tag",
     "set_wave_deps",
     "switch_track",
+    "validate_claim_session",
 ]

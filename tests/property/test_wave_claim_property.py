@@ -49,6 +49,8 @@ from eawf.workflow.lifecycle.transitions import LifecycleError, claim_wave
 def _seed_state(state_path: Path) -> None:
     """Write a minimal state.json with one PENDING wave."""
     state_path.parent.mkdir(parents=True, exist_ok=True)
+    session_ids = [*(f"SES-{i}" for i in range(8)), "SES-A", "SES-B"]
+    now = datetime.now(UTC).isoformat()
     payload = {
         "schema_version": "1.0",
         "scope_kind": "repo",
@@ -70,7 +72,7 @@ def _seed_state(state_path: Path) -> None:
             "phase_id": "P01",
             "iter_id": "P01-I01",
             "active_wave_ids": [],
-            "active_session_ids": [],
+            "active_session_ids": session_ids,
         },
         "workspace": None,
         "phases": {
@@ -117,7 +119,17 @@ def _seed_state(state_path: Path) -> None:
             }
         },
         "artifacts": {},
-        "agent_sessions": {},
+        "agent_sessions": {
+            session_id: {
+                "id": session_id,
+                "role": "executor",
+                "runtime": "test",
+                "scope_id": "QR",
+                "status": "active",
+                "started_at": now,
+            }
+            for session_id in session_ids
+        },
         "plugins": {},
         "indexes": {},
     }
@@ -191,6 +203,12 @@ def test_concurrent_wave_claim_exactly_once(
     assert active.count("P01-I01-W01") == 1, (
         f"active_wave_ids should hold exactly one entry, got {active}"
     )
+    bound_sessions = [
+        session_id
+        for session_id, session in final["agent_sessions"].items()
+        if session["claimed_wave_ids"] == ["P01-I01-W01"]
+    ]
+    assert bound_sessions == [wave["claim_session_id"]]
 
 
 def test_seeded_state_validates(tmp_path: Path) -> None:
