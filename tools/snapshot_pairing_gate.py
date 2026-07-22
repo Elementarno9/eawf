@@ -90,16 +90,14 @@ _WATCHED_DIRS: tuple[str, ...] = tuple(
     sorted(f"{surface.golden_dir}/" for surface in SNAPSHOT_SURFACES.values())
 )
 
-# Wave-form ``test:`` subject — mirrors the commit-prefix grammar in
-# ``tools/commit_prefix_lint.py`` narrowed to ``type == 'test'``. The
-# ``(?!00)`` lookaheads reject ``I00`` / ``W00`` (1-based indices). Both
-# the ``-W##`` planned-wave suffix and the legacy ``-CORE`` bookkeeping
-# alias satisfy the pairing contract. The digit-width is ``\d{2,}`` so
-# 3-digit ids (``P100`` / ``I100`` / ``W100``) parse cleanly once the
-# queue grows past 99 — matches the widened ``commit_prefix_lint.py``
-# grammar per AGENTS symbol-conventions.
+# ``test:`` subject forms accepted by the commit-prefix grammar. Planned
+# work uses a wave/CORE scope tag; out-of-phase work uses a bare conventional
+# subject while no phase is active. The commit-prefix lint owns that lifecycle
+# distinction, so this gate only needs to recognise both valid test forms.
+# The ``(?!00)`` lookaheads reject ``I00`` / ``W00`` (1-based indices), and
+# the digit-width remains ``\d{2,}`` for 3-digit ids.
 _PAIRED_SUBJECT_RE = re.compile(
-    r"^\[P\d{2,}(-I(?!00)\d{2,})?(-W(?!00)\d{2,}|-CORE)\]\s+test:\s+\S.*$"
+    r"^(?:\[P\d{2,}(-I(?!00)\d{2,})?(-W(?!00)\d{2,}|-CORE)\]\s+)?test:\s+\S.*$"
 )
 
 # Phase/iter scope key at the head of a commit subject, e.g. ``[P27-I04-W04]``
@@ -252,7 +250,7 @@ def commit_mutates_golden(record: CommitRecord) -> bool:
 
 
 def is_paired(subject: str) -> bool:
-    """Return whether *subject* satisfies the wave-form ``test:`` grammar."""
+    """Return whether *subject* satisfies a scoped or bare ``test:`` grammar."""
     return bool(_PAIRED_SUBJECT_RE.match(subject))
 
 
@@ -352,8 +350,9 @@ def main(argv: list[str]) -> int:
 
     print(
         "snapshot pairing gate: unpaired golden-surface mutation(s) detected.\n"
-        "Every commit that touches a managed golden fixture must carry a wave-form\n"
-        "'test:' subject, e.g. '[P27-W19] test: snapshot update <kind>'\n"
+        "Every commit that touches a managed golden fixture must carry a valid\n"
+        "'test:' subject, e.g. '[P27-W19] test: snapshot update <kind>' or\n"
+        "'test: snapshot update <kind>' while no phase is active\n"
         "(regenerate with `eawf snapshot update --kind <kind>` first).\n"
         "Offending commits:",
         file=sys.stderr,
