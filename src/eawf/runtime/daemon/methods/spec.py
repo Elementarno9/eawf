@@ -1181,6 +1181,7 @@ def _apply_sync_locked(
         written_at=datetime.now(UTC),
         before_state_version=before_version,
         after_state_version=after_version,
+        state_path=str(state_path),
     )
     wal.write_pending(wal_path, record)
     atomic_write_json_locked(state_path, new_payload)

@@ -369,3 +369,43 @@ def test_replay_wal_refuses_tampered_envelope_id(tmp_path: Path) -> None:
     assert report.poisoned_count == 1
     body = orjson.loads(list_poisoned(wal_dir)[0].read_bytes())
     assert body["poison_reason"] == "wal_digest_mismatch"
+
+
+# ---- multi-root routing ------------------------------------------------------
+
+
+def test_replay_wal_routes_stamped_record_to_its_own_root(tmp_path: Path) -> None:
+    """A record stamped with a state_path replays into THAT repo's log.
+
+    The machine-global daemon serves many repos from one WAL directory;
+    a crash must not replay another repo's envelope into the boot root's
+    event.jsonl.
+    """
+    wal_dir = tmp_path / "wal"
+    boot_events = tmp_path / "boot" / ".ea" / "store" / "event.jsonl"
+    other_state = tmp_path / "other" / ".ea" / "state.json"
+    other_events = tmp_path / "other" / ".ea" / "store" / "event.jsonl"
+
+    legacy = _record("rec-legacy", "env-legacy")
+    stamped = WalRecord(
+        record_id="rec-stamped",
+        envelope=_envelope("env-stamped"),
+        idempotency_key=None,
+        written_at=datetime(2026, 5, 19, 12, 0, 1, tzinfo=UTC),
+        before_state_version="sha:before",
+        after_state_version="sha:after",
+        state_path=str(other_state),
+    )
+    for record in (legacy, stamped):
+        write_pending(wal_dir, record)
+        mark_applied(wal_dir, record.record_id)
+
+    report = replay_wal(
+        wal_dir, state_path=tmp_path / "boot" / ".ea" / "state.json", event_path=boot_events
+    )
+
+    assert report.replayed_event_count == 2
+    # The legacy (unstamped) row lands in the caller-supplied boot log;
+    # the stamped row lands in its own repo's log and nowhere else.
+    assert _read_event_ids(boot_events) == ["env-legacy"]
+    assert _read_event_ids(other_events) == ["env-stamped"]

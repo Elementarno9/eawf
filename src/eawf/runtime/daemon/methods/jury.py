@@ -24,11 +24,12 @@ from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
+from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon.methods import (
     DaemonValidationError,
     MethodContext,
+    note_cross_root_serve,
     register,
-    require_bound_state_root,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,8 +49,9 @@ class LabelParams(BaseModel):
         ground_truth: ``True`` = the wave was actually a good outcome.
         reason: Why the operator pinned this label (>= 20 chars, so a
             label always carries a real rationale).
-        repo_root: Caller's intended repo root (the EP3 guard refuses a
-            mismatch).
+        repo_root: Caller's intended repo root; the label is written into
+            that repo's state-sibling store (multi-root serve). ``None``
+            resolves to the daemon-bound boot root.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -89,9 +91,9 @@ async def label(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         Dict matching :class:`LabelResult`.
 
     Raises:
-        DaemonValidationError: On a mismatched state root (EP3 guard), an
-            unknown wave, or invalid params.
-        RuntimeError: When ``ctx.state_path`` is unset.
+        DaemonValidationError: On an unknown wave or invalid params.
+        RuntimeError: When neither ``repo_root`` nor ``ctx.state_path``
+            resolves a state path.
     """
     from eawf.observability.eval.jury_validation import GoldLabel
 
@@ -99,10 +101,16 @@ async def label(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         args = LabelParams.model_validate(params)
     except ValidationError as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
-    require_bound_state_root(ctx, repo_root=args.repo_root, command="jury label")
-    if ctx.state_path is None:
+    note_cross_root_serve(ctx, repo_root=args.repo_root, command="jury label")
+    if args.repo_root:
+        state_path = Path(args.repo_root) / ".ea" / "state.json"
+    elif ctx.state_path is not None:
+        state_path = Path(ctx.state_path)
+    else:
         raise RuntimeError("state_path not configured on daemon context")
-    state_path = Path(ctx.state_path)
+    cross_root = (
+        ctx.state_path is not None and state_path.resolve() != Path(ctx.state_path).resolve()
+    )
 
     payload = json.loads(state_path.read_text(encoding="utf-8"))
     if args.wave_id not in (payload.get("waves") or {}):
@@ -155,10 +163,15 @@ async def label(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         blob_refs=[],
         artifact_ids=[],
     )
-    if ctx.event_path is not None:
-        append_envelope(Path(ctx.event_path), envelope)
-    if ctx.bus is not None and hasattr(ctx.bus, "publish"):
-        ctx.bus.publish(envelope)
+    if cross_root:
+        # A cross-root label lands in the TARGET repo's event log and is
+        # not published on the boot root's subscriber bus.
+        append_envelope(store_path(state_path, StoreKind.EVENT), envelope)
+    else:
+        if ctx.event_path is not None:
+            append_envelope(Path(ctx.event_path), envelope)
+        if ctx.bus is not None and hasattr(ctx.bus, "publish"):
+            ctx.bus.publish(envelope)
     ctx.last_event_id = envelope.id
     logger.info(summary)
 

@@ -104,7 +104,7 @@ from eawf.runtime.daemon.dispatch_runner import (
     emit_agent_output_chunk,
     run_dispatch,
 )
-from eawf.runtime.daemon.methods import MethodContext, register, require_bound_state_root
+from eawf.runtime.daemon.methods import MethodContext, note_cross_root_serve, register
 from eawf.runtime.daemon.methods.fleet import kill_lane
 from eawf.runtime.lock import portalock
 from eawf.runtime.runtimes.adapter import ErrorClass, RuntimeSpawnError, SpawnResult
@@ -381,11 +381,9 @@ class PauseParams(BaseModel):
     """Params for :func:`pause` / :func:`resume`.
 
     Attributes:
-        repo_root: The caller's intended repo root. The EP3 state-root
-            guard refuses the toggle when it differs from the daemon-bound
-            root — a daemon bound to a fixture state once served
-            ``dispatch resume`` for the real repo and mutated the fixture.
-            ``None`` (the legacy shape) resolves to the bound root.
+        repo_root: The caller's intended repo root; the toggle persists
+            into that repo's state (multi-root serve). ``None`` (the
+            legacy shape) resolves to the daemon-bound boot root.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1866,7 +1864,7 @@ async def kill(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _set_dispatch_paused(ctx: MethodContext, *, paused: bool) -> bool:
+def _set_dispatch_paused(ctx: MethodContext, *, paused: bool, repo_root: str | None = None) -> bool:
     """Persist :attr:`~eawf.kernel.state.models.State.dispatch_paused` = *paused*.
 
     Routes the write through the daemon canonical state/event path:
@@ -1877,24 +1875,33 @@ def _set_dispatch_paused(ctx: MethodContext, *, paused: bool) -> bool:
     payload (only ``updated_at`` advances) and emits a fresh event row.
 
     Args:
-        ctx: Daemon method context — supplies ``state_path``.
+        ctx: Daemon method context — supplies the boot-root ``state_path``
+            fallback and the bus.
         paused: The value to persist (``True`` to pause, ``False`` to resume).
+        repo_root: Optional per-request repo root; the toggle persists into
+            that repo's state/event files (multi-root serve). ``None`` falls
+            back to the daemon-bound boot root.
 
     Returns:
         The persisted flag value (always equal to *paused*).
 
     Raises:
-        RuntimeError: When ``ctx.state_path`` is unset (the toggle cannot
-            persist without an on-disk state).
+        RuntimeError: When neither *repo_root* nor ``ctx.state_path``
+            resolves a state path (the toggle cannot persist without an
+            on-disk state).
     """
-    if ctx.state_path is None:
+    if repo_root:
+        state_path = Path(repo_root) / ".ea" / "state.json"
+        event_path = store_path(state_path, StoreKind.EVENT)
+    elif ctx.state_path is not None:
+        state_path = Path(ctx.state_path)
+        event_path = (
+            Path(ctx.event_path)
+            if ctx.event_path is not None
+            else store_path(state_path, StoreKind.EVENT)
+        )
+    else:
         raise RuntimeError("state_path not configured on daemon context")
-    state_path = Path(ctx.state_path)
-    event_path = (
-        Path(ctx.event_path)
-        if ctx.event_path is not None
-        else store_path(state_path, StoreKind.EVENT)
-    )
     command = "agent.pause" if paused else "agent.resume"
     summary = f"{command} dispatch_paused={paused}"
     with portalock.acquire(state_path, timeout=5.0):
@@ -1934,7 +1941,10 @@ def _set_dispatch_paused(ctx: MethodContext, *, paused: bool) -> bool:
             artifact_ids=[],
         )
         append_envelope(event_path, envelope)
-    if ctx.bus is not None and hasattr(ctx.bus, "publish"):
+    cross_root = (
+        ctx.state_path is not None and state_path.resolve() != Path(ctx.state_path).resolve()
+    )
+    if not cross_root and ctx.bus is not None and hasattr(ctx.bus, "publish"):
         ctx.bus.publish(envelope)
     ctx.last_event_id = envelope.id
     logger.info(f"_set_dispatch_paused paused={paused} envelope_id={envelope.id!r}")
@@ -1959,13 +1969,12 @@ async def pause(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         Dict matching :class:`PauseResult` with ``paused=true``.
 
     Raises:
-        RuntimeError: When ``ctx.state_path`` is unset (e.g. tests).
-        DaemonValidationError: When the caller's ``repo_root`` resolves a
-            state root other than the daemon-bound one (the EP3 guard).
+        RuntimeError: When neither ``repo_root`` nor ``ctx.state_path``
+            resolves a state path.
     """
     args = PauseParams.model_validate(params)
-    require_bound_state_root(ctx, repo_root=args.repo_root, command="dispatch pause")
-    paused = _set_dispatch_paused(ctx, paused=True)
+    note_cross_root_serve(ctx, repo_root=args.repo_root, command="dispatch pause")
+    paused = _set_dispatch_paused(ctx, paused=True, repo_root=args.repo_root)
     return PauseResult(paused=paused).model_dump(mode="json")
 
 
@@ -1990,6 +1999,6 @@ async def resume(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         RuntimeError: When ``ctx.state_path`` is unset (e.g. tests).
     """
     args = PauseParams.model_validate(params)
-    require_bound_state_root(ctx, repo_root=args.repo_root, command="dispatch resume")
-    paused = _set_dispatch_paused(ctx, paused=False)
+    note_cross_root_serve(ctx, repo_root=args.repo_root, command="dispatch resume")
+    paused = _set_dispatch_paused(ctx, paused=False, repo_root=args.repo_root)
     return PauseResult(paused=paused).model_dump(mode="json")

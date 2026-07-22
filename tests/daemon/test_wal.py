@@ -395,3 +395,54 @@ def test_tampered_on_disk_record_fails_verification(tmp_path: Path) -> None:
     body["after_state_version"] = "sha:ATTACKER"
     path.write_bytes(orjson.dumps(body))
     assert verify_record_digest(read_record(path)) is False
+
+
+# ---- multi-root state_path digest compatibility ------------------------------
+
+
+def test_digest_verifies_legacy_record_without_state_path_field(tmp_path: Path) -> None:
+    """A pre-multi-root on-disk record (no state_path key) still verifies.
+
+    The digest excludes ``state_path`` when it is ``None``, so records
+    written before the field existed keep their stored digests valid.
+    """
+    wal_dir = tmp_path / "wal"
+    record = _build_record("rec-legacy-digest")
+    write_pending(wal_dir, record)
+    path = wal_dir / "rec-legacy-digest.pending.json"
+    body = orjson.loads(path.read_bytes())
+    del body["state_path"]
+    path.write_bytes(orjson.dumps(body))
+
+    reread = read_record(path)
+    assert reread.state_path is None
+    assert wal.verify_record_digest(reread)
+
+
+def test_digest_covers_state_path_when_set(tmp_path: Path) -> None:
+    """A stamped record's state_path is tamper-protected by the digest."""
+    wal_dir = tmp_path / "wal"
+    record = WalRecord(
+        record_id="rec-rooted",
+        envelope=_build_envelope("env-rooted"),
+        idempotency_key=None,
+        written_at=datetime(2026, 5, 19, 12, 0, 0, tzinfo=UTC),
+        before_state_version="sha:before",
+        after_state_version="sha:after",
+        state_path=str(tmp_path / "repo" / ".ea" / "state.json"),
+    )
+    write_pending(wal_dir, record)
+    path = wal_dir / "rec-rooted.pending.json"
+
+    assert wal.verify_record_digest(read_record(path))
+
+    # Redirecting the root breaks the digest.
+    body = orjson.loads(path.read_bytes())
+    body["state_path"] = str(tmp_path / "evil" / ".ea" / "state.json")
+    path.write_bytes(orjson.dumps(body))
+    assert not wal.verify_record_digest(read_record(path))
+
+    # Stripping the root back to None breaks it too.
+    body["state_path"] = None
+    path.write_bytes(orjson.dumps(body))
+    assert not wal.verify_record_digest(read_record(path))
