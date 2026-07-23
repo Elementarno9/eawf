@@ -67,7 +67,7 @@ def test_audit_cadence_is_5_value_literal() -> None:
             name=f"c-{legacy}",
             cmd=["uv", "run", "pytest", "-q"],
             scope="all",
-            cadence=legacy,  # type: ignore[arg-type]
+            cadence=legacy,
             policy="warn",
         )
 
@@ -857,6 +857,42 @@ def test_overlay_repo_verify_leaves_preserves_profile_values_when_defaults_are_b
     assert resolved is not None
     assert resolved.waiver_mode == "C"
     assert resolved.juror_wall_clock_seconds == pytest.approx(1800.0)
+
+
+def test_overlay_repo_verify_leaves_builtin_only_without_profile_stays_absent() -> None:
+    merged = {
+        "verify": {
+            "juror_wall_clock_seconds": 600.0,
+            "odr_blocking": False,
+            "require_iter_audit_accepted": False,
+            "waiver_mode": "B",
+        }
+    }
+    source_map = {f"verify.{key}": "built-in" for key in merged["verify"]}
+
+    resolved = _overlay_repo_verify_leaves(None, merged, source_map=source_map)
+
+    assert resolved is None
+
+
+def test_overlay_repo_verify_leaves_explicit_leaf_without_profile_synthesizes() -> None:
+    merged = {
+        "verify": {
+            "odr_blocking": False,
+            "require_iter_audit_accepted": True,
+            "waiver_mode": "B",
+        }
+    }
+    source_map = {
+        "verify.odr_blocking": "built-in",
+        "verify.require_iter_audit_accepted": "repo",
+        "verify.waiver_mode": "built-in",
+    }
+
+    resolved = _overlay_repo_verify_leaves(None, merged, source_map=source_map)
+
+    assert resolved is not None
+    assert resolved.require_iter_audit_accepted is True
 
 
 def test_overlay_repo_verify_leaves_tightens_audit_and_disables_waivers() -> None:

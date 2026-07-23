@@ -703,6 +703,18 @@ def _load_active_verify_block(
     return _overlay_repo_verify_leaves(merged_block, merged, source_map=sources)
 
 
+def _verify_leaf_explicitly_supplied(
+    key: str,
+    *,
+    verify_section: dict[str, Any],
+    source_map: dict[str, str] | None,
+) -> bool:
+    """Return whether a verify leaf came from outside built-in defaults."""
+    if source_map is None:
+        return key in verify_section
+    return source_map.get(f"verify.{key}") not in {None, "built-in"}
+
+
 def _overlay_repo_verify_leaves(
     block: VerifyBlock | None,
     merged_config: dict[str, Any],
@@ -732,23 +744,39 @@ def _overlay_repo_verify_leaves(
         key: value for key, value in verify_section.items() if key != "juror_wall_clock_seconds"
     }
     repo_verify = VerifyConfig.model_validate(schema_section)
+
+    if block is None and not any(
+        _verify_leaf_explicitly_supplied(
+            key,
+            verify_section=verify_section,
+            source_map=source_map,
+        )
+        for key in verify_section
+    ):
+        return None
     if block is None:
         block = VerifyBlock()
-
-    def explicitly_supplied(key: str) -> bool:
-        if source_map is None:
-            return key in verify_section
-        return source_map.get(f"verify.{key}") not in {None, "built-in"}
 
     updates: dict[str, Any] = {}
     if repo_verify.odr_blocking and not block.odr_blocking:
         updates["odr_blocking"] = True
     if repo_verify.require_iter_audit_accepted and not block.require_iter_audit_accepted:
         updates["require_iter_audit_accepted"] = True
-    if explicitly_supplied("waiver_mode") and block.waiver_mode != "disabled":
+    if (
+        _verify_leaf_explicitly_supplied(
+            "waiver_mode",
+            verify_section=verify_section,
+            source_map=source_map,
+        )
+        and block.waiver_mode != "disabled"
+    ):
         updates["waiver_mode"] = repo_verify.waiver_mode
     if (
-        explicitly_supplied("juror_wall_clock_seconds")
+        _verify_leaf_explicitly_supplied(
+            "juror_wall_clock_seconds",
+            verify_section=verify_section,
+            source_map=source_map,
+        )
         and isinstance(wall_clock, int | float)
         and not isinstance(wall_clock, bool)
         and wall_clock > 0

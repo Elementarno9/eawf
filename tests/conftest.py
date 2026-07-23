@@ -19,6 +19,7 @@ from eawf.kernel.spec.common import (
     ResponseClause,
 )
 from eawf.kernel.spec.intent import IntentBrief
+from eawf.kernel.state.models import CriteriaFloorWaiver
 
 # --- Hypothesis CI example-budget profile (P30-I26-W22) --------------------
 #
@@ -133,6 +134,24 @@ def runtime_dir_isolation() -> Iterator[RuntimeDirIsolation]:
         shutil.rmtree(isolated, ignore_errors=True)
 
 
+@pytest.fixture(scope="session", autouse=True)
+def global_config_isolation(runtime_dir_isolation: RuntimeDirIsolation) -> Iterator[Path]:
+    """Keep tests independent from the operator's real global EAWF config.
+
+    Individual config-layer tests may monkeypatch ``global_config_path`` again;
+    pytest restores those local overrides to this session-level fake.
+    """
+    from eawf.kernel.config import layered
+
+    isolated_path = runtime_dir_isolation.runtime_dir / "global-config.yaml"
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(layered, "global_config_path", lambda: isolated_path)
+    try:
+        yield isolated_path
+    finally:
+        monkeypatch.undo()
+
+
 def make_intent(
     problem: str = "test wave lacks a typed intent",
     desired_outcome: str = "the test wave carries a populated IntentBrief",
@@ -192,7 +211,7 @@ def tmp_repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def make_floor_waiver():
+def make_floor_waiver() -> CriteriaFloorWaiver:
     """Build a typed criteria-floor waiver for legacy-criterion fixtures.
 
     The plan-time typed-criteria floor (P30-I23-W26) rejects a wave
@@ -201,8 +220,6 @@ def make_floor_waiver():
     state stays constructible while the floor stays on for real authoring.
     """
     from datetime import UTC, datetime
-
-    from eawf.kernel.state.models import CriteriaFloorWaiver
 
     return CriteriaFloorWaiver(
         reason="test fixture models a migration-era legacy wave",
