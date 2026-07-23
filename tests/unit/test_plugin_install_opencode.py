@@ -90,6 +90,9 @@ def test_install_writes_plugin_js_sidecar_and_config(
     assert result.plugin_js.action == "created"
     assert result.sidecar is not None
     assert result.scope == scope
+    plugin_root = tmp_path / ".opencode" if scope == "project" else fake_opencode_config_dir
+    assert not list(plugin_root.rglob("*.lock"))
+    assert not config.with_name(f"{config.name}.lock").exists()
 
 
 @pytest.mark.parametrize("scope", ["project", "user"])

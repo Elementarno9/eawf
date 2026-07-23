@@ -614,5 +614,8 @@ service_templates = [
 # validation, TUI cockpit) grew the pure-src wheel to ~2.6 MiB (verified: still
 # no .ea / golden / tests / plugin-tree bundling, only eawf/** modules);
 # recalibrate to 3 MiB (~10 % headroom) — the gate still catches accidental
-# data-bundling bloat without reding on legitimate source growth.
-wheel_max_bytes = 3145728
+# data-bundling bloat. The v0.6.1 lifecycle guards and doctor diagnostics grew
+# the wheel to ~3.03 MiB without changing the two-file service-template bundle;
+# recalibrate to 3.5 MiB (~16 % headroom) so legitimate source growth remains
+# distinct from accidental plugin-tree or docs bundling.
+wheel_max_bytes = 3670016

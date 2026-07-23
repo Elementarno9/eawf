@@ -120,6 +120,14 @@ def test_inventory_tui_config_modal_is_guarded() -> None:
     )
 
 
+def test_inventory_dispatch_targets_refresh_writer() -> None:
+    """Dispatch updates collect the dedicated env-aware writer test."""
+    surface = resolve_surface("dispatch")
+    assert surface.regen_target == (
+        "tests/integration/test_plugin_doctor_strict.py::test_refresh_dispatch_goldens"
+    )
+
+
 def test_resolve_surface_returns_typed_surface() -> None:
     surface = resolve_surface("envelope")
     assert isinstance(surface, SnapshotSurface)
