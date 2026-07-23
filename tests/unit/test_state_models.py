@@ -31,7 +31,7 @@ from eawf.workflow.lifecycle.transitions import (
     plan_wave,
 )
 from tests._session_helpers import claim_wave_with_session as claim_wave
-from tests.conftest import make_intent
+from tests.conftest import make_claim_criterion, make_intent
 
 
 def _empty_state() -> State:
@@ -76,6 +76,7 @@ def _seed_chain() -> State:
         title="A",
         file_scopes=["src/"],
         effort_bucket="M",
+        success_criteria=[make_claim_criterion()],
         intent=make_intent(),
     )
     plan_wave(
@@ -86,6 +87,7 @@ def _seed_chain() -> State:
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
         effort_bucket="M",
+        success_criteria=[make_claim_criterion()],
         intent=make_intent(),
     )
     plan_wave(
@@ -96,6 +98,7 @@ def _seed_chain() -> State:
         file_scopes=["src/"],
         deps=["P01-I01-W02"],
         effort_bucket="M",
+        success_criteria=[make_claim_criterion()],
         intent=make_intent(),
     )
     return state
@@ -113,6 +116,7 @@ def _seed_diamond() -> State:
         title="A",
         file_scopes=["src/"],
         effort_bucket="M",
+        success_criteria=[make_claim_criterion()],
         intent=make_intent(),
     )
     plan_wave(
@@ -123,6 +127,7 @@ def _seed_diamond() -> State:
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
         effort_bucket="M",
+        success_criteria=[make_claim_criterion()],
         intent=make_intent(),
     )
     plan_wave(
@@ -133,6 +138,7 @@ def _seed_diamond() -> State:
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
         effort_bucket="M",
+        success_criteria=[make_claim_criterion()],
         intent=make_intent(),
     )
     plan_wave(
@@ -143,6 +149,7 @@ def _seed_diamond() -> State:
         file_scopes=["src/"],
         deps=["P01-I01-W02", "P01-I01-W03"],
         effort_bucket="M",
+        success_criteria=[make_claim_criterion()],
         intent=make_intent(),
     )
     return state

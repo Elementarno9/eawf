@@ -39,7 +39,7 @@ from eawf.workflow.lifecycle.transitions import (
 from eawf.workflow.verify import readiness as readiness_mod
 from tests._criteria_helpers import legacy_criteria
 from tests._session_helpers import claim_wave_with_session as claim_wave
-from tests.conftest import make_floor_waiver, make_intent
+from tests.conftest import make_claim_criterion, make_floor_waiver, make_intent
 
 WAVE_ID = "P01-I01-W01"
 
@@ -86,6 +86,7 @@ def _seed_wave(
     success_criteria: list[str] | None = None,
     file_scopes: list[str] | None = None,
 ) -> None:
+    historical_criteria = legacy_criteria(*(success_criteria or []))
     open_phase(state, phase_id="P01", title="phase")
     open_iter(state, iter_id="P01-I01", phase_id="P01", title="iter")
     plan_wave(
@@ -94,12 +95,13 @@ def _seed_wave(
         iter_id="P01-I01",
         title="wave",
         file_scopes=file_scopes or ["src/"],
-        success_criteria=legacy_criteria(*(success_criteria or [])),
-        criteria_floor_waiver=make_floor_waiver(),
+        success_criteria=[make_claim_criterion()],
         effort_bucket="M",
         intent=make_intent(),
     )
     claim_wave(state, wave_id=WAVE_ID, session_id="SES-flr")
+    state.waves[WAVE_ID].success_criteria = historical_criteria
+    state.waves[WAVE_ID].criteria_floor_waiver = make_floor_waiver()
 
 
 def _git(repo_root: Path, *args: str) -> None:

@@ -114,6 +114,21 @@ def _build_state_payload(
                 "iter_id": iter_id,
                 "title": "test wave",
                 "status": wave_status,
+                "success_criteria": [
+                    {
+                        "id": "CR-01",
+                        "text": "the daemon mutation produces the expected state transition",
+                        "kind": "deterministic",
+                        "acceptance_style": "binary",
+                        "evidence_kind": "deterministic",
+                        "gate_ids": [],
+                        "required": True,
+                        "quality_dimension": "functional_suitability",
+                        "measurable_signal": (
+                            "the focused daemon test observes the expected state row"
+                        ),
+                    }
+                ],
                 "claim_session_id": "session-abc" if wave_status == "claimed" else None,
                 "opened_at": _now().isoformat(),
                 "sessions": {},
@@ -1183,6 +1198,81 @@ def test_mutate_wave_claim_missing_session_preserves_state_and_event_store(
 
     async def body() -> None:
         with pytest.raises(DaemonValidationError, match="claim_session_not_found"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        assert state_path.read_bytes() == before
+        assert not event_path.exists() or not event_path.read_bytes()
+
+    _run(body)
+
+
+def test_mutate_wave_claim_resolves_configured_cap_under_lock(tmp_path: Path) -> None:
+    """Daemon claim counts live statuses and ignores stale pointers/caller cap hints."""
+    payload = _build_state_payload(wave_status="pending")
+    candidate = payload["waves"]["P24-I01-W09"]  # type: ignore[index]
+    candidate["effort_bucket"] = "M"  # type: ignore[index]
+    candidate["file_scopes"] = ["src/"]  # type: ignore[index]
+    occupied = dict(candidate)  # type: ignore[arg-type]
+    occupied.update(
+        {
+            "id": "P24-I01-W08",
+            "title": "occupied lane",
+            "status": "in_progress",
+            "claim_session_id": "SES-active",
+            "claimed_at": _now().isoformat(),
+        }
+    )
+    payload["waves"]["P24-I01-W08"] = occupied  # type: ignore[index]
+    payload["iters"]["P24-I01"]["wave_ids"] = [  # type: ignore[index]
+        "P24-I01-W08",
+        "P24-I01-W09",
+    ]
+    payload["current"]["active_wave_ids"] = []  # type: ignore[index]
+    payload["agent_sessions"].update(  # type: ignore[union-attr]
+        {
+            "SES-active": {
+                "id": "SES-active",
+                "role": "executor",
+                "runtime": "test",
+                "scope_id": "P24-I01-W08",
+                "status": "active",
+                "claimed_wave_ids": ["P24-I01-W08"],
+                "started_at": _now().isoformat(),
+            },
+            "SES-2": {
+                "id": "SES-2",
+                "role": "executor",
+                "runtime": "test",
+                "scope_id": "P24-I01-W09",
+                "status": "active",
+                "started_at": _now().isoformat(),
+            },
+        }
+    )
+    payload["current"]["active_session_ids"] = ["SES-active", "SES-2"]  # type: ignore[index]
+    ctx, state_path, event_path, _wal_dir = _build_ctx(
+        tmp_path=tmp_path,
+        state_payload=payload,
+    )
+    (tmp_path / ".ea").mkdir(exist_ok=True)
+    (tmp_path / ".ea" / "config.yaml").write_text(
+        "planning:\n  max_parallel_waves: 1\n",
+        encoding="utf-8",
+    )
+    before = state_path.read_bytes()
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLAIM,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "wave_id": "P24-I01-W09",
+            "session_id": "SES-2",
+            "out_of_order": True,
+            "max_parallel_waves": 99,
+        },
+    )
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="claim_parallel_limit_reached"):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         assert state_path.read_bytes() == before
         assert not event_path.exists() or not event_path.read_bytes()

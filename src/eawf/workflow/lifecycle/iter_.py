@@ -632,6 +632,45 @@ def set_iter_candidate_tag(state: State, *, iter_id: str, tag: str) -> Iter:
     return it
 
 
+def _validate_iter_activation(
+    state: State,
+    it: Iter,
+    *,
+    allow_concurrent: bool,
+) -> None:
+    """Validate PLANNED -> ACTIVE and the single-active-sibling rule."""
+    validate_transition(
+        ITER_TRANSITIONS,
+        it.status,
+        IterStatus.ACTIVE,
+        illegal_message=(
+            f"iter {it.id!r} has status {it.status.value!r}; only planned iters can activate"
+        ),
+    )
+    if allow_concurrent:
+        return
+    active = _active_sibling_iters(state, phase_id=it.phase_id, exclude_id=it.id)
+    if active:
+        raise ValueError(
+            f"phase {it.phase_id!r} already has an active iter: {active[0]!r}; "
+            "pass allow_concurrent to override"
+        )
+
+
+def _apply_iter_activation(
+    state: State,
+    it: Iter,
+    *,
+    preserve_active_wave_ids: bool,
+) -> None:
+    """Apply a previously validated iter activation."""
+    it.status = IterStatus.ACTIVE
+    state.current.phase_id = it.phase_id
+    state.current.iter_id = it.id
+    if not preserve_active_wave_ids:
+        state.current.active_wave_ids = []
+
+
 def activate_iter(state: State, *, iter_id: str, allow_concurrent: bool = False) -> Iter:
     """Flip a planned iter to active.
 
@@ -654,27 +693,7 @@ def activate_iter(state: State, *, iter_id: str, allow_concurrent: bool = False)
     it = state.iters.get(iter_id)
     if it is None:
         raise LifecycleError(f"unknown iter {iter_id!r}")
-    # planned -> active is the only legal activate edge; the table has no
-    # active/terminal -> active edge, so a non-planned source raises the
-    # legacy "only planned iters can activate" message.
-    validate_transition(
-        ITER_TRANSITIONS,
-        it.status,
-        IterStatus.ACTIVE,
-        illegal_message=(
-            f"iter {iter_id!r} has status {it.status.value!r}; only planned iters can activate"
-        ),
-    )
-    if not allow_concurrent:
-        active = _active_sibling_iters(state, phase_id=it.phase_id, exclude_id=iter_id)
-        if active:
-            raise ValueError(
-                f"phase {it.phase_id!r} already has an active iter: {active[0]!r}; "
-                "pass allow_concurrent to override"
-            )
-    it.status = IterStatus.ACTIVE
-    state.current.phase_id = it.phase_id
-    state.current.iter_id = iter_id
-    state.current.active_wave_ids = []
+    _validate_iter_activation(state, it, allow_concurrent=allow_concurrent)
+    _apply_iter_activation(state, it, preserve_active_wave_ids=False)
     logger.info(f"activate_iter id={iter_id} phase={it.phase_id}")
     return it

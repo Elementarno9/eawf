@@ -54,7 +54,7 @@ from eawf.workflow.lifecycle.transitions import (
 )
 from eawf.workflow.lifecycle.wave import compute_runtime_delta
 from tests._session_helpers import claim_wave_with_session as claim_wave
-from tests.conftest import make_intent
+from tests.conftest import make_claim_criterion, make_intent
 
 
 def _empty_state() -> State:
@@ -103,6 +103,7 @@ def _seed_wave(
         title="w",
         file_scopes=["src/"],
         effort_bucket=effort_bucket or EffortBucket.M,
+        success_criteria=[make_claim_criterion()],
         intent=make_intent(),
     )
     if effort_bucket is None:

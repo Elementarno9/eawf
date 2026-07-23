@@ -141,6 +141,11 @@ from eawf.workflow.dispatch.renderer import render_dispatch_envelope, resolve_ro
 from eawf.workflow.dispatch.retry import spawn_with_retry
 from eawf.workflow.dispatch.routing import resolve_routing, runtime_model_for_decision
 from eawf.workflow.evidence._io import load_state
+from eawf.workflow.lifecycle._capacity import resolve_max_parallel_waves
+from eawf.workflow.lifecycle._claim_guards import (
+    SPAWN_WAVE_NOT_CLAIMED,
+    validate_spawn_wave,
+)
 from eawf.workflow.lifecycle._claim_session import CLAIM_SESSION_NOT_FOUND
 from eawf.workflow.lifecycle._errors import LifecycleError, LifecycleGuardError
 from eawf.workflow.lifecycle.wave import claim_wave, validate_claim_session
@@ -1085,13 +1090,10 @@ def _restore_dispatch_wave(
     session_id: str,
     claimed_at: datetime,
 ) -> bool:
-    """Restore a dispatched wave's status, binding, and active index."""
+    """Restore a claimed/in-progress wave's binding and active index."""
     changed = False
     if wave.id not in state.current.active_wave_ids:
         state.current.active_wave_ids = [*state.current.active_wave_ids, wave.id]
-        changed = True
-    if wave.status is WaveStatus.PENDING:
-        wave.status = WaveStatus.IN_PROGRESS
         changed = True
     if wave.claim_session_id != session_id:
         wave.claim_session_id = session_id
@@ -1116,13 +1118,11 @@ def _reassert_dispatch_state(
 
     The daemon writes the claim, the role-matched session registration, and the
     phase-active pointer into the repo-tracked ``.ea/state.json`` BEFORE the
-    spawn. A sandboxed executor that runs ``git checkout -- .ea/`` to drop
-    out-of-scope changes reverts those uncommitted rows, so the post-spawn
-    close would resolve a corrupted state: a missing session ``KeyError``s the
-    close, a wave reverted to ``PENDING`` falls off the ready frontier, and a
-    cleared ``phase_id`` orphans the phase. Reload post-spawn and re-assert any
-    missing row from the wave's own bookkeeping so the close proceeds against
-    authoritative state. A no-op when nothing was reverted (the healthy path).
+    spawn. A sandboxed executor may revert session/index bookkeeping, which is
+    safe to rebuild for a wave still CLAIMED or IN_PROGRESS. A wave reverted to
+    PENDING is different: recovery cannot invent the missing claim transition,
+    so it raises ``spawn_wave_not_claimed`` without writing state or events.
+    Terminal waves remain untouched. Healthy state is a no-op.
 
     Args:
         ctx: Daemon method context carrying the bound ``state_path``.
@@ -1143,6 +1143,16 @@ def _reassert_dispatch_state(
             # Unknown wave, or close-on-behalf already resolved it terminally --
             # do not resurrect a wave the daemon lawfully finished.
             return
+        if wave.status is WaveStatus.PENDING:
+            logger.warning(
+                f"_reassert_dispatch_state wave={wave_id} session={session_id!r} "
+                f"guard_code={SPAWN_WAVE_NOT_CLAIMED} status={wave.status.value!r}"
+            )
+            raise LifecycleGuardError(
+                SPAWN_WAVE_NOT_CLAIMED,
+                wave_id,
+                f"cannot recover dispatch wave {wave_id!r}: status reverted to pending",
+            )
         session_changed = _restore_dispatch_session(
             state,
             wave_id=wave_id,
@@ -1203,7 +1213,8 @@ def _claim_live_session(
 
     Raises:
         LiveSpawnError: When state/event paths are unavailable.
-        LifecycleError: When a lifecycle or claim-session guard rejects.
+        LifecycleError: When a lifecycle, criteria, capacity, spawn-boundary,
+            or claim-session guard rejects.
     """
     if ctx.state_path is None or ctx.event_path is None:
         raise LiveSpawnError(f"live spawn requires state_path + event_path for wave: {wave_id!r}")
@@ -1229,6 +1240,7 @@ def _claim_live_session(
                     f"cannot dispatch wave {wave_id!r}: claimed wave has no bound session",
                 )
             session = validate_claim_session(state, wave, session_id)
+            validate_spawn_wave(state, wave_id)
             model = _preflight_spawn_model(
                 state_path,
                 wave_id=wave_id,
@@ -1282,7 +1294,9 @@ def _claim_live_session(
             wave_id=wave_id,
             session_id=session.id,
             out_of_order=out_of_order,
+            max_parallel_waves=resolve_max_parallel_waves(state_path.parent.parent),
         )
+        validate_spawn_wave(state, wave_id)
         state.updated_at = datetime.now(UTC)
         new_payload = state.model_dump(mode="json")
         after_version = state_version(new_payload)
@@ -1686,6 +1700,7 @@ async def _spawn_and_dispatch(
     # switched runtime inside the spawn closure (below), so each runtime always
     # spawns its own model.
     state = load_state(state_path)
+    validate_spawn_wave(state, wave_id)
     # The live-spawn path reads the spawned model's final message as a JSON
     # role-specific report body, so render the headless prompt: it pins the
     # report schema + an output-only-JSON instruction so the model emits a

@@ -23,7 +23,7 @@ from eawf.workflow.lifecycle.transitions import (
     plan_wave,
 )
 from tests._session_helpers import claim_wave_with_session as claim_wave
-from tests.conftest import make_intent
+from tests.conftest import make_claim_criterion, make_intent
 
 
 def _empty_state() -> State:
@@ -320,6 +320,7 @@ def test_plan_wave_close_round_trip_keeps_blocks_intact() -> None:
         title="A",
         file_scopes=["src/"],
         effort_bucket="M",
+        success_criteria=[make_claim_criterion()],
         intent=make_intent(),
     )
     plan_wave(
@@ -330,6 +331,7 @@ def test_plan_wave_close_round_trip_keeps_blocks_intact() -> None:
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
         effort_bucket="M",
+        success_criteria=[make_claim_criterion()],
         intent=make_intent(),
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")

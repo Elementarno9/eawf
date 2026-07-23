@@ -107,7 +107,12 @@ from eawf.workflow.dispatch.retry import (
     repair_until_resolved,
 )
 from eawf.workflow.evidence._io import load_state
-from eawf.workflow.lifecycle._errors import LifecycleError
+from eawf.workflow.lifecycle._capacity import (
+    DEFAULT_MAX_PARALLEL_WAVES,
+    resolve_max_parallel_waves,
+)
+from eawf.workflow.lifecycle._claim_guards import CLAIM_PARALLEL_LIMIT_REACHED
+from eawf.workflow.lifecycle._errors import LifecycleError, LifecycleGuardError
 from eawf.workflow.lifecycle.spec import WAVE_TRANSITIONS, validate_transition
 from eawf.workflow.lifecycle.wave import (
     close_wave,
@@ -521,6 +526,38 @@ def _persist_fleet_run(ctx: MethodContext, fleet_run: FleetRun | None) -> None:
     run_state = fleet_run.run_state.value if fleet_run is not None else None
     _publish_run_transition(ctx, fleet_run)
     logger.info(f"_persist_fleet_run run_state={run_state!r}")
+
+
+def _validate_fleet_concurrency(ctx: MethodContext, concurrency: int) -> int:
+    """Return the effective cap, rejecting an over-wide fleet before arm.
+
+    Config resolution happens while holding the repository's canonical state
+    lock. A rejection therefore cannot race a claim-side capacity decision and
+    performs no state, event, or process mutation.
+
+    Args:
+        ctx: Daemon method context supplying the repository state path.
+        concurrency: Requested fleet lane width.
+
+    Returns:
+        Effective repository-wide maximum parallel-wave count.
+
+    Raises:
+        LifecycleGuardError: When *concurrency* exceeds the effective cap.
+    """
+    max_parallel_waves = DEFAULT_MAX_PARALLEL_WAVES
+    if ctx.state_path is not None:
+        state_path = Path(ctx.state_path)
+        with portalock.acquire(state_path, timeout=5.0):
+            max_parallel_waves = resolve_max_parallel_waves(state_path.parent.parent)
+    if concurrency > max_parallel_waves:
+        raise LifecycleGuardError(
+            CLAIM_PARALLEL_LIMIT_REACHED,
+            "fleet",
+            f"cannot arm fleet drive: requested concurrency {concurrency} exceeds "
+            f"planning.max_parallel_waves={max_parallel_waves}",
+        )
+    return max_parallel_waves
 
 
 def _publish_run_transition(ctx: MethodContext, fleet_run: FleetRun | None) -> None:
@@ -3258,9 +3295,12 @@ def arm_drive(
     Raises:
         LifecycleError: When *frontier* is empty -- the loop refuses to arm a
             ``DRAINING``-with-zero-lanes run that can never make progress.
+        LifecycleGuardError: When *concurrency* exceeds the repository-wide
+            ``planning.max_parallel_waves`` cap.
     """
     if not frontier:
         raise LifecycleError("cannot arm fleet drive: ready frontier is empty")
+    _validate_fleet_concurrency(ctx, concurrency)
     now = datetime.now(UTC)
     run = FleetRun(
         run_state=FleetRunState.IDLE,
@@ -4252,11 +4292,14 @@ def start_background_drive(ctx: MethodContext, args: DriveParams) -> FleetDriveH
     Raises:
         LifecycleError: When a drive is already in flight (single-active-run
             guard), or the resolved frontier is empty.
+        LifecycleGuardError: When the requested concurrency exceeds the
+            repository-wide ``planning.max_parallel_waves`` cap.
     """
     if drive_in_flight():
         raise LifecycleError("a fleet drive is already in flight; halt or wait for it to drain")
     if not args.frontier:
         raise LifecycleError("cannot arm fleet drive: ready frontier is empty")
+    _validate_fleet_concurrency(ctx, args.concurrency)
     handle_id = f"fleet-run-{uuid.uuid4().hex[:12]}"
     # W09: resolve the run's jury block authority through the SAME resolver the
     # close gate uses, so a high / ui lane auto-closes exactly when the close

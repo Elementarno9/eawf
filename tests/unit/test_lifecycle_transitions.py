@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -62,15 +63,42 @@ from eawf.workflow.lifecycle.transitions import (
     open_phase,
     plan_iter,
     plan_phase,
-    plan_wave,
     remove_wave_plan,
     reopen_phase,
     set_wave_deps,
     start_wave,
     switch_track,
 )
+from eawf.workflow.lifecycle.transitions import (
+    plan_wave as _plan_wave,
+)
 from tests._session_helpers import claim_wave_with_session as claim_wave
 from tests.conftest import make_intent
+
+
+def _claimable_criterion() -> CriterionSpec:
+    """Build one real typed criterion for transition fixtures that claim."""
+    return CriterionSpec(
+        id="CR-CLAIM",
+        text="focused lifecycle transition exits with the expected status",
+        kind="deterministic",
+        acceptance_style="binary",
+        evidence_kind="deterministic",
+        gate_ids=["GATE-CLAIM"],
+        quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
+        measurable_signal="the focused lifecycle test observes the expected transition",
+        response=ResponseClause(
+            observe=ObserveVerb.EXITS,
+            object="zero from the focused lifecycle test",
+            locus=ProofLocus.PYTEST,
+        ),
+    )
+
+
+def plan_wave(state: State, **kwargs: Any) -> Wave:
+    """Plan a claimable fixture wave unless criteria are explicit."""
+    kwargs.setdefault("success_criteria", [_claimable_criterion()])
+    return _plan_wave(state, **kwargs)
 
 
 def _empty_state() -> State:
@@ -1467,7 +1495,7 @@ def test_edit_wave_plan_rejects_unmeasurable_criterion() -> None:
     state = _empty_state()
     plan_phase(state, phase_id="P01", title="t")
     plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
-    plan_wave(
+    _plan_wave(
         state,
         wave_id="P01-I01-W01",
         iter_id="P01-I01",
@@ -2257,9 +2285,8 @@ def test_claim_wave_rejected_claim_does_not_activate_iter() -> None:
 def test_claim_wave_under_terminal_iter_rejected_and_not_activated() -> None:
     """A wave under a CLOSED iter cannot be claimed and the iter is untouched.
 
-    The wave's PENDING gate is the load-bearing reject (a CLOSED iter only
-    holds non-PENDING waves); the activation guard additionally only fires
-    for PLANNED iters, so a terminal iter is never resurrected.
+    Parent lifecycle validation precedes wave-status validation, so the
+    terminal-parent guard is the stable rejection surface.
     """
     state = _empty_state()
     open_phase(state, phase_id="P01", title="t")
@@ -2277,7 +2304,7 @@ def test_claim_wave_under_terminal_iter_rejected_and_not_activated() -> None:
     close_wave(state, wave_id="P01-I01-W01", outcome="ok")
     close_iter(state, iter_id="P01-I01", audit_id="AUD-1")
     assert state.iters["P01-I01"].status == IterStatus.CLOSED
-    with pytest.raises(LifecycleError, match="cannot be claimed"):
+    with pytest.raises(LifecycleError, match="claim_parent_iter_terminal"):
         claim_wave(state, wave_id="P01-I01-W01", session_id="SES-2")
     assert state.iters["P01-I01"].status == IterStatus.CLOSED
 

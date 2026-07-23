@@ -595,6 +595,8 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="int",
         default=4,
         writable_layers=_WRITABLE_GWR,
+        description="Repo-wide hard cap for CLAIMED and IN_PROGRESS waves.",
+        consumer="eawf.workflow.lifecycle._capacity.resolve_max_parallel_waves",
     ),
     # --- verify --------------------------------------------------------------
     LeafKey(

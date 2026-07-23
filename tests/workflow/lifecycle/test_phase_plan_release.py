@@ -30,7 +30,7 @@ from eawf.workflow.lifecycle.iter_ import open_iter
 from eawf.workflow.lifecycle.phase import edit_phase_plan, open_phase
 from eawf.workflow.lifecycle.wave import plan_wave, release_wave
 from tests._session_helpers import claim_wave_with_session as claim_wave
-from tests.conftest import make_intent
+from tests.conftest import make_claim_criterion, make_intent
 
 
 def _empty_state() -> State:
@@ -83,6 +83,7 @@ def _seed_claimed_wave() -> State:
         iter_id="P01-I01",
         title="w",
         file_scopes=["src/"],
+        success_criteria=[make_claim_criterion()],
         effort_bucket=EffortBucket.M,
         intent=make_intent(),
     )

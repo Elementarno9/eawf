@@ -28,6 +28,21 @@ ClaimSessionGuardCode = Literal[
     "claim_session_role_mismatch",
 ]
 
+LifecycleGuardCode = Literal[
+    "claim_session_not_found",
+    "claim_session_not_active",
+    "claim_session_scope_mismatch",
+    "claim_session_role_mismatch",
+    "claim_parent_iter_missing",
+    "claim_parent_phase_missing",
+    "claim_parent_phase_not_active",
+    "claim_parent_iter_terminal",
+    "claim_active_iter_conflict",
+    "claim_criteria_empty",
+    "claim_parallel_limit_reached",
+    "spawn_wave_not_claimed",
+]
+
 
 class LifecycleGuardError(LifecycleError):
     """A lifecycle rejection carrying a stable machine-readable guard code.
@@ -53,7 +68,7 @@ class LifecycleGuardError(LifecycleError):
         message: The operator-facing message (also the exception ``str``).
     """
 
-    def __init__(self, code: ClaimSessionGuardCode, scope_id: str, message: str) -> None:
+    def __init__(self, code: LifecycleGuardCode, scope_id: str, message: str) -> None:
         """Build a coded guard rejection anchored to one lifecycle scope.
 
         Args:

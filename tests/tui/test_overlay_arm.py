@@ -40,6 +40,7 @@ from eawf.surfaces.tui.screens.overlays.arm import (
     ARM_DRAINING,
     CAPS_ROW_ID,
     CONCURRENCY_GROUP_ID,
+    CONCURRENCY_OPTIONS,
     CONVERGENCE_GROUP_ID,
     HALT_ROW_ID,
     NOTHING_TO_DRAIN,
@@ -50,6 +51,7 @@ from eawf.surfaces.tui.screens.overlays.arm import (
     ArmModal,
     ArmSpec,
     build_arm_spec,
+    concurrency_options,
     render_caps_row,
     render_group_row,
     render_halt_row,
@@ -157,6 +159,25 @@ def test_build_arm_spec_maps_concurrency_option_to_lane_int() -> None:
         convergence_option="drain to empty",
     )
     assert spec.concurrency == 4
+
+
+def test_concurrency_options_cover_every_width_through_cap() -> None:
+    """The selector has no power-of-two gaps and includes the effective cap."""
+    assert CONCURRENCY_OPTIONS == ("1 lane", "2 lanes", "3 lanes", "4 lanes")
+    assert concurrency_options(6) == (
+        "1 lane",
+        "2 lanes",
+        "3 lanes",
+        "4 lanes",
+        "5 lanes",
+        "6 lanes",
+    )
+
+
+def test_concurrency_options_reject_zero_cap() -> None:
+    """A malformed sub-one cap cannot produce an empty selector."""
+    with pytest.raises(ValueError, match="at least 1"):
+        concurrency_options(0)
 
 
 def test_build_arm_spec_drain_option_maps_to_drain_mode() -> None:
@@ -295,6 +316,32 @@ def test_arm_binding_opens_overlay(tmp_path: Path) -> None:
             await pilot.press("a")  # open the arm overlay
             await settle_screen(pilot)
             assert isinstance(app.screen, ArmModal)
+
+    asyncio.run(body())
+
+
+def test_arm_overlay_uses_repo_configured_concurrency_cap(tmp_path: Path) -> None:
+    """Autopilot resolves repo config and exposes every width through that cap."""
+    state_path = _write_state(tmp_path, _frontier_state())
+    (tmp_path / ".ea" / "config.yaml").write_text(
+        "planning:\n  max_parallel_waves: 3\n",
+        encoding="utf-8",
+    )
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("a")
+            await settle_screen(pilot)
+            modal = app.screen
+            assert isinstance(modal, ArmModal)
+            concurrency_group = next(
+                group for group in modal._groups if group[0] == CONCURRENCY_GROUP_ID
+            )
+            assert concurrency_group[2] == ("1 lane", "2 lanes", "3 lanes")
 
     asyncio.run(body())
 

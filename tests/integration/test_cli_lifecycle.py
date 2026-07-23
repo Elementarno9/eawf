@@ -248,22 +248,7 @@ def test_phase_close_happy(workspace: Path) -> None:
     _init_project(workspace)
     runner.invoke(app, ["phase", "open", "--auto", "--title", "x"])
     runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "i"])
-    runner.invoke(
-        app,
-        [
-            "wave",
-            "plan",
-            "P01-I01",
-            "--id",
-            "P01-I01-W01",
-            "--title",
-            "w",
-            "--files",
-            "src/",
-            "--effort-bucket",
-            "M",
-        ],
-    )
+    _plan_claimable_wave("P01-I01-W01")
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"])
     runner.invoke(app, ["wave", "close", "P01-I01-W01", "--outcome", "done"])
     runner.invoke(app, ["iter", "close", "P01-I01", "--audit", "AUD-I"])
@@ -307,22 +292,7 @@ def test_phase_close_single_closed_wave_without_decision_exits_4(workspace: Path
     _init_project(workspace)
     runner.invoke(app, ["phase", "open", "--auto", "--title", "x"])
     runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "i"])
-    runner.invoke(
-        app,
-        [
-            "wave",
-            "plan",
-            "P01-I01",
-            "--id",
-            "P01-I01-W01",
-            "--title",
-            "w",
-            "--files",
-            "src/",
-            "--effort-bucket",
-            "M",
-        ],
-    )
+    _plan_claimable_wave("P01-I01-W01")
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "SES-1"])
     runner.invoke(
         app,
@@ -346,22 +316,7 @@ def test_phase_reopen_happy_allows_followup_iter(workspace: Path) -> None:
     _init_project(workspace)
     runner.invoke(app, ["phase", "open", "--auto", "--title", "x"])
     runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "i"])
-    runner.invoke(
-        app,
-        [
-            "wave",
-            "plan",
-            "P01-I01",
-            "--id",
-            "P01-I01-W01",
-            "--title",
-            "w",
-            "--files",
-            "src/",
-            "--effort-bucket",
-            "M",
-        ],
-    )
+    _plan_claimable_wave("P01-I01-W01")
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"])
     runner.invoke(app, ["wave", "close", "P01-I01-W01", "--outcome", "done"])
     runner.invoke(app, ["iter", "close", "P01-I01", "--audit", "AUD-I"])
@@ -609,6 +564,36 @@ def _bootstrap_to_iter(workspace: Path) -> None:
     assert runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "Iter1"]).exit_code == 0
 
 
+def _plan_claimable_wave(
+    wave_id: str,
+    *,
+    title: str = "claimable wave",
+    files_csv: str = "src/",
+) -> None:
+    """Plan one legacy CLI wave with an explicit non-empty criterion + waiver."""
+    result = runner.invoke(
+        app,
+        [
+            "wave",
+            "plan",
+            "P01-I01",
+            "--id",
+            wave_id,
+            "--title",
+            title,
+            "--files",
+            files_csv,
+            "--effort-bucket",
+            "M",
+            "--success",
+            "the claim persists the selected session",
+            "--criteria-floor-waiver",
+            "legacy CLI fixture carries an explicit claim criterion",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+
+
 def test_wave_plan_happy(workspace: Path) -> None:
     _bootstrap_to_iter(workspace)
     res = runner.invoke(
@@ -681,22 +666,7 @@ def test_wave_plan_closed_iter_exits_3(workspace: Path) -> None:
 
 def test_wave_claim_happy(workspace: Path) -> None:
     _bootstrap_to_iter(workspace)
-    runner.invoke(
-        app,
-        [
-            "wave",
-            "plan",
-            "P01-I01",
-            "--id",
-            "P01-I01-W01",
-            "--title",
-            "x",
-            "--files",
-            "src/",
-            "--effort-bucket",
-            "M",
-        ],
-    )
+    _plan_claimable_wave("P01-I01-W01")
     res = runner.invoke(
         app,
         [
@@ -718,22 +688,7 @@ def test_wave_claim_daemonless_event_records_committed_session_reference(
     """Fallback claim event carries the post-mutation session binding."""
     monkeypatch.setenv("EAWF_DAEMONLESS", "1")
     _bootstrap_to_iter(workspace)
-    runner.invoke(
-        app,
-        [
-            "wave",
-            "plan",
-            "P01-I01",
-            "--id",
-            "P01-I01-W01",
-            "--title",
-            "x",
-            "--files",
-            "src/",
-            "--effort-bucket",
-            "M",
-        ],
-    )
+    _plan_claimable_wave("P01-I01-W01")
 
     res = runner.invoke(
         app,
@@ -748,6 +703,45 @@ def test_wave_claim_daemonless_event_records_committed_session_reference(
     claims = [row for row in events if row["payload"]["command"] == "wave claim"]
     assert len(claims) == 1
     assert claims[0]["payload"]["extras"] == {"claim_session_id": "SES-1"}
+
+
+def test_wave_claim_daemonless_resolves_repo_capacity_under_lock(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Direct fallback uses repo config and status rows, not stale active pointers."""
+    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
+    _bootstrap_to_iter(workspace)
+    _plan_claimable_wave("P01-I01-W01", title="occupied lane")
+    _plan_claimable_wave("P01-I01-W02", title="capacity contender")
+    first = runner.invoke(
+        app,
+        ["wave", "claim", "P01-I01-W01", "--session", "S"],
+    )
+    assert first.exit_code == 0, first.stdout
+
+    state_path = workspace / ".ea" / "state.json"
+    state = orjson.loads(state_path.read_bytes())
+    state["current"]["active_wave_ids"] = []
+    state_path.write_bytes(orjson.dumps(state, option=orjson.OPT_INDENT_2))
+    config_path = workspace / ".ea" / "config.yaml"
+    config_path.write_text(
+        "planning:\n  max_parallel_waves: 1\n",
+        encoding="utf-8",
+    )
+    before = state_path.read_bytes()
+    event_path = workspace / ".ea" / "store" / "event.jsonl"
+    events_before = event_path.read_bytes()
+
+    result = runner.invoke(
+        app,
+        ["wave", "claim", "P01-I01-W02", "--session", "SES-1"],
+    )
+
+    assert result.exit_code != 0
+    assert "claim_parallel_limit_reached" in result.stdout
+    assert state_path.read_bytes() == before
+    assert event_path.read_bytes() == events_before
 
 
 def test_wave_claim_invalid_policy_exits_3(workspace: Path) -> None:
@@ -808,22 +802,7 @@ def test_wave_close_without_outcome_exits_3(workspace: Path) -> None:
 
 def test_wave_close_happy(workspace: Path) -> None:
     _bootstrap_to_iter(workspace)
-    runner.invoke(
-        app,
-        [
-            "wave",
-            "plan",
-            "P01-I01",
-            "--id",
-            "P01-I01-W01",
-            "--title",
-            "x",
-            "--files",
-            "src/",
-            "--effort-bucket",
-            "M",
-        ],
-    )
+    _plan_claimable_wave("P01-I01-W01")
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"])
     res = runner.invoke(
         app,
@@ -905,22 +884,7 @@ def test_wave_fail_happy(workspace: Path) -> None:
 def _plan_and_claim_wave(workspace: Path) -> None:
     """Bootstrap to a CLAIMED ``P01-I01-W01`` ready to release."""
     _bootstrap_to_iter(workspace)
-    runner.invoke(
-        app,
-        [
-            "wave",
-            "plan",
-            "P01-I01",
-            "--id",
-            "P01-I01-W01",
-            "--title",
-            "x",
-            "--files",
-            "src/",
-            "--effort-bucket",
-            "M",
-        ],
-    )
+    _plan_claimable_wave("P01-I01-W01")
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"])
 
 
@@ -997,25 +961,7 @@ def _bootstrap_update_pending_wave(
 ) -> None:
     """Bring the state up to one PENDING wave with *files_csv* as file_scopes."""
     _bootstrap_to_iter(workspace)
-    assert (
-        runner.invoke(
-            app,
-            [
-                "wave",
-                "plan",
-                "P01-I01",
-                "--id",
-                wave_id,
-                "--title",
-                "w",
-                "--files",
-                files_csv,
-                "--effort-bucket",
-                "M",
-            ],
-        ).exit_code
-        == 0
-    )
+    _plan_claimable_wave(wave_id, files_csv=files_csv)
 
 
 def test_wave_update_files_set_replaces_scope(workspace: Path) -> None:
@@ -1222,22 +1168,7 @@ def test_full_lifecycle_emits_events(workspace: Path) -> None:
     _init_project(workspace)
     runner.invoke(app, ["phase", "open", "--auto", "--title", "Bootstrap"])
     runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "Iter1"])
-    runner.invoke(
-        app,
-        [
-            "wave",
-            "plan",
-            "P01-I01",
-            "--id",
-            "P01-I01-W01",
-            "--title",
-            "W1",
-            "--files",
-            "src/",
-            "--effort-bucket",
-            "M",
-        ],
-    )
+    _plan_claimable_wave("P01-I01-W01")
     runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "SES-1"])
     runner.invoke(
         app,

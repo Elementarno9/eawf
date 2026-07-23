@@ -55,7 +55,7 @@ from eawf.runtime.daemon.methods.fleet import (
     resume,
 )
 from eawf.workflow.evidence._io import load_state
-from eawf.workflow.lifecycle._errors import LifecycleError
+from eawf.workflow.lifecycle._errors import LifecycleError, LifecycleGuardError
 
 pytestmark = pytest.mark.integration
 
@@ -288,6 +288,22 @@ def test_drive_rpc_empty_frontier_rejected_by_param_constraint(tmp_path: Path) -
     ctx = _ctx(state_path)
     with pytest.raises(ValidationError):
         asyncio.run(drive(ctx, {"frontier": [], "concurrency": 2}))
+
+
+def test_drive_rpc_rejects_concurrency_over_configured_cap_before_write(tmp_path: Path) -> None:
+    """Fleet arm shares the claim cap and rejects before state/event/process mutation."""
+    state_path = _write_state(tmp_path)
+    (tmp_path / ".ea" / "config.yaml").write_text(
+        "planning:\n  max_parallel_waves: 2\n",
+        encoding="utf-8",
+    )
+    before = state_path.read_bytes()
+
+    with pytest.raises(LifecycleGuardError, match="claim_parallel_limit_reached"):
+        asyncio.run(drive(_ctx(state_path), {"frontier": list(_WAVE_IDS), "concurrency": 3}))
+
+    assert state_path.read_bytes() == before
+    assert not (tmp_path / ".ea" / "store" / "event.jsonl").exists()
 
 
 # ---- C3: FleetRun strict + closed run_state enum ----------------------------

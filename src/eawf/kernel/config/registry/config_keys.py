@@ -346,10 +346,10 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
     ConfigKey(
         tab="planning",
         key="planning.max_parallel_waves",
-        label="Reserved: maximum parallel waves",
+        label="Maximum parallel waves",
         type="int",
         default=4,
-        description="Reserved for compatibility; dispatch does not read this value yet.",
+        description="Repo-wide hard cap for waves in claimed or in-progress status.",
         min_value=1,
         max_value=16,
     ),

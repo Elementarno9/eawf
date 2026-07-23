@@ -31,6 +31,7 @@ from eawf.runtime.lock import portalock
 from eawf.workflow.evidence._io import load_state
 from eawf.workflow.lifecycle.wave import close_wave
 from tests._session_helpers import claim_wave_with_session as claim_wave
+from tests.conftest import make_claim_criterion
 
 pytestmark = pytest.mark.integration
 
@@ -54,7 +55,7 @@ def _state_payload() -> dict[str, Any]:
             "deps": _DEPS[wid],
             "blocks": [],
             "file_scopes": [],
-            "success_criteria": [],
+            "success_criteria": [make_claim_criterion().model_dump(mode="json")],
             "agent_role": "executor",
             "effort_bucket": "M",
             "claim_session_id": None,

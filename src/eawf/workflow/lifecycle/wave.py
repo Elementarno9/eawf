@@ -38,6 +38,13 @@ from eawf.kernel.state.models import (
 )
 from eawf.observability.telemetry.join import _duration_ms_to_eu, _tokens_to_eu
 from eawf.workflow.estimation.buckets import default_estimate_summary
+from eawf.workflow.lifecycle._capacity import DEFAULT_MAX_PARALLEL_WAVES
+from eawf.workflow.lifecycle._claim_guards import (
+    active_wave_ids,
+    validate_claim_capacity,
+    validate_claim_criteria,
+    validate_claim_parent,
+)
 from eawf.workflow.lifecycle._claim_session import validate_claim_session as validate_claim_session
 from eawf.workflow.lifecycle._errors import (
     LifecycleError,
@@ -45,6 +52,7 @@ from eawf.workflow.lifecycle._errors import (
     check_criteria_measurability,
     check_title_clarity,
 )
+from eawf.workflow.lifecycle.iter_ import _apply_iter_activation
 from eawf.workflow.lifecycle.spec import (
     WAVE_TRANSITIONS,
     GuardContext,
@@ -821,6 +829,7 @@ def claim_wave(
     wave_id: str,
     session_id: str,
     out_of_order: bool = False,
+    max_parallel_waves: int = DEFAULT_MAX_PARALLEL_WAVES,
 ) -> Wave:
     """Move a pending wave to ``claimed`` and bind it to *session_id*.
 
@@ -856,15 +865,24 @@ def claim_wave(
       where multiple waves of the same dep-frontier are intentionally
       claimed at once.
 
-    Lifecycle guard: once every gate above passes, a PLANNED parent
-    iter is activated as part of the same claim mutation so waves
-    never run under a PLANNED iter. The activation is inlined rather
-    than delegated to :func:`eawf.workflow.lifecycle.iter_.activate_iter`
-    because that helper resets ``current.active_wave_ids`` — which
-    would clobber sibling waves already on the active pointer. An
-    already-ACTIVE iter is left untouched (idempotent); a terminal
-    iter is unreachable here because the wave's own PENDING gate
-    already rejects claims under a closed/abandoned iter.
+    Parent rows, not ``state.current`` pointers, define executability. The
+    parent phase must be ACTIVE and the parent iter must be PLANNED or ACTIVE.
+    A PLANNED iter runs the shared activation validator and is activated in the
+    same mutation while preserving status-derived active-wave rows. Empty
+    success criteria are rejected. Finally, the repository-wide count of
+    CLAIMED + IN_PROGRESS waves must remain below *max_parallel_waves*;
+    ``out_of_order`` relaxes sibling ordering only and never bypasses these
+    lifecycle, criteria, session, pause, dependency, or capacity guards.
+
+    Args:
+        state: Mutable typed repository state.
+        wave_id: Pending wave to claim.
+        session_id: Active compatible session to bind.
+        out_of_order: Whether to relax lower-ready-sibling ordering only.
+        max_parallel_waves: Repository-wide CLAIMED + IN_PROGRESS hard cap.
+
+    Returns:
+        The claimed wave row.
 
     Raises:
         LifecycleError: when *wave_id* is unknown, wave is not
@@ -873,13 +891,17 @@ def claim_wave(
             PENDING (without ``out_of_order``), or dispatch is paused
             (``state.dispatch_paused`` is ``True``) — the pause gate
             blocks regardless of ``out_of_order``.
-        LifecycleGuardError: when the claiming session does not exist, is
-            not ACTIVE, carries the wrong role, or is scoped outside the
-            wave's own scope chain (see :func:`validate_claim_session`).
+        LifecycleGuardError: when a parent row is missing or not executable,
+            another sibling iter conflicts with PLANNED autoactivation,
+            criteria are empty, capacity is exhausted, or the claiming session
+            is missing, inactive, role-incompatible, or scoped outside the
+            wave's own scope chain.
     """
     wave = state.waves.get(wave_id)
     if wave is None:
         raise LifecycleError(f"unknown wave {wave_id!r}")
+    parent_iter = validate_claim_parent(state, wave)
+    validate_claim_criteria(wave)
     if wave.status == WaveStatus.CLAIMED and wave.claim_session_id == session_id:
         # Idempotent re-entry still re-checks the binding: a wave claimed
         # hours ago whose session has since gone STALE must not be re-entered
@@ -929,6 +951,12 @@ def claim_wave(
     # claim leaves the state byte-identical (no status flip, no claimed_at
     # stamp, no active-wave pointer, no session index entry, no estimate row).
     session = validate_claim_session(state, wave, session_id)
+    validate_claim_capacity(state, wave, max_parallel_waves=max_parallel_waves)
+    if parent_iter.status is IterStatus.PLANNED:
+        _apply_iter_activation(state, parent_iter, preserve_active_wave_ids=True)
+        logger.info(
+            f"claim_wave auto-activated iter={parent_iter.id} on first claim wave={wave_id}"
+        )
     wave.status = WaveStatus.CLAIMED
     wave.claim_session_id = session_id
     # The session's claimed-wave index moves with the wave's own binding, in
@@ -951,18 +979,10 @@ def claim_wave(
     # absence is honest: the live-spawn path stamps a matched
     # baseline/latest pair of its own, and the interactive capture path
     # re-origins a missing baseline on its first capture.
-    if wave_id not in state.current.active_wave_ids:
-        state.current.active_wave_ids.append(wave_id)
-    # Lifecycle guard: a wave must never run under a PLANNED iter, so the
-    # first claim activates the parent iter (status flip + current pointer)
-    # atomically with the claim. ACTIVE iters are left as-is (idempotent);
-    # terminal iters are unreachable because the PENDING gate above already
-    # rejects claims under a closed iter's now-non-pending waves.
-    it = state.iters.get(wave.iter_id)
-    if it is not None and it.status == IterStatus.PLANNED:
-        it.status = IterStatus.ACTIVE
-        state.current.iter_id = it.id
-        logger.info(f"claim_wave auto-activated iter={it.id} on first claim wave={wave_id}")
+    # Rebuild the advisory pointer from authoritative statuses on every
+    # successful claim. This both records the new claimant and repairs stale
+    # pointer rows without letting a stale pointer weaken the repo-wide cap.
+    state.current.active_wave_ids = active_wave_ids(state)
     # Seed a default estimate from the wave's effort bucket so the
     # estimate-vs-actual variance metric has a baseline to compare the
     # close-time actual against. Skipped (no estimate) when the wave

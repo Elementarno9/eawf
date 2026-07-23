@@ -21,7 +21,8 @@ def test_acquire_writes_holder_metadata(tmp_path: Path) -> None:
         assert body["hostname"]
         assert "started_at" in body
         assert "heartbeat_at" in body
-    assert not lock.path.exists()
+    assert lock.path.exists()
+    assert lock.path.read_text() == ""
 
 
 def test_acquire_timeout_raises(tmp_path: Path) -> None:
@@ -44,15 +45,19 @@ def test_heartbeat_updates_during_long_hold(tmp_path: Path) -> None:
         assert second > first
 
 
-def test_lockfile_removed_after_context_exit(tmp_path: Path) -> None:
+def test_lockfile_inode_persists_across_contexts(tmp_path: Path) -> None:
     target = tmp_path / "state.json"
     target.write_text("{}")
     lock_path: Path | None = None
     with portalock.acquire(target, timeout=1.0) as lock:
         lock_path = lock.path
         assert lock_path.exists()
+        inode = lock_path.stat().st_ino
     assert lock_path is not None
-    assert not lock_path.exists()
+    assert lock_path.exists()
+    assert lock_path.read_text() == ""
+    with portalock.acquire(target, timeout=1.0) as reacquired:
+        assert reacquired.path.stat().st_ino == inode
 
 
 def test_on_event_callback_not_called_on_clean_acquire(tmp_path: Path) -> None:

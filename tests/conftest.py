@@ -11,6 +11,13 @@ from pathlib import Path
 import hypothesis
 import pytest
 
+from eawf.kernel.spec.common import (
+    CriterionSpec,
+    ObserveVerb,
+    ProofLocus,
+    QualityDimension,
+    ResponseClause,
+)
 from eawf.kernel.spec.intent import IntentBrief
 
 # --- Hypothesis CI example-budget profile (P30-I26-W22) --------------------
@@ -152,6 +159,26 @@ def make_intent(
         priority_rationale="exercises the plan_wave authoring path under test",
         planned_steps=["stage the wave with a populated intent"],
         risks=["none material for the test fixture"],
+    )
+
+
+def make_claim_criterion(criterion_id: str = "CR-CLAIM") -> CriterionSpec:
+    """Build one real typed criterion for fixtures that execute a wave."""
+    return CriterionSpec(
+        id=criterion_id,
+        text="the focused lifecycle operation exits with the expected status",
+        kind="attested",
+        acceptance_style="binary",
+        evidence_kind="attested",
+        gate_ids=[],
+        quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
+        measurable_signal="the focused test observes the expected state transition",
+        response=ResponseClause(
+            observe=ObserveVerb.JUDGED,
+            object="the focused lifecycle operation",
+            locus=ProofLocus.HUMAN,
+            jury_reason="fixture criterion is satisfied by the focused test assertion",
+        ),
     )
 
 
