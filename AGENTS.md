@@ -456,7 +456,7 @@ Before writing a memory entry, ask whether a query already answers it. If ``eawf
 <!-- BEGIN EAWF:managed id=zone-reference version=1.0 hash=06f4f2b046f45f0f -->
 <!-- Zone 2: reference (lazy) -->
 <!-- END EAWF:managed id=zone-reference -->
-<!-- BEGIN EAWF:managed id=agent-driven-phase-equals-release version=1.0 hash=11c981fa6b99b7bd -->
+<!-- BEGIN EAWF:managed id=agent-driven-phase-equals-release version=1.0 hash=db252c71120f4b3c -->
 ### Rationale
 
 In a single-operator, agent-driven repo a phase is the unit of shipped value, not an internal checkpoint — agent throughput collapses many human-weeks of work into one reviewable delivery. Treating each phase as at least a minor release keeps the published version honest about what landed and gives every phase a tag to bisect releases against. Drip- releasing per wave would churn tags faster than the value is observable.
@@ -464,12 +464,12 @@ In a single-operator, agent-driven repo a phase is the unit of shipped value, no
 
 ### Mechanism
 
-Every closed phase ships as at least a minor release. The phase-close commit bumps the package version (e.g. ``0.3.0`` -> ``0.3.1``, or ``-> 0.4.0`` / ``-> 1.0.0`` when the phase warrants it) and the phase PR merge tags that release. The version bump and tag ride the same ``[P<NN>] state: close iter + phase`` commit that ends the phase, so the release marker and the closed state land together. Do not close a phase without bumping the version.
+Every closed phase ships as at least a minor release. The phase-close commit bumps the package version in ``src/eawf/_version.py`` (e.g. ``0.3.0`` -> ``0.3.1``, or ``-> 0.4.0`` / ``-> 1.0.0`` when the phase warrants it) and the phase PR merge tags that release. ``pyproject.toml`` declares the version dynamically; it has no static ``project.version`` field to edit. The version bump and tag ride the same ``[P<NN>] state: close iter + phase`` commit that ends the phase, so the release marker and the closed state land together. Do not close a phase without bumping the version.
 
 
 ### Verification
 
-Read the phase-close commit: it touches the package version field (``pyproject.toml`` ``project.version``) and the merge creates a release tag matching the new version. ``git tag --points-at <phase-close-sha>`` lists the release tag; a phase that closed without a version bump or a tag is reworked before the PR merges.
+Read the phase-close commit: it advances ``src/eawf/_version.py`` while ``pyproject.toml`` remains dynamically versioned, and the merge creates a release tag matching the new version. ``git tag --points-at <phase-close-sha>`` lists the release tag; a phase that closed without a version bump or a tag is reworked before the PR merges.
 
 <!-- END EAWF:managed id=agent-driven-phase-equals-release -->
 <!-- BEGIN EAWF:managed id=agent-driven-large-phase-pr version=1.0 hash=75acdab274a770a9 -->
@@ -568,19 +568,19 @@ Use named arguments over positional when a function takes three or more paramete
 Read each call site of a function with arity of three or more: arguments are passed by keyword. A function whose name implies a value but returns ``None`` on the happy path is reworked. mypy (``uv run mypy src/``) backs the explicit-return contract via full type hints.
 
 <!-- END EAWF:managed id=code-craft-explicit-over-implicit -->
-<!-- BEGIN EAWF:managed id=lean-wave-verification version=1.0 hash=6aba94ef59c31230 -->
+<!-- BEGIN EAWF:managed id=lean-wave-verification version=1.0 hash=19d492df6af39650 -->
 ### Rationale
 
-Running the full test suite plus a fresh-context audit on every wave costs 10-30 minutes per wave and serializes iter execution, while the close gate's risk weighting already reserves the mandatory auditor for the high-risk band (L/XL effort, judgment roles, security scope, plus a 1-in-4 sample of mechanical waves). Verifying at the batch boundary — one exact-head pass per iter — catches integration defects at the same point the v0.7 target delivery model does (the exact-head Batch audit), for a fraction of the wall-clock.
+Running the full test suite plus a fresh-context audit on every wave costs 10-30 minutes per wave and serializes iter execution. The live close gate reserves blocking auditor spawn for the high-risk band (L/XL effort, judgment roles, and security scope). Its deterministic 1-in-4 classification for mechanical waves is advisory today: sampled mechanical waves do not trigger a blocking live auditor spawn. Iter-close audit-link integrity is the patch-release guard; proof that the audit evaluated the exact closing HEAD remains deferred to the provenance model in v0.7.
 
 
 ### Mechanism
 
-Wave success criteria name targeted tests only (``uv run pytest <touched paths>``) — never the full suite. A mechanical wave (S/M effort, executor role, non-security) closes on criteria + evidence alone; do not spawn a per-wave auditor beyond what the close gate itself requires. The full suite (the repo's acceptance ``tests`` command) and the single fresh-context audit run once per iter, at iter close, in this order: polish -> full suite -> one exact-head audit over the iter diff -> close. Any code change after that audit invalidates it; rerun the audit once. Nonblocking audit findings become backlog items (``eawf backlog add``), never new waves on the closing iter; a blocker gets one repair wave appended to the same iter, affected tests, and one re-audit; a second repair cycle stops the iter for an operator split/defer decision. Exceptions that keep the wave-level full-tree gauntlet: persisted-schema / migration waves and security-scoped waves.
+Wave success criteria name targeted tests only (``uv run pytest <touched paths>``) — never the full suite. A mechanical wave (S/M effort, executor role, non-security) closes on criteria + evidence alone; do not describe the 1-in-4 sampler as a blocking spawn control. The full suite (the repo's acceptance ``tests`` command) and one fresh-context audit run once per iter, at iter close, in this order: polish -> full suite -> audit over the iter diff -> close. Strict close validates that the named audit exists, belongs to the iter, is complete and accepted, and carries real evidence; it does not validate evaluated HEAD. Nonblocking audit findings become backlog items (``eawf backlog add``). One repair wave and one re-audit is operator procedure, not a production limit: reserved ``flow.max_repair_cycles`` does not enforce it. Exceptions that keep the wave-level full-tree gauntlet: persisted-schema / migration waves and security-scoped waves.
 
 
 ### Verification
 
-A closed mechanical wave shows no full-suite run and no unforced auditor session in its evidence; the iter close shows exactly one full-suite run and one audit bound to the closing head SHA. Audit findings resolve to backlog rows or a single appended repair wave — an iter that needed a second repair cycle was stopped and split, not extended.
+A closed mechanical wave shows no full-suite run and no blocking sampler-spawn claim. The iter close names a real accepted audit linked to that iter; do not infer an audited HEAD SHA from the link. Audit findings resolve through operator triage, and no check claims ``flow.max_repair_cycles`` enforces a one-repair-wave ceiling.
 
 <!-- END EAWF:managed id=lean-wave-verification -->
