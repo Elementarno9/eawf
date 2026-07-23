@@ -196,6 +196,23 @@ def test_close_iter_strict_pass_stores_exact_audit_id() -> None:
     assert warnings == []
 
 
+def test_close_iter_strict_passing_check_survives_missing_report_artifact() -> None:
+    state = _state()
+    audit = _accepted_audit()
+    audit.report_artifact_id = "ART-MISSING"
+    state.audits = {_AUDIT_ID: audit}
+
+    closed = close_iter(
+        state,
+        iter_id=_ITER_ID,
+        audit_id=_AUDIT_ID,
+        require_audit_accepted=True,
+    )
+
+    assert closed.status is IterStatus.CLOSED
+    assert closed.audit_id == _AUDIT_ID
+
+
 def test_close_iter_strict_minor_returns_backlog_triage_warning(
     caplog: pytest.LogCaptureFixture,
 ) -> None:

@@ -91,11 +91,12 @@ def audit_has_real_close_evidence(
 ) -> bool:
     """Return whether *audit* has a real artifact or non-stub check result."""
     report_artifact_id = audit.report_artifact_id
-    if report_artifact_id:
-        return report_artifact_id in state.artifacts
-    return any(
-        _audit_row_has_result(row, require_passing=require_passing_check)
-        for row in audit.check_results
+    return bool(
+        (report_artifact_id and report_artifact_id in state.artifacts)
+        or any(
+            _audit_row_has_result(row, require_passing=require_passing_check)
+            for row in audit.check_results
+        )
     )
 
 

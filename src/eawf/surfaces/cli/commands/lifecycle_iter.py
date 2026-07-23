@@ -650,12 +650,15 @@ def iter_close_cmd(
     mutation_warnings: list[str] = []
 
     def _mutator(state: State) -> None:
-        repo_root = resolve_state_path(flags.workspace).parent.parent
+        state_path = resolve_state_path(flags.workspace)
+        config_root = (
+            state_path.parent.parent if state_path.parent.name == ".ea" else state_path.parent
+        )
         verify_block = load_active_verify_block(
             iter_id,
             state,
-            repo_root=repo_root,
-            config_root=repo_root,
+            repo_root=config_root,
+            config_root=config_root,
         )
         close_iter(
             state,
