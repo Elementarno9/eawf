@@ -151,6 +151,7 @@ Manage layered configuration (built-in / global / workspace / repo / local).
 | `get` | Print the merged value for ``key`` and the layer it came from. |
 | `menu` | Open an interactive ``questionary`` menu for tunable config keys. |
 | `set` | Write *value* under *key* to the chosen layer file. |
+| `unset` | Remove *key* from one layer without changing lower-precedence values. |
 | `validate` | Validate the merged config against the minimal Pydantic schema. |
 
 ### `eawf daemon`
