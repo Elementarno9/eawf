@@ -6,6 +6,8 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from eawf.kernel.state.enums import (
     McpRisk,
     McpStatus,
@@ -18,7 +20,7 @@ from eawf.kernel.state.models import (
     Project,
     State,
 )
-from eawf.observability.doctor.checks import check_mcp_drift, run_all
+from eawf.observability.doctor.checks import check_config_resolves, check_mcp_drift, run_all
 
 
 def _seed_state(workspace: Path, *, servers: dict[str, McpServer] | None = None) -> Path:
@@ -150,7 +152,26 @@ def test_run_all_includes_mcp_drift(tmp_path: Path) -> None:
     results = run_all(workspace=tmp_path)
     names = [r.name for r in results]
     assert "mcp_drift" in names
-    assert len(results) == 12
+    assert len(results) == 19
+
+
+def test_check_config_resolves_uses_workspace_as_repo_anchor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, Path | None] = {}
+
+    def _merge_config(
+        *, repo: Path | None, workspace: Path | None
+    ) -> tuple[dict[str, object], dict[str, str]]:
+        captured.update(repo=repo, workspace=workspace)
+        return {"profiles": {"enabled": ["core"]}}, {}
+
+    monkeypatch.setattr("eawf.observability.doctor.checks.merge_config", _merge_config)
+
+    result = check_config_resolves(workspace=tmp_path)
+
+    assert result.status == "ok"
+    assert captured == {"repo": tmp_path, "workspace": tmp_path}
 
 
 def test_check_warns_on_unreadable_settings(tmp_path: Path) -> None:

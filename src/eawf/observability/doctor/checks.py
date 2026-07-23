@@ -265,10 +265,13 @@ def check_config_resolves(*, workspace: Path | None) -> CheckResult:
 
     The merge is best-effort: any unexpected exception collapses to ``warn``
     so the doctor surface stays useful even when a layer file is malformed.
+    An explicit workspace anchors both workspace and repo layers so config
+    from the process cwd cannot bleed into another repository's diagnosis.
     """
-    repo = Path.cwd()
+    anchor = _resolve_anchor(workspace)
+    repo = anchor if anchor is not None else Path.cwd()
     try:
-        merged, _sources = merge_config(repo=repo, workspace=workspace)
+        merged, _sources = merge_config(repo=repo, workspace=anchor)
     except Exception as exc:
         return CheckResult(
             name="config_resolves",
