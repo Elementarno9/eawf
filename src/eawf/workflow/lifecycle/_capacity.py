@@ -8,7 +8,6 @@ from typing import Annotated, Final
 from pydantic import Field, TypeAdapter
 
 from eawf.kernel.config.defaults import BUILT_IN_DEFAULTS
-from eawf.kernel.config.layered import get_dotted, merge_config
 
 DEFAULT_MAX_PARALLEL_WAVES: Final[int] = int(BUILT_IN_DEFAULTS["planning"]["max_parallel_waves"])
 
@@ -38,6 +37,8 @@ def resolve_max_parallel_waves(repo_root: Path | None) -> int:
     """
     if repo_root is None:
         return DEFAULT_MAX_PARALLEL_WAVES
+    from eawf.kernel.config.layered import get_dotted, merge_config
+
     merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
     raw = get_dotted(merged, "planning.max_parallel_waves")
     return _MAX_PARALLEL_WAVES_ADAPTER.validate_python(raw)

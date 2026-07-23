@@ -107,6 +107,7 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     assert not (target / "settings.json").exists()
     assert not (target / ".claude").exists()
     assert not (target / ".ea").exists()
+    assert not list(target.rglob("*.lock")), "plugin package leaked control-plane locks"
     # README emitted by default.
     assert (target / "README.md").exists()
 

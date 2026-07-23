@@ -83,7 +83,9 @@ SNAPSHOT_SURFACES: dict[str, SnapshotSurface] = {
         SnapshotSurface(
             kind="dispatch",
             golden_dir="tests/golden/dispatch",
-            regen_target="tests/golden/dispatch",
+            regen_target=(
+                "tests/integration/test_plugin_doctor_strict.py::test_refresh_dispatch_goldens"
+            ),
             description="Dispatch envelope per runtime x skill.",
         ),
         SnapshotSurface(

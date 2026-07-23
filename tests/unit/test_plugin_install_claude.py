@@ -73,6 +73,8 @@ def test_install_plugin_writes_full_tree(tmp_path: Path) -> None:
     assert settings.exists()
     mcp_config = tmp_path / ".mcp.json"
     assert json.loads(mcp_config.read_text(encoding="utf-8")) == {"mcpServers": {}}
+    assert not list((tmp_path / ".claude").rglob("*.lock"))
+    assert not mcp_config.with_name(f"{mcp_config.name}.lock").exists()
 
 
 def test_install_plugin_is_idempotent(tmp_path: Path) -> None:

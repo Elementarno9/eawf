@@ -27,6 +27,7 @@ Three concerns are covered here:
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from pathlib import Path
@@ -341,6 +342,29 @@ def _build_dispatch_state() -> State:
             intent=make_intent(),
         )
     return state
+
+
+def test_refresh_dispatch_goldens() -> None:
+    """Regenerate every dispatch golden through the snapshot-update surface."""
+    if os.environ.get("EAWF_REFRESH_GOLDEN") != "1":
+        pytest.skip("set EAWF_REFRESH_GOLDEN=1 via `eawf snapshot update --kind dispatch`")
+
+    state = _build_dispatch_state()
+    output_dir = os.environ.get("EAWF_SNAPSHOT_OUT")
+    target_dir = Path(output_dir) if output_dir is not None else _GOLDEN_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
+    fixtures = {
+        "cc_research.txt": "research",
+        "cc_prep.txt": "prep",
+        "cc_audit.txt": "audit",
+        "cc_ship.txt": "ship",
+        "cc_flow.txt": "flow",
+        "codex_research.txt": "research",
+        "codex_audit.txt": "audit",
+    }
+    for fixture_name, surface in fixtures.items():
+        rendered = render_wave_prompt(state, _SURFACE_WAVE_ID[surface])
+        (target_dir / fixture_name).write_text(rendered, encoding="utf-8")
 
 
 @pytest.mark.parametrize(
