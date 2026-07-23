@@ -32,6 +32,7 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
+import orjson
 import pytest
 from pydantic import ValidationError
 
@@ -302,6 +303,32 @@ def test_drive_rpc_rejects_concurrency_over_configured_cap_before_write(tmp_path
     with pytest.raises(LifecycleGuardError, match="claim_parallel_limit_reached"):
         asyncio.run(drive(_ctx(state_path), {"frontier": list(_WAVE_IDS), "concurrency": 3}))
 
+    assert state_path.read_bytes() == before
+    assert not (tmp_path / ".ea" / "store" / "event.jsonl").exists()
+
+
+def test_drive_wire_rejection_maps_guard_to_validation_failed(tmp_path: Path) -> None:
+    """An over-cap fleet arm surfaces as ``-32002``, never an internal error."""
+    from eawf.runtime.daemon.methods import VALIDATION_FAILED
+    from eawf.runtime.daemon.server import _process_frame
+
+    state_path = _write_state(tmp_path)
+    (tmp_path / ".ea" / "config.yaml").write_text(
+        "planning:\n  max_parallel_waves: 2\n",
+        encoding="utf-8",
+    )
+    before = state_path.read_bytes()
+    request = {
+        "jsonrpc": "2.0",
+        "id": "fleet-cap-wire",
+        "method": "fleet.drive",
+        "params": {"frontier": list(_WAVE_IDS), "concurrency": 3},
+    }
+
+    response = asyncio.run(_process_frame(orjson.dumps(request), _ctx(state_path)))
+
+    assert response["error"]["code"] == VALIDATION_FAILED == -32002
+    assert "validation_failed: claim_parallel_limit_reached" in response["error"]["message"]
     assert state_path.read_bytes() == before
     assert not (tmp_path / ".ea" / "store" / "event.jsonl").exists()
 
