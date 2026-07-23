@@ -197,15 +197,24 @@ def _spawn_wave(*, wave_id: str, flags: GlobalFlags, model: str | None = None) -
             an unknown wave id surfaces as ``-32602`` (invalid params), mapped
             via :func:`~eawf.surfaces.cli.errors.cli_error_for_rpc`.
     """
+    from eawf.runtime.daemon.limits import (
+        cli_mutation_timeout_for,
+        configured_juror_wall_clock,
+    )
     from eawf.surfaces.cli import _dispatch
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
     params: dict[str, Any] = {"wave_id": wave_id, "spawn": True}
     if model is not None:
         params["model"] = model
+    repo_root = (flags.workspace if flags.workspace is not None else Path.cwd()).resolve()
     try:
         _dispatch.escalate_mutation("dispatch wave", flags=flags)
-        with DaemonClient() as client:
+        with DaemonClient(
+            call_timeout_seconds=cli_mutation_timeout_for(
+                configured_juror_wall_clock(repo_root),
+            )
+        ) as client:
             result: dict[str, Any] = client.call(_DISPATCH_RPC, params)
     except DaemonRpcError as exc:
         if exc.code == cli_errors.RPC_VALIDATION_FAILED:

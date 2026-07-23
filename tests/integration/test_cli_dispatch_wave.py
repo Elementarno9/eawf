@@ -46,6 +46,10 @@ class _RecordingSpawnClient:
     pid: ClassVar[int] = 54321
     runtime: ClassVar[str] = "claude-code"
     session_id: ClassVar[str] = "sess-abc123"
+    call_timeout_seconds: ClassVar[float | None] = None
+
+    def __init__(self, *, call_timeout_seconds: float) -> None:
+        type(self).call_timeout_seconds = call_timeout_seconds
 
     def __enter__(self) -> _RecordingSpawnClient:
         return self
@@ -66,6 +70,9 @@ class _RecordingSpawnClient:
 
 class _UnknownWaveClient:
     """Recording DaemonClient whose ``call`` raises ``-32602`` (unknown wave)."""
+
+    def __init__(self, **_kwargs: Any) -> None:
+        pass
 
     def __enter__(self) -> _UnknownWaveClient:
         return self
@@ -112,6 +119,25 @@ def test_dispatch_wave_sends_spawn_frame_and_reports_pid_runtime(
     assert _RecordingSpawnClient.captured["params"] == {"wave_id": "P30-I06-W02", "spawn": True}
     # The reported line carries the captured pid + the serving runtime.
     assert "spawned P30-I06-W02 on claude-code (pid=54321)" in result.stdout
+
+
+def test_dispatch_wave_uses_mutation_wire_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A live spawn waits beyond the generic 30-second request timeout."""
+    _RecordingSpawnClient.call_timeout_seconds = None
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _RecordingSpawnClient)
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.limits.configured_juror_wall_clock",
+        lambda _repo_root: 75.0,
+    )
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.limits.cli_mutation_timeout_for",
+        lambda ceiling: 321.0 if ceiling == 75.0 else 0.0,
+    )
+
+    result = runner.invoke(app, ["dispatch", "wave", "P30-I06-W02"])
+
+    assert result.exit_code == 0, result.output
+    assert _RecordingSpawnClient.call_timeout_seconds == pytest.approx(321.0)
 
 
 def test_dispatch_wave_json_envelope(monkeypatch: pytest.MonkeyPatch) -> None:
