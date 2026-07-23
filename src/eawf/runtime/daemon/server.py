@@ -58,6 +58,7 @@ from eawf.runtime.daemon.methods import (
 )
 from eawf.runtime.daemon.methods.event import subscribe as run_subscribe
 from eawf.runtime.daemon.methods.state_subscribe import SUBSCRIBE_METHODS
+from eawf.workflow.lifecycle._errors import LifecycleGuardError
 from eawf.workflow.verify.dispatch_close import DispatchCloseBlockedError
 
 logger = logging.getLogger(__name__)
@@ -219,6 +220,12 @@ async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
         result = await dispatch(method, ctx, params)
     except MethodNotFoundError:
         return _error(req_id, METHOD_NOT_FOUND, f"method not found: {method!r}")
+    except LifecycleGuardError as exc:
+        logger.warning(
+            f"_process_frame lifecycle_guard_rejected method={method!r} "
+            f"code={exc.code!r} scope={exc.scope_id!r}"
+        )
+        return _error(req_id, VALIDATION_FAILED, f"validation_failed: {exc}")
     except DaemonValidationError as exc:
         # A lifecycle-guard / post-invariant rejection — the param shape
         # was syntactically fine, the mutation was semantically refused.
