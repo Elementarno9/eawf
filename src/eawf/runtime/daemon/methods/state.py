@@ -58,12 +58,12 @@ import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, cast
 
 import orjson
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from eawf.kernel.config.schema import EuBasis
+from eawf.kernel.config.schema import EuBasis, VerifyWaiverMode
 from eawf.kernel.spec.common import (
     CriterionSpec,
     grandfather_criterion,
@@ -613,6 +613,36 @@ def _apply_wave_claim(
         session_id=str(params["session_id"]),
         out_of_order=bool(params.get("out_of_order", False)),
         max_parallel_waves=max_parallel_waves,
+        waiver_mode=_mutation_waiver_mode(mutation),
+    )
+
+
+def _mutation_waiver_mode(mutation: Mutation) -> VerifyWaiverMode:
+    """Return the daemon-injected waiver mode, defaulting for direct tests."""
+    value = mutation.params.get("waiver_mode", "B")
+    if value not in {"A", "B", "C", "disabled"}:
+        raise LifecycleError(f"invalid waiver_mode: {value!r}")
+    return cast("VerifyWaiverMode", value)
+
+
+def _thread_mutation_waiver_mode(
+    state: State,
+    mutation: Mutation,
+    *,
+    state_path: Path,
+    repo_root_override: str | None,
+) -> None:
+    """Overwrite caller input with the strict config-derived waiver policy."""
+    from eawf.workflow.verify.readiness import load_active_waiver_mode
+
+    config_root = _config_root_for_state_path(state_path)
+    repo_root = Path(repo_root_override) if repo_root_override else config_root
+    scope_id = str(mutation.params.get("wave_id") or mutation.scope_id)
+    mutation.params["waiver_mode"] = load_active_waiver_mode(
+        scope_id,
+        state,
+        repo_root=repo_root,
+        config_root=config_root,
     )
 
 
@@ -863,6 +893,7 @@ def _compute_wave_close_readiness(
             rejection.
     """
     from eawf.kernel.store.paths import store_dir as _store_dir
+    from eawf.workflow.lifecycle._errors import check_disabled_waiver_policy
     from eawf.workflow.verify import compute as compute_readiness
     from eawf.workflow.verify.readiness import (
         load_active_verify_block,
@@ -876,15 +907,19 @@ def _compute_wave_close_readiness(
     # intent; the wave-aware resolver narrows ``enforce`` to the UI/UX band
     # so a non-band wave keeps the advisory close path even when a
     # band-scoped profile is enabled.
-    verify_block = resolve_wave_verify_block(
-        load_active_verify_block(
-            wave_id,
-            state,
-            repo_root=repo_root,
-            config_root=_config_root_for_state_path(state_path),
-        ),
-        state.waves[wave_id],
+    policy_block = load_active_verify_block(
+        wave_id,
+        state,
+        repo_root=repo_root,
+        config_root=_config_root_for_state_path(state_path),
     )
+    check_disabled_waiver_policy(
+        waiver_mode="B" if policy_block is None else policy_block.waiver_mode,
+        scope_id=wave_id,
+        criteria=list(state.waves[wave_id].success_criteria),
+        criteria_floor_waiver=state.waves[wave_id].criteria_floor_waiver,
+    )
+    verify_block = resolve_wave_verify_block(policy_block, state.waves[wave_id])
     if verify_block is None or not verify_block.enforce:
         return None
     deferred: frozenset[str] = frozenset()
@@ -2331,6 +2366,7 @@ def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
                 if params.get("criteria_floor_waiver_reason")
                 else None
             ),
+            waiver_mode=_mutation_waiver_mode(mutation),
         )
     elif op == "remove_wave":
         remove_wave_plan(state, wave_id=str(params["wave_id"]))
@@ -2354,6 +2390,7 @@ def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
                 title=title_str,
                 description=description_str,
                 intent=intent,
+                waiver_mode=_mutation_waiver_mode(mutation),
             )
     else:
         raise LifecycleError(f"unknown roadmap revise op: {op!r}")
@@ -3652,6 +3689,16 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 )
 
             try:
+                if mutation.kind in {
+                    MutationKind.WAVE_CLAIM,
+                    MutationKind.ROADMAP_REVISE,
+                }:
+                    _thread_mutation_waiver_mode(
+                        state,
+                        mutation,
+                        state_path=state_path,
+                        repo_root_override=args.repo_root,
+                    )
                 if mutation.kind is MutationKind.WAVE_CLAIM:
                     repo_anchor = (
                         Path(args.repo_root)

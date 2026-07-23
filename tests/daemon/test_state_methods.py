@@ -38,7 +38,9 @@ import orjson
 import pytest
 
 from eawf import __version__
+from eawf.kernel.spec.common import grandfather_criterion
 from eawf.kernel.state.enums import DecisionStatus, StoreKind
+from eawf.kernel.state.models import CriteriaFloorWaiver
 from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.kernel.store.kinds.event import EventKind
 from eawf.kernel.store.paths import store_path
@@ -278,6 +280,16 @@ def _write_verify_profile(root: Path, *, enforce: bool) -> None:
                 "",
             ]
         ),
+        encoding="utf-8",
+    )
+
+
+def _write_disabled_waiver_config(root: Path) -> None:
+    """Set the strict repo waiver policy used by H04 daemon tests."""
+    config_dir = root / ".ea"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config_dir.joinpath("config.yaml").write_text(
+        "verify:\n  waiver_mode: disabled\n",
         encoding="utf-8",
     )
 
@@ -1280,6 +1292,55 @@ def test_mutate_wave_claim_resolves_configured_cap_under_lock(tmp_path: Path) ->
     _run(body)
 
 
+def test_mutate_wave_claim_disabled_rejects_historical_floor_waiver(
+    tmp_path: Path,
+) -> None:
+    """Daemon claim derives disabled config and leaves every store untouched."""
+    payload = _build_state_payload(wave_status="pending")
+    wave = payload["waves"]["P24-I01-W09"]  # type: ignore[index]
+    wave["effort_bucket"] = "M"  # type: ignore[index]
+    wave["file_scopes"] = ["src/"]  # type: ignore[index]
+    wave["success_criteria"] = [  # type: ignore[index]
+        grandfather_criterion("historical criterion", index=1).model_dump(mode="json")
+    ]
+    wave["criteria_floor_waiver"] = CriteriaFloorWaiver(  # type: ignore[index]
+        reason="historical typed-criteria repair waiver",
+        waived_at=_now(),
+    ).model_dump(mode="json")
+    payload["agent_sessions"]["SES-2"] = {  # type: ignore[index]
+        "id": "SES-2",
+        "role": "executor",
+        "runtime": "test",
+        "scope_id": "P24-I01-W09",
+        "status": "active",
+        "started_at": _now().isoformat(),
+    }
+    payload["current"]["active_session_ids"] = ["SES-2"]  # type: ignore[index]
+    ctx, state_path, event_path, wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    _write_disabled_waiver_config(tmp_path)
+    before = state_path.read_bytes()
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLAIM,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "wave_id": "P24-I01-W09",
+            "session_id": "SES-2",
+            "out_of_order": False,
+            "waiver_mode": "A",
+        },
+    )
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="waiver_mode_disabled"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        assert state_path.read_bytes() == before
+        assert not event_path.exists() or not event_path.read_bytes()
+        assert not list(wal_dir.glob("*.json"))
+
+    _run(body)
+
+
 def test_daemon_wave_event_kind_table_has_no_w19_orphans() -> None:
     """W19 mapped wave lifecycle kinds are canonical EventKind literals."""
     from eawf.runtime.daemon.methods.state import _MUTATION_EVENT_KIND
@@ -1733,6 +1794,46 @@ def test_mutate_roadmap_revise_add_wave_inserts_pending_wave(tmp_path: Path) -> 
         # The typed-criteria floor waiver persists visibly on the wave row.
         waiver = new_state["waves"]["P50-I01-W01"]["criteria_floor_waiver"]
         assert waiver is not None and "test fixture" in waiver["reason"]
+
+    _run(body)
+
+
+def test_mutate_roadmap_revise_disabled_overrides_caller_mode_before_write(
+    tmp_path: Path,
+) -> None:
+    """Daemon derives disabled policy; mutation params cannot weaken it."""
+    payload = _build_planned_phase_payload()
+    ctx, state_path, event_path, wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    _write_disabled_waiver_config(tmp_path)
+    before = state_path.read_bytes()
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_REVISE,
+        scope_id="P50",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "op": "add_wave",
+            "wave_id": "P50-I01-W01",
+            "iter_id": "P50-I01",
+            "title": "New wave",
+            "file_scopes": ["src/eawf/x.py"],
+            "success_criteria": ["does x"],
+            "criteria_floor_waiver_reason": "caller tries to weaken strict policy",
+            "waiver_mode": "A",
+            "effort_bucket": "S",
+            "intent": {
+                "problem": "x is unhandled",
+                "desired_outcome": "x is handled",
+                "priority_rationale": "handle x before dependents land",
+            },
+        },
+    )
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="waiver_mode_disabled"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        assert state_path.read_bytes() == before
+        assert not event_path.exists() or not event_path.read_bytes()
+        assert not list(wal_dir.glob("*.json"))
 
     _run(body)
 

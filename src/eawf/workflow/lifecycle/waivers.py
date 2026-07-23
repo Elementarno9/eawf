@@ -55,6 +55,7 @@ from eawf.kernel.store.kinds.evidence import EvidenceRecord, mint_evidence_id
 from eawf.kernel.store.paths import store_path
 from eawf.platform.profiles.models import VerifyBlock
 from eawf.surfaces.cli import errors as cli_errors
+from eawf.workflow.lifecycle._errors import WAIVER_MODE_DISABLED
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 
 logger = logging.getLogger(__name__)
@@ -83,6 +84,10 @@ WAIVER_NO_REASON_SUMMARY: str = "(no reason)"
 #: directly; otherwise it returns the validated record without writing
 #: and lets the CLI proxy through the daemon RPC.
 EVIDENCE_DIRECT_WRITE_ENV: str = "EAWF_EVIDENCE_DIRECT_WRITE"
+
+#: The metering-specific override intentionally remains available when gate
+#: waivers are disabled. v0.7 owns strict runtime-usage provenance.
+RUNTIME_ZERO_WAIVER_REF: str = "runtime-zero"
 
 
 class WaiverInput(_StrictModel):
@@ -172,9 +177,13 @@ def _validate_linkage(waiver: WaiverInput, mode: WaiverMode) -> None:
 
     Raises:
         cli_errors.ValidationError: When the linkage policy rejects
-            *waiver* (missing reason in modes B/C, missing
-            decision/audit in mode C).
+            *waiver* (disabled mode, missing reason in modes B/C, or
+            missing decision/audit in mode C).
     """
+    if mode == "disabled":
+        raise cli_errors.ValidationError(
+            f"{WAIVER_MODE_DISABLED}: gate waiver creation is disabled (gate={waiver.gate_id!r})"
+        )
     reason_required = mode in ("B", "C")
     if reason_required and (waiver.reason is None or waiver.reason == ""):
         raise cli_errors.ValidationError(
@@ -370,9 +379,11 @@ def apply_waiver(
         RuntimeError: When the direct-write fallback is enabled but
             *state_path* is not supplied.
     """
+    # Policy is the first check. A disabled request must not resolve sessions,
+    # derive Git state, mint evidence ids, or reach either append path.
+    _validate_linkage(waiver, mode)
     _resolve_operator_session(state, operator_identity=operator_identity)
     assert operator_identity is not None  # _resolve_operator_session rejected None
-    _validate_linkage(waiver, mode)
 
     wave_sha = derive_wave_sha(wave_id, repo_root=repo_root)
     record = _build_waiver_record(
@@ -404,6 +415,7 @@ def apply_waiver(
 __all__ = [
     "DEFAULT_WAIVER_MODE",
     "EVIDENCE_DIRECT_WRITE_ENV",
+    "RUNTIME_ZERO_WAIVER_REF",
     "WAIVER_NO_REASON_SUMMARY",
     "WaiverInput",
     "WaiverMode",

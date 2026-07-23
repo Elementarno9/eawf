@@ -16,7 +16,7 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.evidence import EvidenceRecord, mint_evidence_id
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
-from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.evidence import append
 
 pytestmark = pytest.mark.unit
@@ -104,6 +104,89 @@ def test_evidence_append_round_trip_re_validates(tmp_path: Path) -> None:
     assert loaded.produced_by == "human"
     assert loaded.status == "waived"
     assert loaded.refs == ["DEC-123"]
+
+
+def test_evidence_append_disabled_rejects_gate_waiver_before_write(tmp_path: Path) -> None:
+    """Direct RPC callers cannot bypass disabled mode with a hand-built row."""
+    state_path = tmp_path / "state.json"
+    state_path.write_text("{}", encoding="utf-8")
+    config_dir = tmp_path / ".ea"
+    config_dir.mkdir()
+    config_dir.joinpath("config.yaml").write_text(
+        "verify:\n  waiver_mode: disabled\n",
+        encoding="utf-8",
+    )
+    ctx = _build_ctx(state_path=state_path)
+    record = _record_dict(
+        evidence_kind="attested",
+        produced_by="human",
+        status="waived",
+        summary="operator waiver",
+        refs=["GATE-disabled"],
+    )
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="waiver_mode_disabled"):
+            await append(ctx, {"record": record})
+
+    _run(body)
+
+    assert not store_path(state_path, StoreKind.EVIDENCE).exists()
+
+
+def test_evidence_append_disabled_keeps_runtime_zero_override(tmp_path: Path) -> None:
+    """Disabled mode intentionally excludes the v0.7-owned runtime override."""
+    state_path = tmp_path / "state.json"
+    state_path.write_text("{}", encoding="utf-8")
+    config_dir = tmp_path / ".ea"
+    config_dir.mkdir()
+    config_dir.joinpath("config.yaml").write_text(
+        "verify:\n  waiver_mode: disabled\n",
+        encoding="utf-8",
+    )
+    ctx = _build_ctx(state_path=state_path)
+    record = _record_dict(
+        evidence_kind="attested",
+        produced_by="human",
+        status="waived",
+        summary="runtime capture unavailable",
+        refs=["runtime-zero"],
+    )
+
+    async def body() -> None:
+        await append(ctx, {"record": record})
+
+    _run(body)
+
+    assert store_path(state_path, StoreKind.EVIDENCE).exists()
+
+
+def test_evidence_append_disabled_rejects_runtime_ref_mixed_with_gate(tmp_path: Path) -> None:
+    """The runtime exception cannot be smuggled onto a gate waiver row."""
+    state_path = tmp_path / "state.json"
+    state_path.write_text("{}", encoding="utf-8")
+    config_dir = tmp_path / ".ea"
+    config_dir.mkdir()
+    config_dir.joinpath("config.yaml").write_text(
+        "verify:\n  waiver_mode: disabled\n",
+        encoding="utf-8",
+    )
+    ctx = _build_ctx(state_path=state_path)
+    record = _record_dict(
+        evidence_kind="attested",
+        produced_by="human",
+        status="waived",
+        summary="mixed waiver",
+        refs=["runtime-zero", "GATE-disabled"],
+    )
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="waiver_mode_disabled"):
+            await append(ctx, {"record": record})
+
+    _run(body)
+
+    assert not store_path(state_path, StoreKind.EVIDENCE).exists()
 
 
 def test_evidence_append_appends_multiple_rows(tmp_path: Path) -> None:

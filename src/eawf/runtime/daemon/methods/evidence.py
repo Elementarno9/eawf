@@ -27,7 +27,9 @@ from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.kernel.store.paths import store_path
-from eawf.runtime.daemon.methods import MethodContext, register
+from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
+from eawf.workflow.lifecycle._errors import WAIVER_MODE_DISABLED
+from eawf.workflow.lifecycle.waivers import RUNTIME_ZERO_WAIVER_REF
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +79,7 @@ async def append(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         Dict matching :class:`AppendResult`.
 
     Raises:
+        DaemonValidationError: When disabled policy rejects a gate waiver.
         ValueError: When ``params.record`` does not validate against
             :class:`EvidenceRecord`. The server maps this to
             ``-32602 invalid params``.
@@ -87,7 +90,28 @@ async def append(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     record = EvidenceRecord.model_validate(args.record)
     if ctx.state_path is None:
         raise RuntimeError("state_path not configured on daemon context")
-    evidence_path = store_path(Path(ctx.state_path), StoreKind.EVIDENCE)
+    state_path = Path(ctx.state_path)
+    runtime_only_waiver = record.refs == [RUNTIME_ZERO_WAIVER_REF]
+    if record.status == "waived" and not runtime_only_waiver:
+        # Defense in depth: direct RPC callers cannot bypass the CLI's
+        # pre-persistence policy check with a hand-built waived row.
+        from eawf.workflow.verify.readiness import load_active_waiver_mode
+
+        config_root = (
+            state_path.parent.parent if state_path.parent.name == ".ea" else state_path.parent
+        )
+        mode = load_active_waiver_mode(
+            record.scope_id,
+            None,
+            repo_root=config_root,
+            config_root=config_root,
+        )
+        if mode == "disabled":
+            raise DaemonValidationError(
+                f"validation_failed: {WAIVER_MODE_DISABLED}: gate waiver creation "
+                f"is disabled (scope_id={record.scope_id!r})"
+            )
+    evidence_path = store_path(state_path, StoreKind.EVIDENCE)
     envelope = Envelope(
         id=record.id,
         kind=StoreKind.EVIDENCE,

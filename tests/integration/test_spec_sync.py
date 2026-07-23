@@ -73,6 +73,11 @@ _GOOD_YAML = textwrap.dedent(
     """
 )
 
+_RAW_WAIVER_YAML = _GOOD_YAML.replace(
+    "    gate_ids: [G-01]\n",
+    "    gate_ids: [G-01]\n    waiver_reason: historical raw waiver\n",
+)
+
 # A UI body whose single gate is an affordance_parity probe. A UI-scope wave
 # materialising these gates satisfies the require-gate check.
 _AFFORDANCE_PARITY_YAML = textwrap.dedent(
@@ -409,6 +414,54 @@ def test_sync_materialises_criteria_and_gates(tmp_path: Path) -> None:
     assert len(wave.gates) == 1
     assert wave.gates[0].id == "G-01"
     assert wave.gates[0].criterion_id == "CR-01"
+
+
+def test_sync_disabled_rejects_raw_waiver_reason_before_any_write(tmp_path: Path) -> None:
+    """Strict raw-reason rejection leaves state, event, and WAL unchanged."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    state_path = repo_root / ".ea" / "state.json"
+    _write_state(state_path, _state_payload(status="pending", planned_steps=[]))
+    _write_spec_file(repo_root, _wrap_body(_RAW_WAIVER_YAML))
+    (repo_root / ".ea" / "config.yaml").write_text(
+        "verify:\n  waiver_mode: disabled\n",
+        encoding="utf-8",
+    )
+    ctx = _build_ctx(tmp_path, state_path)
+    assert ctx.event_path is not None
+    assert ctx.wal_dir is not None
+    before = state_path.read_bytes()
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="waiver_mode_disabled"):
+            await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
+
+    _run(body)
+
+    assert state_path.read_bytes() == before
+    assert not Path(ctx.event_path).exists() or not Path(ctx.event_path).read_bytes()
+    assert not list(Path(ctx.wal_dir).glob("*.json"))
+
+
+def test_sync_permissive_mode_keeps_raw_waiver_compatibility(tmp_path: Path) -> None:
+    """Mode B preserves the legacy spec-sync raw-reason path."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    state_path = repo_root / ".ea" / "state.json"
+    _write_state(state_path, _state_payload(status="pending", planned_steps=[]))
+    _write_spec_file(repo_root, _wrap_body(_RAW_WAIVER_YAML))
+    (repo_root / ".ea" / "config.yaml").write_text(
+        "verify:\n  waiver_mode: B\n",
+        encoding="utf-8",
+    )
+    ctx = _build_ctx(tmp_path, state_path)
+
+    async def body() -> None:
+        await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
+
+    _run(body)
+
+    assert _load_wave(state_path).success_criteria[0].waiver_reason == "historical raw waiver"
 
 
 def test_sync_publishes_event_envelope(tmp_path: Path) -> None:

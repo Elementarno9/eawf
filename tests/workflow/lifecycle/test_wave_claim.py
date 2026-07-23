@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from eawf.kernel.spec.common import CriterionSpec, ResponseClause
+from eawf.kernel.spec.common import CriterionSpec, ResponseClause, grandfather_criterion
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     AgentSessionStatus,
@@ -25,7 +25,13 @@ from eawf.kernel.state.enums import (
     ScopeKind,
     WaveStatus,
 )
-from eawf.kernel.state.models import AgentSession, CurrentPointers, Project, State
+from eawf.kernel.state.models import (
+    AgentSession,
+    CriteriaFloorWaiver,
+    CurrentPointers,
+    Project,
+    State,
+)
 from eawf.workflow.lifecycle._errors import LifecycleError, LifecycleGuardError
 from eawf.workflow.lifecycle.iter_ import open_iter, plan_iter
 from eawf.workflow.lifecycle.phase import open_phase
@@ -166,6 +172,73 @@ def test_claim_wave_succeeds_when_effort_bucket_set() -> None:
     assert w.effort_bucket == EffortBucket.XS
     assert "P01-I01-W01" in state.current.active_wave_ids
     assert state.agent_sessions["SES-1"].claimed_wave_ids == ["P01-I01-W01"]
+
+
+def test_claim_wave_disabled_rejects_historical_floor_waiver_without_mutation() -> None:
+    """A pending historical floor waiver cannot enter execution in disabled mode."""
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        success_criteria=[grandfather_criterion("historical criterion", index=1)],
+        criteria_floor_waiver=CriteriaFloorWaiver(
+            reason="historical repair waiver with sufficient detail",
+            waived_at=datetime.now(UTC),
+        ),
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    before = state.model_dump_json()
+
+    with pytest.raises(LifecycleGuardError) as raised:
+        claim_wave(
+            state,
+            wave_id="P01-I01-W01",
+            session_id="SES-1",
+            waiver_mode="disabled",
+        )
+
+    assert raised.value.code == "waiver_mode_disabled"
+    assert state.model_dump_json() == before
+
+
+def test_claim_wave_disabled_rejects_historical_raw_reason_without_mutation() -> None:
+    """Raw criterion waivers reject at claim even when rows predate the policy."""
+    state = _seed_wave_state()
+    criterion = grandfather_criterion("historical criterion", index=1).model_copy(
+        update={"waiver_reason": "old raw criterion waiver"}
+    )
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        success_criteria=[criterion],
+        criteria_floor_waiver=CriteriaFloorWaiver(
+            reason="historical repair waiver with sufficient detail",
+            waived_at=datetime.now(UTC),
+        ),
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    # Isolate the raw-reason leg from the separate floor-waiver leg.
+    state.waves["P01-I01-W01"].criteria_floor_waiver = None
+    before = state.model_dump_json()
+
+    with pytest.raises(LifecycleGuardError) as raised:
+        claim_wave(
+            state,
+            wave_id="P01-I01-W01",
+            session_id="SES-1",
+            waiver_mode="disabled",
+        )
+
+    assert raised.value.code == "waiver_mode_disabled"
+    assert state.model_dump_json() == before
 
 
 @pytest.mark.parametrize(

@@ -28,6 +28,8 @@ ClaimSessionGuardCode = Literal[
     "claim_session_role_mismatch",
 ]
 
+WaiverGuardCode = Literal["waiver_mode_disabled"]
+
 LifecycleGuardCode = Literal[
     "claim_session_not_found",
     "claim_session_not_active",
@@ -41,7 +43,10 @@ LifecycleGuardCode = Literal[
     "claim_criteria_empty",
     "claim_parallel_limit_reached",
     "spawn_wave_not_claimed",
+    "waiver_mode_disabled",
 ]
+
+WAIVER_MODE_DISABLED: WaiverGuardCode = "waiver_mode_disabled"
 
 
 class LifecycleGuardError(LifecycleError):
@@ -72,7 +77,7 @@ class LifecycleGuardError(LifecycleError):
         """Build a coded guard rejection anchored to one lifecycle scope.
 
         Args:
-            code: Stable claim-session guard identifier.
+            code: Stable lifecycle guard identifier.
             scope_id: Lifecycle entity the guard rejected.
             message: Human-readable rejection detail.
         """
@@ -80,6 +85,49 @@ class LifecycleGuardError(LifecycleError):
         self.code = code
         self.scope_id = scope_id
         self.message = message
+
+
+def check_disabled_waiver_policy(
+    *,
+    waiver_mode: Literal["A", "B", "C", "disabled"],
+    scope_id: str,
+    criteria: list[CriterionSpec],
+    criteria_floor_waiver: object | None = None,
+) -> None:
+    """Reject state-carried waiver mechanisms when policy disables waivers.
+
+    The helper is deliberately independent of config loading. Production
+    boundaries resolve the effective layered policy and pass it here; library
+    callers can exercise the transition with an explicit mode. Running this
+    before any field assignment gives plan, edit, claim, and close one coded
+    rejection with byte-identical state on failure.
+
+    Args:
+        waiver_mode: Effective strict waiver policy.
+        scope_id: Wave whose authoring or execution was attempted.
+        criteria: Candidate or persisted criteria to inspect.
+        criteria_floor_waiver: Candidate or persisted criteria-floor waiver.
+
+    Raises:
+        LifecycleGuardError: When disabled mode sees a criteria-floor waiver
+            or any raw ``CriterionSpec.waiver_reason``.
+    """
+    if waiver_mode != "disabled":
+        return
+    if criteria_floor_waiver is not None:
+        raise LifecycleGuardError(
+            WAIVER_MODE_DISABLED,
+            scope_id,
+            f"criteria-floor waiver rejected for wave {scope_id!r}: waiver mode is disabled",
+        )
+    waived_criteria = [criterion.id for criterion in criteria if criterion.waiver_reason]
+    if waived_criteria:
+        raise LifecycleGuardError(
+            WAIVER_MODE_DISABLED,
+            scope_id,
+            f"raw criterion waiver_reason rejected for wave {scope_id!r}: "
+            f"waiver mode is disabled (criteria={waived_criteria})",
+        )
 
 
 def check_title_clarity(title: str, *, entity_kind: str, entity_id: str) -> None:

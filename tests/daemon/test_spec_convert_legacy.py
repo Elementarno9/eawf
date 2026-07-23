@@ -40,7 +40,7 @@ from eawf.kernel.state.models import State
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
-from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.spec_convert import convert_legacy
 
 pytestmark = pytest.mark.integration
@@ -308,6 +308,40 @@ def test_convert_legacy_refuses_wave_without_file_scopes(tmp_path: Path) -> None
     assert row["kind"] == "legacy"
     assert row["waiver_reason"].startswith("non-convertible:")
     assert "file_scopes" in row["waiver_reason"]
+
+
+def test_convert_legacy_disabled_rejects_generated_raw_waiver_before_write(
+    tmp_path: Path,
+) -> None:
+    """Disabled mode rejects conversion refusal reasons atomically."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    state_path = repo_root / ".ea" / "state.json"
+    _write_state(
+        state_path,
+        _state_payload(criteria=[_legacy_criterion(1, _MEASURABLE_TEXT)], file_scopes=[]),
+    )
+    (repo_root / ".ea" / "config.yaml").write_text(
+        "verify:\n  waiver_mode: disabled\n",
+        encoding="utf-8",
+    )
+    before_bytes = state_path.read_bytes()
+    ctx = _build_ctx(tmp_path, state_path)
+    assert ctx.event_path is not None
+    assert ctx.wal_dir is not None
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="waiver_mode_disabled"):
+            await convert_legacy(
+                ctx,
+                {"scope_id": _WAVE_ID, "repo_root": str(repo_root)},
+            )
+
+    _run(body)
+
+    assert state_path.read_bytes() == before_bytes
+    assert not ctx.event_path.exists()
+    assert list(ctx.wal_dir.iterdir()) == []
 
 
 def test_convert_legacy_unknown_wave_scope_raises(tmp_path: Path) -> None:

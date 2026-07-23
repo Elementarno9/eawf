@@ -28,6 +28,7 @@ from pathlib import Path
 import orjson
 import pytest
 
+from eawf.kernel.spec.common import grandfather_criterion
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     AgentSessionStatus,
@@ -175,6 +176,7 @@ def test_resolve_waiver_mode_honours_a_b_c() -> None:
     assert resolve_waiver_mode({"verify": {"waiver_mode": "A"}}) == "A"
     assert resolve_waiver_mode({"verify": {"waiver_mode": "B"}}) == "B"
     assert resolve_waiver_mode({"verify": {"waiver_mode": "C"}}) == "C"
+    assert resolve_waiver_mode({"verify": {"waiver_mode": "disabled"}}) == "disabled"
 
 
 def test_resolve_waiver_mode_unknown_falls_back_to_default(
@@ -401,6 +403,40 @@ def test_mode_a_allows_no_reason_no_ref(tmp_path: Path) -> None:
     assert record.refs == ["GATE-a-bare"]
     assert record.status == "waived"
     assert record.produced_by == "human"
+
+
+def test_disabled_mode_rejects_before_any_evidence_side_effect(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Disabled policy runs before session, SHA, id mint, or direct append."""
+    import eawf.workflow.lifecycle.waivers as waivers_mod
+
+    state = _empty_state()
+    _seed_wave_with_operator(state)
+    state_path = tmp_path / ".ea" / "state.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_bytes(orjson.dumps(state.model_dump(mode="json")))
+    before_state = state.model_dump_json()
+    monkeypatch.setenv(EVIDENCE_DIRECT_WRITE_ENV, "1")
+
+    def _unexpected_sha(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("disabled waiver reached SHA derivation")
+
+    monkeypatch.setattr(waivers_mod, "derive_wave_sha", _unexpected_sha)
+
+    with pytest.raises(cli_errors.ValidationError, match="waiver_mode_disabled"):
+        apply_waiver(
+            state,
+            wave_id=WAVE_ID,
+            waiver=WaiverInput(gate_id="GATE-disabled", reason="must reject"),
+            operator_identity=OPERATOR_SESSION_ID,
+            mode="disabled",
+            state_path=state_path,
+            repo_root=tmp_path,
+        )
+
+    assert state.model_dump_json() == before_state
+    assert not store_path(state_path, StoreKind.EVIDENCE).exists()
 
 
 # ---- record composition -----------------------------------------------------
@@ -898,6 +934,158 @@ def test_cli_wave_close_mode_a_accepts_bare_waive(
             waivers.append(rec)
     assert len(waivers) == 1
     assert waivers[0].summary == WAIVER_NO_REASON_SUMMARY
+
+
+def test_cli_wave_close_disabled_rejects_before_gate_or_runtime_waiver_append(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mixed gate + runtime waiver input leaves state and stores byte-identical."""
+    runner, state_path = _bootstrap_cli(tmp_path, monkeypatch)
+    _seed_operator_session_into_disk_state(state_path, session_id=OPERATOR_SESSION_ID)
+    (tmp_path / ".ea" / "config.yaml").write_text(
+        "verify:\n  waiver_mode: disabled\n",
+        encoding="utf-8",
+    )
+    evidence_path = store_path(state_path, StoreKind.EVIDENCE)
+    event_path = store_path(state_path, StoreKind.EVENT)
+
+    def _snapshot(path: Path) -> bytes | None:
+        return path.read_bytes() if path.exists() else None
+
+    before = {
+        "state": _snapshot(state_path),
+        "evidence": _snapshot(evidence_path),
+        "event": _snapshot(event_path),
+    }
+
+    from eawf.surfaces.cli.app import app
+
+    result = runner.invoke(
+        app,
+        [
+            "wave",
+            "close",
+            WAVE_ID,
+            "--outcome",
+            "blocked",
+            "--waive",
+            "GATE-disabled",
+            "--reason",
+            "policy forbids this waiver",
+            "--no-runtime",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "waiver_mode_disabled" in result.stdout + (result.stderr or "")
+    assert _snapshot(state_path) == before["state"]
+    assert _snapshot(evidence_path) == before["evidence"]
+    assert _snapshot(event_path) == before["event"]
+
+
+def test_cli_wave_close_disabled_still_allows_no_runtime_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """H04 does not extend disabled mode to the metering override."""
+    runner, state_path = _bootstrap_cli(tmp_path, monkeypatch)
+    _seed_operator_session_into_disk_state(state_path, session_id=OPERATOR_SESSION_ID)
+    (tmp_path / ".ea" / "config.yaml").write_text(
+        "verify:\n  waiver_mode: disabled\n",
+        encoding="utf-8",
+    )
+
+    from eawf.surfaces.cli.app import app
+
+    result = runner.invoke(
+        app,
+        ["wave", "close", WAVE_ID, "--outcome", "ok", "--no-runtime"],
+    )
+
+    assert result.exit_code == 0, (result.stdout, result.stderr)
+
+
+def test_cli_wave_close_disabled_no_runtime_cannot_bypass_raw_waiver(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Runtime override cannot swallow a disabled historical raw waiver."""
+    runner, state_path = _bootstrap_cli(tmp_path, monkeypatch)
+    _seed_operator_session_into_disk_state(state_path, session_id=OPERATOR_SESSION_ID)
+    state = State.model_validate(orjson.loads(state_path.read_bytes()))
+    criterion = grandfather_criterion("historical outcome remains accepted", index=1)
+    state.waves[WAVE_ID].success_criteria = [
+        criterion.model_copy(update={"waiver_reason": "historical raw waiver"})
+    ]
+    state_path.write_bytes(orjson.dumps(state.model_dump(mode="json")))
+    (tmp_path / ".ea" / "config.yaml").write_text(
+        "verify:\n  waiver_mode: disabled\n",
+        encoding="utf-8",
+    )
+    evidence_path = store_path(state_path, StoreKind.EVIDENCE)
+    event_path = store_path(state_path, StoreKind.EVENT)
+
+    def _snapshot(path: Path) -> bytes | None:
+        return path.read_bytes() if path.exists() else None
+
+    before = {
+        "state": _snapshot(state_path),
+        "evidence": _snapshot(evidence_path),
+        "event": _snapshot(event_path),
+    }
+
+    from eawf.surfaces.cli.app import app
+
+    result = runner.invoke(
+        app,
+        ["wave", "close", WAVE_ID, "--outcome", "ok", "--no-runtime"],
+    )
+
+    assert result.exit_code != 0
+    assert "waiver_mode_disabled" in result.stdout + (result.stderr or "")
+    assert _snapshot(state_path) == before["state"]
+    assert _snapshot(evidence_path) == before["evidence"]
+    assert _snapshot(event_path) == before["event"]
+
+
+def test_cli_wave_plan_disabled_rejects_floor_waiver_without_state_or_event_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Daemonless authoring applies the same disabled criteria-floor guard."""
+    runner, state_path = _bootstrap_cli(tmp_path, monkeypatch)
+    (tmp_path / ".ea" / "config.yaml").write_text(
+        "verify:\n  waiver_mode: disabled\n",
+        encoding="utf-8",
+    )
+    event_path = store_path(state_path, StoreKind.EVENT)
+    before_state = state_path.read_bytes()
+    before_event = event_path.read_bytes() if event_path.exists() else None
+
+    from eawf.surfaces.cli.app import app
+
+    result = runner.invoke(
+        app,
+        [
+            "wave",
+            "plan",
+            "P01-I01",
+            "--id",
+            "P01-I01-W02",
+            "--title",
+            "add guarded wave",
+            "--files",
+            "src/",
+            "--success",
+            "legacy success text",
+            "--criteria-floor-waiver",
+            "temporary typed criteria repair waiver",
+            "--effort-bucket",
+            "M",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "waiver_mode_disabled" in result.stdout + (result.stderr or "")
+    assert state_path.read_bytes() == before_state
+    assert (event_path.read_bytes() if event_path.exists() else None) == before_event
 
 
 def test_cli_wave_close_rejects_agent_session_waiver(
