@@ -50,6 +50,10 @@ def _sandbox_host_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
         "eawf.kernel.config.layered.global_config_path",
         lambda: tmp_path / "global-config.yaml",
     )
+    monkeypatch.setattr(
+        "eawf.observability.doctor.checks._probe_running_daemon_version",
+        lambda: None,
+    )
 
 
 def _green_probe(*_args: object, **_kwargs: object) -> ProbeReport:
@@ -101,8 +105,14 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
         "manifest_in_sync",
         "mcp_drift",
         "state_scale_ceiling",
+        "active_phase_without_iter",
+        "stale_session_count",
+        "recent_actuals",
+        "iter_audit_links",
         "incident_fold_parity",
         "backlog_fold_parity",
+        "cli_daemon_version",
+        "parallel_cap_enforcement",
         "launchd_agent",
         "runtime_dir_size",
         "render_output_roundtrip",

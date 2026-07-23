@@ -8,9 +8,9 @@ handlers translate ``--kind`` into the surface's canonical refresh.
 
 The locked surface inventory is the C09 §5.6 table — every golden tree
 under ``tests/golden/<kind>/`` has exactly one ``--kind`` token that
-regenerates its subset. Surfaces regenerate through the repo's canonical
-``EAWF_REFRESH_GOLDEN=1`` pytest idiom: each surface names the pytest
-node that, run under that env var, rewrites its committed golden bytes.
+regenerates its subset. Surfaces use both supported refresh switches:
+``EAWF_REFRESH_GOLDEN=1`` for golden fixtures and
+``EAWF_SNAPSHOT_REGEN=1`` for snapshot tests.
 
 Verbs:
 
@@ -52,7 +52,7 @@ class SnapshotSurface:
         golden_dir: Repo-relative directory holding the surface's
             committed golden bytes.
         regen_target: Pytest node id whose golden test rewrites the
-            surface's bytes when run under ``EAWF_REFRESH_GOLDEN=1``.
+            surface's bytes when run under the refresh switches.
         description: One-line operator summary.
     """
 
@@ -64,7 +64,7 @@ class SnapshotSurface:
 
 # Locked surface inventory — mirrors the C09 §5.6 table one-for-one. Each
 # surface's golden tree lives under ``tests/golden/<kind>/`` and its bytes
-# regenerate by running ``regen_target`` with ``EAWF_REFRESH_GOLDEN=1``.
+# regenerate by running ``regen_target`` with both supported refresh switches.
 SNAPSHOT_SURFACES: dict[str, SnapshotSurface] = {
     surface.kind: surface
     for surface in (
@@ -193,8 +193,8 @@ def resolve_surface(kind: str) -> SnapshotSurface:
 def _regen_command(surface: SnapshotSurface) -> list[str]:
     """Build the ``uv run pytest`` argv that rewrites *surface*'s goldens.
 
-    The surface's pytest golden test rewrites its committed bytes when
-    invoked under ``EAWF_REFRESH_GOLDEN=1`` (set by :func:`run_regen`).
+    The surface's pytest golden test rewrites its committed bytes when invoked
+    under its supported refresh switch (both are set by :func:`run_regen`).
     Cache is disabled so a regeneration run is hermetic.
     """
     return ["uv", "run", "pytest", surface.regen_target, "-q", "-p", "no:cacheprovider"]
@@ -206,14 +206,15 @@ def run_regen(
     workspace: Path | None,
     output_dir: Path | None,
 ) -> subprocess.CompletedProcess[str]:
-    """Run *surface*'s golden regeneration under ``EAWF_REFRESH_GOLDEN=1``.
+    """Run *surface*'s regeneration under both supported refresh switches.
 
     The regeneration drives the surface's pytest golden node — the repo's
-    canonical refresh idiom. ``EAWF_REFRESH_GOLDEN=1`` switches each golden
-    test from assert-mode to write-mode; ``EAWF_SNAPSHOT_OUT`` (set only
-    when *output_dir* is given) redirects the rewritten bytes to a tmp
-    directory so a caller can verify the regeneration without disturbing
-    the committed tree.
+    canonical refresh idiom. Golden tests consume
+    ``EAWF_REFRESH_GOLDEN=1`` while snapshot tests consume
+    ``EAWF_SNAPSHOT_REGEN=1``; setting both makes the mixed inventory honest.
+    ``EAWF_SNAPSHOT_OUT`` (set only when *output_dir* is given) redirects the
+    rewritten bytes to a tmp directory so a caller can verify regeneration
+    without disturbing the committed tree.
 
     Args:
         surface: The resolved snapshot surface to regenerate.
@@ -228,6 +229,7 @@ def run_regen(
     """
     env = dict(os.environ)
     env["EAWF_REFRESH_GOLDEN"] = "1"
+    env["EAWF_SNAPSHOT_REGEN"] = "1"
     if output_dir is not None:
         env["EAWF_SNAPSHOT_OUT"] = str(output_dir)
     cwd = str(workspace) if workspace is not None else None

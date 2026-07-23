@@ -138,11 +138,11 @@ def test_resolve_surface_unknown_raises_user_error() -> None:
 # --- run_regen plumbing -----------------------------------------------------
 
 
-def test_run_regen_sets_refresh_env_and_writes_out(
+def test_run_regen_sets_both_refresh_envs_and_writes_out(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``run_regen`` sets EAWF_REFRESH_GOLDEN + EAWF_SNAPSHOT_OUT and the
+    """``run_regen`` sets both refresh switches plus EAWF_SNAPSHOT_OUT and
     regeneration writes the subset into the tmp ``--out`` directory.
 
     The pytest subprocess is replaced by a stub that honours
@@ -172,6 +172,7 @@ def test_run_regen_sets_refresh_env_and_writes_out(
 
     assert completed.returncode == 0
     assert seen["env"]["EAWF_REFRESH_GOLDEN"] == "1"
+    assert seen["env"]["EAWF_SNAPSHOT_REGEN"] == "1"
     assert seen["env"]["EAWF_SNAPSHOT_OUT"] == str(out_dir)
     assert surface.regen_target in seen["argv"]
     assert (out_dir / "expected.json").read_text(encoding="utf-8") == '{"ok": true}\n'
@@ -191,6 +192,7 @@ def test_run_regen_omits_snapshot_out_when_in_place(
     run_regen(resolve_surface("state"), workspace=None, output_dir=None)
     assert "EAWF_SNAPSHOT_OUT" not in seen["env"]
     assert seen["env"]["EAWF_REFRESH_GOLDEN"] == "1"
+    assert seen["env"]["EAWF_SNAPSHOT_REGEN"] == "1"
 
 
 # --- CLI surface ------------------------------------------------------------

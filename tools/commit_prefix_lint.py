@@ -83,7 +83,9 @@ import re
 import subprocess
 import sys
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from coauthor_policy import (
     SUPPORTED_TRAILERS,
@@ -130,6 +132,16 @@ _WAVE_TRAILER_RE = re.compile(
     r"(?P<wave>P\d{2,}(?:-I(?!00)\d{2,})?-W(?!00)\d{2,})\s*$",
     re.MULTILINE,
 )
+_BRACKET_SCOPE_RE = re.compile(
+    r"^\[(?P<phase>P\d{2,})"
+    r"(?:-(?P<iter>I(?!00)\d{2,}))?"
+    r"(?:(?:-(?P<wave>W(?!00)\d{2,}))|-CORE)?\]"
+)
+_FULL_WAVE_SCOPE_RE = re.compile(
+    r"^(?P<phase>P\d{2,})"
+    r"(?:-(?P<iter>I(?!00)\d{2,}))?"
+    r"-(?P<wave>W(?!00)\d{2,})$"
+)
 _RELEASE_ANNOTATION_RE = re.compile(r"\(release=v(?P<version>\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?)\)")
 # Fires on ANY ``release=`` substring, not just the standalone
 # ``(release=`` paren group. The .github/workflows/phase-release.yaml
@@ -171,6 +183,16 @@ _STATE_ONLY_PREFIXES = (".ea/store/", ".ea/specs/")
 # the promoted-artifact tree; wave-produced docs use the
 # ``[P##-W##] docs:`` wave form, which accepts any path.
 _DOCS_BARE_PREFIXES = (".ea/artifacts/",)
+_CLAIMED_PROOF_STATUSES = frozenset({"claimed", "in_progress"})
+
+
+@dataclass(frozen=True)
+class _ScopeRef:
+    """Normalized lifecycle reference parsed from a subject or trailer."""
+
+    phase_id: str
+    iter_id: str | None = None
+    wave_id: str | None = None
 
 
 def _find_repo_root(start: Path | None = None) -> Path:
@@ -238,6 +260,22 @@ def _has_wave_trailer(text: str) -> bool:
     return _WAVE_TRAILER_RE.search(text) is not None
 
 
+def _load_managed_state(path: Path) -> tuple[dict[str, Any] | None, str | None]:
+    """Load a managed state document, distinguishing absence from corruption."""
+    if not path.is_file():
+        return None, None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return None, f"managed state decode failed at {path}: {exc}"
+    if not isinstance(raw, dict):
+        return None, f"managed state decode failed at {path}: root must be an object"
+    for key in ("current", "phases", "iters", "waves"):
+        if not isinstance(raw.get(key), dict):
+            return None, f"managed state decode failed at {path}: {key!r} must be an object"
+    return raw, None
+
+
 def _current_phase_active(state_path: Path | None = None) -> bool:
     """Return True when ``state.current.phase_id`` is non-null.
 
@@ -257,14 +295,231 @@ def _current_phase_active(state_path: Path | None = None) -> bool:
                 break
     if state_path is None or not state_path.is_file():
         return False
-    try:
-        data = json.loads(state_path.read_text(encoding="utf-8"))
-    except OSError, json.JSONDecodeError:
+    data, error = _load_managed_state(state_path)
+    if error is not None or data is None:
         return False
     current = data.get("current")
     if not isinstance(current, dict):
         return False
     return current.get("phase_id") is not None
+
+
+def _subject_scope_ref(subject: str) -> _ScopeRef | None:
+    """Return the normalized lifecycle reference carried by *subject*."""
+    match = _BRACKET_SCOPE_RE.match(subject)
+    if match is None:
+        return None
+    phase_id = match.group("phase")
+    iter_token = match.group("iter")
+    wave_token = match.group("wave")
+    iter_id = f"{phase_id}-{iter_token}" if iter_token is not None else None
+    if wave_token is not None:
+        iter_id = iter_id or f"{phase_id}-I01"
+        return _ScopeRef(
+            phase_id=phase_id,
+            iter_id=iter_id,
+            wave_id=f"{iter_id}-{wave_token}",
+        )
+    return _ScopeRef(phase_id=phase_id, iter_id=iter_id)
+
+
+def _trailer_scope_ref(text: str) -> _ScopeRef | None:
+    """Return the normalized ``Eawf-Wave`` reference, if present."""
+    trailer = _WAVE_TRAILER_RE.search(text)
+    if trailer is None:
+        return None
+    match = _FULL_WAVE_SCOPE_RE.match(trailer.group("wave"))
+    if match is None:  # pragma: no cover - the trailer regex already guarantees shape
+        return None
+    phase_id = match.group("phase")
+    iter_token = match.group("iter") or "I01"
+    iter_id = f"{phase_id}-{iter_token}"
+    return _ScopeRef(
+        phase_id=phase_id,
+        iter_id=iter_id,
+        wave_id=f"{iter_id}-{match.group('wave')}",
+    )
+
+
+def _canonical_state_path(repo_root: Path) -> Path | None:
+    """Resolve the main-worktree state through Git's supported common-dir API."""
+    proc = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        return None
+    raw = proc.stdout.strip()
+    if not raw:
+        return None
+    common_dir = Path(raw)
+    if not common_dir.is_absolute():
+        return None
+    return common_dir.parent / ".ea" / "state.json"
+
+
+def _validate_scope_hierarchy(state: Mapping[str, Any], ref: _ScopeRef) -> str | None:
+    """Return a diagnostic when *ref* does not resolve bidirectionally."""
+    phases = state.get("phases")
+    iters = state.get("iters")
+    waves = state.get("waves")
+    if not isinstance(phases, dict) or not isinstance(iters, dict) or not isinstance(waves, dict):
+        return "managed state hierarchy unavailable"
+    phase = phases.get(ref.phase_id)
+    if not isinstance(phase, dict):
+        return f"unknown phase reference: {ref.phase_id!r}"
+    if ref.iter_id is None:
+        return None
+    iteration = iters.get(ref.iter_id)
+    if not isinstance(iteration, dict):
+        return f"unknown iter reference: {ref.iter_id!r}"
+    iter_error = _validate_iter_hierarchy(phase, iteration, ref)
+    if iter_error is not None or ref.wave_id is None:
+        return iter_error
+    wave = waves.get(ref.wave_id)
+    if not isinstance(wave, dict):
+        return f"unknown wave reference: {ref.wave_id!r}"
+    return _validate_wave_hierarchy(iteration, wave, ref)
+
+
+def _validate_iter_hierarchy(
+    phase: Mapping[str, Any],
+    iteration: Mapping[str, Any],
+    ref: _ScopeRef,
+) -> str | None:
+    """Validate both directions of one phase-to-iter edge."""
+    assert ref.iter_id is not None
+    phase_iters = phase.get("iter_ids")
+    if not isinstance(phase_iters, list) or ref.iter_id not in phase_iters:
+        return (
+            f"wrong phase/iter hierarchy: phase {ref.phase_id!r} "
+            f"does not contain iter {ref.iter_id!r}"
+        )
+    if iteration.get("phase_id") != ref.phase_id:
+        return (
+            f"wrong phase/iter hierarchy: iter {ref.iter_id!r} "
+            f"belongs to {iteration.get('phase_id')!r}"
+        )
+    return None
+
+
+def _validate_wave_hierarchy(
+    iteration: Mapping[str, Any],
+    wave: Mapping[str, Any],
+    ref: _ScopeRef,
+) -> str | None:
+    """Validate both directions of one iter-to-wave edge."""
+    assert ref.iter_id is not None
+    assert ref.wave_id is not None
+    iter_waves = iteration.get("wave_ids")
+    if not isinstance(iter_waves, list) or ref.wave_id not in iter_waves:
+        return (
+            f"wrong iter/wave hierarchy: iter {ref.iter_id!r} does not contain wave {ref.wave_id!r}"
+        )
+    if wave.get("iter_id") != ref.iter_id:
+        return f"wrong iter/wave hierarchy: wave {ref.wave_id!r} belongs to {wave.get('iter_id')!r}"
+    return None
+
+
+def _validate_commit_scope_refs(
+    refs: list[tuple[str, _ScopeRef]],
+    *,
+    managed_state: Mapping[str, Any] | None,
+    state_path: Path | None,
+    repo_root: Path | None,
+    commit_type: str,
+    canonical_state_path: Path | None,
+) -> str | None:
+    """Return the first hierarchy/authorization rejection for commit refs."""
+    if refs and state_path is not None and managed_state is None:
+        return "managed state hierarchy unavailable: state.json is missing"
+    if managed_state is None:
+        return None
+    resolved_canonical = canonical_state_path
+    for origin, ref in refs:
+        hierarchy_error = _validate_scope_hierarchy(managed_state, ref)
+        if hierarchy_error is not None:
+            return f"{origin} rejected: {hierarchy_error}"
+        if ref.wave_id is None or commit_type == "state":
+            continue
+        active_error = _validate_active_source_scope(managed_state, ref)
+        if active_error is not None:
+            return f"{origin} rejected: {active_error}"
+        if resolved_canonical is None:
+            assert state_path is not None
+            anchor = repo_root or _find_repo_root(state_path.parent)
+            resolved_canonical = _canonical_state_path(anchor)
+        proof_error = _validate_claimed_proof(
+            ref,
+            canonical_state_path=resolved_canonical,
+        )
+        if proof_error is not None:
+            return f"{origin} rejected: {proof_error}"
+    return None
+
+
+def _validate_active_source_scope(state: Mapping[str, Any], ref: _ScopeRef) -> str | None:
+    """Require a wave source commit to target the current ACTIVE phase/iter."""
+    if ref.iter_id is None or ref.wave_id is None:
+        return None
+    current = state.get("current")
+    phases = state.get("phases")
+    iters = state.get("iters")
+    if not isinstance(current, dict) or not isinstance(phases, dict) or not isinstance(iters, dict):
+        return "managed state active scope unavailable"
+    phase = phases.get(ref.phase_id)
+    iteration = iters.get(ref.iter_id)
+    if not isinstance(phase, dict) or not isinstance(iteration, dict):
+        return "managed state active scope unavailable"
+    if current.get("phase_id") != ref.phase_id or phase.get("status") != "active":
+        return (
+            f"source commit phase is not current ACTIVE phase: "
+            f"referenced={ref.phase_id!r} current={current.get('phase_id')!r}"
+        )
+    if current.get("iter_id") != ref.iter_id or iteration.get("status") != "active":
+        return (
+            f"source commit iter is not current ACTIVE iter: "
+            f"referenced={ref.iter_id!r} current={current.get('iter_id')!r}"
+        )
+    return None
+
+
+def _validate_claimed_proof(
+    ref: _ScopeRef,
+    *,
+    canonical_state_path: Path | None,
+) -> str | None:
+    """Require CLAIMED/IN_PROGRESS proof from canonical main-worktree state."""
+    if ref.wave_id is None:
+        return None
+    if canonical_state_path is None or not canonical_state_path.is_file():
+        return (
+            f"claimed proof unavailable for wave {ref.wave_id!r}: "
+            "canonical main-worktree state is missing"
+        )
+    canonical, error = _load_managed_state(canonical_state_path)
+    if error is not None:
+        return error
+    if canonical is None:
+        return (
+            f"claimed proof unavailable for wave {ref.wave_id!r}: "
+            "canonical main-worktree state is missing"
+        )
+    hierarchy_error = _validate_scope_hierarchy(canonical, ref)
+    if hierarchy_error is not None:
+        return f"canonical claimed proof rejected: {hierarchy_error}"
+    waves = canonical["waves"]
+    wave = waves[ref.wave_id]
+    status = wave.get("status")
+    if status not in _CLAIMED_PROOF_STATUSES:
+        return (
+            f"claimed proof rejected for wave {ref.wave_id!r}: "
+            f"canonical status {status!r} is not CLAIMED or IN_PROGRESS"
+        )
+    return None
 
 
 def _staged_paths() -> list[str]:
@@ -460,6 +715,7 @@ def lint(
     state_path: Path | None = None,
     repo_root: Path | None = None,
     subject_style: str | None = None,
+    canonical_state_path: Path | None = None,
 ) -> tuple[int, str]:
     """Run both checks against *message_path* + *staged* paths.
 
@@ -467,6 +723,12 @@ def lint(
     inject a fixture ``state.json``; production callers leave it
     unset and the helper walks upward from cwd to find ``.ea/state.json``.
     """
+    managed_state: dict[str, Any] | None = None
+    if state_path is not None:
+        managed_state, state_error = _load_managed_state(state_path)
+        if state_error is not None:
+            return 1, state_error
+
     text = message_path.read_text(encoding="utf-8")
     subject = _extract_subject(text)
     if not subject:
@@ -483,6 +745,37 @@ def lint(
     release_annotation = _check_release_annotation(subject)
     if release_annotation is not None:
         return release_annotation
+    subject_ref = _subject_scope_ref(subject)
+    trailer_ref = _trailer_scope_ref(text)
+    if (
+        subject_ref is not None
+        and subject_ref.wave_id is not None
+        and trailer_ref is not None
+        and subject_ref != trailer_ref
+    ):
+        return (
+            1,
+            (
+                "subject/trailer hierarchy mismatch: "
+                f"subject={subject_ref.wave_id!r} trailer={trailer_ref.wave_id!r}"
+            ),
+        )
+    refs = [
+        (origin, ref)
+        for origin, ref in (("subject", subject_ref), ("Eawf-Wave trailer", trailer_ref))
+        if ref is not None
+    ]
+    commit_type = match.group("type")
+    scope_error = _validate_commit_scope_refs(
+        refs,
+        managed_state=managed_state,
+        state_path=state_path,
+        repo_root=repo_root,
+        commit_type=commit_type,
+        canonical_state_path=canonical_state_path,
+    )
+    if scope_error is not None:
+        return 1, scope_error
     # Bare conventional-commits (no bracket prefix) has no path whitelist;
     # bracketed forms (wave/CORE + bare state/docs) route through the
     # scoped-path check, which internally gates on commit_type / CORE tag
@@ -507,7 +800,15 @@ def main(argv: list[str]) -> int:
     if not message_path.exists():
         print(f"commit message file missing: {message_path}", file=sys.stderr)
         return 1
-    exit_code, diag = lint(message_path, _staged_paths(), env=os.environ)
+    repo_root = _find_repo_root()
+    managed_state_path = repo_root / ".ea" / "state.json" if (repo_root / ".ea").is_dir() else None
+    exit_code, diag = lint(
+        message_path,
+        _staged_paths(),
+        env=os.environ,
+        state_path=managed_state_path,
+        repo_root=repo_root,
+    )
     if exit_code != 0:
         print(diag, file=sys.stderr)
     return exit_code

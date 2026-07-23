@@ -1572,6 +1572,11 @@ async def _produce_high_risk_verdict(
         atomic_write_json_locked(state_path, registered.model_dump(mode="json"))
         logger.info(f"_produce_high_risk_verdict wave={wave.id} status=auditor-session-persisted")
 
+    def _persist_terminal_auditor_session(terminal: State) -> None:
+        """Persist the auditor terminal row before later close guards run."""
+        atomic_write_json_locked(state_path, terminal.model_dump(mode="json"))
+        logger.info(f"_produce_high_risk_verdict wave={wave.id} status=auditor-session-terminal")
+
     await produce_wave_verdict(
         state=state,
         state_path=state_path,
@@ -1580,6 +1585,7 @@ async def _produce_high_risk_verdict(
         spawn=spawn,
         repo_root=repo_root,
         on_session_registered=_persist_live_auditor_session,
+        on_session_terminalized=_persist_terminal_auditor_session,
     )
     logger.info(f"_produce_high_risk_verdict wave={wave.id} status=produced")
 
@@ -2502,7 +2508,18 @@ def _resolve_apply(kind: MutationKind) -> ApplyFunc:
 _MUTATION_EVENT_KIND: Final[dict[MutationKind, EventKind]] = {
     MutationKind.WAVE_CLAIM: "wave_claimed",
     MutationKind.WAVE_CLOSE: "wave_closed",
+    MutationKind.PHASE_ACTIVATE: "phase_activated",
+    MutationKind.ITER_CLOSE: "iter_closed",
+    MutationKind.PHASE_CLOSE: "phase_closed",
 }
+
+
+def _log_guard_rejection(mutation: Mutation, exc: LifecycleGuardError) -> None:
+    """Log one coded lifecycle rejection without emitting a durable event."""
+    logger.warning(
+        f"mutate rejected mutation_kind={mutation.kind.value} "
+        f"scope_id={mutation.scope_id!r} guard_code={exc.code}"
+    )
 
 
 def _bucket_drift_extras(state: State) -> dict[str, str | int | float | bool]:
@@ -3718,10 +3735,7 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 else:
                     apply_func(state, mutation)
             except LifecycleGuardError as exc:
-                logger.warning(
-                    f"mutate rejected mutation_kind={mutation.kind.value} "
-                    f"scope_id={mutation.scope_id!r} guard_code={exc.code}"
-                )
+                _log_guard_rejection(mutation, exc)
                 raise DaemonValidationError(f"validation_failed: {exc}") from exc
             except LifecycleError as exc:
                 # Closure-kind (*_CLOSE) rejections surface as -32002
@@ -3801,6 +3815,10 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
                 audit_id = str(mutation.params["audit_id"])
                 audit = (state.audits or {}).get(audit_id)
+                extras["audit_id"] = audit_id
+                extras["require_audit_accepted"] = bool(
+                    mutation.params.get("require_audit_accepted", False)
+                )
                 if (
                     bool(mutation.params.get("require_audit_accepted", False))
                     and audit is not None
@@ -3976,6 +3994,9 @@ async def _mutate_wave_close(
             enforce_close_gate=partial(_enforce_wave_close_gate, tier="deterministic"),
             compute_readiness=partial(_compute_wave_close_readiness, defer_verdict_kinds=True),
         )
+    except LifecycleGuardError as exc:
+        _log_guard_rejection(mutation, exc)
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
     except LifecycleError as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
     wave_close_readiness = preflight.readiness
@@ -4058,6 +4079,9 @@ async def _mutate_wave_close(
                     runtime_delta=runtime_delta,
                 )
                 _sync_wave_close_track(state, mutation)
+            except LifecycleGuardError as exc:
+                _log_guard_rejection(mutation, exc)
+                raise DaemonValidationError(f"validation_failed: {exc}") from exc
             except LifecycleError as exc:
                 raise DaemonValidationError(f"validation_failed: {exc}") from exc
             except ValidationError as exc:

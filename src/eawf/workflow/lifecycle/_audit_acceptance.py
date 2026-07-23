@@ -33,6 +33,16 @@ class AuditAcceptanceIssue(StrEnum):
     EVIDENCE_MISSING = "evidence_missing"
 
 
+ITER_CLOSE_AUDIT_CHECK_ORDER: Final[tuple[AuditAcceptanceIssue, ...]] = (
+    AuditAcceptanceIssue.SCOPE_MISMATCH,
+    AuditAcceptanceIssue.KIND_INVALID,
+    AuditAcceptanceIssue.NOT_COMPLETE,
+    AuditAcceptanceIssue.VERDICT_REJECTED,
+    AuditAcceptanceIssue.FUTURE_TIMESTAMP,
+    AuditAcceptanceIssue.EVIDENCE_MISSING,
+)
+
+
 @dataclass(frozen=True)
 class AuditAcceptance:
     """Read-only assessment of one audit proposed for lifecycle close."""
@@ -145,6 +155,7 @@ def assess_close_audit(
 
 __all__ = [
     "AUDIT_MINOR_BACKLOG_TRIAGE",
+    "ITER_CLOSE_AUDIT_CHECK_ORDER",
     "AuditAcceptance",
     "AuditAcceptanceIssue",
     "assess_close_audit",

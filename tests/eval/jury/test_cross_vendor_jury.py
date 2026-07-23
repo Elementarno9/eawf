@@ -30,7 +30,11 @@ from typing import Any
 
 import pytest
 
-from eawf.kernel.state.enums import AgentReportVerdict
+from eawf.kernel.state.enums import (
+    AgentReportVerdict,
+    AgentSessionRole,
+    AgentSessionStatus,
+)
 from eawf.kernel.state.models import State, Wave
 from eawf.observability.eval.cross_vendor_jury import (
     JURY_QUORUM,
@@ -312,6 +316,22 @@ def test_convene_cross_vendor_jury_jurors_get_distinct_fresh_sessions(tmp_path: 
     assert len(session_ids) == 3
     # Distinct sessions: no juror reuses another's authoring session.
     assert len(set(session_ids)) == 3
+
+
+def test_convene_cross_vendor_jury_terminalizes_every_real_session(tmp_path: Path) -> None:
+    """Successful jurors inherit the producer's central terminalizer."""
+    result, state, _path = _convene(tmp_path, factory=_unanimous_pass_factory())
+
+    session_ids = {j.session_id for j in result.jurors if j.session_id is not None}
+    auditors = [
+        session
+        for session in state.agent_sessions.values()
+        if session.role is AgentSessionRole.AUDITOR
+    ]
+    assert {session.id for session in auditors} == session_ids
+    assert all(session.status is AgentSessionStatus.CLOSED for session in auditors)
+    assert all(session.ended_at is not None for session in auditors)
+    assert state.current.active_session_ids == []
 
 
 def test_convene_cross_vendor_jury_each_juror_sees_only_diff_and_criteria(tmp_path: Path) -> None:

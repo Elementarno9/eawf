@@ -367,6 +367,27 @@ def close_session(
     now: datetime | None = None,
 ) -> SessionResult:
     """Move *session_id* to a terminal status and emit a ``session.close`` event."""
+    staged = _stage_session_close(
+        state=state,
+        session_id=session_id,
+        status=status,
+        summary=summary,
+        now=now,
+    )
+    commit_event(events_path, staged.event)
+    logger.info(f"close_session id={session_id} status={status.value}")
+    return staged
+
+
+def _stage_session_close(
+    *,
+    state: State,
+    session_id: str,
+    status: AgentSessionStatus,
+    summary: str | None = None,
+    now: datetime | None = None,
+) -> SessionResult:
+    """Terminalize one session in memory and build its close event."""
     if status not in {
         AgentSessionStatus.CLOSED,
         AgentSessionStatus.STALE,
@@ -388,8 +409,7 @@ def close_session(
             sid for sid in state.current.active_session_ids if sid != session_id
         ]
 
-    event = append_event(
-        events_path=events_path,
+    event = build_event(
         event_id=f"{session_id}-close",
         event_type="session.close",
         actor=session_id,
@@ -400,8 +420,41 @@ def close_session(
         scope_id=session.scope_id,
         occurred_at=moment,
     )
-    logger.info(f"close_session id={session_id} status={status.value}")
     return SessionResult(session=session, event=event)
+
+
+def terminalize_session(
+    *,
+    state: State,
+    events_path: Path,
+    session_id: str,
+    status: AgentSessionStatus,
+    summary: str | None = None,
+    now: datetime | None = None,
+) -> SessionResult:
+    """Terminalize a session even when its close-event append fails.
+
+    The session row and active-pointer cleanup happen before the event write.
+    Event-store failure is secondary telemetry loss: it is logged and swallowed
+    so an auditor's validated result or primary spawn/report error keeps its
+    original outcome while callers can still persist the terminal state.
+    """
+    staged = _stage_session_close(
+        state=state,
+        session_id=session_id,
+        status=status,
+        summary=summary,
+        now=now,
+    )
+    try:
+        commit_event(events_path, staged.event)
+    except Exception as exc:
+        logger.warning(
+            f"terminalize_session id={session_id} status={status.value} "
+            f"event_status=failed error={exc!r}"
+        )
+    logger.info(f"terminalize_session id={session_id} status={status.value}")
+    return staged
 
 
 def reconcile_orphaned_sessions(state_path: Path, event_path: Path) -> int:

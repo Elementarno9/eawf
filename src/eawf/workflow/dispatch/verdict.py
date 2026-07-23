@@ -70,7 +70,7 @@ from eawf.kernel.state.enums import (
 )
 from eawf.kernel.state.models import AgentSession, State, Wave
 from eawf.kernel.store.kinds.agent_report import AgentReportBody, AuditorReportBody
-from eawf.runtime.session.store import SessionConflict, start_session
+from eawf.runtime.session.store import SessionConflict, start_session, terminalize_session
 from eawf.workflow.agent_report.rollup import iter_agent_reports
 from eawf.workflow.agent_report.store import (
     AgentReportAppendResult,
@@ -734,6 +734,7 @@ async def produce_wave_verdict(
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     now: datetime | None = None,
     on_session_registered: Callable[[State], None] | None = None,
+    on_session_terminalized: Callable[[State], None] | None = None,
 ) -> WaveVerdictResult:
     """Produce + persist a fresh-context auditor verdict for *wave*.
 
@@ -792,6 +793,10 @@ async def produce_wave_verdict(
             The close path binds it to a state persist so the running auditor is
             visible in the Watch roster while it works, rather than only once the
             close completes (and never, when the close fails).
+        on_session_terminalized: Optional best-effort callback invoked after the
+            auditor session reaches CLOSED or FAILED. The daemon close path
+            persists this terminal state immediately so a later close guard
+            rejection cannot leave the durable row ACTIVE.
 
     Returns:
         A :class:`WaveVerdictResult` carrying the append result, the
@@ -806,49 +811,78 @@ async def produce_wave_verdict(
         eawf.workflow.agent_report.store.AgentReportRoleMismatchError: When
             the persisted body role disagrees with the author session role.
     """
-    auditor_session = _resolve_auditor_session(
-        state=state,
-        events_path=events_path,
-        wave=wave,
-        runtime=runtime,
-        now=now,
-    )
-    # The session lands in `state` in memory, and the CALLER persists state --
-    # which, on the close path, happens only when the close finishes. An audit
-    # runs for minutes and can fail, so the operator's Watch roster (which reads
-    # state) showed no running agent at all while the auditor worked, and none
-    # afterwards when the close failed. Persist the registration now so the live
-    # auditor is visible for as long as it runs.
-    if on_session_registered is not None:
-        on_session_registered(state)
+    auditor_session: AgentSession | None = None
+    report_appended = False
+    try:
+        auditor_session = _resolve_auditor_session(
+            state=state,
+            events_path=events_path,
+            wave=wave,
+            runtime=runtime,
+            now=now,
+        )
+        # The session lands in `state` in memory, and the CALLER persists state --
+        # which, on the close path, happens only when the close finishes. An audit
+        # runs for minutes and can fail, so the operator's Watch roster (which reads
+        # state) showed no running agent at all while the auditor worked, and none
+        # afterwards when the close failed. Persist the registration now so the live
+        # auditor is visible for as long as it runs.
+        if on_session_registered is not None:
+            on_session_registered(state)
 
-    diff_base = derive_diff_base(wave.id, repo_root=repo_root)
-    prompt = build_auditor_prompt(wave, diff_base=diff_base)
-    assist_result = await assist_with_schema(
-        prompt,
-        spawn=spawn,
-        validator=parse_auditor_report_body,
-        max_attempts=max_attempts,
-    )
-    body: AgentReportBody = assist_result.body
-    append_result = append_agent_report(
-        state=state,
-        state_path=state_path,
-        session_id=auditor_session.id,
-        base_id=wave.id,
-        body=body,
-        runtime=runtime,
-    )
-    logger.info(
-        f"produce_wave_verdict wave={wave.id} session={auditor_session.id!r} "
-        f"verdict={body.verdict.value!r} attempt={append_result.attempt}"
-    )
-    return WaveVerdictResult(
-        append_result=append_result,
-        assist_result=assist_result,
-        auditor_session_id=auditor_session.id,
-        verdict=body.verdict,
-    )
+        diff_base = derive_diff_base(wave.id, repo_root=repo_root)
+        prompt = build_auditor_prompt(wave, diff_base=diff_base)
+        assist_result = await assist_with_schema(
+            prompt,
+            spawn=spawn,
+            validator=parse_auditor_report_body,
+            max_attempts=max_attempts,
+        )
+        body: AgentReportBody = assist_result.body
+        append_result = append_agent_report(
+            state=state,
+            state_path=state_path,
+            session_id=auditor_session.id,
+            base_id=wave.id,
+            body=body,
+            runtime=runtime,
+        )
+        report_appended = True
+        logger.info(
+            f"produce_wave_verdict wave={wave.id} session={auditor_session.id!r} "
+            f"verdict={body.verdict.value!r} attempt={append_result.attempt}"
+        )
+        return WaveVerdictResult(
+            append_result=append_result,
+            assist_result=assist_result,
+            auditor_session_id=auditor_session.id,
+            verdict=body.verdict,
+        )
+    finally:
+        if auditor_session is not None:
+            terminal_status = (
+                AgentSessionStatus.CLOSED if report_appended else AgentSessionStatus.FAILED
+            )
+            terminalize_session(
+                state=state,
+                events_path=events_path,
+                session_id=auditor_session.id,
+                status=terminal_status,
+                summary=(
+                    "auditor report appended"
+                    if report_appended
+                    else "auditor attempt failed before report append"
+                ),
+                now=now,
+            )
+            if on_session_terminalized is not None:
+                try:
+                    on_session_terminalized(state)
+                except Exception as exc:
+                    logger.warning(
+                        f"produce_wave_verdict wave={wave.id} session={auditor_session.id!r} "
+                        f"terminal_persist=failed error={exc!r}"
+                    )
 
 
 def assert_not_executor_self_report(state: State, *, wave_id: str, author_session_id: str) -> None:
