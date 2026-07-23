@@ -22,7 +22,11 @@ from eawf.kernel.spec.common import (
     grandfather_criterion,
 )
 from eawf.kernel.state.models import CriteriaFloorWaiver, State
-from eawf.workflow.lifecycle._errors import check_criteria_floor
+from eawf.workflow.lifecycle._errors import (
+    LifecycleGuardError,
+    check_criteria_floor,
+    check_disabled_waiver_policy,
+)
 from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
     edit_wave_plan,
@@ -187,6 +191,86 @@ def test_edit_wave_plan_waiver_allows_legacy_replacement() -> None:
     )
     assert wave.criteria_floor_waiver == waiver
     assert wave.success_criteria[0].kind == "legacy"
+
+
+def test_plan_wave_disabled_rejects_floor_waiver_without_mutation() -> None:
+    """Disabled policy rejects before the wave or reverse indexes mutate."""
+    state = _seeded_state()
+    before = state.model_dump_json()
+    legacy = [grandfather_criterion("implement the parser tokeniser module", index=1)]
+
+    with pytest.raises(LifecycleGuardError) as raised:
+        _plan(
+            state,
+            success_criteria=legacy,
+            criteria_floor_waiver=_waiver(),
+            waiver_mode="disabled",
+        )
+
+    assert raised.value.code == "waiver_mode_disabled"
+    assert state.model_dump_json() == before
+
+
+def test_check_disabled_waiver_policy_directly_rejects_floor_waiver() -> None:
+    """Shared policy contract carries the stable disabled guard code."""
+    with pytest.raises(LifecycleGuardError) as raised:
+        check_disabled_waiver_policy(
+            waiver_mode="disabled",
+            scope_id="P01-I01-W01",
+            criteria=[],
+            criteria_floor_waiver=_waiver(),
+        )
+
+    assert raised.value.code == "waiver_mode_disabled"
+
+
+def test_edit_wave_plan_disabled_rejects_floor_waiver_without_mutation() -> None:
+    """Rejected disabled edit leaves every existing plan field unchanged."""
+    state = _seeded_state()
+    _plan(state, success_criteria=[])
+    before = state.model_dump_json()
+
+    with pytest.raises(LifecycleGuardError) as raised:
+        edit_wave_plan(
+            state,
+            wave_id="P01-I01-W01",
+            success_criteria=[
+                grandfather_criterion("wire the telemetry dashboard exporter", index=1)
+            ],
+            criteria_floor_waiver=_waiver(),
+            waiver_mode="disabled",
+        )
+
+    assert raised.value.code == "waiver_mode_disabled"
+    assert state.model_dump_json() == before
+
+
+def test_plan_wave_disabled_rejects_raw_criterion_reason_without_mutation() -> None:
+    """Raw criterion reasons are forbidden at disabled authoring boundaries."""
+    state = _seeded_state()
+    before = state.model_dump_json()
+    criterion = _typed_criterion(gate_ids=["G-01"]).model_copy(
+        update={"waiver_reason": "historical raw waiver reason"}
+    )
+
+    with pytest.raises(LifecycleGuardError) as raised:
+        _plan(state, success_criteria=[criterion], waiver_mode="disabled")
+
+    assert raised.value.code == "waiver_mode_disabled"
+    assert state.model_dump_json() == before
+
+
+@pytest.mark.parametrize("mode", ["A", "B", "C"])
+def test_plan_wave_permissive_modes_keep_raw_criterion_compatibility(mode: str) -> None:
+    """A/B/C continue accepting historical raw criterion reasons."""
+    state = _seeded_state()
+    criterion = _typed_criterion(gate_ids=["G-01"]).model_copy(
+        update={"waiver_reason": "historical raw waiver reason"}
+    )
+
+    wave = _plan(state, success_criteria=[criterion], waiver_mode=mode)
+
+    assert wave.success_criteria[0].waiver_reason == "historical raw waiver reason"
 
 
 def test_waiver_reason_floor_rejects_short_reason() -> None:

@@ -32,6 +32,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import NamedTuple
 
+from eawf.kernel.config.schema import VerifyWaiverMode
 from eawf.kernel.spec.roadmap_plan import RoadmapPlan, RoadmapPlanWave
 from eawf.kernel.state.models import CriteriaFloorWaiver, State
 from eawf.workflow.lifecycle._errors import LifecycleError, LifecycleGuardError
@@ -81,7 +82,12 @@ class PlannedRoadmap(NamedTuple):
     wave_ids: list[str]
 
 
-def plan_roadmap(state: State, *, plan: RoadmapPlan) -> PlannedRoadmap:
+def plan_roadmap(
+    state: State,
+    *,
+    plan: RoadmapPlan,
+    waiver_mode: VerifyWaiverMode = "B",
+) -> PlannedRoadmap:
     """Stage a whole roadmap plan into ``state``.
 
     The strict :class:`RoadmapPlan` loader owns schema validation. This
@@ -138,6 +144,7 @@ def plan_roadmap(state: State, *, plan: RoadmapPlan) -> PlannedRoadmap:
             description=wave_plan.description,
             intent=wave_plan.intent,
             criteria_floor_waiver=_propose_stage_floor_waiver(wave_plan),
+            waiver_mode=waiver_mode,
         )
         wave_ids.append(wave_plan.id)
     return PlannedRoadmap(phase_id=phase.id, iter_ids=iter_ids, wave_ids=wave_ids)

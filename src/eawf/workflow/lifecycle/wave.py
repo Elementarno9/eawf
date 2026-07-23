@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from eawf.kernel.config.schema import EuBasis
+from eawf.kernel.config.schema import EuBasis, VerifyWaiverMode
 from eawf.kernel.spec.common import CriterionSpec
 from eawf.kernel.spec.intent import IntentBrief, has_authoring_body
 from eawf.kernel.state.enums import (
@@ -50,6 +50,7 @@ from eawf.workflow.lifecycle._errors import (
     LifecycleError,
     check_criteria_floor,
     check_criteria_measurability,
+    check_disabled_waiver_policy,
     check_title_clarity,
 )
 from eawf.workflow.lifecycle.iter_ import _apply_iter_activation
@@ -483,6 +484,7 @@ def plan_wave(
     description: str | None = None,
     intent: IntentBrief | None = None,
     criteria_floor_waiver: CriteriaFloorWaiver | None = None,
+    waiver_mode: VerifyWaiverMode = "B",
 ) -> Wave:
     """Insert a new wave with status ``pending``.
 
@@ -522,6 +524,13 @@ def plan_wave(
     dep wave's ``blocks`` list is mutated in-place to include *wave_id*
     (idempotent — already-present ids are not duplicated).
     """
+    candidate_criteria = list(success_criteria or [])
+    check_disabled_waiver_policy(
+        waiver_mode=waiver_mode,
+        scope_id=wave_id,
+        criteria=candidate_criteria,
+        criteria_floor_waiver=criteria_floor_waiver,
+    )
     it = state.iters.get(iter_id)
     if it is None:
         raise LifecycleError(f"unknown iter {iter_id!r}")
@@ -566,14 +575,12 @@ def plan_wave(
     # Measurability runs before the wave is inserted so an unmeasurable typed
     # criterion is rejected at author time rather than slipping onto the row and
     # failing only at the close gate. Grandfathered legacy rows are exempt.
-    check_criteria_measurability(
-        list(success_criteria or []), entity_kind="wave", entity_id=wave_id
-    )
+    check_criteria_measurability(candidate_criteria, entity_kind="wave", entity_id=wave_id)
     # The typed-criteria floor rejects legacy-string rows and gateless
     # deterministic claims at author time; a typed waiver bypasses it and
     # is persisted on the wave row so the bypass stays visible.
     check_criteria_floor(
-        list(success_criteria or []),
+        candidate_criteria,
         entity_kind="wave",
         entity_id=wave_id,
         waiver=criteria_floor_waiver,
@@ -587,7 +594,7 @@ def plan_wave(
         deps=deps_list,
         blocks=[],
         file_scopes=list(file_scopes),
-        success_criteria=list(success_criteria or []),
+        success_criteria=candidate_criteria,
         agent_role=agent_role,
         effort_bucket=effort_bucket,
         claim_session_id=None,
@@ -661,6 +668,7 @@ def edit_wave_plan(
     description: str | None = None,
     intent: IntentBrief | None = None,
     criteria_floor_waiver: CriteriaFloorWaiver | None = None,
+    waiver_mode: VerifyWaiverMode = "B",
 ) -> Wave:
     """Mutate a PENDING wave's plan-time fields. Rejects non-PENDING waves.
 
@@ -706,6 +714,18 @@ def edit_wave_plan(
     if wave.status != WaveStatus.PENDING:
         raise LifecycleError(
             f"wave {wave_id!r} is not pending (status={wave.status.value!r}); cannot edit plan"
+        )
+    candidate_criteria = list(success_criteria) if success_criteria is not None else []
+    if success_criteria is not None or criteria_floor_waiver is not None:
+        check_disabled_waiver_policy(
+            waiver_mode=waiver_mode,
+            scope_id=wave_id,
+            criteria=candidate_criteria,
+            criteria_floor_waiver=(
+                criteria_floor_waiver
+                if criteria_floor_waiver is not None
+                else wave.criteria_floor_waiver
+            ),
         )
     if success_criteria is not None:
         # Gate the new criteria before any field mutates so a rejected edit
@@ -830,6 +850,7 @@ def claim_wave(
     session_id: str,
     out_of_order: bool = False,
     max_parallel_waves: int = DEFAULT_MAX_PARALLEL_WAVES,
+    waiver_mode: VerifyWaiverMode = "B",
 ) -> Wave:
     """Move a pending wave to ``claimed`` and bind it to *session_id*.
 
@@ -880,6 +901,7 @@ def claim_wave(
         session_id: Active compatible session to bind.
         out_of_order: Whether to relax lower-ready-sibling ordering only.
         max_parallel_waves: Repository-wide CLAIMED + IN_PROGRESS hard cap.
+        waiver_mode: Effective policy for persisted waiver mechanisms.
 
     Returns:
         The claimed wave row.
@@ -900,6 +922,12 @@ def claim_wave(
     wave = state.waves.get(wave_id)
     if wave is None:
         raise LifecycleError(f"unknown wave {wave_id!r}")
+    check_disabled_waiver_policy(
+        waiver_mode=waiver_mode,
+        scope_id=wave_id,
+        criteria=list(wave.success_criteria),
+        criteria_floor_waiver=wave.criteria_floor_waiver,
+    )
     parent_iter = validate_claim_parent(state, wave)
     validate_claim_criteria(wave)
     if wave.status == WaveStatus.CLAIMED and wave.claim_session_id == session_id:

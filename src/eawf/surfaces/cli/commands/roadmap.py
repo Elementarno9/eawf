@@ -42,6 +42,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from eawf.kernel.config.schema import VerifyWaiverMode
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     EffortBucket,
@@ -72,6 +73,22 @@ roadmap_app = typer.Typer(
     help="Roadmap planner (propose / revise / apply / drop / show).",
     no_args_is_help=True,
 )
+
+
+def _effective_waiver_mode(state: State, *, scope_id: str, state_path: Path) -> VerifyWaiverMode:
+    """Resolve strict layered waiver policy for roadmap authoring."""
+    from eawf.workflow.verify.readiness import load_active_waiver_mode
+
+    config_root = state_path.parent.parent if state_path.parent.name == ".ea" else state_path.parent
+    try:
+        return load_active_waiver_mode(
+            scope_id,
+            state,
+            repo_root=config_root,
+            config_root=config_root,
+        )
+    except (OSError, ValueError, KeyError) as exc:
+        raise cli_errors.ValidationError(f"verify config invalid: {exc}") from exc
 
 
 def _append_roadmap_event(
@@ -627,7 +644,15 @@ def _roadmap_propose_from_plan(
     try:
         with state_transaction(state_path, read_only=dry_run) as state:
             try:
-                planned = plan_roadmap(state, plan=plan)
+                planned = plan_roadmap(
+                    state,
+                    plan=plan,
+                    waiver_mode=_effective_waiver_mode(
+                        state,
+                        scope_id=phase_id,
+                        state_path=state_path,
+                    ),
+                )
             except LifecycleError as exc:
                 raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             except PydValidationError as exc:
@@ -1003,6 +1028,11 @@ def roadmap_revise_cmd(
                             )
                             if criteria_floor_waiver is not None
                             else None
+                        ),
+                        waiver_mode=_effective_waiver_mode(
+                            state,
+                            scope_id=full_wave_id,
+                            state_path=state_path,
                         ),
                     )
                     action_summary = f"added wave {full_wave_id}"

@@ -53,7 +53,7 @@ from typing import Any, Literal
 
 import orjson
 
-from eawf.kernel.config.schema import VerifyConfig
+from eawf.kernel.config.schema import VerifyConfig, VerifyWaiverMode
 from eawf.kernel.spec.common import GRANDFATHERED_KIND, CriterionSpec, GateSpec
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State, Wave
@@ -66,7 +66,7 @@ from eawf.workflow.audit_dsl.kinds.backlog_resolution import (
 )
 from eawf.workflow.audit_dsl.models import CheckSpec
 from eawf.workflow.audit_dsl.runner import run_checks
-from eawf.workflow.lifecycle._errors import LifecycleError
+from eawf.workflow.lifecycle._errors import LifecycleError, check_disabled_waiver_policy
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 from eawf.workflow.verify.compile import compile_floor_pack, compile_gate
 from eawf.workflow.verify.models import (
@@ -217,9 +217,8 @@ def _is_stale_waiver(row: EvidenceRecord, *, current_sha: str | None) -> bool:
         row: One scope-filtered :class:`EvidenceRecord`.
         current_sha: Current wave SHA derived via
             :func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha`.
-            ``None`` (git unavailable, no commit yet) is treated as
-            "freshness check skipped" — the waiver is NOT considered
-            stale when the SHA cannot be derived.
+            ``None`` (git unavailable, no commit yet) makes every waiver
+            stale: absence is not proof of freshness.
 
     Returns:
         ``True`` iff *row* is a waiver whose stamped ``wave_sha``
@@ -228,12 +227,12 @@ def _is_stale_waiver(row: EvidenceRecord, *, current_sha: str | None) -> bool:
     if row.status != "waived":
         return False
     if current_sha is None:
-        return False
+        return True
     if row.metrics is None:
-        return False
+        return True
     stamped = row.metrics.get("wave_sha")
     if stamped is None:
-        return False
+        return True
     return stamped != current_sha
 
 
@@ -603,12 +602,49 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
     )
 
 
+def _enabled_profile_ids(
+    merged: dict[str, Any],
+    *,
+    strict_config: bool,
+) -> list[str] | None:
+    """Validate and return the enabled profile ids from merged config."""
+    profiles = merged.get("profiles")
+    if not isinstance(profiles, dict):
+        if strict_config:
+            raise ValueError(f"profiles config must be a mapping, got {type(profiles).__name__}")
+        return None
+    enabled_raw = profiles.get("enabled", [])
+    if not isinstance(enabled_raw, list):
+        if strict_config:
+            raise ValueError(f"profiles.enabled must be a list, got {type(enabled_raw).__name__}")
+        logger.warning(
+            f"_load_active_verify_block status=skip reason=bad-enabled "
+            f"type={type(enabled_raw).__name__!r}"
+        )
+        return None
+    profile_ids: list[str] = []
+    for profile_id_raw in enabled_raw:
+        if isinstance(profile_id_raw, str):
+            profile_ids.append(profile_id_raw)
+            continue
+        if strict_config:
+            raise ValueError(
+                f"profiles.enabled entries must be strings, got {type(profile_id_raw).__name__}"
+            )
+        logger.warning(
+            f"_load_active_verify_block status=skip-profile reason=bad-id "
+            f"type={type(profile_id_raw).__name__!r}"
+        )
+    return profile_ids
+
+
 def _load_active_verify_block(
     scope_id: str,
-    state: State,
+    state: State | None,
     *,
     repo_root: Path,
     config_root: Path | None = None,
+    strict_config: bool = False,
 ) -> VerifyBlock | None:
     """Return the active profile's :class:`VerifyBlock`, or ``None``.
 
@@ -642,29 +678,20 @@ def _load_active_verify_block(
     try:
         merged, sources = merge_config(workspace=anchor, repo=anchor)
     except (OSError, ValueError, KeyError) as exc:
+        if strict_config:
+            raise
         logger.warning(f"_load_active_verify_block status=skip err={exc!s}")
         return None
-    profiles = merged.get("profiles")
-    if not isinstance(profiles, dict):
-        return None
-    enabled_raw = profiles.get("enabled") or []
-    if not isinstance(enabled_raw, list):
-        logger.warning(
-            f"_load_active_verify_block status=skip reason=bad-enabled "
-            f"type={type(enabled_raw).__name__!r}"
-        )
+    profile_ids = _enabled_profile_ids(merged, strict_config=strict_config)
+    if profile_ids is None:
         return None
     blocks: list[VerifyBlock] = []
-    for profile_id_raw in enabled_raw:
-        if not isinstance(profile_id_raw, str):
-            logger.warning(
-                f"_load_active_verify_block status=skip-profile reason=bad-id "
-                f"type={type(profile_id_raw).__name__!r}"
-            )
-            continue
+    for profile_id_raw in profile_ids:
         try:
             body = load_profile(profile_id_raw, workspace=anchor)
         except (OSError, ValueError, KeyError) as exc:
+            if strict_config:
+                raise
             logger.warning(
                 f"_load_active_verify_block status=skip-profile "
                 f"profile={profile_id_raw!r} err={exc!s}"
@@ -739,13 +766,46 @@ def load_active_verify_block(
     repo_root: Path,
     config_root: Path | None = None,
 ) -> VerifyBlock | None:
-    """Return the active merged verify block without executing floor checks."""
+    """Return the active merged verify block through strict config loading."""
     return _load_active_verify_block(
         scope_id,
         state,
         repo_root=repo_root,
         config_root=config_root,
+        strict_config=True,
     )
+
+
+def load_active_waiver_mode(
+    scope_id: str,
+    state: State | None,
+    *,
+    repo_root: Path,
+    config_root: Path | None = None,
+) -> VerifyWaiverMode:
+    """Resolve the effective waiver policy through strict layered config.
+
+    Unlike the advisory verify loader, this security boundary never converts
+    malformed config or a broken enabled profile into permissive mode B.
+
+    Args:
+        scope_id: Wave whose policy is being resolved.
+        state: Optional validated state snapshot. Current profile resolution
+            is scope-independent, so non-state stores may pass ``None``.
+        repo_root: Repository root for profile discovery.
+        config_root: Optional layered-config anchor.
+
+    Returns:
+        Effective waiver mode; ``B`` when no verify block contributes one.
+    """
+    block = _load_active_verify_block(
+        scope_id,
+        state,
+        repo_root=repo_root,
+        config_root=config_root,
+        strict_config=True,
+    )
+    return "B" if block is None else block.waiver_mode
 
 
 def resolve_wave_verify_block(
@@ -1462,6 +1522,25 @@ def compute(
     if wave is None:
         raise KeyError(f"unknown wave: {scope_id!r}")
 
+    # Waiver policy is security-relevant even when callers request advisory
+    # readiness. Always load it strictly; ``load_profile_verify=False`` skips
+    # floor execution and readiness enforcement, not disabled-mode policy.
+    policy_block = _load_active_verify_block(
+        scope_id,
+        state,
+        repo_root=repo_root,
+        config_root=config_root,
+        strict_config=True,
+    )
+    waiver_mode: VerifyWaiverMode = "B" if policy_block is None else policy_block.waiver_mode
+    check_disabled_waiver_policy(
+        waiver_mode=waiver_mode,
+        scope_id=scope_id,
+        criteria=list(wave.success_criteria),
+        criteria_floor_waiver=wave.criteria_floor_waiver,
+    )
+    verify_block = policy_block if load_profile_verify else None
+
     # SHA derive feeds both the W06 advisory log + the W11 SHA-bound
     # waiver freshness filter: a waiver row whose stamped
     # ``metrics["wave_sha"]`` no longer matches the current wave SHA
@@ -1477,7 +1556,12 @@ def compute(
 
     evidence_rows = _read_evidence_rows(store_dir)
     scope_evidence = _filter_evidence_for_scope(evidence_rows, scope_id=scope_id)
-    fresh_evidence = [row for row in scope_evidence if not _is_stale_waiver(row, current_sha=sha)]
+    fresh_evidence = [
+        row
+        for row in scope_evidence
+        if not _is_stale_waiver(row, current_sha=sha)
+        and not (waiver_mode == "disabled" and row.status == "waived")
+    ]
 
     spec_views, waived_gate_ids = _build_spec_views(
         criterion_specs,
@@ -1486,17 +1570,6 @@ def compute(
         runner_cwd=repo_root,
     )
     legacy_views, legacy_warnings = _build_legacy_views(wave)
-    verify_block = (
-        _load_active_verify_block(
-            scope_id,
-            state,
-            repo_root=repo_root,
-            config_root=config_root,
-        )
-        if load_profile_verify
-        else None
-    )
-
     # Profile-fed floor pack (P28-I01-W10). Floor checks render only
     # when the wave has no typed CriterionSpec rows — the typed-spec
     # layer is authoritative when present; the floor pack is the
@@ -1567,6 +1640,7 @@ __all__ = [
     "compute",
     "legacy_criterion_count",
     "load_active_verify_block",
+    "load_active_waiver_mode",
     "resolve_wave_verify_block",
     "wired_audit_dsl_kinds",
 ]

@@ -147,7 +147,11 @@ from eawf.workflow.lifecycle._claim_guards import (
     validate_spawn_wave,
 )
 from eawf.workflow.lifecycle._claim_session import CLAIM_SESSION_NOT_FOUND
-from eawf.workflow.lifecycle._errors import LifecycleError, LifecycleGuardError
+from eawf.workflow.lifecycle._errors import (
+    LifecycleError,
+    LifecycleGuardError,
+    check_disabled_waiver_policy,
+)
 from eawf.workflow.lifecycle.wave import claim_wave, validate_claim_session
 
 logger = logging.getLogger(__name__)
@@ -1230,6 +1234,28 @@ def _claim_live_session(
         wave = state.waves.get(wave_id)
         if wave is None:
             raise LifecycleError(f"unknown wave {wave_id!r}")
+        config_root = (
+            state_path.parent.parent if state_path.parent.name == ".ea" else state_path.parent
+        )
+        try:
+            from eawf.workflow.verify.readiness import load_active_waiver_mode
+
+            waiver_mode = load_active_waiver_mode(
+                wave_id,
+                state,
+                repo_root=config_root,
+                config_root=config_root,
+            )
+        except (OSError, ValueError, KeyError) as exc:
+            raise LifecycleError(f"verify config invalid: {exc}") from exc
+        # Run before staging a session: disabled historical waiver rows must
+        # leave session/state/event stores byte-identical on rejection.
+        check_disabled_waiver_policy(
+            waiver_mode=waiver_mode,
+            scope_id=wave_id,
+            criteria=list(wave.success_criteria),
+            criteria_floor_waiver=wave.criteria_floor_waiver,
+        )
 
         if wave.status in {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}:
             session_id = wave.claim_session_id
@@ -1295,6 +1321,7 @@ def _claim_live_session(
             session_id=session.id,
             out_of_order=out_of_order,
             max_parallel_waves=resolve_max_parallel_waves(state_path.parent.parent),
+            waiver_mode=waiver_mode,
         )
         validate_spawn_wave(state, wave_id)
         state.updated_at = datetime.now(UTC)

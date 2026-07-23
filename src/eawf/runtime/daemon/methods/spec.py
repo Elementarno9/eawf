@@ -1157,8 +1157,21 @@ def _apply_sync_locked(
     )
 
     try:
-        edit_wave_plan(state, wave_id=args.wave_id, success_criteria=criteria)
-    except LifecycleError as exc:
+        from eawf.workflow.verify.readiness import load_active_waiver_mode
+
+        waiver_mode = load_active_waiver_mode(
+            args.wave_id,
+            state,
+            repo_root=repo_root,
+            config_root=repo_root,
+        )
+        edit_wave_plan(
+            state,
+            wave_id=args.wave_id,
+            success_criteria=criteria,
+            waiver_mode=waiver_mode,
+        )
+    except (LifecycleError, OSError, ValueError, KeyError) as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
     wave.gates = list(gates)
 

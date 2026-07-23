@@ -193,6 +193,7 @@ def _make_evidence_record(
     scope_id: str,
     status: str,
     refs: list[str],
+    metrics: dict[str, str] | None = None,
 ) -> EvidenceRecord:
     return EvidenceRecord(
         id=mint_evidence_id(),
@@ -202,6 +203,7 @@ def _make_evidence_record(
         status=status,  # type: ignore[arg-type]
         summary=f"{status} evidence for {scope_id} refs={refs}",
         refs=list(refs),
+        metrics=metrics,
         created_at=datetime.now(UTC),
     )
 
@@ -334,6 +336,92 @@ def test_spec_wave_all_gates_pass(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert result.waived_gate_ids == []
 
 
+def test_load_active_waiver_mode_disabled_is_absorbing_across_composition(
+    tmp_path: Path,
+) -> None:
+    """A permissive repo overlay cannot weaken a disabled enabled profile."""
+    profile_dir = tmp_path / ".ea" / "profiles"
+    profile_dir.mkdir(parents=True)
+    (tmp_path / ".ea" / "config.yaml").write_text(
+        "profiles:\n  enabled: [permissive, locked]\nverify:\n  waiver_mode: A\n",
+        encoding="utf-8",
+    )
+    profile_dir.joinpath("permissive.yaml").write_text(
+        "name: permissive\nverify:\n  waiver_mode: C\n",
+        encoding="utf-8",
+    )
+    profile_dir.joinpath("locked.yaml").write_text(
+        "name: locked\nverify:\n  waiver_mode: disabled\n",
+        encoding="utf-8",
+    )
+    state = _empty_state()
+
+    mode = readiness_mod.load_active_waiver_mode(
+        WAVE_ID,
+        state,
+        repo_root=tmp_path,
+        config_root=tmp_path,
+    )
+
+    assert mode == "disabled"
+
+
+def test_readiness_does_not_fall_back_on_invalid_verify_config(tmp_path: Path) -> None:
+    """Malformed strict policy config rejects instead of defaulting to mode B."""
+    from pydantic import ValidationError
+
+    config_dir = tmp_path / ".ea"
+    config_dir.mkdir()
+    config_dir.joinpath("config.yaml").write_text(
+        "verify:\n  waiver_mode: disabled\n  waiver_mod: A\n",
+        encoding="utf-8",
+    )
+    state = _empty_state()
+    _seed_wave(state)
+    before = state.model_dump_json()
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        readiness_mod.compute(
+            WAVE_ID,
+            state=state,
+            store_dir=_store_dir(tmp_path / "state.json"),
+            repo_root=tmp_path,
+            config_root=tmp_path,
+        )
+
+    assert state.model_dump_json() == before
+
+
+@pytest.mark.parametrize(
+    ("config_body", "message"),
+    [
+        ("profiles: disabled\n", "profiles config must be a mapping"),
+        ("profiles:\n  enabled: disabled\n", "profiles.enabled must be a list"),
+        (
+            "profiles:\n  enabled: [7]\n",
+            "profiles.enabled entries must be strings",
+        ),
+    ],
+)
+def test_load_active_waiver_mode_rejects_invalid_profile_shape(
+    tmp_path: Path,
+    config_body: str,
+    message: str,
+) -> None:
+    """Malformed profile selection cannot silently fall back to mode B."""
+    config_dir = tmp_path / ".ea"
+    config_dir.mkdir()
+    config_dir.joinpath("config.yaml").write_text(config_body, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        readiness_mod.load_active_waiver_mode(
+            WAVE_ID,
+            _empty_state(),
+            repo_root=tmp_path,
+            config_root=tmp_path,
+        )
+
+
 def test_spec_wave_one_gate_fail_flips_ready(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -434,9 +522,19 @@ def test_spec_wave_waived_gate_passes_and_counts(
         lambda scope_id, state_arg: [criterion],
     )
     monkeypatch.setattr(readiness_mod, "_load_gate_specs", lambda scope_id, state_arg: [gate])
+    monkeypatch.setattr(
+        readiness_mod,
+        "derive_wave_sha",
+        lambda scope_id, repo_root=None: "waived_sha_123",
+    )
     _write_evidence_row(
         store_dir,
-        record=_make_evidence_record(scope_id=WAVE_ID, status="waived", refs=["GATE-waived"]),
+        record=_make_evidence_record(
+            scope_id=WAVE_ID,
+            status="waived",
+            refs=["GATE-waived"],
+            metrics={"wave_sha": "waived_sha_123"},
+        ),
     )
 
     result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
@@ -644,17 +742,15 @@ def test_sha_matching_waiver_is_honoured(tmp_path: Path, monkeypatch: pytest.Mon
     assert view.status == "waived"
 
 
-def test_waiver_without_sha_metric_treated_as_fresh(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("mode", ["A", "B", "C"])
+@pytest.mark.parametrize("metrics", [None, {}])
+def test_waiver_without_metrics_or_evidence_sha_is_stale(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    metrics: dict[str, str] | None,
 ) -> None:
-    """A waiver row missing ``metrics['wave_sha']`` is treated as fresh (W11).
-
-    Defensive contract: the SHA freshness check fires ONLY when both
-    the stamped SHA and the current SHA are present and disagree.
-    Missing-stamp rows (e.g. produced by an older CLI version, or by
-    the spec-attest path that does not stamp a SHA) are honoured to
-    avoid silently breaking the W06 evidence pipeline.
-    """
+    """A/B/C reject absent metrics and metrics missing ``wave_sha``."""
     state = _empty_state()
     _seed_wave(state)
     state_path = tmp_path / "state.json"
@@ -673,6 +769,11 @@ def test_waiver_without_sha_metric_treated_as_fresh(
         "derive_wave_sha",
         lambda scope_id, repo_root=None: "any_sha_111",
     )
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_active_verify_block",
+        lambda *_a, **_k: VerifyBlock(waiver_mode=mode),
+    )
 
     unstamped = EvidenceRecord(
         id=mint_evidence_id(),
@@ -682,15 +783,141 @@ def test_waiver_without_sha_metric_treated_as_fresh(
         status="waived",
         summary="unstamped waiver",
         refs=["GATE-nostamp"],
-        metrics=None,
+        metrics=metrics,
         created_at=datetime.now(UTC),
     )
     _write_evidence_row(store_dir, record=unstamped)
 
     result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
 
+    assert result.ready is False
+    assert result.waived_gate_ids == []
+
+
+@pytest.mark.parametrize("mode", ["A", "B", "C"])
+def test_waiver_without_current_sha_is_stale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    """A/B/C stale a stamped waiver when current SHA cannot be derived."""
+    state = _empty_state()
+    _seed_wave(state)
+    store_dir = _store_dir(tmp_path / "state.json")
+    criterion = _make_criterion("CRIT-no-current", gate_ids=["GATE-no-current"])
+    gate = _make_gate("GATE-no-current", criterion_id=criterion.id)
+    monkeypatch.setattr(readiness_mod, "_load_criterion_specs", lambda *_a: [criterion])
+    monkeypatch.setattr(readiness_mod, "_load_gate_specs", lambda *_a: [gate])
+    monkeypatch.setattr(readiness_mod, "derive_wave_sha", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_active_verify_block",
+        lambda *_a, **_k: VerifyBlock(waiver_mode=mode),
+    )
+    _write_evidence_row(
+        store_dir,
+        record=_make_evidence_record(
+            scope_id=WAVE_ID,
+            status="waived",
+            refs=[gate.id],
+            metrics={"wave_sha": "stamped_sha_123"},
+        ),
+    )
+
+    result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
+
+    assert result.ready is False
+    assert result.waived_gate_ids == []
+
+
+def test_disabled_mode_ignores_historical_waiver_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Historical waived rows remain stored but cannot satisfy readiness."""
+    state = _empty_state()
+    _seed_wave(state)
+    state.waves[WAVE_ID].criteria_floor_waiver = None
+    store_dir = _store_dir(tmp_path / "state.json")
+    criterion = _make_criterion("CRIT-disabled", gate_ids=["GATE-disabled"])
+    gate = _make_gate("GATE-disabled", criterion_id=criterion.id)
+    monkeypatch.setattr(readiness_mod, "_load_criterion_specs", lambda *_a: [criterion])
+    monkeypatch.setattr(readiness_mod, "_load_gate_specs", lambda *_a: [gate])
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_active_verify_block",
+        lambda *_a, **_k: VerifyBlock(waiver_mode="disabled"),
+    )
+    monkeypatch.setattr(readiness_mod, "derive_wave_sha", lambda *_a, **_k: "same_sha_123")
+    _write_evidence_row(
+        store_dir,
+        record=_make_evidence_record(
+            scope_id=WAVE_ID,
+            status="waived",
+            refs=[gate.id],
+            metrics={"wave_sha": "same_sha_123"},
+        ),
+    )
+
+    result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
+
+    assert result.ready is False
+    assert result.waived_gate_ids == []
+    assert result.criteria[0].status == "blocked"
+
+
+@pytest.mark.parametrize("mode", ["A", "B", "C"])
+def test_raw_criterion_waiver_remains_compatible_in_permissive_modes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    """A/B/C retain legacy raw ``waiver_reason`` readiness semantics."""
+    state = _empty_state()
+    _seed_wave(state)
+    state.waves[WAVE_ID].criteria_floor_waiver = None
+    criterion = _make_criterion("CRIT-raw", waiver_reason="historical operator waiver")
+    state.waves[WAVE_ID].success_criteria = [criterion]
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_active_verify_block",
+        lambda *_a, **_k: VerifyBlock(waiver_mode=mode),
+    )
+
+    result = readiness_mod.compute(
+        WAVE_ID,
+        state=state,
+        store_dir=_store_dir(tmp_path / "state.json"),
+        repo_root=tmp_path,
+    )
+
     assert result.ready is True
-    assert result.waived_gate_ids == ["GATE-nostamp"]
+    assert result.criteria[0].status == "waived"
+
+
+def test_disabled_mode_rejects_historical_raw_criterion_waiver(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Disabled mode rejects raw reasons regardless of row age."""
+    from eawf.workflow.lifecycle._errors import LifecycleGuardError
+
+    state = _empty_state()
+    _seed_wave(state)
+    state.waves[WAVE_ID].criteria_floor_waiver = None
+    state.waves[WAVE_ID].success_criteria = [
+        _make_criterion("CRIT-raw", waiver_reason="historical operator waiver")
+    ]
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_active_verify_block",
+        lambda *_a, **_k: VerifyBlock(waiver_mode="disabled"),
+    )
+
+    with pytest.raises(LifecycleGuardError) as raised:
+        readiness_mod.compute(
+            WAVE_ID,
+            state=state,
+            store_dir=_store_dir(tmp_path / "state.json"),
+            repo_root=tmp_path,
+        )
+    assert raised.value.code == "waiver_mode_disabled"
 
 
 def test_advisory_failure_returns_not_ready_without_raising(

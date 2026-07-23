@@ -9,6 +9,8 @@ read / dispatch / budget verbs live in
 :mod:`eawf.surfaces.cli.commands.lifecycle_wave_read`.
 """
 
+# noqa: EAWF010 cohesive wave-mutator CLI; split with shared close-policy plumbing
+
 from __future__ import annotations
 
 import logging
@@ -19,6 +21,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
 
+from eawf.kernel.config.schema import VerifyWaiverMode
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     EffortBucket,
@@ -56,6 +59,70 @@ NO_RUNTIME_WAIVER_REASON = "runtime capture unavailable; operator supplied --no-
 def _config_root_for_state_path(state_path: Path) -> Path:
     """Return the root that owns ``.ea/config.yaml`` for *state_path*."""
     return state_path.parent.parent if state_path.parent.name == ".ea" else state_path.parent
+
+
+def _effective_waiver_mode(
+    state: State,
+    *,
+    wave_id: str,
+    flags: GlobalFlags,
+) -> VerifyWaiverMode:
+    """Resolve strict layered waiver policy for one CLI mutation boundary."""
+    from eawf.surfaces.cli.scope import resolve_state_path
+    from eawf.workflow.verify.readiness import load_active_waiver_mode
+
+    state_path = resolve_state_path(flags.workspace)
+    config_root = _config_root_for_state_path(state_path)
+    repo_root = _resolve_repo_root_for_drift(flags.workspace) or config_root
+    try:
+        return load_active_waiver_mode(
+            wave_id,
+            state,
+            repo_root=repo_root,
+            config_root=config_root,
+        )
+    except (OSError, ValueError, KeyError) as exc:
+        raise cli_errors.ValidationError(f"verify config invalid: {exc}") from exc
+
+
+def _reject_disabled_close_waivers(
+    *,
+    ctx: typer.Context,
+    flags: GlobalFlags,
+    wave_id: str,
+    waive_inputs: list[Any],
+) -> None:
+    """Reject disabled close policy violations before any evidence append."""
+    from eawf.workflow.lifecycle._errors import (
+        WAIVER_MODE_DISABLED,
+        LifecycleGuardError,
+        check_disabled_waiver_policy,
+    )
+
+    loaded = _load_state_readonly(ctx)
+    if loaded is None:
+        raise cli_errors.UserError(
+            "state not loadable; waiver policy cannot be resolved", kind="NotFound"
+        )
+    state, _ = loaded
+    waiver_mode = _effective_waiver_mode(state, wave_id=wave_id, flags=flags)
+    if waiver_mode != "disabled":
+        return
+    if waive_inputs:
+        raise cli_errors.ValidationError(
+            f"{WAIVER_MODE_DISABLED}: gate waiver creation is disabled (wave={wave_id!r})"
+        )
+    wave = state.waves.get(wave_id)
+    if wave is not None:
+        try:
+            check_disabled_waiver_policy(
+                waiver_mode=waiver_mode,
+                scope_id=wave_id,
+                criteria=list(wave.success_criteria),
+                criteria_floor_waiver=wave.criteria_floor_waiver,
+            )
+        except LifecycleGuardError as exc:
+            raise cli_errors.ValidationError(str(exc)) from exc
 
 
 def _resolve_close_verify_block(
@@ -211,12 +278,8 @@ def _persist_waivers(
             the daemon RPC path fails (mapped from the JSON-RPC error
             code).
     """
-    from eawf.kernel.config.layered import merge_config
     from eawf.surfaces.cli.scope import resolve_state_path
-    from eawf.workflow.lifecycle.waivers import (
-        apply_waiver,
-        resolve_waiver_mode,
-    )
+    from eawf.workflow.lifecycle.waivers import apply_waiver
 
     loaded = _load_state_readonly(ctx)
     if loaded is None:
@@ -227,18 +290,8 @@ def _persist_waivers(
         )
     state, _ = loaded
 
-    # Anchor config-merge on the resolved state.json so an ``EA_STATE``
-    # override (canonical in test fixtures + CI / recovery shells) still
-    # picks up the ``.ea/config.yaml`` overlay next to it.
     state_path = resolve_state_path(flags.workspace)
-    repo = state_path.parent.parent
-    workspace_for_merge = flags.workspace if flags.workspace is not None else repo
-    try:
-        merged, _src = merge_config(workspace=workspace_for_merge, repo=repo)
-    except (OSError, ValueError, KeyError) as exc:
-        logger.debug(f"_persist_waivers merge_config status='skip' err={exc!s}")
-        merged = {}
-    mode = resolve_waiver_mode(merged)
+    mode = _effective_waiver_mode(state, wave_id=wave_id, flags=flags)
 
     operator_identity = (
         state.current.active_session_ids[0] if state.current.active_session_ids else None
@@ -527,6 +580,7 @@ def _run_daemonless_close_preflight(
     """
     from eawf.kernel.store.paths import store_dir as _store_dir
     from eawf.workflow.dispatch.verdict import verdict_requirement, verify_wave_verdict_gate
+    from eawf.workflow.lifecycle._errors import LifecycleGuardError
     from eawf.workflow.lifecycle.transitions import LifecycleError
     from eawf.workflow.verify import compute as compute_readiness
 
@@ -541,6 +595,8 @@ def _run_daemonless_close_preflight(
         )
     except KeyError as exc:
         logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
+    except LifecycleGuardError:
+        raise
     except LifecycleError:
         # A failing required gate refuses the close unless waived (daemon parity).
         if not waived:
@@ -652,6 +708,40 @@ def wave_plan_cmd(
         desired_outcome=title,
         priority_rationale=f"staged via wave plan {wave_id}",
     )
+
+    def _plan_with_waiver_policy(state: State) -> None:
+        _wrap_no_return(
+            plan_wave(
+                state,
+                wave_id=wave_id,
+                iter_id=iter_id,
+                title=title,
+                file_scopes=file_list,
+                deps=deps_list,
+                success_criteria=[
+                    grandfather_criterion(text, index=idx)
+                    for idx, text in enumerate(criteria_list, start=1)
+                ],
+                agent_role=agent_role,
+                effort_bucket=effort_bucket,
+                description=description,
+                intent=wave_intent,
+                criteria_floor_waiver=(
+                    CriteriaFloorWaiver(
+                        reason=criteria_floor_waiver,
+                        waived_at=datetime.now(UTC),
+                    )
+                    if criteria_floor_waiver is not None
+                    else None
+                ),
+                waiver_mode=_effective_waiver_mode(
+                    state,
+                    wave_id=wave_id,
+                    flags=flags,
+                ),
+            )
+        )
+
     _run_mutation(
         ctx,
         command="wave plan",
@@ -679,32 +769,7 @@ def wave_plan_cmd(
             "effort_bucket": effort_bucket.value if effort_bucket else None,
             "description": description,
         },
-        mutate=lambda state: _wrap_no_return(
-            plan_wave(
-                state,
-                wave_id=wave_id,
-                iter_id=iter_id,
-                title=title,
-                file_scopes=file_list,
-                deps=deps_list,
-                success_criteria=[
-                    grandfather_criterion(text, index=idx)
-                    for idx, text in enumerate(criteria_list, start=1)
-                ],
-                agent_role=agent_role,
-                effort_bucket=effort_bucket,
-                description=description,
-                intent=wave_intent,
-                criteria_floor_waiver=(
-                    CriteriaFloorWaiver(
-                        reason=criteria_floor_waiver,
-                        waived_at=datetime.now(UTC),
-                    )
-                    if criteria_floor_waiver is not None
-                    else None
-                ),
-            )
-        ),
+        mutate=_plan_with_waiver_policy,
         mutation_kind=MutationKind.ROADMAP_REVISE,
         params={
             "op": "add_wave",
@@ -718,6 +783,7 @@ def wave_plan_cmd(
             "effort_bucket": effort_bucket.value if effort_bucket else None,
             "description": description,
             "intent": wave_intent.model_dump(mode="json"),
+            "criteria_floor_waiver_reason": criteria_floor_waiver,
         },
     )
 
@@ -787,6 +853,11 @@ def wave_claim_cmd(
             out_of_order=out_of_order,
             max_parallel_waves=resolve_max_parallel_waves(
                 _config_root_for_state_path(resolve_state_path(flags.workspace))
+            ),
+            waiver_mode=_effective_waiver_mode(
+                state,
+                wave_id=wave_id,
+                flags=flags,
             ),
         )
         claim_session_id = state.waves[wave_id].claim_session_id
@@ -992,6 +1063,12 @@ def wave_close_cmd(
     # Persist waiver evidence BEFORE the close + readiness compute so the
     # readiness view sees the rows.
     try:
+        _reject_disabled_close_waivers(
+            ctx=ctx,
+            flags=flags,
+            wave_id=wave_id,
+            waive_inputs=waive_inputs,
+        )
         _persist_close_waiver_inputs(
             ctx=ctx,
             flags=flags,

@@ -38,7 +38,7 @@ from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.runtime.daemon import wal
-from eawf.runtime.daemon.methods import MethodContext, register
+from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
 from eawf.runtime.daemon.methods.spec import (
     _cache_replay,
     _idempotent_replay,
@@ -52,6 +52,7 @@ from eawf.runtime.daemon.methods.state import (
     _state_version,
 )
 from eawf.runtime.daemon.wal import WalRecord
+from eawf.workflow.lifecycle._errors import LifecycleGuardError, check_disabled_waiver_policy
 
 logger = logging.getLogger(__name__)
 
@@ -392,19 +393,44 @@ def _apply_convert_legacy_locked(
     """
     state, _payload = _read_state(state_path)
     before_version = _state_version(state.model_dump(mode="json"))
+    config_root = state_path.parent.parent if state_path.parent.name == ".ea" else state_path.parent
+    repo_root = Path(args.repo_root) if args.repo_root is not None else config_root
+    try:
+        from eawf.workflow.verify.readiness import load_active_waiver_mode
+
+        waiver_mode = load_active_waiver_mode(
+            args.scope_id,
+            state,
+            repo_root=repo_root,
+            config_root=config_root,
+        )
+    except (OSError, ValueError, KeyError) as exc:
+        raise DaemonValidationError(f"validation_failed: verify config invalid: {exc}") from exc
     rows: list[ConvertRowReport] = []
-    touched = 0
+    staged_waves: list[tuple[Any, list[CriterionSpec], list[GateSpec]]] = []
     for wave_id in _waves_for_convert_scope(state, args.scope_id, kind):
         wave = state.waves[wave_id]
         criteria, gates, reports = _convert_wave_rows(wave)
         rows.extend(reports)
         changed = criteria != list(wave.success_criteria) or gates != list(wave.gates)
         if changed:
-            wave.success_criteria = criteria
-            wave.gates = gates
-            touched += 1
+            try:
+                check_disabled_waiver_policy(
+                    waiver_mode=waiver_mode,
+                    scope_id=wave_id,
+                    criteria=criteria,
+                )
+            except LifecycleGuardError as exc:
+                raise DaemonValidationError(f"validation_failed: {exc}") from exc
+            staged_waves.append((wave, criteria, gates))
+
+    # All policy checks finish before the first in-memory state assignment.
+    for wave, criteria, gates in staged_waves:
+        wave.success_criteria = criteria
+        wave.gates = gates
 
     converted_count = sum(1 for row in rows if row.disposition == "converted")
+    touched = len(staged_waves)
     if touched == 0:
         return _convert_result(
             args, rows, before=before_version, after=before_version, envelope=None
