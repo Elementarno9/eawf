@@ -2212,6 +2212,7 @@ def _apply_iter_close(state: State, mutation: Mutation) -> None:
         audit_id=str(params["audit_id"]),
         odr_floor=float(params.get("odr_floor", DEFAULT_ODR_FLOOR)),
         odr_blocking=bool(params.get("odr_blocking", False)),
+        require_audit_accepted=bool(params.get("require_audit_accepted", False)),
     )
 
 
@@ -2222,19 +2223,19 @@ def _thread_iter_close_verify_params(
     state_path: Path,
     repo_root_override: str | None,
 ) -> None:
-    """Thread the resolved verify block's ODR leaves into an ITER_CLOSE.
+    """Thread resolved verify leaves into an ITER_CLOSE without weakening.
 
     Runs under the commit lock with the freshly read state, so the flags
     the applier consumes reflect the same config the close is about. Params
-    already present on the mutation win (a caller may pin them explicitly);
-    resolution failures leave the advisory defaults in place — threading is
-    an enrichment, never a new failure mode for the close itself.
+    Caller-supplied ODR dials retain their historical precedence. Audit
+    acceptance is tighten-only: a caller may opt in, but cannot override an
+    enforcing profile or repo leaf with ``False``. Resolution failures leave
+    caller/default behaviour in place.
     """
-    if "odr_floor" in mutation.params and "odr_blocking" in mutation.params:
-        return
     from eawf.workflow.verify.readiness import load_active_verify_block
 
     iter_id = str(mutation.params.get("iter_id", ""))
+    caller_requires_audit = bool(mutation.params.get("require_audit_accepted", False))
     repo_root = Path(repo_root_override) if repo_root_override else state_path.parent.parent
     verify_block = load_active_verify_block(
         iter_id,
@@ -2243,9 +2244,13 @@ def _thread_iter_close_verify_params(
         config_root=_config_root_for_state_path(state_path),
     )
     if verify_block is None:
+        mutation.params["require_audit_accepted"] = caller_requires_audit
         return
     mutation.params.setdefault("odr_floor", verify_block.odr_floor)
     mutation.params.setdefault("odr_blocking", verify_block.odr_blocking)
+    mutation.params["require_audit_accepted"] = (
+        caller_requires_audit or verify_block.require_iter_audit_accepted
+    )
 
 
 def _apply_track_add(state: State, mutation: Mutation) -> None:
@@ -3713,6 +3718,10 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 else:
                     apply_func(state, mutation)
             except LifecycleGuardError as exc:
+                logger.warning(
+                    f"mutate rejected mutation_kind={mutation.kind.value} "
+                    f"scope_id={mutation.scope_id!r} guard_code={exc.code}"
+                )
                 raise DaemonValidationError(f"validation_failed: {exc}") from exc
             except LifecycleError as exc:
                 # Closure-kind (*_CLOSE) rejections surface as -32002
@@ -3784,6 +3793,20 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 # session gained the wave without claiming that session
                 # authenticated the state.mutate request.
                 extras["claim_session_id"] = claim_session_id
+            elif mutation.kind is MutationKind.ITER_CLOSE:
+                from eawf.kernel.state.enums import AuditVerdict
+                from eawf.workflow.lifecycle._audit_acceptance import (
+                    AUDIT_MINOR_BACKLOG_TRIAGE,
+                )
+
+                audit_id = str(mutation.params["audit_id"])
+                audit = (state.audits or {}).get(audit_id)
+                if (
+                    bool(mutation.params.get("require_audit_accepted", False))
+                    and audit is not None
+                    and audit.verdict is AuditVerdict.MINOR
+                ):
+                    extras["warning"] = AUDIT_MINOR_BACKLOG_TRIAGE
 
             envelope = _build_event_envelope(
                 mutation=mutation,

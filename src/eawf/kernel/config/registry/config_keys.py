@@ -724,10 +724,10 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
     ConfigKey(
         tab="verify",
         key="verify.require_iter_audit_accepted",
-        label="Reserved: require an accepted iter audit",
+        label="Require an accepted iter audit",
         type="bool",
         default=False,
-        description="Reserved for compatibility; iter close does not read this value yet.",
+        description="Require a completed accepted evaluation audit before iter close.",
     ),
     ConfigKey(
         tab="verify",

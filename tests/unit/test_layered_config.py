@@ -367,6 +367,7 @@ _EXPECTED_CONFIG_CONSUMERS: dict[str, str] = {
     "vcs.conventions.release.cadence": (
         "eawf.runtime.vcs.coauthor.requires_phase_release_preflight"
     ),
+    "verify.require_iter_audit_accepted": "eawf.workflow.lifecycle.iter_.close_iter",
     "verify.waiver_mode": "eawf.workflow.lifecycle.waivers.resolve_waiver_mode",
 }
 
@@ -388,7 +389,7 @@ def test_config_consumer_set_is_exact_and_importable() -> None:
 
     expected = _EXPECTED_CONFIG_CONSUMERS | _EXPECTED_CATALOG_ONLY_CONSUMERS
     assert actual == expected
-    assert len(actual) == 18
+    assert len(actual) == 19
     assert {
         key: value for key, value in actual.items() if key in {row.key for row in CONFIG_REGISTRY}
     } == _EXPECTED_CONFIG_CONSUMERS
@@ -405,7 +406,7 @@ def test_reserved_config_leaf_set_is_exact() -> None:
     expected = behavior_keys - _EXPECTED_CONFIG_CONSUMERS.keys()
     reserved = {key for key, entry in LEAF_KEY_REGISTRY.items() if entry.reserved}
 
-    assert len(expected) == 65
+    assert len(expected) == 64
     assert reserved == expected
     assert {
         "audit.fix_safe",
@@ -414,8 +415,10 @@ def test_reserved_config_leaf_set_is_exact() -> None:
         "planning.auto_plan",
         "planning.max_parallel_waves",
         "ship.require_audit_pass",
-        "verify.require_iter_audit_accepted",
     } <= reserved
+    strict_audit = leaf_key_lookup("verify.require_iter_audit_accepted")
+    assert strict_audit.consumer == "eawf.workflow.lifecycle.iter_.close_iter"
+    assert strict_audit.reserved is False
 
 
 def test_leaf_key_lookup_known_key_returns_entry() -> None:

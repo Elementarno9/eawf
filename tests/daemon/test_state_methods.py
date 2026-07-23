@@ -27,6 +27,8 @@ framing is exercised in :mod:`tests.daemon.test_scaffolding`.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import logging
 import os
 import uuid
 from collections.abc import Awaitable, Callable
@@ -39,7 +41,13 @@ import pytest
 
 from eawf import __version__
 from eawf.kernel.spec.common import grandfather_criterion
-from eawf.kernel.state.enums import DecisionStatus, StoreKind
+from eawf.kernel.state.enums import (
+    AuditKind,
+    AuditStatus,
+    AuditVerdict,
+    DecisionStatus,
+    StoreKind,
+)
 from eawf.kernel.state.models import CriteriaFloorWaiver
 from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.kernel.store.kinds.event import EventKind
@@ -356,6 +364,37 @@ def _build_ctx(
 def _run(body: Callable[[], Awaitable[None]]) -> None:
     """Run an async test body without ``pytest-asyncio``."""
     asyncio.run(body())
+
+
+def _iter_close_payload(*, verdict: AuditVerdict = AuditVerdict.PASS) -> dict[str, object]:
+    """Return a closable iter with one real evaluation audit."""
+    payload = _build_state_payload()
+    payload["waves"] = {}
+    iter_row = payload["iters"]["P24-I01"]  # type: ignore[index]
+    iter_row["wave_ids"] = []  # type: ignore[index]
+    payload["audits"] = {
+        "AUD-ITER": {
+            "id": "AUD-ITER",
+            "scope_id": "P24-I01",
+            "kind": AuditKind.EVALUATION.value,
+            "status": AuditStatus.COMPLETE.value,
+            "created_at": _now().isoformat(),
+            "verdict": verdict.value,
+            "check_results": [
+                {
+                    "name": "acceptance",
+                    "passed": True,
+                    "details": "targeted verification passed",
+                }
+            ],
+        }
+    }
+    return payload
+
+
+def _path_digest(path: Path) -> str | None:
+    """Return the content digest for *path*, or ``None`` when absent."""
+    return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
 
 
 # ---- state.read -------------------------------------------------------------
@@ -2723,3 +2762,84 @@ def test_the_zero_runtime_gate_bites_outside_the_uiux_band(
         assert written["waves"]["P24-I01-W09"]["status"] == "claimed"
 
     _run(body)
+
+
+def test_mutate_iter_close_config_strictness_cannot_be_weakened_by_rpc(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Resolved strict config wins over a caller-supplied false param."""
+    payload = _iter_close_payload()
+    payload["audits"] = {}
+    ctx, state_path, event_path, _wal_dir = _build_ctx(
+        tmp_path=tmp_path,
+        state_payload=payload,
+    )
+    config_dir = tmp_path / ".ea"
+    config_dir.mkdir()
+    config_dir.joinpath("config.yaml").write_text(
+        "verify:\n  require_iter_audit_accepted: true\n",
+        encoding="utf-8",
+    )
+    audit_path = store_path(state_path, StoreKind.AUDIT)
+    memory_path = store_path(state_path, StoreKind.MEMORY)
+    audit_path.parent.mkdir(parents=True, exist_ok=True)
+    audit_path.write_text("audit sentinel\n", encoding="utf-8")
+    memory_path.write_text("memory sentinel\n", encoding="utf-8")
+    before = {
+        path: _path_digest(path) for path in (state_path, event_path, audit_path, memory_path)
+    }
+    mutation = Mutation(
+        kind=MutationKind.ITER_CLOSE,
+        scope_id="P24-I01",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "iter_id": "P24-I01",
+            "audit_id": "AUD-PHANTOM",
+            "require_audit_accepted": False,
+        },
+    )
+
+    async def body() -> None:
+        with (
+            caplog.at_level(logging.WARNING),
+            pytest.raises(DaemonValidationError, match="audit_not_found"),
+        ):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+
+    _run(body)
+    after = {path: _path_digest(path) for path in (state_path, event_path, audit_path, memory_path)}
+    assert after == before
+    assert "mutation_kind=iter_close" in caplog.text
+    assert "scope_id='P24-I01'" in caplog.text
+    assert "guard_code=audit_not_found" in caplog.text
+
+
+def test_mutate_iter_close_minor_returns_stable_warning(tmp_path: Path) -> None:
+    """Daemon result surfaces the strict MINOR backlog-triage advisory."""
+    payload = _iter_close_payload(verdict=AuditVerdict.MINOR)
+    ctx, state_path, _event_path, _wal_dir = _build_ctx(
+        tmp_path=tmp_path,
+        state_payload=payload,
+    )
+    mutation = Mutation(
+        kind=MutationKind.ITER_CLOSE,
+        scope_id="P24-I01",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "iter_id": "P24-I01",
+            "audit_id": "AUD-ITER",
+            "require_audit_accepted": True,
+        },
+    )
+
+    result: dict[str, Any] = {}
+
+    async def body() -> None:
+        result.update(await mutate(ctx, {"mutation": mutation.model_dump(mode="json")}))
+
+    _run(body)
+    assert result["event"]["payload"]["extras"]["warning"] == ("audit_minor_backlog_triage")
+    written = orjson.loads(state_path.read_bytes())
+    assert written["iters"]["P24-I01"]["status"] == "closed"
+    assert written["iters"]["P24-I01"]["audit_id"] == "AUD-ITER"

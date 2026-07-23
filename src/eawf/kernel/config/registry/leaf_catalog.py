@@ -1610,6 +1610,7 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "vcs.conventions.release.cadence": (
         "eawf.runtime.vcs.coauthor.requires_phase_release_preflight"
     ),
+    "verify.require_iter_audit_accepted": "eawf.workflow.lifecycle.iter_.close_iter",
     "verify.waiver_mode": "eawf.workflow.lifecycle.waivers.resolve_waiver_mode",
 }
 

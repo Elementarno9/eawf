@@ -636,7 +636,9 @@ def iter_close_cmd(
     and its blob SHA recorded so ``eawf spec show <urn> --from-git`` recovers
     the body. Without the flag the specs stay untouched.
     """
+    from eawf.workflow.lifecycle._audit_acceptance import AUDIT_MINOR_BACKLOG_TRIAGE
     from eawf.workflow.lifecycle.transitions import close_iter
+    from eawf.workflow.verify.readiness import load_active_verify_block
 
     flags: GlobalFlags = ctx.obj
     if not is_iter_id(iter_id):
@@ -645,14 +647,59 @@ def iter_close_cmd(
             flags=flags,
         )
         return
+    mutation_warnings: list[str] = []
+
+    def _mutator(state: State) -> None:
+        repo_root = resolve_state_path(flags.workspace).parent.parent
+        verify_block = load_active_verify_block(
+            iter_id,
+            state,
+            repo_root=repo_root,
+            config_root=repo_root,
+        )
+        close_iter(
+            state,
+            iter_id=iter_id,
+            audit_id=audit,
+            require_audit_accepted=bool(
+                verify_block is not None and verify_block.require_iter_audit_accepted
+            ),
+            warnings_out=mutation_warnings,
+        )
+
+    def _capture_result(result: object) -> None:
+        if not isinstance(result, dict):
+            return
+        event = result.get("event")
+        payload = event.get("payload") if isinstance(event, dict) else None
+        extras = payload.get("extras") if isinstance(payload, dict) else None
+        warning = extras.get("warning") if isinstance(extras, dict) else None
+        if warning == AUDIT_MINOR_BACKLOG_TRIAGE and warning not in mutation_warnings:
+            mutation_warnings.append(warning)
+
+    def _text() -> str:
+        base = f"iter close {iter_id} audit={audit}"
+        if not mutation_warnings:
+            return base
+        return (
+            f"{base}\nwarning: {AUDIT_MINOR_BACKLOG_TRIAGE}: "
+            "nonblocking audit findings require backlog triage"
+        )
+
     _run_mutation(
         ctx,
         command="iter close",
         args={"id": iter_id, "audit": audit},
         scope_id=iter_id,
-        text=f"iter close {iter_id} audit={audit}",
-        envelope=lambda: {"iter": iter_id, "audit": audit},
-        mutate=lambda state: _wrap_no_return(close_iter(state, iter_id=iter_id, audit_id=audit)),
+        text_factory=_text,
+        envelope=lambda: {
+            "iter": iter_id,
+            "audit": audit,
+            "warnings": list(mutation_warnings),
+        },
+        mutate=_mutator,
+        extras_factory=lambda: {"warning": mutation_warnings[0]} if mutation_warnings else {},
+        result_callback=_capture_result,
         closure_kind=True,
         mutation_kind=MutationKind.ITER_CLOSE,
         params={"iter_id": iter_id, "audit_id": audit},
