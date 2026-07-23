@@ -93,7 +93,7 @@ Structured findings block with `Question / Findings / Alternatives / Recommendat
    - `uv run pytest tests/ -q`
    A schema or persisted-model wave never narrows this run: keep the full-tree `tests/` sweep (a scoped gauntlet hides fixture fallout in sibling suites).
 4. Commit with prefix `[P07-W01] <type>: <summary>` (3-6 bullet body) and the recognized Claude or Codex `Co-Authored-By` trailer.
-5. Emit the typed executor report as your final message; the dispatching parent session verifies your work, supplies `--tokens-consumed` from your report, and runs the close itself.
+5. Emit the typed researcher report as your final message; the dispatching parent session verifies your work, supplies `--tokens-consumed` from your report, and runs the close itself.
 6. Stop after the report. Take no further action — the close is run for you, never by you.
 
 ## Out of scope
