@@ -193,6 +193,26 @@ def test_iter_close_daemonless_strict_false_keeps_legacy_compatibility(
     assert payload["warnings"] == []
 
 
+def test_iter_close_daemonless_external_state_uses_adjacent_repo_config(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_strict_config(workspace)
+    external_state_path = workspace / "state.json"
+    external_state_path.write_bytes(workspace.joinpath(".ea", "state.json").read_bytes())
+    monkeypatch.setenv("EA_STATE", str(external_state_path))
+    before = external_state_path.read_bytes()
+
+    result = runner.invoke(
+        app,
+        ["--json", "iter", "close", _ITER_ID, "--audit", "AUD-PHANTOM"],
+    )
+
+    assert result.exit_code == 2, result.stdout
+    assert "audit_not_found" in result.stdout
+    assert external_state_path.read_bytes() == before
+
+
 @pytest.mark.parametrize("verdict", ["pass", "minor"])
 def test_iter_close_daemonless_strict_accepts_real_audit_and_returns_warning_parity(
     workspace: Path,
