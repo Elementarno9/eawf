@@ -43,6 +43,7 @@ from eawf.observability.metrics.odr import (
 from eawf.workflow.estimation.buckets import wave_estimate_eu
 from eawf.workflow.lifecycle._audit_acceptance import (
     AUDIT_MINOR_BACKLOG_TRIAGE,
+    ITER_CLOSE_AUDIT_CHECK_ORDER,
     AuditAcceptanceIssue,
     assess_close_audit,
 )
@@ -70,15 +71,6 @@ _DEFAULT_DRIFT_BUDGET_WAVES: Final[int] = 3
 _DEFAULT_DRIFT_BUDGET_EU: Final[float] = 3.5
 _DEFAULT_CHECKPOINT_MODE: Final[Literal["optimistic", "barrier"]] = "optimistic"
 
-_ITER_CLOSE_AUDIT_CHECK_ORDER: Final[tuple[AuditAcceptanceIssue, ...]] = (
-    AuditAcceptanceIssue.SCOPE_MISMATCH,
-    AuditAcceptanceIssue.KIND_INVALID,
-    AuditAcceptanceIssue.NOT_COMPLETE,
-    AuditAcceptanceIssue.VERDICT_REJECTED,
-    AuditAcceptanceIssue.FUTURE_TIMESTAMP,
-    AuditAcceptanceIssue.EVIDENCE_MISSING,
-)
-
 
 def _validate_iter_close_audit(
     state: State,
@@ -92,7 +84,7 @@ def _validate_iter_close_audit(
         audit_id=audit_id,
         allowed_scope_ids=frozenset({iter_id}),
         required_kind=AuditKind.EVALUATION,
-        check_order=_ITER_CLOSE_AUDIT_CHECK_ORDER,
+        check_order=ITER_CLOSE_AUDIT_CHECK_ORDER,
         require_passing_check=True,
     )
     issue = assessment.issue

@@ -1380,12 +1380,18 @@ def test_mutate_wave_claim_disabled_rejects_historical_floor_waiver(
     _run(body)
 
 
-def test_daemon_wave_event_kind_table_has_no_w19_orphans() -> None:
-    """W19 mapped wave lifecycle kinds are canonical EventKind literals."""
+def test_daemon_lifecycle_event_kind_table_uses_canonical_literals() -> None:
+    """Lifecycle mutation mappings resolve to existing typed event kinds."""
     from eawf.runtime.daemon.methods.state import _MUTATION_EVENT_KIND
 
     mapped = set(_MUTATION_EVENT_KIND.values())
-    assert {"wave_claimed", "wave_closed"} <= mapped
+    assert {
+        "wave_claimed",
+        "wave_closed",
+        "phase_activated",
+        "iter_closed",
+        "phase_closed",
+    } <= mapped
     assert mapped <= set(get_args(EventKind))
 
 
@@ -2839,7 +2845,57 @@ def test_mutate_iter_close_minor_returns_stable_warning(tmp_path: Path) -> None:
         result.update(await mutate(ctx, {"mutation": mutation.model_dump(mode="json")}))
 
     _run(body)
-    assert result["event"]["payload"]["extras"]["warning"] == ("audit_minor_backlog_triage")
+    payload_extras = result["event"]["payload"]["extras"]
+    assert result["event"]["payload"]["event_kind"] == "iter_closed"
+    assert payload_extras["audit_id"] == "AUD-ITER"
+    assert payload_extras["require_audit_accepted"] is True
+    assert payload_extras["warning"] == "audit_minor_backlog_triage"
     written = orjson.loads(state_path.read_bytes())
     assert written["iters"]["P24-I01"]["status"] == "closed"
     assert written["iters"]["P24-I01"]["audit_id"] == "AUD-ITER"
+
+
+def test_mutate_wave_close_coded_guard_logs_without_durable_event(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The bespoke close path logs coded rejection fields and writes nothing."""
+    from eawf.runtime.daemon.methods import DaemonValidationError
+    from eawf.workflow.lifecycle._errors import LifecycleGuardError
+
+    ctx, state_path, event_path, wal_dir = _build_ctx(tmp_path=tmp_path)
+    before = state_path.read_bytes()
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def _reject(*_args: object, **_kwargs: object) -> list[object]:
+        raise LifecycleGuardError(
+            "waiver_mode_disabled",
+            "P24-I01-W09",
+            "waiver policy rejected close",
+        )
+
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.state._enforce_wave_close_gate",
+        _reject,
+    )
+
+    async def body() -> None:
+        with (
+            caplog.at_level(logging.WARNING),
+            pytest.raises(DaemonValidationError, match="waiver_mode_disabled"),
+        ):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+
+    _run(body)
+    assert state_path.read_bytes() == before
+    assert not event_path.exists() or not event_path.read_bytes()
+    assert not list(wal_dir.glob("*.json"))
+    assert "mutation_kind=wave_close" in caplog.text
+    assert "scope_id='P24-I01-W09'" in caplog.text
+    assert "guard_code=waiver_mode_disabled" in caplog.text

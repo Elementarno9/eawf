@@ -6,6 +6,7 @@ import importlib.util
 import re
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -384,7 +385,12 @@ def test_disabled_coauthor_policy_accepts_no_trailer(tmp_path: Path, mod) -> Non
 
 
 def _write_state(tmp_path: Path, *, phase_id: str | None) -> Path:
-    state = {"current": {"phase_id": phase_id, "iter_id": None}}
+    state = {
+        "current": {"phase_id": phase_id, "iter_id": None},
+        "phases": {},
+        "iters": {},
+        "waves": {},
+    }
     p = tmp_path / "state.json"
     import json as _json
 
@@ -410,8 +416,14 @@ def test_accepts_trailer_style_wave_commit_when_configured(tmp_path: Path, mod) 
         tmp_path,
         "feat: add trailer-style wave commit\n\nEawf-Wave: P28-I03-W02\n",
     )
-    state = _write_state(tmp_path, phase_id="P28")
-    code, diag = mod.lint(msg, ["src/eawf/x.py"], state_path=state, repo_root=repo)
+    state = _write_hierarchy_state(tmp_path, wave_status="claimed", iter_token="I03")
+    code, diag = mod.lint(
+        msg,
+        ["src/eawf/x.py"],
+        state_path=state,
+        repo_root=repo,
+        canonical_state_path=state,
+    )
     assert code == 0, diag
 
 
@@ -475,6 +487,258 @@ def test_bare_conventional_all_supported_types(tmp_path: Path, mod) -> None:
         msg = _write_msg(tmp_path, f"{ctype}: something\n\nbody\n")
         code, diag = mod.lint(msg, ["any/path.py"], state_path=state)
         assert code == 0, f"{ctype} rejected: {diag}"
+
+
+def _write_hierarchy_state(
+    tmp_path: Path,
+    *,
+    wave_status: str,
+    iter_token: str = "I01",
+    phase_status: str = "active",
+    iter_status: str = "active",
+    current_phase_id: str | None = "P28",
+    current_iter_id: str | None = None,
+    filename: str = "hierarchy-state.json",
+) -> Path:
+    """Write one bidirectionally-linked phase/iter/wave lint fixture."""
+    phase_id = "P28"
+    iter_id = f"{phase_id}-{iter_token}"
+    wave_id = f"{iter_id}-W02"
+    current_iter = iter_id if current_iter_id is None else current_iter_id
+    payload = {
+        "current": {
+            "phase_id": current_phase_id,
+            "iter_id": current_iter,
+        },
+        "phases": {
+            phase_id: {
+                "id": phase_id,
+                "status": phase_status,
+                "iter_ids": [iter_id],
+            }
+        },
+        "iters": {
+            iter_id: {
+                "id": iter_id,
+                "phase_id": phase_id,
+                "status": iter_status,
+                "wave_ids": [wave_id],
+            }
+        },
+        "waves": {
+            wave_id: {
+                "id": wave_id,
+                "iter_id": iter_id,
+                "status": wave_status,
+            }
+        },
+    }
+    path = tmp_path / filename
+    import json as _json
+
+    path.write_text(_json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def test_managed_state_decode_failure_rejects_bare_commit(tmp_path: Path, mod) -> None:
+    """A present-but-corrupt managed state never fails open."""
+    state = tmp_path / "state.json"
+    state.write_text("{not-json", encoding="utf-8")
+    msg = _write_msg(tmp_path, "fix: cannot authorize against corrupt state\n")
+
+    code, diag = mod.lint(msg, ["src/eawf/x.py"], state_path=state)
+
+    assert code == 1
+    assert "managed state decode failed" in diag
+
+
+def test_wave_subject_rejects_unknown_hierarchy(tmp_path: Path, mod) -> None:
+    state = _write_hierarchy_state(tmp_path, wave_status="claimed")
+    msg = _write_msg(tmp_path, "[P28-I01-W03] fix: unknown wave\n")
+
+    code, diag = mod.lint(
+        msg,
+        ["src/eawf/x.py"],
+        state_path=state,
+        canonical_state_path=state,
+    )
+
+    assert code == 1
+    assert "unknown wave reference" in diag
+
+
+def test_wave_subject_rejects_wrong_bidirectional_parent(tmp_path: Path, mod) -> None:
+    state = _write_hierarchy_state(tmp_path, wave_status="claimed")
+    import json as _json
+
+    payload = _json.loads(state.read_text(encoding="utf-8"))
+    payload["iters"]["P28-I01"]["wave_ids"] = []
+    state.write_text(_json.dumps(payload), encoding="utf-8")
+    msg = _write_msg(tmp_path, "[P28-W02] fix: detached wave\n")
+
+    code, diag = mod.lint(
+        msg,
+        ["src/eawf/x.py"],
+        state_path=state,
+        canonical_state_path=state,
+    )
+
+    assert code == 1
+    assert "does not contain wave" in diag
+
+
+def test_short_wave_subject_normalizes_to_i01(tmp_path: Path, mod) -> None:
+    state = _write_hierarchy_state(tmp_path, wave_status="claimed")
+    msg = _write_msg(tmp_path, "[P28-W02] fix: valid short wave\n")
+
+    code, diag = mod.lint(
+        msg,
+        ["src/eawf/x.py"],
+        state_path=state,
+        canonical_state_path=state,
+    )
+
+    assert code == 0, diag
+
+
+def test_source_commit_requires_current_active_phase_and_iter(tmp_path: Path, mod) -> None:
+    state = _write_hierarchy_state(
+        tmp_path,
+        wave_status="claimed",
+        phase_status="closed",
+        iter_status="closed",
+    )
+    msg = _write_msg(tmp_path, "[P28-W02] fix: stale source scope\n")
+
+    code, diag = mod.lint(
+        msg,
+        ["src/eawf/x.py"],
+        state_path=state,
+        canonical_state_path=state,
+    )
+
+    assert code == 1
+    assert "not current ACTIVE phase" in diag
+
+
+def test_trailer_reference_rejects_unknown_hierarchy(tmp_path: Path, mod) -> None:
+    state = _write_hierarchy_state(tmp_path, wave_status="claimed", iter_token="I03")
+    msg = _write_msg(
+        tmp_path,
+        "fix: bad trailer scope\n\nEawf-Wave: P28-I03-W03\n",
+    )
+
+    code, diag = mod.lint(
+        msg,
+        ["src/eawf/x.py"],
+        state_path=state,
+        subject_style="trailer",
+        canonical_state_path=state,
+    )
+
+    assert code == 1
+    assert "Eawf-Wave trailer rejected" in diag
+    assert "unknown wave reference" in diag
+
+
+def test_claimed_proof_uses_canonical_state_not_stale_child(tmp_path: Path, mod) -> None:
+    child = _write_hierarchy_state(
+        tmp_path,
+        wave_status="pending",
+        filename="child-state.json",
+    )
+    canonical = _write_hierarchy_state(
+        tmp_path,
+        wave_status="claimed",
+        filename="canonical-state.json",
+    )
+    msg = _write_msg(tmp_path, "[P28-W02] fix: canonical claim proof\n")
+
+    code, diag = mod.lint(
+        msg,
+        ["src/eawf/x.py"],
+        state_path=child,
+        canonical_state_path=canonical,
+    )
+
+    assert code == 0, diag
+
+
+@pytest.mark.parametrize("status", ["claimed", "in_progress"])
+def test_claimed_proof_accepts_live_canonical_status(tmp_path: Path, mod, status: str) -> None:
+    state = _write_hierarchy_state(tmp_path, wave_status=status)
+    msg = _write_msg(tmp_path, "[P28-W02] fix: live proof\n")
+
+    code, diag = mod.lint(
+        msg,
+        ["src/eawf/x.py"],
+        state_path=state,
+        canonical_state_path=state,
+    )
+
+    assert code == 0, diag
+
+
+def test_claimed_proof_rejects_pending_canonical_state(tmp_path: Path, mod) -> None:
+    child = _write_hierarchy_state(
+        tmp_path,
+        wave_status="claimed",
+        filename="child-state.json",
+    )
+    canonical = _write_hierarchy_state(
+        tmp_path,
+        wave_status="pending",
+        filename="canonical-state.json",
+    )
+    msg = _write_msg(tmp_path, "[P28-W02] fix: pending canonical proof\n")
+
+    code, diag = mod.lint(
+        msg,
+        ["src/eawf/x.py"],
+        state_path=child,
+        canonical_state_path=canonical,
+    )
+
+    assert code == 1
+    assert "canonical status 'pending'" in diag
+
+
+def test_claimed_proof_rejects_missing_canonical_state(tmp_path: Path, mod) -> None:
+    state = _write_hierarchy_state(tmp_path, wave_status="claimed")
+    msg = _write_msg(tmp_path, "[P28-W02] fix: missing canonical proof\n")
+
+    code, diag = mod.lint(
+        msg,
+        ["src/eawf/x.py"],
+        state_path=state,
+        canonical_state_path=tmp_path / "missing-canonical.json",
+    )
+
+    assert code == 1
+    assert "claimed proof unavailable" in diag
+
+
+def test_canonical_state_path_uses_supported_git_common_dir(
+    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    common_dir = tmp_path / "main" / ".git"
+    seen: dict[str, object] = {}
+
+    def _run(args: list[str], **kwargs: object) -> object:
+        seen["args"] = args
+        seen["cwd"] = kwargs.get("cwd")
+        return SimpleNamespace(returncode=0, stdout=f"{common_dir}\n", stderr="")
+
+    monkeypatch.setattr(mod.subprocess, "run", _run)
+
+    assert mod._canonical_state_path(tmp_path) == tmp_path / "main" / ".ea" / "state.json"
+    assert seen["args"] == [
+        "git",
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-common-dir",
+    ]
+    assert seen["cwd"] == tmp_path
 
 
 def test_accepts_three_digit_wave_id(tmp_path: Path, mod) -> None:

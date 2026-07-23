@@ -30,7 +30,7 @@ import orjson
 import pytest
 
 from eawf import __version__
-from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.kernel.store.paths import store_path
@@ -356,6 +356,16 @@ def test_close_high_risk_no_prior_verdict_is_blocked(
     _run(body)
     # The single-auditor producer spawned exactly one fresh auditor.
     assert stub.calls == 1
+    persisted = State.model_validate(orjson.loads(state_path.read_bytes()))
+    auditors = [
+        session
+        for session in persisted.agent_sessions.values()
+        if session.role is AgentSessionRole.AUDITOR
+    ]
+    assert len(auditors) == 1
+    assert auditors[0].status is AgentSessionStatus.CLOSED
+    assert auditors[0].ended_at is not None
+    assert auditors[0].id not in persisted.current.active_session_ids
 
 
 def test_close_high_risk_fail_verdict_is_blocked(

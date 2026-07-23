@@ -130,9 +130,15 @@ _SECTION_OF: dict[str, str] = {
     "tools_available": "install",
     "config_resolves": "install",
     "render_output_roundtrip": "install",
+    "cli_daemon_version": "install",
+    "parallel_cap_enforcement": "install",
     # state -- the state.json presence + scale + recent-events signals
     "state_present": "state",
     "state_scale_ceiling": "state",
+    "active_phase_without_iter": "state",
+    "stale_session_count": "state",
+    "recent_actuals": "state",
+    "iter_audit_links": "state",
     "recent_events": "state",
     # drift -- the manifest / MCP / git-state reconciler signals
     "manifest_in_sync": "drift",

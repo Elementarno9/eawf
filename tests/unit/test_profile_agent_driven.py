@@ -12,9 +12,8 @@ plus a pointer to the decisions that ratified them:
 - **ADR pointer** — names Decision D10 (one-PR-per-phase cadence) + D07
   (rebase-merge) and the canonical ``docs/architecture/workflow.md`` reference
   so the divergence is auditable and reversible.
-- **lean wave verification** — targeted tests per wave; the full suite plus
-  the single fresh-context audit run once per iter at close (batch-boundary
-  verification, mirroring the v0.7 exact-head Batch audit).
+- **lean wave verification** — targeted tests per wave; strict close validates
+  audit-link integrity only, while exact-HEAD provenance stays deferred.
 
 The contracts under test mirror the W02 ``quality`` profile suite:
 
@@ -121,6 +120,15 @@ def test_agent_driven_profile_renders_divergence_rules(tmp_path: Path) -> None:
     assert "D10" in rendered
     assert "D07" in rendered
     assert "docs/architecture/workflow.md" in rendered
+    assert "src/eawf/_version.py" in rendered
+    assert "declares the version dynamically" in rendered
+    assert "static ``project.version``" in rendered
+    assert "exact closing HEAD remains deferred" in rendered
+    assert "does not validate evaluated HEAD" in rendered
+    assert "1-in-4 classification for mechanical waves is advisory" in rendered
+    assert "do not trigger a blocking live auditor spawn" in rendered
+    assert "``flow.max_repair_cycles`` does not enforce it" in rendered
+    assert "audit bound to the closing head SHA" not in rendered
 
 
 def test_agent_driven_profile_composes_with_core() -> None:

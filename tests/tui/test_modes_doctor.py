@@ -384,8 +384,14 @@ def test_render_health_lines_groups_install_state_drift_sections() -> None:
             HealthRow("tools_available", "ok", "3 probes ok"),
             HealthRow("config_resolves", "ok", "2 profile(s)"),
             HealthRow("render_output_roundtrip", "ok", "ok"),
+            HealthRow("cli_daemon_version", "ok", "versions match"),
+            HealthRow("parallel_cap_enforcement", "ok", "cap enforced"),
             HealthRow("state_present", "ok", "found"),
             HealthRow("state_scale_ceiling", "ok", "under ceiling"),
+            HealthRow("active_phase_without_iter", "ok", "none"),
+            HealthRow("stale_session_count", "ok", "zero"),
+            HealthRow("recent_actuals", "ok", "recorded"),
+            HealthRow("iter_audit_links", "ok", "accepted"),
             HealthRow("manifest_in_sync", "ok", "synced"),
             HealthRow("mcp_drift", "ok", "no drift"),
             HealthRow("git_state_drift", "ok", "reconciles"),
@@ -405,9 +411,16 @@ def test_render_health_lines_groups_install_state_drift_sections() -> None:
     # An install-section row sits before the State header; a drift-section
     # row sits after the Drift header (the grouping is honoured, not flat).
     assert body.index("tools_available") < state_at
+    assert body.index("cli_daemon_version") < state_at
+    assert body.index("parallel_cap_enforcement") < state_at
     assert body.index("git_state_drift") > drift_at
     assert body.index("state_present") > state_at
     assert body.index("state_present") < drift_at
+    assert body.index("active_phase_without_iter") > state_at
+    assert body.index("active_phase_without_iter") < drift_at
+    assert body.index("stale_session_count") < drift_at
+    assert body.index("recent_actuals") < drift_at
+    assert body.index("iter_audit_links") < drift_at
 
 
 def test_render_health_lines_header_reads_n_checks_m_warn() -> None:

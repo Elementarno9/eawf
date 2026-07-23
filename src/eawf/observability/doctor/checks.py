@@ -32,6 +32,8 @@ from __future__ import annotations
 
 import logging
 import os
+import socket
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -77,6 +79,13 @@ STATE_WAVE_WARN_FRACTION = 0.8
 # from ``ok`` to ``warn``. Derived from the ceiling and the warn fraction so the
 # two knobs stay the single source of truth.
 STATE_WAVE_WARN_THRESHOLD = int(STATE_WAVE_SCALE_CEILING * STATE_WAVE_WARN_FRACTION)
+
+# Bound the diagnostic to a recent, deterministic slice. This is an
+# operability summary, not a historical accounting report.
+RECENT_ACTUAL_WINDOW = 20
+
+# Doctor is interactive and must never hang behind a dead runtime socket.
+DAEMON_VERSION_PROBE_TIMEOUT_SECONDS = 0.2
 
 
 class CheckResult(BaseModel):
@@ -648,6 +657,287 @@ def check_state_scale_ceiling(*, workspace: Path | None) -> CheckResult:
     )
 
 
+def check_active_phase_without_iter(*, workspace: Path | None) -> CheckResult:
+    """Warn when an ACTIVE phase has no ACTIVE child iter."""
+    name = "active_phase_without_iter"
+    if workspace is None:
+        return CheckResult(name=name, status="ok", detail="no workspace anchor")
+    loaded = _load_state_for_check(workspace, name=name)
+    if isinstance(loaded, CheckResult):
+        return loaded
+    state, _state_path = loaded
+
+    from eawf.kernel.state.enums import IterStatus, PhaseStatus
+
+    offenders = sorted(
+        phase_id
+        for phase_id, phase in state.phases.items()
+        if phase.status is PhaseStatus.ACTIVE
+        and not any(
+            state.iters.get(iter_id) is not None
+            and state.iters[iter_id].status is IterStatus.ACTIVE
+            for iter_id in phase.iter_ids
+        )
+    )
+    if offenders:
+        shown = ", ".join(offenders[:5])
+        suffix = f" (+{len(offenders) - 5} more)" if len(offenders) > 5 else ""
+        return CheckResult(
+            name=name,
+            status="warn",
+            detail=f"{len(offenders)} active phase(s) have no active iter: {shown}{suffix}",
+        )
+    return CheckResult(name=name, status="ok", detail="every active phase has an active iter")
+
+
+def check_stale_session_count(*, workspace: Path | None) -> CheckResult:
+    """Summarize historical agent sessions still marked STALE."""
+    name = "stale_session_count"
+    if workspace is None:
+        return CheckResult(name=name, status="ok", detail="no workspace anchor")
+    loaded = _load_state_for_check(workspace, name=name)
+    if isinstance(loaded, CheckResult):
+        return loaded
+    state, _state_path = loaded
+
+    from eawf.kernel.state.enums import AgentSessionStatus
+
+    stale_count = sum(
+        session.status is AgentSessionStatus.STALE for session in state.agent_sessions.values()
+    )
+    if stale_count:
+        return CheckResult(
+            name=name,
+            status="warn",
+            detail=f"{stale_count} historical agent session(s) marked stale",
+        )
+    return CheckResult(name=name, status="ok", detail="0 stale agent sessions")
+
+
+def check_recent_actuals(*, workspace: Path | None) -> CheckResult:
+    """Summarize missing or zero-token/zero-cost actuals for recent closes.
+
+    A numeric zero alone does not prove that no usage occurred. This row only
+    reports what state records so operators can inspect unavailable telemetry.
+    """
+    name = "recent_actuals"
+    if workspace is None:
+        return CheckResult(name=name, status="ok", detail="no workspace anchor")
+    loaded = _load_state_for_check(workspace, name=name)
+    if isinstance(loaded, CheckResult):
+        return loaded
+    state, _state_path = loaded
+
+    from eawf.kernel.state.enums import WaveStatus
+
+    closed = [wave for wave in state.waves.values() if wave.status is WaveStatus.CLOSED]
+    closed.sort(
+        key=lambda wave: (
+            wave.closed_at.isoformat() if wave.closed_at is not None else "",
+            wave.id,
+        ),
+        reverse=True,
+    )
+    sampled = closed[:RECENT_ACTUAL_WINDOW]
+    actuals = state.actuals or {}
+    missing_ids = [wave.id for wave in sampled if wave.id not in actuals]
+    zero_ids = [
+        wave.id
+        for wave in sampled
+        if (actual := actuals.get(wave.id)) is not None
+        and actual.actual_tokens == 0
+        and actual.actual_cost_usd == 0.0
+    ]
+    if missing_ids or zero_ids:
+        return CheckResult(
+            name=name,
+            status="warn",
+            detail=(
+                f"last {len(sampled)} closed wave(s): {len(missing_ids)} missing actual(s), "
+                f"{len(zero_ids)} zero-token/zero-cost actual(s); zeros do not prove no usage"
+            ),
+        )
+    return CheckResult(
+        name=name,
+        status="ok",
+        detail=f"last {len(sampled)} closed wave(s) have nonzero recorded actuals",
+    )
+
+
+def check_iter_audit_links(*, workspace: Path | None) -> CheckResult:
+    """Validate CLOSED iter audit links with the production close policy."""
+    name = "iter_audit_links"
+    if workspace is None:
+        return CheckResult(name=name, status="ok", detail="no workspace anchor")
+    loaded = _load_state_for_check(workspace, name=name)
+    if isinstance(loaded, CheckResult):
+        return loaded
+    state, _state_path = loaded
+
+    from eawf.kernel.state.enums import AuditKind, IterStatus
+    from eawf.workflow.lifecycle._audit_acceptance import (
+        ITER_CLOSE_AUDIT_CHECK_ORDER,
+        assess_close_audit,
+    )
+
+    invalid: list[str] = []
+    closed_count = 0
+    for iter_id, iter_row in sorted(state.iters.items()):
+        if iter_row.status is not IterStatus.CLOSED:
+            continue
+        closed_count += 1
+        assessment = assess_close_audit(
+            state,
+            audit_id=iter_row.audit_id,
+            allowed_scope_ids=frozenset({iter_id}),
+            required_kind=AuditKind.EVALUATION,
+            check_order=ITER_CLOSE_AUDIT_CHECK_ORDER,
+            require_passing_check=True,
+        )
+        if assessment.issue is not None:
+            invalid.append(f"{iter_id}={assessment.issue.value}")
+    if invalid:
+        shown = ", ".join(invalid[:5])
+        suffix = f" (+{len(invalid) - 5} more)" if len(invalid) > 5 else ""
+        return CheckResult(
+            name=name,
+            status="warn",
+            detail=f"{len(invalid)} invalid closed-iter audit link(s): {shown}{suffix}",
+        )
+    return CheckResult(
+        name=name,
+        status="ok",
+        detail=f"{closed_count} closed iter audit link(s) accepted",
+    )
+
+
+def _daemon_ping_request() -> bytes:
+    """Return a newline-framed read-only daemon ping request."""
+    import json
+
+    payload = {
+        "jsonrpc": "2.0",
+        "id": "doctor-version-probe",
+        "method": "daemon.ping",
+        "params": {},
+    }
+    return json.dumps(payload).encode("utf-8") + b"\n"
+
+
+def _version_from_ping_response(response_bytes: bytes) -> str | None:
+    """Extract a daemon version from one JSON-RPC response frame."""
+    import json
+
+    try:
+        response = json.loads(response_bytes.rstrip(b"\n").decode("utf-8"))
+    except UnicodeDecodeError, json.JSONDecodeError:
+        return None
+    result = response.get("result") if isinstance(response, dict) else None
+    version = result.get("version") if isinstance(result, dict) else None
+    return version if isinstance(version, str) and version else None
+
+
+def _probe_running_daemon_version() -> str | None:
+    """Read an existing daemon's version without starting or restarting it."""
+    from eawf.runtime.daemon.runtime_dir import runtime_dir
+
+    request = _daemon_ping_request()
+    if sys.platform == "win32":
+        from eawf.runtime.daemon.windows_pipe import default_pipe_name, pipe_client_call
+
+        try:
+            response = pipe_client_call(
+                default_pipe_name(),
+                request,
+                wait_ms=max(1, int(DAEMON_VERSION_PROBE_TIMEOUT_SECONDS * 1000)),
+            )
+        except Exception:
+            return None
+        return _version_from_ping_response(response)
+
+    sock_path = runtime_dir() / "eawfd.sock"
+    if not sock_path.exists():
+        return None
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe_socket:
+            probe_socket.settimeout(DAEMON_VERSION_PROBE_TIMEOUT_SECONDS)
+            probe_socket.connect(str(sock_path))
+            probe_socket.sendall(request)
+            reader = probe_socket.makefile("rb")
+            try:
+                response = reader.readline()
+            finally:
+                reader.close()
+    except OSError:
+        return None
+    return _version_from_ping_response(response) if response else None
+
+
+def check_cli_daemon_version(
+    *,
+    probe_version: Callable[[], str | None] | None = None,
+) -> CheckResult:
+    """Compare installed CLI and running daemon versions without spawning."""
+    from eawf import __version__
+
+    name = "cli_daemon_version"
+    probe_version = probe_version or _probe_running_daemon_version
+    try:
+        daemon_version = probe_version()
+    except Exception as exc:
+        return CheckResult(
+            name=name,
+            status="warn",
+            detail=f"running daemon version probe failed: {exc}",
+        )
+    if daemon_version is None:
+        return CheckResult(
+            name=name,
+            status="ok",
+            detail=f"CLI {__version__}; no running daemon version available",
+        )
+    if daemon_version != __version__:
+        return CheckResult(
+            name=name,
+            status="warn",
+            detail=(
+                f"version skew: CLI {__version__}, running daemon {daemon_version}; "
+                "restart daemon after install"
+            ),
+        )
+    return CheckResult(
+        name=name,
+        status="ok",
+        detail=f"CLI and running daemon both {__version__}",
+    )
+
+
+def check_parallel_cap_enforcement(
+    *,
+    workspace: Path | None,
+    resolver: Callable[[Path | None], int] | None = None,
+) -> CheckResult:
+    """Report the effective cap and this version's enforcement capability."""
+    from eawf.workflow.lifecycle._capacity import resolve_max_parallel_waves
+
+    name = "parallel_cap_enforcement"
+    anchor = _resolve_anchor(workspace)
+    resolver = resolver or resolve_max_parallel_waves
+    try:
+        cap = resolver(anchor)
+    except Exception as exc:
+        return CheckResult(
+            name=name,
+            status="warn",
+            detail=f"parallel cap cannot be resolved: {exc}",
+        )
+    return CheckResult(
+        name=name,
+        status="ok",
+        detail=f"planning.max_parallel_waves={cap}; claim and fleet paths enforce this cap",
+    )
+
+
 def _store_fold_parity(
     *, workspace: Path, name: str, store_filename: str, state_map: Mapping[str, object]
 ) -> CheckResult:
@@ -1047,6 +1337,7 @@ def run_all(
     reprobe: bool = False,
     cache_path: Path | None = None,
     reserved_config_result: CheckResult | None = None,
+    daemon_version_probe: Callable[[], str | None] | None = None,
 ) -> list[CheckResult]:
     """Run every doctor check and return the result list.
 
@@ -1066,6 +1357,8 @@ def run_all(
     location (:func:`_resolve_probe_cache_path`) so probing never litters an
     ``instrument-probe.json`` into an arbitrary anchor directory.
     """
+    from eawf.observability.doctor.workflow_health import run_workflow_health_checks
+
     anchor = _resolve_anchor(workspace)
     probe_cache = cache_path if cache_path is not None else _resolve_probe_cache_path(anchor)
     workspace_for_probe = anchor if anchor is not None else Path.cwd()
@@ -1086,6 +1379,10 @@ def run_all(
         check_manifest_in_sync(workspace=anchor),
         check_mcp_drift(workspace=anchor),
         check_state_scale_ceiling(workspace=anchor),
+        *run_workflow_health_checks(
+            workspace=anchor,
+            daemon_version_probe=daemon_version_probe,
+        ),
         check_incident_fold_parity(workspace=anchor),
         check_backlog_fold_parity(workspace=anchor),
         check_launchd_agent(),

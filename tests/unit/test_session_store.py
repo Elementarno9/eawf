@@ -22,6 +22,7 @@ from eawf.runtime.session.store import (
     close_session,
     reconcile_orphaned_sessions,
     start_session,
+    terminalize_session,
 )
 from eawf.workflow.evidence._io import load_state
 
@@ -397,6 +398,38 @@ def test_close_after_failed_state_supports_replay(tmp_path: Path) -> None:
         now=datetime.now(UTC) + timedelta(minutes=1),
     )
     assert state.agent_sessions[started.session.id].status is AgentSessionStatus.STALE
+
+
+def test_terminalize_session_event_failure_keeps_terminal_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Best-effort terminalization swallows only close-event telemetry loss."""
+    from eawf.runtime.session import store as session_store
+
+    state = _make_state()
+    events = tmp_path / "events.jsonl"
+    started = start_session(
+        state=state,
+        events_path=events,
+        role=AgentSessionRole.AUDITOR,
+        scope_id="QR",
+        runtime="claude",
+    )
+
+    def _fail_event(_path: Path, _envelope: object) -> object:
+        raise OSError("event store unavailable")
+
+    monkeypatch.setattr(session_store, "commit_event", _fail_event)
+    result = terminalize_session(
+        state=state,
+        events_path=events,
+        session_id=started.session.id,
+        status=AgentSessionStatus.FAILED,
+    )
+    assert result.session.status is AgentSessionStatus.FAILED
+    assert result.session.ended_at is not None
+    assert result.session.id not in state.current.active_session_ids
+    assert "event_status=failed" in caplog.text
 
 
 def _seed_state_path(tmp_path: Path, sessions: dict[str, str]) -> Path:

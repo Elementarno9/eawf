@@ -498,7 +498,7 @@ def test_verify_gate_returns_typed_outcome(tmp_path: Path) -> None:
 
 
 def test_produce_registers_fresh_auditor_session(tmp_path: Path) -> None:
-    """The producer registers a NEW AUDITOR session scoped to the wave."""
+    """A successful producer closes its fresh AUDITOR session."""
     state, state_path, events_path = _write_state(tmp_path, effort_bucket="L")
     wave = state.waves[_WAVE_ID]
     result = _run(
@@ -518,7 +518,9 @@ def test_produce_registers_fresh_auditor_session(tmp_path: Path) -> None:
     # coexists with the executor's wave-scoped session; the verdict's join
     # key (report base_id) is the bare wave id (asserted separately).
     assert auditor.scope_id == f"{_WAVE_ID}::audit"
-    assert auditor.status is AgentSessionStatus.ACTIVE
+    assert auditor.status is AgentSessionStatus.CLOSED
+    assert auditor.ended_at is not None
+    assert auditor.id not in state.current.active_session_ids
     assert result.auditor_session_id == auditor.id
 
 
@@ -644,12 +646,13 @@ def test_produce_retry_appends_attempt_two(tmp_path: Path) -> None:
     assert rows[1].payload.body.verdict is AgentReportVerdict.PASS
 
 
-def test_produce_retry_reuses_single_auditor_session(tmp_path: Path) -> None:
-    """Retry reuses the ACTIVE auditor session rather than minting a second."""
+def test_produce_retry_creates_distinct_terminal_auditor_session(tmp_path: Path) -> None:
+    """Each report retry mints a distinct terminal auditor session."""
     state, state_path, events_path = _write_state(tmp_path, effort_bucket="L")
     wave = state.waves[_WAVE_ID]
+    result_ids: list[str] = []
     for verdict in ("fail", "pass"):
-        _run(
+        result = _run(
             produce_wave_verdict(
                 state=state,
                 state_path=state_path,
@@ -659,8 +662,12 @@ def test_produce_retry_reuses_single_auditor_session(tmp_path: Path) -> None:
                 repo_root=tmp_path,
             )
         )
+        result_ids.append(result.auditor_session_id)
     auditors = [s for s in state.agent_sessions.values() if s.role is AgentSessionRole.AUDITOR]
-    assert len(auditors) == 1
+    assert len(auditors) == 2
+    assert len(set(result_ids)) == 2
+    assert all(session.status is AgentSessionStatus.CLOSED for session in auditors)
+    assert state.current.active_session_ids == []
 
 
 # --------------------------------------------------------------------------- #
@@ -904,6 +911,87 @@ def test_produce_rejects_when_executor_body_returned(tmp_path: Path) -> None:
         )
     rows = iter_agent_reports(state_path, role=AgentSessionRole.AUDITOR, base_id=_WAVE_ID)
     assert rows == []
+    auditor = next(
+        session
+        for session in state.agent_sessions.values()
+        if session.role is AgentSessionRole.AUDITOR
+    )
+    assert auditor.status is AgentSessionStatus.FAILED
+    assert auditor.ended_at is not None
+    assert auditor.id not in state.current.active_session_ids
+
+
+def test_produce_report_store_failure_terminalizes_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A report append failure preserves its error and leaves no ACTIVE session."""
+    state, state_path, events_path = _write_state(tmp_path, effort_bucket="L")
+    wave = state.waves[_WAVE_ID]
+
+    def _fail_append(**_kwargs: object) -> object:
+        raise OSError("report store unavailable")
+
+    monkeypatch.setattr(
+        "eawf.workflow.dispatch.verdict.append_agent_report",
+        _fail_append,
+    )
+    with pytest.raises(OSError, match="report store unavailable"):
+        _run(
+            produce_wave_verdict(
+                state=state,
+                state_path=state_path,
+                events_path=events_path,
+                wave=wave,
+                spawn=_RecordingSpawn([_auditor_body_json()]),
+                repo_root=tmp_path,
+            )
+        )
+    auditor = next(
+        session
+        for session in state.agent_sessions.values()
+        if session.role is AgentSessionRole.AUDITOR
+    )
+    assert auditor.status is AgentSessionStatus.FAILED
+    assert auditor.ended_at is not None
+    assert auditor.id not in state.current.active_session_ids
+
+
+def test_produce_close_event_failure_does_not_mask_success(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Close-event loss is secondary; validated report still returns CLOSED."""
+    from eawf.runtime.session import store as session_store
+
+    state, state_path, events_path = _write_state(tmp_path, effort_bucket="L")
+    wave = state.waves[_WAVE_ID]
+    original = session_store.commit_event
+    calls = 0
+
+    def _fail_second_event(path: Path, envelope: object) -> object:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("close event unavailable")
+        return original(path, envelope)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(session_store, "commit_event", _fail_second_event)
+    result = _run(
+        produce_wave_verdict(
+            state=state,
+            state_path=state_path,
+            events_path=events_path,
+            wave=wave,
+            spawn=_RecordingSpawn([_auditor_body_json()]),
+            repo_root=tmp_path,
+        )
+    )
+    auditor = state.agent_sessions[result.auditor_session_id]
+    assert auditor.status is AgentSessionStatus.CLOSED
+    assert auditor.ended_at is not None
+    assert auditor.id not in state.current.active_session_ids
+    assert "event_status=failed" in caplog.text
 
 
 # --------------------------------------------------------------------------- #
@@ -984,10 +1072,10 @@ def test_produce_coexists_with_active_executor_session(tmp_path: Path) -> None:
     author = state.agent_sessions[result.auditor_session_id]
     assert author.role is AgentSessionRole.AUDITOR
     assert result.auditor_session_id != "SES-EXEC"
-    # Both lanes are ACTIVE: the executor on the wave scope, the auditor on
-    # the verdict-qualified scope.
+    # The executor lane remains ACTIVE; the completed auditor lane is CLOSED.
     assert state.agent_sessions["SES-EXEC"].status is AgentSessionStatus.ACTIVE
     assert author.scope_id == f"{_WAVE_ID}::audit"
+    assert author.status is AgentSessionStatus.CLOSED
 
 
 def test_append_agent_report_role_mismatch_is_typed() -> None:
