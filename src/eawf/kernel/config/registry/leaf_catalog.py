@@ -1599,6 +1599,7 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "estimation.eu_basis": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
     "estimation.eu_minutes": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
     "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_enforce",
+    "planning.max_parallel_waves": ("eawf.workflow.lifecycle._capacity.resolve_max_parallel_waves"),
     "prep.auto_resume": "eawf.workflow.skills.prep.PrepSkill._resolve_auto_resume",
     "research.agent_count": "eawf.workflow.skills.research.ResearchSkill._resolve_agents",
     "research.default_depth": "eawf.workflow.skills.research.ResearchSkill._resolve_depth",
