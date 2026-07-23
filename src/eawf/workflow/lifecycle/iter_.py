@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Final, Literal
 from eawf.kernel.spec.common import CriterionSpec
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
+    AuditKind,
     Confidence,
     IterStatus,
     MemoryStatus,
@@ -40,7 +41,16 @@ from eawf.observability.metrics.odr import (
     pulse_refuses_dispatch,
 )
 from eawf.workflow.estimation.buckets import wave_estimate_eu
-from eawf.workflow.lifecycle._errors import LifecycleError, check_title_clarity
+from eawf.workflow.lifecycle._audit_acceptance import (
+    AUDIT_MINOR_BACKLOG_TRIAGE,
+    AuditAcceptanceIssue,
+    assess_close_audit,
+)
+from eawf.workflow.lifecycle._errors import (
+    LifecycleError,
+    LifecycleGuardError,
+    check_title_clarity,
+)
 from eawf.workflow.lifecycle.spec import ITER_TRANSITIONS, validate_transition
 
 if TYPE_CHECKING:
@@ -59,6 +69,75 @@ logger = logging.getLogger(__name__)
 _DEFAULT_DRIFT_BUDGET_WAVES: Final[int] = 3
 _DEFAULT_DRIFT_BUDGET_EU: Final[float] = 3.5
 _DEFAULT_CHECKPOINT_MODE: Final[Literal["optimistic", "barrier"]] = "optimistic"
+
+_ITER_CLOSE_AUDIT_CHECK_ORDER: Final[tuple[AuditAcceptanceIssue, ...]] = (
+    AuditAcceptanceIssue.SCOPE_MISMATCH,
+    AuditAcceptanceIssue.KIND_INVALID,
+    AuditAcceptanceIssue.NOT_COMPLETE,
+    AuditAcceptanceIssue.VERDICT_REJECTED,
+    AuditAcceptanceIssue.FUTURE_TIMESTAMP,
+    AuditAcceptanceIssue.EVIDENCE_MISSING,
+)
+
+
+def _validate_iter_close_audit(
+    state: State,
+    *,
+    iter_id: str,
+    audit_id: str,
+) -> tuple[str, ...]:
+    """Return strict-close warnings or raise a coded audit-link rejection."""
+    assessment = assess_close_audit(
+        state,
+        audit_id=audit_id,
+        allowed_scope_ids=frozenset({iter_id}),
+        required_kind=AuditKind.EVALUATION,
+        check_order=_ITER_CLOSE_AUDIT_CHECK_ORDER,
+        require_passing_check=True,
+    )
+    issue = assessment.issue
+    if issue is None:
+        return assessment.warnings
+    if issue in {AuditAcceptanceIssue.REQUIRED, AuditAcceptanceIssue.NOT_FOUND}:
+        raise LifecycleGuardError(
+            "audit_not_found",
+            iter_id,
+            f"iter close audit {audit_id!r} not found",
+        )
+    if issue is AuditAcceptanceIssue.SCOPE_MISMATCH:
+        raise LifecycleGuardError(
+            "audit_scope_mismatch",
+            iter_id,
+            f"iter close audit {audit_id!r} must be scoped exactly to iter {iter_id!r}",
+        )
+    if issue is AuditAcceptanceIssue.KIND_INVALID:
+        raise LifecycleGuardError(
+            "audit_kind_invalid",
+            iter_id,
+            f"iter close audit {audit_id!r} must have kind 'evaluation'",
+        )
+    if issue in {AuditAcceptanceIssue.NOT_COMPLETE, AuditAcceptanceIssue.FUTURE_TIMESTAMP}:
+        detail = (
+            "must be complete"
+            if issue is AuditAcceptanceIssue.NOT_COMPLETE
+            else "has a future created_at timestamp"
+        )
+        raise LifecycleGuardError(
+            "audit_not_complete",
+            iter_id,
+            f"iter close audit {audit_id!r} {detail}",
+        )
+    if issue is AuditAcceptanceIssue.VERDICT_REJECTED:
+        raise LifecycleGuardError(
+            "audit_verdict_rejected",
+            iter_id,
+            f"iter close audit {audit_id!r} verdict must be pass or minor",
+        )
+    raise LifecycleGuardError(
+        "audit_evidence_missing",
+        iter_id,
+        f"iter close audit {audit_id!r} must include real passing audit evidence",
+    )
 
 
 def _active_sibling_iters(state: State, *, phase_id: str, exclude_id: str) -> list[str]:
@@ -167,6 +246,8 @@ def close_iter(
     checkpoint: CheckpointBlock | None = None,
     odr_floor: float = DEFAULT_ODR_FLOOR,
     odr_blocking: bool = False,
+    require_audit_accepted: bool = False,
+    warnings_out: list[str] | None = None,
 ) -> Iter:
     """Close an active iter. Rejects when child waves are still open.
 
@@ -197,6 +278,13 @@ def close_iter(
             drift pulse; when ``False`` (the default) a sub-floor ratio is
             advisory only (logged, never blocks). Read from
             :attr:`~eawf.platform.profiles.models.VerifyBlock.odr_blocking`.
+        require_audit_accepted: When ``True``, require *audit_id* to resolve to
+            a completed accepted evaluation audit scoped exactly to this iter
+            and carrying real evidence. Defaults ``False`` for historical
+            callers.
+        warnings_out: Optional sink populated after every close gate clears.
+            A strict MINOR audit appends ``audit_minor_backlog_triage`` while
+            the return value remains the closed :class:`Iter`.
 
     Raises:
         LifecycleError: when the iter is unknown, the close edge is illegal,
@@ -225,6 +313,11 @@ def close_iter(
         raise LifecycleError(
             f"iter {iter_id!r} has open waves: {sorted(open_waves, key=natural_key)}"
         )
+    audit_warnings = (
+        _validate_iter_close_audit(state, iter_id=iter_id, audit_id=audit_id)
+        if require_audit_accepted
+        else ()
+    )
     if checkpoint is not None:
         budget_waves = checkpoint.drift_budget_waves
         budget_eu = checkpoint.drift_budget_eu
@@ -246,6 +339,12 @@ def close_iter(
             f"thin waves {pulse.thin_wave_ids}"
         )
     _emit_iter_odr_advisory(state, iter_id=iter_id, floor=odr_floor, blocking=odr_blocking)
+    if audit_warnings:
+        if warnings_out is not None:
+            warnings_out.extend(audit_warnings)
+        logger.warning(
+            f"close_iter iter={iter_id} audit={audit_id} warning={AUDIT_MINOR_BACKLOG_TRIAGE}"
+        )
     closed_at = datetime.now(UTC)
     it.status = IterStatus.CLOSED
     it.closed_at = closed_at

@@ -30,6 +30,15 @@ ClaimSessionGuardCode = Literal[
 
 WaiverGuardCode = Literal["waiver_mode_disabled"]
 
+AuditAcceptanceGuardCode = Literal[
+    "audit_not_found",
+    "audit_scope_mismatch",
+    "audit_kind_invalid",
+    "audit_not_complete",
+    "audit_verdict_rejected",
+    "audit_evidence_missing",
+]
+
 LifecycleGuardCode = Literal[
     "claim_session_not_found",
     "claim_session_not_active",
@@ -44,6 +53,12 @@ LifecycleGuardCode = Literal[
     "claim_parallel_limit_reached",
     "spawn_wave_not_claimed",
     "waiver_mode_disabled",
+    "audit_not_found",
+    "audit_scope_mismatch",
+    "audit_kind_invalid",
+    "audit_not_complete",
+    "audit_verdict_rejected",
+    "audit_evidence_missing",
 ]
 
 WAIVER_MODE_DISABLED: WaiverGuardCode = "waiver_mode_disabled"

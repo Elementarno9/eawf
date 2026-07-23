@@ -539,6 +539,7 @@ def _run_mutation(
     envelope: Any = None,
     envelope_factory: Any = None,
     extras_factory: Any = None,
+    result_callback: Any = None,
     closure_kind: bool = False,
     mutation_kind: MutationKind | None = None,
     params: dict[str, Any] | None = None,
@@ -577,6 +578,9 @@ def _run_mutation(
             event -- the channel the daemonless wave-close path uses to thread
             ``close_mechanism`` onto its event so both close paths agree.
             ``None`` keeps the historical empty-extras shape.
+        result_callback: Optional callable receiving the committed daemon or
+            fallback result before the command payload renders. Used by
+            commands that surface additive mutation advisories.
     """
     from pydantic import ValidationError as PydValidationError
 
@@ -664,7 +668,7 @@ def _run_mutation(
             assert params is not None  # guarded above
             from eawf.surfaces.cli._dispatch import _mutate_via_daemon
 
-            _mutate_via_daemon(
+            mutation_result = _mutate_via_daemon(
                 mutation_kind,
                 params,
                 flags,
@@ -673,13 +677,16 @@ def _run_mutation(
                 fallback=_in_process,
             )
         else:
-            _in_process()
+            mutation_result = _in_process()
     except portalock.LockTimeout as exc:
         cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
         return
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
+
+    if result_callback is not None:
+        result_callback(mutation_result)
 
     final_text = text if text is not None else text_factory()
     final_payload = envelope() if envelope is not None else envelope_factory()

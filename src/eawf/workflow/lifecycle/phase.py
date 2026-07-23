@@ -32,6 +32,11 @@ from eawf.observability.metrics.odr import (
     drift_budget_pulse,
 )
 from eawf.workflow.estimation.buckets import wave_estimate_eu
+from eawf.workflow.lifecycle._audit_acceptance import (
+    AuditAcceptanceIssue,
+    assess_close_audit,
+    audit_has_real_close_evidence,
+)
 from eawf.workflow.lifecycle._errors import LifecycleError, check_title_clarity
 from eawf.workflow.lifecycle.spec import PHASE_TRANSITIONS, validate_transition
 
@@ -195,22 +200,37 @@ def _phase_close_audit_warning(
     require_real_evidence: bool = True,
 ) -> str | None:
     """Return the close-audit blocker text, or ``None`` when it clears."""
-    if audit_id is None:
+    check_order: tuple[AuditAcceptanceIssue, ...] = (
+        AuditAcceptanceIssue.NOT_COMPLETE,
+        AuditAcceptanceIssue.KIND_INVALID,
+        AuditAcceptanceIssue.SCOPE_MISMATCH,
+        AuditAcceptanceIssue.VERDICT_REJECTED,
+    )
+    if require_real_evidence:
+        check_order += (AuditAcceptanceIssue.EVIDENCE_MISSING,)
+    assessment = assess_close_audit(
+        state,
+        audit_id=audit_id,
+        allowed_scope_ids=frozenset({phase.id, phase.scope_id}),
+        required_kind=AuditKind.SHIP_GATE,
+        check_order=check_order,
+        require_passing_check=False,
+    )
+    if assessment.accepted:
+        return None
+    if assessment.issue is AuditAcceptanceIssue.REQUIRED:
         return "close audit required"
-    audit = (state.audits or {}).get(audit_id)
-    if audit is None:
+    if assessment.issue is AuditAcceptanceIssue.NOT_FOUND:
         return f"close audit {audit_id!r} not found"
-    if audit.status != AuditStatus.COMPLETE:
+    if assessment.issue is AuditAcceptanceIssue.NOT_COMPLETE:
         return f"close audit {audit_id!r} must be complete"
-    if audit.kind != AuditKind.SHIP_GATE:
+    if assessment.issue is AuditAcceptanceIssue.KIND_INVALID:
         return f"close audit {audit_id!r} must be ship-gate"
-    if audit.scope_id not in {phase.id, phase.scope_id}:
+    if assessment.issue is AuditAcceptanceIssue.SCOPE_MISMATCH:
         return f"close audit {audit_id!r} must be scoped to phase {phase.id!r}"
-    if audit.verdict not in _PHASE_CLOSE_ALLOWED_AUDIT_VERDICTS:
+    if assessment.issue is AuditAcceptanceIssue.VERDICT_REJECTED:
         return f"close audit {audit_id!r} verdict must be pass or minor"
-    if require_real_evidence and not _audit_has_real_close_evidence(state, audit=audit):
-        return f"close audit {audit_id!r} must include real audit evidence"
-    return None
+    return f"close audit {audit_id!r} must include real audit evidence"
 
 
 def _repo_markdown_artifact_path(uri: str, *, project_root: Path) -> Path | None:
@@ -319,11 +339,13 @@ def _audit_has_real_close_evidence(state: State, *, audit: object) -> bool:
     ``stub`` audit row is intentionally rejected so phase close cannot be
     satisfied by a placeholder verdict alone.
     """
-    report_artifact_id = getattr(audit, "report_artifact_id", None)
-    if isinstance(report_artifact_id, str) and report_artifact_id:
-        return report_artifact_id in state.artifacts
-    check_results = getattr(audit, "check_results", [])
-    return any(_audit_row_has_result(row) for row in check_results)
+    if not isinstance(audit, Audit):
+        return False
+    return audit_has_real_close_evidence(
+        state,
+        audit=audit,
+        require_passing_check=False,
+    )
 
 
 def _phase_closed_wave_plan_rows(state: State, *, phase_id: str) -> list[WavePlanRow]:
