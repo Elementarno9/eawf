@@ -55,7 +55,7 @@ from tests._session_helpers import (
 from tests._session_helpers import (
     seed_active_session_on_disk,
 )
-from tests.conftest import make_floor_waiver, make_intent
+from tests.conftest import make_claim_criterion, make_floor_waiver, make_intent
 
 WAVE_ID = "P01-I01-W01"
 
@@ -94,6 +94,7 @@ def _empty_state() -> State:
 
 
 def _seed_claimed_wave(state: State, *, criteria: list[str] | None = None) -> None:
+    historical_criteria = legacy_criteria(*(criteria or []))
     open_phase(state, phase_id="P01", title="phase")
     open_iter(state, iter_id="P01-I01", phase_id="P01", title="iter")
     plan_wave(
@@ -102,12 +103,13 @@ def _seed_claimed_wave(state: State, *, criteria: list[str] | None = None) -> No
         iter_id="P01-I01",
         title="wave",
         file_scopes=["src/"],
-        success_criteria=legacy_criteria(*(criteria or [])),
-        criteria_floor_waiver=make_floor_waiver(),
+        success_criteria=[make_claim_criterion()],
         effort_bucket="M",
         intent=make_intent(),
     )
     claim_wave(state, wave_id=WAVE_ID, session_id="SES-1")
+    state.waves[WAVE_ID].success_criteria = historical_criteria
+    state.waves[WAVE_ID].criteria_floor_waiver = make_floor_waiver()
 
 
 # ---- Seam #1 — CLI _close_and_pin -------------------------------------------

@@ -10,22 +10,27 @@ one-line fix (``eawf roadmap revise --set-bucket``).
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
+from eawf.kernel.spec.common import CriterionSpec, ResponseClause
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     AgentSessionStatus,
     EffortBucket,
+    IterStatus,
+    PhaseStatus,
     ProjectStatus,
     ScopeKind,
     WaveStatus,
 )
 from eawf.kernel.state.models import AgentSession, CurrentPointers, Project, State
 from eawf.workflow.lifecycle._errors import LifecycleError, LifecycleGuardError
-from eawf.workflow.lifecycle.iter_ import open_iter
+from eawf.workflow.lifecycle.iter_ import open_iter, plan_iter
 from eawf.workflow.lifecycle.phase import open_phase
-from eawf.workflow.lifecycle.wave import claim_wave, plan_wave
+from eawf.workflow.lifecycle.wave import claim_wave
+from eawf.workflow.lifecycle.wave import plan_wave as _plan_wave
 from tests.conftest import make_intent
 
 
@@ -87,6 +92,31 @@ def _add_session(
     if status is AgentSessionStatus.ACTIVE:
         state.current.active_session_ids.append(session_id)
     return session
+
+
+def _claim_criterion() -> CriterionSpec:
+    """Build one real typed criterion for claim-path fixtures."""
+    return CriterionSpec(
+        id="CR-01",
+        text="focused pytest exits zero for the claimed lifecycle behavior",
+        kind="deterministic",
+        acceptance_style="binary",
+        evidence_kind="deterministic",
+        gate_ids=["GATE-1"],
+        quality_dimension="functional_suitability",
+        measurable_signal="the focused pytest process exits with status zero",
+        response=ResponseClause(
+            observe="exits",
+            object="zero from the focused lifecycle test",
+            locus="pytest",
+        ),
+    )
+
+
+def plan_wave(state: State, **kwargs: Any) -> Any:
+    """Plan a claimable wave unless a test explicitly supplies criteria."""
+    kwargs.setdefault("success_criteria", [_claim_criterion()])
+    return _plan_wave(state, **kwargs)
 
 
 def test_claim_wave_rejects_when_effort_bucket_none() -> None:
@@ -396,3 +426,209 @@ def test_claim_wave_idempotent_reuse_requires_active_bound_session() -> None:
 
     assert exc_info.value.code == "claim_session_not_active"
     assert state.model_dump_json() == before
+
+
+def test_claim_wave_rejects_missing_parent_iter_without_mutation() -> None:
+    state = _seed_wave_state()
+    wave = plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    del state.iters[wave.iter_id]
+    before = state.model_dump_json()
+
+    with pytest.raises(LifecycleGuardError) as exc_info:
+        claim_wave(state, wave_id=wave.id, session_id="SES-1")
+
+    assert exc_info.value.code == "claim_parent_iter_missing"
+    assert state.model_dump_json() == before
+
+
+def test_claim_wave_rejects_missing_parent_phase_without_mutation() -> None:
+    state = _seed_wave_state()
+    wave = plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    del state.phases["P01"]
+    before = state.model_dump_json()
+
+    with pytest.raises(LifecycleGuardError) as exc_info:
+        claim_wave(state, wave_id=wave.id, session_id="SES-1")
+
+    assert exc_info.value.code == "claim_parent_phase_missing"
+    assert state.model_dump_json() == before
+
+
+def test_claim_wave_rejects_nonactive_parent_phase_without_mutation() -> None:
+    state = _seed_wave_state()
+    wave = plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    state.phases["P01"].status = PhaseStatus.PLANNED
+    before = state.model_dump_json()
+
+    with pytest.raises(LifecycleGuardError) as exc_info:
+        claim_wave(state, wave_id=wave.id, session_id="SES-1")
+
+    assert exc_info.value.code == "claim_parent_phase_not_active"
+    assert state.model_dump_json() == before
+
+
+def test_claim_wave_rejects_terminal_parent_iter_without_mutation() -> None:
+    state = _seed_wave_state()
+    wave = plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    state.iters[wave.iter_id].status = IterStatus.CLOSED
+    before = state.model_dump_json()
+
+    with pytest.raises(LifecycleGuardError) as exc_info:
+        claim_wave(state, wave_id=wave.id, session_id="SES-1")
+
+    assert exc_info.value.code == "claim_parent_iter_terminal"
+    assert state.model_dump_json() == before
+
+
+def test_claim_wave_rejects_planned_iter_with_active_sibling_without_mutation() -> None:
+    state = _seed_wave_state()
+    plan_iter(state, iter_id="P01-I02", phase_id="P01", title="second")
+    wave = plan_wave(
+        state,
+        wave_id="P01-I02-W01",
+        iter_id="P01-I02",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    before = state.model_dump_json()
+
+    with pytest.raises(LifecycleGuardError) as exc_info:
+        claim_wave(state, wave_id=wave.id, session_id="SES-1")
+
+    assert exc_info.value.code == "claim_active_iter_conflict"
+    assert state.model_dump_json() == before
+
+
+def test_claim_wave_autoactivates_planned_iter_without_clobbering_active_waves() -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="first")
+    _add_session(state)
+    first = plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="first wave",
+        file_scopes=["src/one"],
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    second = plan_wave(
+        state,
+        wave_id="P01-I01-W02",
+        iter_id="P01-I01",
+        title="second wave",
+        file_scopes=["src/two"],
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+
+    claim_wave(state, wave_id=first.id, session_id="SES-1")
+    claim_wave(state, wave_id=second.id, session_id="SES-1")
+
+    assert state.iters["P01-I01"].status is IterStatus.ACTIVE
+    assert state.current.iter_id == "P01-I01"
+    assert state.current.active_wave_ids == [first.id, second.id]
+
+
+def test_claim_wave_rejects_empty_criteria_without_mutation() -> None:
+    state = _seed_wave_state()
+    wave = _plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    before = state.model_dump_json()
+
+    with pytest.raises(LifecycleGuardError) as exc_info:
+        claim_wave(state, wave_id=wave.id, session_id="SES-1")
+
+    assert exc_info.value.code == "claim_criteria_empty"
+    assert state.model_dump_json() == before
+
+
+def test_claim_wave_counts_statuses_when_active_pointer_is_stale() -> None:
+    state = _seed_wave_state()
+    for wave_id in ("P01-I01-W01", "P01-I01-W02"):
+        plan_wave(
+            state,
+            wave_id=wave_id,
+            iter_id="P01-I01",
+            title=wave_id,
+            file_scopes=["src/"],
+            effort_bucket=EffortBucket.M,
+            intent=make_intent(),
+        )
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1", max_parallel_waves=1)
+    state.current.active_wave_ids = []
+    before = state.model_dump_json()
+
+    with pytest.raises(LifecycleGuardError) as exc_info:
+        claim_wave(
+            state,
+            wave_id="P01-I01-W02",
+            session_id="SES-1",
+            out_of_order=True,
+            max_parallel_waves=1,
+        )
+
+    assert exc_info.value.code == "claim_parallel_limit_reached"
+    assert state.model_dump_json() == before
+
+
+def test_claim_wave_uses_parent_rows_when_current_pointers_are_stale() -> None:
+    state = _seed_wave_state()
+    wave = plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    state.current.phase_id = None
+    state.current.iter_id = None
+
+    claimed = claim_wave(state, wave_id=wave.id, session_id="SES-1")
+
+    assert claimed.status is WaveStatus.CLAIMED
+    assert state.current.active_wave_ids == [wave.id]

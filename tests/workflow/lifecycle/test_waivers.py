@@ -59,7 +59,7 @@ from eawf.workflow.lifecycle.waivers import (
     resolve_waiver_mode,
 )
 from tests._session_helpers import claim_wave_with_session as claim_wave
-from tests.conftest import make_intent
+from tests.conftest import make_claim_criterion, make_intent
 
 WAVE_ID = "P01-I01-W01"
 OPERATOR_SESSION_ID = "SES-operator-1"
@@ -110,7 +110,7 @@ def _seed_wave_with_operator(state: State) -> None:
         iter_id="P01-I01",
         title="wave",
         file_scopes=["src/"],
-        success_criteria=[],
+        success_criteria=[make_claim_criterion()],
         effort_bucket="M",
         intent=make_intent(),
     )
@@ -138,7 +138,7 @@ def _seed_wave_with_executor(state: State) -> None:
         iter_id="P01-I01",
         title="wave",
         file_scopes=["src/"],
-        success_criteria=[],
+        success_criteria=[make_claim_criterion()],
         effort_bucket="M",
         intent=make_intent(),
     )
@@ -653,6 +653,10 @@ def _bootstrap_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[obj
                 "src/",
                 "--effort-bucket",
                 "M",
+                "--success",
+                "waiver fixture remains claimable",
+                "--criteria-floor-waiver",
+                "legacy CLI waiver fixture",
             ],
         ).exit_code
         == 0

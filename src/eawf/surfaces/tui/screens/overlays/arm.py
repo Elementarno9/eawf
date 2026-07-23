@@ -53,6 +53,7 @@ from textual.widgets import Static
 
 from eawf.surfaces.tui.widgets.markup import escape_markup
 from eawf.surfaces.tui.widgets.sigils import chrome
+from eawf.workflow.lifecycle._capacity import DEFAULT_MAX_PARALLEL_WAVES
 
 logger = logging.getLogger(__name__)
 
@@ -112,9 +113,31 @@ SCOPE_OPTIONS: tuple[str, ...] = ("this iter", "this phase", "cross-repo")
 #: under. ``unbounded`` runs with no cap; the named tiers tighten from there.
 BUDGET_OPTIONS: tuple[str, ...] = ("unbounded", "lenient", "standard", "strict")
 
-#: Lane-concurrency options (group 3) -- how many waves drain at once. Each maps
-#: to the integer lane width the ``fleet.drive`` ``concurrency`` param takes.
-CONCURRENCY_OPTIONS: tuple[str, ...] = ("1 lane", "2 lanes", "4 lanes", "8 lanes")
+
+def concurrency_options(max_parallel_waves: int) -> tuple[str, ...]:
+    """Return every selectable lane width from one through *max_parallel_waves*.
+
+    Args:
+        max_parallel_waves: Effective repository-wide claim cap.
+
+    Returns:
+        Human-readable option labels in contiguous ascending order.
+
+    Raises:
+        ValueError: When the cap is below one.
+    """
+    if isinstance(max_parallel_waves, bool) or max_parallel_waves < 1:
+        raise ValueError("max_parallel_waves must be at least 1")
+    return tuple(
+        f"{width} lane" if width == 1 else f"{width} lanes"
+        for width in range(1, max_parallel_waves + 1)
+    )
+
+
+#: Default lane-concurrency options. Mounted repo surfaces replace this with
+#: the effective configured cap, preserving the default four-lane surface for
+#: standalone harnesses.
+CONCURRENCY_OPTIONS: tuple[str, ...] = concurrency_options(DEFAULT_MAX_PARALLEL_WAVES)
 
 #: Risk-policy options (group 4) -- the fork disposition + hard-halt toggle. A
 #: hard-halt policy stops the whole fleet on a fork; the softer tier forks the
@@ -129,14 +152,6 @@ RISK_OPTIONS: tuple[str, ...] = (
 #: only when the frontier empties; ``kclean`` stops after K consecutive clean
 #: rounds. Maps to the ``fleet.drive`` ``convergence`` param.
 CONVERGENCE_OPTIONS: tuple[str, ...] = ("drain to empty", "K-clean rounds")
-
-#: The lane-width integer each :data:`CONCURRENCY_OPTIONS` entry maps to.
-_CONCURRENCY_LANES: dict[str, int] = {
-    "1 lane": 1,
-    "2 lanes": 2,
-    "4 lanes": 4,
-    "8 lanes": 8,
-}
 
 #: The EU / USD / waves spend-cap triple each :data:`BUDGET_OPTIONS` tier maps to
 #: -- the ``fleet.drive`` ``eu_cap`` / ``usd_cap`` / ``waves_cap`` params (DL-4).
@@ -233,7 +248,7 @@ def build_arm_spec(
     return ArmSpec(
         scope=scope,
         budget=budget,
-        concurrency=_CONCURRENCY_LANES.get(concurrency_option, 1),
+        concurrency=int(concurrency_option.partition(" ")[0]),
         risk_policy=risk_policy,
         hard_halt="hard-halt" in risk_policy,
         convergence="kclean" if convergence_option == "K-clean rounds" else "drain",
@@ -361,6 +376,17 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (RISK_GROUP_ID, "risk policy", RISK_OPTIONS),
     (CONVERGENCE_GROUP_ID, "convergence", CONVERGENCE_OPTIONS),
 )
+
+
+def _groups_for_cap(max_parallel_waves: int) -> tuple[tuple[str, str, tuple[str, ...]], ...]:
+    """Return launch-form groups with concurrency bounded by the effective cap."""
+    return tuple(
+        (group_id, caption, concurrency_options(max_parallel_waves))
+        if group_id == CONCURRENCY_GROUP_ID
+        else (group_id, caption, options)
+        for group_id, caption, options in _GROUPS
+    )
+
 
 #: The key-hint footer vocab, mirroring the other reskin overlays: a calm
 #: middle-dot-separated chord list under the form.
@@ -502,7 +528,13 @@ class ArmModal(ModalScreen["ArmSpec | None"]):
     #: clamp it to the first / last group (no wrap).
     field_index: reactive[int] = reactive(0)
 
-    def __init__(self, *, frontier_empty: bool, frontier_count: int | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        frontier_empty: bool,
+        frontier_count: int | None = None,
+        max_parallel_waves: int = DEFAULT_MAX_PARALLEL_WAVES,
+    ) -> None:
         """Construct the launch form, seeding each group to its first option.
 
         Args:
@@ -512,15 +544,18 @@ class ArmModal(ModalScreen["ArmSpec | None"]):
             frontier_count: Count of ready frontier waves the overlay will
                 drain if armed. Defaults to ``0`` for an empty frontier and
                 ``1`` for older populated call sites.
+            max_parallel_waves: Effective repository-wide claim cap. The form
+                exposes every lane width from one through this value.
         """
         super().__init__()
         self._frontier_empty = frontier_empty
         self._frontier_count = (
             0 if frontier_empty else (frontier_count if frontier_count is not None else 1)
         )
+        self._groups = _groups_for_cap(max_parallel_waves)
         #: The selected option index per group, keyed by group id; seeded to the
         #: first option of each group.
-        self._selected: dict[str, int] = {group_id: 0 for group_id, _, _ in _GROUPS}
+        self._selected: dict[str, int] = {group_id: 0 for group_id, _, _ in self._groups}
 
     def compose(self) -> ComposeResult:
         """Yield the title, the (honest-empty banner or) five group rows, and the hint."""
@@ -530,7 +565,7 @@ class ArmModal(ModalScreen["ArmSpec | None"]):
                 yield Static(f"[$warn]{NOTHING_TO_DRAIN}[/]", id=EMPTY_BANNER_ID)
                 yield Static(_CLOSE_ONLY_HINT, id=HINT_ID)
                 return
-            for index, (group_id, caption, options) in enumerate(_GROUPS):
+            for index, (group_id, caption, options) in enumerate(self._groups):
                 yield Static(
                     render_group_row(caption, options[0], focused=index == 0),
                     classes="arm-group",
@@ -576,7 +611,7 @@ class ArmModal(ModalScreen["ArmSpec | None"]):
         """Repaint every group row with its selected option + focus caret."""
         if self._frontier_empty:
             return
-        for index, (group_id, caption, options) in enumerate(_GROUPS):
+        for index, (group_id, caption, options) in enumerate(self._groups):
             option = options[self._selected[group_id]]
             row = self.query_one(f"#{group_id}", Static)
             row.update(render_group_row(caption, option, focused=index == self.field_index))
@@ -594,7 +629,7 @@ class ArmModal(ModalScreen["ArmSpec | None"]):
         Args:
             delta: ``-1`` (up) or ``1`` (down).
         """
-        self.field_index = max(0, min(len(_GROUPS) - 1, self.field_index + delta))
+        self.field_index = max(0, min(len(self._groups) - 1, self.field_index + delta))
 
     def action_cycle(self, delta: int) -> None:
         """Cycle the focused group's selected option by *delta* (wrapping).
@@ -602,13 +637,13 @@ class ArmModal(ModalScreen["ArmSpec | None"]):
         Args:
             delta: ``-1`` (previous) or ``1`` (next).
         """
-        group_id, _caption, options = _GROUPS[self.field_index]
+        group_id, _caption, options = self._groups[self.field_index]
         self._selected[group_id] = (self._selected[group_id] + delta) % len(options)
         self._repaint_groups()
 
     def _selected_option(self, group_id: str) -> str:
         """Return the currently-selected option label for *group_id*."""
-        _gid, _caption, options = next(group for group in _GROUPS if group[0] == group_id)
+        _gid, _caption, options = next(group for group in self._groups if group[0] == group_id)
         return options[self._selected[group_id]]
 
     def action_arm(self) -> None:
@@ -667,6 +702,7 @@ __all__ = [
     "ArmModal",
     "ArmSpec",
     "build_arm_spec",
+    "concurrency_options",
     "issue_drive",
     "render_caps_row",
     "render_group_row",

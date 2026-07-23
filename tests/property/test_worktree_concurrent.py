@@ -18,14 +18,8 @@ Invariants asserted after every Hypothesis example:
 4. **No git-registry collisions.** ``git worktree list --porcelain``
    shows N entries under ``.ea/worktrees/``.
 
-Caveat (inherited from
-:mod:`tests.property.test_wave_claim_property`): on macOS the
-``portalock`` implementation unlinks the lockfile on release, which
-admits a race where two contemporaneous in-process threads can pass
-the lock check on different inodes. We therefore assert *data-level*
-invariants (every wave gets a unique record) rather than
-"exactly one thread held the lock at a time". The CONFLICTED dataset
-this property test exercises is broader than the raw lock layer.
+The state lock keeps one persistent lockfile inode across releases, so every
+concurrent state transaction serializes against the same advisory lock.
 """
 
 from __future__ import annotations
@@ -211,17 +205,9 @@ def test_concurrent_create_disjoint_file_scopes(
 
     successes = sum(1 for code, _ in outcomes if code == 0)
     failures = [(code, err) for code, err in outcomes if code != 0]
-    # macOS portalock can race so badly under contention that every
-    # claimer fails. Treat that as a skipped example rather than running
-    # the disjointness invariants on empty state — those would silently
-    # vacuously pass and mask a real regression. See feedback /
-    # test_wave_claim_property module docstring for the lock-layer caveat.
-    if successes == 0:
-        pytest.skip(
-            f"portalock admitted zero successes (claimer_count={claimer_count}); "
-            f"failures={failures}"
-        )
-    assert successes >= 1, f"expected at least one success, got {successes}; failures={failures}"
+    assert successes == claimer_count, (
+        f"expected every disjoint worktree creation to succeed; failures={failures}"
+    )
 
     # State integrity: every record on disk references a unique wave id
     # in the candidate set, with no duplicates.
@@ -245,10 +231,8 @@ def test_concurrent_create_disjoint_file_scopes(
         )
         seen_scopes |= scope_set
 
-    # git worktree list cross-check: every path under .ea/worktrees/
-    # should be unique. The number can lag behind state.json on macOS
-    # (lock race), so we assert "no duplicate paths" rather than
-    # "exactly N paths".
+    # git worktree list cross-check: every path under .ea/worktrees/ is unique
+    # and every successful state record has a corresponding git worktree.
     entries = worktree_list(repo)
     paths_under_eawf = [
         entry["worktree"]
@@ -258,6 +242,7 @@ def test_concurrent_create_disjoint_file_scopes(
     assert len(set(paths_under_eawf)) == len(paths_under_eawf), (
         f"duplicate worktree paths: {paths_under_eawf}"
     )
+    assert len(paths_under_eawf) == claimer_count
 
 
 def test_seeded_state_validates(tmp_path: Path) -> None:

@@ -217,24 +217,6 @@ def acquire(
     fh: IO[str] | None = None
 
     while True:
-        # Stale-lock detection: steal if the existing lock is dead.
-        if lock_path.exists() and stale.is_stale(lock_path):
-            prev_holder: object = None
-            with contextlib.suppress(Exception):
-                prev_holder = json.loads(lock_path.read_text(encoding="utf-8"))
-
-            if on_event is not None:
-                on_event(
-                    {
-                        "event_type": "lock_stolen",
-                        "lock_path": str(lock_path),
-                        "stolen_from": prev_holder,
-                        "occurred_at": datetime.now(UTC).isoformat(),
-                    }
-                )
-            lock_path.unlink(missing_ok=True)
-            logger.info(f"acquire stale-lock-stolen path={lock_path}")
-
         try:
             fh = open(lock_path, "a+", encoding="utf-8")  # noqa: SIM115
             fh.seek(0)
@@ -258,6 +240,27 @@ def acquire(
 
     assert fh is not None  # guaranteed by loop logic above
 
+    # The advisory lock is bound to this inode. Never unlink the path while a
+    # contender may already have opened it: unlink/recreate lets two processes
+    # lock different inodes under the same pathname. Inspect stale metadata only
+    # after acquiring the stable inode, then overwrite it in place.
+    fh.seek(0)
+    previous_raw = fh.read()
+    if previous_raw and stale.is_stale(lock_path):
+        prev_holder: object = None
+        with contextlib.suppress(Exception):
+            prev_holder = json.loads(previous_raw)
+        if on_event is not None:
+            on_event(
+                {
+                    "event_type": "lock_stolen",
+                    "lock_path": str(lock_path),
+                    "stolen_from": prev_holder,
+                    "occurred_at": datetime.now(UTC).isoformat(),
+                }
+            )
+        logger.info(f"acquire stale-lock-recovered path={lock_path}")
+
     _write_holder(fh, lock_path)
     handle = LockHandle(
         target=target,
@@ -273,10 +276,16 @@ def acquire(
         with _heartbeat_ticker(handle, interval=heartbeat_interval, ceiling=hold_ceiling):
             yield handle
     finally:
+        # Clear holder metadata while the lock is still held, but preserve the
+        # inode permanently. The next contender opens and locks this same file.
+        with contextlib.suppress(Exception):
+            fh.seek(0)
+            fh.truncate()
+            fh.flush()
+            os.fsync(fh.fileno())
         try:
             portalocker.unlock(fh)
         except Exception:
             logger.warning(f"acquire unlock-failed path={lock_path}", exc_info=True)
         with contextlib.suppress(Exception):
             fh.close()
-        lock_path.unlink(missing_ok=True)

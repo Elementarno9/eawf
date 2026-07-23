@@ -123,6 +123,10 @@ from eawf.runtime.daemon.methods import (
 )
 from eawf.runtime.daemon.wal import WalRecord
 from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
+from eawf.workflow.lifecycle._capacity import (
+    DEFAULT_MAX_PARALLEL_WAVES,
+    resolve_max_parallel_waves,
+)
 from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
     LifecycleGuardError,
@@ -595,7 +599,12 @@ def _args_hash(mutation: Mutation) -> str:
 ApplyFunc = Callable[[State, Mutation], None]
 
 
-def _apply_wave_claim(state: State, mutation: Mutation) -> None:
+def _apply_wave_claim(
+    state: State,
+    mutation: Mutation,
+    *,
+    max_parallel_waves: int = DEFAULT_MAX_PARALLEL_WAVES,
+) -> None:
     """Apply :attr:`MutationKind.WAVE_CLAIM` — delegate to ``claim_wave``."""
     params = mutation.params
     claim_wave(
@@ -603,6 +612,7 @@ def _apply_wave_claim(state: State, mutation: Mutation) -> None:
         wave_id=str(params["wave_id"]),
         session_id=str(params["session_id"]),
         out_of_order=bool(params.get("out_of_order", False)),
+        max_parallel_waves=max_parallel_waves,
     )
 
 
@@ -3642,7 +3652,19 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 )
 
             try:
-                apply_func(state, mutation)
+                if mutation.kind is MutationKind.WAVE_CLAIM:
+                    repo_anchor = (
+                        Path(args.repo_root)
+                        if args.repo_root
+                        else _config_root_for_state_path(state_path)
+                    )
+                    _apply_wave_claim(
+                        state,
+                        mutation,
+                        max_parallel_waves=resolve_max_parallel_waves(repo_anchor),
+                    )
+                else:
+                    apply_func(state, mutation)
             except LifecycleGuardError as exc:
                 raise DaemonValidationError(f"validation_failed: {exc}") from exc
             except LifecycleError as exc:

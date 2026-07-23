@@ -49,6 +49,7 @@ from eawf.runtime.lock import portalock
 from eawf.workflow.evidence._io import load_state
 from eawf.workflow.lifecycle._errors import LifecycleError
 from tests._session_helpers import claim_wave_with_session as claim_wave
+from tests.conftest import make_claim_criterion
 
 pytestmark = pytest.mark.integration
 
@@ -79,6 +80,7 @@ def _gate_payload(kind: str) -> dict[str, Any]:
 def _state_payload() -> dict[str, Any]:
     waves: dict[str, Any] = {}
     for wid, kind in _WAVE_KINDS.items():
+        criterion = make_claim_criterion("CR-01").model_copy(update={"gate_ids": ["GATE-01"]})
         waves[wid] = {
             "id": wid,
             "iter_id": "P30-I12",
@@ -87,7 +89,7 @@ def _state_payload() -> dict[str, Any]:
             "deps": [],
             "blocks": [],
             "file_scopes": [],
-            "success_criteria": [],
+            "success_criteria": [criterion.model_dump(mode="json")],
             "gates": [_gate_payload(kind)],
             "agent_role": "executor",
             "effort_bucket": "M",

@@ -39,6 +39,8 @@ from eawf.surfaces.cli.commands.lifecycle import (
     wave_app,
 )
 from eawf.surfaces.cli.flags import GlobalFlags
+from eawf.surfaces.cli.scope import resolve_state_path
+from eawf.workflow.lifecycle._capacity import resolve_max_parallel_waves
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
@@ -783,6 +785,9 @@ def wave_claim_cmd(
             wave_id=wave_id,
             session_id=session,
             out_of_order=out_of_order,
+            max_parallel_waves=resolve_max_parallel_waves(
+                _config_root_for_state_path(resolve_state_path(flags.workspace))
+            ),
         )
         claim_session_id = state.waves[wave_id].claim_session_id
         if claim_session_id is None:  # pragma: no cover - transition guarantees it

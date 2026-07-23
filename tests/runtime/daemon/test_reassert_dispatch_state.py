@@ -1,11 +1,9 @@
 """Unit: the post-spawn dispatch-state re-assertion (W10).
 
 Exercises :func:`eawf.runtime.daemon.methods.agent._reassert_dispatch_state`
-against a ``state.json`` that models a jailed agent reverting ``.ea/`` mid-spawn:
-the executor session, the claim, and the phase-active pointer are gone. The
-load-bearing assertion is that the re-assertion restores all three from the
-wave's own bookkeeping so the close that follows resolves authoritative state
-instead of KeyErroring a successful wave into failed.
+against healthy, terminal, and partially reverted dispatch state. Recovery may
+repair indexes for a still-claimed wave, but never promotes a PENDING wave back
+to execution without a fresh atomic claim.
 """
 
 from __future__ import annotations
@@ -15,10 +13,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from eawf.kernel.state.enums import AgentSessionRole, WaveStatus
 from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.agent import _reassert_dispatch_state
+from eawf.workflow.lifecycle._errors import LifecycleGuardError
 
 _WAVE_ID = "P28-I03-W57"
 _SESSION_ID = "SES-executor-w57"
@@ -161,35 +162,25 @@ def _ctx(state_path: Path) -> MethodContext:
     )
 
 
-def test_reassert_restores_reverted_session_claim_and_phase(tmp_path: Path) -> None:
-    """A reverted ``.ea/`` is repaired: session, claim, and phase all return."""
+def test_reassert_rejects_reverted_pending_wave_without_side_effects(tmp_path: Path) -> None:
+    """A reverted PENDING wave is never promoted by recovery."""
     state_path = _write(_reverted_payload(), tmp_path)
+    before = state_path.read_bytes()
 
-    _reassert_dispatch_state(
-        _ctx(state_path),
-        wave_id=_WAVE_ID,
-        session_id=_SESSION_ID,
-        session_runtime="codex",
-        session_role=AgentSessionRole.EXECUTOR,
-        session_scope_id=_WAVE_ID,
-        session_started_at=_STARTED_AT,
-    )
+    with pytest.raises(LifecycleGuardError) as exc_info:
+        _reassert_dispatch_state(
+            _ctx(state_path),
+            wave_id=_WAVE_ID,
+            session_id=_SESSION_ID,
+            session_runtime="codex",
+            session_role=AgentSessionRole.EXECUTOR,
+            session_scope_id=_WAVE_ID,
+            session_started_at=_STARTED_AT,
+        )
 
-    reloaded = State.model_validate_json(state_path.read_text(encoding="utf-8"))
-    # Session re-registered with the wave's role + the serving runtime.
-    assert _SESSION_ID in reloaded.agent_sessions
-    session = reloaded.agent_sessions[_SESSION_ID]
-    assert session.role is AgentSessionRole.EXECUTOR
-    assert session.runtime == "codex"
-    assert session.scope_id == _WAVE_ID
-    assert _SESSION_ID in reloaded.current.active_session_ids
-    # Claim re-asserted: the wave is back on the in-flight track.
-    assert reloaded.waves[_WAVE_ID].status is WaveStatus.IN_PROGRESS
-    assert reloaded.waves[_WAVE_ID].claim_session_id == _SESSION_ID
-    assert _WAVE_ID in reloaded.current.active_wave_ids
-    # Phase-active pointer restored from the wave's iter.
-    assert reloaded.current.phase_id == "P28"
-    assert reloaded.current.iter_id == "P28-I03"
+    assert exc_info.value.code == "spawn_wave_not_claimed"
+    assert state_path.read_bytes() == before
+    assert not (_ctx(state_path).event_path or Path()).exists()
 
 
 def test_reassert_is_noop_on_healthy_state(tmp_path: Path) -> None:
@@ -235,7 +226,9 @@ def test_reassert_rebuilds_missing_operator_session_without_wave_role_substituti
     tmp_path: Path,
 ) -> None:
     """A missing operator binding returns as OPERATOR, not the wave specialist."""
-    payload = _reverted_payload()
+    payload = _state_payload()
+    payload["agent_sessions"] = {}
+    payload["current"]["active_session_ids"] = []
     payload["waves"][_WAVE_ID]["agent_role"] = "reviewer"
     state_path = _write(payload, tmp_path)
 

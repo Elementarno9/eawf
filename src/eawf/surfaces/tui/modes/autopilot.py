@@ -109,6 +109,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from textual.app import ComposeResult
@@ -1524,15 +1525,28 @@ class AutopilotModeScreen(ScopeScreen):
         :meth:`_on_arm_dismissed` handles its typed dismiss value.
         """
         from eawf.surfaces.tui.screens.overlays.arm import ArmModal
+        from eawf.workflow.lifecycle._capacity import resolve_max_parallel_waves
 
         frontier_count = len(self._rows)
         frontier_empty = frontier_count == 0
+        state_path = getattr(self.app, "_state_path", None)
+        repo_root = (
+            state_path.parent.parent
+            if isinstance(state_path, Path) and state_path.parent.name == ".ea"
+            else None
+        )
+        max_parallel_waves = resolve_max_parallel_waves(repo_root)
         self._push_overlay(
-            ArmModal(frontier_empty=frontier_empty, frontier_count=frontier_count),
+            ArmModal(
+                frontier_empty=frontier_empty,
+                frontier_count=frontier_count,
+                max_parallel_waves=max_parallel_waves,
+            ),
             self._on_arm_dismissed,
         )
         logger.info(
-            f"action_arm_flow opened frontier_empty={frontier_empty} frontier={frontier_count}"
+            f"action_arm_flow opened frontier_empty={frontier_empty} frontier={frontier_count} "
+            f"max_parallel_waves={max_parallel_waves}"
         )
 
     def _on_arm_dismissed(self, spec: ArmSpec | None) -> None:

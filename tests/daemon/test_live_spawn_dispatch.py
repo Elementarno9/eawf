@@ -40,7 +40,12 @@ from typing import Any
 import pytest
 
 from eawf import __version__
-from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
+from eawf.kernel.state.enums import (
+    AgentSessionRole,
+    AgentSessionStatus,
+    PhaseStatus,
+    StoreKind,
+)
 from eawf.kernel.state.models import AgentSession
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import AgentReportPayload, store_kind_for_role
@@ -459,6 +464,70 @@ def test_dispatch_claim_failure_leaves_no_session_wave_or_event(
 
     with pytest.raises(DaemonValidationError, match="has no effort_bucket"):
         _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+
+    assert state_path.read_bytes() == before
+    assert not event_path.exists()
+    assert adapter.spawn_calls == 0
+
+
+def test_dispatch_pending_wave_rejects_inactive_parent_before_session_or_event(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Live claim enforces real parent rows before creating durable dispatch state."""
+    state_path = _write_state(tmp_path)
+    state = load_state(state_path)
+    state.phases["P29"].status = PhaseStatus.PLANNED
+    state_path.write_text(state.model_dump_json(), encoding="utf-8")
+    before = state_path.read_bytes()
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    adapter = _StubAdapter()
+    _patch_adapter(monkeypatch, adapter)
+
+    with pytest.raises(DaemonValidationError, match="claim_parent_phase_not_active"):
+        _run(
+            dispatch(
+                _ctx(state_path, event_path=event_path),
+                {"wave_id": _WAVE_ID, "spawn": True},
+            )
+        )
+
+    assert state_path.read_bytes() == before
+    assert not event_path.exists()
+    assert adapter.spawn_calls == 0
+
+
+def test_dispatch_claimed_wave_rejects_inactive_parent_at_spawn_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A bound CLAIMED row still needs active parents before any adapter spawn."""
+    state_path = _write_state(tmp_path, wave_status="claimed")
+    state = load_state(state_path)
+    session_id = "SES-inactive-parent"
+    state.agent_sessions[session_id] = AgentSession(
+        id=session_id,
+        role=AgentSessionRole.EXECUTOR,
+        runtime="claude-code",
+        scope_id=_WAVE_ID,
+        status=AgentSessionStatus.ACTIVE,
+        claimed_wave_ids=[_WAVE_ID],
+        started_at=_T0,
+    )
+    state.current.active_session_ids.append(session_id)
+    state.waves[_WAVE_ID].claim_session_id = session_id
+    state.phases["P29"].status = PhaseStatus.PLANNED
+    state_path.write_text(state.model_dump_json(), encoding="utf-8")
+    before = state_path.read_bytes()
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    adapter = _StubAdapter()
+    _patch_adapter(monkeypatch, adapter)
+
+    with pytest.raises(DaemonValidationError, match="spawn_wave_not_claimed"):
+        _run(
+            dispatch(
+                _ctx(state_path, event_path=event_path),
+                {"wave_id": _WAVE_ID, "spawn": True},
+            )
+        )
 
     assert state_path.read_bytes() == before
     assert not event_path.exists()
