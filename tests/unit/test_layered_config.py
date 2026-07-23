@@ -356,6 +356,7 @@ _EXPECTED_CONFIG_CONSUMERS: dict[str, str] = {
     "estimation.eu_basis": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
     "estimation.eu_minutes": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
     "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_enforce",
+    "planning.max_parallel_waves": ("eawf.workflow.lifecycle._capacity.resolve_max_parallel_waves"),
     "prep.auto_resume": "eawf.workflow.skills.prep.PrepSkill._resolve_auto_resume",
     "research.agent_count": "eawf.workflow.skills.research.ResearchSkill._resolve_agents",
     "research.default_depth": "eawf.workflow.skills.research.ResearchSkill._resolve_depth",
@@ -389,7 +390,7 @@ def test_config_consumer_set_is_exact_and_importable() -> None:
 
     expected = _EXPECTED_CONFIG_CONSUMERS | _EXPECTED_CATALOG_ONLY_CONSUMERS
     assert actual == expected
-    assert len(actual) == 19
+    assert len(actual) == 20
     assert {
         key: value for key, value in actual.items() if key in {row.key for row in CONFIG_REGISTRY}
     } == _EXPECTED_CONFIG_CONSUMERS
@@ -406,14 +407,13 @@ def test_reserved_config_leaf_set_is_exact() -> None:
     expected = behavior_keys - _EXPECTED_CONFIG_CONSUMERS.keys()
     reserved = {key for key, entry in LEAF_KEY_REGISTRY.items() if entry.reserved}
 
-    assert len(expected) == 64
+    assert len(expected) == 63
     assert reserved == expected
     assert {
         "audit.fix_safe",
         "flow.max_repair_cycles",
         "planning.approval",
         "planning.auto_plan",
-        "planning.max_parallel_waves",
         "ship.require_audit_pass",
     } <= reserved
     strict_audit = leaf_key_lookup("verify.require_iter_audit_accepted")
