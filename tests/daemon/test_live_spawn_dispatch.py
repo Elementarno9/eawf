@@ -62,7 +62,12 @@ from eawf.runtime.daemon.methods.agent import (
     dispatch,
     kill,
 )
-from eawf.runtime.runtimes.adapter import SpawnResult
+from eawf.runtime.runtimes.adapter import (
+    RUNTIME_RATE_LIMIT,
+    ErrorClass,
+    RuntimeSpawnError,
+    SpawnResult,
+)
 from eawf.runtime.runtimes.cancel import CancelResult
 from eawf.workflow.evidence._io import load_state
 
@@ -365,6 +370,70 @@ def _write_state(tmp_path: Path, **kwargs: Any) -> Path:
     return path
 
 
+def _bind_claimed_session(
+    state_path: Path,
+    *,
+    session_id: str = "SES-spawn-boundary",
+) -> None:
+    """Bind one ACTIVE executor session to an already-CLAIMED fixture wave."""
+    state = load_state(state_path)
+    state.agent_sessions[session_id] = AgentSession(
+        id=session_id,
+        role=AgentSessionRole.EXECUTOR,
+        runtime="claude-code",
+        scope_id=_WAVE_ID,
+        status=AgentSessionStatus.ACTIVE,
+        claimed_wave_ids=[_WAVE_ID],
+        started_at=_T0,
+    )
+    state.current.active_session_ids.append(session_id)
+    state.waves[_WAVE_ID].claim_session_id = session_id
+    state_path.write_text(state.model_dump_json(), encoding="utf-8")
+
+
+def _deactivate_parent_phase(state_path: Path) -> None:
+    """Simulate a concurrent lifecycle writer invalidating spawn eligibility."""
+    state = load_state(state_path)
+    state.phases["P29"].status = PhaseStatus.PLANNED
+    state_path.write_text(state.model_dump_json(), encoding="utf-8")
+
+
+class _RetryDeactivationAdapter(_StubAdapter):
+    """Fail one allowed spawn after deactivating its parent before the retry."""
+
+    def __init__(self, state_path: Path) -> None:
+        super().__init__()
+        self._state_path = state_path
+
+    async def spawn_session(
+        self,
+        prompt: str,
+        *,
+        model: str,
+        cwd: str | None = None,
+        extra_args: Sequence[str] = (),
+        denied_tools: Sequence[str] = (),
+        timeout: float | None = None,
+        on_spawn: Callable[[int], None] | None = None,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
+    ) -> SpawnResult:
+        self.spawn_calls += 1
+        self.prompts.append(prompt)
+        self.models.append(model)
+        if on_spawn is not None:
+            on_spawn(_STUB_PID)
+        _deactivate_parent_phase(self._state_path)
+        raise RuntimeSpawnError(
+            "runtime rate limited",
+            exit_status=1,
+            stderr=b"rate limit",
+        )
+
+    def parse_error(self, exit_status: int, stderr: bytes) -> ErrorClass:
+        """Classify the first failure as retryable on the same runtime."""
+        return RUNTIME_RATE_LIMIT
+
+
 def _ctx(state_path: Path | None, *, event_path: Path | None = None) -> MethodContext:
     return MethodContext(
         started_at="2026-06-01T00:00:00+00:00",
@@ -532,6 +601,78 @@ def test_dispatch_claimed_wave_rejects_inactive_parent_at_spawn_boundary(
     assert state_path.read_bytes() == before
     assert not event_path.exists()
     assert adapter.spawn_calls == 0
+
+
+def test_dispatch_revalidates_after_preflight_before_first_spawn(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A post-preflight lifecycle change prevents the first adapter spawn."""
+    from eawf.workflow.dispatch.renderer import render_dispatch_envelope
+
+    state_path = _write_state(tmp_path, wave_status="claimed")
+    session_id = "SES-first-spawn-boundary"
+    _bind_claimed_session(state_path, session_id=session_id)
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    adapter = _StubAdapter()
+    _patch_adapter(monkeypatch, adapter)
+
+    def _render_then_deactivate(*args: Any, **kwargs: Any) -> Any:
+        rendered = render_dispatch_envelope(*args, **kwargs)
+        _deactivate_parent_phase(state_path)
+        return rendered
+
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.agent.render_dispatch_envelope",
+        _render_then_deactivate,
+    )
+
+    with pytest.raises(DaemonValidationError, match="spawn_wave_not_claimed"):
+        _run(
+            dispatch(
+                _ctx(state_path, event_path=event_path),
+                {"wave_id": _WAVE_ID, "spawn": True},
+            )
+        )
+
+    state = load_state(state_path)
+    assert state.phases["P29"].status is PhaseStatus.PLANNED
+    assert state.waves[_WAVE_ID].claim_session_id == session_id
+    assert state.waves[_WAVE_ID].sessions == {}
+    assert state.waves[_WAVE_ID].dispatch_history == []
+    assert adapter.spawn_calls == 0
+    assert not event_path.exists()
+    assert _executor_report_rows(state_path) == []
+
+
+def test_dispatch_revalidates_before_retry_spawn(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A lifecycle change during attempt one prevents every later retry."""
+    state_path = _write_state(tmp_path, wave_status="claimed")
+    session_id = "SES-retry-spawn-boundary"
+    _bind_claimed_session(state_path, session_id=session_id)
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    adapter = _RetryDeactivationAdapter(state_path)
+    _patch_adapter(monkeypatch, adapter)
+
+    with pytest.raises(DaemonValidationError, match="spawn_wave_not_claimed"):
+        _run(
+            dispatch(
+                _ctx(state_path, event_path=event_path),
+                {"wave_id": _WAVE_ID, "spawn": True},
+            )
+        )
+
+    state = load_state(state_path)
+    assert state.phases["P29"].status is PhaseStatus.PLANNED
+    assert state.waves[_WAVE_ID].claim_session_id == session_id
+    assert state.waves[_WAVE_ID].sessions == {}
+    assert state.waves[_WAVE_ID].dispatch_history == []
+    assert adapter.spawn_calls == 1
+    assert not event_path.exists()
+    assert _executor_report_rows(state_path) == []
 
 
 def test_dispatch_unknown_runtime_rejects_before_session_claim_or_event(tmp_path: Path) -> None:

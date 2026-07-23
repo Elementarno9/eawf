@@ -1361,6 +1361,27 @@ def _claim_live_session(
     )
 
 
+def _validate_spawn_attempt(state_path: Path, wave_id: str) -> None:
+    """Revalidate one process-spawn attempt against authoritative state.
+
+    The state lock serializes this read with lifecycle writers, and the check is
+    the final synchronous operation before the adapter receives control. The
+    lock cannot span ``spawn_session`` because that API awaits the child through
+    completion; holding it would block the child's daemon-owned state writes.
+
+    Args:
+        state_path: Canonical repository ``state.json`` path.
+        wave_id: Wave about to spawn a process.
+
+    Raises:
+        LifecycleError: When the wave is missing.
+        LifecycleGuardError: When the wave or either parent is no longer
+            execution-active.
+    """
+    with portalock.acquire(state_path, timeout=5.0):
+        validate_spawn_wave(load_state(state_path), wave_id)
+
+
 async def _bind_or_synthesize_report(
     accepted: SpawnResult,
     *,
@@ -1821,6 +1842,10 @@ async def _spawn_and_dispatch(
                 state_path, wave_id=wave_id, runtime=spawn_runtime, override=model_override
             )
         )
+        # Retry delays and runtime/model resolution create a window after the
+        # earlier dispatch preflight. Re-read under the canonical lock for every
+        # actual attempt so a terminal wave or inactive parent cannot respawn.
+        _validate_spawn_attempt(state_path, wave_id)
         return await spawn_adapter.spawn_session(
             envelope.prompt,
             model=spawn_model,
