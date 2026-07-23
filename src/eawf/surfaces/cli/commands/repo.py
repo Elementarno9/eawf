@@ -36,7 +36,8 @@ Subcommands:
   The "real divergence" between repo init and the top-level ``eawf init``
   lands in Phase 5 W06 (``eawf init`` self-apply); for v0.1 the surface is
   identical so existing callers can opt into the noun-based UX without
-  behaviour change.
+  behaviour change. ``--refresh-gitignore`` remains the same non-destructive
+  managed-block-only path on both aliases.
 - ``repo link <workspace-code> <repo-code>`` — append the current (or
   ``--target``) repo to a workspace state document, optionally recording
   the workspace code on the repo's ``state.indexes.workspace_code`` so a
@@ -204,6 +205,16 @@ def repo_init_cmd(
             help="Require typecheck as an acceptance gate.",
         ),
     ] = True,
+    refresh_gitignore: Annotated[
+        bool,
+        typer.Option(
+            "--refresh-gitignore",
+            help=(
+                "Refresh only the managed .gitignore block for the selected "
+                "state path; do not run the init wizard."
+            ),
+        ),
+    ] = False,
     force: Annotated[
         bool,
         typer.Option(
@@ -234,6 +245,7 @@ def repo_init_cmd(
         acceptance_tests=acceptance_tests,
         acceptance_lint=acceptance_lint,
         acceptance_typecheck=acceptance_typecheck,
+        refresh_gitignore=refresh_gitignore,
         force=force,
     )
 

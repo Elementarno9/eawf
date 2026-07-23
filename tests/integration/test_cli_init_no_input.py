@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 import yaml
 from click.testing import Result
 from typer.testing import CliRunner
@@ -195,3 +196,106 @@ def test_cli_init_no_input_requires_project_code(tmp_path: Path) -> None:
     )
     assert res.exit_code == 1, res.stdout
     assert not (tmp_path / ".ea").exists()
+
+
+def test_cli_init_refresh_gitignore_is_non_destructive_and_idempotent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Refresh writes only the managed ignore block and needs no project code."""
+    from eawf.platform.install import wizard
+
+    target = tmp_path / "existing"
+    ea_dir = target / ".ea"
+    manifest_path = ea_dir / "indexes" / "generated.json"
+    plugin_path = target / ".claude-plugin" / "plugin.json"
+    for path, content in (
+        (target / "state.json", b'{"sentinel":"state"}\n'),
+        (ea_dir / "config.yaml", b"sentinel: config\n"),
+        (target / "AGENTS.md", b"sentinel agents\n"),
+        (target / "CLAUDE.md", b"sentinel claude\n"),
+        (manifest_path, b'{"sentinel":"manifest"}\n'),
+        (plugin_path, b'{"sentinel":"plugin"}\n'),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    gitignore_path = target / ".gitignore"
+    gitignore_path.write_text(
+        "user-before\n\n"
+        "# BEGIN EAWF:gitignore\n"
+        "stale-pattern\n"
+        "# END EAWF:gitignore\n\n"
+        "user-after\n",
+        encoding="utf-8",
+    )
+    preserved = {
+        path: path.read_bytes()
+        for path in (
+            target / "state.json",
+            ea_dir / "config.yaml",
+            target / "AGENTS.md",
+            target / "CLAUDE.md",
+            manifest_path,
+            plugin_path,
+        )
+    }
+
+    def _full_init_forbidden(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("refresh must not invoke the full init pipeline")
+
+    monkeypatch.setattr(wizard, "run_wizard_no_input", _full_init_forbidden)
+    monkeypatch.setattr(wizard, "run_wizard_interactive", _full_init_forbidden)
+    args = [
+        "--json",
+        "--no-input",
+        "init",
+        "--refresh-gitignore",
+        "--state-path",
+        "state.json",
+        "--target",
+        str(target),
+    ]
+
+    first = runner.invoke(app, args)
+    assert first.exit_code == 0, first.stdout
+    payload = json.loads(first.stdout)
+    assert payload["gitignore_path"] == str(gitignore_path.resolve())
+    assert "/state.json.lock" in payload["gitignore_patterns"]
+    first_bytes = gitignore_path.read_bytes()
+
+    second = runner.invoke(app, args)
+    assert second.exit_code == 0, second.stdout
+    assert gitignore_path.read_bytes() == first_bytes
+
+    changed_args = list(args)
+    changed_args[5] = "nested/state.json"
+    changed = runner.invoke(app, changed_args)
+    assert changed.exit_code == 0, changed.stdout
+    changed_text = gitignore_path.read_text(encoding="utf-8")
+    changed_lines = changed_text.splitlines()
+    assert "/nested/state.json.lock" in changed_lines
+    assert "/state.json.lock" not in changed_lines
+    assert preserved == {path: path.read_bytes() for path in preserved}
+    assert "user-before" in changed_text
+    assert "user-after" in changed_text
+    assert "stale-pattern" not in changed_text
+
+
+def test_cli_init_refresh_gitignore_rejects_line_injection(tmp_path: Path) -> None:
+    """Refresh maps a malicious state path to normal invalid-input output."""
+    result = runner.invoke(
+        app,
+        [
+            "--no-input",
+            "init",
+            "--refresh-gitignore",
+            "--state-path",
+            "bad\npattern/state.json",
+            "--target",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "cannot contain CR or LF" in result.stdout
+    assert not (tmp_path / ".gitignore").exists()

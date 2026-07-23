@@ -180,6 +180,14 @@ class WizardAnswers(BaseModel):
     # ``None`` for the legacy ``--profile`` only path.
     template_extras: dict[str, Any] | None = None
 
+    @field_validator("state_path")
+    @classmethod
+    def _validate_state_path(cls, value: str) -> str:
+        """Reject line separators that could inject managed ignore entries."""
+        if "\r" in value or "\n" in value:
+            raise ValueError("state path cannot contain CR or LF characters")
+        return value
+
     @field_validator("project_code")
     @classmethod
     def _validate_project_code(cls, value: str) -> str:
@@ -666,7 +674,7 @@ def run_wizard_no_input(
     with portalock.acquire(config_path, timeout=5.0):
         _atomic_write_yaml(config_path, _build_config_yaml(answers))
 
-    gitignore_result = write_gitignore(target_dir)
+    gitignore_result = write_gitignore(target_dir, state_path=state_path)
 
     # Materialise state keys per profile. We avoid ``enable_profile`` here
     # (see module docstring) and call ``_materialise_state_keys`` directly,

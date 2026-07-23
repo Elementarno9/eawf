@@ -18,6 +18,8 @@ Surface contract:
   ``--profiles`` / ``--profile``.
 - ``eawf init --force`` allows the pipeline to overwrite an existing
   ``.ea/state.json`` or ``.ea/config.yaml`` (otherwise init refuses).
+- ``eawf init --refresh-gitignore`` updates only the managed ignore block
+  for ``--state-path`` and skips the wizard pipeline.
 
 Exit codes (mapped via :class:`eawf.surfaces.cli.errors.CliError` subclasses):
 
@@ -377,6 +379,16 @@ def init_cmd(
             help="Require typecheck as an acceptance gate.",
         ),
     ] = True,
+    refresh_gitignore: Annotated[
+        bool,
+        typer.Option(
+            "--refresh-gitignore",
+            help=(
+                "Refresh only the managed .gitignore block for the selected "
+                "state path; do not run the init wizard."
+            ),
+        ),
+    ] = False,
     force: Annotated[
         bool,
         typer.Option(
@@ -386,13 +398,41 @@ def init_cmd(
     ] = False,
 ) -> None:
     """Initialise a new Eä Workflow workspace at *target*."""
+    flags: GlobalFlags = ctx.obj
+    target_dir = (target or Path.cwd()).resolve()
+
+    if refresh_gitignore:
+        from eawf.platform.install.gitignore_writer import write_gitignore
+
+        resolved_state_path = (
+            state_path if state_path.is_absolute() else target_dir / state_path
+        ).resolve()
+        try:
+            gitignore_result = write_gitignore(
+                target_dir,
+                state_path=resolved_state_path,
+            )
+        except ValueError as exc:
+            cli_errors.emit_error(
+                cli_errors.UserError(str(exc), kind="InvalidInput"),
+                flags=flags,
+            )
+            return
+        refresh_payload: dict[str, object] = {
+            "gitignore_path": str(gitignore_result.path),
+            "gitignore_patterns": list(gitignore_result.patterns),
+        }
+        emit_json_or_text(
+            refresh_payload,
+            f"eawf init: refreshed gitignore={gitignore_result.path}",
+            flags=flags,
+        )
+        return
+
     from pydantic import ValidationError
 
     from eawf.platform.install.wizard import run_wizard_interactive, run_wizard_no_input
     from eawf.platform.profiles.discovery import list_init_templates
-
-    flags: GlobalFlags = ctx.obj
-    target_dir = (target or Path.cwd()).resolve()
 
     if list_templates:
         names = list_init_templates()
