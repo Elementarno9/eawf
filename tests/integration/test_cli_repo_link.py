@@ -101,6 +101,46 @@ def test_repo_init_invalid_project_code_exits_3(tmp_path: Path) -> None:
     assert res.exit_code == 1, res.stdout
 
 
+def test_repo_init_refresh_gitignore_matches_top_level_alias(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The repo alias refreshes an empty repo without running full init."""
+    from eawf.platform.install import wizard
+
+    def _full_init_forbidden(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("refresh must not invoke the full init pipeline")
+
+    monkeypatch.setattr(wizard, "run_wizard_no_input", _full_init_forbidden)
+    monkeypatch.setattr(wizard, "run_wizard_interactive", _full_init_forbidden)
+    top_level_target = tmp_path / "top-level"
+    alias_target = tmp_path / "alias"
+    common = [
+        "--no-input",
+        "--refresh-gitignore",
+        "--state-path",
+        "state.json",
+    ]
+    top_level = runner.invoke(
+        app,
+        [common[0], "init", *common[1:], "--target", str(top_level_target)],
+    )
+    alias = runner.invoke(
+        app,
+        [common[0], "repo", "init", *common[1:], "--target", str(alias_target)],
+    )
+
+    assert top_level.exit_code == 0, top_level.stdout
+    assert alias.exit_code == 0, alias.stdout
+    assert (top_level_target / ".gitignore").read_bytes() == (
+        alias_target / ".gitignore"
+    ).read_bytes()
+    for target in (top_level_target, alias_target):
+        assert not (target / ".ea").exists()
+        assert not (target / "state.json").exists()
+        assert not (target / "AGENTS.md").exists()
+
+
 def test_repo_link_round_trip(tmp_path: Path) -> None:
     """``repo link`` records the link on both the workspace and the repo state."""
     workspace_dir = tmp_path / "ws"

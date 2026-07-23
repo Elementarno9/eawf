@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
+from pydantic import ValidationError
 
 from eawf.kernel.config.defaults import CONFIG_SCHEMA_VERSION
 from eawf.platform.install.gitignore_writer import GITIGNORE_PATTERNS
@@ -84,6 +86,15 @@ def test_runtime_choices_accept_codex() -> None:
     assert body["runtime"]["adapters"] == ["codex"]
 
 
+@pytest.mark.parametrize("separator", ["\r", "\n"])
+def test_wizard_answers_rejects_state_path_line_injection(separator: str) -> None:
+    payload = _answers().model_dump()
+    payload["state_path"] = f"bad{separator}pattern/state.json"
+
+    with pytest.raises(ValidationError, match="state path cannot contain CR or LF"):
+        WizardAnswers.model_validate(payload)
+
+
 def test_wizard_writes_disk_config_with_adapters(tmp_path: Path) -> None:
     target = tmp_path / "proj"
     target.mkdir()
@@ -108,7 +119,7 @@ def test_wizard_writes_managed_gitignore_block(tmp_path: Path) -> None:
     assert "# BEGIN EAWF:gitignore" in text
     assert "# END EAWF:gitignore" in text
     assert result.gitignore_patterns == list(GITIGNORE_PATTERNS)
-    for pattern in GITIGNORE_PATTERNS:
+    for pattern in result.gitignore_patterns:
         assert pattern in text
 
 
