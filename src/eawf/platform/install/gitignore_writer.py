@@ -22,6 +22,7 @@ GITIGNORE_PATTERNS: tuple[str, ...] = (
     ".mcp.json",
     "opencode.json",
     ".ea/locks/",
+    ".ea/**/*.lock",
     ".ea/local/",
     ".ea/worktrees/",
     ".ea/indexes/",
