@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.6.1]
+
+### Added
+- **Layered config values can now be removed through the canonical daemon writer.** `eawf config unset <key> --scope <layer>` validates the key and writable layer, prunes empty parents, safely no-ops when the value is absent, and publishes the same typed config-update envelope as a set.
+
+### Changed
+- **Workflow claims now fail closed across direct dispatch, fleet, advanced claim, and TUI paths.** A claim requires a live role/scope-compatible session, ACTIVE phase, claimable iter, nonempty criteria, satisfied dependencies and ordering, and an available repository-wide capacity slot; live spawn rechecks the parents and CLAIMED/IN_PROGRESS status immediately before each process attempt. Session creation and claim persist atomically, so a rejected preflight cannot leave an orphan ACTIVE session, event, attempt, process, or worktree.
+- **`planning.max_parallel_waves` is now an enforced repository-wide hard cap.** The compatibility default is 4; consumers that intentionally run wider fleets must raise the setting before upgrading. Fleet arm rejects an over-wide concurrency request before persistence, and the TUI offers only widths up to the effective cap.
+- **Verification policy now composes from strict typed leaves.** Config metadata distinguishes production consumers from reserved policy leaves, doctor reports explicit reserved settings, `waiver_mode: disabled` prevents new and historical waivers from satisfying execution gates, and optional strict iter close requires a complete accepted evaluation audit with real evidence. State schema remains 1.19.
+
+### Fixed
+- **Auditor sessions always reach a terminal state and lifecycle mutations publish their typed events.** Validated reports close their sessions; spawn, parse, schema, or store failures mark them failed; event-store failure still terminalizes state best-effort. Phase activation, iter close, and phase close now map to their existing lifecycle event types.
+- **Daemon guard errors and long-running direct dispatches now preserve their public contracts.** Coded rejections map to `-32002 validation_failed` with structured guard logs and no durable rejection event, while a legitimate runtime spawn uses the mutation timeout policy instead of falsely reporting daemon unreachability after 30 seconds.
+- **Cross-repository daemon mutations now resolve the request repository instead of silently writing through the daemon's boot repository.** Restart the daemon after installing 0.6.1 so the running process loads this mutation-path fix and all new workflow guards.
+- **Out-of-phase golden regeneration commits can use a bare `test:` subject.** The snapshot pairing gate still rejects malformed or non-test bare subjects while no phase is active.
+
 ## [0.6.0]
 
 ### Added
