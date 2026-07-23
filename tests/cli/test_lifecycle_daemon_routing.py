@@ -33,9 +33,12 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
+from eawf.kernel.state.models import State
 from eawf.kernel.state.mutations import MutationKind
 from eawf.surfaces.cli import _dispatch
 from eawf.surfaces.cli.app import app
+from tests._session_helpers import seed_active_session_on_disk
+from tests.conftest import make_claim_criterion
 
 pytestmark = pytest.mark.unit
 
@@ -116,6 +119,11 @@ def _bootstrap_to_pending_wave(workspace: Path, wave_id: str = "P01-I01-W01") ->
         ).exit_code
         == 0
     )
+    state = State.model_validate(orjson.loads(_state_path(workspace).read_bytes()))
+    state.waves[wave_id].success_criteria = [make_claim_criterion()]
+    _state_path(workspace).write_bytes(orjson.dumps(state.model_dump(mode="json")))
+    for session_id in ("S-1", "S-fallback", "S-crash", "S-clean"):
+        seed_active_session_on_disk(_state_path(workspace), session_id=session_id)
 
 
 # ---- fake daemon client -----------------------------------------------------

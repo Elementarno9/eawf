@@ -35,6 +35,8 @@ from eawf.kernel.state.models import State
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.cli._mutation import DAEMONLESS_WAIVER_EVENT_TYPE
 from eawf.surfaces.cli.app import app
+from tests._session_helpers import seed_active_session_on_disk
+from tests.conftest import make_claim_criterion
 
 pytestmark = pytest.mark.unit
 
@@ -94,6 +96,10 @@ def _bootstrap_claimed_wave(workspace: Path) -> None:
         ).exit_code
         == 0
     )
+    state = State.model_validate(orjson.loads(_state_path(workspace).read_bytes()))
+    state.waves[_WAVE_ID].success_criteria = [make_claim_criterion()]
+    _state_path(workspace).write_bytes(orjson.dumps(state.model_dump(mode="json")))
+    seed_active_session_on_disk(_state_path(workspace), session_id="S-1")
     assert runner.invoke(app, ["wave", "claim", _WAVE_ID, "--session", "S-1"]).exit_code == 0
 
 

@@ -11,7 +11,10 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
+from eawf.kernel.state.models import State
 from eawf.surfaces.cli.app import app
+from tests._session_helpers import seed_active_session_on_disk
+from tests.conftest import make_claim_criterion
 
 runner = CliRunner()
 
@@ -1572,9 +1575,18 @@ def test_wave_claim_out_of_order_flag_overrides_monotonic_gate(workspace: Path) 
                 "auto intent rationale",
             ],
         )
+    state_path = workspace / ".ea" / "state.json"
+    state = State.model_validate(orjson.loads(state_path.read_bytes()))
+    for wave_id in ("P21-I01-W01", "P21-I01-W02"):
+        state.waves[wave_id].success_criteria = [make_claim_criterion()]
+    state_path.write_bytes(orjson.dumps(state.model_dump(mode="json")))
+    seed_active_session_on_disk(state_path, session_id="S")
+    activated = runner.invoke(app, ["phase", "activate", "P21"])
+    assert activated.exit_code == 0, activated.output
     # Default claim of W02 is rejected because W01 is still PENDING + ready.
     blocked = runner.invoke(app, ["wave", "claim", "P21-I01-W02", "--session", "S"])
     assert blocked.exit_code != 0
+    assert "would skip lower-numbered ready siblings" in blocked.output
     # --out-of-order escape hatch must succeed.
     ok = runner.invoke(
         app,

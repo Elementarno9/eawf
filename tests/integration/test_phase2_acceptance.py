@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import orjson
 import pytest
 from typer.testing import CliRunner
 
@@ -29,7 +30,9 @@ from typer.testing import CliRunner
 pytest.importorskip("eawf.surfaces.cli.commands.lifecycle")
 pytest.importorskip("eawf.surfaces.cli.commands.session")
 
+from eawf.kernel.state.models import State
 from eawf.surfaces.cli.app import app
+from tests.conftest import make_claim_criterion
 
 runner = CliRunner()
 
@@ -92,6 +95,9 @@ def test_phase2_full_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
         ],
     )
     assert r.exit_code == 0, r.output
+    state = State.model_validate(orjson.loads(state_path.read_bytes()))
+    state.waves["P01-I01-W01"].success_criteria = [make_claim_criterion()]
+    state_path.write_bytes(orjson.dumps(state.model_dump(mode="json")))
     r = runner.invoke(
         app,
         [

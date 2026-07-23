@@ -25,11 +25,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import orjson
 import pytest
 from typer.testing import CliRunner
 
+from eawf.kernel.state.models import State
 from eawf.platform.install.wizard import WizardAnswers, run_wizard_no_input
 from eawf.surfaces.cli.app import app
+from tests._session_helpers import seed_active_session_on_disk
+from tests.conftest import make_claim_criterion
 
 from .conftest import (
     assert_or_regen_json,
@@ -311,6 +315,11 @@ def test_lifecycle_flow_full(
         exit_code = getattr(result, "exit_code", None)
         stdout = getattr(result, "stdout", "")
         assert exit_code == 0, f"step {step_args} failed: exit={exit_code} stdout={stdout!r}"
+        if step_args[:2] == ("wave", "plan"):
+            state = State.model_validate(orjson.loads(state_path.read_bytes()))
+            state.waves["P01-I01-W01"].success_criteria = [make_claim_criterion()]
+            state_path.write_bytes(orjson.dumps(state.model_dump(mode="json")))
+            seed_active_session_on_disk(state_path, session_id="SES-1")
 
     assert state_path.exists()
     live_state = json.loads(state_path.read_text(encoding="utf-8"))

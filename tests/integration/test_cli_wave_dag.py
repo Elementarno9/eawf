@@ -11,10 +11,14 @@ import json
 from collections.abc import Iterator
 from pathlib import Path
 
+import orjson
 import pytest
 from typer.testing import CliRunner
 
+from eawf.kernel.state.models import State
 from eawf.surfaces.cli.app import app
+from tests._session_helpers import seed_active_session_on_disk
+from tests.conftest import make_claim_criterion
 
 runner = CliRunner()
 
@@ -59,6 +63,12 @@ def _bootstrap_chain(workspace: Path) -> None:
             args.extend(["--deps", deps])
         res = runner.invoke(app, args)
         assert res.exit_code == 0, res.stdout
+    state_path = workspace / ".ea" / "state.json"
+    state = State.model_validate(orjson.loads(state_path.read_bytes()))
+    for wave in state.waves.values():
+        wave.success_criteria = [make_claim_criterion()]
+    state_path.write_bytes(orjson.dumps(state.model_dump(mode="json")))
+    seed_active_session_on_disk(state_path, session_id="S")
 
 
 # ---- wave graph -------------------------------------------------------------

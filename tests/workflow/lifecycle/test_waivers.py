@@ -989,6 +989,10 @@ def test_cli_wave_close_disabled_still_allows_no_runtime_override(
     """H04 does not extend disabled mode to the metering override."""
     runner, state_path = _bootstrap_cli(tmp_path, monkeypatch)
     _seed_operator_session_into_disk_state(state_path, session_id=OPERATOR_SESSION_ID)
+    state = State.model_validate(orjson.loads(state_path.read_bytes()))
+    state.waves[WAVE_ID].success_criteria = [make_claim_criterion()]
+    state.waves[WAVE_ID].criteria_floor_waiver = None
+    state_path.write_bytes(orjson.dumps(state.model_dump(mode="json")))
     (tmp_path / ".ea" / "config.yaml").write_text(
         "verify:\n  waiver_mode: disabled\n",
         encoding="utf-8",
