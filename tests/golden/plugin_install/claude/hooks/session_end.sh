@@ -40,9 +40,9 @@ _eawf_json_escape() {
     printf '%s' "$s"
 }
 
-# Claude Code delivers hook input as a JSON document on stdin; SessionEnd,
-# Stop, and SubagentStop carry the session cost + token usage totals that
-# feed EU capture. Read that document verbatim. The read is fail-open: a
+# The provider delivers hook input as a JSON document on stdin. Claude points
+# at transcripts carrying usage; Codex points at exact session/subagent rollout
+# files. Read that document verbatim. The read is fail-open: a
 # hook that dies breaks the operator's session, so an interactive TTY or an
 # empty pipe leaves the payload blank and the positional-arg fallback runs.
 _eawf_stdin=""

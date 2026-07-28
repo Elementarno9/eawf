@@ -17,9 +17,10 @@
             │   ≡ overview  ▸ criteria  ◈ gates  ● evidence  ∑ metrics                                     │
             │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
             │  size:     L                                                                                 │
-            │  eu:       — no data                                                                         │
+            │  eu:       unavailable — no ended runtime attempt                                            │
             │  estimate: 2.00 EU                                                                           │
-            │  tokens:   — no data                                                                         │
+            │  tokens:   unavailable — no runtime measurement recorded                                     │
+            │  cost:     unavailable — no runtime measurement recorded                                     │
             │                                                                                              │
             │  [ Tab/Shift+Tab cycle · Esc close ]                                                         │
             │                                                                                              │
