@@ -43,10 +43,14 @@ from eawf import __version__
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     AgentSessionStatus,
+    DependencyStage,
+    MeasurementQuality,
+    MeasurementStatus,
     PhaseStatus,
     StoreKind,
+    WaveStatus,
 )
-from eawf.kernel.state.models import AgentSession
+from eawf.kernel.state.models import AgentSession, WaveDependencyBarrier, wave_dependency_key
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import AgentReportPayload, store_kind_for_role
 from eawf.kernel.store.paths import store_path
@@ -70,10 +74,15 @@ from eawf.runtime.runtimes.adapter import (
 )
 from eawf.runtime.runtimes.cancel import CancelResult
 from eawf.workflow.evidence._io import load_state
+from eawf.workflow.lifecycle.integration import (
+    bind_start_dependencies,
+    create_wave_integration,
+)
 
 pytestmark = pytest.mark.integration
 
 _WAVE_ID = "P29-I04-W01"
+_UPSTREAM_ID = "P29-I04-W00"
 _T0 = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
 _T1 = datetime(2026, 6, 1, 12, 0, 5, tzinfo=UTC)
 _STUB_PID = 54321
@@ -398,6 +407,69 @@ def _deactivate_parent_phase(state_path: Path) -> None:
     state_path.write_text(state.model_dump_json(), encoding="utf-8")
 
 
+def _add_bound_dependency(state_path: Path) -> None:
+    """Add one integrated dependency and bind the dispatched wave to generation one."""
+    state = load_state(state_path)
+    downstream = state.waves[_WAVE_ID]
+    upstream = downstream.model_copy(
+        deep=True,
+        update={
+            "id": _UPSTREAM_ID,
+            "title": "Integrated spawn dependency",
+            "status": WaveStatus.IN_PROGRESS,
+            "deps": [],
+            "blocks": [_WAVE_ID],
+            "claim_session_id": None,
+            "sessions": {},
+            "dispatch_history": [],
+            "claimed_at": _T0,
+        },
+    )
+    state.waves[_UPSTREAM_ID] = upstream
+    state.iters[downstream.iter_id].wave_ids.insert(0, _UPSTREAM_ID)
+    state.current.active_wave_ids.append(_UPSTREAM_ID)
+    downstream.deps = [_UPSTREAM_ID]
+    state.wave_dependency_barriers[wave_dependency_key(_WAVE_ID, _UPSTREAM_ID)] = (
+        WaveDependencyBarrier(
+            wave_id=_WAVE_ID,
+            dep_wave_id=_UPSTREAM_ID,
+            start_after=DependencyStage.INTEGRATED,
+            land_after=DependencyStage.VERIFIED,
+            reason="dispatch consumes the exact integrated dependency generation",
+        )
+    )
+    create_wave_integration(
+        state,
+        wave_id=_UPSTREAM_ID,
+        base_sha="a" * 40,
+        candidate_sha="b" * 40,
+        integrated_sha="c" * 40,
+        tree_sha="d" * 40,
+        diff_digest="initial-diff",
+        spec_digest="initial-spec",
+        now=_T0,
+    )
+    bind_start_dependencies(state, wave_id=_WAVE_ID, now=_T0)
+    state_path.write_text(state.model_dump_json(), encoding="utf-8")
+
+
+def _supersede_dependency_generation(state_path: Path) -> None:
+    """Append generation two so the downstream wave's pinned binding is stale."""
+    state = load_state(state_path)
+    create_wave_integration(
+        state,
+        wave_id=_UPSTREAM_ID,
+        base_sha="a" * 40,
+        candidate_sha="e" * 40,
+        integrated_sha="f" * 40,
+        tree_sha="1" * 40,
+        diff_digest="superseding-diff",
+        spec_digest="superseding-spec",
+        now=_T1,
+    )
+    state_path.write_text(state.model_dump_json(), encoding="utf-8")
+
+
 class _RetryDeactivationAdapter(_StubAdapter):
     """Fail one allowed spawn after deactivating its parent before the retry."""
 
@@ -432,6 +504,40 @@ class _RetryDeactivationAdapter(_StubAdapter):
     def parse_error(self, exit_status: int, stderr: bytes) -> ErrorClass:
         """Classify the first failure as retryable on the same runtime."""
         return RUNTIME_RATE_LIMIT
+
+
+class _CorrectionDependencyRaceAdapter(_StubAdapter):
+    """Supersede a dependency after the initial invalid report completes."""
+
+    def __init__(self, state_path: Path, *, report_texts: Sequence[str]) -> None:
+        super().__init__(report_texts=report_texts)
+        self._state_path = state_path
+
+    async def spawn_session(
+        self,
+        prompt: str,
+        *,
+        model: str,
+        cwd: str | None = None,
+        extra_args: Sequence[str] = (),
+        denied_tools: Sequence[str] = (),
+        timeout: float | None = None,
+        on_spawn: Callable[[int], None] | None = None,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
+    ) -> SpawnResult:
+        result = await super().spawn_session(
+            prompt,
+            model=model,
+            cwd=cwd,
+            extra_args=extra_args,
+            denied_tools=denied_tools,
+            timeout=timeout,
+            on_spawn=on_spawn,
+            on_chunk=on_chunk,
+        )
+        if self.spawn_calls == 1:
+            _supersede_dependency_generation(self._state_path)
+        return result
 
 
 def _ctx(state_path: Path | None, *, event_path: Path | None = None) -> MethodContext:
@@ -672,6 +778,81 @@ def test_dispatch_revalidates_before_retry_spawn(
     assert state.waves[_WAVE_ID].dispatch_history == []
     assert adapter.spawn_calls == 1
     assert not event_path.exists()
+    assert _executor_report_rows(state_path) == []
+
+
+def test_dispatch_revalidates_dependency_generation_before_first_spawn(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A post-preflight generation change prevents the initial process spawn."""
+    from eawf.workflow.dispatch.renderer import render_dispatch_envelope
+
+    state_path = _write_state(tmp_path, wave_status="claimed")
+    session_id = "SES-first-dependency-boundary"
+    _bind_claimed_session(state_path, session_id=session_id)
+    _add_bound_dependency(state_path)
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    adapter = _StubAdapter()
+    _patch_adapter(monkeypatch, adapter)
+
+    def _render_then_supersede(*args: Any, **kwargs: Any) -> Any:
+        rendered = render_dispatch_envelope(*args, **kwargs)
+        _supersede_dependency_generation(state_path)
+        return rendered
+
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.agent.render_dispatch_envelope",
+        _render_then_supersede,
+    )
+
+    with pytest.raises(DaemonValidationError, match="bound-generation=1"):
+        _run(
+            dispatch(
+                _ctx(state_path, event_path=event_path),
+                {"wave_id": _WAVE_ID, "spawn": True},
+            )
+        )
+
+    state = load_state(state_path)
+    assert state.waves[_WAVE_ID].claim_session_id == session_id
+    assert state.waves[_WAVE_ID].sessions == {}
+    assert state.waves[_WAVE_ID].dispatch_history == []
+    assert adapter.spawn_calls == 0
+    assert _executor_report_rows(state_path) == []
+
+
+def test_dispatch_revalidates_dependency_generation_before_correction_spawn(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A generation change after invalid output prevents a correction process."""
+    state_path = _write_state(tmp_path, wave_status="claimed")
+    session_id = "SES-correction-dependency-boundary"
+    _bind_claimed_session(state_path, session_id=session_id)
+    _add_bound_dependency(state_path)
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    invalid = json.dumps({"role": "executor", "verdict": "pass", "confidence": "high"})
+    adapter = _CorrectionDependencyRaceAdapter(
+        state_path,
+        report_texts=[invalid, _executor_report_json()],
+    )
+    _patch_adapter(monkeypatch, adapter)
+
+    with pytest.raises(DaemonValidationError, match="bound-generation=1"):
+        _run(
+            dispatch(
+                _ctx(state_path, event_path=event_path),
+                {"wave_id": _WAVE_ID, "spawn": True},
+            )
+        )
+
+    state = load_state(state_path)
+    assert state.waves[_WAVE_ID].claim_session_id == session_id
+    assert state.waves[_WAVE_ID].sessions == {}
+    assert state.waves[_WAVE_ID].dispatch_history == []
+    assert adapter.spawn_calls == 1
+    assert len(adapter.prompts) == 1
     assert _executor_report_rows(state_path) == []
 
 
@@ -1599,3 +1780,50 @@ def test_persist_live_session_attempt_persists_when_wave_active(
     # its priced snapshot onto the wave (proving the non-terminal path ran).
     assert wave.runtime_baseline is not None
     assert wave.runtime_latest is not None
+
+
+def test_persist_live_codex_attempt_preserves_missing_usage(
+    tmp_path: Path,
+) -> None:
+    """Headless Codex without a usage event persists unavailable, never zero."""
+    state_path = _write_state(tmp_path, wave_status="claimed")
+    ctx = _ctx(state_path)
+    spawn_result = _terminal_spawn_result(runtime="codex").model_copy(
+        update={
+            "input_tokens": None,
+            "output_tokens": None,
+            "cache_creation_input_tokens": None,
+            "cache_creation_5m_input_tokens": None,
+            "cache_creation_1h_input_tokens": None,
+            "cache_read_input_tokens": None,
+            "measurement_quality": MeasurementQuality.UNAVAILABLE,
+            "measurement_status": MeasurementStatus.NO_TOKEN_EVIDENCE,
+            "measurement_reason": "codex_turn_usage_missing_or_invalid",
+        }
+    )
+
+    result = _persist_live_session_attempt(
+        ctx,
+        wave_id=_WAVE_ID,
+        requested_runtime="codex",
+        serving_runtime="codex",
+        session_log_handle="urn:eawf:v1:session-log:codex:sess-late-xyz789",
+        spawn_result=spawn_result,
+        pid=_STUB_PID,
+    )
+
+    assert result is not None
+    wave = load_state(state_path).waves[_WAVE_ID]
+    attempt = wave.sessions[1]
+    assert attempt.input_tokens is None
+    assert attempt.output_tokens is None
+    assert attempt.cache_creation_input_tokens is None
+    assert attempt.cache_read_input_tokens is None
+    assert attempt.cost_usd is None
+    assert attempt.measurement_quality is MeasurementQuality.UNAVAILABLE
+    assert attempt.measurement_status is MeasurementStatus.NO_TOKEN_EVIDENCE
+    assert attempt.measurement_reason == "codex_turn_usage_missing_or_invalid"
+    assert wave.runtime_latest is not None
+    assert wave.runtime_latest.input_tokens is None
+    assert wave.runtime_latest.output_tokens is None
+    assert wave.runtime_latest.cost_usd is None

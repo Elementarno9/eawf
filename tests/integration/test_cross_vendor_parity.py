@@ -287,6 +287,9 @@ def test_three_vendors_emit_identical_spawn_result_shape(monkeypatch: pytest.Mon
         "cache_creation_1h_input_tokens",
         "cache_read_input_tokens",
         "cost_usd_reported",
+        "measurement_quality",
+        "measurement_status",
+        "measurement_reason",
         "started_at",
         "ended_at",
     }

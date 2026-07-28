@@ -14,7 +14,7 @@ import re
 from enum import IntEnum, StrEnum
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from eawf.kernel.state.models import IdStr
 
@@ -810,9 +810,9 @@ class GateSpec(_StrictModel):
     :func:`eawf.kernel.spec.promotion.validate_argv_gates` — defense
     in depth across the parse-time and persistence-time seams.
 
-    ``timeout_s`` is ``None`` by default so a kind that has a class
-    default (e.g. command_exit_zero defaults to 30s) does not need an
-    explicit override.
+    ``timeout_s`` is ``None`` by default so a kind that has a timeout-class
+    default does not need an explicit override. A present value must be a
+    positive strict integer; zero is not a meaningful process budget.
     """
 
     id: IdStr
@@ -822,7 +822,7 @@ class GateSpec(_StrictModel):
     policy: GatePolicy
     cadence: GateCadence
     required: bool = True
-    timeout_s: int | None = Field(default=None, ge=0)
+    timeout_s: StrictInt | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def _argv_passes_l0_policy(self) -> GateSpec:

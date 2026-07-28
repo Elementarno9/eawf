@@ -2,10 +2,9 @@
 
 Per the W06 success criteria:
 
-* sc #3 — the three close seams call :func:`readiness.compute` AFTER
-  the state mutation lands; at least one seam asserts ordering
-  explicitly. The CLI seam (``_close_and_pin``) is the canonical
-  one — :func:`test_close_and_pin_calls_compute_after_close_wave`
+* v0.6.2 lock split — the CLI fallback calls
+  :func:`readiness.compute` before the state mutation and outside the
+  lock. :func:`test_close_preflight_calls_compute_before_close_wave`
   pins the ordering by monkeypatching both ``close_wave`` and
   ``compute`` to record the call sequence.
 * sc #5 — the close envelope grows a ``readiness_warnings_count``
@@ -115,17 +114,17 @@ def _seed_claimed_wave(state: State, *, criteria: list[str] | None = None) -> No
 # ---- Seam #1 — CLI _close_and_pin -------------------------------------------
 
 
-def test_close_and_pin_calls_compute_after_close_wave(
+def test_close_preflight_calls_compute_before_close_wave(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``_close_and_pin`` calls ``compute`` AFTER ``close_wave`` (sc #3).
+    """Daemonless close computes readiness before applying ``close_wave``.
 
     Drives ``eawf wave close`` via :class:`typer.testing.CliRunner`
     against a bootstrapped state.json. Patches the live call sites of
     ``close_wave`` (imported into ``lifecycle_wave``) and ``compute``
-    (re-exported from ``eawf.workflow.verify`` and imported into
-    ``lifecycle_wave``) to a recorder; the recorder asserts the
-    canonical ``close_wave`` -> ``compute`` ordering.
+    (re-exported from ``eawf.workflow.verify``) to a recorder; the
+    recorder asserts the lock-free ``compute`` -> ``close_wave``
+    ordering.
     """
     from typer.testing import CliRunner
 
@@ -202,10 +201,9 @@ def test_close_and_pin_calls_compute_after_close_wave(
     result = runner.invoke(app, ["wave", "close", WAVE_ID, "--outcome", "ok"])
     assert result.exit_code == 0, result.stdout
 
-    # The handler MUST call close_wave then compute (in that order)
-    # for the wave it just closed.
-    assert call_log == [f"close_wave:{WAVE_ID}", f"compute:{WAVE_ID}"], (
-        f"compute must run AFTER close_wave; got {call_log}"
+    # Verification MUST finish before the short locked mutation.
+    assert call_log == [f"compute:{WAVE_ID}", f"close_wave:{WAVE_ID}"], (
+        f"compute must run BEFORE close_wave; got {call_log}"
     )
 
 

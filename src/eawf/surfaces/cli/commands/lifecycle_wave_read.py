@@ -23,6 +23,7 @@ import typer
 
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.ids import is_wave_id, natural_key
+from eawf.kernel.state.models import wave_dependency_key
 from eawf.runtime.lock import portalock
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
@@ -47,6 +48,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+wave_integration_app = typer.Typer(
+    name="integration",
+    help="Inspect or explicitly adopt Wave integration facts.",
+    no_args_is_help=True,
+)
+wave_app.add_typer(wave_integration_app, name="integration")
+
 
 # ---- Wave DAG read-only verbs (B026) ---------------------------------------
 
@@ -59,6 +67,41 @@ _WAVE_STATUS_EMOJI: dict[WaveStatus, str] = {
     WaveStatus.FAILED: "❌",  # cross mark
     WaveStatus.ABANDONED: "❌",
 }
+
+
+def _dependency_barrier_rows(
+    state: State,
+    *,
+    wave_id: str,
+    dep_wave_ids: list[str],
+) -> list[dict[str, Any]]:
+    """Project explicit and legacy dependency thresholds for one Wave."""
+    from eawf.workflow.lifecycle.integration import dependency_barrier
+
+    rows: list[dict[str, Any]] = []
+    for dep_wave_id in dep_wave_ids:
+        key = wave_dependency_key(wave_id, dep_wave_id)
+        barrier = dependency_barrier(
+            state,
+            wave_id=wave_id,
+            dep_wave_id=dep_wave_id,
+        )
+        explicit = key in state.wave_dependency_barriers
+        rows.append(
+            {
+                "dep_wave_id": dep_wave_id,
+                "start_after": barrier.start_after.value,
+                "land_after": barrier.land_after.value,
+                "explicit": explicit,
+                "reason": barrier.reason if explicit else None,
+            }
+        )
+    return rows
+
+
+def _barrier_text(rows: list[dict[str, Any]]) -> str:
+    """Render compact ``dep:start/land`` barrier labels."""
+    return str([f"{row['dep_wave_id']}:{row['start_after']}/{row['land_after']}" for row in rows])
 
 
 def _topo_order_with_depth(waves: list[tuple[str, list[str]]]) -> list[tuple[str, int]]:
@@ -112,8 +155,9 @@ def wave_graph_cmd(
     """Print the wave DAG for an iter in topological order.
 
     Each row is ``<emoji> <wave-id> <title-truncated-60> blocks=[...]
-    blocked_by=[...]`` indented two spaces per topo-depth level. Sort
-    order: topo first, then ascending wave id at each frontier.
+    blocked_by=[...] barriers=[...]`` indented two spaces per topo-depth
+    level. Missing explicit barriers render as legacy ``closed/closed``.
+    Sort order: topo first, then ascending wave id at each frontier.
     """
     loaded = _load_state_readonly(ctx)
     if loaded is None:
@@ -134,8 +178,14 @@ def wave_graph_cmd(
         emoji = _WAVE_STATUS_EMOJI.get(w.status, "?")
         title = w.title if len(w.title) <= 60 else w.title[:57] + "..."
         indent = "  " * depth
+        barriers = _dependency_barrier_rows(
+            state,
+            wave_id=wid,
+            dep_wave_ids=list(w.deps),
+        )
         text_lines.append(
-            f"{indent}{emoji} {wid} {title} blocks={list(w.blocks)} blocked_by={list(w.deps)}"
+            f"{indent}{emoji} {wid} {title} blocks={list(w.blocks)} "
+            f"blocked_by={list(w.deps)} barriers={_barrier_text(barriers)}"
         )
         json_rows.append(
             {
@@ -145,11 +195,119 @@ def wave_graph_cmd(
                 "depth": depth,
                 "blocks": list(w.blocks),
                 "blocked_by": list(w.deps),
+                "dependency_barriers": barriers,
             }
         )
     payload: dict[str, Any] = {"iter": target_iter, "waves": json_rows}
     text = "\n".join(text_lines) if text_lines else f"iter {target_iter}: no waves"
     emit_json_or_text(payload, text, flags=flags)
+
+
+# ---- Wave integration operator surfaces -----------------------------------
+
+
+@wave_integration_app.command("show")
+def wave_integration_show_cmd(
+    ctx: typer.Context,
+    wave_id: Annotated[str, typer.Argument(help="Wave ID to inspect.")],
+) -> None:
+    """Show immutable integration generations for one Wave."""
+    loaded = _load_state_readonly(ctx)
+    if loaded is None:
+        return
+    state, flags = loaded
+    if not is_wave_id(wave_id):
+        cli_errors.emit_error(
+            cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+    if wave_id not in state.waves:
+        cli_errors.emit_error(
+            cli_errors.UserError(f"unknown wave: {wave_id!r}", kind="NotFound"),
+            flags=flags,
+        )
+        return
+    from eawf.workflow.lifecycle.integration import latest_wave_integration
+
+    integrations = sorted(
+        (row for row in state.wave_integrations.values() if row.wave_id == wave_id),
+        key=lambda row: (row.generation, row.created_at, row.id),
+    )
+    active = latest_wave_integration(state, wave_id)
+    payload = {
+        "wave_id": wave_id,
+        "active_integration_id": active.id if active is not None else None,
+        "integrations": [row.model_dump(mode="json") for row in integrations],
+    }
+    if integrations:
+        text = "\n".join(
+            f"{row.id} generation={row.generation} status={row.status.value} "
+            f"kind={row.kind.value} integrated_sha={row.integrated_sha} "
+            f"tree_sha={row.tree_sha}"
+            for row in integrations
+        )
+    else:
+        text = f"wave {wave_id}: no integration facts"
+    emit_json_or_text(payload, text, flags=flags)
+
+
+@wave_integration_app.command("adopt")
+def wave_integration_adopt_cmd(
+    ctx: typer.Context,
+    wave_id: Annotated[str, typer.Argument(help="Wave ID receiving the adopted fact.")],
+    commit: Annotated[
+        str,
+        typer.Option("--commit", help="Already-integrated Git commit or ref."),
+    ],
+    reason: Annotated[
+        str,
+        typer.Option("--reason", help="Operator rationale persisted with the fact."),
+    ],
+) -> None:
+    """Adopt an ancestry-verified integrated revision via the daemon."""
+    from eawf.surfaces.cli import _dispatch
+    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+    flags: GlobalFlags = ctx.obj
+    if not is_wave_id(wave_id):
+        cli_errors.emit_error(
+            cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+    try:
+        _dispatch.escalate_mutation("wave integration adopt", flags=flags)
+        repo_root = str((flags.workspace or Path.cwd()).resolve())
+        with DaemonClient() as client:
+            result = client.call(
+                "integration.adopt",
+                {
+                    "repo_root": repo_root,
+                    "wave_id": wave_id,
+                    "commit": commit,
+                    "reason": reason,
+                },
+            )
+    except DaemonRpcError as exc:
+        if exc.code == cli_errors.RPC_VALIDATION_FAILED:
+            err: cli_errors.CliError = cli_errors.ValidationError(exc.message)
+        else:
+            err = cli_errors.cli_error_for_rpc(exc.code, exc.message)
+        cli_errors.emit_error(err, flags=flags)
+        return
+    except (OSError, RuntimeError, TimeoutError) as exc:
+        cli_errors.emit_error(
+            cli_errors.DaemonUnreachable(f"daemon unavailable for integration.adopt: {exc}"),
+            flags=flags,
+        )
+        return
+    integration = result["integration"]
+    emit_json_or_text(
+        result,
+        f"adopted {wave_id} integration={integration['id']} commit={integration['integrated_sha']}",
+        flags=flags,
+    )
 
 
 @wave_app.command("next-ready")

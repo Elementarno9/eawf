@@ -35,6 +35,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from eawf.kernel.state.enums import MeasurementQuality, MeasurementStatus
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.runtime.runtimes.adapter import (
     ErrorClass,
@@ -345,7 +346,12 @@ def _codex_tool_grant_overrides(denied_tools: Sequence[str]) -> list[str]:
     return overrides
 
 
-def _usage_int(usage: dict[str, object], key: str) -> int:
+def _usage_int(
+    usage: dict[str, object],
+    key: str,
+    *,
+    missing: int | None = None,
+) -> int | None:
     """Read a non-negative token count from a codex ``usage`` block.
 
     The ``usage`` block is decoded from JSON so each value is typed
@@ -361,19 +367,22 @@ def _usage_int(usage: dict[str, object], key: str) -> int:
     Returns:
         The coerced integer, or ``0`` when absent / falsey / non-coercible.
     """
-    value = usage.get(key, 0)
-    if not value:
+    if key not in usage:
+        return missing
+    value = usage[key]
+    if value == 0:
         return 0
     if isinstance(value, bool):
-        return 0
+        return None
     if isinstance(value, int):
-        return value
+        return value if value >= 0 else None
     if isinstance(value, (str, float)):
         try:
-            return int(value)
+            parsed = int(value)
         except TypeError, ValueError:
-            return 0
-    return 0
+            return None
+        return parsed if parsed >= 0 else None
+    return None
 
 
 #: Chunk size for the incremental stdout / stderr drain. Reads in fixed-size
@@ -521,7 +530,7 @@ def _decode_codex_events(stdout: bytes) -> list[dict[str, object]]:
 
 def _scan_codex_events(
     events: list[dict[str, object]],
-) -> tuple[str, str, dict[str, object]]:
+) -> tuple[str, str, dict[str, object] | None]:
     """Scan decoded codex events into ``(session_id, text, usage)``.
 
     Walks the event stream once, pulling the session id from
@@ -535,7 +544,7 @@ def _scan_codex_events(
     Returns:
         A tuple of the session id (``""`` when the stream carried no
         ``thread.started``), the answer text, and the usage mapping
-        (``{}`` when no ``turn.completed`` usage was seen).
+        (``None`` when no ``turn.completed`` usage was seen).
 
     Raises:
         RuntimeSpawnError: an ``error`` / ``turn.failed`` event was seen,
@@ -543,7 +552,7 @@ def _scan_codex_events(
     """
     session_id = ""
     text: str | None = None
-    usage: dict[str, object] = {}
+    usage: dict[str, object] | None = None
     for event in events:
         event_type = event.get("type")
         if event_type == "error":
@@ -720,13 +729,21 @@ def _parse_codex_result(
         raise RuntimeSpawnError("codex output carried no parseable json event line")
     session_id, text, usage = _scan_codex_events(events)
 
-    input_total = _usage_int(usage, "input_tokens")
-    cache_read = _usage_int(usage, "cached_input_tokens")
+    input_total = _usage_int(usage, "input_tokens") if usage is not None else None
+    output_tokens = _usage_int(usage, "output_tokens") if usage is not None else None
+    cache_read = _usage_int(usage, "cached_input_tokens", missing=0) if usage is not None else None
+    usage_observed = (
+        input_total is not None and output_tokens is not None and cache_read is not None
+    )
     # Codex's input_tokens is GROSS (includes cached); split out the
     # non-cached portion so input + cache-read never double-count. Clamp at
     # 0 to respect the ge=0 SpawnResult field if a malformed envelope ever
     # reports more cached than total.
-    input_non_cached = max(input_total - cache_read, 0)
+    input_non_cached = (
+        max(input_total - cache_read, 0)
+        if usage_observed and input_total is not None and cache_read is not None
+        else None
+    )
 
     return SpawnResult(
         session_id=session_id or f"{runtime}-{subprocess_pid}",
@@ -737,12 +754,21 @@ def _parse_codex_result(
         exit_status=exit_status,
         text=text,
         input_tokens=input_non_cached,
-        output_tokens=_usage_int(usage, "output_tokens"),
-        cache_creation_input_tokens=0,
-        cache_creation_5m_input_tokens=0,
-        cache_creation_1h_input_tokens=0,
+        output_tokens=output_tokens if usage_observed else None,
+        cache_creation_input_tokens=0 if usage_observed else None,
+        cache_creation_5m_input_tokens=0 if usage_observed else None,
+        cache_creation_1h_input_tokens=0 if usage_observed else None,
         cache_read_input_tokens=cache_read,
         cost_usd_reported=None,
+        measurement_quality=(
+            MeasurementQuality.EXACT if usage_observed else MeasurementQuality.UNAVAILABLE
+        ),
+        measurement_status=(
+            MeasurementStatus.USAGE_OBSERVED
+            if usage_observed
+            else MeasurementStatus.NO_TOKEN_EVIDENCE
+        ),
+        measurement_reason=None if usage_observed else "codex_turn_usage_missing_or_invalid",
         started_at=started_at,
         ended_at=ended_at,
     )

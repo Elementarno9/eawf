@@ -385,10 +385,10 @@ def test_gate_spec_empty_args_allowed_on_non_argv_kind() -> None:
     assert gate.args == {}
 
 
-def test_gate_spec_timeout_zero_allowed() -> None:
-    """timeout_s=0 is the boundary value the ge=0 bound permits."""
-    gate = _gate(timeout_s=0)
-    assert gate.timeout_s == 0
+def test_gate_spec_timeout_zero_rejected() -> None:
+    """Explicit timeout must be positive; ``None`` selects class default."""
+    with pytest.raises(ValidationError, match="timeout_s"):
+        _gate(timeout_s=0)
 
 
 def test_gate_spec_timeout_set_explicit() -> None:
@@ -467,6 +467,15 @@ def test_gate_spec_rejects_negative_timeout() -> None:
                 "timeout_s": -1,
             }
         )
+    assert "timeout_s" in str(exc_info.value)
+
+
+@pytest.mark.parametrize("timeout_s", ["60", 1.5, True])
+def test_gate_spec_rejects_malformed_timeout(timeout_s: object) -> None:
+    """Typed ingestion rejects coercible strings, fractions, and booleans."""
+    with pytest.raises(ValidationError) as exc_info:
+        _gate(timeout_s=timeout_s)
+
     assert "timeout_s" in str(exc_info.value)
 
 

@@ -125,6 +125,18 @@ Claude Code adapter (statusline, plugin, hooks).
 
 _No verbs registered._
 
+### `eawf close`
+
+Submit, inspect, follow, resume, or cancel durable wave closure.
+
+| Verb | Summary |
+|---|---|
+| `cancel` | Cancel a close attempt before its APPLYING stage. |
+| `follow` | Follow a close attempt until it reaches a terminal state. |
+| `resume` | Resume an interrupted or infrastructure-failed close attempt. |
+| `status` | Show durable close status without waiting. |
+| `submit` | Submit an idempotent exact-revision close attempt. |
+
 ### `eawf coauthor`
 
 Resolve co-author trailers from VCS config.

@@ -13,12 +13,12 @@ register with one command::
 
     eawf plugin package codex --target ./build/eawf-codex-marketplace
     codex plugin marketplace add ./build/eawf-codex-marketplace
+    codex plugin add eawf@eawf
 
-After ``marketplace add`` the plugin auto-registers; the
-``[plugins.eawf] enabled = true`` block that ``eawf plugin install
-codex`` writes to ``config.toml`` activates it. Codex has no separate
-``plugin install`` subcommand (only ``plugin marketplace add /
-upgrade / remove``).
+``marketplace add`` registers the source; current Codex CLI then
+installs the selected plugin through ``plugin add``. The explicit
+second step keeps marketplace registration distinct from installation
+and matches the provider's current command contract.
 
 Layout::
 
@@ -56,14 +56,17 @@ from dataclasses import dataclass, field
 from importlib.resources import files
 from pathlib import Path
 
-from eawf.runtime.runtimes.codex.hook_map import codex_hook_name
 from eawf.runtime.runtimes.codex.plugin_install import (
     IntegrityViolation,
+    _codex_hook_specs,
+    _hook_config_target,
+    _hook_target,
+    _render_hook_config,
     _render_manifest,
     _render_skill,
 )
 from eawf.surfaces.render._atomic import atomic_write_text
-from eawf.surfaces.render.hooks import HOOK_REGISTRY, render_hook_sh
+from eawf.surfaces.render.hooks import render_hook_sh
 from eawf.surfaces.render.skills import SKILL_REGISTRY
 
 logger = logging.getLogger(__name__)
@@ -157,6 +160,7 @@ class PackageResult:
     target: Path
     skills: list[FileDelta] = field(default_factory=list)
     hooks: list[FileDelta] = field(default_factory=list)
+    hook_config: FileDelta | None = None
     manifest: FileDelta | None = None
     marketplace: FileDelta | None = None
     dry_run: bool = False
@@ -307,8 +311,8 @@ def package_plugin(
         skill_deltas.append(FileDelta(path=path, action=action))
 
     hook_deltas: list[FileDelta] = []
-    for hook_spec in HOOK_REGISTRY:
-        path = plugin_root / "hooks" / f"{codex_hook_name(hook_spec.event_type)}.sh"
+    for hook_spec in _codex_hook_specs():
+        path = _hook_target(plugin_root, hook_spec)
         payload = render_hook_sh(hook_spec.event_type, runtime="codex").encode("utf-8")
         action = _classify(path, payload)
         if not dry_run:
@@ -316,6 +320,14 @@ def package_plugin(
             atomic_write_text(path, payload.decode("utf-8"))
             os.chmod(path, _HOOK_FILE_MODE)
         hook_deltas.append(FileDelta(path=path, action=action))
+
+    hook_config_path = _hook_config_target(plugin_root)
+    hook_config_payload = _render_hook_config()
+    hook_config_action = _classify(hook_config_path, hook_config_payload)
+    if not dry_run:
+        _ensure_dir(hook_config_path.parent)
+        atomic_write_text(hook_config_path, hook_config_payload.decode("utf-8"))
+    hook_config_delta = FileDelta(path=hook_config_path, action=hook_config_action)
 
     manifest_path = plugin_root / _MANIFEST_DIR / _MANIFEST_FILE
     manifest_payload = _render_manifest()
@@ -339,6 +351,7 @@ def package_plugin(
     logger.info(
         f"package_plugin runtime=codex target={target} "
         f"skills={len(skill_deltas)} hooks={len(hook_deltas)} "
+        f"hook_config={hook_config_action} "
         f"manifest={manifest_action} marketplace={marketplace_action} "
         f"publish_source={publish_source.value} dry_run={dry_run}"
     )
@@ -346,6 +359,7 @@ def package_plugin(
         target=target,
         skills=skill_deltas,
         hooks=hook_deltas,
+        hook_config=hook_config_delta,
         manifest=manifest_delta,
         marketplace=marketplace_delta,
         dry_run=dry_run,

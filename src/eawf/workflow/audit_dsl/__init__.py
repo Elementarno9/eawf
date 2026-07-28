@@ -14,6 +14,7 @@ from eawf.workflow.audit_dsl.models import (
     CheckSpec,
     CheckStatus,
     CommandExitZeroArgs,
+    GateFreshnessInput,
     Scope,
     TimeoutClass,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "CheckSpec",
     "CheckStatus",
     "CommandExitZeroArgs",
+    "GateFreshnessInput",
     "Scope",
     "TimeoutClass",
     "load_spec",

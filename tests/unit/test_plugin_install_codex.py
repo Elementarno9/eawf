@@ -18,14 +18,23 @@ import pytest
 
 import eawf
 from eawf.runtime.runtimes.codex import doctor_plugin, expected_paths, install_plugin
-from eawf.runtime.runtimes.codex.hook_map import codex_hook_name
+from eawf.runtime.runtimes.codex.hook_map import (
+    CODEX_HOOK_EVENT_TYPES,
+    codex_hook_event_name,
+    codex_hook_name,
+)
 from eawf.runtime.runtimes.codex.plugin_install import IntegrityViolation
 from eawf.runtime.runtimes.codex.skills import render_codex_agent_toml
 from eawf.surfaces.render.agents import AGENT_REGISTRY
-from eawf.surfaces.render.hooks import HOOK_REGISTRY
 from eawf.surfaces.render.skills import SKILL_REGISTRY
 
 _GOLDEN_DIR = Path(__file__).parents[1] / "golden" / "plugin_install" / "codex"
+_TRUSTED_HOOK_HASHES = {
+    "session_start": "sha256:e3c2e4ccb618e34154ba48a54c366aa43580559171e53b8eeae8922925db5156",
+    "subagent_start": "sha256:d4668602f9c0321859e3515cc397cfc48f2bb8ebfbaf659c0d7dc4bd66ab9185",
+    "subagent_stop": "sha256:f9c8f2c77aa7a2e2bf3625625684421e77fd5e097c63cb569360f9ea9c03a33c",
+    "session_end": "sha256:0b68efff9048a85638caee762a85997b402f95bfd974ab4e34111469d46a6dca",
+}
 
 
 @pytest.fixture()
@@ -58,6 +67,33 @@ def _agents_dir(target: Path, scope: str, fake_home: Path) -> Path:
     return fake_home / ".codex" / "agents"
 
 
+def _write_hook_trust_config(
+    home: Path,
+    *,
+    disabled_event: str | None = None,
+    include_events: tuple[str, ...] | None = None,
+    hash_overrides: dict[str, str] | None = None,
+) -> None:
+    config_path = home / ".codex" / "config.toml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    events = include_events or tuple(event.value for event in CODEX_HOOK_EVENT_TYPES)
+    sections: list[str] = []
+    for event in events:
+        state_key = f"eawf@eawf:hooks/hooks.json:{event}:0:0"
+        trusted_hash = (hash_overrides or {}).get(event, _TRUSTED_HOOK_HASHES[event])
+        sections.extend(
+            [
+                f'[hooks.state."{state_key}"]',
+                f'trusted_hash = "{trusted_hash}"',
+            ]
+        )
+        if event == disabled_event:
+            sections.append("enabled = false")
+        sections.append("")
+    existing = config_path.read_text(encoding="utf-8") if config_path.is_file() else ""
+    config_path.write_text(f"{existing.rstrip()}\n\n" + "\n".join(sections), encoding="utf-8")
+
+
 def test_rendered_executor_agent_toml_matches_golden() -> None:
     executor = next(spec for spec in AGENT_REGISTRY if spec.role == "executor")
     expected = (_GOLDEN_DIR / "agents" / "executor.toml").read_bytes()
@@ -75,7 +111,9 @@ def test_install_creates_plugin_layout(tmp_path: Path, fake_home: Path, scope: s
     assert (root / ".codex-plugin" / ".eawf-managed.json").is_file()
     assert len(result.skills) == len(SKILL_REGISTRY)
     assert len(result.agents) == len(AGENT_REGISTRY)
-    assert len(result.hooks) == len(HOOK_REGISTRY)
+    assert len(result.hooks) == len(CODEX_HOOK_EVENT_TYPES)
+    assert result.hook_config is not None
+    assert result.hook_config.path == root / "hooks" / "hooks.json"
     assert result.scope == scope
     for delta in result.skills:
         assert delta.action == "created"
@@ -113,6 +151,8 @@ def test_install_idempotent_second_run_unchanged(
     assert second.manifest.action == "unchanged"
     assert second.sidecar is not None
     assert second.sidecar.action == "unchanged"
+    assert second.hook_config is not None
+    assert second.hook_config.action == "unchanged"
     for delta in second.skills + second.agents + second.hooks:
         assert delta.action == "unchanged", (delta.path, delta.action)
 
@@ -176,20 +216,23 @@ def test_install_codex_emits_manifest_toml(tmp_path: Path, fake_home: Path, scop
     assert body["version"] == eawf.__version__
     assert body["description"]
     assert body["skills"] == "./skills/"
-    # Codex requires `hooks` to be a list of {event_type, path} objects, not
-    # the directory-string `"./hooks/"` (Codex opens that as a config file
-    # and surfaces "Is a directory (os error 21)"). Shape mirrors the
-    # sidecar `hooks_payload` in `_build_sidecar_body`.
-    assert isinstance(body["hooks"], list)
-    assert len(body["hooks"]) == len(HOOK_REGISTRY)
-    expected_hooks = [
-        {
-            "event_type": spec.event_type.value,
-            "path": f"hooks/{codex_hook_name(spec.event_type)}.sh",
-        }
-        for spec in HOOK_REGISTRY
-    ]
-    assert body["hooks"] == expected_hooks
+    assert body["hooks"] == "./hooks/hooks.json"
+    hooks_body = json.loads(
+        (_plugin_root(tmp_path, scope, fake_home) / "hooks" / "hooks.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert set(hooks_body["hooks"]) == {
+        "SessionStart",
+        "SubagentStart",
+        "SubagentStop",
+        "SessionEnd",
+    }
+    for event_type in CODEX_HOOK_EVENT_TYPES:
+        event_name = codex_hook_event_name(event_type)
+        handler = hooks_body["hooks"][event_name][0]["hooks"][0]
+        assert handler["type"] == "command"
+        assert codex_hook_name(event_type) in handler["command"]
     assert "interface" in body
     iface = body["interface"]
     assert iface["displayName"] == "Eä Workflow"
@@ -249,10 +292,72 @@ def test_config_toml_preserves_user_sections(tmp_path: Path) -> None:
 @pytest.mark.parametrize("scope", ["project", "user"])
 def test_doctor_reports_clean_after_install(tmp_path: Path, fake_home: Path, scope: str) -> None:
     install_plugin(tmp_path, **_install_kwargs(scope, fake_home))
-    report = doctor_plugin(tmp_path, scope=scope, home=fake_home if scope == "user" else None)
+    _write_hook_trust_config(fake_home)
+    report = doctor_plugin(tmp_path, scope=scope, home=fake_home)
     assert report.clean is True, (report.drifted, report.missing)
     assert not report.drifted
     assert not report.missing
+    assert {entry.status for entry in report.hook_trust} == {"trusted"}
+
+
+def test_doctor_reports_missing_trust_state_as_unavailable(tmp_path: Path, fake_home: Path) -> None:
+    install_plugin(tmp_path)
+    report = doctor_plugin(tmp_path, home=fake_home)
+    assert report.clean is False
+    assert {entry.status for entry in report.hook_trust} == {"unavailable"}
+    assert all("missing" in entry.reason for entry in report.hook_trust)
+
+
+def test_doctor_reports_untrusted_hook_records(tmp_path: Path, fake_home: Path) -> None:
+    install_plugin(tmp_path)
+    _write_hook_trust_config(fake_home, include_events=("session_start",))
+    report = doctor_plugin(tmp_path, home=fake_home)
+    by_event = {entry.event_name: entry for entry in report.hook_trust}
+    assert by_event["SessionStart"].status == "trusted"
+    assert by_event["SubagentStart"].status == "untrusted"
+    assert report.clean is False
+
+
+def test_doctor_rejects_persisted_hash_for_previous_hook_definition(
+    tmp_path: Path,
+    fake_home: Path,
+) -> None:
+    install_plugin(tmp_path)
+    _write_hook_trust_config(
+        fake_home,
+        hash_overrides={"subagent_start": "sha256:stale-hook-definition"},
+    )
+
+    report = doctor_plugin(tmp_path, home=fake_home)
+
+    by_event = {entry.event_name: entry for entry in report.hook_trust}
+    assert by_event["SessionStart"].status == "trusted"
+    assert by_event["SubagentStart"].status == "untrusted"
+    assert by_event["SubagentStart"].reason == (
+        "hook changed since approval; review in Codex /hooks"
+    )
+    assert report.clean is False
+
+
+def test_doctor_reports_disabled_hook_record(tmp_path: Path, fake_home: Path) -> None:
+    install_plugin(tmp_path)
+    _write_hook_trust_config(fake_home, disabled_event="subagent_stop")
+    report = doctor_plugin(tmp_path, home=fake_home)
+    by_event = {entry.event_name: entry for entry in report.hook_trust}
+    assert by_event["SubagentStop"].status == "disabled"
+    assert report.clean is False
+
+
+def test_doctor_reports_malformed_trust_state_as_unavailable(
+    tmp_path: Path, fake_home: Path
+) -> None:
+    install_plugin(tmp_path)
+    config_path = fake_home / ".codex" / "config.toml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("[hooks.state\n", encoding="utf-8")
+    report = doctor_plugin(tmp_path, home=fake_home)
+    assert {entry.status for entry in report.hook_trust} == {"unavailable"}
+    assert all("TOMLDecodeError" in entry.reason for entry in report.hook_trust)
 
 
 def test_doctor_flags_missing_files(tmp_path: Path) -> None:

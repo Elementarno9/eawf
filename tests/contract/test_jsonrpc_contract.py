@@ -381,8 +381,8 @@ def test_daemon_validation_error_subclasses_value_error() -> None:
 
 
 def test_protocol_version_is_pinned_string() -> None:
-    """The wire protocol version is the pinned string ``"1"``."""
-    assert PROTOCOL_VERSION == "1"
+    """The wire protocol version is the pinned string ``"2"``."""
+    assert PROTOCOL_VERSION == "2"
     assert isinstance(PROTOCOL_VERSION, str)
 
 

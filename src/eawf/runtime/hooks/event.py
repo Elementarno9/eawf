@@ -11,7 +11,7 @@ v0.x releases):
 ``pre_commit | post_commit | pre_push | post_push | pre_audit |
 post_audit | session_start | session_end | wave_open | wave_close |
 iter_open | iter_close | phase_open | phase_close | agent_end |
-subagent_stop | pre_compact``.
+subagent_start | subagent_stop | pre_compact``.
 
 The optional ``payloads`` mapping carries per-event extension shapes;
 ``docs/hook-events.md`` enumerates the v1 shape for each
@@ -52,6 +52,7 @@ class HookEventType(StrEnum):
     PHASE_OPEN = "phase_open"
     PHASE_CLOSE = "phase_close"
     AGENT_END = "agent_end"
+    SUBAGENT_START = "subagent_start"
     SUBAGENT_STOP = "subagent_stop"
     PRE_COMPACT = "pre_compact"
 

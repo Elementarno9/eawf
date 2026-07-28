@@ -246,8 +246,8 @@ def test_parse_codex_result_no_thread_id_falls_back_to_synthetic_session() -> No
     assert result.session_id == "codex-99"
 
 
-def test_parse_codex_result_missing_usage_defaults_to_zero() -> None:
-    """A stream with no turn.completed usage zeroes the token counts."""
+def test_parse_codex_result_missing_usage_is_unavailable() -> None:
+    """A stream with no turn.completed usage never fabricates zero."""
     events: list[dict[str, object]] = [
         {"type": "thread.started", "thread_id": "t1"},
         {"type": "item.completed", "item": {"type": "agent_message", "text": "hi"}},
@@ -262,9 +262,44 @@ def test_parse_codex_result_missing_usage_defaults_to_zero() -> None:
         started_at=_T0,
         ended_at=_T1,
     )
+    assert result.input_tokens is None
+    assert result.output_tokens is None
+    assert result.cache_read_input_tokens is None
+    assert result.measurement_quality.value == "unavailable"
+    assert result.measurement_status.value == "no_token_evidence"
+    assert result.measurement_reason == "codex_turn_usage_missing_or_invalid"
+
+
+def test_parse_codex_result_explicit_zero_usage_is_measured_zero() -> None:
+    """An explicit provider usage block preserves genuine numeric zero."""
+    events: list[dict[str, object]] = [
+        {"type": "thread.started", "thread_id": "t1"},
+        {"type": "item.completed", "item": {"type": "agent_message", "text": "hi"}},
+        {
+            "type": "turn.completed",
+            "usage": {
+                "input_tokens": 0,
+                "cached_input_tokens": 0,
+                "output_tokens": 0,
+            },
+        },
+    ]
+    result = _parse_codex_result(
+        runtime="codex",
+        model="gpt-5.5",
+        stdout=_events_bytes(events),
+        stderr=b"",
+        exit_status=0,
+        subprocess_pid=1,
+        started_at=_T0,
+        ended_at=_T1,
+    )
     assert result.input_tokens == 0
     assert result.output_tokens == 0
     assert result.cache_read_input_tokens == 0
+    assert result.measurement_quality.value == "exact"
+    assert result.measurement_status.value == "usage_observed"
+    assert result.measurement_reason is None
 
 
 def test_parse_codex_result_empty_text_item_becomes_empty_string() -> None:

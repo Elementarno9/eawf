@@ -179,6 +179,19 @@
           "title": "Runtime",
           "type": "string"
         },
+        "runtime_session_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Runtime Session Id"
+        },
         "scope_id": {
           "title": "Scope Id",
           "type": "string"
@@ -392,6 +405,16 @@
         "review"
       ],
       "title": "AuditKind",
+      "type": "string"
+    },
+    "AuditRequirement": {
+      "description": "Whether a close attempt needs independent audit evidence.",
+      "enum": [
+        "none",
+        "optional",
+        "required"
+      ],
+      "title": "AuditRequirement",
       "type": "string"
     },
     "AuditStatus": {
@@ -643,6 +666,383 @@
         "superseded"
       ],
       "title": "ClaimStatus",
+      "type": "string"
+    },
+    "CloseAttempt": {
+      "additionalProperties": false,
+      "description": "Durable exact-revision close attempt, separate from Wave status.",
+      "properties": {
+        "apply_event_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Apply Event Id"
+        },
+        "artifact_refs": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Artifact Refs",
+          "type": "array"
+        },
+        "audit_report_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audit Report Id"
+        },
+        "audit_requirement": {
+          "$ref": "#/$defs/AuditRequirement"
+        },
+        "candidate_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Candidate Sha",
+          "type": "string"
+        },
+        "criteria_digest": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Criteria Digest",
+          "type": "string"
+        },
+        "dependency_binding_digest": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Dependency Binding Digest",
+          "type": "string"
+        },
+        "failure_detail_ref": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure Detail Ref"
+        },
+        "failure_kind": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure Kind"
+        },
+        "gate_manifest_digest": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Gate Manifest Digest",
+          "type": "string"
+        },
+        "gate_receipt_ids": {
+          "items": {
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "type": "string"
+          },
+          "title": "Gate Receipt Ids",
+          "type": "array"
+        },
+        "generation": {
+          "minimum": 1,
+          "title": "Generation",
+          "type": "integer"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "idempotency_key": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Idempotency Key",
+          "type": "string"
+        },
+        "infrastructure_retry_budget_remaining": {
+          "minimum": 0,
+          "title": "Infrastructure Retry Budget Remaining",
+          "type": "integer"
+        },
+        "integrated_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Integrated Sha",
+          "type": "string"
+        },
+        "integration_id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Integration Id",
+          "type": "string"
+        },
+        "invalidation_causes": {
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Invalidation Causes",
+          "type": "array"
+        },
+        "no_runtime_waiver": {
+          "title": "No Runtime Waiver",
+          "type": "boolean"
+        },
+        "outcome": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Outcome",
+          "type": "string"
+        },
+        "policy_digest": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Policy Digest",
+          "type": "string"
+        },
+        "repair_budget_remaining": {
+          "minimum": 0,
+          "title": "Repair Budget Remaining",
+          "type": "integer"
+        },
+        "repair_generation": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repair Generation"
+        },
+        "repair_wave_id": {
+          "anyOf": [
+            {
+              "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repair Wave Id"
+        },
+        "requested_at": {
+          "format": "date-time",
+          "title": "Requested At",
+          "type": "string"
+        },
+        "required_gate_ids": {
+          "items": {
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "type": "string"
+          },
+          "title": "Required Gate Ids",
+          "type": "array"
+        },
+        "required_operator_actions": {
+          "items": {
+            "$ref": "#/$defs/CloseOperatorAction"
+          },
+          "title": "Required Operator Actions",
+          "type": "array"
+        },
+        "runner_environment_digest": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Runner Environment Digest",
+          "type": "string"
+        },
+        "spec_digest": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Spec Digest",
+          "type": "string"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
+        },
+        "status": {
+          "$ref": "#/$defs/CloseAttemptStatus"
+        },
+        "supersedes_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Supersedes Id"
+        },
+        "terminal_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Terminal At"
+        },
+        "tokens_consumed": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Tokens Consumed"
+        },
+        "tree_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Tree Sha",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "usage_receipt_ids": {
+          "items": {
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "type": "string"
+          },
+          "title": "Usage Receipt Ids",
+          "type": "array"
+        },
+        "waiver_decision_ids": {
+          "items": {
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "type": "string"
+          },
+          "title": "Waiver Decision Ids",
+          "type": "array"
+        },
+        "wave_id": {
+          "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
+          "title": "Wave Id",
+          "type": "string"
+        },
+        "wave_revision_digest": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Wave Revision Digest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "wave_id",
+        "outcome",
+        "tokens_consumed",
+        "generation",
+        "supersedes_id",
+        "status",
+        "integration_id",
+        "candidate_sha",
+        "integrated_sha",
+        "tree_sha",
+        "wave_revision_digest",
+        "spec_digest",
+        "criteria_digest",
+        "gate_manifest_digest",
+        "policy_digest",
+        "runner_environment_digest",
+        "dependency_binding_digest",
+        "audit_requirement",
+        "no_runtime_waiver",
+        "repair_budget_remaining",
+        "infrastructure_retry_budget_remaining",
+        "requested_at",
+        "updated_at",
+        "idempotency_key"
+      ],
+      "title": "CloseAttempt",
+      "type": "object"
+    },
+    "CloseAttemptStatus": {
+      "description": "Durable close-worker lifecycle, orthogonal to :class:`WaveStatus`.",
+      "enum": [
+        "queued",
+        "preparing",
+        "checking",
+        "auditing",
+        "ready",
+        "applying",
+        "closed",
+        "blocked",
+        "stale",
+        "failed",
+        "cancelled"
+      ],
+      "title": "CloseAttemptStatus",
+      "type": "string"
+    },
+    "CloseOperatorAction": {
+      "description": "Operator choices exposed after the bounded close repair is exhausted.",
+      "enum": [
+        "split",
+        "defer",
+        "abort"
+      ],
+      "title": "CloseOperatorAction",
       "type": "string"
     },
     "Confidence": {
@@ -974,6 +1374,16 @@
         "obsolete"
       ],
       "title": "DecisionStatus",
+      "type": "string"
+    },
+    "DependencyStage": {
+      "description": "Fact strength required at one wave-dependency boundary.",
+      "enum": [
+        "integrated",
+        "verified",
+        "closed"
+      ],
+      "title": "DependencyStage",
       "type": "string"
     },
     "DispatchAnnotation": {
@@ -1509,7 +1919,7 @@
     },
     "GateSpec": {
       "additionalProperties": false,
-      "description": "One gate row that scores a :class:`CriterionSpec` at some cadence.\n\nThe ``kind`` field names the check family\n(``command_exit_zero``, ``regex_match``, ``schema_validate``, etc.)\nand ``args`` carries the per-kind arguments. The spec layer does\nnot validate the full ``args`` shape — that is the gate-runner\nsubsystem's responsibility (W08 lands per-kind args validators).\nThe one exception is the ``argv`` vector on argv-bearing kinds\n(``command_exit_zero`` today): an\n``@model_validator`` routes ``args[\"argv\"]`` through the L0\nargv-policy at construction time so a malformed or shell-deny\nargv cannot reach the spec layer regardless of which builder\nconstructed the row. The same policy fires again at spec-promote\npersistence via\n:func:`eawf.kernel.spec.promotion.validate_argv_gates` — defense\nin depth across the parse-time and persistence-time seams.\n\n``timeout_s`` is ``None`` by default so a kind that has a class\ndefault (e.g. command_exit_zero defaults to 30s) does not need an\nexplicit override.",
+      "description": "One gate row that scores a :class:`CriterionSpec` at some cadence.\n\nThe ``kind`` field names the check family\n(``command_exit_zero``, ``regex_match``, ``schema_validate``, etc.)\nand ``args`` carries the per-kind arguments. The spec layer does\nnot validate the full ``args`` shape — that is the gate-runner\nsubsystem's responsibility (W08 lands per-kind args validators).\nThe one exception is the ``argv`` vector on argv-bearing kinds\n(``command_exit_zero`` today): an\n``@model_validator`` routes ``args[\"argv\"]`` through the L0\nargv-policy at construction time so a malformed or shell-deny\nargv cannot reach the spec layer regardless of which builder\nconstructed the row. The same policy fires again at spec-promote\npersistence via\n:func:`eawf.kernel.spec.promotion.validate_argv_gates` — defense\nin depth across the parse-time and persistence-time seams.\n\n``timeout_s`` is ``None`` by default so a kind that has a timeout-class\ndefault does not need an explicit override. A present value must be a\npositive strict integer; zero is not a meaningful process budget.",
       "properties": {
         "args": {
           "additionalProperties": true,
@@ -1560,7 +1970,7 @@
         "timeout_s": {
           "anyOf": [
             {
-              "minimum": 0,
+              "exclusiveMinimum": 0,
               "type": "integer"
             },
             {
@@ -2278,6 +2688,28 @@
         "disabled"
       ],
       "title": "McpStatus",
+      "type": "string"
+    },
+    "MeasurementQuality": {
+      "description": "Evidence quality of a persisted runtime measurement.",
+      "enum": [
+        "exact",
+        "reconstructed",
+        "estimated",
+        "unavailable"
+      ],
+      "title": "MeasurementQuality",
+      "type": "string"
+    },
+    "MeasurementStatus": {
+      "description": "Observed usage state without treating missing counters as zero.",
+      "enum": [
+        "usage_observed",
+        "model_work_observed",
+        "no_token_evidence",
+        "usage_unavailable"
+      ],
+      "title": "MeasurementStatus",
       "type": "string"
     },
     "MemoryStatus": {
@@ -3593,6 +4025,28 @@
           "default": null,
           "title": "Input Tokens"
         },
+        "measurement_quality": {
+          "$ref": "#/$defs/MeasurementQuality",
+          "default": "unavailable"
+        },
+        "measurement_reason": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measurement Reason"
+        },
+        "measurement_status": {
+          "$ref": "#/$defs/MeasurementStatus",
+          "default": "usage_unavailable"
+        },
         "output_tokens": {
           "anyOf": [
             {
@@ -4045,6 +4499,254 @@
       "title": "Wave",
       "type": "object"
     },
+    "WaveDependencyBarrier": {
+      "additionalProperties": false,
+      "description": "Explicit start/land proof thresholds for one Wave dependency.",
+      "properties": {
+        "dep_wave_id": {
+          "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
+          "title": "Dep Wave Id",
+          "type": "string"
+        },
+        "land_after": {
+          "$ref": "#/$defs/DependencyStage"
+        },
+        "reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "start_after": {
+          "$ref": "#/$defs/DependencyStage"
+        },
+        "wave_id": {
+          "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
+          "title": "Wave Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "wave_id",
+        "dep_wave_id",
+        "start_after",
+        "land_after",
+        "reason"
+      ],
+      "title": "WaveDependencyBarrier",
+      "type": "object"
+    },
+    "WaveDependencyBinding": {
+      "additionalProperties": false,
+      "description": "Exact upstream integration generation adopted by a downstream Wave.",
+      "properties": {
+        "bound_at": {
+          "format": "date-time",
+          "title": "Bound At",
+          "type": "string"
+        },
+        "dep_wave_id": {
+          "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
+          "title": "Dep Wave Id",
+          "type": "string"
+        },
+        "generation": {
+          "minimum": 1,
+          "title": "Generation",
+          "type": "integer"
+        },
+        "integrated_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Integrated Sha",
+          "type": "string"
+        },
+        "integration_id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Integration Id",
+          "type": "string"
+        },
+        "land_fact_ref": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Land Fact Ref"
+        },
+        "start_fact_ref": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Fact Ref"
+        },
+        "tree_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Tree Sha",
+          "type": "string"
+        },
+        "wave_id": {
+          "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
+          "title": "Wave Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "wave_id",
+        "dep_wave_id",
+        "integration_id",
+        "generation",
+        "integrated_sha",
+        "tree_sha",
+        "bound_at"
+      ],
+      "title": "WaveDependencyBinding",
+      "type": "object"
+    },
+    "WaveIntegration": {
+      "additionalProperties": false,
+      "description": "One immutable source-to-integrated generation for a Wave.",
+      "properties": {
+        "base_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Base Sha",
+          "type": "string"
+        },
+        "candidate_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Candidate Sha",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "diff_digest": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Diff Digest",
+          "type": "string"
+        },
+        "generation": {
+          "minimum": 1,
+          "title": "Generation",
+          "type": "integer"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "integrated_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Integrated Sha",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/WaveIntegrationKind"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "spec_digest": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Spec Digest",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/WaveIntegrationStatus"
+        },
+        "supersedes_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supersedes Id"
+        },
+        "tree_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Tree Sha",
+          "type": "string"
+        },
+        "wave_id": {
+          "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
+          "title": "Wave Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "wave_id",
+        "generation",
+        "status",
+        "base_sha",
+        "candidate_sha",
+        "integrated_sha",
+        "tree_sha",
+        "diff_digest",
+        "spec_digest",
+        "created_at",
+        "kind"
+      ],
+      "title": "WaveIntegration",
+      "type": "object"
+    },
+    "WaveIntegrationKind": {
+      "description": "How an immutable wave-integration generation entered state.",
+      "enum": [
+        "land",
+        "adopt",
+        "repair"
+      ],
+      "title": "WaveIntegrationKind",
+      "type": "string"
+    },
+    "WaveIntegrationStatus": {
+      "description": "Lifecycle position of one immutable wave-integration generation.",
+      "enum": [
+        "integrated",
+        "verified",
+        "superseded",
+        "failed"
+      ],
+      "title": "WaveIntegrationStatus",
+      "type": "string"
+    },
     "WaveStatus": {
       "enum": [
         "pending",
@@ -4225,7 +4927,7 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Top-level eawf state document.\n\n``schema_version`` accepts the full ``\"1.0\"`` through ``\"1.17\"`` range so\nan on-disk state written before any bump still re-validates after the\nmodel advances — the migrate chain rewrites the version string in place,\nbut a read of an un-migrated state must never reject. The accepted set\ndrives the migrate guard's model-supported max, so the literals move in\nlockstep with the migration steps (``v1_0_to_v1_1`` through\n``v1_16_to_v1_17``). The ``1.5`` edge is purely additive — it registers\n:attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum\nvalue no existing state row references, so no historical fact changes.\nThe ``1.6`` edge is likewise purely additive — it adds the top-level\n:attr:`dispatch_paused` flag (default ``False``), so a state written\nbefore the bump re-validates with the flag defaulted and no historical\nfact changes. The ``1.7`` edge retypes\n:attr:`Wave.success_criteria` from ``list[str]`` to\n``list[CriterionSpec]`` and backfills every legacy string into a\ngrandfathered :class:`~eawf.kernel.spec.common.CriterionSpec` row, so an\nun-migrated state with bare strings would reject the typed field — the\nmigrate chain rewrites the rows before load. The ``1.8`` edge is purely\nadditive — it adds the typed :attr:`Wave.gates` list (default ``[]``), so a\nstate written before the bump re-validates with the list defaulted and no\nhistorical fact changes; the migrate chain backfills ``gates: []`` on every\nwave for an explicit on-disk row. The ``1.9`` edge adds the optional\n:attr:`Wave.runtime_baseline` claim-time telemetry baseline; it backfills\n``runtime_baseline: None`` on every wave for an explicit on-disk row.\n``Wave.runtime_latest`` is likewise additive on top of ``1.9`` and defaults\nto ``None`` until the runtime.capture daemon RPC records fresh counters.\n\n:attr:`fleet_run` is additive on top of ``1.9`` and defaults to ``None``\n(no active auto-drain loop), so a state written before the field existed\nre-validates with it defaulted and no historical fact changes.\n\nThe ``1.10`` edge is a rename, not an additive field: it renames the\ntop-level ``subprojects`` key to :attr:`tracks` and the cursor field\n``current.subproject_id`` to :attr:`CurrentPointers.track_id`. An\nun-migrated state carrying the old key names rejects under\n``extra=\"forbid\"``, so the ``v1_9_to_v1_10`` migrate step rewrites both\nnames before load. The ``1.11`` edge is purely additive — it adds the\noptional ``harness`` + ``model`` attribution fields to\n:class:`ActualSummary` and :class:`RuntimeBaseline` (inherited by\n:class:`RuntimeLatest`), so EU actuals become calibratable by harness+model.\nBoth default to ``None``; the ``v1_10_to_v1_11`` migrate step backfills NULL\nattribution on every actual + runtime-baseline / runtime-latest row for an\nexplicit on-disk row, and a state written before the bump re-validates with\nboth defaulted and no historical fact changes.\n\nThe ``1.12`` edge is purely additive in the same sense as the ``1.5``\nenum-registration edge: it registers the\n:class:`~eawf.kernel.state.enums.UserDecisionKind` enum and the\n:class:`PauseResolution` typed record (the shared operator-decision shape\nspanning both the ``needs_user`` pause and the fleet-fork surfaces), neither\nof which any existing persisted ``State`` field references -- pause / fork\nresolutions live in the append-only event + evidence stores, not on a\ntop-level ``State`` field. The ``v1_11_to_v1_12`` step therefore rewrites\nonly the version marker, leaving every row untouched, so a state written\nbefore the bump re-validates unchanged and the step is a lossless,\nreplay-safe round-trip.\n\nThe ``1.15`` edge is purely additive: it adds ``session_id`` to\n:class:`RuntimeBaseline` (inherited by :class:`RuntimeLatest`) and the\noptional :attr:`Wave.runtime_carry` accumulator, which together let a wave\nthat spans several sessions sum its per-session runtimes instead of\ndifferencing counters taken against two different session origins. Both\ndefault to ``None``; the ``v1_14_to_v1_15`` step backfills them explicitly on\nevery wave, and a state written before the bump re-validates with both\ndefaulted and no historical fact changes.\n\nThe ``1.16`` edge is purely additive: it adds\n:attr:`RuntimeCarry.counter_resets`, which records how many times the counter\nsource reset under a wave. A reset drops the runtime measured before it, so\nthe count is the recorded REASON a wave closed with missing runtime -- without\nit, an honest reset is indistinguishable from a capture path that silently did\nnothing. It defaults to ``0``; the ``v1_15_to_v1_16`` step backfills it on\nevery existing carry.\n\nThe ``1.17`` edge is purely additive: it adds\n:attr:`RuntimeBaseline.measure_version` (inherited by :class:`RuntimeLatest`),\nwhich records which definition of the counters produced a snapshot. Counters\nare comparable only against a baseline taken under the same definition, and a\nredefinition that RAISES the figure is otherwise indistinguishable from work.\nIt defaults to ``None``; the ``v1_16_to_v1_17`` step backfills it on every\nsnapshot, and a null version falls back to the old direction check.\n\nThe ``1.18`` edge is purely additive: it adds\n:attr:`RuntimeBaseline.shared_wave_count` (inherited by\n:class:`RuntimeLatest`), which records how many waves were active when a\nsnapshot was captured. One capture is written to every active wave, so without\nthe count N concurrent waves each difference -- and each record -- the whole\nsession's runtime. It defaults to ``None``; the ``v1_17_to_v1_18`` step\nbackfills it on every snapshot, and a null count reads as a divisor of one.\n\nThe ``1.19`` edge is purely additive: it adds\n:attr:`ActualSummary.calibration_excluded`, which marks an actual that was\nmeasured but does not calibrate anything -- its runtime was re-originated by a\ncounter reset, or shared across concurrent waves. Without the flag a consumer\nhas no way to tell such a row from a clean one, so the exclusion would live in\na document rather than in state. It defaults to ``False``; the\n``v1_18_to_v1_19`` step backfills it on every actual, and a state written\nbefore the bump re-validates with no historical fact changed.",
+  "description": "Top-level eawf state document.\n\n``schema_version`` accepts the full ``\"1.0\"`` through ``\"1.20\"`` range so\nan on-disk state written before any bump still re-validates after the\nmodel advances — the migrate chain rewrites the version string in place,\nbut a read of an un-migrated state must never reject. The accepted set\ndrives the migrate guard's model-supported max, so the literals move in\nlockstep with the migration steps (``v1_0_to_v1_1`` through\n``v1_19_to_v1_20``). The ``1.5`` edge is purely additive — it registers\n:attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum\nvalue no existing state row references, so no historical fact changes.\nThe ``1.6`` edge is likewise purely additive — it adds the top-level\n:attr:`dispatch_paused` flag (default ``False``), so a state written\nbefore the bump re-validates with the flag defaulted and no historical\nfact changes. The ``1.7`` edge retypes\n:attr:`Wave.success_criteria` from ``list[str]`` to\n``list[CriterionSpec]`` and backfills every legacy string into a\ngrandfathered :class:`~eawf.kernel.spec.common.CriterionSpec` row, so an\nun-migrated state with bare strings would reject the typed field — the\nmigrate chain rewrites the rows before load. The ``1.8`` edge is purely\nadditive — it adds the typed :attr:`Wave.gates` list (default ``[]``), so a\nstate written before the bump re-validates with the list defaulted and no\nhistorical fact changes; the migrate chain backfills ``gates: []`` on every\nwave for an explicit on-disk row. The ``1.9`` edge adds the optional\n:attr:`Wave.runtime_baseline` claim-time telemetry baseline; it backfills\n``runtime_baseline: None`` on every wave for an explicit on-disk row.\n``Wave.runtime_latest`` is likewise additive on top of ``1.9`` and defaults\nto ``None`` until the runtime.capture daemon RPC records fresh counters.\n\n:attr:`fleet_run` is additive on top of ``1.9`` and defaults to ``None``\n(no active auto-drain loop), so a state written before the field existed\nre-validates with it defaulted and no historical fact changes.\n\nThe ``1.10`` edge is a rename, not an additive field: it renames the\ntop-level ``subprojects`` key to :attr:`tracks` and the cursor field\n``current.subproject_id`` to :attr:`CurrentPointers.track_id`. An\nun-migrated state carrying the old key names rejects under\n``extra=\"forbid\"``, so the ``v1_9_to_v1_10`` migrate step rewrites both\nnames before load. The ``1.11`` edge is purely additive — it adds the\noptional ``harness`` + ``model`` attribution fields to\n:class:`ActualSummary` and :class:`RuntimeBaseline` (inherited by\n:class:`RuntimeLatest`), so EU actuals become calibratable by harness+model.\nBoth default to ``None``; the ``v1_10_to_v1_11`` migrate step backfills NULL\nattribution on every actual + runtime-baseline / runtime-latest row for an\nexplicit on-disk row, and a state written before the bump re-validates with\nboth defaulted and no historical fact changes.\n\nThe ``1.12`` edge is purely additive in the same sense as the ``1.5``\nenum-registration edge: it registers the\n:class:`~eawf.kernel.state.enums.UserDecisionKind` enum and the\n:class:`PauseResolution` typed record (the shared operator-decision shape\nspanning both the ``needs_user`` pause and the fleet-fork surfaces), neither\nof which any existing persisted ``State`` field references -- pause / fork\nresolutions live in the append-only event + evidence stores, not on a\ntop-level ``State`` field. The ``v1_11_to_v1_12`` step therefore rewrites\nonly the version marker, leaving every row untouched, so a state written\nbefore the bump re-validates unchanged and the step is a lossless,\nreplay-safe round-trip.\n\nThe ``1.15`` edge is purely additive: it adds ``session_id`` to\n:class:`RuntimeBaseline` (inherited by :class:`RuntimeLatest`) and the\noptional :attr:`Wave.runtime_carry` accumulator, which together let a wave\nthat spans several sessions sum its per-session runtimes instead of\ndifferencing counters taken against two different session origins. Both\ndefault to ``None``; the ``v1_14_to_v1_15`` step backfills them explicitly on\nevery wave, and a state written before the bump re-validates with both\ndefaulted and no historical fact changes.\n\nThe ``1.16`` edge is purely additive: it adds\n:attr:`RuntimeCarry.counter_resets`, which records how many times the counter\nsource reset under a wave. A reset drops the runtime measured before it, so\nthe count is the recorded REASON a wave closed with missing runtime -- without\nit, an honest reset is indistinguishable from a capture path that silently did\nnothing. It defaults to ``0``; the ``v1_15_to_v1_16`` step backfills it on\nevery existing carry.\n\nThe ``1.17`` edge is purely additive: it adds\n:attr:`RuntimeBaseline.measure_version` (inherited by :class:`RuntimeLatest`),\nwhich records which definition of the counters produced a snapshot. Counters\nare comparable only against a baseline taken under the same definition, and a\nredefinition that RAISES the figure is otherwise indistinguishable from work.\nIt defaults to ``None``; the ``v1_16_to_v1_17`` step backfills it on every\nsnapshot, and a null version falls back to the old direction check.\n\nThe ``1.18`` edge is purely additive: it adds\n:attr:`RuntimeBaseline.shared_wave_count` (inherited by\n:class:`RuntimeLatest`), which records how many waves were active when a\nsnapshot was captured. One capture is written to every active wave, so without\nthe count N concurrent waves each difference -- and each record -- the whole\nsession's runtime. It defaults to ``None``; the ``v1_17_to_v1_18`` step\nbackfills it on every snapshot, and a null count reads as a divisor of one.\n\nThe ``1.19`` edge is purely additive: it adds\n:attr:`ActualSummary.calibration_excluded`, which marks an actual that was\nmeasured but does not calibrate anything -- its runtime was re-originated by a\ncounter reset, or shared across concurrent waves. Without the flag a consumer\nhas no way to tell such a row from a clean one, so the exclusion would live in\na document rather than in state. It defaults to ``False``; the\n``v1_18_to_v1_19`` step backfills it on every actual, and a state written\nbefore the bump re-validates with no historical fact changed.\n\nThe ``1.20`` edge adds sparse operational truth without changing\n:class:`Wave` or :class:`WaveStatus`: immutable integration generations,\ndurable close attempts, and explicit dependency barriers/bindings live in\ntop-level mappings. The migration creates only empty mappings, so no\nhistorical Wave gains fabricated integration, close, dependency, or usage\nfacts. Missing barrier metadata continues to mean ``closed/closed``.",
   "properties": {
     "actuals": {
       "anyOf": [
@@ -4300,6 +5002,13 @@
       ],
       "default": null,
       "title": "Claims"
+    },
+    "close_attempts": {
+      "additionalProperties": {
+        "$ref": "#/$defs/CloseAttempt"
+      },
+      "title": "Close Attempts",
+      "type": "object"
     },
     "current": {
       "$ref": "#/$defs/CurrentPointers"
@@ -4545,7 +5254,8 @@
         "1.16",
         "1.17",
         "1.18",
-        "1.19"
+        "1.19",
+        "1.20"
       ],
       "title": "Schema Version",
       "type": "string"
@@ -4577,6 +5287,27 @@
       "pattern": "^urn:eawf:v1:(artifact|audit|blob|branch|commit|decision|event|hypothesis|iter|mcp|memory|phase|plugin|pr|principal|profile|repo|report|runtime|secret|session|spec|state|store|wave|workspace):[^:?#/]+(?:/[^?#]*)?(?:\\?=[^#]*)?(?:#.*)?$",
       "title": "Urn",
       "type": "string"
+    },
+    "wave_dependency_barriers": {
+      "additionalProperties": {
+        "$ref": "#/$defs/WaveDependencyBarrier"
+      },
+      "title": "Wave Dependency Barriers",
+      "type": "object"
+    },
+    "wave_dependency_bindings": {
+      "additionalProperties": {
+        "$ref": "#/$defs/WaveDependencyBinding"
+      },
+      "title": "Wave Dependency Bindings",
+      "type": "object"
+    },
+    "wave_integrations": {
+      "additionalProperties": {
+        "$ref": "#/$defs/WaveIntegration"
+      },
+      "title": "Wave Integrations",
+      "type": "object"
     },
     "waves": {
       "additionalProperties": {

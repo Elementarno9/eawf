@@ -55,10 +55,10 @@ import hashlib
 import logging
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final, Literal, cast
 
 import orjson
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -72,13 +72,17 @@ from eawf.kernel.spec.common import (
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     AgentSessionRole,
+    CloseAttemptStatus,
     EffortBucket,
+    MeasurementQuality,
+    MeasurementStatus,
     PhaseStatus,
     StoreKind,
     TrackKind,
     WaveStatus,
 )
 from eawf.kernel.state.models import (
+    AgentSession,
     CriteriaFloorWaiver,
     RuntimeBaseline,
     RuntimeCarry,
@@ -157,6 +161,8 @@ if TYPE_CHECKING:
     from eawf.observability.eval.jury import JurorBallot
     from eawf.observability.eval.jury_validation import BlockAuthority
     from eawf.platform.profiles.models import VerifyBlock
+    from eawf.workflow.dispatch.verdict import DurableAuditContext
+from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
 
 logger = logging.getLogger(__name__)
 
@@ -278,9 +284,11 @@ class RuntimeCaptureParams(RuntimeCounters):
     """Params for :func:`runtime_capture`.
 
     The runtime-owned counters are cumulative, so this RPC records the latest
-    observed snapshot onto every active wave; the active wave set remains
-    canonical state. ``session_id`` names the session the counters were read
-    from, which is load-bearing rather than decorative: counters are cumulative
+    observed snapshot onto one exactly correlated active wave. ``wave_id`` may
+    name it directly; otherwise the daemon uses an exact Codex provider-session
+    binding or the sole-active-wave fallback. ``session_id`` names the session
+    the counters were read from, which is load-bearing rather than decorative:
+    counters are cumulative
     *per session*, so it is what lets a capture from a new session rebase the
     wave's baseline onto that session's origin
     (:func:`_rebase_for_session`) and what dedupes the interactive
@@ -293,6 +301,7 @@ class RuntimeCaptureParams(RuntimeCounters):
     model_config = ConfigDict(extra="forbid")
 
     repo_root: str | None = None
+    wave_id: str | None = None
     session_id: str | None = None
     captured_at: datetime | None = None
 
@@ -307,6 +316,43 @@ class RuntimeCaptureResult(BaseModel):
     before_version: str
     after_version: str
     event: dict[str, Any]
+
+
+class CodexLifecycleParams(BaseModel):
+    """Provider-native Codex session/subagent lifecycle event."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    event_type: Literal[
+        "session_start",
+        "subagent_start",
+        "subagent_stop",
+        "session_end",
+    ]
+    provider_session_id: str = Field(min_length=1)
+    agent_id: str | None = None
+    agent_transcript_path: str | None = None
+    occurred_at: datetime
+    repo_root: str | None = None
+    counters: RuntimeCounters | None = None
+    measurement_quality: MeasurementQuality = MeasurementQuality.UNAVAILABLE
+    measurement_status: MeasurementStatus = MeasurementStatus.USAGE_UNAVAILABLE
+    measurement_reason: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class CodexLifecycleResult(BaseModel):
+    """Result of one Codex lifecycle correlation attempt."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    correlated: bool
+    reason: str | None = None
+    agent_session_id: str | None = None
+    wave_id: str | None = None
+    attempt: int | None = None
+    before_version: str
+    after_version: str
+    event: dict[str, Any] | None = None
 
 
 class WaveLandParams(BaseModel):
@@ -329,6 +375,9 @@ class WaveLandRpcResult(BaseModel):
     closed: bool
     worktree_cleaned: bool
     merged_commit: str
+    integration_id: str | None = None
+    close_attempt: dict[str, Any] | None = None
+    close_backgrounded: bool = False
 
 
 class WaveLandBatchParams(BaseModel):
@@ -345,10 +394,12 @@ class WaveLandBatchRpcResult(BaseModel):
     """Result of :func:`wave_land_batch_rpc`."""
 
     model_config = ConfigDict(extra="forbid")
-    landed: list[dict[str, Any]]
+    landed: list[WaveLandRpcResult]
     failed_wave: str | None
     error: str | None
     skipped: list[str]
+    barrier_requirements: dict[str, list[str]]
+    close_mode: Literal["durable_async", "daemonless_synchronous"]
 
 
 class WaveAutolandParams(BaseModel):
@@ -875,6 +926,7 @@ def _compute_wave_close_readiness(
     state_path: Path,
     repo_root: Path,
     defer_verdict_kinds: bool = False,
+    prevalidated_gate_ids: Collection[str] = (),
 ) -> CloseReadiness | None:
     """Return the enforcing pre-close readiness view for a wave-close mutation.
 
@@ -942,6 +994,7 @@ def _compute_wave_close_readiness(
         repo_root=repo_root,
         config_root=_config_root_for_state_path(state_path),
         deferred_criterion_ids=deferred,
+        prevalidated_gate_ids=prevalidated_gate_ids,
     )
 
 
@@ -1139,6 +1192,55 @@ def _enforce_wave_verdict_gate(wave: Wave, *, state_path: Path) -> None:
     raise LifecycleError(
         f"wave {wave.id!r} verdict gate blocked close (requirement={gate.requirement}): {reasons}"
     )
+
+
+def _persist_auditor_session_snapshot(
+    snapshot: State,
+    *,
+    state_path: Path,
+    wave_id: str,
+) -> None:
+    """Merge one close auditor's session row into canonical state.
+
+    Close verification runs without the long-lived state lock. The verdict
+    producer still needs to expose its live and terminal auditor session to
+    Watch, so its callbacks pass the in-memory verification snapshot here.
+    Only the qualified ``<wave>::audit`` session rows are copied; unrelated
+    state from the pre-flight snapshot is never written back over concurrent
+    mutations.
+
+    Args:
+        snapshot: Verification snapshot carrying the auditor session update.
+        state_path: Canonical repository state path.
+        wave_id: Wave whose qualified auditor session may be copied.
+
+    Raises:
+        DaemonValidationError: When the merged state fails strict validation.
+    """
+    from eawf.runtime.lock import portalock
+
+    auditor_scope = f"{wave_id}::audit"
+    changed = {
+        session_id: session
+        for session_id, session in snapshot.agent_sessions.items()
+        if session.role is AgentSessionRole.AUDITOR and session.scope_id == auditor_scope
+    }
+    if not changed:
+        return
+    with portalock.acquire(state_path, timeout=5.0):
+        current, _payload = _read_state(state_path)
+        current.agent_sessions.update(changed)
+        current.updated_at = datetime.now(UTC)
+        payload = current.model_dump(mode="json")
+        post = validate_state(payload, strict_optional=False)
+        if post.state is None or post.violations:
+            details = list(post.schema_errors[:3])
+            details.extend(violation.code for violation in post.violations[:3])
+            raise DaemonValidationError(
+                "validation_failed: auditor session snapshot invalid: " + "; ".join(details)
+            )
+        atomic_write_json_locked(state_path, payload)
+    logger.info(f"_persist_auditor_session_snapshot wave={wave_id!r} sessions={len(changed)}")
 
 
 #: The three disjoint juror runtime families the cross-vendor jury convenes
@@ -1501,7 +1603,9 @@ async def _produce_high_risk_verdict(
     state_path: Path,
     repo_root: Path,
     wall_clock_seconds: float,
-) -> None:
+    reuse_existing: bool = True,
+    durable_context: DurableAuditContext | None = None,
+) -> str | None:
     """Write the single fresh-auditor verdict the high-risk close gate reads.
 
     The producer half of the high-risk single-auditor close gate: it spawns
@@ -1539,15 +1643,24 @@ async def _produce_high_risk_verdict(
             default, and a killed auditor writes no verdict -- which the gate
             reads as "no verdict" and refuses the close, so the wave can never
             close no matter how many times the operator retries.
+        durable_context: Optional exact close-attempt evidence context, built
+            only after deterministic GateReceipts have been persisted.
     """
     from eawf.workflow.dispatch.verdict import (
         produce_wave_verdict,
         verify_wave_verdict_gate,
     )
 
-    if verify_wave_verdict_gate(wave, state_path=state_path).passed:
+    if reuse_existing and verify_wave_verdict_gate(wave, state_path=state_path).passed:
+        from eawf.workflow.agent_report.rollup import iter_agent_reports
+
+        rows = iter_agent_reports(
+            state_path,
+            role=AgentSessionRole.AUDITOR,
+            base_id=wave.id,
+        )
         logger.debug(f"_produce_high_risk_verdict wave={wave.id} status=already-ready")
-        return
+        return rows[-1].envelope.id if rows else None
     events_path = store_path(state_path, StoreKind.EVENT)
     # Thread events_path so the single fresh-auditor spawn streams its stdout
     # live to the auditor's Watch roster row (W21).
@@ -1562,22 +1675,27 @@ async def _produce_high_risk_verdict(
     def _persist_live_auditor_session(registered: State) -> None:
         """Write the freshly-registered auditor session so Watch can see it.
 
-        The close persists state only when it FINISHES. An audit runs for
-        minutes and can fail, so without this the operator's Watch roster --
-        which reads state -- showed no running agent for the whole audit, and
-        none afterwards when the close failed, while the event Feed streamed the
-        auditor's output the entire time. The close already holds the state lock,
-        so the write goes through the lock-free ``_locked`` primitive.
+        Verification owns a snapshot and intentionally holds no state lock
+        while the auditor runs. Merge only the qualified auditor session into
+        the latest canonical state so concurrent lifecycle mutations survive.
         """
-        atomic_write_json_locked(state_path, registered.model_dump(mode="json"))
+        _persist_auditor_session_snapshot(
+            registered,
+            state_path=state_path,
+            wave_id=wave.id,
+        )
         logger.info(f"_produce_high_risk_verdict wave={wave.id} status=auditor-session-persisted")
 
     def _persist_terminal_auditor_session(terminal: State) -> None:
         """Persist the auditor terminal row before later close guards run."""
-        atomic_write_json_locked(state_path, terminal.model_dump(mode="json"))
+        _persist_auditor_session_snapshot(
+            terminal,
+            state_path=state_path,
+            wave_id=wave.id,
+        )
         logger.info(f"_produce_high_risk_verdict wave={wave.id} status=auditor-session-terminal")
 
-    await produce_wave_verdict(
+    verdict_result = await produce_wave_verdict(
         state=state,
         state_path=state_path,
         events_path=events_path,
@@ -1586,8 +1704,127 @@ async def _produce_high_risk_verdict(
         repo_root=repo_root,
         on_session_registered=_persist_live_auditor_session,
         on_session_terminalized=_persist_terminal_auditor_session,
+        durable_context=durable_context,
     )
+    if verdict_result is None:
+        logger.warning(f"_produce_high_risk_verdict wave={wave.id} status=no-report")
+        return None
     logger.info(f"_produce_high_risk_verdict wave={wave.id} status=produced")
+    return verdict_result.append_result.envelope.id
+
+
+def _build_durable_audit_context(
+    *,
+    state_path: Path,
+    close_attempt_id: str,
+    wave: Wave,
+) -> DurableAuditContext:
+    """Bind a durable auditor to exact close inputs and persisted receipts.
+
+    This helper is intentionally called after the deterministic oracle loop.
+    It re-reads canonical state plus the append-only GateReceipt store, so an
+    in-memory callback result that was never durably written cannot enter the
+    auditor prompt as proof.
+
+    Raises:
+        LifecycleError: When the close attempt is absent, a bound receipt is
+            invalid for the frozen attempt, or a required deterministic
+            criterion lacks a passing persisted GateReceipt.
+    """
+    from eawf.kernel.state.enums import GateReceiptResult
+    from eawf.kernel.state.urn import build as build_urn
+    from eawf.kernel.store.kinds.gate_receipt import GateReceipt
+    from eawf.workflow.dispatch.verdict import DurableAuditContext, DurableAuditCriterion
+
+    canonical_state, _ = _read_state(state_path)
+    attempt = canonical_state.close_attempts.get(close_attempt_id)
+    if attempt is None:
+        raise LifecycleError(f"unknown close attempt: {close_attempt_id!r}")
+
+    criteria_by_id = {
+        criterion.id: criterion for criterion in wave.success_criteria if criterion.required
+    }
+    wanted = set(attempt.gate_receipt_ids)
+    receipts_by_criterion: dict[str, list[str]] = {}
+    receipt_path = store_path(state_path, StoreKind.GATE_RECEIPT)
+    if wanted and receipt_path.is_file():
+        for line in receipt_path.read_bytes().splitlines():
+            if not line:
+                continue
+            try:
+                envelope = Envelope.model_validate(orjson.loads(line))
+                if envelope.id not in wanted:
+                    continue
+                receipt = GateReceipt.model_validate(envelope.payload)
+            except orjson.JSONDecodeError, ValidationError:
+                continue
+            if (
+                receipt.result is not GateReceiptResult.PASS
+                or receipt.scope_id != attempt.wave_id
+                or receipt.integration_id != attempt.integration_id
+                or receipt.integrated_sha != attempt.integrated_sha
+                or receipt.tree_sha != attempt.tree_sha
+                or receipt.contract_digest != attempt.spec_digest
+                or receipt.criteria_digest != attempt.criteria_digest
+                or receipt.gate_manifest_digest != attempt.gate_manifest_digest
+                or receipt.policy_digest != attempt.policy_digest
+                or receipt.dependency_binding_digest != attempt.dependency_binding_digest
+                or receipt.runner_environment_digest != attempt.runner_environment_digest
+            ):
+                raise LifecycleError(
+                    f"gate receipt does not match frozen close attempt: {envelope.id!r}"
+                )
+            if receipt.criterion_id is None:
+                raise LifecycleError(f"gate receipt has no criterion binding: {envelope.id!r}")
+            criterion = criteria_by_id.get(receipt.criterion_id)
+            if (
+                envelope.kind is not StoreKind.GATE_RECEIPT
+                or criterion is None
+                or receipt.gate_id not in criterion.gate_ids
+                or receipt.gate_id not in attempt.required_gate_ids
+            ):
+                raise LifecycleError(
+                    f"gate receipt has invalid criterion/gate binding: {envelope.id!r}"
+                )
+            urn = build_urn(
+                "store",
+                owner=receipt.scope_id,
+                id=f"{StoreKind.GATE_RECEIPT.value}/{receipt.id}",
+            )
+            receipts_by_criterion.setdefault(receipt.criterion_id, []).append(urn)
+
+    criteria: list[DurableAuditCriterion] = []
+    for criterion in wave.success_criteria:
+        if not criterion.required:
+            continue
+        deterministic = criterion.evidence_kind == "deterministic"
+        receipt_urns = tuple(dict.fromkeys(receipts_by_criterion.get(criterion.id, [])))
+        if deterministic and not receipt_urns:
+            raise LifecycleError(
+                f"required deterministic criterion has no persisted GateReceipt: {criterion.id!r}"
+            )
+        criteria.append(
+            DurableAuditCriterion(
+                criterion_id=criterion.id,
+                text=criterion.text,
+                deterministic=deterministic,
+                gate_receipt_urns=receipt_urns,
+            )
+        )
+    return DurableAuditContext(
+        wave_id=wave.id,
+        close_attempt_id=attempt.id,
+        integration_id=attempt.integration_id,
+        integrated_sha=attempt.integrated_sha,
+        tree_sha=attempt.tree_sha,
+        spec_digest=attempt.spec_digest,
+        criteria_digest=attempt.criteria_digest,
+        gate_manifest_digest=attempt.gate_manifest_digest,
+        policy_digest=attempt.policy_digest,
+        runner_digest=attempt.runner_environment_digest,
+        dependency_binding_digest=attempt.dependency_binding_digest,
+        criteria=tuple(criteria),
+    )
 
 
 class WaveCloseRefusalError(LifecycleError):
@@ -1743,6 +1980,15 @@ async def _enforce_wave_close_gate(
     state_path: Path,
     repo_root: Path,
     tier: str = "all",
+    on_auditing: Callable[[], None] | None = None,
+    on_audit_result: Callable[[str], None] | None = None,
+    before_gate_execute: Callable[
+        [str, str, CheckSpec, str],
+        CheckResult | None,
+    ]
+    | None = None,
+    on_gate_result: Callable[[str, str, CheckResult], None] | None = None,
+    reusable_pass_gate_ids: set[str] | None = None,
 ) -> list[EvidenceRecord]:
     """Run the enforcing wave-close gate via the ordered oracle.
 
@@ -1813,6 +2059,15 @@ async def _enforce_wave_close_gate(
     if not wave_id or wave_id not in state.waves:
         return []
     wave = state.waves[wave_id]
+    close_attempt_id = str(mutation.params.get("close_attempt_id", ""))
+    auditing_announced = False
+
+    def _announce_auditing() -> None:
+        nonlocal auditing_announced
+        if on_auditing is not None and not auditing_announced:
+            on_auditing()
+            auditing_announced = True
+
     # Band-conditional enforcement: the merged block records the fleet
     # intent; the wave-aware resolver narrows ``enforce`` +
     # ``cross_vendor_jury`` to the UI/UX band so the gate fires for a band
@@ -1847,19 +2102,24 @@ async def _enforce_wave_close_gate(
     jury_replaces_auditor = (
         verify_block.cross_vendor_jury and block_authority is BlockAuthority.BLOCKING
     )
-    if verdict_requirement(wave) == "always" and not jury_replaces_auditor:
+    high_risk_single_auditor = verdict_requirement(wave) == "always" and not jury_replaces_auditor
+    if high_risk_single_auditor and not close_attempt_id:
         # The whole wave is covered by the blocking single-auditor; the
         # deterministic tier defers to the verdict tier (the auditor spawn
         # is lock-scoped and W08-bounded under the D-LOCK-SPLIT ordering).
         if tier == "deterministic":
             return []
-        await _produce_high_risk_verdict(
+        _announce_auditing()
+        audit_report_id = await _produce_high_risk_verdict(
             state,
             wave,
             state_path=state_path,
             repo_root=repo_root,
             wall_clock_seconds=verify_block.juror_wall_clock_seconds,
+            reuse_existing=on_audit_result is None,
         )
+        if audit_report_id is not None and on_audit_result is not None:
+            on_audit_result(audit_report_id)
         _enforce_wave_verdict_gate(wave, state_path=state_path)
         logger.info(f"_enforce_wave_close_gate wave={wave_id} high_risk=single-auditor passed=True")
         return []
@@ -1888,6 +2148,14 @@ async def _enforce_wave_close_gate(
         events_path=events_path,
     )
     gate_specs = _load_gate_specs(wave_id, state)
+    freshness_inputs: dict[str, Any] = {}
+    if close_attempt_id:
+        from eawf.runtime.daemon.methods.close import gate_freshness_inputs
+
+        freshness_inputs = gate_freshness_inputs(
+            state,
+            attempt_id=close_attempt_id,
+        )
     # The staged advisory-to-block gate (TRUST-4): block_authority (computed
     # once above) is threaded into every per-criterion run_oracle call; with
     # an empty validation substrate the jury stays advisory, so an enforcing
@@ -1905,6 +2173,19 @@ async def _enforce_wave_close_gate(
             continue
         if tier == "verdict" and gates:
             continue
+        if (
+            high_risk_single_auditor
+            and close_attempt_id
+            and (not gates or criterion.evidence_kind != "deterministic")
+        ):
+            continue
+        if not gates:
+            _announce_auditing()
+        criterion_freshness = {
+            gate.id: freshness_inputs[gate.id].model_copy(update={"criterion_id": criterion.id})
+            for gate in gates
+            if gate.id in freshness_inputs
+        }
         result = await run_oracle(
             criterion,
             gates,
@@ -1915,6 +2196,11 @@ async def _enforce_wave_close_gate(
             repo_root=repo_root,
             spawn_factory=spawn_factory,
             block_authority=block_authority,
+            freshness_by_gate=criterion_freshness,
+            reusable_pass_gate_ids=reusable_pass_gate_ids,
+            before_gate_execute=before_gate_execute,
+            after_gate_execute=on_gate_result,
+            require_all_deterministic=bool(close_attempt_id),
         )
         if result.status != "pass":
             logger.warning(
@@ -1946,6 +2232,42 @@ async def _enforce_wave_close_gate(
                     detail=result.detail,
                 )
             )
+    if high_risk_single_auditor and close_attempt_id and tier in {"all", "verdict"}:
+        durable_context = _build_durable_audit_context(
+            state_path=state_path,
+            close_attempt_id=close_attempt_id,
+            wave=wave,
+        )
+        _announce_auditing()
+        from eawf.runtime.daemon.methods.close import (
+            reusable_bound_audit_report_id,
+        )
+
+        try:
+            audit_report_id = reusable_bound_audit_report_id(
+                state_path,
+                attempt_id=close_attempt_id,
+                durable_context=durable_context,
+            )
+        except ValueError as exc:
+            raise LifecycleError(f"bound audit report invalid: {exc!s}") from exc
+        if audit_report_id is None:
+            audit_report_id = await _produce_high_risk_verdict(
+                state,
+                wave,
+                state_path=state_path,
+                repo_root=repo_root,
+                wall_clock_seconds=verify_block.juror_wall_clock_seconds,
+                reuse_existing=False,
+                durable_context=durable_context,
+            )
+        if audit_report_id is not None and on_audit_result is not None:
+            on_audit_result(audit_report_id)
+        _enforce_wave_verdict_gate(wave, state_path=state_path)
+        logger.info(
+            f"_enforce_wave_close_gate wave={wave_id} "
+            "high_risk=deterministic-then-single-auditor passed=True"
+        )
     logger.info(
         f"_enforce_wave_close_gate wave={wave_id} oracle=pass "
         f"criteria={len(wave.success_criteria)} "
@@ -2777,16 +3099,27 @@ def _wave_land_payload(result: Any) -> dict[str, Any]:
         closed=result.closed,
         worktree_cleaned=result.worktree_cleaned,
         merged_commit=result.merged_commit,
+        integration_id=result.integration_id,
+        close_attempt=None,
+        close_backgrounded=False,
     ).model_dump(mode="json")
 
 
-def _wave_land_batch_payload(result: Any) -> dict[str, Any]:
+def _wave_land_batch_payload(
+    result: Any,
+    *,
+    close_mode: Literal["durable_async", "daemonless_synchronous"],
+) -> dict[str, Any]:
     """Return the JSON-mode result shape for a wave-land-batch result."""
     return WaveLandBatchRpcResult(
-        landed=[_wave_land_payload(row) for row in result.landed],
+        landed=[WaveLandRpcResult.model_validate(_wave_land_payload(row)) for row in result.landed],
         failed_wave=result.failed_wave,
         error=result.error,
         skipped=list(result.skipped),
+        barrier_requirements={
+            wave_id: list(stages) for wave_id, stages in result.barrier_requirements.items()
+        },
+        close_mode=close_mode,
     ).model_dump(mode="json")
 
 
@@ -2917,6 +3250,260 @@ def _build_runtime_capture_event_envelope(
     )
 
 
+def _build_codex_lifecycle_event_envelope(
+    *,
+    args: CodexLifecycleParams,
+    result: CodexLifecycleResult,
+    before_version: str,
+    after_version: str,
+) -> Envelope:
+    """Build the event row emitted for Codex lifecycle correlation."""
+    now = datetime.now(UTC)
+    safe_params = args.model_dump(
+        mode="json",
+        exclude={"repo_root", "agent_transcript_path"},
+    )
+    args_raw = orjson.dumps(safe_params, option=orjson.OPT_SORT_KEYS)
+    scope_id = result.wave_id or result.agent_session_id or ""
+    extras: dict[str, str | int | float | bool] = {
+        "provider_event": args.event_type,
+        "correlated": result.correlated,
+    }
+    if result.reason is not None:
+        extras["reason"] = result.reason
+    if result.wave_id is not None:
+        extras["wave"] = result.wave_id
+    if result.attempt is not None:
+        extras["attempt"] = result.attempt
+    payload = EventPayload(
+        timestamp=now,
+        event_type="runtime.codex_lifecycle",
+        event_kind=None,
+        actor="daemon",
+        command="runtime.codex_lifecycle",
+        args_hash=hashlib.sha256(args_raw).hexdigest()[:16],
+        before_state_version=before_version,
+        after_state_version=after_version,
+        status="ok" if result.correlated else "warn",
+        message=(f"runtime.codex_lifecycle event={args.event_type} correlated={result.correlated}"),
+        extras=extras,
+    ).model_dump(mode="json")
+    return Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=scope_id,
+        created_at=now,
+        updated_at=None,
+        summary=(f"runtime.codex_lifecycle event={args.event_type} correlated={result.correlated}"),
+        payload=payload,
+        blob_refs=[],
+        artifact_ids=[],
+    )
+
+
+def _active_codex_sessions(state: State) -> list[AgentSession]:
+    return [
+        session
+        for session in state.agent_sessions.values()
+        if session.runtime == "codex" and session.status == "active"
+    ]
+
+
+def _bind_codex_provider_session(
+    state: State,
+    provider_session_id: str,
+) -> tuple[AgentSession | None, str | None]:
+    sessions = _active_codex_sessions(state)
+    bound = [session for session in sessions if session.runtime_session_id == provider_session_id]
+    if len(bound) == 1:
+        return bound[0], None
+    if len(bound) > 1:
+        return None, "provider_session_binding_ambiguous"
+    unbound = [session for session in sessions if session.runtime_session_id is None]
+    if len(unbound) != 1:
+        reason = (
+            "provider_session_target_missing"
+            if not unbound
+            else "provider_session_target_ambiguous"
+        )
+        return None, reason
+    unbound[0].runtime_session_id = provider_session_id
+    return unbound[0], None
+
+
+def _bound_codex_session(
+    state: State,
+    provider_session_id: str,
+) -> tuple[AgentSession | None, str | None]:
+    bound = [
+        session
+        for session in _active_codex_sessions(state)
+        if session.runtime_session_id == provider_session_id
+    ]
+    if len(bound) == 1:
+        return bound[0], None
+    reason = (
+        "provider_session_binding_missing" if not bound else "provider_session_binding_ambiguous"
+    )
+    return None, reason
+
+
+def _codex_session_wave(
+    state: State,
+    session: AgentSession,
+) -> tuple[Wave | None, str | None]:
+    active_wave_ids = set(state.current.active_wave_ids)
+    candidates = {wave_id for wave_id in session.claimed_wave_ids if wave_id in active_wave_ids}
+    if session.scope_id in active_wave_ids:
+        candidates.add(session.scope_id)
+    if len(candidates) != 1:
+        reason = "wave_correlation_missing" if not candidates else "wave_correlation_ambiguous"
+        return None, reason
+    wave_id = next(iter(candidates))
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        return None, "wave_record_missing"
+    return wave, None
+
+
+def _apply_codex_lifecycle(
+    state: State,
+    args: CodexLifecycleParams,
+) -> CodexLifecycleResult:
+    before_version = ""
+    after_version = ""
+    if args.event_type == "session_start":
+        session, reason = _bind_codex_provider_session(state, args.provider_session_id)
+        return CodexLifecycleResult(
+            correlated=session is not None,
+            reason=reason,
+            agent_session_id=session.id if session is not None else None,
+            before_version=before_version,
+            after_version=after_version,
+        )
+
+    session, reason = _bound_codex_session(state, args.provider_session_id)
+    if session is None:
+        return CodexLifecycleResult(
+            correlated=False,
+            reason=reason,
+            before_version=before_version,
+            after_version=after_version,
+        )
+    if args.event_type == "session_end":
+        wave, reason = _codex_session_wave(state, session)
+        return CodexLifecycleResult(
+            correlated=wave is not None,
+            reason=reason,
+            agent_session_id=session.id,
+            wave_id=wave.id if wave is not None else None,
+            before_version=before_version,
+            after_version=after_version,
+        )
+
+    if args.agent_id is None:
+        return CodexLifecycleResult(
+            correlated=False,
+            reason="agent_id_missing",
+            agent_session_id=session.id,
+            before_version=before_version,
+            after_version=after_version,
+        )
+    wave, reason = _codex_session_wave(state, session)
+    if wave is None:
+        return CodexLifecycleResult(
+            correlated=False,
+            reason=reason,
+            agent_session_id=session.id,
+            before_version=before_version,
+            after_version=after_version,
+        )
+
+    existing_no = next(
+        (
+            attempt_no
+            for attempt_no, attempt in wave.sessions.items()
+            if attempt.runtime == "codex" and attempt.session_id == args.agent_id
+        ),
+        None,
+    )
+    if args.event_type == "subagent_start":
+        if existing_no is None:
+            attempt_no = (max(wave.sessions) if wave.sessions else 0) + 1
+            wave.sessions[attempt_no] = SessionAttempt(
+                attempt=attempt_no,
+                runtime="codex",
+                session_id=args.agent_id,
+                session_log_handle=(f"urn:eawf:v1:session-log:codex:{uuid.uuid4().hex}"),
+                started_at=args.occurred_at,
+                measurement_quality=MeasurementQuality.UNAVAILABLE,
+                measurement_status=MeasurementStatus.USAGE_UNAVAILABLE,
+                measurement_reason="awaiting_subagent_stop",
+            )
+        else:
+            attempt_no = existing_no
+        return CodexLifecycleResult(
+            correlated=True,
+            agent_session_id=session.id,
+            wave_id=wave.id,
+            attempt=attempt_no,
+            before_version=before_version,
+            after_version=after_version,
+        )
+
+    if existing_no is None:
+        return CodexLifecycleResult(
+            correlated=False,
+            reason="subagent_start_missing",
+            agent_session_id=session.id,
+            wave_id=wave.id,
+            before_version=before_version,
+            after_version=after_version,
+        )
+    attempt = wave.sessions[existing_no]
+    counters = args.counters
+    session_log_handle = attempt.session_log_handle
+    if args.agent_transcript_path is not None:
+        from eawf.runtime.daemon.session import register_session_log
+
+        session_log_handle = register_session_log(
+            "codex",
+            Path(args.agent_transcript_path),
+            wave_id=wave.id,
+        )
+    wave.sessions[existing_no] = attempt.model_copy(
+        update={
+            "session_log_handle": session_log_handle,
+            "ended_at": args.occurred_at,
+            "cache_creation_input_tokens": (
+                counters.cache_creation_input_tokens if counters is not None else None
+            ),
+            "cache_read_input_tokens": (
+                counters.cache_read_input_tokens if counters is not None else None
+            ),
+            "input_tokens": counters.input_tokens if counters is not None else None,
+            "output_tokens": counters.output_tokens if counters is not None else None,
+            "cost_usd": (
+                float(counters.cost_usd)
+                if counters is not None and counters.cost_usd is not None
+                else None
+            ),
+            "measurement_quality": args.measurement_quality,
+            "measurement_status": args.measurement_status,
+            "measurement_reason": args.measurement_reason,
+        }
+    )
+    return CodexLifecycleResult(
+        correlated=True,
+        agent_session_id=session.id,
+        wave_id=wave.id,
+        attempt=existing_no,
+        before_version=before_version,
+        after_version=after_version,
+    )
+
+
 def _runtime_latest_from_params(
     params: RuntimeCaptureParams,
     *,
@@ -2956,6 +3543,59 @@ def _runtime_latest_from_params(
         measure_version=params.measure_version,
         shared_wave_count=shared_wave_count,
         captured_at=captured_at,
+    )
+
+
+def _resolve_runtime_capture_wave_ids(
+    state: State,
+    params: RuntimeCaptureParams,
+) -> list[str]:
+    """Resolve one exact wave for a runtime capture.
+
+    Runtime counters are session-scoped. Copying one snapshot onto every active
+    wave fabricates attribution, so ambiguous correlation is rejected. Callers
+    may name the wave directly; Codex session-end captures may instead resolve
+    through the daemon-owned :class:`AgentSession` provider-session binding.
+    The sole-active-wave fallback preserves the unambiguous legacy path.
+    """
+    active_wave_ids = list(state.current.active_wave_ids)
+    if not active_wave_ids:
+        raise DaemonValidationError("validation_failed: runtime.capture requires active waves")
+
+    if params.wave_id is not None:
+        if params.wave_id not in active_wave_ids:
+            raise DaemonValidationError(
+                f"validation_failed: runtime.capture wave is not active: {params.wave_id!r}"
+            )
+        return [params.wave_id]
+
+    if params.harness == "codex" and params.session_id is not None:
+        candidates: set[str] = set()
+        for session in state.agent_sessions.values():
+            if (
+                session.runtime != "codex"
+                or session.runtime_session_id != params.session_id
+                or session.status != "active"
+            ):
+                continue
+            candidates.update(
+                wave_id for wave_id in session.claimed_wave_ids if wave_id in active_wave_ids
+            )
+            if session.scope_id in active_wave_ids:
+                candidates.add(session.scope_id)
+        if len(candidates) == 1:
+            return sorted(candidates)
+        if candidates:
+            raise DaemonValidationError(
+                "validation_failed: runtime.capture correlation ambiguous: "
+                f"candidate_count={len(candidates)}"
+            )
+
+    if len(active_wave_ids) == 1:
+        return active_wave_ids
+    raise DaemonValidationError(
+        "validation_failed: runtime.capture correlation ambiguous: "
+        f"active_count={len(active_wave_ids)}"
     )
 
 
@@ -3478,9 +4118,85 @@ async def digest(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     return DigestResult(version=version).model_dump(mode="json")
 
 
+@register("runtime.codex_lifecycle")
+async def codex_lifecycle(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Correlate provider-native Codex lifecycle events under daemon ownership."""
+    try:
+        args = CodexLifecycleParams.model_validate(params)
+    except ValidationError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+
+    state_path, event_path, wal_path = _resolve_mutator_paths(
+        repo_root=args.repo_root,
+        ctx=ctx,
+    )
+    from eawf.runtime.lock import portalock
+
+    ctx.in_flight_mutations += 1
+    try:
+        with portalock.acquire(state_path, timeout=5.0):
+            state, payload = _read_state(state_path)
+            before_version = _state_version(payload)
+            result = _apply_codex_lifecycle(state, args)
+            if result.correlated:
+                state.updated_at = datetime.now(UTC)
+            new_payload = state.model_dump(mode="json")
+            post = validate_state(new_payload, strict_optional=False)
+            if post.state is None:
+                raise DaemonValidationError(
+                    "validation_failed: post-mutation schema invalid: "
+                    + "; ".join(post.schema_errors[:3])
+                )
+            if post.violations:
+                violation_codes = ",".join(v.code for v in post.violations)
+                raise DaemonValidationError(
+                    f"validation_failed: post-mutation invariants violated: {violation_codes}"
+                )
+            after_version = _state_version(new_payload)
+            result = result.model_copy(
+                update={
+                    "before_version": before_version,
+                    "after_version": after_version,
+                }
+            )
+            envelope = _build_codex_lifecycle_event_envelope(
+                args=args,
+                result=result,
+                before_version=before_version,
+                after_version=after_version,
+            )
+            result = result.model_copy(update={"event": envelope.model_dump(mode="json")})
+            record_id = uuid.uuid4().hex
+            record = WalRecord(
+                record_id=record_id,
+                envelope=envelope,
+                idempotency_key=None,
+                written_at=datetime.now(UTC),
+                before_state_version=before_version,
+                after_state_version=after_version,
+                state_path=str(state_path),
+            )
+            wal.write_pending(wal_path, record)
+            atomic_write_json_locked(state_path, new_payload)
+            wal.mark_applied(wal_path, record_id)
+            append_envelope(event_path, envelope)
+            wal.mark_fsynced(wal_path, record_id)
+            bus = _bus_for_root(ctx, state_path)
+            if bus is not None:
+                bus.publish(envelope)
+            ctx.last_event_id = envelope.id
+            logger.info(
+                f"codex_lifecycle event={args.event_type} "
+                f"correlated={result.correlated} wave={result.wave_id!r}"
+            )
+            return result.model_dump(mode="json")
+    finally:
+        ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
+
+
 @register("runtime.capture")
 async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Persist latest runtime counters onto every active wave.
+    """Persist latest runtime counters onto one exactly correlated active wave.
 
     Args:
         ctx: Server context; state, event, and WAL paths are resolved the same
@@ -3512,11 +4228,7 @@ async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[st
         with portalock.acquire(state_path, timeout=5.0):
             state, payload = _read_state(state_path)
             before_version = _state_version(payload)
-            active_wave_ids = list(state.current.active_wave_ids)
-            if not active_wave_ids:
-                raise DaemonValidationError(
-                    "validation_failed: runtime.capture requires active waves"
-                )
+            active_wave_ids = _resolve_runtime_capture_wave_ids(state, args)
 
             latest = _runtime_latest_from_params(args, shared_wave_count=len(active_wave_ids))
             for wave_id in active_wave_ids:
@@ -3543,9 +4255,6 @@ async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[st
                 # same priced capture so an interactive wave surfaces per-attempt
                 # cost the way a headless wave does. Idempotent per session id.
                 _upsert_interactive_session_attempt(wave, latest=latest, session_id=args.session_id)
-            if len(active_wave_ids) > 1:
-                logger.warning(f"runtime_capture active_count={len(active_wave_ids)}")
-
             state.updated_at = datetime.now(UTC)
             new_payload = state.model_dump(mode="json")
             post = validate_state(new_payload, strict_optional=False)
@@ -3915,6 +4624,74 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             )
 
 
+def _validate_close_apply_snapshot(
+    state: State,
+    *,
+    state_path: Path,
+    repo_root: Path,
+    attempt_id: str,
+) -> None:
+    """Reject durable close inputs or proof that drifted after READY.
+
+    Args:
+        state: Canonical state reloaded under the final mutation lock.
+        state_path: Canonical state file used to resolve durable proof.
+        repo_root: Repository whose effective close policy is authoritative.
+        attempt_id: Durable close attempt entering APPLYING.
+
+    Raises:
+        DaemonValidationError: When the attempt, its governing inputs, or its
+            bound gate/audit proof changed after READY.
+    """
+    from eawf.runtime.daemon.methods.close import (
+        _attempt_invalidation_causes,
+        reusable_bound_audit_report_id,
+    )
+
+    attempt = state.close_attempts.get(attempt_id)
+    if attempt is None:
+        raise DaemonValidationError(
+            f"validation_failed: close_preflight_stale: close attempt "
+            f"{attempt_id!r} disappeared before apply"
+        )
+    governing_drift = _attempt_invalidation_causes(
+        state,
+        repo_root=repo_root,
+        attempt=attempt,
+    )
+    if governing_drift:
+        raise DaemonValidationError(
+            "validation_failed: close_preflight_stale: governing inputs "
+            f"changed after READY: {'; '.join(governing_drift)}"
+        )
+    if not attempt.gate_receipt_ids and attempt.audit_report_id is None:
+        return
+
+    current_wave = state.waves.get(attempt.wave_id)
+    if current_wave is None:
+        raise DaemonValidationError(
+            f"validation_failed: close_preflight_stale: wave "
+            f"{attempt.wave_id!r} disappeared before proof CAS"
+        )
+    try:
+        durable_context = _build_durable_audit_context(
+            state_path=state_path,
+            close_attempt_id=attempt.id,
+            wave=current_wave,
+        )
+        if attempt.audit_report_id is not None:
+            reusable_bound_audit_report_id(
+                state_path,
+                attempt_id=attempt.id,
+                durable_context=durable_context,
+            )
+    except (LifecycleError, ValueError) as exc:
+        raise DaemonValidationError(
+            "validation_failed: close_preflight_stale: bound gate/audit "
+            f"proof changed after READY: {exc!s}"
+        ) from exc
+
+
 async def _mutate_wave_close(
     ctx: MethodContext,
     *,
@@ -3937,16 +4714,15 @@ async def _mutate_wave_close(
     Three phases:
 
     1. **Pre-flight (no lock)** — snapshot state, capture the pre-flight
-       version, run the W06 :func:`run_close_preflight` bundle with the
-       close gate restricted to the DETERMINISTIC tier, and take the
-       rollup / runtime-delta reads.
+       version, run the full :func:`run_close_preflight` bundle (deterministic
+       gates plus any required auditor/jury verdict), and take the rollup /
+       runtime-delta reads. Auditor session callbacks merge only their own
+       qualified session row through short independent lock holds.
     2. **Commit (lock, ms-scale)** — re-read state and compare versions;
        when the target wave row itself changed since pre-flight the close
        is REFUSED with a typed stale error (the caller retries, which
-       re-runs pre-flight off-lock). Then the verdict / jury tier runs
-       (W08-bounded spawns — the one deliberately lock-scoped long step,
-       per D-LOCK-SPLIT), followed by apply, post-validate, WAL, atomic
-       write, and event append.
+       re-runs pre-flight off-lock). Apply, post-validate, WAL, atomic write,
+       and event append are the only work inside the close lock.
     3. **Post-lock** — deterministic-evidence append (its own sibling
        portalock), bus publish, advisory retraction, idempotency cache.
 
@@ -3975,10 +4751,112 @@ async def _mutate_wave_close(
 
     from eawf.runtime.lock import portalock
 
+    verification_repo_root = mutation.params.get("verification_repo_root")
     repo_anchor = (
+        Path(str(verification_repo_root))
+        if verification_repo_root
+        else (
+            Path(repo_root_override)
+            if repo_root_override
+            else _config_root_for_state_path(state_path)
+        )
+    )
+    canonical_repo_root = (
         Path(repo_root_override) if repo_root_override else _config_root_for_state_path(state_path)
     )
     wave_id = str(mutation.params.get("wave_id", ""))
+    close_attempt_id = str(mutation.params.get("close_attempt_id", ""))
+    on_auditing: Callable[[], None] | None = None
+    on_audit_result: Callable[[str], None] | None = None
+    before_gate_execute: (
+        Callable[
+            [str, str, CheckSpec, str],
+            CheckResult | None,
+        ]
+        | None
+    ) = None
+    on_gate_result: Callable[[str, str, CheckResult], None] | None = None
+    prevalidated_gate_ids: set[str] = set()
+    if close_attempt_id:
+        from eawf.runtime.daemon.gate_execution import (
+            claim_gate_execution,
+            complete_gate_execution,
+        )
+        from eawf.runtime.daemon.methods.close import (
+            persist_gate_receipt,
+            transition_attempt_stage,
+        )
+
+        transition_attempt_stage(
+            ctx,
+            repo_root=canonical_repo_root,
+            attempt_id=close_attempt_id,
+            status=CloseAttemptStatus.CHECKING,
+        )
+
+        def _on_auditing() -> None:
+            transition_attempt_stage(
+                ctx,
+                repo_root=canonical_repo_root,
+                attempt_id=close_attempt_id,
+                status=CloseAttemptStatus.AUDITING,
+            )
+
+        def _before_gate_execute(
+            criterion_id: str,
+            gate_id: str,
+            spec: CheckSpec,
+            freshness_key: str,
+        ) -> CheckResult | None:
+            return claim_gate_execution(
+                state_path,
+                attempt_id=close_attempt_id,
+                criterion_id=criterion_id,
+                gate_id=gate_id,
+                spec=spec,
+                freshness_key=freshness_key,
+            )
+
+        def _on_gate_result(
+            criterion_id: str,
+            gate_id: str,
+            result: CheckResult,
+        ) -> None:
+            receipt_id = persist_gate_receipt(
+                ctx,
+                repo_root=canonical_repo_root,
+                execution_root=repo_anchor,
+                attempt_id=close_attempt_id,
+                criterion_id=criterion_id,
+                gate_id=gate_id,
+                result=result,
+            )
+            if receipt_id is not None and result.freshness_key is not None:
+                complete_gate_execution(
+                    state_path,
+                    attempt_id=close_attempt_id,
+                    freshness_key=result.freshness_key,
+                    receipt_id=receipt_id,
+                    result=result,
+                )
+                if result.status == "pass" or (result.status is None and result.passed):
+                    prevalidated_gate_ids.add(gate_id)
+
+        def _on_audit_result(report_id: str) -> None:
+            from eawf.runtime.daemon.methods.close import _commit_attempt
+
+            _commit_attempt(
+                ctx,
+                repo_root=canonical_repo_root,
+                attempt_id=close_attempt_id,
+                updates={"audit_report_id": report_id},
+                command="close.audit_receipt",
+            )
+
+        on_auditing = _on_auditing
+        on_audit_result = _on_audit_result
+        before_gate_execute = _before_gate_execute
+        on_gate_result = _on_gate_result
 
     # ---- Phase 1: pre-flight, NO lock --------------------------------------
     state_pre, payload_pre = _read_state(state_path)
@@ -3991,8 +4869,19 @@ async def _mutate_wave_close(
             state_path=state_path,
             repo_root=repo_anchor,
             validate_gate_refs=_validate_wave_close_gate_refs,
-            enforce_close_gate=partial(_enforce_wave_close_gate, tier="deterministic"),
-            compute_readiness=partial(_compute_wave_close_readiness, defer_verdict_kinds=True),
+            enforce_close_gate=partial(
+                _enforce_wave_close_gate,
+                tier="all",
+                on_auditing=on_auditing,
+                on_audit_result=on_audit_result,
+                before_gate_execute=before_gate_execute,
+                on_gate_result=on_gate_result,
+            ),
+            compute_readiness=partial(
+                _compute_wave_close_readiness,
+                defer_verdict_kinds=True,
+                prevalidated_gate_ids=prevalidated_gate_ids,
+            ),
         )
     except LifecycleGuardError as exc:
         _log_guard_rejection(mutation, exc)
@@ -4013,6 +4902,15 @@ async def _mutate_wave_close(
         state_path=state_path,
         repo_root=repo_anchor,
     )
+    if close_attempt_id:
+        from eawf.runtime.daemon.methods.close import mark_attempt_ready
+
+        mark_attempt_ready(
+            ctx,
+            repo_root=canonical_repo_root,
+            attempt_id=close_attempt_id,
+            expected_wave_payload=preflight_wave_row,
+        )
     # A ZERO delta must not suppress the rollup. A zero means the snapshots yielded
     # nothing (a reset re-originated them, or nothing was captured) -- it is an
     # absence of evidence, and the telemetry rollup may hold real evidence of the
@@ -4028,11 +4926,18 @@ async def _mutate_wave_close(
         )
     )
 
-    # ---- Phase 2: commit under the lock (ms-scale + bounded verdict tier) --
+    # ---- Phase 2: commit under the lock (ms-scale only) ---------------------
     # The handle reset MUST ride a finally: a refused close (stale row,
     # gate refusal, post-validate reject) raises out of the with-block
     # after the handle is already released, and a dangling closed handle
     # kills the watchdog's next heartbeat (W35 review blocker).
+    if close_attempt_id:
+        transition_attempt_stage(
+            ctx,
+            repo_root=canonical_repo_root,
+            attempt_id=close_attempt_id,
+            status=CloseAttemptStatus.APPLYING,
+        )
     try:
         with portalock.acquire(state_path, timeout=5.0) as lock_handle:
             ctx.active_lock_handle = lock_handle
@@ -4040,8 +4945,9 @@ async def _mutate_wave_close(
             before_version = _state_version(payload)
             if before_version != preflight_version:
                 # The optimistic re-check: another writer moved state during
-                # pre-flight. Only a change to the TARGET WAVE ROW invalidates
-                # the pre-flight verdicts; unrelated rows moving is fine.
+                # pre-flight. A target-Wave change invalidates immediately;
+                # unrelated rows may move, subject to the durable attempt's
+                # governing-input CAS below.
                 commit_wave_row = (payload.get("waves") or {}).get(wave_id)
                 if commit_wave_row != preflight_wave_row:
                     raise DaemonValidationError(
@@ -4049,21 +4955,16 @@ async def _mutate_wave_close(
                         "changed during the lock-free pre-flight; retry the close "
                         "(the retry re-runs pre-flight off-lock)"
                     )
+            if close_attempt_id:
+                _validate_close_apply_snapshot(
+                    state,
+                    state_path=state_path,
+                    repo_root=canonical_repo_root,
+                    attempt_id=close_attempt_id,
+                )
             wave_close_evidence = list(preflight.evidence)
             actual_written_auto = bool(wave_id and wave_id not in (state.actuals or {}))
             try:
-                # The verdict / jury tier is the one deliberately lock-scoped
-                # long step (it mutates state in-memory and appends session
-                # events; W08 bounds every spawn), per D-LOCK-SPLIT.
-                wave_close_evidence.extend(
-                    await _enforce_wave_close_gate(
-                        state,
-                        mutation,
-                        state_path=state_path,
-                        repo_root=repo_anchor,
-                        tier="verdict",
-                    )
-                )
                 _enforce_nonzero_runtime_close(
                     state,
                     mutation,
@@ -4187,7 +5088,7 @@ async def wave_land_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str,
     from eawf.runtime.worktree import wave_land, worktree_registry_lock
 
     with worktree_registry_lock(repo_root, timeout=5.0):
-        return _commit_worktree_state(
+        landed = _commit_worktree_state(
             ctx=ctx,
             repo_root=repo_root,
             params=params,
@@ -4200,21 +5101,36 @@ async def wave_land_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str,
                     wave_id=args.wave_id,
                     outcome=args.outcome,
                     keep_worktree=args.keep_worktree,
+                    defer_close=True,
                 )
             ),
         )
+    from eawf.runtime.daemon.methods.close import submit as submit_close
+
+    submitted = await submit_close(
+        ctx,
+        {
+            "wave_id": args.wave_id,
+            "outcome": landed["outcome"],
+            "commit": landed["merged_commit"],
+            "repo_root": str(repo_root),
+        },
+    )
+    landed["close_attempt"] = submitted["attempt"]
+    landed["close_backgrounded"] = submitted["backgrounded"]
+    return WaveLandRpcResult.model_validate(landed).model_dump(mode="json")
 
 
 @register("state.wave_land_batch")
 async def wave_land_batch_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Daemon-owned implementation of ``eawf wave land-batch``."""
+    """Integrate a batch, then submit each durable close outside the state lock."""
     args = WaveLandBatchParams.model_validate(params)
     repo_root = Path(args.repo_root)
 
     from eawf.runtime.worktree import wave_land_batch, worktree_registry_lock
 
     with worktree_registry_lock(repo_root, timeout=5.0):
-        return _commit_worktree_state(
+        landed = _commit_worktree_state(
             ctx=ctx,
             repo_root=repo_root,
             params=params,
@@ -4227,9 +5143,26 @@ async def wave_land_batch_rpc(ctx: MethodContext, params: dict[str, Any]) -> dic
                     iter_id=args.iter_id,
                     ready_only=args.ready_only,
                     keep_worktree=args.keep_worktree,
-                )
+                    defer_close=True,
+                ),
+                close_mode="durable_async",
             ),
         )
+    from eawf.runtime.daemon.methods.close import submit as submit_close
+
+    for row in landed["landed"]:
+        submitted = await submit_close(
+            ctx,
+            {
+                "wave_id": row["wave"],
+                "outcome": row["outcome"],
+                "commit": row["merged_commit"],
+                "repo_root": str(repo_root),
+            },
+        )
+        row["close_attempt"] = submitted["attempt"]
+        row["close_backgrounded"] = submitted["backgrounded"]
+    return WaveLandBatchRpcResult.model_validate(landed).model_dump(mode="json")
 
 
 @register("state.wave_autoland")
@@ -4338,6 +5271,7 @@ __all__ = [
     "IDEMPOTENCY_TTL_SECONDS",
     "VALIDATION_FAILED",
     "_APPLY_REGISTRY",
+    "codex_lifecycle",
     "event_store_path_for",
     "runtime_capture",
     "track_sync_rpc",

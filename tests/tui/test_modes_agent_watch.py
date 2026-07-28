@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -74,6 +75,7 @@ from eawf.surfaces.tui.modes.agent_watch import (
     WatchTarget,
     WatchTile,
     is_watched_event,
+    load_output_chunk_batch,
     load_output_chunk_lines,
     pick_watch_target,
     picker_column_widths,
@@ -540,6 +542,61 @@ def test_agent_watch_roster_is_the_default_at_two_active(tmp_path: Path) -> None
     asyncio.run(body())
 
 
+def test_roster_arrows_select_rows_beyond_viewport(tmp_path: Path) -> None:
+    """Screen-level arrows keep selecting overflow rows, not scrolling focus."""
+    sessions = {
+        f"S-{index:02d}": _session(
+            f"S-{index:02d}",
+            scope_id=f"P01-I01-W{index:02d}",
+            started_at=_T0 + timedelta(minutes=index),
+        )
+        for index in range(1, 18)
+    }
+    state_path = _write_state(tmp_path, _state(sessions=sessions))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(80, 18)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            picker = pane.query_one(SessionPicker)
+            for _ in range(14):
+                await pilot.press("down")
+            await settle_screen(pilot)
+            assert picker.selected == 14
+
+    asyncio.run(body())
+
+
+def test_late_output_chunk_is_dom_safe_with_picker_and_stale_target(tmp_path: Path) -> None:
+    """Late output cannot resolve a removed tail after zoom recomposes to picker."""
+    state_path = _write_state(
+        tmp_path,
+        _state(sessions={"S-1": _session("S-1"), "S-2": _session("S-2")}),
+    )
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(100, 30)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            assert pane.query(SessionPicker)
+            assert not pane.query("#watch-list")
+            assert not pane.query(f"#{WATCH_OUTPUT_ID}")
+            pane.target = _target()
+            await app._on_event(_agent_output_chunk_envelope(_WAVE, ["late chunk"]))
+            await settle_screen(pilot)
+            assert pane.query(SessionPicker)
+
+    asyncio.run(body())
+
+
 def test_session_picker_rows_lists_all_watchable_roles() -> None:
     """The roster lists executor + researcher sessions, each carrying its role."""
     state = _state(
@@ -584,25 +641,55 @@ def test_is_watched_event_false_when_scope_is_none() -> None:
     assert is_watched_event(_event("EV-1", scope_id=None), _target()) is False
 
 
+def test_is_watched_event_rejects_same_scope_different_runtime_session() -> None:
+    """Retry rows sharing scope do not leak across runtime sessions."""
+    target = replace(_target(), runtime_session_id="runtime-new")
+    envelope = _event("EV-old", scope_id=_WAVE).model_copy(
+        update={"payload": {"session_id": "runtime-old"}}
+    )
+    assert is_watched_event(envelope, target) is False
+
+
+def test_is_watched_event_rejects_same_session_different_attempt() -> None:
+    """Numeric attempt identity prevents same-session retry collisions."""
+    target = replace(_target(), runtime_session_id="runtime-1", attempt=2)
+    envelope = _event("EV-old", scope_id=_WAVE).model_copy(
+        update={"payload": {"session_id": "runtime-1", "attempt": 1}}
+    )
+    assert is_watched_event(envelope, target) is False
+
+
 # --------------------------------------------------------------------------
 # load_output_chunk_lines -- the W53 event-store tail backfill
 # --------------------------------------------------------------------------
 
 
-def _chunk_line(wave_id: str, *, seq: int, lines: str) -> str:
+def _chunk_line(
+    wave_id: str,
+    *,
+    seq: int,
+    lines: str,
+    session_id: str | None = None,
+    attempt: int | None = None,
+) -> str:
     """One ``agent.output.chunk`` event-store JSONL row for *wave_id*."""
     import json
 
+    payload: dict[str, object] = {
+        "event_type": "agent.output.chunk",
+        "wave_id": wave_id,
+        "seq": seq,
+        "lines": lines,
+    }
+    if session_id is not None:
+        payload["session_id"] = session_id
+    if attempt is not None:
+        payload["attempt"] = attempt
     return json.dumps(
         {
             "kind": "event",
             "scope_id": wave_id,
-            "payload": {
-                "event_type": "agent.output.chunk",
-                "wave_id": wave_id,
-                "seq": seq,
-                "lines": lines,
-            },
+            "payload": payload,
         }
     )
 
@@ -654,6 +741,112 @@ def test_load_output_chunk_lines_caps_to_limit(tmp_path: Path) -> None:
         [_chunk_line(_WAVE, seq=0, lines="\n".join(str(n) for n in range(10)))],
     )
     assert load_output_chunk_lines(path, _WAVE, limit=3) == ["7", "8", "9"]
+
+
+def test_output_chunk_byte_cursor_continues_after_initial_cap(tmp_path: Path) -> None:
+    """A 2,000-row initial cap does not freeze later persisted output."""
+    path = _write_event_store(
+        tmp_path,
+        [_chunk_line(_WAVE, seq=0, lines="\n".join(str(n) for n in range(2005)), session_id="r1")],
+    )
+    initial = load_output_chunk_batch(path, _WAVE, runtime_session_id="r1", limit=2000)
+    assert len(initial.lines) == 2000
+    assert initial.lines[-1] == "2004"
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        + _chunk_line(_WAVE, seq=1, lines="continued", session_id="r1")
+        + "\n",
+        encoding="utf-8",
+    )
+    appended = load_output_chunk_batch(
+        path,
+        _WAVE,
+        runtime_session_id="r1",
+        after_byte=initial.byte_cursor,
+    )
+    assert appended.lines == ("continued",)
+    assert appended.byte_cursor > initial.byte_cursor
+
+
+def test_output_chunk_byte_cursor_retains_partial_only_row(tmp_path: Path) -> None:
+    """An unterminated only row remains unread until its newline arrives."""
+    row = _chunk_line(_WAVE, seq=0, lines="recovered", session_id="r1")
+    split = len(row.encode("utf-8")) // 2
+    path = tmp_path / "event.jsonl"
+    path.write_bytes(row.encode("utf-8")[:split])
+
+    partial = load_output_chunk_batch(path, _WAVE, runtime_session_id="r1")
+    assert partial.lines == ()
+    assert partial.byte_cursor == 0
+
+    with path.open("ab") as stream:
+        stream.write(row.encode("utf-8")[split:] + b"\n")
+    recovered = load_output_chunk_batch(
+        path,
+        _WAVE,
+        runtime_session_id="r1",
+        after_byte=partial.byte_cursor,
+    )
+    assert recovered.lines == ("recovered",)
+    assert recovered.byte_cursor == path.stat().st_size
+
+
+def test_output_chunk_byte_cursor_stops_after_complete_before_partial(tmp_path: Path) -> None:
+    """A complete row advances; following partial row is recovered next poll."""
+    complete_row = _chunk_line(_WAVE, seq=0, lines="complete", session_id="r1")
+    partial_row = _chunk_line(_WAVE, seq=1, lines="later", session_id="r1")
+    complete_bytes = complete_row.encode("utf-8") + b"\n"
+    split = len(partial_row.encode("utf-8")) // 2
+    path = tmp_path / "event.jsonl"
+    path.write_bytes(complete_bytes + partial_row.encode("utf-8")[:split])
+
+    first = load_output_chunk_batch(path, _WAVE, runtime_session_id="r1")
+    assert first.lines == ("complete",)
+    assert first.byte_cursor == len(complete_bytes)
+
+    with path.open("ab") as stream:
+        stream.write(partial_row.encode("utf-8")[split:] + b"\n")
+    second = load_output_chunk_batch(
+        path,
+        _WAVE,
+        runtime_session_id="r1",
+        after_byte=first.byte_cursor,
+    )
+    assert second.lines == ("later",)
+    assert second.byte_cursor == path.stat().st_size
+
+
+def test_output_chunk_retry_identity_prevents_sequence_collision(tmp_path: Path) -> None:
+    """Same-scope retries with seq=0 bind to the selected runtime session."""
+    path = _write_event_store(
+        tmp_path,
+        [
+            _chunk_line(_WAVE, seq=0, lines="old retry", session_id="r1", attempt=1),
+            _chunk_line(_WAVE, seq=0, lines="new retry", session_id="r2", attempt=2),
+        ],
+    )
+    batch = load_output_chunk_batch(
+        path,
+        _WAVE,
+        runtime_session_id="r2",
+        attempt=2,
+    )
+    assert batch.lines == ("new retry",)
+    assert batch.legacy_scope_fallback is False
+
+
+def test_output_chunk_legacy_scope_only_fallback_is_explicit(tmp_path: Path) -> None:
+    """Legacy rows remain readable but expose their weak attribution."""
+    path = _write_event_store(tmp_path, [_chunk_line(_WAVE, seq=0, lines="legacy")])
+    batch = load_output_chunk_batch(
+        path,
+        _WAVE,
+        runtime_session_id="r2",
+        attempt=2,
+        preserve_legacy_store_order=True,
+    )
+    assert batch.lines == ("legacy",)
+    assert batch.legacy_scope_fallback is True
 
 
 # --------------------------------------------------------------------------
@@ -1240,6 +1433,76 @@ def test_agent_watch_append_output_streams_watched_wave_only(tmp_path: Path) -> 
             assert all("other lane output" not in row for row in rows)
             assert tail.has_output
             assert not tail.query(f"#{OUTPUT_TAIL_WAITING_ID}")  # notice dropped
+
+    asyncio.run(body())
+
+
+def test_agent_watch_output_navigation_keys_and_mouse_wheel(tmp_path: Path) -> None:
+    """Paging, bounds, wheel, and live-tail resume move one mounted output pane."""
+    from textual.events import MouseScrollDown, MouseScrollUp
+
+    state_path = _write_state(tmp_path, _state(sessions={"S-1": _session("S-1")}))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(80, 18)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            tail = pane.query_one(f"#{WATCH_OUTPUT_ID}", OutputTail)
+            for index in range(80):
+                pane.append_output(_WAVE, f"line {index}")
+            await settle_screen(pilot)
+            assert tail.max_scroll_y > 0
+            assert tail.scroll_y == tail.max_scroll_y
+
+            await pilot.press("home")
+            assert tail.scroll_y == 0
+            await pilot.press("end")
+            assert tail.scroll_y == tail.max_scroll_y
+            await pilot.press("pageup")
+            page_up_y = tail.scroll_y
+            assert page_up_y < tail.max_scroll_y
+            await pilot.press("pagedown")
+            assert tail.scroll_y > page_up_y
+
+            tail.post_message(
+                MouseScrollUp(
+                    tail,
+                    x=0,
+                    y=0,
+                    delta_x=0,
+                    delta_y=-1,
+                    button=0,
+                    shift=False,
+                    meta=False,
+                    ctrl=False,
+                )
+            )
+            await settle_screen(pilot)
+            wheel_up_y = tail.scroll_y
+            assert wheel_up_y < tail.max_scroll_y
+            tail.post_message(
+                MouseScrollDown(
+                    tail,
+                    x=0,
+                    y=0,
+                    delta_x=0,
+                    delta_y=1,
+                    button=0,
+                    shift=False,
+                    meta=False,
+                    ctrl=False,
+                )
+            )
+            await settle_screen(pilot)
+            assert tail.scroll_y > wheel_up_y
+
+            pane.append_output(_WAVE, "live tail resumes")
+            await settle_screen(pilot)
+            assert tail.scroll_y == tail.max_scroll_y
 
     asyncio.run(body())
 

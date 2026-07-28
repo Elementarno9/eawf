@@ -91,6 +91,11 @@ def _codex_install_payload(result: CodexInstallResult) -> dict[str, object]:
         "skills": [{"path": str(d.path), "action": d.action} for d in result.skills],
         "agents": [{"path": str(d.path), "action": d.action} for d in result.agents],
         "hooks": [{"path": str(d.path), "action": d.action} for d in result.hooks],
+        "hook_config": (
+            {"path": str(result.hook_config.path), "action": result.hook_config.action}
+            if result.hook_config is not None
+            else None
+        ),
         "manifest": (
             {"path": str(result.manifest.path), "action": result.manifest.action}
             if result.manifest is not None
@@ -117,6 +122,7 @@ def _codex_install_text(result: CodexInstallResult) -> str:
     parts.append(f"  skills:   {len(result.skills)} files")
     parts.append(f"  agents:   {len(result.agents)} files")
     parts.append(f"  hooks:    {len(result.hooks)} files")
+    parts.append(f"  hooks.json: {result.hook_config.action if result.hook_config else 'no-op'}")
     parts.append(f"  manifest: {result.manifest.action if result.manifest else 'no-op'}")
     parts.append(f"  sidecar:  {result.sidecar.action if result.sidecar else 'no-op'}")
     if result.config is not None:
@@ -149,6 +155,15 @@ def _codex_doctor_payload(report: CodexDoctorReport) -> dict[str, object]:
             {"region_id": e.region_id, "path": str(e.path), "kind": e.kind} for e in report.missing
         ],
         "legacy_paths": [str(p) for p in report.legacy_paths],
+        "hook_trust": [
+            {
+                "event_name": entry.event_name,
+                "state_key": entry.state_key,
+                "status": entry.status,
+                "reason": entry.reason,
+            }
+            for entry in report.hook_trust
+        ],
     }
 
 
@@ -157,6 +172,19 @@ def _codex_doctor_text(report: CodexDoctorReport) -> str:
     parts.append(
         f"  ok={len(report.ok)} drifted={len(report.drifted)} missing={len(report.missing)}"
     )
+    trust_counts: dict[str, int] = {}
+    for entry in report.hook_trust:
+        trust_counts[entry.status] = trust_counts.get(entry.status, 0) + 1
+    parts.append(
+        "  hook trust: "
+        + " ".join(
+            f"{status}={trust_counts.get(status, 0)}"
+            for status in ("trusted", "untrusted", "disabled", "unavailable")
+        )
+    )
+    for entry in report.hook_trust:
+        if entry.status != "trusted":
+            parts.append(f"    - {entry.event_name}: {entry.status} ({entry.reason})")
     if report.legacy_paths:
         parts.append("  legacy paths (delete manually):")
         for path in report.legacy_paths:

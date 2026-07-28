@@ -8,6 +8,7 @@ constraint. Datetimes are tz-aware UTC (Pydantic accepts ISO-8601 with ``Z``).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
 from typing import TYPE_CHECKING, Annotated, Any, Literal, get_args
 
@@ -22,13 +23,17 @@ from eawf.kernel.state.enums import (
     AgentSessionRole,
     AgentSessionStatus,
     AuditKind,
+    AuditRequirement,
     AuditStatus,
     AuditVerdict,
     BacklogPriority,
     BacklogStatus,
     ClaimStatus,
+    CloseAttemptStatus,
+    CloseOperatorAction,
     Confidence,
     DecisionStatus,
+    DependencyStage,
     DispatchNote,
     EffortBucket,
     FlowStatus,
@@ -43,6 +48,8 @@ from eawf.kernel.state.enums import (
     IterTrigger,
     McpRisk,
     McpStatus,
+    MeasurementQuality,
+    MeasurementStatus,
     MemoryStatus,
     MemoryTier,
     OpenQuestionStatus,
@@ -57,6 +64,8 @@ from eawf.kernel.state.enums import (
     TrackStatus,
     Urgency,
     UserDecisionKind,
+    WaveIntegrationKind,
+    WaveIntegrationStatus,
     WaveStatus,
     WorktreeStatus,
 )
@@ -95,6 +104,7 @@ HypothesisIdStr = Annotated[
 ]
 IdStr = Annotated[str, Field(min_length=1, pattern=r"^\S+$")]
 ShaStr = Annotated[str, Field(pattern=r"^[0-9a-f]{40}$")]
+DigestStr = Annotated[str, Field(min_length=1, max_length=128)]
 #: A ``vMAJOR.MINOR.PATCH`` release label (e.g. ``v0.5.0``). The semver core
 #: is required; an optional PEP-440 pre-release segment (``a`` / ``b`` /
 #: ``rc`` + a number) is accepted so a pre-release phase band (``v0.5.0rc1``)
@@ -113,6 +123,17 @@ class _StrictModel(BaseModel):
     """Base model: forbids unknown keys."""
 
     model_config = ConfigDict(extra="forbid")
+
+
+class _FrozenStrictModel(BaseModel):
+    """Immutable operational fact model that forbids unknown keys."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+def wave_dependency_key(wave_id: str, dep_wave_id: str) -> str:
+    """Return the canonical sparse-map key for one directed dependency edge."""
+    return f"{wave_id}::{dep_wave_id}"
 
 
 #: Minimum useful length for a present entity ``description``. A description
@@ -460,6 +481,160 @@ class Iter(_DescribedEntity):
         return sorted(wave_ids, key=natural_key)
 
 
+class WaveIntegration(_FrozenStrictModel):
+    """One immutable source-to-integrated generation for a Wave."""
+
+    id: IdStr
+    wave_id: WaveIdStr
+    generation: Annotated[int, Field(ge=1)]
+    status: WaveIntegrationStatus
+    base_sha: ShaStr
+    candidate_sha: ShaStr
+    integrated_sha: ShaStr
+    tree_sha: ShaStr
+    diff_digest: DigestStr
+    spec_digest: DigestStr
+    created_at: UtcDatetime
+    supersedes_id: IdStr | None = None
+    kind: WaveIntegrationKind
+    reason: Annotated[str, Field(min_length=1, max_length=500)] | None = None
+
+    @model_validator(mode="after")
+    def _require_adoption_reason(self) -> WaveIntegration:
+        """Require explicit operator rationale for adopted integrations."""
+        if self.kind is WaveIntegrationKind.ADOPT and self.reason is None:
+            raise ValueError("adopted integration requires a reason")
+        return self
+
+
+class CloseAttempt(_FrozenStrictModel):
+    """Durable exact-revision close attempt, separate from Wave status."""
+
+    id: IdStr
+    wave_id: WaveIdStr
+    outcome: Annotated[str, Field(min_length=1, max_length=1000)]
+    tokens_consumed: Annotated[int, Field(ge=0)] | None
+    generation: Annotated[int, Field(ge=1)]
+    supersedes_id: IdStr | None
+    status: CloseAttemptStatus
+    integration_id: IdStr
+    candidate_sha: ShaStr
+    integrated_sha: ShaStr
+    tree_sha: ShaStr
+    wave_revision_digest: DigestStr
+    spec_digest: DigestStr
+    criteria_digest: DigestStr
+    gate_manifest_digest: DigestStr
+    policy_digest: DigestStr
+    runner_environment_digest: DigestStr
+    dependency_binding_digest: DigestStr
+    required_gate_ids: list[IdStr] = Field(default_factory=list)
+    gate_receipt_ids: list[IdStr] = Field(default_factory=list)
+    audit_requirement: AuditRequirement
+    audit_report_id: IdStr | None = None
+    no_runtime_waiver: bool
+    repair_wave_id: WaveIdStr | None = None
+    repair_generation: Annotated[int, Field(ge=1)] | None = None
+    repair_budget_remaining: Annotated[int, Field(ge=0)]
+    infrastructure_retry_budget_remaining: Annotated[int, Field(ge=0)]
+    required_operator_actions: list[CloseOperatorAction] = Field(default_factory=list)
+    waiver_decision_ids: list[IdStr] = Field(default_factory=list)
+    usage_receipt_ids: list[IdStr] = Field(default_factory=list)
+    artifact_refs: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
+    failure_kind: Annotated[str, Field(min_length=1, max_length=100)] | None = None
+    failure_detail_ref: Annotated[str, Field(min_length=1, max_length=500)] | None = None
+    invalidation_causes: list[Annotated[str, Field(min_length=1, max_length=500)]] = Field(
+        default_factory=list
+    )
+    requested_at: UtcDatetime
+    started_at: UtcDatetime | None = None
+    updated_at: UtcDatetime
+    terminal_at: UtcDatetime | None = None
+    idempotency_key: Annotated[str, Field(min_length=1, max_length=500)]
+    apply_event_id: IdStr | None = None
+
+    @model_validator(mode="after")
+    def _validate_required_operator_actions(self) -> CloseAttempt:
+        """Expose exactly split/defer/abort after the repair budget is exhausted."""
+        required = [
+            CloseOperatorAction.SPLIT,
+            CloseOperatorAction.DEFER,
+            CloseOperatorAction.ABORT,
+        ]
+        exhausted_block = (
+            self.status is CloseAttemptStatus.BLOCKED and self.repair_budget_remaining == 0
+        )
+        if exhausted_block and self.required_operator_actions != required:
+            raise ValueError(
+                "blocked close attempt with exhausted repair budget requires "
+                "split/defer/abort operator actions"
+            )
+        if not exhausted_block and self.required_operator_actions:
+            raise ValueError(
+                "required_operator_actions are only valid for a blocked close "
+                "attempt with exhausted repair budget"
+            )
+        return self
+
+
+class WaveDependencyBarrier(_FrozenStrictModel):
+    """Explicit start/land proof thresholds for one Wave dependency."""
+
+    wave_id: WaveIdStr
+    dep_wave_id: WaveIdStr
+    start_after: DependencyStage
+    land_after: DependencyStage
+    reason: Annotated[str, Field(min_length=1, max_length=500)]
+
+    @model_validator(mode="after")
+    def _validate_edge(self) -> WaveDependencyBarrier:
+        """Reject self edges and a land threshold weaker than start."""
+        if self.wave_id == self.dep_wave_id:
+            raise ValueError(f"dependency barrier cannot reference itself: {self.wave_id!r}")
+        rank = {
+            DependencyStage.INTEGRATED: 0,
+            DependencyStage.VERIFIED: 1,
+            DependencyStage.CLOSED: 2,
+        }
+        if rank[self.land_after] < rank[self.start_after]:
+            raise ValueError("land_after cannot be weaker than start_after")
+        return self
+
+
+def wave_dependency_stages(
+    barriers: Mapping[str, WaveDependencyBarrier],
+    *,
+    wave_id: str,
+    dep_wave_id: str,
+) -> tuple[DependencyStage, DependencyStage]:
+    """Resolve an edge's stages, preserving legacy ``closed/closed`` semantics."""
+    barrier = barriers.get(wave_dependency_key(wave_id, dep_wave_id))
+    if barrier is None:
+        return DependencyStage.CLOSED, DependencyStage.CLOSED
+    return barrier.start_after, barrier.land_after
+
+
+class WaveDependencyBinding(_FrozenStrictModel):
+    """Exact upstream integration generation adopted by a downstream Wave."""
+
+    wave_id: WaveIdStr
+    dep_wave_id: WaveIdStr
+    integration_id: IdStr
+    generation: Annotated[int, Field(ge=1)]
+    integrated_sha: ShaStr
+    tree_sha: ShaStr
+    start_fact_ref: Annotated[str, Field(min_length=1, max_length=500)] | None = None
+    land_fact_ref: Annotated[str, Field(min_length=1, max_length=500)] | None = None
+    bound_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def _reject_self_binding(self) -> WaveDependencyBinding:
+        """Reject a Wave binding its own integration generation."""
+        if self.wave_id == self.dep_wave_id:
+            raise ValueError(f"dependency binding cannot reference itself: {self.wave_id!r}")
+        return self
+
+
 class SessionAttempt(_StrictModel):
     """One runtime subprocess attempt against a wave.
 
@@ -513,6 +688,9 @@ class SessionAttempt(_StrictModel):
     input_tokens: int | None = None
     output_tokens: int | None = None
     cost_usd: Annotated[float, Field(ge=0.0)] | None = None
+    measurement_quality: MeasurementQuality = MeasurementQuality.UNAVAILABLE
+    measurement_status: MeasurementStatus = MeasurementStatus.USAGE_UNAVAILABLE
+    measurement_reason: Annotated[str, Field(min_length=1, max_length=200)] | None = None
 
 
 class DispatchAnnotation(_StrictModel):
@@ -1050,6 +1228,7 @@ class AgentSession(_StrictModel):
     ended_at: UtcDatetime | None = None
     summary: str | None = None
     agent_principal_id: PrincipalIdStr | None = None
+    runtime_session_id: Annotated[str, Field(min_length=1)] | None = None
 
 
 class WorktreeRecord(_StrictModel):
@@ -1617,13 +1796,13 @@ class FleetRun(_StrictModel):
 class State(_StrictModel):
     """Top-level eawf state document.
 
-    ``schema_version`` accepts the full ``"1.0"`` through ``"1.17"`` range so
+    ``schema_version`` accepts the full ``"1.0"`` through ``"1.20"`` range so
     an on-disk state written before any bump still re-validates after the
     model advances — the migrate chain rewrites the version string in place,
     but a read of an un-migrated state must never reject. The accepted set
     drives the migrate guard's model-supported max, so the literals move in
     lockstep with the migration steps (``v1_0_to_v1_1`` through
-    ``v1_16_to_v1_17``). The ``1.5`` edge is purely additive — it registers
+    ``v1_19_to_v1_20``). The ``1.5`` edge is purely additive — it registers
     :attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum
     value no existing state row references, so no historical fact changes.
     The ``1.6`` edge is likewise purely additive — it adds the top-level
@@ -1715,6 +1894,13 @@ class State(_StrictModel):
     a document rather than in state. It defaults to ``False``; the
     ``v1_18_to_v1_19`` step backfills it on every actual, and a state written
     before the bump re-validates with no historical fact changed.
+
+    The ``1.20`` edge adds sparse operational truth without changing
+    :class:`Wave` or :class:`WaveStatus`: immutable integration generations,
+    durable close attempts, and explicit dependency barriers/bindings live in
+    top-level mappings. The migration creates only empty mappings, so no
+    historical Wave gains fabricated integration, close, dependency, or usage
+    facts. Missing barrier metadata continues to mean ``closed/closed``.
     """
 
     schema_version: Literal[
@@ -1738,6 +1924,7 @@ class State(_StrictModel):
         "1.17",
         "1.18",
         "1.19",
+        "1.20",
     ]
     scope_kind: ScopeKind
     urn: UrnStr
@@ -1754,6 +1941,10 @@ class State(_StrictModel):
     phases: dict[str, Phase]
     iters: dict[str, Iter]
     waves: dict[str, Wave]
+    wave_integrations: dict[str, WaveIntegration] = Field(default_factory=dict)
+    close_attempts: dict[str, CloseAttempt] = Field(default_factory=dict)
+    wave_dependency_barriers: dict[str, WaveDependencyBarrier] = Field(default_factory=dict)
+    wave_dependency_bindings: dict[str, WaveDependencyBinding] = Field(default_factory=dict)
     estimates: dict[str, EstimateSummary] | None = None
     actuals: dict[str, ActualSummary] | None = None
     hypotheses: dict[str, Hypothesis] | None = None
@@ -1772,6 +1963,67 @@ class State(_StrictModel):
     plugins: dict[str, PluginInstall]
     memory_index: dict[str, MemorySummary] | None = None
     indexes: dict[str, Any]
+
+    @model_validator(mode="after")
+    def _validate_sparse_operational_keys(self) -> State:
+        """Keep sparse map keys identical to their immutable record identities."""
+        for key, integration in self.wave_integrations.items():
+            if key != integration.id:
+                raise ValueError(
+                    f"wave integration key {key!r} does not match id {integration.id!r}"
+                )
+        for key, attempt in self.close_attempts.items():
+            if key != attempt.id:
+                raise ValueError(f"close attempt key {key!r} does not match id {attempt.id!r}")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_dependency_barriers(self) -> State:
+        """Require sparse barriers to resolve to declared graph edges."""
+        for key, barrier in self.wave_dependency_barriers.items():
+            expected = wave_dependency_key(barrier.wave_id, barrier.dep_wave_id)
+            if key != expected:
+                raise ValueError(
+                    f"wave dependency barrier key {key!r} does not match edge {expected!r}"
+                )
+            wave = self.waves.get(barrier.wave_id)
+            if wave is None:
+                raise ValueError(
+                    f"wave dependency barrier references missing wave {barrier.wave_id!r}"
+                )
+            if barrier.dep_wave_id not in self.waves:
+                raise ValueError(
+                    f"wave dependency barrier references missing dep wave {barrier.dep_wave_id!r}"
+                )
+            if barrier.dep_wave_id not in wave.deps:
+                raise ValueError(
+                    f"wave dependency barrier edge {expected!r} is not declared in wave deps"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_dependency_bindings(self) -> State:
+        """Require sparse bindings to resolve to declared graph edges."""
+        for key, binding in self.wave_dependency_bindings.items():
+            expected = wave_dependency_key(binding.wave_id, binding.dep_wave_id)
+            if key != expected:
+                raise ValueError(
+                    f"wave dependency binding key {key!r} does not match edge {expected!r}"
+                )
+            wave = self.waves.get(binding.wave_id)
+            if wave is None:
+                raise ValueError(
+                    f"wave dependency binding references missing wave {binding.wave_id!r}"
+                )
+            if binding.dep_wave_id not in self.waves:
+                raise ValueError(
+                    f"wave dependency binding references missing dep wave {binding.dep_wave_id!r}"
+                )
+            if binding.dep_wave_id not in wave.deps:
+                raise ValueError(
+                    f"wave dependency binding edge {expected!r} is not declared in wave deps"
+                )
+        return self
 
 
 # Importing :mod:`eawf.kernel.spec.common` triggers its module-bottom

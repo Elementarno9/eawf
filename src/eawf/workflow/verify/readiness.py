@@ -48,6 +48,7 @@ rejection.
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
@@ -399,6 +400,7 @@ def _build_spec_views(
     evidence: list[EvidenceRecord],
     *,
     runner_cwd: Path,
+    prevalidated_gate_ids: Collection[str] = (),
 ) -> tuple[list[CriterionView], list[str]]:
     """Convert typed CriterionSpec / GateSpec into :class:`CriterionView` rows.
 
@@ -430,6 +432,10 @@ def _build_spec_views(
             subprocess execution. Threaded from
             :func:`compute`'s ``repo_root`` so wave-anchored diff-base
             + scope-resolution land in the right git tree.
+        prevalidated_gate_ids: Deterministic gates already executed and
+            passed by the enforcing close oracle for the same frozen
+            inputs. These gates project as pass without a second
+            subprocess execution.
 
     Returns:
         ``(views, waived_gate_ids)``.
@@ -453,19 +459,23 @@ def _build_spec_views(
         per_criterion_waived: list[str] = []
         for gate in gates:
             if criterion.evidence_kind == "deterministic":
-                # Waiver pre-empts the live run so W11's operator
-                # override semantics survive the deterministic floor.
-                waiver = _latest_waiver_for_gate(gate, evidence)
-                if waiver is not None:
+                if gate.id in prevalidated_gate_ids:
                     status = "pass"
-                    was_waived = True
-                else:
-                    status = _run_deterministic_gate(
-                        gate,
-                        criterion,
-                        runner_cwd=runner_cwd,
-                    )
                     was_waived = False
+                else:
+                    # Waiver pre-empts the live run so W11's operator
+                    # override semantics survive the deterministic floor.
+                    waiver = _latest_waiver_for_gate(gate, evidence)
+                    if waiver is not None:
+                        status = "pass"
+                        was_waived = True
+                    else:
+                        status = _run_deterministic_gate(
+                            gate,
+                            criterion,
+                            runner_cwd=runner_cwd,
+                        )
+                        was_waived = False
             else:
                 # jury / attested -> the evidence-row path remains
                 # authoritative until v0.4.1's jury + attestation
@@ -1477,6 +1487,7 @@ def compute(
     config_root: Path | None = None,
     load_profile_verify: bool = True,
     deferred_criterion_ids: frozenset[str] = frozenset(),
+    prevalidated_gate_ids: Collection[str] = (),
 ) -> CloseReadiness:
     """Return the close-readiness projection for *scope_id*.
 
@@ -1532,6 +1543,10 @@ def compute(
             verify loading. Close paths use this for non-enforcing
             advisory metrics so long-running profile floor checks do
             not run while the state lock is held.
+        prevalidated_gate_ids: Deterministic gates already executed and
+            passed by the enforcing close oracle against the same frozen
+            inputs. Readiness consumes their result instead of executing
+            them again.
 
     Returns:
         A :class:`CloseReadiness` view. Empty waves (no typed specs +
@@ -1596,6 +1611,7 @@ def compute(
         gate_specs,
         fresh_evidence,
         runner_cwd=repo_root,
+        prevalidated_gate_ids=prevalidated_gate_ids,
     )
     legacy_views, legacy_warnings = _build_legacy_views(wave)
     # Profile-fed floor pack (P28-I01-W10). Floor checks render only

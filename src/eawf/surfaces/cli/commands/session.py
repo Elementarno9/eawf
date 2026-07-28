@@ -75,7 +75,7 @@ def _resolve_close_status(raw: str) -> AgentSessionStatus:
     return status
 
 
-_VALID_RUNTIMES: frozenset[str] = frozenset({"claude", "opencode", "generic"})
+_VALID_RUNTIMES: frozenset[str] = frozenset({"claude", "codex", "opencode", "generic"})
 
 
 def _validate_runtime(runtime: str) -> str:
@@ -96,7 +96,10 @@ def session_start_cmd(
     ctx: typer.Context,
     role: Annotated[str, typer.Option("--role", help="Session role.")],
     scope: Annotated[str, typer.Option("--scope", help="Scope ID anchor.")],
-    runtime: Annotated[str, typer.Option("--runtime", help="One of claude / opencode / generic.")],
+    runtime: Annotated[
+        str,
+        typer.Option("--runtime", help="One of claude / codex / opencode / generic."),
+    ],
 ) -> None:
     """Start a new agent session; rejects (scope, runtime) collisions."""
     from eawf.runtime.session.store import SessionConflict, start_session

@@ -163,9 +163,10 @@ runs:
 
 ```bash
 codex plugin marketplace add ./build/eawf-codex-marketplace
+codex plugin add eawf@eawf
 ```
 
-`marketplace add` registers the marketplace and auto-installs its plugins. Codex has no separate `plugin install` subcommand — only `plugin marketplace {add,upgrade,remove}`. The `[plugins.eawf] enabled = true` block that `eawf plugin install codex` writes to `~/.codex/config.toml` activates the plugin once Codex discovers it. After registration, Codex caches the plugin under `~/.codex/plugins/cache/eawf/eawf/<version>/` and loads it from there.
+`marketplace add` registers the source; `plugin add eawf@eawf` installs the selected plugin from that configured marketplace snapshot. Codex caches the installed plugin under `~/.codex/plugins/cache/eawf/eawf/<version>/` and loads it from there.
 
 ## Install from the committed marketplace
 
@@ -188,9 +189,10 @@ Eä ships its own marketplace pointers in the repo, so an operator installs the 
 
 ```bash
 codex plugin marketplace add https://github.com/Elementarno9/eawf
+codex plugin add eawf@eawf
 ```
 
-`marketplace add` registers the marketplace and auto-installs its plugins; Codex has no separate `plugin install` subcommand (only `plugin marketplace {add,upgrade,remove}`). The `plugins-dist` branch is published by the tag-triggered `plugin-release.yaml` workflow, so the `git-subdir` source always resolves to the latest packaged Codex tree.
+`marketplace add` registers the marketplace source; `plugin add eawf@eawf` installs the plugin from its snapshot. The `plugins-dist` branch is published by the tag-triggered `plugin-release.yaml` workflow, so the `git-subdir` source resolves to the latest packaged Codex tree.
 
 ## OpenCode adapter
 

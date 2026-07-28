@@ -613,6 +613,10 @@ class WatchTarget:
     #: researcher / auditor), not only its scope. Defaults to EXECUTOR so the
     #: pre-W20 executor-only callers construct unchanged.
     agent_role: AgentSessionRole = AgentSessionRole.EXECUTOR
+    #: Runtime-issued session id for exact retry attribution. ``None`` marks a
+    #: legacy state row; stream readers then use an explicitly-labelled
+    #: scope-only fallback instead of pretending the retry identity is known.
+    runtime_session_id: str | None = None
 
     @property
     def wave_is_terminal(self) -> bool:
@@ -743,6 +747,10 @@ def _session_watch_target(state: State, session: AgentSession) -> WatchTarget:
         started_at=session.started_at,
         effort_bucket=wave.effort_bucket if wave is not None else None,
         agent_role=session.role,
+        runtime_session_id=(
+            session.runtime_session_id
+            or (attempt_row.session_id if attempt_row is not None else None)
+        ),
     )
 
 
@@ -1047,9 +1055,17 @@ def is_watched_event(envelope: Envelope, target: WatchTarget | None) -> bool:
     Returns:
         ``True`` when the envelope belongs to the watched session's stream.
     """
-    if target is None:
+    if target is None or envelope.scope_id != target.wave_id:
         return False
-    return envelope.scope_id == target.wave_id
+    payload_session_id = envelope.payload.get("session_id")
+    if (
+        target.runtime_session_id is not None
+        and isinstance(payload_session_id, str)
+        and payload_session_id != target.runtime_session_id
+    ):
+        return False
+    payload_attempt = envelope.payload.get("attempt")
+    return not (isinstance(payload_attempt, int) and payload_attempt != target.attempt)
 
 
 #: Cap on the persisted output lines the watch tail backfills on mount, so a
@@ -1068,9 +1084,143 @@ _OUTPUT_BACKFILL_LIMIT: int = 2000
 #: poll mirrors the state binder's mtime-poll for the output stream.
 _OUTPUT_POLL_INTERVAL_S: float = 1.0
 
+#: Visible warning prepended when old output envelopes carry only ``scope_id``.
+#: Such rows remain readable for backward compatibility, but the UI states that
+#: it cannot distinguish retries rather than silently binding them to one.
+LEGACY_SCOPE_OUTPUT_NOTICE: str = "[legacy scope-only output attribution]"
+
+
+@dataclass(frozen=True)
+class OutputChunkBatch:
+    """One append-only event-store read plus its durable byte cursor."""
+
+    lines: tuple[str, ...]
+    byte_cursor: int
+    legacy_scope_fallback: bool = False
+
+
+def _decode_output_chunk(
+    raw_line: bytes,
+    *,
+    wave_id: str,
+    runtime_session_id: str | None,
+    attempt: int | None,
+    event_type: str,
+) -> tuple[int, str, bool] | None:
+    """Decode one matching output row as ``(seq, lines, identified)``."""
+    import orjson
+
+    try:
+        record = orjson.loads(raw_line.strip())
+    except orjson.JSONDecodeError:
+        return None
+    if not isinstance(record, dict) or record.get("scope_id") != wave_id:
+        return None
+    payload = record.get("payload")
+    if not isinstance(payload, dict) or payload.get("event_type") != event_type:
+        return None
+    joined = payload.get("lines")
+    if not isinstance(joined, str):
+        return None
+    payload_session_id = payload.get("session_id")
+    payload_attempt = payload.get("attempt")
+    if (
+        runtime_session_id is not None
+        and isinstance(payload_session_id, str)
+        and payload_session_id != runtime_session_id
+    ):
+        return None
+    if attempt is not None and isinstance(payload_attempt, int) and payload_attempt != attempt:
+        return None
+    seq = payload.get("seq")
+    identified = isinstance(payload_session_id, str) or isinstance(payload_attempt, int)
+    return seq if isinstance(seq, int) else 0, joined, identified
+
+
+def load_output_chunk_batch(
+    event_path: Path | None,
+    wave_id: str,
+    *,
+    runtime_session_id: str | None = None,
+    attempt: int | None = None,
+    after_byte: int = 0,
+    limit: int = _OUTPUT_BACKFILL_LIMIT,
+    preserve_legacy_store_order: bool = False,
+) -> OutputChunkBatch:
+    """Read matching output envelopes after a durable byte cursor.
+
+    Exact attribution requires scope plus runtime session when both sides carry
+    it, and attempt when the envelope carries a numeric attempt. Legacy rows
+    lacking runtime/attempt identity are retained with an explicit fallback
+    marker. Initial reads are capped to the newest ``limit`` lines; append
+    reads return every new matching line and advance by file bytes, so a tail
+    already capped at 2,000 rows continues receiving output.
+    """
+    if event_path is None or not event_path.is_file():
+        return OutputChunkBatch((), 0)
+    from eawf.runtime.daemon.dispatch_runner import AGENT_OUTPUT_CHUNK_EVENT_TYPE
+
+    try:
+        size = event_path.stat().st_size
+        start = after_byte if 0 <= after_byte <= size else 0
+        with event_path.open("rb") as stream:
+            stream.seek(start)
+            raw = stream.read()
+        # Writers append JSONL rows in more than one write. Keep any
+        # unterminated suffix behind the cursor so the next poll re-reads it
+        # after its terminating newline arrives instead of losing that row.
+        last_newline = raw.rfind(b"\n")
+        if last_newline < 0:
+            raw = b""
+            cursor = start
+        else:
+            raw = raw[: last_newline + 1]
+            cursor = start + last_newline + 1
+    except OSError as exc:
+        logger.warning(
+            f"load_output_chunk_batch path={event_path!s} status=unreadable cause={exc!r}"
+        )
+        return OutputChunkBatch((), after_byte)
+
+    chunks: list[tuple[int, int, str]] = []
+    legacy = False
+    for order, raw_line in enumerate(raw.splitlines()):
+        if not raw_line.strip():
+            continue
+        decoded = _decode_output_chunk(
+            raw_line,
+            wave_id=wave_id,
+            runtime_session_id=runtime_session_id,
+            attempt=attempt,
+            event_type=AGENT_OUTPUT_CHUNK_EVENT_TYPE,
+        )
+        if decoded is None:
+            continue
+        seq, joined, identified = decoded
+        if not identified:
+            legacy = True
+        chunks.append((seq, order, joined))
+
+    # A single identified attempt owns its sequence space. Legacy scope-only
+    # rows may mix retries whose seq restarts at zero, so preserve store order
+    # rather than colliding/reordering them.
+    if chunks and (not legacy or not preserve_legacy_store_order):
+        chunks.sort(key=lambda item: (item[0], item[1]))
+    else:
+        chunks.sort(key=lambda item: item[1])
+    lines = [line for _seq, _order, joined in chunks for line in format_agent_output_lines(joined)]
+    if after_byte == 0:
+        lines = lines[-limit:]
+    return OutputChunkBatch(tuple(lines), cursor, legacy)
+
 
 def load_output_chunk_lines(
-    event_path: Path | None, wave_id: str, *, limit: int = _OUTPUT_BACKFILL_LIMIT
+    event_path: Path | None,
+    wave_id: str,
+    *,
+    runtime_session_id: str | None = None,
+    attempt: int | None = None,
+    limit: int = _OUTPUT_BACKFILL_LIMIT,
 ) -> list[str]:
     """Read a wave's persisted ``agent.output.chunk`` lines from the event store.
 
@@ -1091,41 +1241,14 @@ def load_output_chunk_lines(
     Returns:
         The wave's output lines, oldest-first, at most *limit* long.
     """
-    if event_path is None or not event_path.is_file():
-        return []
-    import orjson
-
-    from eawf.runtime.daemon.dispatch_runner import AGENT_OUTPUT_CHUNK_EVENT_TYPE
-
-    try:
-        raw = event_path.read_text(encoding="utf-8")
-    except OSError as exc:
-        logger.warning(f"load_output_chunk_lines path={event_path!s} unreadable cause={exc!r}")
-        return []
-    chunks: list[tuple[int, str]] = []
-    for raw_line in raw.splitlines():
-        stripped = raw_line.strip()
-        if not stripped:
-            continue
-        try:
-            record = orjson.loads(stripped)
-        except orjson.JSONDecodeError:
-            continue
-        if not isinstance(record, dict) or record.get("scope_id") != wave_id:
-            continue
-        payload = record.get("payload")
-        if not isinstance(payload, dict):
-            continue
-        if payload.get("event_type") != AGENT_OUTPUT_CHUNK_EVENT_TYPE:
-            continue
-        joined = payload.get("lines")
-        if not isinstance(joined, str):
-            continue
-        seq = payload.get("seq")
-        chunks.append((seq if isinstance(seq, int) else 0, joined))
-    chunks.sort(key=lambda item: item[0])
-    lines = [line for _seq, joined in chunks for line in format_agent_output_lines(joined)]
-    return lines[-limit:]
+    batch = load_output_chunk_batch(
+        event_path,
+        wave_id,
+        runtime_session_id=runtime_session_id,
+        attempt=attempt,
+        limit=limit,
+    )
+    return list(batch.lines)
 
 
 def frame_replay_lines(
@@ -1264,7 +1387,14 @@ def session_routes_event(session: AgentSession, envelope: Envelope) -> bool:
     Returns:
         ``True`` when the envelope belongs to this session's tile stream.
     """
-    return envelope.scope_id is not None and envelope.scope_id == session.scope_id
+    if envelope.scope_id is None or envelope.scope_id != session.scope_id:
+        return False
+    payload_session_id = envelope.payload.get("session_id")
+    return not (
+        session.runtime_session_id is not None
+        and isinstance(payload_session_id, str)
+        and payload_session_id != session.runtime_session_id
+    )
 
 
 class WatchTile(Vertical):
@@ -1941,6 +2071,7 @@ class LaneGrid(Widget):
         Binding("down", "select_next", "down", show=False),
         Binding("enter", "zoom_lane", "zoom", show=False),
     ]
+    can_focus = True
 
     #: Index of the selected lane row (the Enter-zoom target); clamped to the
     #: row list, ``0`` when non-empty, ``-1`` when empty.
@@ -2008,16 +2139,27 @@ class LaneGrid(Widget):
     def on_mount(self) -> None:
         """Seed the selection at the first row (or ``-1`` for the empty grid)."""
         self.set_reactive(type(self).selected, 0 if self._rows else -1)
+        self.focus()
 
     def action_select_prev(self) -> None:
         """Move the selection to the previous lane row (clamped at the top)."""
         if self._rows:
             self.selected = max(0, self.selected - 1)
+            self._scroll_to_selected()
 
     def action_select_next(self) -> None:
         """Move the selection to the next lane row (clamped at the bottom)."""
         if self._rows:
             self.selected = min(len(self._rows) - 1, self.selected + 1)
+            self._scroll_to_selected()
+
+    def _scroll_to_selected(self) -> None:
+        """Keep the selected lane visible when the roster overflows."""
+        if not self.is_mounted or not 0 <= self.selected < len(self._rows):
+            return
+        widgets = list(self.query(f".{LANE_GRID_ROW_CLASS}").results(Static))
+        if self.selected < len(widgets):
+            widgets[self.selected].scroll_visible(animate=False)
 
     def action_zoom_lane(self) -> None:
         """Zoom the selected lane to the FA4 session view (Enter).
@@ -2291,6 +2433,7 @@ class SessionPicker(Widget):
         Binding("down", "select_next", "down", show=False),
         Binding("enter", "zoom_session", "zoom", show=False),
     ]
+    can_focus = True
 
     #: Index of the selected session row; ``0`` when non-empty.
     selected: reactive[int] = reactive(0, init=False)
@@ -2353,6 +2496,7 @@ class SessionPicker(Widget):
         """
         self.set_reactive(type(self).selected, self._initial_index())
         self._scroll_to_selected()
+        self.focus()
 
     def _initial_index(self) -> int:
         """Return the row index to seed the selection on (W22).
@@ -2553,12 +2697,12 @@ class AgentWatchModeScreen(ScopeScreen):
     #: aliases, so ``k`` remains a legacy kill alias while ``x`` is the
     #: advertised cancel key matching the failed-look mark.
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("up", "scroll_up", "up", show=False),
-        Binding("down", "scroll_down", "down", show=False),
-        Binding("pageup", "page_up", "page up", show=False),
-        Binding("pagedown", "page_down", "page down", show=False),
-        Binding("home", "scroll_home", "home", show=False),
-        Binding("end", "scroll_end", "end", show=False),
+        Binding("up", "scroll_up", "up", show=False, priority=True),
+        Binding("down", "scroll_down", "down", show=False, priority=True),
+        Binding("pageup", "page_up", "page up", show=False, priority=True),
+        Binding("pagedown", "page_down", "page down", show=False, priority=True),
+        Binding("home", "scroll_home", "home", show=False, priority=True),
+        Binding("end", "scroll_end", "end", show=False, priority=True),
         Binding("k", "cancel_session", "kill", show=False),
         Binding("x", "cancel_session", "kill", show=False),
         Binding("space", "pause_session", "pause new dispatches", show=False),
@@ -2706,6 +2850,7 @@ class AgentWatchModeScreen(ScopeScreen):
         # resets too so the first post-recompose sync REPLACES the tail (W14).
         self._output_store_cursor = 0
         self._output_synced_wave = None
+        self._legacy_output_notice_shown = False
         yield VerdictRollupPane(self._fleet_verdict_rollup(), mode=mode)
         # An explicit roster request (the ``l`` key -> ``action_open_roster``)
         # surfaces the browsable session picker over WHATEVER the body would
@@ -3017,8 +3162,9 @@ class AgentWatchModeScreen(ScopeScreen):
             return
         buffer = getattr(self.app, "live_output_buffer", ())
         lines = [line for wave_id, line in buffer if wave_id == self.target.wave_id]
-        if lines:
-            self._output_tail().extend(lines)
+        tail = self.query(f"#{WATCH_OUTPUT_ID}")
+        if lines and tail:
+            tail.first(OutputTail).extend(lines)
 
     def _sync_output_from_store(self) -> bool:
         """Sync the raw-output tail to the persisted event store -- W53 + W58.
@@ -3068,10 +3214,31 @@ class AgentWatchModeScreen(ScopeScreen):
             # lines rather than appending them onto the previous lane's output.
             self._output_store_cursor = 0
             self._output_synced_wave = wave_id
-        lines = load_output_chunk_lines(store_path(state_path, StoreKind.EVENT), wave_id)
-        if not lines:
+            self._legacy_output_notice_shown = False
+        identity_target = (
+            self.target
+            if self.target is not None and self.target.wave_id == wave_id
+            else self._target_for_wave(wave_id)
+        )
+        batch = load_output_chunk_batch(
+            store_path(state_path, StoreKind.EVENT),
+            wave_id,
+            runtime_session_id=(
+                identity_target.runtime_session_id if identity_target is not None else None
+            ),
+            attempt=identity_target.attempt if identity_target is not None else None,
+            after_byte=self._output_store_cursor,
+            preserve_legacy_store_order=True,
+        )
+        initial = self._output_store_cursor == 0
+        self._output_store_cursor = batch.byte_cursor
+        if not batch.lines:
             return False
-        if self._output_store_cursor == 0:
+        lines = list(batch.lines)
+        if batch.legacy_scope_fallback and not self._legacy_output_notice_shown:
+            lines.insert(0, LEGACY_SCOPE_OUTPUT_NOTICE)
+            self._legacy_output_notice_shown = True
+        if initial:
             # The first sync REPLACES the tail; frame a synthesized-report or a
             # terminal-not-closed wave's replay with the degrade banner(s) so the
             # agent's self-claimed pass never reads as the recorded outcome. The
@@ -3081,9 +3248,8 @@ class AgentWatchModeScreen(ScopeScreen):
             self._output_tail().replace(
                 frame_replay_lines(lines, wave_status, report_source=report_source)
             )
-        elif len(lines) > self._output_store_cursor:
-            self._output_tail().extend(lines[self._output_store_cursor :])
-        self._output_store_cursor = len(lines)
+        else:
+            self._output_tail().extend(lines)
         return True
 
     def _synced_wave(self) -> tuple[str, WaveStatus | None] | None:
@@ -3176,9 +3342,9 @@ class AgentWatchModeScreen(ScopeScreen):
         # without this the operator's keys would not reach the freshly-mounted
         # roster -- the very trap this wave removes.
         if self._picker is not None:
-            scroller = self._picker.query(f"#{SESSION_PICKER_ID}")
-            if scroller:
-                scroller.first().focus()
+            self._picker.focus()
+        elif self._lane_grid is not None:
+            self._lane_grid.focus()
 
     def _refresh_header(self) -> None:
         """Repaint the watch header with the live liveness heartbeat (G5/G6).
@@ -3312,13 +3478,64 @@ class AgentWatchModeScreen(ScopeScreen):
             return
         if wave_id != self.target.wave_id:
             return
+        tail = self.query(f"#{WATCH_OUTPUT_ID}")
+        if not tail:
+            return
         # Once the persisted store has seeded the tail it is the authoritative
         # source (W58): the poll-tick sync owns every line, so a live push would
         # double-render. Defer to the store while its cursor is advanced.
         if self._output_store_cursor > 0:
             return
-        self._output_tail().append_line(line)
+        tail.first(OutputTail).append_line(line)
         logger.debug(f"append_output wave={wave_id} len={len(line)}")
+
+    def action_scroll_up(self) -> None:
+        """Move roster selection, else scroll output one line up."""
+        if self._picker is not None:
+            self._picker.action_select_prev()
+            return
+        if self._lane_grid is not None:
+            self._lane_grid.action_select_prev()
+            return
+        tail = self.query(f"#{WATCH_OUTPUT_ID}")
+        if tail:
+            tail.first(OutputTail).scroll_up(animate=False)
+
+    def action_scroll_down(self) -> None:
+        """Move roster selection, else scroll output one line down."""
+        if self._picker is not None:
+            self._picker.action_select_next()
+            return
+        if self._lane_grid is not None:
+            self._lane_grid.action_select_next()
+            return
+        tail = self.query(f"#{WATCH_OUTPUT_ID}")
+        if tail:
+            tail.first(OutputTail).scroll_down(animate=False)
+
+    def action_page_up(self) -> None:
+        """Page the output stream up without stealing arrow selection."""
+        tail = self.query(f"#{WATCH_OUTPUT_ID}")
+        if tail:
+            tail.first(OutputTail).scroll_page_up(animate=False)
+
+    def action_page_down(self) -> None:
+        """Page the output stream down without stealing arrow selection."""
+        tail = self.query(f"#{WATCH_OUTPUT_ID}")
+        if tail:
+            tail.first(OutputTail).scroll_page_down(animate=False)
+
+    def action_scroll_home(self) -> None:
+        """Jump the output stream to its first row."""
+        tail = self.query(f"#{WATCH_OUTPUT_ID}")
+        if tail:
+            tail.first(OutputTail).scroll_home(animate=False)
+
+    def action_scroll_end(self) -> None:
+        """Jump the output stream to its newest row."""
+        tail = self.query(f"#{WATCH_OUTPUT_ID}")
+        if tail:
+            tail.first(OutputTail).scroll_end(animate=False)
 
     def refresh_empty_notice(self) -> None:
         """Update the live-waiting notice text to track the degraded flag.
@@ -3642,7 +3859,10 @@ class AgentWatchModeScreen(ScopeScreen):
         Args:
             envelope: The event envelope to render at the top.
         """
-        listing = self.query_one(f"#{WATCH_LIST_ID}", VerticalScroll)
+        listing_matches = self.query(f"#{WATCH_LIST_ID}")
+        if not listing_matches:
+            return
+        listing = listing_matches.first(VerticalScroll)
         empty = listing.query(f"#{WATCH_EMPTY_ID}")
         if empty:
             empty.first().remove()
@@ -3772,6 +3992,9 @@ class AgentWatchModeScreen(ScopeScreen):
         if runtime is None:
             return None
         attempt = _latest_attempt(state, wave_id=wave_id)
+        wave = state.waves.get(wave_id)
+        attempt_row = wave.sessions.get(attempt) if wave is not None else None
+        executor_session = _wave_executor_session(state, wave_id)
         return WatchTarget(
             session_id=_wave_session_id(state, wave_id) or wave_id,
             wave_id=wave_id,
@@ -3780,6 +4003,11 @@ class AgentWatchModeScreen(ScopeScreen):
             attempt=attempt,
             log_handle=_log_handle(state, wave_id=wave_id, attempt=attempt),
             wave_status=_wave_status(state, wave_id),
+            runtime_session_id=(
+                executor_session.runtime_session_id
+                if executor_session is not None and executor_session.runtime_session_id is not None
+                else (attempt_row.session_id if attempt_row is not None else None)
+            ),
         )
 
     def _current_state(self) -> State | None:

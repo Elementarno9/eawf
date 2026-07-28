@@ -2149,15 +2149,28 @@ class _Loop:
         if not self.recompute_frontier or self.ctx.state_path is None:
             return
         state = load_state(Path(self.ctx.state_path))
-        items = tuple(
-            WaveFrontierItem(
-                wave_id=wave.id,
-                iter_id=wave.iter_id,
-                status=wave.status,
-                deps=tuple(wave.deps),
+        from eawf.workflow.lifecycle.integration import evaluate_dependency_barriers
+
+        projected: list[WaveFrontierItem] = []
+        for wave in state.waves.values():
+            evaluation = evaluate_dependency_barriers(state, wave_id=wave.id)
+            blockers = tuple(
+                dict.fromkeys(
+                    detail.split(":", maxsplit=1)[0]
+                    for detail in (*evaluation.unmet, *evaluation.stale)
+                )
             )
-            for wave in state.waves.values()
-        )
+            projected.append(
+                WaveFrontierItem(
+                    wave_id=wave.id,
+                    iter_id=wave.iter_id,
+                    status=wave.status,
+                    deps=tuple(wave.deps),
+                    dependency_ready=evaluation.satisfied,
+                    dependency_blockers=blockers,
+                )
+            )
+        items = tuple(projected)
         if not items:
             return
         ready = compute_ready_frontier(items)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +18,8 @@ from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
-from eawf.runtime.daemon.methods.state import runtime_capture
+from eawf.runtime.daemon.methods.state import codex_lifecycle, runtime_capture
+from eawf.runtime.daemon.session import resolve_session_log
 from eawf.surfaces.tui.screens.overlays.detail_cost import (
     NO_METERED_SESSIONS,
     cost_tab_rows,
@@ -176,21 +177,15 @@ def test_runtime_capture_updates_one_active_wave(tmp_path: Path) -> None:
     _run(body)
 
 
-def test_runtime_capture_updates_two_active_waves_and_logs_ambiguity(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_runtime_capture_refuses_ambiguous_active_waves(tmp_path: Path) -> None:
     active_wave_ids = ["P30-I05-W03", "P30-I05-W04"]
     ctx, state_path = _ctx(tmp_path, _state_payload(active_wave_ids=active_wave_ids))
+    before = state_path.read_bytes()
 
     async def body() -> None:
-        result = await runtime_capture(ctx, _capture_params())
-
-        assert result["active_count"] == 2
-        payload = orjson.loads(state_path.read_bytes())
-        for wave_id in active_wave_ids:
-            assert payload["waves"][wave_id]["runtime_latest"]["api_duration_ms"] == 17000
-        assert "active_count=2" in caplog.text
+        with pytest.raises(DaemonValidationError, match="correlation ambiguous"):
+            await runtime_capture(ctx, _capture_params())
+        assert state_path.read_bytes() == before
 
     _run(body)
 
@@ -238,47 +233,50 @@ def test_runtime_capture_attribution_defaults_null_when_absent(tmp_path: Path) -
     _run(body)
 
 
-def test_two_waves_sharing_one_capture_each_record_half_of_it(tmp_path: Path) -> None:
-    """W46: a session shared by two waves is split between them, not handed to each.
-
-    ``runtime.capture`` writes the SAME session snapshot to every active wave, and
-    each wave then differences the whole session -- so before this the two waves
-    each recorded the session's entire runtime and cost. (P30-I25 lived it: W35 and
-    W36 both closed on 0.3769 EU / $3.10, the same session counted twice.)
-
-    The capture stamps the concurrency it saw, and the close-time delta divides by
-    it. Delete the ``shared_wave_count`` stamp in ``_runtime_latest_from_params``,
-    or the division in ``compute_runtime_delta``, and the halves below become
-    wholes.
-    """
+def test_explicit_wave_correlation_never_fans_capture(tmp_path: Path) -> None:
     active_wave_ids = ["P30-I05-W03", "P30-I05-W04"]
     ctx, state_path = _ctx(tmp_path, _state_payload(active_wave_ids=active_wave_ids))
 
     async def body() -> None:
-        await runtime_capture(ctx, _capture_params())
+        await runtime_capture(ctx, _capture_params(wave_id="P30-I05-W04"))
 
         state = State.model_validate(orjson.loads(state_path.read_bytes()))
-        for wave_id in active_wave_ids:
-            wave = state.waves[wave_id]
-            # The divisor is on the row, readable straight out of state.json --
-            # the split is auditable rather than a silent halving.
-            assert wave.runtime_latest is not None
-            assert wave.runtime_latest.shared_wave_count == 2
+        assert state.waves["P30-I05-W03"].runtime_latest is None
+        wave = state.waves["P30-I05-W04"]
+        assert wave.runtime_latest is not None
+        assert wave.runtime_latest.shared_wave_count == 1
 
-            delta = compute_runtime_delta(
-                wave.runtime_baseline,
-                wave.runtime_latest,
-                carry=wave.runtime_carry,
-                eu_minutes=30.0,
-            )
-            assert delta is not None
-            assert delta.shared_wave_count == 2
-            # The session spent 17000ms / $0.42 / 150 work-tokens; each wave gets half.
-            assert delta.api_duration_ms == 8500
-            assert delta.actual_cost_usd == pytest.approx(0.21)
-            assert delta.input_tokens == 50
-            assert delta.output_tokens == 25
-            assert delta.elapsed_eu == pytest.approx(8500 / 60_000 / 30.0)
+    _run(body)
+
+
+def test_codex_provider_session_binding_correlates_one_wave(tmp_path: Path) -> None:
+    active_wave_ids = ["P30-I05-W03", "P30-I05-W04"]
+    payload = _state_payload(active_wave_ids=active_wave_ids)
+    payload["agent_sessions"] = {
+        "SES-01": {
+            "id": "SES-01",
+            "role": "executor",
+            "runtime": "codex",
+            "runtime_session_id": "provider-session-1",
+            "scope_id": "P30-I05-W04",
+            "status": "active",
+            "claimed_wave_ids": ["P30-I05-W04"],
+            "started_at": _now().isoformat(),
+        }
+    }
+    ctx, state_path = _ctx(tmp_path, payload)
+
+    async def body() -> None:
+        await runtime_capture(
+            ctx,
+            _capture_params(
+                harness="codex",
+                session_id="provider-session-1",
+            ),
+        )
+        state = State.model_validate(orjson.loads(state_path.read_bytes()))
+        assert state.waves["P30-I05-W03"].runtime_latest is None
+        assert state.waves["P30-I05-W04"].runtime_latest is not None
 
     _run(body)
 
@@ -309,18 +307,11 @@ def test_one_wave_alone_in_its_session_records_all_of_it(tmp_path: Path) -> None
     _run(body)
 
 
-def test_a_wave_that_shared_then_ran_alone_keeps_the_larger_divisor(tmp_path: Path) -> None:
-    """A later solo capture does not hand the shared runtime back.
-
-    The wave shared its session (count 2), then the sibling closed and the next
-    capture saw only this wave (count 1). Taking the freshest count would undo the
-    split for runtime that really was shared, so the merge keeps the largest
-    concurrency the wave was captured under.
-    """
+def test_explicit_wave_capture_stays_single_when_sibling_closes(tmp_path: Path) -> None:
     ctx, state_path = _ctx(tmp_path, _state_payload(active_wave_ids=["P30-I05-W03", "P30-I05-W04"]))
 
     async def body() -> None:
-        await runtime_capture(ctx, _capture_params())
+        await runtime_capture(ctx, _capture_params(wave_id="P30-I05-W04"))
         # The sibling closes; the next capture sees this wave on its own.
         payload = orjson.loads(state_path.read_bytes())
         payload["current"]["active_wave_ids"] = ["P30-I05-W04"]
@@ -331,7 +322,7 @@ def test_a_wave_that_shared_then_ran_alone_keeps_the_larger_divisor(tmp_path: Pa
         state = State.model_validate(orjson.loads(state_path.read_bytes()))
         latest = state.waves["P30-I05-W04"].runtime_latest
         assert latest is not None
-        assert latest.shared_wave_count == 2
+        assert latest.shared_wave_count == 1
 
     _run(body)
 
@@ -352,6 +343,162 @@ def test_runtime_capture_params_forbid_extra_keys(tmp_path: Path) -> None:
     async def body() -> None:
         with pytest.raises(DaemonValidationError, match="extra"):
             await runtime_capture(ctx, _capture_params(unexpected=True))
+
+    _run(body)
+
+
+def _codex_agent_session_payload(*, ambiguous: bool = False) -> dict[str, Any]:
+    session = {
+        "id": "SES-CODEX-01",
+        "role": "executor",
+        "runtime": "codex",
+        "scope_id": "P30-I05-W04",
+        "status": "active",
+        "claimed_wave_ids": ["P30-I05-W04"],
+        "started_at": _now().isoformat(),
+    }
+    sessions = {"SES-CODEX-01": session}
+    if ambiguous:
+        sessions["SES-CODEX-02"] = session | {
+            "id": "SES-CODEX-02",
+            "scope_id": "P30-I05-W03",
+            "claimed_wave_ids": ["P30-I05-W03"],
+        }
+    return sessions
+
+
+def test_codex_lifecycle_correlates_timed_subagent_attempt(tmp_path: Path) -> None:
+    payload = _state_payload(active_wave_ids=["P30-I05-W03", "P30-I05-W04"])
+    payload["agent_sessions"] = _codex_agent_session_payload()
+    ctx, state_path = _ctx(tmp_path, payload)
+    transcript = tmp_path / "agent-rollout.jsonl"
+    transcript.write_text(
+        "\n".join(
+            [
+                '{"type":"session_meta","payload":{"id":"agent-01"}}',
+                (
+                    '{"type":"event_msg","payload":{"type":"token_count","info":'
+                    '{"total_token_usage":{"input_tokens":120,'
+                    '"cached_input_tokens":20,"output_tokens":30,'
+                    '"reasoning_output_tokens":5}}}}'
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    async def body() -> None:
+        bound = await codex_lifecycle(
+            ctx,
+            {
+                "event_type": "session_start",
+                "provider_session_id": "provider-session-01",
+                "occurred_at": _now().isoformat(),
+            },
+        )
+        assert bound["correlated"] is True
+        started_at = _now() + timedelta(minutes=1)
+        started = await codex_lifecycle(
+            ctx,
+            {
+                "event_type": "subagent_start",
+                "provider_session_id": "provider-session-01",
+                "agent_id": "agent-01",
+                "occurred_at": started_at.isoformat(),
+            },
+        )
+        assert started["wave_id"] == "P30-I05-W04"
+        assert started["attempt"] == 1
+        stopped_at = _now() + timedelta(minutes=3)
+        stopped = await codex_lifecycle(
+            ctx,
+            {
+                "event_type": "subagent_stop",
+                "provider_session_id": "provider-session-01",
+                "agent_id": "agent-01",
+                "agent_transcript_path": str(transcript),
+                "occurred_at": stopped_at.isoformat(),
+                "counters": {
+                    "input_tokens": 100,
+                    "output_tokens": 35,
+                    "cache_read_input_tokens": 20,
+                    "harness": "codex",
+                    "measure_version": 201,
+                },
+                "measurement_quality": "exact",
+                "measurement_status": "usage_observed",
+            },
+        )
+        assert stopped["correlated"] is True
+
+        state = State.model_validate(orjson.loads(state_path.read_bytes()))
+        agent_session = state.agent_sessions["SES-CODEX-01"]
+        assert agent_session.runtime_session_id == "provider-session-01"
+        attempt = state.waves["P30-I05-W04"].sessions[1]
+        assert attempt.started_at == started_at
+        assert attempt.ended_at == stopped_at
+        assert attempt.input_tokens == 100
+        assert attempt.output_tokens == 35
+        assert attempt.cache_read_input_tokens == 20
+        assert attempt.cache_creation_input_tokens is None
+        assert attempt.cost_usd is None
+        assert attempt.measurement_quality.value == "exact"
+        assert attempt.measurement_status.value == "usage_observed"
+        assert str(transcript) not in attempt.session_log_handle
+        assert resolve_session_log(attempt.session_log_handle) == transcript
+
+    _run(body)
+
+
+def test_codex_lifecycle_refuses_ambiguous_session_binding(tmp_path: Path) -> None:
+    payload = _state_payload(active_wave_ids=["P30-I05-W03", "P30-I05-W04"])
+    payload["agent_sessions"] = _codex_agent_session_payload(ambiguous=True)
+    ctx, state_path = _ctx(tmp_path, payload)
+
+    async def body() -> None:
+        result = await codex_lifecycle(
+            ctx,
+            {
+                "event_type": "session_start",
+                "provider_session_id": "provider-session-01",
+                "occurred_at": _now().isoformat(),
+            },
+        )
+        assert result["correlated"] is False
+        assert result["reason"] == "provider_session_target_ambiguous"
+        state = State.model_validate(orjson.loads(state_path.read_bytes()))
+        assert all(session.runtime_session_id is None for session in state.agent_sessions.values())
+        assert all(not wave.sessions for wave in state.waves.values())
+
+    _run(body)
+
+
+def test_codex_lifecycle_stop_without_start_does_not_invent_attempt(
+    tmp_path: Path,
+) -> None:
+    payload = _state_payload(active_wave_ids=["P30-I05-W04"])
+    payload["agent_sessions"] = _codex_agent_session_payload()
+    payload["agent_sessions"]["SES-CODEX-01"]["runtime_session_id"] = "provider-session-01"
+    ctx, state_path = _ctx(tmp_path, payload)
+
+    async def body() -> None:
+        result = await codex_lifecycle(
+            ctx,
+            {
+                "event_type": "subagent_stop",
+                "provider_session_id": "provider-session-01",
+                "agent_id": "agent-01",
+                "occurred_at": _now().isoformat(),
+                "measurement_quality": "unavailable",
+                "measurement_status": "usage_unavailable",
+                "measurement_reason": "missing_transcript_path",
+            },
+        )
+        assert result["correlated"] is False
+        assert result["reason"] == "subagent_start_missing"
+        state = State.model_validate(orjson.loads(state_path.read_bytes()))
+        assert state.waves["P30-I05-W04"].sessions == {}
 
     _run(body)
 

@@ -180,8 +180,8 @@ def _default_daemon_client_factory() -> Any:
 
 
 def _session_end_payload(event: HookEvent) -> dict[str, Any]:
-    """Return the payload shape that may carry Claude runtime counters."""
-    for key in ("claude_code", event.event_type.value):
+    """Return the provider payload for a runtime lifecycle event."""
+    for key in (event.runtime, "claude_code", event.event_type.value):
         payload = event.payloads.get(key)
         if isinstance(payload, dict):
             return payload
@@ -271,6 +271,174 @@ def _transcript_counters(payload: dict[str, Any]) -> RuntimeCounters | None:
     return aggregate_transcript_counters(raw)
 
 
+def _codex_lifecycle_params(
+    event: HookEvent,
+    payload: dict[str, Any],
+    *,
+    repo_root: Path | None,
+) -> tuple[dict[str, Any] | None, RuntimeCounters | None]:
+    """Build strict Codex lifecycle params plus exact rollout counters."""
+    provider_session_id = payload.get("session_id")
+    if not isinstance(provider_session_id, str) or not provider_session_id:
+        return None, None
+
+    params: dict[str, Any] = {
+        "event_type": event.event_type.value,
+        "provider_session_id": provider_session_id,
+        "occurred_at": event.occurred_at.isoformat(),
+    }
+    if repo_root is not None:
+        params["repo_root"] = str(repo_root)
+    agent_id = payload.get("agent_id")
+    if isinstance(agent_id, str) and agent_id:
+        params["agent_id"] = agent_id
+
+    counters: RuntimeCounters | None = None
+    if event.event_type in {HookEventType.SUBAGENT_STOP, HookEventType.SESSION_END}:
+        from eawf.runtime.runtimes.codex.rollout_counters import (
+            read_codex_rollout_counters,
+        )
+
+        transcript_key = (
+            "agent_transcript_path"
+            if event.event_type == HookEventType.SUBAGENT_STOP
+            else "transcript_path"
+        )
+        raw_path = payload.get(transcript_key)
+        if isinstance(raw_path, str) and raw_path:
+            expected_session_id = (
+                agent_id
+                if event.event_type == HookEventType.SUBAGENT_STOP
+                and isinstance(agent_id, str)
+                and agent_id
+                else provider_session_id
+            )
+            capture = read_codex_rollout_counters(
+                Path(raw_path),
+                expected_session_id=expected_session_id,
+            )
+            counters = capture.counters
+            params["agent_transcript_path"] = raw_path
+            params["measurement_quality"] = capture.measurement_quality.value
+            params["measurement_status"] = capture.measurement_status.value
+            params["measurement_reason"] = capture.measurement_reason
+        else:
+            params["measurement_quality"] = "unavailable"
+            params["measurement_status"] = "usage_unavailable"
+            params["measurement_reason"] = "missing_transcript_path"
+    if counters is not None:
+        params["counters"] = counters.model_dump(mode="json")
+    return params, counters
+
+
+def capture_codex_lifecycle(
+    event: HookEvent,
+    *,
+    daemon_client_factory: DaemonClientFactory | None = None,
+    repo_root: Path | None = None,
+) -> tuple[HookResult, dict[str, Any] | None, RuntimeCounters | None]:
+    """Forward one provider-native Codex lifecycle event to the daemon."""
+    if event.runtime != "codex":
+        return (
+            HookResult(
+                name="runtime.codex_lifecycle",
+                block=False,
+                output="runtime.codex_lifecycle skipped: non-codex runtime",
+            ),
+            None,
+            None,
+        )
+    payload = _session_end_payload(event)
+    params, counters = _codex_lifecycle_params(event, payload, repo_root=repo_root)
+    if params is None:
+        return (
+            HookResult(
+                name="runtime.codex_lifecycle",
+                block=False,
+                output="runtime.codex_lifecycle skipped: missing session_id",
+            ),
+            None,
+            None,
+        )
+    factory = daemon_client_factory or _default_daemon_client_factory
+    try:
+        with factory() as client:
+            response = client.call("runtime.codex_lifecycle", params)
+    except Exception as exc:
+        return (
+            HookResult(
+                name="runtime.codex_lifecycle",
+                block=False,
+                output=repr(exc),
+            ),
+            None,
+            counters,
+        )
+    correlated = response.get("correlated") is True
+    reason = response.get("reason")
+    output = (
+        "runtime.codex_lifecycle ok"
+        if correlated
+        else f"runtime.codex_lifecycle unavailable: {reason or 'uncorrelated'}"
+    )
+    return (
+        HookResult(
+            name="runtime.codex_lifecycle",
+            block=False,
+            output=output,
+        ),
+        response,
+        counters,
+    )
+
+
+def _capture_codex_session_end(
+    event: HookEvent,
+    *,
+    daemon_client_factory: DaemonClientFactory | None,
+    repo_root: Path | None,
+) -> HookResult:
+    lifecycle_result, response, counters = capture_codex_lifecycle(
+        event,
+        daemon_client_factory=daemon_client_factory,
+        repo_root=repo_root,
+    )
+    if response is None or response.get("correlated") is not True:
+        return lifecycle_result
+    if counters is None:
+        return HookResult(
+            name="runtime.capture",
+            block=False,
+            output=(f"{lifecycle_result.output}; runtime.capture skipped: usage unavailable"),
+        )
+    params = counters.model_dump(mode="json")
+    payload = _session_end_payload(event)
+    session_id = payload.get("session_id")
+    if isinstance(session_id, str) and session_id:
+        params["session_id"] = session_id
+    wave_id = response.get("wave_id")
+    if isinstance(wave_id, str) and wave_id:
+        params["wave_id"] = wave_id
+    params["captured_at"] = event.occurred_at.isoformat()
+    if repo_root is not None:
+        params["repo_root"] = str(repo_root)
+    factory = daemon_client_factory or _default_daemon_client_factory
+    try:
+        with factory() as client:
+            client.call("runtime.capture", params)
+    except Exception as exc:
+        return HookResult(
+            name="runtime.capture",
+            block=False,
+            output=repr(exc),
+        )
+    return HookResult(
+        name="runtime.capture",
+        block=False,
+        output=f"{lifecycle_result.output}; runtime.capture ok",
+    )
+
+
 def capture_runtime_on_session_end(
     event: HookEvent,
     *,
@@ -287,6 +455,13 @@ def capture_runtime_on_session_end(
     statusline path.
     """
     from eawf.runtime.runtimes.claude.runtime_counters import parse_runtime_counters
+
+    if event.runtime == "codex":
+        return _capture_codex_session_end(
+            event,
+            daemon_client_factory=daemon_client_factory,
+            repo_root=repo_root,
+        )
 
     payload = _session_end_payload(event)
     counters = _transcript_counters(payload) or parse_runtime_counters(
@@ -339,6 +514,24 @@ def register_runtime_capture_hooks(
             repo_root=repo_root,
         )
 
+    def _codex_hook(event: HookEvent) -> HookResult:
+        result, _response, _counters = capture_codex_lifecycle(
+            event,
+            daemon_client_factory=daemon_client_factory,
+            repo_root=repo_root,
+        )
+        return result
+
+    for event_type in (
+        HookEventType.SESSION_START,
+        HookEventType.SUBAGENT_START,
+        HookEventType.SUBAGENT_STOP,
+    ):
+        runner.register(
+            event_type,
+            _codex_hook,
+            name="runtime.codex_lifecycle",
+        )
     runner.register(HookEventType.SESSION_END, _hook, name="runtime.capture")
 
 
@@ -477,6 +670,7 @@ __all__ = [
     "HookResult",
     "HookRunner",
     "append_event_idempotent",
+    "capture_codex_lifecycle",
     "capture_runtime_on_session_end",
     "register_runtime_capture_hooks",
 ]

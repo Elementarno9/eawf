@@ -29,16 +29,27 @@ from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
+    AuditRequirement,
     BacklogStatus,
+    CloseAttemptStatus,
+    CloseOperatorAction,
     Confidence,
     DispatchNote,
     EffortBucket,
     IncidentCause,
     IncidentSeverity,
     IncidentStatus,
+    MeasurementQuality,
+    MeasurementStatus,
     StoreKind,
 )
-from eawf.kernel.state.models import DispatchAnnotation, Incident, SessionAttempt, State
+from eawf.kernel.state.models import (
+    CloseAttempt,
+    DispatchAnnotation,
+    Incident,
+    SessionAttempt,
+    State,
+)
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import (
     AgentReportHeader,
@@ -113,6 +124,8 @@ def _state_with_attempted_wave() -> tuple[State, str]:
                     exit_status=0,
                     input_tokens=10,
                     output_tokens=5,
+                    measurement_quality=MeasurementQuality.EXACT,
+                    measurement_status=MeasurementStatus.USAGE_OBSERVED,
                 ),
                 2: SessionAttempt(
                     attempt=2,
@@ -126,6 +139,8 @@ def _state_with_attempted_wave() -> tuple[State, str]:
                     output_tokens=7,
                     cache_creation_input_tokens=3,
                     cache_read_input_tokens=4,
+                    measurement_quality=MeasurementQuality.EXACT,
+                    measurement_status=MeasurementStatus.USAGE_OBSERVED,
                 ),
             },
             "dispatch_history": [
@@ -149,6 +164,37 @@ def _state_with_attempted_wave() -> tuple[State, str]:
     new_waves = dict(state.waves)
     new_waves[wave_id] = attempted
     return state.model_copy(update={"waves": new_waves}), wave_id
+
+
+def _state_with_attempt_token_values(
+    values: dict[int, tuple[int | None, int | None]],
+) -> tuple[State, str]:
+    """Return attempted-wave state with input/output token cells replaced."""
+    state, wave_id = _state_with_attempted_wave()
+    sessions = dict(state.waves[wave_id].sessions)
+    for attempt, (input_tokens, output_tokens) in values.items():
+        measured = input_tokens is not None or output_tokens is not None
+        sessions[attempt] = sessions[attempt].model_copy(
+            update={
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cache_creation_input_tokens": None,
+                "cache_read_input_tokens": None,
+                "measurement_quality": (
+                    MeasurementQuality.EXACT if measured else MeasurementQuality.UNAVAILABLE
+                ),
+                "measurement_status": (
+                    MeasurementStatus.USAGE_OBSERVED
+                    if measured
+                    else MeasurementStatus.USAGE_UNAVAILABLE
+                ),
+                "measurement_reason": (None if measured else "test_usage_unavailable"),
+            }
+        )
+    wave = state.waves[wave_id].model_copy(update={"sessions": sessions})
+    waves = dict(state.waves)
+    waves[wave_id] = wave
+    return state.model_copy(update={"waves": waves}), wave_id
 
 
 def _report(wave_id: str, *, attempt: int, verdict: AgentReportVerdict) -> AgentReportRow:
@@ -1014,6 +1060,165 @@ def test_resolve_detail_wave_attempt_rollup_uses_reports_and_errors() -> None:
     assert "yes" in rows["attempt timeline"]
 
 
+def test_attempt_summary_all_unknown_tokens_is_unavailable() -> None:
+    """Unknown token cells never fabricate an aggregate numeric zero."""
+    state, wave_id = _state_with_attempt_token_values({1: (None, None), 2: (None, None)})
+    rows = dict(resolve_detail(state, wave_id).evidence)
+    assert "tokens unavailable — no runtime measurement recorded" in rows["attempts"]
+    assert "0 tokens" not in rows["attempts"]
+    timeline = [line.split() for line in rows["attempt timeline"].splitlines()[2:]]
+    assert timeline
+    assert all(cells[-1] == "-" for cells in timeline)
+
+
+def test_attempt_summary_measured_zero_tokens_remains_zero() -> None:
+    """Measured zero differs from unavailable token evidence."""
+    state, wave_id = _state_with_attempt_token_values({1: (0, 0), 2: (0, 0)})
+    summary = dict(resolve_detail(state, wave_id).evidence)["attempts"]
+    assert summary.endswith("0 tokens")
+    assert "unavailable" not in summary
+    assert "partial" not in summary
+
+
+def test_attempt_summary_mixed_tokens_is_explicitly_partial() -> None:
+    """Known plus unknown attempts expose partial aggregation."""
+    state, wave_id = _state_with_attempt_token_values({1: (10, 5), 2: (None, None)})
+    summary = dict(resolve_detail(state, wave_id).evidence)["attempts"]
+    assert summary.endswith("15 tokens (partial — 1 attempt unavailable)")
+
+
+def test_report_only_row_is_not_counted_as_observed_attempt() -> None:
+    """A report with no SessionAttempt is labelled report-only."""
+    state, wave_id = _state_with_attempted_wave()
+    card = resolve_detail(
+        state,
+        wave_id,
+        reports=(_report(wave_id, attempt=3, verdict=AgentReportVerdict.PASS),),
+    )
+    rows = dict(card.evidence)
+    assert rows["attempts"].startswith("2 attempts")
+    assert "report-only evidence" in rows["report 3 (executor)"]
+    assert "\n  3 " not in rows["attempt timeline"]
+
+
+def test_wave_detail_renders_latest_close_attempt_progress() -> None:
+    """Close worker stage, elapsed time, and stale reason stay visible."""
+    state, wave_id = _state_with_attempted_wave()
+    now = datetime(2026, 5, 27, 13, 0, tzinfo=UTC)
+    close = CloseAttempt(
+        id="CA-1",
+        wave_id=wave_id,
+        outcome="close wave",
+        tokens_consumed=None,
+        generation=1,
+        supersedes_id=None,
+        status=CloseAttemptStatus.STALE,
+        integration_id="INT-1",
+        candidate_sha="a" * 40,
+        integrated_sha="b" * 40,
+        tree_sha="c" * 40,
+        wave_revision_digest="wave-revision",
+        spec_digest="spec",
+        criteria_digest="criteria",
+        gate_manifest_digest="gates",
+        policy_digest="policy",
+        runner_environment_digest="runner",
+        dependency_binding_digest="dependency-bindings",
+        required_gate_ids=["gate-a", "gate-b"],
+        gate_receipt_ids=["receipt-a"],
+        audit_requirement=AuditRequirement.REQUIRED,
+        no_runtime_waiver=False,
+        repair_budget_remaining=1,
+        infrastructure_retry_budget_remaining=1,
+        invalidation_causes=["candidate revision changed"],
+        requested_at=now,
+        started_at=now,
+        updated_at=now + timedelta(seconds=75),
+        terminal_at=now + timedelta(seconds=75),
+        idempotency_key="close-key",
+    )
+    card = resolve_detail(state.model_copy(update={"close_attempts": {"CA-1": close}}), wave_id)
+    rows = dict(card.evidence)
+    assert rows["close stage"] == "stale"
+    assert rows["close elapsed"] == "1m 15s"
+    assert rows["close gates"] == "1/2 receipts"
+    assert rows["close stale"] == "candidate revision changed"
+
+
+def test_wave_detail_renders_exhausted_close_operator_actions() -> None:
+    """Exhausted repair makes split/defer/abort visible on the Wave detail."""
+    state, wave_id = _state_with_attempted_wave()
+    now = datetime(2026, 5, 27, 13, 0, tzinfo=UTC)
+    close = CloseAttempt(
+        id="CA-2",
+        wave_id=wave_id,
+        outcome="close wave after bounded repair",
+        tokens_consumed=None,
+        generation=2,
+        supersedes_id="CA-1",
+        status=CloseAttemptStatus.BLOCKED,
+        integration_id="INT-1",
+        candidate_sha="a" * 40,
+        integrated_sha="b" * 40,
+        tree_sha="c" * 40,
+        wave_revision_digest="wave-revision",
+        spec_digest="spec",
+        criteria_digest="criteria",
+        gate_manifest_digest="gates",
+        policy_digest="policy",
+        runner_environment_digest="runner",
+        dependency_binding_digest="dependency-bindings",
+        audit_requirement=AuditRequirement.REQUIRED,
+        no_runtime_waiver=False,
+        repair_generation=1,
+        repair_budget_remaining=0,
+        infrastructure_retry_budget_remaining=1,
+        required_operator_actions=[
+            CloseOperatorAction.SPLIT,
+            CloseOperatorAction.DEFER,
+            CloseOperatorAction.ABORT,
+        ],
+        requested_at=now,
+        updated_at=now,
+        terminal_at=now,
+        idempotency_key="close-repair-key",
+    )
+
+    card = resolve_detail(
+        state.model_copy(update={"close_attempts": {"CA-2": close}}),
+        wave_id,
+    )
+
+    rows = dict(card.evidence)
+    assert rows["close action required"] == "split / defer / abort"
+
+
+def test_wave_metrics_render_evidence_backed_measured_zero() -> None:
+    """Explicit usage evidence distinguishes measured zero from unavailable."""
+    state = _load(_PHASE_ITER_WAVE)
+    wave_id = next(iter(state.waves))
+    now = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
+    observed_zero = SessionAttempt(
+        attempt=1,
+        runtime="codex",
+        session_id="sess-zero",
+        session_log_handle="urn:eawf:v1:session-log:codex:sess-zero",
+        started_at=now,
+        ended_at=now,
+        input_tokens=0,
+        output_tokens=0,
+        cost_usd=0,
+        measurement_quality=MeasurementQuality.EXACT,
+        measurement_status=MeasurementStatus.USAGE_OBSERVED,
+    )
+    wave = state.waves[wave_id].model_copy(update={"sessions": {1: observed_zero}})
+    card = resolve_detail(state.model_copy(update={"waves": {wave_id: wave}}), wave_id)
+    metrics = dict(card.metrics)
+    assert metrics["tokens"] == "0"
+    assert metrics["eu"] == "0.00 EU"
+    assert metrics["cost"] == "$0.0000"
+
+
 # --------------------------------------------------------------------------
 # Evidence tab — humanized token counts + cost-tab table treatment (W08)
 # --------------------------------------------------------------------------
@@ -1160,7 +1365,7 @@ def test_resolve_detail_claimed_wave_renders_claimed_row_and_switch_reason() -> 
     assert rows["claimed"] != "—"
     # The runtime-switch annotation's reason is appended to its attempt row.
     switch = state.waves[wave_id].dispatch_history[1]
-    attempt_value = rows[f"attempt {switch.attempt}"]
+    attempt_value = rows[f"dispatch {switch.attempt}"]
     assert switch.note.value in attempt_value
     assert switch.reason is not None
     assert switch.reason in attempt_value
@@ -1191,7 +1396,7 @@ def test_resolve_detail_dispatch_row_without_reason_omits_reason_suffix() -> Non
     assert fresh.reason is None
     card = resolve_detail(state, wave_id)
     rows = dict(card.evidence)
-    attempt_value = rows[f"attempt {fresh.attempt}"]
+    attempt_value = rows[f"dispatch {fresh.attempt}"]
     assert attempt_value == f"{fresh.note.value} ({fresh.runtime_to})"
     # No reason em-dash suffix is fabricated for a reason-less annotation.
     assert " — " not in attempt_value
@@ -1331,11 +1536,11 @@ def test_resolve_detail_wave_metrics_honest_empty_without_rollup() -> None:
     wave_id = next(iter(state.waves))
     assert state.waves[wave_id].sessions == {}
     empty = dict(resolve_detail(state, wave_id).metrics)
-    assert empty["tokens"] == EMPTY_STATE
-    assert empty["eu"] == EMPTY_STATE
+    assert empty["tokens"] == "unavailable — no runtime measurement recorded"
+    assert empty["eu"] == "unavailable — no ended runtime attempt"
     # A rollup that joined but summed to zero tokens stays the sentinel.
     zero = dict(resolve_detail(state, wave_id, cost_rollup=_session_rollup(wave_id)).metrics)
-    assert zero["tokens"] == EMPTY_STATE
+    assert zero["tokens"] == "unavailable — no runtime measurement recorded"
 
 
 def test_resolve_detail_wave_metrics_eu_empty_while_session_running() -> None:
@@ -1365,7 +1570,7 @@ def test_resolve_detail_wave_metrics_eu_empty_while_session_running() -> None:
     new_waves = dict(state.waves)
     new_waves[wave_id] = running
     metrics = dict(resolve_detail(state.model_copy(update={"waves": new_waves}), wave_id).metrics)
-    assert metrics["eu"] == EMPTY_STATE
+    assert metrics["eu"] == "unavailable — no ended runtime attempt"
 
 
 def test_detail_modal_metrics_paints_actual_tokens_and_eu() -> None:
@@ -1553,8 +1758,8 @@ def test_resolve_detail_wave_metrics_eu_tokens_empty_state() -> None:
     card = resolve_detail(state, wave_id)
     metrics = dict(card.metrics)
     # Honest-empty: a no-runtime wave shows the sentinel, never 0.00/0.00.
-    assert metrics["eu"] == EMPTY_STATE
-    assert metrics["tokens"] == EMPTY_STATE
+    assert metrics["eu"] == "unavailable — no ended runtime attempt"
+    assert metrics["tokens"] == "unavailable — no runtime measurement recorded"
     assert "0.00" not in metrics["eu"]
     assert "0.00" not in metrics["tokens"]
 
@@ -1775,7 +1980,7 @@ def test_detail_modal_metrics_show_empty_state_for_eu_tokens() -> None:
             tabs.active = "detail-tab-metrics"
             await pilot.pause()
             rendered = capture_screen_text(app)
-            assert EMPTY_STATE in rendered
+            assert "unavailable" in rendered
 
     asyncio.run(body())
 

@@ -73,6 +73,7 @@ from eawf.kernel.state.enums import (
     Confidence,
     DispatchNote,
     EffortBucket,
+    MeasurementStatus,
     ReportSource,
     StoreKind,
     WaveStatus,
@@ -151,6 +152,10 @@ from eawf.workflow.lifecycle._errors import (
     LifecycleError,
     LifecycleGuardError,
     check_disabled_waiver_policy,
+)
+from eawf.workflow.lifecycle.integration import (
+    DependencyBarrierError,
+    require_start_dependencies,
 )
 from eawf.workflow.lifecycle.wave import claim_wave, validate_claim_session
 
@@ -910,7 +915,11 @@ def _headless_runtime_snapshots(
         measure_version=_HEADLESS_MEASURE_VERSION,
         api_duration_ms=duration_ms,
         total_duration_ms=duration_ms,
-        cost_usd=float(priced.cost_usd),
+        cost_usd=(
+            float(priced.cost_usd)
+            if spawn_result.measurement_status is MeasurementStatus.USAGE_OBSERVED
+            else None
+        ),
         input_tokens=spawn_result.input_tokens,
         output_tokens=spawn_result.output_tokens,
         cache_creation_input_tokens=spawn_result.cache_creation_input_tokens,
@@ -1008,7 +1017,14 @@ def _persist_live_session_attempt(
             # Stamp THIS attempt's own priced cost so a wave with several
             # genuine dispatch attempts surfaces per-attempt cost, not just the
             # single wave-level runtime snapshot (which credits one spawn).
-            cost_usd=float(price_spawn_result(spawn_result).cost_usd),
+            cost_usd=(
+                float(price_spawn_result(spawn_result).cost_usd)
+                if spawn_result.measurement_status is MeasurementStatus.USAGE_OBSERVED
+                else None
+            ),
+            measurement_quality=spawn_result.measurement_quality,
+            measurement_status=spawn_result.measurement_status,
+            measurement_reason=spawn_result.measurement_reason,
         )
         wave.sessions[attempt] = session_attempt
         wave.dispatch_history.append(annotation)
@@ -1374,12 +1390,18 @@ def _validate_spawn_attempt(state_path: Path, wave_id: str) -> None:
         wave_id: Wave about to spawn a process.
 
     Raises:
-        LifecycleError: When the wave is missing.
+        LifecycleError: When the wave is missing, a dependency barrier is no
+            longer satisfied, or a bound upstream generation is stale.
         LifecycleGuardError: When the wave or either parent is no longer
             execution-active.
     """
     with portalock.acquire(state_path, timeout=5.0):
-        validate_spawn_wave(load_state(state_path), wave_id)
+        state = load_state(state_path)
+        validate_spawn_wave(state, wave_id)
+        try:
+            require_start_dependencies(state, wave_id=wave_id)
+        except DependencyBarrierError as exc:
+            raise LifecycleError(str(exc)) from exc
 
 
 async def _bind_or_synthesize_report(
@@ -1900,6 +1922,7 @@ async def _spawn_and_dispatch(
         # adapter + the model the accepted spawn was requested with (the
         # runtime the accepted spawn ran on), so the model sees the
         # validation-failure notice the assist loop appended.
+        _validate_spawn_attempt(state_path, wave_id)
         return await adapter.spawn_session(
             reask_prompt,
             model=serving_model,

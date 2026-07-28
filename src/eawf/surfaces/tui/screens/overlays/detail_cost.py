@@ -123,7 +123,9 @@ def _format_cost(cost: Decimal) -> str:
     return f"${cost:.{_COST_DP}f}"
 
 
-def _attempt_cost_cell(attempt: WaveAttemptRollup) -> str:
+def _attempt_cost_cell(
+    attempt: WaveAttemptRollup, *, measured_zero_attempts: frozenset[int] = frozenset()
+) -> str:
     """Return the cost cell for *attempt*: a figure, or the unbilled marker.
 
     Args:
@@ -135,6 +137,8 @@ def _attempt_cost_cell(attempt: WaveAttemptRollup) -> str:
     """
     if attempt_is_priced(attempt):
         return _format_cost(attempt.cost_usd)
+    if attempt.attempt in measured_zero_attempts:
+        return _format_cost(Decimal("0"))
     return f"{COST_ABSENT} {UNBILLED_MARKER}"
 
 
@@ -170,7 +174,9 @@ def _attempt_eu(attempt: WaveAttemptRollup) -> str:
     return f"{attempt.attention_eu:.2f} EU"
 
 
-def _attempt_cells(attempt: WaveAttemptRollup) -> tuple[str, ...]:
+def _attempt_cells(
+    attempt: WaveAttemptRollup, *, measured_zero_attempts: frozenset[int] = frozenset()
+) -> tuple[str, ...]:
     """Return the eight ordered column cells for one attempt row."""
     return (
         str(attempt.attempt),
@@ -179,7 +185,7 @@ def _attempt_cells(attempt: WaveAttemptRollup) -> tuple[str, ...]:
         format_tokens(attempt.output_tokens),
         format_tokens(attempt.cache_write_tokens),
         format_tokens(attempt.cache_read_tokens),
-        _attempt_cost_cell(attempt),
+        _attempt_cost_cell(attempt, measured_zero_attempts=measured_zero_attempts),
         _attempt_eu(attempt),
     )
 
@@ -285,7 +291,10 @@ def _blended_token_rows(rollup: WaveSessionRollup) -> tuple[tuple[str, str], ...
 
 
 def cost_tab_rows(
-    rollup: WaveSessionRollup, *, mode: RenderMode = DEFAULT_RENDER_MODE
+    rollup: WaveSessionRollup,
+    *,
+    mode: RenderMode = DEFAULT_RENDER_MODE,
+    measured_zero_attempts: frozenset[int] = frozenset(),
 ) -> tuple[tuple[str, str], ...]:
     """Build the ``$`` (cost) tab ``(label, value)`` rows for a wave rollup.
 
@@ -307,7 +316,10 @@ def cost_tab_rows(
     """
     if not rollup.attempts:
         return (("sessions", NO_METERED_SESSIONS),)
-    raw_rows = [_attempt_cells(attempt) for attempt in rollup.attempts]
+    raw_rows = [
+        _attempt_cells(attempt, measured_zero_attempts=measured_zero_attempts)
+        for attempt in rollup.attempts
+    ]
     widths = [len(col) for col in _COST_COLUMNS]
     for raw in raw_rows:
         widths = [max(width, len(cell)) for width, cell in zip(widths, raw, strict=True)]
@@ -320,13 +332,15 @@ def cost_tab_rows(
     rendered = PreMarkedText("\n" + "\n".join(f"  {line}" for line in table))
     return (
         ("attempts", rendered),
-        ("total", _aggregate_total_cell(rollup)),
+        ("total", _aggregate_total_cell(rollup, measured_zero_attempts=measured_zero_attempts)),
         ("cost", aggregate_cost_bar(rollup, mode=mode)),
         *_blended_token_rows(rollup),
     )
 
 
-def _aggregate_total_cell(rollup: WaveSessionRollup) -> str:
+def _aggregate_total_cell(
+    rollup: WaveSessionRollup, *, measured_zero_attempts: frozenset[int] = frozenset()
+) -> str:
     """Return the aggregate-total cost cell for the cost tab.
 
     Args:
@@ -339,6 +353,10 @@ def _aggregate_total_cell(rollup: WaveSessionRollup) -> str:
     """
     if rollup.cost_usd > Decimal("0"):
         return _format_cost(rollup.cost_usd)
+    if rollup.attempts and all(
+        attempt.attempt in measured_zero_attempts for attempt in rollup.attempts
+    ):
+        return _format_cost(Decimal("0"))
     return f"{COST_ABSENT} {UNBILLED_MARKER}"
 
 
@@ -416,8 +434,24 @@ def wave_cost_rows(
     if not wave.sessions:
         return ()
     if cost_rollup is None:
-        cost_rollup = WaveSessionRollup(wave_id=wave.id)
-    return cost_tab_rows(cost_rollup)
+        cost_rollup = _runtime_snapshot_rollup(wave)
+    if cost_rollup is None or not cost_rollup.attempts:
+        return (("sessions", f"unavailable — {_cost_unavailable_reason(wave)}"),)
+    measured_zero_attempts = frozenset(
+        attempt
+        for attempt, session in wave.sessions.items()
+        if session.measurement_status.value == "usage_observed" and session.cost_usd == 0
+    )
+    return cost_tab_rows(cost_rollup, measured_zero_attempts=measured_zero_attempts)
+
+
+def _cost_unavailable_reason(wave: Wave) -> str:
+    """Return persisted cost-capture reason for an unmetered wave."""
+    sessions = sorted(wave.sessions.values(), key=lambda row: (row.started_at, row.attempt))
+    for session in reversed(sessions):
+        if session.measurement_reason is not None:
+            return session.measurement_reason
+    return sessions[-1].measurement_status.value
 
 
 def wave_cost_rollup_for_wave(

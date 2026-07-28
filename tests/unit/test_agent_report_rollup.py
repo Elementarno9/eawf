@@ -9,6 +9,8 @@ from eawf.kernel.state.enums import (
     AgentSessionRole,
     Confidence,
     DispatchNote,
+    MeasurementQuality,
+    MeasurementStatus,
     WaveStatus,
 )
 from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, Wave
@@ -34,6 +36,15 @@ def _session(
     cache_creation_input_tokens: int | None = None,
     cache_read_input_tokens: int | None = None,
 ) -> SessionAttempt:
+    measured = any(
+        value is not None
+        for value in (
+            input_tokens,
+            output_tokens,
+            cache_creation_input_tokens,
+            cache_read_input_tokens,
+        )
+    )
     return SessionAttempt(
         attempt=attempt,
         runtime="codex",
@@ -46,6 +57,13 @@ def _session(
         output_tokens=output_tokens,
         cache_creation_input_tokens=cache_creation_input_tokens,
         cache_read_input_tokens=cache_read_input_tokens,
+        measurement_quality=(
+            MeasurementQuality.EXACT if measured else MeasurementQuality.UNAVAILABLE
+        ),
+        measurement_status=(
+            MeasurementStatus.USAGE_OBSERVED if measured else MeasurementStatus.USAGE_UNAVAILABLE
+        ),
+        measurement_reason=None if measured else "test_usage_unavailable",
     )
 
 
@@ -148,6 +166,7 @@ def test_per_wave_attempt_rollup_counts_retry_blocked_tokens_and_error_kinds() -
     assert rollup.retry_count == 1
     assert rollup.blocked_count == 1
     assert rollup.token_total == 52
+    assert rollup.unmeasured_token_attempt_count == 0
     assert rollup.error_kind_breakdown == {"network_error": 1, "timeout": 2}
     assert [row.retry for row in rollup.attempts] == ["initial", "switch"]
     assert [row.blocked for row in rollup.attempts] == ["no", "yes"]
@@ -180,5 +199,71 @@ def test_per_wave_attempt_rollup_handles_no_attempts() -> None:
     assert rollup.attempt_count == 0
     assert rollup.retry_count == 0
     assert rollup.blocked_count == 0
-    assert rollup.token_total == 0
+    assert rollup.token_total is None
+    assert rollup.unmeasured_token_attempt_count == 0
     assert rollup.error_kind_breakdown == {}
+
+
+def test_per_wave_attempt_rollup_unknown_tokens_are_unavailable() -> None:
+    """Absent runtime measurements differ from a measured numeric zero."""
+    wave = _wave().model_copy(
+        update={
+            "sessions": {
+                1: _session(1, session_id="sess-1", exit_status=0),
+                2: _session(2, session_id="sess-2", exit_status=0),
+            },
+            "dispatch_history": [],
+        }
+    )
+    rollup = per_wave_attempt_rollup(wave)
+
+    assert rollup.token_total is None
+    assert rollup.unmeasured_token_attempt_count == 2
+    assert [row.tokens for row in rollup.attempts] == ["-", "-"]
+
+
+def test_per_wave_attempt_rollup_measured_zero_is_zero() -> None:
+    """Explicit zero-valued counters remain a measured zero."""
+    wave = _wave().model_copy(
+        update={
+            "sessions": {
+                1: _session(
+                    1,
+                    session_id="sess-1",
+                    exit_status=0,
+                    input_tokens=0,
+                    output_tokens=0,
+                )
+            },
+            "dispatch_history": [],
+        }
+    )
+    rollup = per_wave_attempt_rollup(wave)
+
+    assert rollup.token_total == 0
+    assert rollup.unmeasured_token_attempt_count == 0
+    assert rollup.attempts[0].tokens == "0"
+
+
+def test_per_wave_attempt_rollup_mixed_tokens_is_partial() -> None:
+    """Known subtotal plus unmeasured count explicitly marks partial data."""
+    wave = _wave().model_copy(
+        update={
+            "sessions": {
+                1: _session(
+                    1,
+                    session_id="sess-1",
+                    exit_status=0,
+                    input_tokens=10,
+                    output_tokens=5,
+                ),
+                2: _session(2, session_id="sess-2", exit_status=0),
+            },
+            "dispatch_history": [],
+        }
+    )
+    rollup = per_wave_attempt_rollup(wave)
+
+    assert rollup.token_total == 15
+    assert rollup.unmeasured_token_attempt_count == 1
+    assert [row.tokens for row in rollup.attempts] == ["15", "-"]

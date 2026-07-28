@@ -14,18 +14,29 @@ legacy files; it surfaces them so the operator can prune manually.
 from __future__ import annotations
 
 import hashlib
+import json
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
+from eawf.runtime.runtimes.codex.hook_map import (
+    codex_hook_event_name,
+    codex_hook_name,
+)
 from eawf.runtime.runtimes.codex.plugin_install import (
     _DEFAULT_TIMESTAMP,
+    _HOOK_TIMEOUT_SECONDS,
     Scope,
     _agent_target,
+    _codex_hook_specs,
     _config_target,
+    _hook_config_target,
     _hook_target,
     _manifest_target,
     _plugin_root,
     _render_agent_toml,
+    _render_hook_config,
     _render_manifest,
     _render_sidecar,
     _render_skill,
@@ -34,7 +45,7 @@ from eawf.runtime.runtimes.codex.plugin_install import (
     _skill_target,
 )
 from eawf.surfaces.render.agents import AGENT_REGISTRY
-from eawf.surfaces.render.hooks import HOOK_REGISTRY
+from eawf.surfaces.render.hooks import HookSpec
 from eawf.surfaces.render.skills import SKILL_REGISTRY
 
 
@@ -49,6 +60,19 @@ class DoctorEntry:
     expected_hash: str | None = None
 
 
+HookTrustStatus = Literal["trusted", "untrusted", "disabled", "unavailable"]
+
+
+@dataclass(frozen=True)
+class HookTrustEntry:
+    """Codex trust state for one installed Eä hook command."""
+
+    event_name: str
+    state_key: str
+    status: HookTrustStatus
+    reason: str
+
+
 @dataclass(frozen=True)
 class DoctorReport:
     """Summary of one :func:`doctor_plugin` call."""
@@ -60,10 +84,15 @@ class DoctorReport:
     drifted: list[DoctorEntry] = field(default_factory=list)
     missing: list[DoctorEntry] = field(default_factory=list)
     legacy_paths: list[Path] = field(default_factory=list)
+    hook_trust: list[HookTrustEntry] = field(default_factory=list)
 
     @property
     def clean(self) -> bool:
-        return not self.drifted and not self.missing
+        return (
+            not self.drifted
+            and not self.missing
+            and all(entry.status == "trusted" for entry in self.hook_trust)
+        )
 
 
 def _hash_bytes(payload: bytes) -> str:
@@ -126,6 +155,130 @@ def _detect_legacy_paths(target_dir: Path, *, plugin_root: Path) -> list[Path]:
     return legacy
 
 
+def _read_hook_trust_state(
+    home: Path | None,
+) -> tuple[dict[str, object] | None, str | None]:
+    codex_home = home if home is not None else Path.home()
+    config_path = codex_home / ".codex" / "config.toml"
+    if not config_path.is_file():
+        return None, "Codex user config is missing"
+    try:
+        with config_path.open("rb") as handle:
+            config = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        return None, f"Codex trust state is unreadable: {type(exc).__name__}"
+    hooks = config.get("hooks")
+    if not isinstance(hooks, dict):
+        return {}, None
+    raw_state = hooks.get("state")
+    return (raw_state if isinstance(raw_state, dict) else {}), None
+
+
+def _normalized_hook_hash(spec: HookSpec) -> str:
+    """Return Codex's current normalized trust hash for *spec*.
+
+    Codex hashes a config-derived handler identity, not source JSON. Its
+    normalization resolves the command timeout, omits absent matcher and
+    optional handler fields, canonicalizes JSON object keys recursively, then
+    prefixes the SHA-256 digest with ``sha256:``.
+    """
+    timeout = _HOOK_TIMEOUT_SECONDS
+    if spec.event_type.value == "session_end":
+        timeout = min(max(timeout, 1), 3)
+    identity = {
+        "event_name": spec.event_type.value,
+        "hooks": [
+            {
+                "async": False,
+                "command": f'"${{PLUGIN_ROOT}}/hooks/{codex_hook_name(spec.event_type)}.sh"',
+                "timeout": timeout,
+                "type": "command",
+            }
+        ],
+    }
+    canonical = json.dumps(
+        identity,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(canonical).hexdigest()}"
+
+
+def _hook_trust_entry(
+    spec: HookSpec,
+    *,
+    state: dict[str, object] | None,
+    unavailable_reason: str | None,
+) -> HookTrustEntry:
+    event_name = codex_hook_event_name(spec.event_type)
+    state_key = f"eawf@eawf:hooks/hooks.json:{spec.event_type.value}:0:0"
+    if unavailable_reason is not None:
+        return HookTrustEntry(
+            event_name=event_name,
+            state_key=state_key,
+            status="unavailable",
+            reason=unavailable_reason,
+        )
+    assert state is not None
+    raw_entry = state.get(state_key)
+    if not isinstance(raw_entry, dict):
+        return HookTrustEntry(
+            event_name=event_name,
+            state_key=state_key,
+            status="untrusted",
+            reason="hook needs review in Codex /hooks",
+        )
+    if raw_entry.get("enabled") is False:
+        return HookTrustEntry(
+            event_name=event_name,
+            state_key=state_key,
+            status="disabled",
+            reason="hook is disabled in Codex /hooks",
+        )
+    trusted_hash = raw_entry.get("trusted_hash")
+    if not isinstance(trusted_hash, str) or not trusted_hash:
+        return HookTrustEntry(
+            event_name=event_name,
+            state_key=state_key,
+            status="untrusted",
+            reason="hook needs review in Codex /hooks",
+        )
+    current_hash = _normalized_hook_hash(spec)
+    if trusted_hash != current_hash:
+        return HookTrustEntry(
+            event_name=event_name,
+            state_key=state_key,
+            status="untrusted",
+            reason="hook changed since approval; review in Codex /hooks",
+        )
+    return HookTrustEntry(
+        event_name=event_name,
+        state_key=state_key,
+        status="trusted",
+        reason="persisted Codex trust hash matches current hook",
+    )
+
+
+def _hook_trust_entries(home: Path | None) -> list[HookTrustEntry]:
+    """Read Codex's persisted per-hook trust/enablement state.
+
+    Codex owns trust changes through its ``/hooks`` browser. Eä only reads the
+    public config state so doctor can explain why an installed hook will be
+    skipped. The doctor mirrors Codex's normalized hash computation for
+    comparison but never writes trust state.
+    """
+    state, unavailable_reason = _read_hook_trust_state(home)
+    return [
+        _hook_trust_entry(
+            spec,
+            state=state,
+            unavailable_reason=unavailable_reason,
+        )
+        for spec in _codex_hook_specs()
+    ]
+
+
 def doctor_plugin(
     target_dir: Path,
     *,
@@ -165,7 +318,7 @@ def doctor_plugin(
             drifted=drifted,
             missing=missing,
         )
-    for hook_spec in HOOK_REGISTRY:
+    for hook_spec in _codex_hook_specs():
         from eawf.surfaces.render.hooks import render_hook_sh
 
         _classify_entry(
@@ -177,6 +330,16 @@ def doctor_plugin(
             drifted=drifted,
             missing=missing,
         )
+
+    _classify_entry(
+        _hook_config_target(plugin_root),
+        region_id="plugin.codex.hook_config",
+        kind="hook_config",
+        expected_body=_render_hook_config(),
+        ok=ok,
+        drifted=drifted,
+        missing=missing,
+    )
 
     _classify_entry(
         _manifest_target(plugin_root),
@@ -234,11 +397,14 @@ def doctor_plugin(
         drifted=drifted,
         missing=missing,
         legacy_paths=legacy,
+        hook_trust=_hook_trust_entries(home),
     )
 
 
 __all__ = [
     "DoctorEntry",
     "DoctorReport",
+    "HookTrustEntry",
+    "HookTrustStatus",
     "doctor_plugin",
 ]

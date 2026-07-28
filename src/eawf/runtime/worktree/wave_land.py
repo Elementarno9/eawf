@@ -25,13 +25,14 @@ worktree-registry lock (when applicable).
 from __future__ import annotations
 
 import bisect
+import contextlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 import eawf.runtime.worktree.git as git
-from eawf.kernel.state.enums import WaveStatus, WorktreeStatus
-from eawf.kernel.state.models import State
+from eawf.kernel.state.enums import WaveIntegrationKind, WaveStatus, WorktreeStatus
+from eawf.kernel.state.models import State, WaveIntegration
 from eawf.kernel.store.paths import store_dir as _store_dir
 from eawf.runtime.worktree.cleanup import CleanupResult, cleanup_worktree
 from eawf.runtime.worktree.merge_back import (
@@ -41,6 +42,16 @@ from eawf.runtime.worktree.merge_back import (
 )
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.scope import resolve_state_path
+from eawf.workflow.lifecycle.integration import (
+    DependencyBarrierError,
+    DependencyEvaluation,
+    bind_start_dependencies,
+    create_wave_integration,
+    digest_wave_contract,
+    evaluate_dependency_barriers,
+    latest_wave_integration,
+    require_land_dependencies,
+)
 from eawf.workflow.lifecycle.transitions import LifecycleError, close_wave
 from eawf.workflow.verify import compute as compute_readiness
 from eawf.workflow.verify.models import CloseReadiness
@@ -65,6 +76,8 @@ class WaveLandResult:
         merged_commit: HEAD of the parent branch post-merge — same as the
             last entry of *commits* when *commits* is non-empty; otherwise
             the pre-call HEAD.
+        integration_id: Immutable integration-generation id recorded before
+            close verification.
         cleanup: The :class:`CleanupResult` from
             :func:`cleanup_worktree`, or ``None`` when cleanup was
             skipped via ``keep_worktree=True``.
@@ -76,6 +89,7 @@ class WaveLandResult:
     closed: bool
     worktree_cleaned: bool
     merged_commit: str
+    integration_id: str | None
     cleanup: CleanupResult | None
 
 
@@ -141,14 +155,51 @@ def _merged_record_result(
     *,
     repo_root: Path,
     wave_id: str,
+    candidate_sha: str,
+    previous_integration: WaveIntegration | None,
 ) -> MergeBackResult | None:
-    """Return a synthetic merge result when a prior land already merged commits."""
+    """Reuse an exact prior merge or replay only newer repair commits."""
     wave = state.waves[wave_id]
     if state.worktrees is None or wave.worktree_id is None:
         return None
     record = state.worktrees.get(wave.worktree_id)
     if record is None or record.status != WorktreeStatus.MERGED:
         return None
+    if previous_integration is not None and candidate_sha != previous_integration.candidate_sha:
+        commits = git.rev_list(
+            repo_root,
+            range_spec=f"{previous_integration.candidate_sha}..{candidate_sha}",
+        )
+        picked: list[str] = []
+        for sha in commits:
+            clean, _detail = git.cherry_pick(repo_root, sha=sha)
+            if not clean:
+                record.status = WorktreeStatus.CONFLICTED
+                record.merged_commit = None
+                return MergeBackResult(
+                    record=record,
+                    strategy=STRATEGY_CHERRY_PICK,
+                    picked_commits=picked,
+                    target_branch=record.base_branch,
+                    merged_commit=None,
+                    conflicted=True,
+                    conflict_files=[],
+                    conflict_commit=sha,
+                )
+            picked.append(git.head_sha(repo_root))
+        merged_commit = git.head_sha(repo_root)
+        record.merged_commit = merged_commit
+        logger.info(f"wave_land wave={wave_id} replay_repair_commits={picked} record={record.id}")
+        return MergeBackResult(
+            record=record,
+            strategy=STRATEGY_CHERRY_PICK,
+            picked_commits=picked,
+            target_branch=record.base_branch,
+            merged_commit=merged_commit,
+            conflicted=False,
+            conflict_files=[],
+            conflict_commit=None,
+        )
     merged_commit = record.merged_commit or git.head_sha(repo_root)
     logger.info(f"wave_land wave={wave_id} reuse_merged_record={record.id}")
     return MergeBackResult(
@@ -205,6 +256,7 @@ def wave_land(
     wave_id: str,
     outcome: str | None = None,
     keep_worktree: bool = False,
+    defer_close: bool = False,
 ) -> WaveLandResult:
     """Cherry-pick the wave's worktree commits onto the parent branch
     and close the wave.
@@ -219,6 +271,9 @@ def wave_land(
         keep_worktree: When ``True``, skip the post-close cleanup. The
             worktree directory and branch remain in place — useful for
             inspect-then-discard flows.
+        defer_close: When ``True``, stop after recording the immutable
+            integration fact. The daemon submits durable close work after the
+            integration transaction commits.
 
     Returns:
         A :class:`WaveLandResult` describing the picked commits, the
@@ -233,11 +288,57 @@ def wave_land(
         LifecycleError surfaces propagate from :func:`close_wave`.
     """
     _check_wave_exists_and_active(state, wave_id)
+    try:
+        require_land_dependencies(state, wave_id=wave_id)
+    except DependencyBarrierError as exc:
+        raise cli_errors.ValidationError(str(exc)) from exc
+
+    existing_integration = latest_wave_integration(state, wave_id)
+    wave = state.waves[wave_id]
+    if state.worktrees is None or wave.worktree_id is None:
+        raise cli_errors.UserError(
+            f"wave {wave_id!r} has no worktree record to integrate",
+            kind="NotFound",
+        )
+    record = state.worktrees.get(wave.worktree_id)
+    if record is None:
+        raise cli_errors.UserError(
+            f"wave {wave_id!r} references unknown worktree {wave.worktree_id!r}",
+            kind="NotFound",
+        )
+    if git.branch_exists(repo_root, record.branch):
+        candidate_sha = git.commit_sha(repo_root, record.branch)
+    elif existing_integration is not None and record.status is WorktreeStatus.MERGED:
+        candidate_sha = git.commit_sha(repo_root, existing_integration.candidate_sha)
+    else:
+        raise cli_errors.UserError(
+            f"worktree branch {record.branch!r} does not exist",
+            kind="NotFound",
+        )
+    current_head = git.commit_sha(repo_root, "HEAD")
+    prior_merge_matches = (
+        existing_integration is not None
+        and record.status is WorktreeStatus.MERGED
+        and record.merged_commit is not None
+        and git.commit_sha(repo_root, record.merged_commit) == existing_integration.integrated_sha
+        and candidate_sha == existing_integration.candidate_sha
+    )
+    base_sha = (
+        git.commit_sha(repo_root, existing_integration.base_sha)
+        if prior_merge_matches and existing_integration is not None
+        else current_head
+    )
 
     # A prior ``wave land`` may have landed commits but skipped close
     # because readiness was not ready. Re-running should re-check
     # readiness and close, not cherry-pick the same source branch again.
-    merge_result = _merged_record_result(state, repo_root=repo_root, wave_id=wave_id)
+    merge_result = _merged_record_result(
+        state,
+        repo_root=repo_root,
+        wave_id=wave_id,
+        candidate_sha=candidate_sha,
+        previous_integration=existing_integration,
+    )
     if merge_result is None:
         # merge_back will raise UserError (kind="NotFound") when the
         # worktree record is missing (e.g., wave was never claimed via
@@ -259,13 +360,33 @@ def wave_land(
     # non-None merged_commit (merge_back populates HEAD on the no-op
     # path too, so this is always set on the success branch).
     assert merge_result.merged_commit is not None
-    merged_commit = merge_result.merged_commit
+    merged_commit = git.commit_sha(repo_root, merge_result.merged_commit)
+
+    integration = create_wave_integration(
+        state,
+        wave_id=wave_id,
+        base_sha=base_sha,
+        candidate_sha=candidate_sha,
+        integrated_sha=merged_commit,
+        tree_sha=git.tree_sha(repo_root, merged_commit),
+        diff_digest=git.diff_digest(
+            repo_root,
+            base_sha=base_sha,
+            head_sha=merged_commit,
+        ),
+        spec_digest=digest_wave_contract(state, wave_id=wave_id),
+        kind=WaveIntegrationKind.LAND,
+    )
 
     commits = list(merge_result.picked_commits)
     chosen_outcome = outcome if outcome else _format_default_outcome(len(commits))
 
-    readiness = _compute_close_readiness(state, repo_root=repo_root, wave_id=wave_id)
-    closed = readiness is None or readiness.ready
+    readiness = (
+        None
+        if defer_close
+        else _compute_close_readiness(state, repo_root=repo_root, wave_id=wave_id)
+    )
+    closed = not defer_close and (readiness is None or readiness.ready)
     if closed:
         try:
             close_wave(
@@ -283,7 +404,7 @@ def wave_land(
 
     cleanup_result: CleanupResult | None = None
     worktree_cleaned = False
-    if closed and not keep_worktree:
+    if (closed or defer_close) and not keep_worktree:
         # The cleanup runs under the same state lock; the worktree-
         # registry lock is held by the caller (see worktree.py for the
         # always-registry-then-state ordering).
@@ -307,6 +428,7 @@ def wave_land(
         closed=closed,
         worktree_cleaned=worktree_cleaned,
         merged_commit=merged_commit,
+        integration_id=integration.id,
         cleanup=cleanup_result,
     )
 
@@ -372,12 +494,23 @@ class WaveLandBatchResult:
         skipped: Waves that were inspected but did not meet the
             eligibility filter (informational; populated only when
             ``ready_only`` is set).
+        barrier_requirements: Required dependency stages for waves skipped or
+            stopped at a configured land barrier.
     """
 
     landed: list[WaveLandResult]
     failed_wave: str | None
     error: str | None
     skipped: list[str]
+    barrier_requirements: dict[str, tuple[str, ...]]
+
+
+def _required_dependency_stages(evaluation: DependencyEvaluation) -> tuple[str, ...]:
+    """Return stable stage labels from one blocked dependency evaluation."""
+    stages = [item.rsplit(":", 1)[-1] for item in evaluation.unmet]
+    if evaluation.stale:
+        stages.append("fresh-integration")
+    return tuple(dict.fromkeys(stages))
 
 
 def wave_land_batch(
@@ -387,6 +520,7 @@ def wave_land_batch(
     iter_id: str | None = None,
     ready_only: bool = False,
     keep_worktree: bool = False,
+    defer_close: bool = False,
 ) -> WaveLandBatchResult:
     """Land every eligible wave in dep order; stop on first failure.
 
@@ -394,13 +528,12 @@ def wave_land_batch(
         state: Mutated in place. Caller holds the state-side lock.
         repo_root: Repository root.
         iter_id: When set, scope the batch to waves in that iter.
-        ready_only: When set, additionally require all declared deps to
-            be ``CLOSED`` before landing. Useful when the operator wants
-            to avoid landing waves whose dependencies have not yet
-            completed (the unfiltered batch will *still* land them if
-            the cherry-pick succeeds — declared deps and pickable
-            commits are different concepts).
+        ready_only: When set, skip waves whose configured land dependency
+            barriers are not satisfied.
         keep_worktree: Forwarded to :func:`wave_land`.
+        defer_close: Forwarded to :func:`wave_land`. Daemon callers set this
+            so the batch records integrations only and submits durable close
+            attempts after the integration transaction commits.
 
     Returns:
         :class:`WaveLandBatchResult`. ``failed_wave`` and ``error`` are
@@ -408,21 +541,31 @@ def wave_land_batch(
     """
     candidates = _candidate_waves_for_batch(state, iter_id)
     skipped: list[str] = []
-    if ready_only:
-        filtered: list[str] = []
-        for wid in candidates:
-            wave = state.waves[wid]
-            deps_ok = all(
-                state.waves[d].status == WaveStatus.CLOSED for d in wave.deps if d in state.waves
-            )
-            if deps_ok:
-                filtered.append(wid)
-            else:
-                skipped.append(wid)
-        candidates = filtered
-
+    barrier_requirements: dict[str, tuple[str, ...]] = {}
     landed: list[WaveLandResult] = []
     for wid in candidates:
+        # Land evaluation below names any configured threshold that remains
+        # blocked. A relaxed integrated edge may become bindable after its
+        # upstream wave lands earlier in this same batch.
+        with contextlib.suppress(DependencyBarrierError):
+            bind_start_dependencies(state, wave_id=wid)
+        evaluation = evaluate_dependency_barriers(state, wave_id=wid, for_land=True)
+        if not evaluation.satisfied:
+            detail = [*evaluation.unmet, *evaluation.stale]
+            barrier_requirements[wid] = _required_dependency_stages(evaluation)
+            error = f"wave {wid!r} land barrier blocked: {detail}"
+            if ready_only:
+                skipped.append(wid)
+                logger.info(f"wave_land_batch action=skip wave={wid} error={error}")
+                continue
+            logger.info(f"wave_land_batch action=stop wave={wid} error={error}")
+            return WaveLandBatchResult(
+                landed=landed,
+                failed_wave=wid,
+                error=error,
+                skipped=skipped,
+                barrier_requirements=barrier_requirements,
+            )
         try:
             result = wave_land(
                 state,
@@ -430,24 +573,27 @@ def wave_land_batch(
                 wave_id=wid,
                 outcome=None,
                 keep_worktree=keep_worktree,
+                defer_close=defer_close,
             )
         except cli_errors.CliError as exc:
-            logger.info(f"wave_land_batch stopping wave={wid} error={exc!s}")
+            logger.info(f"wave_land_batch action=stop wave={wid} error={exc!s}")
             return WaveLandBatchResult(
                 landed=landed,
                 failed_wave=wid,
                 error=str(exc),
                 skipped=skipped,
+                barrier_requirements=barrier_requirements,
             )
         landed.append(result)
-        if not result.closed:
+        if not defer_close and not result.closed:
             error = "close-readiness not ready; wave left open after landing commits"
-            logger.info(f"wave_land_batch stopping wave={wid} error={error}")
+            logger.info(f"wave_land_batch action=stop wave={wid} error={error}")
             return WaveLandBatchResult(
                 landed=landed,
                 failed_wave=wid,
                 error=error,
                 skipped=skipped,
+                barrier_requirements=barrier_requirements,
             )
 
     return WaveLandBatchResult(
@@ -455,6 +601,7 @@ def wave_land_batch(
         failed_wave=None,
         error=None,
         skipped=skipped,
+        barrier_requirements=barrier_requirements,
     )
 
 

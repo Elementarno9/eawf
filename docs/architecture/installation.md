@@ -332,10 +332,11 @@ Claude Code — add the marketplace by repo slug, then install from it:
 /plugin install eawf@eawf
 ```
 
-Codex — point `plugin marketplace add` at the repo; `marketplace add` registers the `eawf` marketplace and auto-installs its plugin (Codex has no separate `plugin install`):
+Codex — register the repo marketplace, then install its plugin with the provider's `plugin add` command:
 
 ```bash
 codex plugin marketplace add https://github.com/Elementarno9/eawf
+codex plugin add eawf@eawf
 ```
 
 See `docs/architecture/plugins.md` for the marketplace-pointer schemas and how the `plugin-release.yaml` workflow publishes each runtime's artifact.

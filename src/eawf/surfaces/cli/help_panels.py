@@ -127,6 +127,7 @@ COMMAND_PANELS: dict[str, str] = {
     "agent-report": "planning",
     "artifact": "planning",
     "backlog": "planning",
+    "close": "planning",
     "decision": "planning",
     "draft": "planning",
     "goal": "planning",

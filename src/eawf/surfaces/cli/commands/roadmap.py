@@ -45,6 +45,7 @@ from rich.table import Table
 from eawf.kernel.config.schema import VerifyWaiverMode
 from eawf.kernel.state.enums import (
     AgentSessionRole,
+    DependencyStage,
     EffortBucket,
     IterStatus,
     PhaseStatus,
@@ -52,6 +53,7 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.kernel.state.ids import is_iter_id, is_phase_id, is_wave_id, natural_key
+from eawf.kernel.state.models import wave_dependency_key
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
@@ -771,6 +773,20 @@ def roadmap_revise_cmd(
             help="Replace a wave's deps. Form: 'W04=W01,W02' or full ids.",
         ),
     ] = None,
+    set_dep_barrier: Annotated[
+        str | None,
+        typer.Option(
+            "--set-dep-barrier",
+            help=("Set one dependency threshold. Form: 'W04:W01:integrated:verified' or full ids."),
+        ),
+    ] = None,
+    barrier_reason: Annotated[
+        str | None,
+        typer.Option(
+            "--reason",
+            help="Optional rationale for --set-dep-barrier.",
+        ),
+    ] = None,
     retitle: Annotated[
         str | None,
         typer.Option(
@@ -929,11 +945,12 @@ def roadmap_revise_cmd(
             flags=flags,
         )
         return
-    selected = [opt for opt in (add_wave, remove_wave, set_deps, retitle) if opt]
+    selected = [opt for opt in (add_wave, remove_wave, set_deps, set_dep_barrier, retitle) if opt]
     if len(selected) != 1:
         cli_errors.emit_error(
             cli_errors.UserError(
-                "exactly one of --add-wave/--remove-wave/--set-deps/--retitle must be passed",
+                "exactly one of --add-wave/--remove-wave/--set-deps/"
+                "--set-dep-barrier/--retitle must be passed",
                 kind="InvalidInput",
             ),
             flags=flags,
@@ -965,6 +982,101 @@ def roadmap_revise_cmd(
         state_path = resolve_state_path(flags.workspace)
     except FileNotFoundError as exc:
         cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
+        return
+
+    if set_dep_barrier:
+        from eawf.surfaces.cli import _dispatch
+        from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+        parts = [part.strip() for part in set_dep_barrier.split(":")]
+        if len(parts) != 4 or any(not part for part in parts):
+            cli_errors.emit_error(
+                cli_errors.UserError(
+                    "--set-dep-barrier must use 'DOWNSTREAM:UPSTREAM:START_AFTER:LAND_AFTER'",
+                    kind="InvalidInput",
+                ),
+                flags=flags,
+            )
+            return
+        downstream_ref, upstream_ref, start_raw, land_raw = parts
+        try:
+            start_after = DependencyStage(start_raw)
+            land_after = DependencyStage(land_raw)
+            with state_transaction(state_path, read_only=True) as state:
+                _resolve_revisable_phase(state, phase_id)
+                barrier_iter_id = _resolve_target_iter(state, phase_id, iter_opt)
+                downstream_id = _coerce_full_wave_id(
+                    state,
+                    phase_id,
+                    downstream_ref,
+                    iter_id=barrier_iter_id,
+                )
+                upstream_id = _coerce_full_wave_id(
+                    state,
+                    phase_id,
+                    upstream_ref,
+                    iter_id=barrier_iter_id,
+                )
+            _dispatch.escalate_mutation(
+                "roadmap revise --set-dep-barrier",
+                flags=flags,
+            )
+            repo_root = str((flags.workspace or Path.cwd()).resolve())
+            with DaemonClient() as client:
+                result = client.call(
+                    "dependency_barrier.set",
+                    {
+                        "repo_root": repo_root,
+                        "wave_id": downstream_id,
+                        "dep_wave_id": upstream_id,
+                        "start_after": start_after.value,
+                        "land_after": land_after.value,
+                        "reason": (
+                            barrier_reason
+                            or "explicit dependency barrier authored via roadmap revise"
+                        ),
+                    },
+                )
+        except ValueError as exc:
+            cli_errors.emit_error(
+                cli_errors.UserError(
+                    f"invalid dependency stage: {exc}",
+                    kind="InvalidInput",
+                ),
+                flags=flags,
+            )
+            return
+        except DaemonRpcError as exc:
+            if exc.code == cli_errors.RPC_VALIDATION_FAILED:
+                err: cli_errors.CliError = cli_errors.ValidationError(exc.message)
+            else:
+                err = cli_errors.cli_error_for_rpc(exc.code, exc.message)
+            cli_errors.emit_error(err, flags=flags)
+            return
+        except cli_errors.CliError as exc:
+            cli_errors.emit_error(exc, flags=flags)
+            return
+        except (OSError, RuntimeError, TimeoutError) as exc:
+            cli_errors.emit_error(
+                cli_errors.DaemonUnreachable(
+                    f"daemon unavailable for dependency_barrier.set: {exc}"
+                ),
+                flags=flags,
+            )
+            return
+        action_summary = (
+            f"set barrier {downstream_id} <- {upstream_id}: {start_after.value}/{land_after.value}"
+        )
+        emit_json_or_text(
+            {
+                "phase_id": phase_id,
+                "action": action_summary,
+                "status": "ok",
+                **result,
+            },
+            f"roadmap revise {phase_id}: {action_summary}",
+            flags=flags,
+        )
         return
 
     action_summary = ""
@@ -1111,6 +1223,7 @@ def roadmap_revise_cmd(
                     "add_wave": add_wave,
                     "remove_wave": remove_wave,
                     "set_deps": set_deps,
+                    "set_dep_barrier": set_dep_barrier,
                     "retitle": retitle,
                     "release": release,
                 },
@@ -1396,7 +1509,6 @@ def roadmap_show_cmd(
             phases = sorted(state.phases.values(), key=lambda p: natural_key(p.id))
             if phase is not None:
                 phases = [p for p in phases if p.id == phase]
-            rows = [_phase_summary(state, p.id) for p in phases]
             nested = [_phase_node(state, p.id, now=datetime.now(UTC)) for p in phases]
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
@@ -1418,7 +1530,7 @@ def roadmap_show_cmd(
             text = render_roadmap_markdown(state, phase_id_filter=phase, config=merged_config)
     else:
         text = _render_show_rich(nested, plain=flags.plain_output)
-    emit_json_or_text({"phases": rows}, text, flags=flags)
+    emit_json_or_text({"phases": nested}, text, flags=flags)
 
 
 def _iter_summary(state: State, iter_id: str) -> dict[str, Any]:
@@ -1437,13 +1549,34 @@ def _iter_summary(state: State, iter_id: str) -> dict[str, Any]:
 
 def _wave_summary(state: State, wave_id: str) -> dict[str, Any]:
     """Return a JSON-friendly summary row for a wave."""
+    from eawf.workflow.lifecycle.integration import dependency_barrier
+
     w = state.waves[wave_id]
+    barriers: list[dict[str, Any]] = []
+    for dep_wave_id in w.deps:
+        key = wave_dependency_key(wave_id, dep_wave_id)
+        barrier = dependency_barrier(
+            state,
+            wave_id=wave_id,
+            dep_wave_id=dep_wave_id,
+        )
+        explicit = key in state.wave_dependency_barriers
+        barriers.append(
+            {
+                "dep_wave_id": dep_wave_id,
+                "start_after": barrier.start_after.value,
+                "land_after": barrier.land_after.value,
+                "explicit": explicit,
+                "reason": barrier.reason if explicit else None,
+            }
+        )
     return {
         "id": w.id,
         "iter_id": w.iter_id,
         "status": w.status.value,
         "title": w.title,
         "deps": list(w.deps),
+        "dependency_barriers": barriers,
         "opened_at": w.opened_at.isoformat(),
     }
 
@@ -1579,7 +1712,13 @@ def _add_phase_rows(table: Table, phase: dict[str, Any]) -> None:
             # tracks status (PENDING/CLAIMED/...), and aging is captured at
             # the iter level via _is_stale_iter (no recent activity).
             w_style = "dim" if it["stale"] else ""
-            w_deps = ", ".join(w["deps"]) or "-"
+            w_deps = (
+                ", ".join(
+                    f"{row['dep_wave_id']}[{row['start_after']}/{row['land_after']}]"
+                    for row in w["dependency_barriers"]
+                )
+                or "-"
+            )
             table.add_row(
                 _styled("    wave", w_style),
                 _styled(w["id"], w_style),
@@ -1618,7 +1757,16 @@ def _render_show_plain(nodes: list[dict[str, Any]]) -> str:
             )
             for w in it["waves"]:
                 w_tag = " (stale)" if it["stale"] else ""
-                lines.append(f"    wave {w['id']:<13} {w['status']:<12}        {w['title']}{w_tag}")
+                barriers = (
+                    ", ".join(
+                        f"{row['dep_wave_id']}[{row['start_after']}/{row['land_after']}]"
+                        for row in w["dependency_barriers"]
+                    )
+                    or "-"
+                )
+                lines.append(
+                    f"    wave {w['id']:<13} {w['status']:<12} deps={barriers}  {w['title']}{w_tag}"
+                )
     return "\n".join(lines)
 
 

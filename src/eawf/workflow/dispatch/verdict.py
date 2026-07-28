@@ -56,9 +56,9 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import TypeAdapter
+from pydantic import AfterValidator, TypeAdapter
 
 from eawf.kernel.spec.wave import WaveBehavior
 from eawf.kernel.state.enums import (
@@ -213,6 +213,34 @@ class WaveVerdictResult:
     assist_result: LLMAssistResult
     auditor_session_id: str
     verdict: AgentReportVerdict
+
+
+@dataclass(frozen=True)
+class DurableAuditCriterion:
+    """One required criterion and its exact deterministic proof bindings."""
+
+    criterion_id: str
+    text: str
+    deterministic: bool
+    gate_receipt_urns: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class DurableAuditContext:
+    """Exact immutable close inputs exposed to a durable close auditor."""
+
+    wave_id: str
+    close_attempt_id: str
+    integration_id: str
+    integrated_sha: str
+    tree_sha: str
+    spec_digest: str
+    criteria_digest: str
+    gate_manifest_digest: str
+    policy_digest: str
+    runner_digest: str
+    dependency_binding_digest: str
+    criteria: tuple[DurableAuditCriterion, ...]
 
 
 def _wave_text_corpus(wave: Wave) -> str:
@@ -416,6 +444,35 @@ def _rubric_block(rubric: Sequence[WaveBehavior]) -> str:
     return "\n".join(rows)
 
 
+def _durable_audit_context_block(context: DurableAuditContext) -> str:
+    """Render exact close inputs and criterion-to-receipt proof bindings."""
+    lines = [
+        f"- wave: `{context.wave_id}`",
+        f"- close attempt: `{context.close_attempt_id}`",
+        f"- integration: `{context.integration_id}`",
+        f"- integrated SHA: `{context.integrated_sha}`",
+        f"- tree SHA: `{context.tree_sha}`",
+        f"- spec digest: `{context.spec_digest}`",
+        f"- criteria digest: `{context.criteria_digest}`",
+        f"- gate manifest digest: `{context.gate_manifest_digest}`",
+        f"- policy digest: `{context.policy_digest}`",
+        f"- runner digest: `{context.runner_digest}`",
+        f"- dependency binding digest: `{context.dependency_binding_digest}`",
+        "",
+        "Required criterion evidence bindings:",
+    ]
+    for criterion in context.criteria:
+        lines.append(
+            f"- `{criterion.criterion_id}`: {criterion.text} "
+            f"(deterministic={str(criterion.deterministic).lower()})"
+        )
+        if criterion.gate_receipt_urns:
+            lines.extend(f"  - `{urn}`" for urn in criterion.gate_receipt_urns)
+        else:
+            lines.append("  - no deterministic GateReceipt applies")
+    return "\n".join(lines)
+
+
 #: The auditor runs inside the operator's LIVE working tree, so a verification
 #: command that mutates that tree is not a read: ``pre-commit run --all-files``
 #: stashes uncommitted changes and, when a hook auto-fix conflicts with the
@@ -445,6 +502,7 @@ def build_auditor_prompt(
     rubric: Sequence[WaveBehavior] | None = None,
     evidence_block: str | None = None,
     include_diff: bool = True,
+    durable_context: DurableAuditContext | None = None,
 ) -> str:
     """Return the fresh-context auditor prompt for *wave*.
 
@@ -476,6 +534,9 @@ def build_auditor_prompt(
             verdict must ground in. ``None`` omits the evidence section.
         include_diff: When ``False`` the diff section is omitted entirely
             (an evidence-grounded verdict cannot lean on the diff).
+        durable_context: Optional exact-revision close context. When present,
+            names every frozen close input and maps deterministic criteria to
+            their already-persisted GateReceipt URNs.
 
     Returns:
         The rendered Markdown auditor prompt.
@@ -497,6 +558,15 @@ def build_auditor_prompt(
         )
     if evidence_block is not None:
         sections.append("## Evidence\n\n" + evidence_block)
+    if durable_context is not None:
+        sections.append(
+            "## Exact durable-close context\n"
+            "\n"
+            "Judge only this frozen close attempt. Deterministic gate proof is\n"
+            "the mapped GateReceipt store record; do not re-run those gates.\n"
+            "\n"
+            f"{_durable_audit_context_block(durable_context)}"
+        )
     if rubric:
         sections.append(
             "## Rubric (refute-first)\n"
@@ -521,10 +591,87 @@ def build_auditor_prompt(
         "success criterion above, and any `refutations` you found. No prose, no\n"
         "code fences."
     )
+    if durable_context is not None:
+        sections.append(
+            "## Durable evidence contract\n"
+            "\n"
+            "Emit exactly one `criteria` row for every required criterion above,\n"
+            "in the same order, using its full criterion text. Every row MUST\n"
+            "carry at least one `evidence_refs` entry. For a deterministic row,\n"
+            'at least one entry MUST use `kind: "store_record"` and cite one of\n'
+            "that criterion's mapped GateReceipt URNs exactly. The aggregate\n"
+            "verdict MUST agree with those rows: pass / pass-with-followups\n"
+            "requires every row to pass; fail / blocked requires at least one\n"
+            "row to fail. A close-ready verdict cannot carry refutations."
+        )
     return "\n\n".join(sections)
 
 
-def parse_auditor_report_body(raw: object) -> AuditorReportBody:
+def _validate_durable_auditor_aggregate(body: AuditorReportBody) -> None:
+    """Reject an aggregate verdict that contradicts required criterion rows."""
+    all_required_passed = all(row.passed for row in body.criteria)
+    close_ready = body.verdict in _CLOSE_READY_VERDICTS
+    if close_ready != all_required_passed:
+        raise ValueError(
+            "durable audit aggregate verdict contradicts required criterion rows: "
+            f"verdict={body.verdict.value!r} all_required_passed={all_required_passed}"
+        )
+    if close_ready and body.refutations:
+        raise ValueError(
+            "durable audit close-ready verdict cannot carry refutations; "
+            "mark the contradicted required criterion false"
+        )
+
+
+def _validate_durable_auditor_body(
+    body: AuditorReportBody,
+    *,
+    context: DurableAuditContext,
+) -> AuditorReportBody:
+    """Enforce exact required-criterion coverage and receipt-grounded proof."""
+    if body.target_id != context.wave_id:
+        raise ValueError(
+            f"durable audit target_id must equal wave id: expected "
+            f"{context.wave_id!r}, got {body.target_id!r}"
+        )
+    expected = context.criteria
+    if len(body.criteria) != len(expected):
+        raise ValueError(
+            f"durable audit requires {len(expected)} criterion rows, got {len(body.criteria)}"
+        )
+    for row, criterion in zip(body.criteria, expected, strict=True):
+        if row.criterion != criterion.text:
+            raise ValueError(
+                f"durable audit criterion mismatch for {criterion.criterion_id!r}: "
+                f"expected {criterion.text!r}, got {row.criterion!r}"
+            )
+        if not row.evidence_refs:
+            raise ValueError(
+                f"durable audit criterion requires evidence_refs: {criterion.criterion_id!r}"
+            )
+        if criterion.deterministic:
+            mapped = set(criterion.gate_receipt_urns)
+            if not mapped:
+                raise ValueError(
+                    f"deterministic criterion has no GateReceipt binding: "
+                    f"{criterion.criterion_id!r}"
+                )
+            if not any(
+                ref.kind == "store_record" and ref.ref in mapped for ref in row.evidence_refs
+            ):
+                raise ValueError(
+                    f"deterministic criterion must cite a mapped GateReceipt URN: "
+                    f"{criterion.criterion_id!r}"
+                )
+    _validate_durable_auditor_aggregate(body)
+    return body
+
+
+def parse_auditor_report_body(
+    raw: object,
+    *,
+    durable_context: DurableAuditContext | None = None,
+) -> AuditorReportBody:
     """Validate *raw* as an :class:`AuditorReportBody`.
 
     The forced-schema validator the producer hands the bounded re-ask loop
@@ -540,6 +687,8 @@ def parse_auditor_report_body(raw: object) -> AuditorReportBody:
 
     Args:
         raw: The JSON-decoded spawn output.
+        durable_context: Optional exact close context. When present, adds
+            required-criterion coverage and GateReceipt citation validation.
 
     Returns:
         The validated :class:`AuditorReportBody`.
@@ -548,7 +697,18 @@ def parse_auditor_report_body(raw: object) -> AuditorReportBody:
         pydantic.ValidationError: When *raw* is not a valid auditor report
             body (wrong role, missing fields, or a schema mismatch).
     """
-    return _AUDITOR_BODY_ADAPTER.validate_python(_coerce_confidence(raw))
+    normalized = _coerce_confidence(raw)
+    if durable_context is None:
+        return _AUDITOR_BODY_ADAPTER.validate_python(normalized)
+    adapter: TypeAdapter[AuditorReportBody] = TypeAdapter(
+        Annotated[
+            AuditorReportBody,
+            AfterValidator(
+                lambda body: _validate_durable_auditor_body(body, context=durable_context)
+            ),
+        ]
+    )
+    return adapter.validate_python(normalized)
 
 
 #: Cutoffs for reading a numeric confidence as an enum bucket. A model asked for
@@ -735,6 +895,7 @@ async def produce_wave_verdict(
     now: datetime | None = None,
     on_session_registered: Callable[[State], None] | None = None,
     on_session_terminalized: Callable[[State], None] | None = None,
+    durable_context: DurableAuditContext | None = None,
 ) -> WaveVerdictResult:
     """Produce + persist a fresh-context auditor verdict for *wave*.
 
@@ -797,6 +958,9 @@ async def produce_wave_verdict(
             auditor session reaches CLOSED or FAILED. The daemon close path
             persists this terminal state immediately so a later close guard
             rejection cannot leave the durable row ACTIVE.
+        durable_context: Optional exact close-attempt evidence context. Its
+            criterion coverage and receipt bindings are enforced inside the
+            bounded schema re-ask validator.
 
     Returns:
         A :class:`WaveVerdictResult` carrying the append result, the
@@ -831,11 +995,20 @@ async def produce_wave_verdict(
             on_session_registered(state)
 
         diff_base = derive_diff_base(wave.id, repo_root=repo_root)
-        prompt = build_auditor_prompt(wave, diff_base=diff_base)
+        prompt = build_auditor_prompt(
+            wave,
+            diff_base=diff_base,
+            durable_context=durable_context,
+        )
+        validator = (
+            parse_auditor_report_body
+            if durable_context is None
+            else lambda raw: parse_auditor_report_body(raw, durable_context=durable_context)
+        )
         assist_result = await assist_with_schema(
             prompt,
             spawn=spawn,
-            validator=parse_auditor_report_body,
+            validator=validator,
             max_attempts=max_attempts,
         )
         body: AgentReportBody = assist_result.body
@@ -916,6 +1089,8 @@ def assert_not_executor_self_report(state: State, *, wave_id: str, author_sessio
 
 
 __all__ = [
+    "DurableAuditContext",
+    "DurableAuditCriterion",
     "ExecutorSelfReportError",
     "VerdictRequirement",
     "WaveVerdictGate",

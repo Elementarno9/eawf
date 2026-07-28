@@ -16,6 +16,7 @@ Full schema: [`state.schema.json`](state.schema.json)
 | `audits` | no |
 | `backlog` | no |
 | `claims` | no |
+| `close_attempts` | no |
 | `current` | yes |
 | `decisions` | no |
 | `dispatch_paused` | no |
@@ -41,6 +42,9 @@ Full schema: [`state.schema.json`](state.schema.json)
 | `tracks` | no |
 | `updated_at` | yes |
 | `urn` | yes |
+| `wave_dependency_barriers` | no |
+| `wave_dependency_bindings` | no |
+| `wave_integrations` | no |
 | `waves` | yes |
 | `workspace` | yes |
 | `worktrees` | no |

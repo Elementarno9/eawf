@@ -436,6 +436,51 @@ def _wave_close_via_daemon(
     return True
 
 
+def _wave_close_async_via_daemon(
+    *,
+    flags: GlobalFlags,
+    wave_id: str,
+    outcome: str,
+    resolved_sha: str | None,
+    tokens_consumed: int | None,
+    no_runtime_waiver: bool,
+    wait: bool,
+) -> bool:
+    """Submit durable close work and optionally wait for its terminal state."""
+    from eawf.surfaces.cli.commands.close import (
+        call_close_rpc,
+        render_close_status,
+        wait_for_close,
+    )
+
+    try:
+        result = call_close_rpc(
+            method="close.submit",
+            params={
+                "wave_id": wave_id,
+                "outcome": outcome,
+                "commit": resolved_sha,
+                "tokens_consumed": tokens_consumed,
+                "no_runtime_waiver": no_runtime_waiver,
+            },
+            flags=flags,
+        )
+        if wait:
+            result = wait_for_close(
+                ref=result["attempt"]["id"],
+                flags=flags,
+            )
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return True
+
+    emit_json_or_text(result, render_close_status(result), flags=flags)
+    status = result["attempt"]["status"]
+    if wait and status != "closed":
+        raise typer.Exit(code=3)
+    return True
+
+
 # ---- Read-only state loaders ------------------------------------------------
 
 
@@ -540,6 +585,8 @@ def _run_mutation(
     envelope_factory: Any = None,
     extras_factory: Any = None,
     result_callback: Any = None,
+    lock_free_preflight: Any = None,
+    preflight_guard_factory: Any = None,
     closure_kind: bool = False,
     mutation_kind: MutationKind | None = None,
     params: dict[str, Any] | None = None,
@@ -581,6 +628,13 @@ def _run_mutation(
         result_callback: Optional callable receiving the committed daemon or
             fallback result before the command payload renders. Used by
             commands that surface additive mutation advisories.
+        lock_free_preflight: Optional callable receiving a validated state
+            snapshot before the fallback acquires ``state.json``. Close uses
+            this seam for subprocess-bearing verification.
+        preflight_guard_factory: Optional callable projecting the payload row
+            whose identity binds the lock-free preflight. When state advances,
+            the fallback accepts unrelated changes but rejects a changed
+            projection and asks the caller to retry.
     """
     from pydantic import ValidationError as PydValidationError
 
@@ -610,9 +664,44 @@ def _run_mutation(
 
     def _in_process() -> dict[str, Any]:
         """In-process WAL-backed transaction — the daemon-down fallback."""
+        preflight_version: str | None = None
+        preflight_guard: Any = None
+        if lock_free_preflight is not None:
+            preflight_payload = _read_state_payload(state_path)
+            preflight_version = state_version(preflight_payload)
+            try:
+                preflight_state = State.model_validate(preflight_payload)
+            except PydValidationError as exc:
+                raise cli_errors.StateConflict(
+                    f"state at {state_path} fails schema validation: {exc}",
+                    kind="IntegrityViolation",
+                ) from exc
+            try:
+                lock_free_preflight(preflight_state)
+            except LifecycleError as exc:
+                if closure_kind:
+                    raise cli_errors.ValidationError(str(exc)) from exc
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
+            except (PydValidationError, ValueError) as exc:
+                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
+            if preflight_guard_factory is not None:
+                preflight_guard = preflight_guard_factory(preflight_payload)
+
         with portalock.acquire(state_path, timeout=5.0):
             payload = _read_state_payload(state_path)
             before_version = state_version(payload)
+            if preflight_version is not None and before_version != preflight_version:
+                current_guard = (
+                    preflight_guard_factory(payload)
+                    if preflight_guard_factory is not None
+                    else None
+                )
+                if preflight_guard_factory is None or current_guard != preflight_guard:
+                    raise cli_errors.StateConflict(
+                        "close_preflight_stale: target state changed during "
+                        "lock-free preflight; retry the close",
+                        kind="LockConflict",
+                    )
             try:
                 state = State.model_validate(payload)
             except PydValidationError as exc:

@@ -371,3 +371,24 @@ def test_session_start_two_runtimes_same_scope(tmp_state: Path) -> None:
     assert a.exit_code == 0
     assert b.exit_code == 0
     assert json.loads(a.output)["id"] != json.loads(b.output)["id"]
+
+
+def test_session_start_accepts_codex_runtime(tmp_state: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "session",
+            "start",
+            "--role",
+            "executor",
+            "--scope",
+            "QR",
+            "--runtime",
+            "codex",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    session_id = json.loads(result.output)["id"]
+    saved = json.loads(tmp_state.read_text(encoding="utf-8"))
+    assert saved["agent_sessions"][session_id]["runtime"] == "codex"

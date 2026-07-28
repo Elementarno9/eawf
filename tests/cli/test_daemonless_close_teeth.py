@@ -37,8 +37,11 @@ from eawf.kernel.spec.common import CriterionSpec, GateSpec, QualityDimension
 from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
 from eawf.kernel.state.models import AgentSession, State
 from eawf.kernel.store.paths import store_path
+from eawf.runtime.lock import portalock
 from eawf.surfaces.cli._mutation import DAEMONLESS_WAIVER_EVENT_TYPE
 from eawf.surfaces.cli.app import app
+from eawf.surfaces.cli.commands import lifecycle_wave
+from eawf.workflow.verify.models import CloseReadiness
 from tests._session_helpers import seed_active_session_on_disk
 from tests.conftest import make_claim_criterion
 
@@ -336,3 +339,76 @@ def test_daemonless_mechanical_wave_not_verdict_gated(workspace: Path) -> None:
     assert res.exit_code == 0, res.stdout
     assert _wave_status(workspace) == "closed"
     assert _waiver_events(workspace) == []
+
+
+def test_daemonless_close_preflight_does_not_hold_state_lock(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fallback verifier can acquire the state lock while it runs."""
+    _bootstrap_claimed_wave(workspace, effort_bucket="XL")
+    _write_enforce_profile(workspace)
+    calls = 0
+
+    def _probe(
+        state: State,
+        *,
+        wave_id: str,
+        state_path: Path,
+        repo_root: Path,
+        config_root: Path,
+        waived: bool,
+    ) -> CloseReadiness | None:
+        del state, wave_id, repo_root, config_root, waived
+        nonlocal calls
+        calls += 1
+        with portalock.acquire(state_path, timeout=0.1):
+            pass
+        return None
+
+    monkeypatch.setattr(lifecycle_wave, "_run_daemonless_close_preflight", _probe)
+
+    res = runner.invoke(app, ["wave", "close", _WAVE_ID, "--outcome", "done"])
+
+    assert res.exit_code == 0, res.stdout
+    assert calls == 1
+    assert _wave_status(workspace) == "closed"
+
+
+def test_daemonless_close_preflight_rejects_target_wave_drift(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A target-wave change after preflight is refused instead of applied."""
+    _bootstrap_claimed_wave(workspace, effort_bucket="XL")
+    _write_enforce_profile(workspace)
+
+    def _drift_target(
+        state: State,
+        *,
+        wave_id: str,
+        state_path: Path,
+        repo_root: Path,
+        config_root: Path,
+        waived: bool,
+    ) -> CloseReadiness | None:
+        del state, repo_root, config_root, waived
+        live = State.model_validate_json(state_path.read_bytes())
+        live.waves[wave_id].title = "changed during preflight"
+        live.updated_at = datetime.now(UTC)
+        state_path.write_text(live.model_dump_json(), encoding="utf-8")
+        return None
+
+    monkeypatch.setattr(
+        lifecycle_wave,
+        "_run_daemonless_close_preflight",
+        _drift_target,
+    )
+
+    res = runner.invoke(app, ["wave", "close", _WAVE_ID, "--outcome", "done"])
+
+    assert res.exit_code != 0
+    assert "close_preflight_stale" in res.stdout
+    final = State.model_validate_json(_state_path(workspace).read_bytes())
+    assert final.waves[_WAVE_ID].status.value == "claimed"
+    assert final.waves[_WAVE_ID].title == "changed during preflight"

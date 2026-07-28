@@ -754,7 +754,7 @@ class _IdentityStepV10:
 
 def test_model_supported_max_version_derives_from_live_model() -> None:
     """The supported max is read from the live ``State`` Literal, not hard-coded."""
-    assert model_supported_max_version() == "1.19"
+    assert model_supported_max_version() == "1.20"
 
 
 def test_guard_target_supported_allows_target_equal_to_max() -> None:
@@ -911,7 +911,7 @@ def test_migrate_cmd_default_target_migrates_v1_0_to_model_max(
 
     assert result.exit_code == 0, result.output
     reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
-    assert reloaded.schema_version == "1.19"
+    assert reloaded.schema_version == "1.20"
 
 
 def test_migrate_cmd_supported_target_noop_keeps_state_reloadable(

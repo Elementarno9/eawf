@@ -44,7 +44,11 @@ from eawf.kernel.spec.common import CriterionSpec, GateSpec
 from eawf.kernel.spec.promotion import DEFAULT_GATE_ARGV_ALLOWLIST
 from eawf.platform.profiles.models import FloorCheck
 from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, validate_gate_argv
-from eawf.workflow.audit_dsl.models import CheckKind, CheckSpec
+from eawf.workflow.audit_dsl.models import (
+    CheckKind,
+    CheckSpec,
+    GateFreshnessInput,
+)
 from eawf.workflow.skills.audit import build_criterion_specs
 
 logger = logging.getLogger(__name__)
@@ -64,7 +68,12 @@ _COMMAND_EXIT_ZERO_PASSTHROUGH_KEYS: tuple[str, ...] = (
 )
 
 
-def compile_gate(gate: GateSpec, *, criterion: CriterionSpec) -> CheckSpec | None:
+def compile_gate(
+    gate: GateSpec,
+    *,
+    criterion: CriterionSpec,
+    freshness: GateFreshnessInput | None = None,
+) -> CheckSpec | None:
     """Compile a typed :class:`GateSpec` into a runnable :class:`CheckSpec`.
 
     v0.4.0 contract: only ``criterion.evidence_kind == "deterministic"``
@@ -80,9 +89,10 @@ def compile_gate(gate: GateSpec, *, criterion: CriterionSpec) -> CheckSpec | Non
        resulting CheckSpec carries the canonical
        ``{"argv": [...], "criterion": ...}`` shape audit already
        produces.
-    2. Overlays the W15-added kwargs (``timeout_class``, ``scope``,
-       ``wave_id``, ``wave_file_scopes``) from ``gate.args`` onto the
-       CheckSpec's args dict so the runner picks them up.
+    2. Overlays the runner kwargs (``timeout_class``, ``scope``,
+       ``wave_id``, ``wave_file_scopes``) from ``gate.args`` and propagates
+       the top-level ``gate.timeout_s`` when explicitly set. The explicit
+       timeout wins over the timeout-class default at execution.
     3. Renames the spec to the gate id so per-gate evidence + waivers
        still address it by its typed identity.
 
@@ -97,6 +107,8 @@ def compile_gate(gate: GateSpec, *, criterion: CriterionSpec) -> CheckSpec | Non
         criterion: Parent criterion. Only ``id`` + ``evidence_kind``
             are read; ``gate_ids`` referential integrity is enforced
             by the readiness loader.
+        freshness: Optional immutable integration and runner facts to carry
+            through the check result for durable receipt persistence.
 
     Returns:
         A :class:`CheckSpec` ready for
@@ -131,7 +143,14 @@ def compile_gate(gate: GateSpec, *, criterion: CriterionSpec) -> CheckSpec | Non
         for key in _COMMAND_EXIT_ZERO_PASSTHROUGH_KEYS:
             if key in gate.args:
                 merged_args[key] = gate.args[key]
-        compiled = CheckSpec(kind=base.kind, name=gate.id, args=merged_args)
+        if gate.timeout_s is not None:
+            merged_args["timeout_s"] = gate.timeout_s
+        compiled = CheckSpec(
+            kind=base.kind,
+            name=gate.id,
+            args=merged_args,
+            freshness=freshness,
+        )
         logger.debug(
             f"compile_gate ok gate_id={gate.id!r} kind={compiled.kind!r} "
             f"evidence_kind={criterion.evidence_kind!r}"
@@ -145,7 +164,12 @@ def compile_gate(gate: GateSpec, *, criterion: CriterionSpec) -> CheckSpec | Non
     # layer; the cast aligns the type with the CheckSpec.kind Literal
     # while Pydantic still raises ``ValidationError`` at construction
     # time when the value is not a registered CheckKind.
-    compiled = CheckSpec(kind=cast(CheckKind, gate.kind), name=gate.id, args=dict(gate.args))
+    compiled = CheckSpec(
+        kind=cast(CheckKind, gate.kind),
+        name=gate.id,
+        args=dict(gate.args),
+        freshness=freshness,
+    )
     logger.debug(f"compile_gate ok gate_id={gate.id!r} kind={compiled.kind!r} reason=passthrough")
     return compiled
 

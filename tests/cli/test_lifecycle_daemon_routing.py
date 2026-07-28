@@ -197,6 +197,8 @@ class _CapturingWorktreeClient:
                 "failed_wave": None,
                 "error": None,
                 "skipped": [],
+                "barrier_requirements": {},
+                "close_mode": "durable_async",
             }
         if method == "state.wave_autoland":
             return {
@@ -214,6 +216,45 @@ class _CapturingWorktreeClient:
             "closed": True,
             "worktree_cleaned": False,
             "merged_commit": "abc123",
+        }
+
+
+class _CapturingBatchAttemptClient(_CapturingWorktreeClient):
+    """Daemon stand-in returning one durable batch close submission."""
+
+    def call(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        del idempotency_key
+        _CapturingBatchAttemptClient.last_method = method
+        _CapturingBatchAttemptClient.last_params = dict(params or {})
+        _CapturingBatchAttemptClient.call_count += 1
+        return {
+            "landed": [
+                {
+                    "wave": "P01-I01-W01",
+                    "commits": ["a" * 40],
+                    "outcome": "landed 1 commit via wave land",
+                    "closed": False,
+                    "worktree_cleaned": True,
+                    "merged_commit": "a" * 40,
+                    "integration_id": "integration-1",
+                    "close_attempt": {
+                        "id": "close-1",
+                        "status": "queued",
+                    },
+                    "close_backgrounded": True,
+                }
+            ],
+            "failed_wave": None,
+            "error": None,
+            "skipped": [],
+            "barrier_requirements": {},
+            "close_mode": "durable_async",
         }
 
 
@@ -444,6 +485,42 @@ def test_wave_land_batch_proxies_to_daemon_owned_method(
         "keep_worktree": False,
     }
     assert _state_path(workspace).read_bytes() == state_before
+
+
+def test_wave_land_batch_json_carries_close_attempt(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Batch CLI returns durable attempt id/status/backgrounded per wave."""
+    from eawf.surfaces.cli.commands import worktree as worktree_cmd
+
+    _bootstrap_to_pending_wave(workspace)
+    monkeypatch.setattr(worktree_cmd, "_resolve_repo_root", lambda _state_path: workspace)
+    _enable_proxy(monkeypatch, client=_CapturingBatchAttemptClient)
+    _CapturingBatchAttemptClient.call_count = 0
+
+    res = runner.invoke(app, ["--json", "wave", "land-batch", "--iter", "P01-I01"])
+
+    assert res.exit_code == 0, res.stdout
+    payload = orjson.loads(res.stdout)
+    landed = payload["landed"][0]
+    assert landed["wave"] == "P01-I01-W01"
+    assert landed["closed"] is False
+    assert landed["close_attempt"] == {"id": "close-1", "status": "queued"}
+    assert landed["close_backgrounded"] is True
+    assert payload["close_mode"] == "durable_async"
+
+
+def test_wave_land_batch_ready_only_help_names_configured_barriers() -> None:
+    """Ready-only help describes configured land stages, not CLOSED-only."""
+    from click import unstyle
+
+    res = runner.invoke(app, ["wave", "land-batch", "--help"])
+
+    assert res.exit_code == 0, res.stdout
+    rendered = " ".join(unstyle(res.stdout).split())
+    assert "configured land dependency" in rendered
+    assert "barriers are not satisfied" in rendered
 
 
 def test_wave_autoland_proxies_to_daemon_owned_method(

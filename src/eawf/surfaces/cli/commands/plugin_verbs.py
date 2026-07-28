@@ -100,7 +100,8 @@ def _install_codex(
         print(
             "note: codex does not auto-load plugins from this path.\n"
             "      run `eawf plugin package codex` to emit a marketplace tree\n"
-            "      and `codex plugin marketplace add <target>` to register it."
+            "      then `codex plugin marketplace add <target>` and\n"
+            "      `codex plugin add eawf@eawf` to register and install it."
         )
         banner = _scope_tip_banner(runtime="codex", scope=scope, result_path=codex_plugin_root)
         if banner:
@@ -545,8 +546,7 @@ def package_cmd(
         if not flags.no_input and not flags.json_output and not codex_result.dry_run:
             print(
                 f"next: codex plugin marketplace add {codex_result.target}\n"
-                f"      (the [plugins.eawf] enabled=true block in ~/.codex/config.toml "
-                f"activates the plugin; Codex has no separate 'plugin install' subcommand)"
+                "      codex plugin add eawf@eawf"
             )
         return
     try:

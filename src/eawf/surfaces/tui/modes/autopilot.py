@@ -502,15 +502,28 @@ def build_frontier_items(state: State | None) -> tuple[WaveFrontierItem, ...]:
     """
     if state is None or not state.waves:
         return ()
-    items = tuple(
-        WaveFrontierItem(
-            wave_id=wave.id,
-            iter_id=wave.iter_id,
-            status=wave.status,
-            deps=tuple(wave.deps),
+    from eawf.workflow.lifecycle.integration import evaluate_dependency_barriers
+
+    projected: list[WaveFrontierItem] = []
+    for wave in state.waves.values():
+        evaluation = evaluate_dependency_barriers(state, wave_id=wave.id)
+        blockers = tuple(
+            dict.fromkeys(
+                detail.split(":", maxsplit=1)[0]
+                for detail in (*evaluation.unmet, *evaluation.stale)
+            )
         )
-        for wave in state.waves.values()
-    )
+        projected.append(
+            WaveFrontierItem(
+                wave_id=wave.id,
+                iter_id=wave.iter_id,
+                status=wave.status,
+                deps=tuple(wave.deps),
+                dependency_ready=evaluation.satisfied,
+                dependency_blockers=blockers,
+            )
+        )
+    items = tuple(projected)
     logger.debug(f"build_frontier_items waves={len(items)}")
     return items
 
@@ -604,6 +617,8 @@ def _blocker_of(
     Returns:
         The blocking wave id, or ``None`` when none resolves.
     """
+    if item.dependency_ready is False and item.dependency_blockers:
+        return item.dependency_blockers[0]
     for dep_id in item.deps:
         dep = frontier.by_id.get(dep_id)
         if dep is None or dep.status is not WaveStatus.CLOSED:

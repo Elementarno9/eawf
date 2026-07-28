@@ -87,6 +87,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.state.enums import MeasurementStatus
 from eawf.observability.telemetry.pricing import PRICING_VERSION, ModelPricing, lookup_pricing
 
 if TYPE_CHECKING:
@@ -167,11 +168,11 @@ def _price_tokens(result: SpawnResult, pricing: ModelPricing) -> Decimal:
     """
     return _sum_token_cost(
         pricing,
-        input_tokens=result.input_tokens,
-        output_tokens=result.output_tokens,
-        cache_creation_5m_input_tokens=result.cache_creation_5m_input_tokens,
-        cache_creation_1h_input_tokens=result.cache_creation_1h_input_tokens,
-        cache_read_input_tokens=result.cache_read_input_tokens,
+        input_tokens=result.input_tokens or 0,
+        output_tokens=result.output_tokens or 0,
+        cache_creation_5m_input_tokens=result.cache_creation_5m_input_tokens or 0,
+        cache_creation_1h_input_tokens=result.cache_creation_1h_input_tokens or 0,
+        cache_read_input_tokens=result.cache_read_input_tokens or 0,
     )
 
 
@@ -265,10 +266,29 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
         The priced :class:`MeteredCost` for the spawn.
     """
     model = result.resolved_model or result.model
+    input_tokens = result.input_tokens or 0
+    output_tokens = result.output_tokens or 0
+    cache_creation_5m = result.cache_creation_5m_input_tokens or 0
+    cache_creation_1h = result.cache_creation_1h_input_tokens or 0
+    cache_read = result.cache_read_input_tokens or 0
+    cache_creation_total = cache_creation_5m + cache_creation_1h
+    if result.measurement_status is not MeasurementStatus.USAGE_OBSERVED:
+        logger.warning(
+            f"price_spawn_result model={model!r} runtime={result.runtime!r} "
+            f"session={result.session_id!r} usage=unavailable cost_usd=0 priced=false"
+        )
+        return MeteredCost(
+            session_id=result.session_id,
+            model=model,
+            input_tokens=0,
+            output_tokens=0,
+            cache_creation_input_tokens=0,
+            cache_read_input_tokens=0,
+            cost_usd=Decimal("0"),
+            pricing_version=PRICING_VERSION,
+            priced=False,
+        )
     pricing = lookup_pricing(model)
-    cache_creation_total = (
-        result.cache_creation_5m_input_tokens + result.cache_creation_1h_input_tokens
-    )
     if pricing is None:
         logger.warning(
             f"price_spawn_result model={model!r} runtime={result.runtime!r} "
@@ -277,10 +297,10 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
         return MeteredCost(
             session_id=result.session_id,
             model=model,
-            input_tokens=result.input_tokens,
-            output_tokens=result.output_tokens,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
             cache_creation_input_tokens=cache_creation_total,
-            cache_read_input_tokens=result.cache_read_input_tokens,
+            cache_read_input_tokens=cache_read,
             cost_usd=Decimal("0"),
             pricing_version=PRICING_VERSION,
             priced=False,
@@ -294,10 +314,10 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
     return MeteredCost(
         session_id=result.session_id,
         model=model,
-        input_tokens=result.input_tokens,
-        output_tokens=result.output_tokens,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
         cache_creation_input_tokens=cache_creation_total,
-        cache_read_input_tokens=result.cache_read_input_tokens,
+        cache_read_input_tokens=cache_read,
         cost_usd=cost_usd,
         pricing_version=pricing.pricing_version,
         priced=True,

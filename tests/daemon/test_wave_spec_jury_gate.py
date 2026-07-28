@@ -493,6 +493,7 @@ def test_band_wave_advisory_authority_routes_to_auditor_not_jury(
         state_path: Path,
         repo_root: Path,
         wall_clock_seconds: float,
+        reuse_existing: bool = True,
     ) -> None:
         return None
 

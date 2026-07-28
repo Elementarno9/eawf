@@ -699,9 +699,16 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
     stale_wave_task = _schedule_stale_wave_sweep(ctx)
     wal_gc_task = _schedule_wal_gc_sweep(ctx)
     mutation_watchdog_task = _schedule_mutation_watchdog(ctx)
+    from eawf.runtime.daemon.methods.close import (
+        resume_durable_close_attempts,
+        shutdown_close_attempts,
+    )
+
+    resume_durable_close_attempts(ctx)
     try:
         await ctx.shutdown_event.wait()
     finally:
+        await shutdown_close_attempts()
         watchdog_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await watchdog_task
@@ -770,9 +777,16 @@ async def _run_windows_server(ctx: MethodContext) -> None:
     stale_wave_task = _schedule_stale_wave_sweep(ctx)
     wal_gc_task = _schedule_wal_gc_sweep(ctx)
     mutation_watchdog_task = _schedule_mutation_watchdog(ctx)
+    from eawf.runtime.daemon.methods.close import (
+        resume_durable_close_attempts,
+        shutdown_close_attempts,
+    )
+
+    resume_durable_close_attempts(ctx)
     try:
         await ctx.shutdown_event.wait()
     finally:
+        await shutdown_close_attempts()
         watchdog_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await watchdog_task
