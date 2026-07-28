@@ -37,4 +37,4 @@
 │                                                          ││                                                          │
 ╰──────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
  ↑↓ select  ·  ←→ collapse  ·  Enter open  ·  …  ·  / palette  ·  ? help  ·  q quit             weekly burn: — no data•
-△ state schema 1.0 trails live daemon schema 1.19; showing a migrated read-only view -- run eawf migrate to update the
+△ state schema 1.0 trails live daemon schema 1.20; showing a migrated read-only view -- run eawf migrate to update the

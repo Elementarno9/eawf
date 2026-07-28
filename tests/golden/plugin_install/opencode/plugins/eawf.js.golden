@@ -36,7 +36,7 @@ function dispatchHook(eventType, payload) {
 
 module.exports = {
   name: 'eawf',
-  version: '0.6.1',
+  version: '0.6.2',
   hooks: {
     onSessionStart: (ctx) => dispatchHook('session_start', ctx),
     onSessionEnd: (ctx) => dispatchHook('session_end', ctx),

@@ -8,7 +8,8 @@
             │  ╸━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    │
             │   ◆ in_progress                                                                              │
             │                                                                                              │
-            │  criteria none    gates none    evidence none    metrics — no data                           │
+            │  criteria none    gates none    evidence none    metrics unavailable — no ended runtime      │
+            │  attempt                                                                                     │
             │                                                                                              │
             │                                                                                              │
             │                                                                                              │
@@ -28,10 +29,9 @@
             │    • No claim attempts recorded.                                                             │
             │    • No rollup yet.                                                                          │
             │                                                                                              │
-            │                                                                                              │
+            │                                                                                          ▄▄  │
             │    Risks                                                                                     │
-            │                                                                                          ▅▅  │
+            │                                                                                              │
             │    • Dispatch errors: 0.                                                                     │
-            │    • Blocked agent reports: 0.                                                               │
             │                                                                                              │
             ╰──────────────────────────────────────────────────────────────────────────────────────────────╯
