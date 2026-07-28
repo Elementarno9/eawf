@@ -29,6 +29,7 @@ from eawf.kernel.state.enums import (
     AuditStatus,
     AuditVerdict,
     DecisionStatus,
+    DependencyStage,
     EffortBucket,
     IterStatus,
     PhaseStatus,
@@ -45,6 +46,10 @@ from eawf.kernel.state.models import (
     Project,
     State,
     Wave,
+    WaveDependencyBarrier,
+    WaveDependencyBinding,
+    wave_dependency_key,
+    wave_dependency_stages,
 )
 from eawf.platform.profiles.models import CheckpointBlock
 from eawf.workflow.lifecycle.transitions import (
@@ -129,6 +134,34 @@ def _empty_state() -> State:
             "indexes": {},
         }
     )
+
+
+def _add_dependency_metadata(
+    state: State,
+    *,
+    wave_id: str,
+    dep_wave_id: str,
+) -> tuple[WaveDependencyBarrier, WaveDependencyBinding]:
+    barrier = WaveDependencyBarrier(
+        wave_id=wave_id,
+        dep_wave_id=dep_wave_id,
+        start_after="integrated",
+        land_after="verified",
+        reason="test edge consumes an exact upstream integration",
+    )
+    binding = WaveDependencyBinding(
+        wave_id=wave_id,
+        dep_wave_id=dep_wave_id,
+        integration_id=f"WI-{dep_wave_id}",
+        generation=1,
+        integrated_sha="a" * 40,
+        tree_sha="b" * 40,
+        bound_at=datetime.now(UTC),
+    )
+    key = wave_dependency_key(wave_id, dep_wave_id)
+    state.wave_dependency_barriers[key] = barrier
+    state.wave_dependency_bindings[key] = binding
+    return barrier, binding
 
 
 def _add_ship_gate_audit(
@@ -1623,6 +1656,137 @@ def test_set_wave_deps_updates_blocks_index() -> None:
     assert state.waves["P01-I01-W02"].blocks == []
 
 
+def test_set_wave_deps_prunes_removed_edge_metadata_and_readd_is_strict() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w1",
+        file_scopes=["x"],
+        effort_bucket="M",
+        intent=make_intent(),
+    )
+    plan_wave(
+        state,
+        wave_id="P01-I01-W02",
+        iter_id="P01-I01",
+        title="w2",
+        file_scopes=["x"],
+        deps=["P01-I01-W01"],
+        effort_bucket="M",
+        intent=make_intent(),
+    )
+    edge_key = wave_dependency_key("P01-I01-W02", "P01-I01-W01")
+    _add_dependency_metadata(
+        state,
+        wave_id="P01-I01-W02",
+        dep_wave_id="P01-I01-W01",
+    )
+
+    set_wave_deps(state, wave_id="P01-I01-W02", deps=[])
+    set_wave_deps(state, wave_id="P01-I01-W02", deps=["P01-I01-W01"])
+
+    assert edge_key not in state.wave_dependency_barriers
+    assert edge_key not in state.wave_dependency_bindings
+    assert wave_dependency_stages(
+        state.wave_dependency_barriers,
+        wave_id="P01-I01-W02",
+        dep_wave_id="P01-I01-W01",
+    ) == (DependencyStage.CLOSED, DependencyStage.CLOSED)
+
+
+def test_set_wave_deps_preserves_kept_edge_metadata() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    for wave_id in ("P01-I01-W01", "P01-I01-W02"):
+        plan_wave(
+            state,
+            wave_id=wave_id,
+            iter_id="P01-I01",
+            title=wave_id,
+            file_scopes=["x"],
+            effort_bucket="M",
+            intent=make_intent(),
+        )
+    plan_wave(
+        state,
+        wave_id="P01-I01-W03",
+        iter_id="P01-I01",
+        title="w3",
+        file_scopes=["x"],
+        deps=["P01-I01-W01", "P01-I01-W02"],
+        effort_bucket="M",
+        intent=make_intent(),
+    )
+    kept_key = wave_dependency_key("P01-I01-W03", "P01-I01-W01")
+    removed_key = wave_dependency_key("P01-I01-W03", "P01-I01-W02")
+    kept_barrier, kept_binding = _add_dependency_metadata(
+        state,
+        wave_id="P01-I01-W03",
+        dep_wave_id="P01-I01-W01",
+    )
+    _add_dependency_metadata(
+        state,
+        wave_id="P01-I01-W03",
+        dep_wave_id="P01-I01-W02",
+    )
+
+    set_wave_deps(state, wave_id="P01-I01-W03", deps=["P01-I01-W01"])
+
+    assert state.wave_dependency_barriers[kept_key] is kept_barrier
+    assert state.wave_dependency_bindings[kept_key] is kept_binding
+    assert removed_key not in state.wave_dependency_barriers
+    assert removed_key not in state.wave_dependency_bindings
+
+
+def test_remove_wave_plan_prunes_dependency_metadata_in_both_directions() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w1",
+        file_scopes=["x"],
+        effort_bucket="M",
+        intent=make_intent(),
+    )
+    plan_wave(
+        state,
+        wave_id="P01-I01-W02",
+        iter_id="P01-I01",
+        title="w2",
+        file_scopes=["x"],
+        deps=["P01-I01-W01"],
+        effort_bucket="M",
+        intent=make_intent(),
+    )
+    downstream_key = wave_dependency_key("P01-I01-W02", "P01-I01-W01")
+    upstream_key = wave_dependency_key("P01-I01-W01", "P01-I01-W02")
+    _add_dependency_metadata(
+        state,
+        wave_id="P01-I01-W02",
+        dep_wave_id="P01-I01-W01",
+    )
+    _add_dependency_metadata(
+        state,
+        wave_id="P01-I01-W01",
+        dep_wave_id="P01-I01-W02",
+    )
+
+    remove_wave_plan(state, wave_id="P01-I01-W02")
+
+    assert downstream_key not in state.wave_dependency_barriers
+    assert upstream_key not in state.wave_dependency_barriers
+    assert downstream_key not in state.wave_dependency_bindings
+    assert upstream_key not in state.wave_dependency_bindings
+
+
 def test_set_wave_deps_cycle_rolled_back() -> None:
     state = _empty_state()
     plan_phase(state, phase_id="P01", title="t")
@@ -1675,7 +1839,7 @@ def test_claim_wave_rejects_unmet_deps() -> None:
         effort_bucket="M",
         intent=make_intent(),
     )
-    with pytest.raises(LifecycleError, match="un-closed dep waves"):
+    with pytest.raises(LifecycleError, match="dependency start barriers"):
         claim_wave(state, wave_id="P20-I01-W02", session_id="SES-2")
 
 
@@ -2276,7 +2440,7 @@ def test_claim_wave_rejected_claim_does_not_activate_iter() -> None:
         effort_bucket="M",
         intent=make_intent(),
     )
-    with pytest.raises(LifecycleError, match="un-closed dep waves"):
+    with pytest.raises(LifecycleError, match="dependency start barriers"):
         claim_wave(state, wave_id="P20-I01-W03", session_id="SES-3", out_of_order=True)
     assert state.iters["P20-I01"].status == IterStatus.PLANNED
     assert state.current.iter_id is None

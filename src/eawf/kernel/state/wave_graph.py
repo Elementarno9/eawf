@@ -14,8 +14,8 @@ Three edge views are exposed:
 - :func:`blocks` — sorted tuple of waves THIS wave blocks (static
   reverse-index; mirrors :attr:`Wave.blocks` but as an immutable
   sorted tuple).
-- :func:`blocked_by` — runtime live view: deps that are not yet
-  ``CLOSED``. Shrinks as deps close. This is the typed surface the
+- :func:`blocked_by` — runtime live view: deps that do not satisfy their
+  explicit start barrier (or the legacy ``closed`` barrier). This is the typed surface the
   TUI wave-board renders to highlight what is actively blocking each
   pending wave right now.
 
@@ -35,7 +35,6 @@ import logging
 
 from pydantic import BaseModel, ConfigDict
 
-from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import State, WaveIdStr
 
 logger = logging.getLogger(__name__)
@@ -46,7 +45,7 @@ class WaveDagEdges(BaseModel):
 
     ``deps`` is the static predecessor set; ``blocks`` is the static
     reverse-index; ``blocked_by`` is the live runtime subset of deps
-    whose own status is not ``CLOSED``. All three are sorted tuples
+    whose effective start barrier is unmet. All three are sorted tuples
     so consumers may rely on stable iteration order and immutability.
     """
 
@@ -103,7 +102,7 @@ def blocks(wave_id: str, state: State) -> tuple[WaveIdStr, ...]:
 
 
 def blocked_by(wave_id: str, state: State) -> tuple[WaveIdStr, ...]:
-    """Return *wave_id*'s LIVE blocked-by view: deps not yet ``CLOSED``.
+    """Return the deps that fail the Wave's effective start barriers.
 
     Differs from :func:`deps` which returns the static predecessor
     set: this view shrinks as predecessor waves close. Missing dep
@@ -116,7 +115,7 @@ def blocked_by(wave_id: str, state: State) -> tuple[WaveIdStr, ...]:
 
     Returns:
         Sorted tuple of wave ids that currently block *wave_id* from
-        becoming ready (their status is not ``WaveStatus.CLOSED``).
+        becoming ready at its explicit or legacy start threshold.
 
     Raises:
         KeyError: when *wave_id* is not in ``state.waves``.
@@ -124,15 +123,15 @@ def blocked_by(wave_id: str, state: State) -> tuple[WaveIdStr, ...]:
     wave = state.waves.get(wave_id)
     if wave is None:
         raise KeyError(f"unknown wave: {wave_id!r}")
-    live: list[str] = []
-    for dep_id in wave.deps:
-        dep_wave = state.waves.get(dep_id)
-        if dep_wave is None:
-            # Referential drift — skip; check_parent_ids surfaces it.
-            continue
-        if dep_wave.status != WaveStatus.CLOSED:
-            live.append(dep_id)
-    return tuple(sorted(live))
+    from eawf.workflow.lifecycle.integration import evaluate_dependency_barriers
+
+    evaluation = evaluate_dependency_barriers(state, wave_id=wave_id)
+    blockers = {
+        detail.split(":", maxsplit=1)[0]
+        for detail in (*evaluation.unmet, *evaluation.stale)
+        if detail.split(":", maxsplit=1)[0] in state.waves
+    }
+    return tuple(sorted(blockers))
 
 
 def edges(wave_id: str, state: State) -> WaveDagEdges:

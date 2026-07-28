@@ -38,7 +38,7 @@ from eawf.surfaces.cli.commands.lifecycle import (
     _resolve_commit_sha,
     _resolve_repo_root_for_drift,
     _run_mutation,
-    _wave_close_via_daemon,
+    _wave_close_async_via_daemon,
     wave_app,
 )
 from eawf.surfaces.cli.flags import GlobalFlags
@@ -977,6 +977,14 @@ def wave_close_cmd(
             ),
         ),
     ] = None,
+    wait: Annotated[
+        bool,
+        typer.Option("--wait", help="Wait for the durable close result."),
+    ] = False,
+    detach: Annotated[
+        bool,
+        typer.Option("--detach", help="Return after durable close submission."),
+    ] = False,
 ) -> None:
     """Close a claimed/in-progress wave with an outcome string.
 
@@ -987,12 +995,11 @@ def wave_close_cmd(
     :func:`~eawf.workflow.lifecycle.wave_sha.derive_wave_sha` walking
     ``git log --grep "[P##-W##]"``.
 
-    P24-W09 canary: when ``daemon.proxy_enabled=true`` the close
-    proxies through the daemon's ``state.mutate`` RPC (typed
-    :class:`~eawf.kernel.state.mutations.Mutation` payload with
-    ``kind=WAVE_CLOSE``); otherwise the legacy in-process path runs.
-    Both paths converge on the same ``state.json`` + ``event.jsonl``
-    on-disk shape.
+    When ``daemon.proxy_enabled=true`` the command submits a durable
+    exact-revision close attempt. Interactive terminals detach by default;
+    noninteractive callers wait by default. ``--wait`` and ``--detach`` make
+    that choice explicit. Daemonless recovery mode retains the legacy
+    synchronous close path.
 
     P28-I01-W11: when ``--waive`` flags are present each named gate is
     waived via :func:`eawf.workflow.lifecycle.waivers.apply_waiver`
@@ -1001,9 +1008,9 @@ def wave_close_cmd(
     Waivers are operator-only — the active session MUST carry the
     OPERATOR role.
 
-    P30-I05-W09: ``--no-runtime`` is a close-scoped operator waiver for
-    missing runtime capture. It writes a human ``EvidenceRecord`` and
-    threads ``no_runtime_waiver=True`` into the daemon close mutation.
+    ``--no-runtime`` is bound to the durable attempt so daemon restart and
+    idempotent retry preserve the operator's choice without duplicate waiver
+    rows. Daemonless recovery still writes the legacy human evidence row.
     """
     from eawf.kernel.store.paths import store_dir as _store_dir
     from eawf.surfaces.cli.scope import resolve_state_path
@@ -1028,6 +1035,15 @@ def wave_close_cmd(
         cli_errors.emit_error(
             cli_errors.UserError(
                 f"--tokens-consumed must be non-negative; got {tokens_consumed}",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+        return
+    if wait and detach:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                "--wait and --detach are mutually exclusive",
                 kind="InvalidInput",
             ),
             flags=flags,
@@ -1060,7 +1076,10 @@ def wave_close_cmd(
             cli_errors.emit_error(err, flags=flags)
             return
 
-    # Persist waiver evidence BEFORE the close + readiness compute so the
+    from eawf.surfaces.cli._mutation import _proxy_enabled
+
+    proxy_enabled = _proxy_enabled(flags.workspace)
+    # Persist gate-waiver evidence BEFORE the close + readiness compute so the
     # readiness view sees the rows.
     try:
         _reject_disabled_close_waivers(
@@ -1074,7 +1093,7 @@ def wave_close_cmd(
             flags=flags,
             wave_id=wave_id,
             waive_inputs=waive_inputs,
-            no_runtime=no_runtime,
+            no_runtime=no_runtime and not proxy_enabled,
         )
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
@@ -1084,24 +1103,26 @@ def wave_close_cmd(
     # when ``daemon.proxy_enabled=true`` in the merged config. Falls
     # back to the in-process ``_run_mutation`` path transparently when
     # the flag is False (W09 default) or the daemon refuses the kind.
-    from eawf.surfaces.cli._mutation import _proxy_enabled
-
     # One-element sink set by ``_wave_close_via_daemon`` when the close RPC hit
     # a transport error and fell back to the in-process path; read below so the
     # fallback close event stamps ``close_mechanism = "daemon-fallback"``.
     transport_fallback = [False]
-    if _proxy_enabled(flags.workspace):
-        proxied = _wave_close_via_daemon(
+    if proxy_enabled:
+        wait_for_terminal = wait or (
+            not detach and not (sys.stdin.isatty() and sys.stdout.isatty())
+        )
+        proxied = _wave_close_async_via_daemon(
             flags=flags,
             wave_id=wave_id,
             outcome=outcome,
             resolved_sha=resolved_sha,
             tokens_consumed=tokens_consumed,
             no_runtime_waiver=no_runtime,
-            transport_fallback=transport_fallback,
+            wait=wait_for_terminal,
         )
         if proxied:
-            _warn_on_zero_eu_close(ctx, wave_id=wave_id, waived=no_runtime)
+            if wait_for_terminal:
+                _warn_on_zero_eu_close(ctx, wave_id=wave_id, waived=no_runtime)
             return
 
     drift_warnings: list[str] = []
@@ -1111,7 +1132,7 @@ def wave_close_cmd(
 
     close_mechanism_holder: list[CloseMechanism] = []
 
-    def _close_and_pin(state: State) -> None:
+    def _close_preflight(state: State) -> None:
         state_path = resolve_state_path(flags.workspace)
         evidence_store_dir = _store_dir(state_path)
         config_root = _config_root_for_state_path(state_path)
@@ -1127,9 +1148,11 @@ def wave_close_cmd(
             repo_root=anchor_for_sha,
             config_root=config_root,
         )
-        # W20 daemonless teeth: mirror the daemon close gate (deterministic
-        # pre-flight + verdict read gate) BEFORE the bypass-door mechanism stamp.
-        if verify_block is not None and verify_block.enforce:
+        enforce_verify = verify_block is not None and verify_block.enforce
+        if enforce_verify:
+            # W20 daemonless teeth: mirror the daemon close gate
+            # (deterministic pre-flight + verdict read gate) before acquiring
+            # the state lock.
             readiness = _run_daemonless_close_preflight(
                 state,
                 wave_id=wave_id,
@@ -1140,6 +1163,25 @@ def wave_close_cmd(
             )
             if readiness is not None:
                 readiness_holder.append(readiness)
+            return
+        try:
+            readiness = compute_readiness(
+                wave_id,
+                state=state,
+                store_dir=evidence_store_dir,
+                repo_root=anchor_for_sha,
+                config_root=config_root,
+                load_profile_verify=False,
+            )
+        except KeyError as exc:
+            logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
+        else:
+            readiness_holder.append(readiness)
+            _log_advisory_criteria(wave_id, readiness)
+
+    def _close_and_pin(state: State) -> None:
+        state_path = resolve_state_path(flags.workspace)
+        repo_root = _resolve_repo_root_for_drift(flags.workspace)
         # Daemonless bypass door + close-mechanism stamp (W18 -> W25 wiring): a
         # gate-bearing daemonless close needs --no-runtime; the mechanism stamps.
         _stamp_close_mechanism(
@@ -1158,21 +1200,6 @@ def wave_close_cmd(
         )
         if resolved_sha is not None:
             wave.commit = resolved_sha
-        if verify_block is None or not verify_block.enforce:
-            try:
-                readiness = compute_readiness(
-                    wave_id,
-                    state=state,
-                    store_dir=evidence_store_dir,
-                    repo_root=anchor_for_sha,
-                    config_root=config_root,
-                    load_profile_verify=False,
-                )
-            except KeyError as exc:
-                logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
-            else:
-                readiness_holder.append(readiness)
-                _log_advisory_criteria(wave_id, readiness)
         if repo_root is not None:
             drift_warnings.extend(check_wave_criteria_drift(wave, repo_root))
         close_succeeded[0] = True
@@ -1206,6 +1233,8 @@ def wave_close_cmd(
             ),
             "close_mechanism": (close_mechanism_holder[0] if close_mechanism_holder else "daemon"),
         },
+        lock_free_preflight=_close_preflight,
+        preflight_guard_factory=lambda payload: (payload.get("waves") or {}).get(wave_id),
         closure_kind=True,
     )
     if close_succeeded[0]:

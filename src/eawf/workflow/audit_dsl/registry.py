@@ -46,12 +46,17 @@ W08 compile-gate + W10 profile-floor packs can lean on the runner:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
+import platform
 import re
+import shlex
 import subprocess
+import time
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +81,7 @@ from eawf.workflow.audit_dsl.kinds.transition_coverage import check_transition_c
 from eawf.workflow.audit_dsl.kinds.tui_flow import check_tui_flow
 from eawf.workflow.audit_dsl.kinds.verify_implements import check_verify_implements
 from eawf.workflow.audit_dsl.models import (
+    OUTPUT_TAIL_MAX_CHARS,
     CheckResult,
     CheckSpec,
     CitationResolvesArgs,
@@ -89,6 +95,10 @@ from eawf.workflow.lifecycle.wave_sha import derive_diff_base
 logger = logging.getLogger(__name__)
 
 CheckFn = Callable[[CheckSpec, Path], CheckResult]
+BeforeGateExecute = Callable[[CheckSpec, str], CheckResult | None]
+# Backward-compatible import name for callers compiled before all deterministic
+# kinds gained the same durable pre-execution claim boundary.
+BeforeCommandExecute = BeforeGateExecute
 
 
 #: Mapping from :data:`~eawf.workflow.audit_dsl.models.TimeoutClass`
@@ -102,6 +112,11 @@ _TIMEOUT_CLASS_SECONDS: dict[TimeoutClass, int] = {
     "slow": 900,
     "very_slow": 3600,
 }
+
+#: Maximum characters retained from each subprocess output stream. Full
+#: output is represented by its digest and, when a caller supplies one, a
+#: durable log reference.
+_OUTPUT_TAIL_CHARS: int = OUTPUT_TAIL_MAX_CHARS
 
 #: Env-var name the runner sets on the child process to publish the
 #: resolved file set. Newline-separated (POSIX env vars cannot carry
@@ -319,7 +334,326 @@ def _resolve_scope_files(
     return sorted(set(changed) | set(wave_file_scopes))
 
 
-def _check_command_exit_zero(spec: CheckSpec, cwd: Path) -> CheckResult:
+def _output_text(value: str | bytes | None) -> str:
+    """Normalise subprocess output into text without dropping undecodable bytes."""
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+def _sha256_text(value: str) -> str:
+    """Return a lowercase SHA-256 digest for UTF-8 text."""
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _sha256_output(value: str | bytes | None) -> str:
+    """Digest exact captured output bytes when subprocess supplies them."""
+    if value is None:
+        raw = b""
+    elif isinstance(value, bytes):
+        raw = value
+    else:
+        raw = value.encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _bounded_tail(value: str) -> str:
+    """Return at most the final :data:`_OUTPUT_TAIL_CHARS` characters."""
+    return value[-_OUTPUT_TAIL_CHARS:]
+
+
+def _selected_file_digest(selected_files: list[str]) -> str:
+    """Digest the canonical sorted selected-file manifest."""
+    manifest = "\n".join(sorted(selected_files))
+    return _sha256_text(manifest)
+
+
+def _declared_manifest_digest(
+    cwd: Path,
+    value: str | None,
+    *,
+    expected_digest: str | None,
+    arg_name: str,
+) -> tuple[str | None, str | None]:
+    """Digest one declared artifact and compare it to its explicit baseline."""
+    if value is None:
+        return None, None
+    target = (cwd / value).resolve()
+    try:
+        target.relative_to(cwd.resolve())
+    except ValueError:
+        return None, f"{arg_name}={value!r} escapes repository root"
+    if not target.is_file():
+        return None, f"{arg_name}={value!r} not found after gate execution"
+    actual_digest = hashlib.sha256(target.read_bytes()).hexdigest()
+    if expected_digest is not None and actual_digest != expected_digest:
+        return (
+            actual_digest,
+            f"{arg_name} digest mismatch expected={expected_digest} actual={actual_digest}",
+        )
+    return actual_digest, None
+
+
+def _runner_fingerprint() -> str | None:
+    """Digest registry, dispatcher, and typed execution-contract sources."""
+    try:
+        root = Path(__file__).parent
+        rows = [
+            {
+                "name": name,
+                "digest": hashlib.sha256((root / name).read_bytes()).hexdigest(),
+            }
+            for name in ("models.py", "registry.py", "runner.py")
+        ]
+        return _sha256_text(json.dumps(rows, sort_keys=True, separators=(",", ":")))
+    except OSError:
+        return None
+
+
+def _environment_fingerprint() -> str | None:
+    """Digest non-identifying execution-environment facts.
+
+    Hostnames, paths, environment variables, and user identity are
+    intentionally excluded.
+    """
+    try:
+        facts = {
+            "machine": platform.machine(),
+            "python_implementation": platform.python_implementation(),
+            "python_version": platform.python_version(),
+            "system": platform.system(),
+            "system_release": platform.release(),
+        }
+        encoded = json.dumps(facts, sort_keys=True, separators=(",", ":"))
+    except OSError:
+        logger.exception("_environment_fingerprint status=unavailable")
+        return None
+    return _sha256_text(encoded)
+
+
+def _freshness_key(
+    spec: CheckSpec,
+    *,
+    resolved_timeout_seconds: int | None,
+    selected_file_digest: str | None,
+    runner_fingerprint: str | None,
+    environment_fingerprint: str | None,
+) -> str:
+    """Digest complete execution identity plus caller-supplied freshness facts."""
+    payload = {
+        "environment_fingerprint": environment_fingerprint,
+        "resolved_timeout_seconds": resolved_timeout_seconds,
+        "runner_fingerprint": runner_fingerprint,
+        "selected_file_digest": selected_file_digest,
+        "spec": spec.model_dump(mode="json"),
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return _sha256_text(encoded)
+
+
+def _execution_fingerprints(spec: CheckSpec) -> tuple[str | None, str | None]:
+    """Resolve runner and environment fingerprints for one typed check."""
+    supplied = spec.freshness
+    runner_fingerprint = (
+        supplied.runner_fingerprint
+        if supplied is not None and supplied.runner_fingerprint is not None
+        else _runner_fingerprint()
+    )
+    environment_fingerprint = (
+        supplied.environment_fingerprint
+        if supplied is not None and supplied.environment_fingerprint is not None
+        else _environment_fingerprint()
+    )
+    return runner_fingerprint, environment_fingerprint
+
+
+def _check_with_durable_instrumentation(
+    spec: CheckSpec,
+    cwd: Path,
+    *,
+    before_execute: BeforeGateExecute,
+) -> CheckResult:
+    """Claim, execute, time, fingerprint, and prove any non-command check."""
+    runner_fingerprint, environment_fingerprint = _execution_fingerprints(spec)
+    freshness_key = _freshness_key(
+        spec,
+        resolved_timeout_seconds=None,
+        selected_file_digest=None,
+        runner_fingerprint=runner_fingerprint,
+        environment_fingerprint=environment_fingerprint,
+    )
+    claimed_result = before_execute(spec, freshness_key)
+    if claimed_result is not None:
+        return claimed_result
+
+    started_at = datetime.now(UTC)
+    started_ns = time.perf_counter_ns()
+    result = CHECK_REGISTRY[spec.kind](spec, cwd)
+    ended_at = datetime.now(UTC)
+    duration_ms = max(0, (time.perf_counter_ns() - started_ns) // 1_000_000)
+    supplied = spec.freshness
+    full_log_ref = (
+        supplied.full_log_ref
+        if supplied is not None and supplied.full_log_ref is not None
+        else f".ea/local/gate-proofs/{freshness_key}.log"
+    )
+    enriched = result.model_copy(
+        update={
+            "started_at": started_at,
+            "ended_at": ended_at,
+            "duration_ms": duration_ms,
+            "runner_fingerprint": runner_fingerprint,
+            "environment_fingerprint": environment_fingerprint,
+            "full_log_ref": full_log_ref,
+            "freshness_key": freshness_key,
+            "freshness": supplied,
+        }
+    )
+    _write_full_log(
+        cwd=cwd,
+        full_log_ref=full_log_ref,
+        argv=[],
+        stdout=enriched.details or "",
+        stderr="",
+    )
+    return enriched
+
+
+def _failure_details(
+    prefix: str,
+    *,
+    stdout_tail: str,
+    stderr_tail: str,
+    full_log_ref: str | None,
+) -> str:
+    """Render bounded captured output and an honest full-log reference."""
+    log_ref = full_log_ref if full_log_ref is not None else "unavailable"
+    prefix_rendered = prefix if len(prefix) <= 400 else f"{prefix[:397]}..."
+
+    def _tail_repr(value: str, *, limit: int) -> str:
+        rendered = repr(value)
+        if len(rendered) <= limit:
+            return rendered
+        return f"...{rendered[-(limit - 3) :]}"
+
+    return (
+        f"{prefix_rendered} stdout_tail={_tail_repr(stdout_tail, limit=512)} "
+        f"stderr_tail={_tail_repr(stderr_tail, limit=512)} "
+        f"full_log_ref={_tail_repr(log_ref, limit=502)}"
+    )
+
+
+def _command_result(
+    spec: CheckSpec,
+    *,
+    argv: list[str],
+    passed: bool,
+    status: str,
+    detail_prefix: str,
+    started_at: datetime,
+    started_ns: int,
+    timeout_class: TimeoutClass,
+    resolved_timeout_seconds: int,
+    exit_status: int | None,
+    stdout: str | bytes | None,
+    stderr: str | bytes | None,
+    selected_file_digest: str,
+    runner_fingerprint: str | None,
+    environment_fingerprint: str | None,
+    freshness_key: str,
+    collected_nodeid_digest: str | None = None,
+    residual_manifest_digest: str | None = None,
+) -> CheckResult:
+    """Build one evidence-rich result from a completed process attempt."""
+    ended_at = datetime.now(UTC)
+    duration_ms = max(0, (time.perf_counter_ns() - started_ns) // 1_000_000)
+    stdout_text = _output_text(stdout)
+    stderr_text = _output_text(stderr)
+    stdout_tail = _bounded_tail(stdout_text)
+    stderr_tail = _bounded_tail(stderr_text)
+    freshness = spec.freshness
+    full_log_ref = freshness.full_log_ref if freshness is not None else None
+    details = detail_prefix
+    if not passed:
+        details = _failure_details(
+            detail_prefix,
+            stdout_tail=stdout_tail,
+            stderr_tail=stderr_tail,
+            full_log_ref=full_log_ref,
+        )
+    return CheckResult(
+        name=spec.name,
+        kind=spec.kind,
+        passed=passed,
+        status=status,  # type: ignore[arg-type]
+        details=details,
+        started_at=started_at,
+        ended_at=ended_at,
+        duration_ms=duration_ms,
+        timeout_class=timeout_class,
+        resolved_timeout_seconds=resolved_timeout_seconds,
+        exit_status=exit_status,
+        argv=argv,
+        command=shlex.join(argv),
+        stdout_tail=stdout_tail,
+        stderr_tail=stderr_tail,
+        stdout_digest=_sha256_output(stdout),
+        stderr_digest=_sha256_output(stderr),
+        selected_file_digest=selected_file_digest,
+        collected_nodeid_digest=(
+            collected_nodeid_digest
+            if collected_nodeid_digest is not None
+            else (freshness.collected_nodeid_digest if freshness is not None else None)
+        ),
+        residual_manifest_digest=(
+            residual_manifest_digest
+            if residual_manifest_digest is not None
+            else (freshness.residual_manifest_digest if freshness is not None else None)
+        ),
+        runner_fingerprint=runner_fingerprint,
+        environment_fingerprint=environment_fingerprint,
+        full_log_ref=full_log_ref,
+        freshness_key=freshness_key,
+        freshness=freshness,
+    )
+
+
+def _write_full_log(
+    *,
+    cwd: Path,
+    full_log_ref: str | None,
+    argv: list[str],
+    stdout: str | bytes | None,
+    stderr: str | bytes | None,
+) -> None:
+    """Persist exact captured subprocess output when a safe sink is supplied."""
+    if full_log_ref is None:
+        return
+    relative = Path(full_log_ref)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError(f"full_log_ref must be repo-relative: {full_log_ref!r}")
+    target = (cwd / relative).resolve()
+    try:
+        target.relative_to(cwd.resolve())
+    except ValueError as exc:
+        raise ValueError(f"full_log_ref escapes repository root: {full_log_ref!r}") from exc
+    target.parent.mkdir(parents=True, exist_ok=True)
+    payload = (
+        f"argv={shlex.join(argv)}\n"
+        f"--- stdout ---\n{_output_text(stdout)}\n"
+        f"--- stderr ---\n{_output_text(stderr)}\n"
+    )
+    target.write_text(payload, encoding="utf-8")
+
+
+def _check_command_exit_zero(
+    spec: CheckSpec,
+    cwd: Path,
+    *,
+    before_execute: BeforeGateExecute | None = None,
+) -> CheckResult:
     """Run an argv and report exit-zero / non-zero / blocked.
 
     The W15 hardening pass validates kwargs via :class:`CommandExitZeroArgs`,
@@ -337,9 +671,11 @@ def _check_command_exit_zero(spec: CheckSpec, cwd: Path) -> CheckResult:
         ) from exc
     argv = list(args.argv)
     timeout_class = args.timeout_class
-    seconds = _TIMEOUT_CLASS_SECONDS[timeout_class]
+    seconds = (
+        args.timeout_s if args.timeout_s is not None else _TIMEOUT_CLASS_SECONDS[timeout_class]
+    )
 
-    diff_base = derive_diff_base(args.wave_id, repo_root=cwd)
+    diff_base = "all" if args.scope == "all" else derive_diff_base(args.wave_id, repo_root=cwd)
     selected_files = _resolve_scope_files(
         scope=args.scope,
         wave_file_scopes=args.wave_file_scopes,
@@ -347,14 +683,31 @@ def _check_command_exit_zero(spec: CheckSpec, cwd: Path) -> CheckResult:
         cwd=cwd,
     )
     child_env = {**os.environ, _GATE_FILES_ENV: _GATE_FILES_SEPARATOR.join(selected_files)}
+    selected_digest = _selected_file_digest(selected_files)
+    supplied_freshness = spec.freshness
+    runner_fingerprint, environment_fingerprint = _execution_fingerprints(spec)
+    freshness_key = _freshness_key(
+        spec,
+        resolved_timeout_seconds=seconds,
+        selected_file_digest=selected_digest,
+        runner_fingerprint=runner_fingerprint,
+        environment_fingerprint=environment_fingerprint,
+    )
+    if before_execute is not None:
+        claimed_result = before_execute(spec, freshness_key)
+        if claimed_result is not None:
+            return claimed_result
 
     logger.debug(
         f"_check_command_exit_zero gate_id={spec.name!r} timeout_class={timeout_class!r} "
-        f"scope={args.scope!r} diff_base={diff_base!r} files={len(selected_files)}"
+        f"timeout_s={seconds} scope={args.scope!r} diff_base={diff_base!r} "
+        f"files={len(selected_files)}"
     )
 
     # Sandbox-policy enforcement is the caller's responsibility in v0.2;
     # see docs/architecture/audit-checks.md (B074 follow-up).
+    started_at = datetime.now(UTC)
+    started_ns = time.perf_counter_ns()
     try:
         completed = subprocess.run(
             argv,
@@ -366,28 +719,110 @@ def _check_command_exit_zero(spec: CheckSpec, cwd: Path) -> CheckResult:
             env=child_env,
         )
     except subprocess.TimeoutExpired as exc:
+        _write_full_log(
+            cwd=cwd,
+            full_log_ref=(
+                supplied_freshness.full_log_ref if supplied_freshness is not None else None
+            ),
+            argv=argv,
+            stdout=exc.stdout,
+            stderr=exc.stderr,
+        )
         detail = f"timeout after {exc.timeout}s (class={timeout_class!r})"
         logger.info(
             f"_check_command_exit_zero gate_id={spec.name!r} status=blocked "
             f"timeout_class={timeout_class!r}"
         )
-        return CheckResult(
-            name=spec.name,
-            kind=spec.kind,
+        return _command_result(
+            spec,
+            argv=argv,
             passed=False,
             status="blocked",
-            details=detail,
+            detail_prefix=detail,
+            started_at=started_at,
+            started_ns=started_ns,
+            timeout_class=timeout_class,
+            resolved_timeout_seconds=seconds,
+            exit_status=None,
+            stdout=exc.stdout,
+            stderr=exc.stderr,
+            selected_file_digest=selected_digest,
+            runner_fingerprint=runner_fingerprint,
+            environment_fingerprint=environment_fingerprint,
+            freshness_key=freshness_key,
         )
     except FileNotFoundError as exc:
-        return CheckResult(
-            name=spec.name,
-            kind=spec.kind,
-            passed=False,
-            details=f"argv={argv} not executable: {exc.strerror}",
+        _write_full_log(
+            cwd=cwd,
+            full_log_ref=(
+                supplied_freshness.full_log_ref if supplied_freshness is not None else None
+            ),
+            argv=argv,
+            stdout="",
+            stderr=str(exc),
         )
-    passed = completed.returncode == 0
+        return _command_result(
+            spec,
+            argv=argv,
+            passed=False,
+            status="fail",
+            detail_prefix=f"argv={argv} not executable: {exc.strerror}",
+            started_at=started_at,
+            started_ns=started_ns,
+            timeout_class=timeout_class,
+            resolved_timeout_seconds=seconds,
+            exit_status=None,
+            stdout="",
+            stderr=str(exc),
+            selected_file_digest=selected_digest,
+            runner_fingerprint=runner_fingerprint,
+            environment_fingerprint=environment_fingerprint,
+            freshness_key=freshness_key,
+        )
+    collected_digest, collected_error = _declared_manifest_digest(
+        cwd,
+        args.collected_nodeids_path,
+        expected_digest=args.collected_nodeids_expected_digest,
+        arg_name="collected_nodeids_path",
+    )
+    residual_digest, residual_error = _declared_manifest_digest(
+        cwd,
+        args.residual_manifest_path,
+        expected_digest=args.residual_manifest_expected_digest,
+        arg_name="residual_manifest_path",
+    )
+    manifest_errors = [error for error in (collected_error, residual_error) if error is not None]
+    passed = completed.returncode == 0 and not manifest_errors
+    _write_full_log(
+        cwd=cwd,
+        full_log_ref=(supplied_freshness.full_log_ref if supplied_freshness is not None else None),
+        argv=argv,
+        stdout=completed.stdout,
+        stderr=completed.stderr,
+    )
     details = f"argv={argv} returncode={completed.returncode}"
-    return CheckResult(name=spec.name, kind=spec.kind, passed=passed, details=details)
+    if manifest_errors:
+        details = f"{details} manifest_errors={manifest_errors}"
+    return _command_result(
+        spec,
+        argv=argv,
+        passed=passed,
+        status="pass" if passed else "fail",
+        detail_prefix=details,
+        started_at=started_at,
+        started_ns=started_ns,
+        timeout_class=timeout_class,
+        resolved_timeout_seconds=seconds,
+        exit_status=completed.returncode,
+        stdout=completed.stdout,
+        stderr=completed.stderr,
+        selected_file_digest=selected_digest,
+        runner_fingerprint=runner_fingerprint,
+        environment_fingerprint=environment_fingerprint,
+        freshness_key=freshness_key,
+        collected_nodeid_digest=collected_digest,
+        residual_manifest_digest=residual_digest,
+    )
 
 
 def _resolve_optional_file(
@@ -664,6 +1099,33 @@ CHECK_REGISTRY: dict[str, CheckFn] = {
 }
 
 
+def execute_check(
+    spec: CheckSpec,
+    cwd: Path,
+    *,
+    before_execute: BeforeGateExecute | None = None,
+) -> CheckResult:
+    """Execute one check, applying durable instrumentation when requested.
+
+    Legacy callers that omit ``before_execute`` retain direct registry
+    dispatch. Durable-close callers supply the claim callback and receive the
+    same claim/timing/fingerprint/proof contract for every deterministic kind.
+    """
+    if spec.kind == "command_exit_zero":
+        return _check_command_exit_zero(
+            spec,
+            cwd,
+            before_execute=before_execute,
+        )
+    if before_execute is not None:
+        return _check_with_durable_instrumentation(
+            spec,
+            cwd,
+            before_execute=before_execute,
+        )
+    return CHECK_REGISTRY[spec.kind](spec, cwd)
+
+
 #: Close-gate kinds that score against the validated state model rather
 #: than a checkout file set, so they do NOT take the ``(CheckSpec, Path)``
 #: runner shape and are not dispatched through :func:`run_checks`. They
@@ -702,6 +1164,9 @@ def registered_audit_dsl_kinds() -> frozenset[str]:
 __all__ = [
     "CHECK_REGISTRY",
     "CLOSE_GATE_KINDS",
+    "BeforeCommandExecute",
+    "BeforeGateExecute",
     "CheckFn",
+    "execute_check",
     "registered_audit_dsl_kinds",
 ]

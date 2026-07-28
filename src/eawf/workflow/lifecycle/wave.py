@@ -53,6 +53,12 @@ from eawf.workflow.lifecycle._errors import (
     check_disabled_waiver_policy,
     check_title_clarity,
 )
+from eawf.workflow.lifecycle.integration import (
+    DependencyBarrierError,
+    bind_start_dependencies,
+    evaluate_dependency_barriers,
+    require_start_dependencies,
+)
 from eawf.workflow.lifecycle.iter_ import _apply_iter_activation
 from eawf.workflow.lifecycle.spec import (
     WAVE_TRANSITIONS,
@@ -795,6 +801,16 @@ def remove_wave_plan(state: State, *, wave_id: str) -> None:
     parent_iter = state.iters.get(wave.iter_id)
     if parent_iter is not None and wave_id in parent_iter.wave_ids:
         parent_iter.wave_ids.remove(wave_id)
+    state.wave_dependency_barriers = {
+        key: barrier
+        for key, barrier in state.wave_dependency_barriers.items()
+        if barrier.wave_id != wave_id and barrier.dep_wave_id != wave_id
+    }
+    state.wave_dependency_bindings = {
+        key: binding
+        for key, binding in state.wave_dependency_bindings.items()
+        if binding.wave_id != wave_id and binding.dep_wave_id != wave_id
+    }
     del state.waves[wave_id]
     logger.info(f"remove_wave_plan id={wave_id}")
 
@@ -839,6 +855,17 @@ def set_wave_deps(state: State, *, wave_id: str, deps: list[str]) -> Wave:
         dep_wave = state.waves[dep]
         if wave_id not in dep_wave.blocks:
             dep_wave.blocks.append(wave_id)
+    removed_deps = set(old_deps) - set(new_deps)
+    state.wave_dependency_barriers = {
+        key: barrier
+        for key, barrier in state.wave_dependency_barriers.items()
+        if not (barrier.wave_id == wave_id and barrier.dep_wave_id in removed_deps)
+    }
+    state.wave_dependency_bindings = {
+        key: binding
+        for key, binding in state.wave_dependency_bindings.items()
+        if not (binding.wave_id == wave_id and binding.dep_wave_id in removed_deps)
+    }
     logger.info(f"set_wave_deps id={wave_id} deps={new_deps}")
     return wave
 
@@ -874,9 +901,10 @@ def claim_wave(
 
     P19-W02 dep + monotonic gates:
 
-    - Reject the claim when any wave in ``wave.deps`` is not in
-      :data:`WaveStatus.CLOSED`. Dependencies must land before a
-      downstream wave can start.
+    - Reject the claim when any dependency fails its start barrier. Missing
+      barrier rows preserve the legacy CLOSED requirement; explicit
+      ``integrated`` / ``verified`` barriers may permit isolated downstream
+      execution and pin the exact upstream integration generation.
     - Reject the claim when a sibling wave with a numerically lower
       ``W##`` is still PENDING under the same iter AND its own deps
       are already satisfied — this enforces the monotonic claim
@@ -936,6 +964,10 @@ def claim_wave(
         # (and then dispatched) on a dead session -- reuse is allowed only
         # while the bound session is still ACTIVE.
         validate_claim_session(state, wave, session_id)
+        try:
+            require_start_dependencies(state, wave_id=wave_id)
+        except DependencyBarrierError as exc:
+            raise LifecycleError(str(exc)) from exc
         logger.debug(f"claim_wave idempotent id={wave_id} session={session_id}")
         return wave
     if wave.status != WaveStatus.PENDING:
@@ -945,17 +977,14 @@ def claim_wave(
             f"wave {wave_id!r} has no effort_bucket; set one via "
             f"`eawf roadmap revise --set-bucket` before claiming"
         )
-    # The pending -> claimed status move plus its named guards (deps-closed,
+    # The pending -> claimed status move plus its named guards (dependency,
     # sibling-ordering, dispatch-not-paused) live in WAVE_TRANSITIONS now; the
     # booleans + the operator-facing failure messages are computed here (where
     # the wave id + sorted lists live) and evaluated by validate_transition in
     # the legacy deps -> sibling -> pause order. The pause gate is
     # unconditional: out_of_order satisfies sibling-ordering, not the pause.
-    unmet_deps = [
-        dep_id
-        for dep_id in wave.deps
-        if state.waves.get(dep_id) is None or state.waves[dep_id].status != WaveStatus.CLOSED
-    ]
+    dependency_evaluation = evaluate_dependency_barriers(state, wave_id=wave_id)
+    unmet_deps = [*dependency_evaluation.unmet, *dependency_evaluation.stale]
     skipped = _lower_w_sibling_pending(state, wave)
     guard_ctx = GuardContext(
         deps_closed=not unmet_deps,
@@ -964,7 +993,7 @@ def claim_wave(
         not_paused=not state.dispatch_paused,
         messages={
             GuardName.DEPS_CLOSED: (
-                f"wave {wave_id!r} blocked on un-closed dep waves: "
+                f"wave {wave_id!r} blocked on dependency start barriers: "
                 f"{sorted(unmet_deps, key=natural_key)}"
             ),
             GuardName.SIBLING_ORDERED: (
@@ -980,6 +1009,10 @@ def claim_wave(
     # stamp, no active-wave pointer, no session index entry, no estimate row).
     session = validate_claim_session(state, wave, session_id)
     validate_claim_capacity(state, wave, max_parallel_waves=max_parallel_waves)
+    try:
+        bind_start_dependencies(state, wave_id=wave_id)
+    except DependencyBarrierError as exc:
+        raise LifecycleError(str(exc)) from exc
     if parent_iter.status is IterStatus.PLANNED:
         _apply_iter_activation(state, parent_iter, preserve_active_wave_ids=True)
         logger.info(
@@ -1026,7 +1059,7 @@ def claim_wave(
 
 
 def _lower_w_sibling_pending(state: State, wave: Wave) -> list[str]:
-    """Return PENDING sibling wave ids with a lower ``W##`` whose deps are CLOSED.
+    """Return lower PENDING siblings whose dependency start barriers pass.
 
     A sibling shares ``wave.iter_id``. ``W##`` ordering uses the
     trailing two digits of the wave id. Returns an empty list when no
@@ -1047,10 +1080,7 @@ def _lower_w_sibling_pending(state: State, wave: Wave) -> list[str]:
             continue
         if other.status != WaveStatus.PENDING:
             continue
-        deps_met = all(
-            state.waves.get(d) is not None and state.waves[d].status == WaveStatus.CLOSED
-            for d in other.deps
-        )
+        deps_met = evaluate_dependency_barriers(state, wave_id=other_id).satisfied
         if deps_met:
             skipped.append(other_id)
     return skipped
@@ -1087,6 +1117,10 @@ def start_wave(state: State, *, wave_id: str) -> Wave:
     if wave is None:
         raise LifecycleError(f"unknown wave {wave_id!r}")
     if wave.status == WaveStatus.IN_PROGRESS:
+        try:
+            require_start_dependencies(state, wave_id=wave_id)
+        except DependencyBarrierError as exc:
+            raise LifecycleError(str(exc)) from exc
         logger.debug(f"start_wave idempotent wave={wave_id} already in_progress")
         return wave
     # claimed -> in_progress is the only legal source for a start (the table
@@ -1100,6 +1134,10 @@ def start_wave(state: State, *, wave_id: str) -> Wave:
             f"wave {wave_id!r} is not claimed (status={wave.status.value!r}); cannot start"
         ),
     )
+    try:
+        require_start_dependencies(state, wave_id=wave_id)
+    except DependencyBarrierError as exc:
+        raise LifecycleError(str(exc)) from exc
     wave.status = WaveStatus.IN_PROGRESS
     logger.info(f"start_wave wave={wave_id}")
     return wave

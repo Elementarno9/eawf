@@ -39,6 +39,8 @@ from eawf.workflow.agent_report.rollup import iter_agent_reports
 from eawf.workflow.agent_report.store import AgentReportRoleMismatchError
 from eawf.workflow.dispatch.llm_assist import LLMAssistError
 from eawf.workflow.dispatch.verdict import (
+    DurableAuditContext,
+    DurableAuditCriterion,
     ExecutorSelfReportError,
     WaveVerdictGate,
     _is_security_scoped,
@@ -54,6 +56,47 @@ from tests._criteria_helpers import legacy_criteria
 _WAVE_ID = "P29-I04-W07"
 _T0 = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
 _T1 = datetime(2026, 6, 1, 12, 0, 5, tzinfo=UTC)
+_RECEIPT_URN = f"urn:eawf:v1:store:{_WAVE_ID}/gate_receipt/GR-proof"
+
+
+def _durable_context() -> DurableAuditContext:
+    """Exact close context with one deterministic and one judged criterion."""
+    return DurableAuditContext(
+        wave_id=_WAVE_ID,
+        close_attempt_id="CA-01",
+        integration_id="WI-01",
+        integrated_sha="a" * 40,
+        tree_sha="b" * 40,
+        spec_digest="c" * 64,
+        criteria_digest="d" * 64,
+        gate_manifest_digest="e" * 64,
+        policy_digest="f" * 64,
+        runner_digest="1" * 64,
+        dependency_binding_digest="2" * 64,
+        criteria=(
+            DurableAuditCriterion(
+                criterion_id="CR-01",
+                text="ship the producer",
+                deterministic=True,
+                gate_receipt_urns=(_RECEIPT_URN,),
+            ),
+            DurableAuditCriterion(
+                criterion_id="CR-02",
+                text="test the producer",
+                deterministic=False,
+            ),
+        ),
+    )
+
+
+def _durable_auditor_body() -> dict[str, Any]:
+    """Return a context-valid auditor body with per-criterion evidence."""
+    body = json.loads(_auditor_body_json())
+    body["criteria"][0]["evidence_refs"] = [{"kind": "store_record", "ref": _RECEIPT_URN}]
+    body["criteria"][1]["evidence_refs"] = [
+        {"kind": "artifact", "ref": "tests/workflow/dispatch/test_verdict.py"}
+    ]
+    return body
 
 
 # --------------------------------------------------------------------------- #
@@ -816,6 +859,149 @@ def test_build_auditor_prompt_back_compat_shape_unchanged() -> None:
     # Legacy section order is preserved.
     assert prompt.index("## Diff under audit") < prompt.index("## Success criteria")
     assert prompt.index("## Success criteria") < prompt.index("## Output contract")
+
+
+def test_build_auditor_prompt_names_exact_durable_close_context() -> None:
+    """Durable prompt pins every frozen input and criterion receipt mapping."""
+    wave = _make_wave(
+        agent_role="executor",
+        effort_bucket="L",
+        success_criteria=["ship the producer", "test the producer"],
+    )
+
+    prompt = build_auditor_prompt(
+        wave,
+        diff_base="abc123~1",
+        durable_context=_durable_context(),
+    )
+
+    for value in (
+        "CA-01",
+        "WI-01",
+        "a" * 40,
+        "b" * 40,
+        "c" * 64,
+        "d" * 64,
+        "e" * 64,
+        "f" * 64,
+        "1" * 64,
+        "2" * 64,
+        _RECEIPT_URN,
+        "CR-01",
+        "CR-02",
+    ):
+        assert value in prompt
+    assert "cite one of" in prompt
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda body: body["criteria"].pop(),
+        lambda body: body["criteria"][0].update({"evidence_refs": []}),
+        lambda body: body["criteria"][0].update(
+            {
+                "evidence_refs": [
+                    {
+                        "kind": "store_record",
+                        "ref": f"urn:eawf:v1:store:{_WAVE_ID}/gate_receipt/GR-wrong",
+                    }
+                ]
+            }
+        ),
+    ],
+)
+def test_parse_durable_auditor_body_rejects_unbound_evidence(
+    mutate: Any,
+) -> None:
+    """Semantic durable-contract failures surface as Pydantic ValidationError."""
+    raw = _durable_auditor_body()
+    mutate(raw)
+
+    with pytest.raises(ValidationError):
+        parse_auditor_report_body(raw, durable_context=_durable_context())
+
+
+@pytest.mark.parametrize("verdict", ["pass", "pass-with-followups"])
+def test_parse_durable_auditor_body_rejects_close_ready_false_criterion(
+    verdict: str,
+) -> None:
+    """A required contradiction cannot be downgraded to a follow-up."""
+    raw = _durable_auditor_body()
+    raw["verdict"] = verdict
+    raw["criteria"][1]["passed"] = False
+
+    with pytest.raises(ValidationError, match="aggregate verdict contradicts"):
+        parse_auditor_report_body(raw, durable_context=_durable_context())
+
+
+@pytest.mark.parametrize("verdict", ["fail", "blocked"])
+def test_parse_durable_auditor_body_rejects_nonpass_all_true(
+    verdict: str,
+) -> None:
+    """The aggregate is derived from required rows in both directions."""
+    raw = _durable_auditor_body()
+    raw["verdict"] = verdict
+
+    with pytest.raises(ValidationError, match="aggregate verdict contradicts"):
+        parse_auditor_report_body(raw, durable_context=_durable_context())
+
+
+def test_parse_durable_auditor_body_rejects_close_ready_refutation() -> None:
+    """A refutation must make its contradicted required criterion false."""
+    raw = _durable_auditor_body()
+    raw["refutations"] = ["the required behavior is absent"]
+
+    with pytest.raises(ValidationError, match="cannot carry refutations"):
+        parse_auditor_report_body(raw, durable_context=_durable_context())
+
+
+@pytest.mark.parametrize("verdict", ["fail", "blocked"])
+def test_parse_durable_auditor_body_accepts_consistent_nonpass(
+    verdict: str,
+) -> None:
+    """Fail and blocked remain legal when a required criterion is false."""
+    raw = _durable_auditor_body()
+    raw["verdict"] = verdict
+    raw["criteria"][1]["passed"] = False
+    raw["refutations"] = ["the second required criterion is not proven"]
+
+    body = parse_auditor_report_body(raw, durable_context=_durable_context())
+
+    assert body.verdict.value == verdict
+    assert body.criteria[1].passed is False
+
+
+def test_produce_durable_verdict_reasks_invalid_evidence(
+    tmp_path: Path,
+) -> None:
+    """Missing criterion proof enters bounded schema re-ask, then appends."""
+    state, state_path, events_path = _write_state(tmp_path, effort_bucket="L")
+    wave = state.waves[_WAVE_ID]
+    invalid = _durable_auditor_body()
+    invalid["criteria"][0]["evidence_refs"] = []
+    spawn = _RecordingSpawn(
+        [
+            json.dumps(invalid),
+            json.dumps(_durable_auditor_body()),
+        ]
+    )
+
+    result = _run(
+        produce_wave_verdict(
+            state=state,
+            state_path=state_path,
+            events_path=events_path,
+            wave=wave,
+            spawn=spawn,
+            repo_root=tmp_path,
+            durable_context=_durable_context(),
+        )
+    )
+
+    assert result.assist_result.attempts_used == 2
+    assert result.assist_result.prior_failures[0].reason == "schema_mismatch"
+    assert result.append_result.envelope.id
 
 
 # --------------------------------------------------------------------------- #

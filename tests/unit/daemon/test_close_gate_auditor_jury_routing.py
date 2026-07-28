@@ -22,8 +22,14 @@ from typing import Any
 
 import pytest
 
-from eawf.kernel.state.models import State
+from eawf.kernel.spec.common import CriterionSpec, GateSpec
+from eawf.kernel.state.enums import AuditRequirement, CloseAttemptStatus, StoreKind
+from eawf.kernel.state.models import CloseAttempt, State
 from eawf.kernel.state.mutations import Mutation, MutationKind
+from eawf.kernel.store.append import append_envelope
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.gate_receipt import GateReceipt
+from eawf.kernel.store.paths import store_path
 from eawf.observability.eval.jury_validation import BlockAuthority
 from eawf.platform.profiles.models import VerifyBlock
 from eawf.runtime.daemon.limits import (
@@ -32,6 +38,7 @@ from eawf.runtime.daemon.limits import (
     mutation_hard_limit_for,
 )
 from eawf.runtime.daemon.methods import state as daemon_state
+from eawf.workflow.dispatch.verdict import DurableAuditContext, DurableAuditCriterion
 from eawf.workflow.verify.oracle import OracleResult
 
 pytestmark = pytest.mark.unit
@@ -121,6 +128,9 @@ class _Recorder:
         self.enforced_verdict_gate = False
         self.oracle_calls = 0
         self.verdict_wall_clock: float | None = None
+        self.reuse_existing: bool | None = None
+        self.durable_context: DurableAuditContext | None = None
+        self.events: list[str] = []
 
 
 def _wire(
@@ -154,9 +164,15 @@ def _wire(
         state_path: Path,
         repo_root: Path,
         wall_clock_seconds: float,
-    ) -> None:
+        reuse_existing: bool = True,
+        durable_context: DurableAuditContext | None = None,
+    ) -> str:
         recorder.produced_verdict = True
         recorder.verdict_wall_clock = wall_clock_seconds
+        recorder.reuse_existing = reuse_existing
+        recorder.durable_context = durable_context
+        recorder.events.append("audit")
+        return "AR-test"
 
     def _enforce(wave: Any, *, state_path: Path) -> None:
         recorder.enforced_verdict_gate = True
@@ -167,6 +183,7 @@ def _wire(
 
     async def _oracle(criterion: Any, gates: Any, **kwargs: Any) -> OracleResult:
         recorder.oracle_calls += 1
+        recorder.events.append("gate")
         return OracleResult(
             criterion_id=criterion.id,
             status="pass",
@@ -224,7 +241,199 @@ def test_close_gate_advisory_jury_routes_to_blocking_auditor(
     # verdict" as a refusal -- so a too-short ceiling makes the wave unclosable
     # no matter how often the operator retries (P30-I25-W32).
     assert recorder.verdict_wall_clock == _WALL_CLOCK
+    assert recorder.reuse_existing is True
     assert VerifyBlock().juror_wall_clock_seconds != _WALL_CLOCK
+
+
+def test_durable_high_risk_close_runs_deterministic_gates_before_fresh_audit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Durable close consumes deterministic proof before spawning its auditor."""
+    recorder = _wire(monkeypatch, authority=BlockAuthority.ADVISORY)
+    state, mutation = _drive(tmp_path)
+    criterion = CriterionSpec(
+        id="CR-01",
+        text="the deterministic close gate passes before the fresh audit",
+        kind="contract",
+        acceptance_style="binary",
+        evidence_kind="deterministic",
+        gate_ids=["G-01"],
+        quality_dimension="functional_suitability",
+        measurable_signal="the required file exists in the exact verification tree",
+    )
+    state.waves[_WAVE].success_criteria = [criterion]
+    state.waves[_WAVE].gates = [
+        GateSpec(
+            id="G-01",
+            criterion_id=criterion.id,
+            kind="file_exists",
+            args={"path": "sentinel"},
+            policy="block",
+            cadence="every-wave",
+        )
+    ]
+    mutation.params["close_attempt_id"] = "CA-01"
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.close.gate_freshness_inputs",
+        lambda state, *, attempt_id: {},
+    )
+    context = DurableAuditContext(
+        wave_id=_WAVE,
+        close_attempt_id="CA-01",
+        integration_id="WI-01",
+        integrated_sha="a" * 40,
+        tree_sha="b" * 40,
+        spec_digest="c" * 64,
+        criteria_digest="d" * 64,
+        gate_manifest_digest="e" * 64,
+        policy_digest="f" * 64,
+        runner_digest="1" * 64,
+        dependency_binding_digest="2" * 64,
+        criteria=(
+            DurableAuditCriterion(
+                criterion_id="CR-01",
+                text=criterion.text,
+                deterministic=True,
+                gate_receipt_urns=(f"urn:eawf:v1:store:{_WAVE}/gate_receipt/GR-proof",),
+            ),
+        ),
+    )
+
+    def _build_context(**kwargs: Any) -> DurableAuditContext:
+        assert recorder.events == ["gate"]
+        recorder.events.append("context")
+        return context
+
+    monkeypatch.setattr(daemon_state, "_build_durable_audit_context", _build_context)
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.close.reusable_bound_audit_report_id",
+        lambda *_args, **_kwargs: None,
+    )
+
+    asyncio.run(
+        daemon_state._enforce_wave_close_gate(
+            state,
+            mutation,
+            state_path=tmp_path / ".ea" / "state.json",
+            repo_root=tmp_path,
+        )
+    )
+
+    assert recorder.events == ["gate", "context", "audit"]
+    assert recorder.oracle_calls == 1
+    assert recorder.reuse_existing is False
+    assert recorder.durable_context == context
+
+
+def test_build_durable_audit_context_reads_bound_persisted_receipt(
+    tmp_path: Path,
+) -> None:
+    """Exact audit context comes from canonical attempt plus receipt store."""
+    state = State.model_validate(_state_payload())
+    criterion = CriterionSpec(
+        id="CR-01",
+        text="the exact deterministic receipt grounds this required criterion",
+        kind="contract",
+        acceptance_style="binary",
+        evidence_kind="deterministic",
+        gate_ids=["G-01"],
+        quality_dimension="functional_suitability",
+        measurable_signal="a passing persisted receipt names this exact integrated tree",
+    )
+    state.waves[_WAVE].success_criteria = [criterion]
+    attempt = CloseAttempt(
+        id="CA-01",
+        wave_id=_WAVE,
+        outcome="close exact integrated revision",
+        tokens_consumed=None,
+        generation=1,
+        supersedes_id=None,
+        status=CloseAttemptStatus.CHECKING,
+        integration_id="WI-01",
+        candidate_sha="0" * 40,
+        integrated_sha="a" * 40,
+        tree_sha="b" * 40,
+        wave_revision_digest="3" * 64,
+        spec_digest="c" * 64,
+        criteria_digest="d" * 64,
+        gate_manifest_digest="e" * 64,
+        policy_digest="f" * 64,
+        runner_environment_digest="1" * 64,
+        dependency_binding_digest="2" * 64,
+        required_gate_ids=["G-01"],
+        gate_receipt_ids=["GR-proof"],
+        audit_requirement=AuditRequirement.REQUIRED,
+        no_runtime_waiver=False,
+        repair_budget_remaining=1,
+        infrastructure_retry_budget_remaining=1,
+        requested_at=_T0,
+        updated_at=_T0,
+        idempotency_key="close-exact-audit",
+    )
+    state.close_attempts[attempt.id] = attempt
+    state_path = tmp_path / ".ea" / "state.json"
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text(state.model_dump_json(), encoding="utf-8")
+    receipt = GateReceipt(
+        id="GR-proof",
+        scope_id=_WAVE,
+        criterion_id=criterion.id,
+        gate_id="G-01",
+        integration_id=attempt.integration_id,
+        integrated_sha=attempt.integrated_sha,
+        tree_sha=attempt.tree_sha,
+        contract_digest=attempt.spec_digest,
+        criteria_digest=attempt.criteria_digest,
+        gate_manifest_digest=attempt.gate_manifest_digest,
+        policy_digest=attempt.policy_digest,
+        dependency_binding_digest=attempt.dependency_binding_digest,
+        runner_environment_digest=attempt.runner_environment_digest,
+        runner_digest="4" * 64,
+        environment_digest="5" * 64,
+        freshness_key="7" * 64,
+        argv=["pytest"],
+        argv_digest="6" * 64,
+        command="pytest",
+        timeout_class="quick",
+        resolved_timeout_seconds=30.0,
+        started_at=_T0,
+        ended_at=_T0,
+        duration_ms=0,
+        result="pass",
+        exit_status=0,
+        full_log_ref=".ea/local/gates/G-01.log",
+    )
+    append_envelope(
+        store_path(state_path, StoreKind.GATE_RECEIPT),
+        Envelope(
+            id=receipt.id,
+            kind=StoreKind.GATE_RECEIPT,
+            scope_id=_WAVE,
+            created_at=_T0,
+            summary="persisted exact gate proof",
+            payload=receipt.model_dump(mode="json"),
+        ),
+    )
+
+    context = daemon_state._build_durable_audit_context(
+        state_path=state_path,
+        close_attempt_id=attempt.id,
+        wave=state.waves[_WAVE],
+    )
+
+    assert context.close_attempt_id == attempt.id
+    assert context.integration_id == attempt.integration_id
+    assert context.integrated_sha == attempt.integrated_sha
+    assert context.tree_sha == attempt.tree_sha
+    assert context.spec_digest == attempt.spec_digest
+    assert context.criteria_digest == attempt.criteria_digest
+    assert context.gate_manifest_digest == attempt.gate_manifest_digest
+    assert context.policy_digest == attempt.policy_digest
+    assert context.runner_digest == attempt.runner_environment_digest
+    assert context.dependency_binding_digest == attempt.dependency_binding_digest
+    assert context.criteria[0].gate_receipt_urns == (
+        f"urn:eawf:v1:store:{_WAVE}/gate_receipt/GR-proof",
+    )
 
 
 def test_close_gate_blocking_jury_replaces_auditor(

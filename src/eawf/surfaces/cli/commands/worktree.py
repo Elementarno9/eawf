@@ -43,6 +43,7 @@ so the daemon remains the canonical state mutator.
 from __future__ import annotations
 
 import logging
+import sys
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Annotated, Any
 
@@ -572,16 +573,23 @@ def _wave_land_payload(result: Any) -> dict[str, Any]:
         "closed": result.closed,
         "worktree_cleaned": result.worktree_cleaned,
         "merged_commit": result.merged_commit,
+        "integration_id": result.integration_id,
+        "close_attempt": None,
+        "close_backgrounded": False,
     }
 
 
 def _wave_land_batch_payload(result: Any) -> dict[str, Any]:
-    """Return the JSON-mode result shape for one wave-land-batch result."""
+    """Return explicit synchronous-compatibility daemonless batch output."""
     return {
         "landed": [_wave_land_payload(row) for row in result.landed],
         "failed_wave": result.failed_wave,
         "error": result.error,
         "skipped": list(result.skipped),
+        "barrier_requirements": {
+            wave_id: list(stages) for wave_id, stages in result.barrier_requirements.items()
+        },
+        "close_mode": "daemonless_synchronous",
     }
 
 
@@ -686,6 +694,14 @@ def wave_land_cmd(
             help="Skip the post-close worktree cleanup.",
         ),
     ] = False,
+    wait: Annotated[
+        bool,
+        typer.Option("--wait", help="Wait for the submitted close attempt."),
+    ] = False,
+    detach: Annotated[
+        bool,
+        typer.Option("--detach", help="Return after close submission."),
+    ] = False,
 ) -> None:
     """Cherry-pick the wave's worktree commits onto the parent branch.
 
@@ -694,6 +710,15 @@ def wave_land_cmd(
     operator can resolve and re-run.
     """
     flags: GlobalFlags = ctx.obj
+    if wait and detach:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                "--wait and --detach are mutually exclusive",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+        return
     if not is_wave_id(wave_id):
         cli_errors.emit_error(
             cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
@@ -722,6 +747,33 @@ def wave_land_cmd(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
+    close_attempt = result.get("close_attempt")
+    if close_attempt is not None:
+        wait_for_terminal = wait or (
+            not detach and not (sys.stdin.isatty() and sys.stdout.isatty())
+        )
+        if wait_for_terminal:
+            from eawf.surfaces.cli.commands.close import wait_for_close
+
+            try:
+                close_result = wait_for_close(
+                    ref=str(close_attempt["id"]),
+                    flags=flags,
+                )
+            except cli_errors.CliError as err:
+                cli_errors.emit_error(err, flags=flags)
+                return
+            result["close_attempt"] = close_result["attempt"]
+            if close_result["attempt"]["status"] != "closed":
+                emit_json_or_text(
+                    result,
+                    (
+                        f"wave land {wave_id} integrated but close "
+                        f"{close_result['attempt']['status']}"
+                    ),
+                    flags=flags,
+                )
+                raise typer.Exit(code=3)
 
     payload: dict[str, Any] = {
         "wave": result["wave"],
@@ -729,6 +781,9 @@ def wave_land_cmd(
         "outcome": result["outcome"],
         "worktree_cleaned": result["worktree_cleaned"],
         "merged_commit": result["merged_commit"],
+        "integration_id": result.get("integration_id"),
+        "close_attempt": result.get("close_attempt"),
+        "close_backgrounded": result.get("close_backgrounded", False),
     }
     text = (
         f"wave land {wave_id} commits={payload['commits']} "
@@ -751,7 +806,7 @@ def wave_land_batch_cmd(
         bool,
         typer.Option(
             "--ready-only",
-            help="Skip waves whose declared deps are not all CLOSED.",
+            help="Skip waves whose configured land dependency barriers are not satisfied.",
         ),
     ] = False,
     keep_worktree: Annotated[
@@ -798,8 +853,12 @@ def wave_land_batch_cmd(
             "wave": r["wave"],
             "commits": list(r["commits"]),
             "outcome": r["outcome"],
+            "closed": r["closed"],
             "worktree_cleaned": r["worktree_cleaned"],
             "merged_commit": r["merged_commit"],
+            "integration_id": r.get("integration_id"),
+            "close_attempt": r.get("close_attempt"),
+            "close_backgrounded": r.get("close_backgrounded", False),
         }
         for r in batch_result["landed"]
     ]
@@ -808,10 +867,19 @@ def wave_land_batch_cmd(
         "failed_wave": batch_result["failed_wave"],
         "error": batch_result["error"],
         "skipped": list(batch_result["skipped"]),
+        "barrier_requirements": dict(batch_result.get("barrier_requirements", {})),
+        "close_mode": batch_result.get("close_mode", "durable_async"),
     }
     landed_count = len(batch_result["landed"])
+    attempts = [
+        row["close_attempt"]["id"] for row in landed_payload if row["close_attempt"] is not None
+    ]
     if batch_result["failed_wave"] is None:
-        text = f"wave land-batch landed={landed_count} skipped={batch_result['skipped']}"
+        text = (
+            f"wave land-batch integrated={landed_count} "
+            f"close_mode={payload['close_mode']} attempts={attempts} "
+            f"skipped={batch_result['skipped']}"
+        )
         emit_json_or_text(payload, text, flags=flags)
         return
 
@@ -823,8 +891,9 @@ def wave_land_batch_cmd(
     # was not satisfied — and matches how individual ``wave land``
     # surfaces close-time failures.
     text = (
-        f"wave land-batch landed={landed_count} failed_at={batch_result['failed_wave']} "
-        f"error={batch_result['error']!r}"
+        f"wave land-batch integrated={landed_count} "
+        f"close_mode={payload['close_mode']} attempts={attempts} "
+        f"failed_at={batch_result['failed_wave']} error={batch_result['error']!r}"
     )
     emit_json_or_text(payload, text, flags=flags)
     raise typer.Exit(cli_errors.ValidationError.exit_code)

@@ -7,8 +7,9 @@ reused from :mod:`eawf.surfaces.render.*`; the renderer is idempotent and the
 install is byte-stable across re-runs.
 
 ``package_plugin`` emits a standalone marketplace tree the operator can
-register via ``codex plugin marketplace add <path>`` — required because
-Codex does not auto-load from the user-scope ``~/.codex/plugins/`` dir.
+register via ``codex plugin marketplace add <path>`` and install via
+``codex plugin add eawf@eawf`` — required because Codex does not auto-load
+from the user-scope ``~/.codex/plugins/`` dir.
 
 Public re-exports:
 

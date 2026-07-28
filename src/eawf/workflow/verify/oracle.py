@@ -27,6 +27,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -47,7 +49,7 @@ from eawf.observability.eval.cross_vendor_jury import (
 )
 from eawf.observability.eval.jury import JuryAggregateOutcome
 from eawf.observability.eval.jury_validation import BlockAuthority
-from eawf.workflow.audit_dsl.models import CheckResult
+from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec, GateFreshnessInput
 from eawf.workflow.audit_dsl.runner import run_checks
 from eawf.workflow.dispatch.verdict import (
     verdict_requirement,
@@ -57,6 +59,12 @@ from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.verify.compile import compile_gate
 
 logger = logging.getLogger(__name__)
+
+BeforeGateExecute = Callable[
+    [str, str, CheckSpec, str],
+    CheckResult | None,
+]
+AfterGateExecute = Callable[[str, str, CheckResult], None]
 
 
 class OracleResult(_StrictModel):
@@ -76,6 +84,7 @@ class OracleResult(_StrictModel):
     criterion_id: IdStr
     gate_id: IdStr | None = None
     detail: Annotated[str, Field(max_length=2000)] = ""
+    check_result: CheckResult | None = None
 
     def failing_detail(self) -> str:
         """Return the concrete failing-check output for a refused criterion.
@@ -127,6 +136,139 @@ def _gate_sort_key(gate: GateSpec) -> int:
         return int(OracleTier.T7_JURY) + 1
 
 
+def _reused_pass_result(
+    criterion: CriterionSpec,
+    gate: GateSpec,
+    *,
+    tier: int,
+    reusable_pass_gate_ids: set[str] | None,
+) -> OracleResult | None:
+    """Return a passing oracle result when a complete receipt is reusable."""
+    if gate.id not in (reusable_pass_gate_ids or set()):
+        return None
+    logger.info(
+        f"run_oracle status=receipt-reuse criterion={criterion.id!r} gate={gate.id!r} tier={tier}"
+    )
+    return OracleResult(
+        tier=OracleTier(tier),
+        status="pass",
+        criterion_id=criterion.id,
+        gate_id=gate.id,
+        detail="reused freshness-matched gate receipt",
+    )
+
+
+async def _run_deterministic_gates(  # noqa: C901
+    criterion: CriterionSpec,
+    ordered: list[GateSpec],
+    *,
+    repo_root: Path,
+    freshness_by_gate: dict[str, GateFreshnessInput] | None,
+    reusable_pass_gate_ids: set[str] | None,
+    before_gate_execute: BeforeGateExecute | None,
+    after_gate_execute: AfterGateExecute | None,
+    require_all_deterministic: bool,
+) -> OracleResult | None:
+    """Run ordered deterministic gates and return the first decisive result."""
+    last_pass: OracleResult | None = None
+    for gate in ordered:
+        tier = _gate_sort_key(gate)
+        if before_gate_execute is None:
+            reused = _reused_pass_result(
+                criterion,
+                gate,
+                tier=tier,
+                reusable_pass_gate_ids=reusable_pass_gate_ids,
+            )
+            if reused is not None:
+                if not require_all_deterministic:
+                    return reused
+                last_pass = reused
+                continue
+        try:
+            gate_freshness = (freshness_by_gate or {}).get(gate.id)
+            if gate_freshness is None:
+                spec = compile_gate(gate, criterion=criterion)
+            else:
+                spec = compile_gate(
+                    gate,
+                    criterion=criterion,
+                    freshness=gate_freshness,
+                )
+            if spec is None:
+                continue
+            if before_gate_execute is None:
+                results = await asyncio.to_thread(
+                    run_checks,
+                    [spec],
+                    cwd=repo_root,
+                )
+            else:
+                before_execute = partial(
+                    before_gate_execute,
+                    criterion.id,
+                    gate.id,
+                )
+                results = await asyncio.to_thread(
+                    run_checks,
+                    [spec],
+                    cwd=repo_root,
+                    before_execute=before_execute,
+                )
+            result = results[0]
+        except Exception as exc:
+            logger.warning(
+                f"run_oracle status=gate-blocked criterion={criterion.id!r} "
+                f"gate={gate.id!r} detail={exc!s}"
+            )
+            if before_gate_execute is not None and gate.required and gate.policy == "block":
+                return OracleResult(
+                    tier=OracleTier(tier),
+                    status="blocked",
+                    criterion_id=criterion.id,
+                    gate_id=gate.id,
+                    detail=f"durable gate execution blocked: {exc!s}",
+                )
+            continue
+        if after_gate_execute is not None and result.started_at is not None:
+            after_gate_execute(criterion.id, gate.id, result)
+        gate_status = _check_result_status(result)
+        if gate_status == "pass":
+            logger.info(
+                f"run_oracle status=pass criterion={criterion.id!r} gate={gate.id!r} tier={tier}"
+            )
+            passed_result = OracleResult(
+                tier=OracleTier(tier),
+                status="pass",
+                criterion_id=criterion.id,
+                gate_id=gate.id,
+                detail=result.details or "",
+                check_result=result,
+            )
+            if not require_all_deterministic:
+                return passed_result
+            last_pass = passed_result
+            continue
+        if gate.required and gate.policy == "block":
+            logger.info(
+                f"run_oracle mode=deterministic criterion={criterion.id!r} "
+                f"gate={gate.id!r} tier={tier} status={gate_status} blocking=True"
+            )
+            return OracleResult(
+                tier=OracleTier(tier),
+                status=gate_status,
+                criterion_id=criterion.id,
+                gate_id=gate.id,
+                detail=result.details or "",
+                check_result=result,
+            )
+        logger.debug(
+            f"run_oracle mode=deterministic criterion={criterion.id!r} "
+            f"gate={gate.id!r} tier={tier} status={gate_status} blocking=False"
+        )
+    return last_pass
+
+
 async def run_oracle(
     criterion: CriterionSpec,
     gates: list[GateSpec],
@@ -138,6 +280,11 @@ async def run_oracle(
     repo_root: Path,
     spawn_factory: SpawnFactory,
     block_authority: BlockAuthority = BlockAuthority.ADVISORY,
+    freshness_by_gate: dict[str, GateFreshnessInput] | None = None,
+    reusable_pass_gate_ids: set[str] | None = None,
+    before_gate_execute: BeforeGateExecute | None = None,
+    after_gate_execute: AfterGateExecute | None = None,
+    require_all_deterministic: bool = False,
 ) -> OracleResult:
     """Score *criterion* by escalating its gates from cheapest tier upward.
 
@@ -195,6 +342,16 @@ async def run_oracle(
             the default, the veto is logged and the close proceeds). The daemon
             close path computes the earned authority and passes it in; an
             uncalibrated jury stays advisory.
+        freshness_by_gate: Optional immutable receipt facts keyed by gate id.
+            Only the selected deterministic gate's facts reach the result.
+        reusable_pass_gate_ids: Gates whose persisted pass receipts match the
+            caller's complete frozen-input identity.
+        before_gate_execute: Optional durable pre-execution claim callback.
+            Returning a result suppresses the subprocess.
+        after_gate_execute: Optional terminal-result callback. Called only for
+            results with execution timestamps, including receipt reuse.
+        require_all_deterministic: Run every required deterministic gate
+            instead of returning after the first pass.
 
     Returns:
         An :class:`OracleResult` carrying the tier that produced the
@@ -214,53 +371,18 @@ async def run_oracle(
     )
 
     if criterion.evidence_kind == "deterministic":
-        for gate in ordered:
-            tier = _gate_sort_key(gate)
-            try:
-                spec = compile_gate(gate, criterion=criterion)
-                if spec is None:
-                    continue
-                # run_checks shells out to per-check subprocesses (pytest, mypy,
-                # pre-commit) with multi-minute budgets; run_oracle is awaited
-                # on the daemon event loop, so the synchronous call is offloaded
-                # to a worker thread to keep the loop responsive under a slow
-                # gate. Result handling stays on-loop.
-                results = await asyncio.to_thread(run_checks, [spec], cwd=repo_root)
-                result = results[0]
-            except Exception as exc:
-                logger.warning(
-                    f"run_oracle gate_blocked criterion={criterion.id!r} gate={gate.id!r} "
-                    f"detail={exc!s}"
-                )
-                continue
-            gate_status = _check_result_status(result)
-            if gate_status == "pass":
-                logger.info(
-                    f"run_oracle pass criterion={criterion.id!r} gate={gate.id!r} tier={tier}"
-                )
-                return OracleResult(
-                    tier=OracleTier(tier),
-                    status="pass",
-                    criterion_id=criterion.id,
-                    gate_id=gate.id,
-                    detail=result.details or "",
-                )
-            if gate.required and gate.policy == "block":
-                logger.info(
-                    f"run_oracle deterministic_nonpass criterion={criterion.id!r} "
-                    f"gate={gate.id!r} tier={tier} status={gate_status}"
-                )
-                return OracleResult(
-                    tier=OracleTier(tier),
-                    status=gate_status,
-                    criterion_id=criterion.id,
-                    gate_id=gate.id,
-                    detail=result.details or "",
-                )
-            logger.debug(
-                f"run_oracle deterministic_advisory criterion={criterion.id!r} "
-                f"gate={gate.id!r} tier={tier} status={gate_status}"
-            )
+        deterministic = await _run_deterministic_gates(
+            criterion,
+            ordered,
+            repo_root=repo_root,
+            freshness_by_gate=freshness_by_gate,
+            reusable_pass_gate_ids=reusable_pass_gate_ids,
+            before_gate_execute=before_gate_execute,
+            after_gate_execute=after_gate_execute,
+            require_all_deterministic=require_all_deterministic,
+        )
+        if deterministic is not None:
+            return deterministic
 
     requirement = verdict_requirement(wave)
     if requirement == "always":

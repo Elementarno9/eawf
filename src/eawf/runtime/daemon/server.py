@@ -33,11 +33,13 @@ import orjson
 
 # Import to ensure handlers register before dispatch runs.
 import eawf.runtime.daemon.methods.agent
+import eawf.runtime.daemon.methods.close  # registers durable close control methods
 import eawf.runtime.daemon.methods.config  # registers config read/write methods
 import eawf.runtime.daemon.methods.daemon
 import eawf.runtime.daemon.methods.event
 import eawf.runtime.daemon.methods.evidence  # registers evidence.append (P28-I01-W04)
 import eawf.runtime.daemon.methods.fleet  # registers fleet.drive (P30-I12-W01)
+import eawf.runtime.daemon.methods.integration  # registers Wave integration/barrier methods
 import eawf.runtime.daemon.methods.jury  # registers jury.label (P30-I23-W17)
 import eawf.runtime.daemon.methods.needs_user  # registers needs_user.{raise,resolve,park}
 import eawf.runtime.daemon.methods.registry  # registers registry.read / registry.update (W10)

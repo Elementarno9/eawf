@@ -25,6 +25,7 @@ cost tab beside it (DRY: one humanizer, one table treatment across the modal):
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime
 
 from rich.markup import escape
@@ -34,7 +35,11 @@ from eawf.surfaces.render.units import format_tokens
 from eawf.workflow.agent_report.rollup import PerWaveAttemptRollup
 
 
-def attempt_rollup_rows(rollup: PerWaveAttemptRollup) -> tuple[tuple[str, str], ...]:
+def attempt_rollup_rows(
+    rollup: PerWaveAttemptRollup,
+    *,
+    observed_attempts: frozenset[int] | None = None,
+) -> tuple[tuple[str, str], ...]:
     """Build evidence-tab rows for a wave's per-attempt timeline.
 
     Args:
@@ -44,10 +49,31 @@ def attempt_rollup_rows(rollup: PerWaveAttemptRollup) -> tuple[tuple[str, str], 
         Ordered ``(label, value)`` rows: the attempt summary, the error-kind
         breakdown, and the aligned per-attempt timeline table.
     """
+    filtered = _observed_rollup(rollup, observed_attempts)
     return (
-        ("attempts", _attempt_summary(rollup)),
-        ("error kinds", _error_kind_breakdown(rollup)),
-        ("attempt timeline", _attempt_timeline_table(rollup)),
+        ("attempts", _attempt_summary(filtered)),
+        ("error kinds", _error_kind_breakdown(filtered)),
+        ("attempt timeline", _attempt_timeline_table(filtered)),
+    )
+
+
+def _observed_rollup(
+    rollup: PerWaveAttemptRollup,
+    observed_attempts: frozenset[int] | None,
+) -> PerWaveAttemptRollup:
+    """Drop report-only synthetic rows from the observed attempt timeline."""
+    if observed_attempts is None:
+        return rollup
+    attempts = tuple(row for row in rollup.attempts if row.attempt in observed_attempts)
+    known_tokens = [int(row.tokens) for row in attempts if row.tokens.isdigit()]
+    return replace(
+        rollup,
+        attempts=attempts,
+        attempt_count=len(attempts),
+        retry_count=sum(row.retry != "initial" for row in attempts),
+        blocked_count=sum(row.blocked == "yes" for row in attempts),
+        token_total=sum(known_tokens) if known_tokens else None,
+        unmeasured_token_attempt_count=len(attempts) - len(known_tokens),
     )
 
 
@@ -57,7 +83,7 @@ def _attempt_summary(rollup: PerWaveAttemptRollup) -> str:
         f"{_count_label(rollup.attempt_count, 'attempt')}, "
         f"{_count_label(rollup.retry_count, 'retry', plural='retries')}, "
         f"{rollup.blocked_count} blocked, "
-        f"{_token_summary_label(rollup.token_total)}"
+        f"{_attempt_token_summary(rollup)}"
     )
 
 
@@ -77,6 +103,18 @@ def _token_summary_label(count: int) -> str:
     """
     noun = "token" if count == 1 else "tokens"
     return f"{format_tokens(count)} {noun}"
+
+
+def _attempt_token_summary(rollup: PerWaveAttemptRollup) -> str:
+    """Return an honest exact, partial, or unavailable token summary."""
+    if rollup.token_total is None:
+        cause = "no runtime measurement recorded" if rollup.attempts else "no attempts recorded"
+        return f"tokens unavailable — {cause}"
+    measured = _token_summary_label(rollup.token_total)
+    if rollup.unmeasured_token_attempt_count == 0:
+        return measured
+    unavailable = _count_label(rollup.unmeasured_token_attempt_count, "attempt")
+    return f"{measured} (partial — {unavailable} unavailable)"
 
 
 def _humanize_token_cell(cell: str) -> str:

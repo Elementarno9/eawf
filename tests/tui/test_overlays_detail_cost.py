@@ -25,6 +25,7 @@ from pathlib import Path
 import orjson
 from textual.widgets import TabbedContent
 
+from eawf.kernel.state.enums import MeasurementStatus
 from eawf.kernel.state.models import (
     RuntimeBaseline,
     RuntimeLatest,
@@ -250,7 +251,45 @@ def test_wave_cost_rows_attempts_but_no_join_render_honest_absence() -> None:
     # ``None`` rollup (no telemetry DB) against a wave that DOES carry session
     # attempts surfaces the honest "no metered sessions yet" line.
     rows = wave_cost_rows(state.waves[wave_id], None)
-    assert rows == (("sessions", NO_METERED_SESSIONS),)
+    assert rows == (("sessions", "unavailable — usage_unavailable"),)
+
+
+def test_wave_cost_rows_renders_evidence_backed_zero_cost() -> None:
+    """Observed zero-cost evidence renders $0, while unknown zero stays unbilled."""
+    state = _load(_PHASE_ITER_WAVE)
+    wave_id = next(iter(state.waves))
+    observed = SessionAttempt(
+        attempt=1,
+        runtime="codex",
+        session_id="sess-zero",
+        session_log_handle="urn:eawf:v1:session-log:codex:sess-zero",
+        started_at=_NOW,
+        ended_at=_NOW,
+        input_tokens=0,
+        output_tokens=0,
+        cost_usd=0,
+        measurement_status=MeasurementStatus.USAGE_OBSERVED,
+    )
+    wave = state.waves[wave_id].model_copy(update={"sessions": {1: observed}})
+    rows = dict(
+        wave_cost_rows(
+            wave,
+            _rollup(
+                _attempt(
+                    attempt=1,
+                    session_id="sess-zero",
+                    input_tokens=0,
+                    output_tokens=0,
+                    cache_read_tokens=0,
+                    cache_write_tokens=0,
+                    cost_usd=Decimal("0"),
+                ),
+                wave_id=wave_id,
+            ),
+        )
+    )
+    assert "$0.0000" in rows["attempts"]
+    assert rows["total"] == "$0.0000"
 
 
 # --------------------------------------------------------------------------
@@ -596,6 +635,7 @@ def test_detail_modal_no_metered_sessions_paints_absence_line() -> None:
             await pilot.pause()
             await app.workers.wait_for_complete()
             rendered = capture_screen_text(app)
-            assert NO_METERED_SESSIONS in rendered
+            assert "unavailable" in rendered
+            assert "usage_unavailable" in rendered
 
     asyncio.run(body())

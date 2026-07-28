@@ -507,6 +507,8 @@ class WaveFrontierItem:
     iter_id: str
     status: WaveStatus
     deps: tuple[str, ...] = ()
+    dependency_ready: bool | None = None
+    dependency_blockers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -607,6 +609,8 @@ def _deps_closed(item: WaveFrontierItem, by_id: dict[str, WaveFrontierItem]) -> 
     An unresolved dep id (not in the view) counts as not-closed -- the wave
     cannot be ready while a dependency is unaccounted for.
     """
+    if item.dependency_ready is not None:
+        return item.dependency_ready
     return all(
         by_id.get(dep_id) is not None and by_id[dep_id].status is WaveStatus.CLOSED
         for dep_id in item.deps

@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.6.2]
+
+### Added
+- **Wave closure is now a durable exact-revision job.** `wave close` and `wave land` persist an idempotent `CloseAttempt`, verify the integrated commit in a detached worktree, expose `close status|follow|resume|cancel`, survive client disconnects and daemon restarts, and apply at most one terminal close mutation. Interactive close detaches by default; noninteractive close waits unless explicitly detached.
+- **Integration and dependency truth are explicit.** Immutable `WaveIntegration` generations separate landing from closure; `wave integration show|adopt` supports ancestry-verified historical adoption; dependency edges may declare `start_after` and `land_after` thresholds while old edges remain `closed/closed`. Claims bind exact upstream generations, and continuation, landing, closure, graph, scheduler, and TUI reads reject stale bindings.
+- **Deterministic checks produce reusable evidence.** Freshness-bound `GateReceipt` rows carry exact integration, contract, policy, runner, environment, timeout, argv, result, bounded output, digest, and full-log facts. A matching pass executes once and can be reused by close.
+- **Codex attempts now carry provider truth.** The generated plugin uses supported PascalCase hook events under `hooks/hooks.json`; doctor reports hook trust state; uniquely correlated subagent starts/stops create timed `runtime=codex` attempts; readable rollout usage records token classes.
+
+### Fixed
+- **Gate timeouts and failures are diagnosable.** An explicit `timeout_s` overrides the timeout class, malformed gate args fail during ingestion, duplicate execution is removed, and nonzero/timeout results retain stdout/stderr tails plus a full-log reference.
+- **Missing usage no longer looks like zero.** Ambiguous or unreadable Codex usage, token, EU, and cost evidence renders as unavailable with a cause; measured zero remains distinct.
+- **Codex marketplace install guidance matches the current CLI.** Installation now registers the marketplace source first, then installs `eawf@eawf` explicitly; marketplace registration is no longer described as auto-installing the plugin.
+- **Agent Watch remains navigable and race-safe.** Up/Down changes lanes and sessions under overflow, mouse wheel stays with output, Page/Home/End scroll the tail, byte cursors continue beyond 2,000 lines, and picker/grid/recompose races no longer raise `NoMatches` for an absent `#watch-list`.
+- **Mixed close protocols fail closed.** A v0.6.2 CLI refuses a pre-v0.6.2 daemon with restart/reinstall guidance instead of attempting an unsafe fallback.
+
+### Known limitations
+- **Codex measurement depends on trusted hooks and readable rollout records.** Codex attempt timing and usage are authoritative only when the generated hooks are installed and trusted and the provider rollout remains readable; doctor surfaces the trust state but cannot bypass provider or local filesystem controls.
+- **Unavailable usage stays unavailable.** Missing, ambiguous, or unreadable provider counters are not converted to zero or estimated during close, so some attempts legitimately carry no token, EU, or cost total.
+- **Collection and residual proof must be declared with an expected baseline.** Gates that emit collected-node or residual manifests must pair each artifact path with its expected SHA-256 digest; close compares the produced digest and binds both values into the receipt. v0.6.2 cannot infer undeclared deselection, ownership, or expiry metadata.
+- **Legacy integrations require explicit adoption.** Migration does not infer integration history from Git. Existing active work remains behind strict barriers until `wave integration adopt` records an ancestry- and tree-verified revision.
+- **Orphaned gate claims fail closed.** If the daemon dies after durably claiming a freshness key but before persisting its terminal receipt, v0.6.2 reports the execution as indeterminate and will not rerun that key automatically. The operator must inspect retained diagnostics, then change a governing input to create a new freshness key or choose the bounded split/defer/abort path.
+- **Native workflow entities remain deferred to v0.7.** v0.6.2 keeps Phase/Iter/Wave and adds bridge records; native Task/Batch/Run, provider-worker leases, usage receipts, and activity semantics remain a v0.7 cutover.
+
+### Migration
+- **`state.json` `schema_version` advanced 1.19 -> 1.20.** The pure additive migration creates empty `wave_integrations`, `close_attempts`, `wave_dependency_barriers`, and `wave_dependency_bindings` maps. It never inspects Git or provider logs and never fabricates historical integration, close, dependency, or usage facts. Existing work remains behind strict legacy barriers until explicitly adopted. Back up state before migration; 0.6.1 cannot open schema 1.20. Run `eawf migrate`, restart the daemon, and reinstall/refresh generated plugins after upgrading.
+
 ## [0.6.1]
 
 ### Added

@@ -450,16 +450,15 @@ def _ready_wave_items(state: State) -> list[AttentionItem]:
         One ``NORMAL`` :class:`AttentionItem` per active-iter ready-to-claim
         wave.
     """
+    from eawf.workflow.lifecycle.integration import evaluate_dependency_barriers
+
     items: list[AttentionItem] = []
     for wave in state.waves.values():
         if wave.status is not WaveStatus.PENDING:
             continue
         if not _is_active_wave(state, wave):
             continue
-        deps_met = all(
-            state.waves[dep].status is WaveStatus.CLOSED for dep in wave.deps if dep in state.waves
-        )
-        if not deps_met:
+        if not evaluate_dependency_barriers(state, wave_id=wave.id).satisfied:
             continue
         items.append(
             AttentionItem(

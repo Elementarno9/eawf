@@ -36,11 +36,13 @@ projection is a pure function of the fixture state.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from textual.app import App, ComposeResult
+from textual.containers import VerticalScroll
 from textual.reactive import reactive
 from textual.widgets import Static
 
@@ -583,6 +585,33 @@ def test_lane_grid_arrows_move_the_selection() -> None:
             return grid.selected
 
     assert asyncio.run(body()) == 2
+
+
+def test_lane_grid_arrows_keep_overflow_selection_visible() -> None:
+    """Down and Up traverse an overflowing lane roster and scroll it into view."""
+    first = lane_grid_rows(_four_lane_state(), now=_NOW)[0]
+    rows = tuple(replace(first, wave_id=f"P01-I01-W{index:02d}") for index in range(1, 21))
+    grid = LaneGrid(rows, mode="unicode")
+
+    async def body() -> None:
+        app = _HostApp(grid=grid)
+        async with app.run_test(size=(100, 12)) as pilot:
+            await settle_screen(pilot)
+            scroller = grid.query_one("#watch-lane-grid", VerticalScroll)
+            assert scroller.max_scroll_y > 0
+            for _ in range(15):
+                await pilot.press("down")
+            await settle_screen(pilot)
+            assert grid.selected == 15
+            assert scroller.scroll_y > 0
+
+            for _ in range(15):
+                await pilot.press("up")
+            await settle_screen(pilot)
+            assert grid.selected == 0
+            assert scroller.scroll_y == 0
+
+    asyncio.run(body())
 
 
 def test_lane_grid_enter_zooms_the_selected_lane() -> None:

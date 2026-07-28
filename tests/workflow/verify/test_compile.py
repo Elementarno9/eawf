@@ -60,6 +60,7 @@ def _command_exit_zero_gate(
     criterion_id: str = "CRIT-1",
     argv: list[str] | None = None,
     extra_args: dict[str, object] | None = None,
+    timeout_s: int | None = None,
 ) -> GateSpec:
     args: dict[str, object] = {"argv": list(argv or ["uv", "run", "pytest", "-q"])}
     if extra_args:
@@ -72,6 +73,7 @@ def _command_exit_zero_gate(
         policy="block",
         cadence="every-wave",
         required=True,
+        timeout_s=timeout_s,
     )
 
 
@@ -121,6 +123,28 @@ def test_compile_gate_threads_timeout_class() -> None:
 
     assert result is not None
     assert result.args["timeout_class"] == "quick"
+
+
+def test_compile_gate_threads_top_level_timeout_override() -> None:
+    """Top-level ``GateSpec.timeout_s`` reaches the runner args unchanged."""
+    gate = _command_exit_zero_gate(
+        extra_args={"timeout_class": "very_slow"},
+        timeout_s=17,
+    )
+
+    result = compile_gate(gate, criterion=_criterion())
+
+    assert result is not None
+    assert result.args["timeout_class"] == "very_slow"
+    assert result.args["timeout_s"] == 17
+
+
+def test_compile_gate_omits_unset_top_level_timeout() -> None:
+    """An unset explicit timeout leaves timeout-class resolution to runner."""
+    result = compile_gate(_command_exit_zero_gate(), criterion=_criterion())
+
+    assert result is not None
+    assert "timeout_s" not in result.args
 
 
 def test_compile_gate_threads_scope() -> None:

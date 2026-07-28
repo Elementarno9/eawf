@@ -8,6 +8,8 @@ applied, doctor reports drift, and update aborts with exit 8.
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -197,10 +199,10 @@ def test_plugin_install_claude_user_scope_rejected(tmp_path: Path) -> None:
     assert "project-scope only" in combined or "marketplace" in combined.lower()
 
 
-def test_plugin_doctor_codex_finds_install_at_scope(
+def test_plugin_doctor_codex_surfaces_untrusted_hooks_after_install(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``plugin doctor codex --scope <s>`` exits 0 after install at that scope."""
+    """Fresh files exist, but Codex still requires operator trust via ``/hooks``."""
     _equip_ea_dir(tmp_path)
     fake_home = tmp_path / "fake-home"
     fake_home.mkdir()
@@ -209,7 +211,10 @@ def test_plugin_doctor_codex_finds_install_at_scope(
     result = runner.invoke(
         app, ["-w", str(tmp_path), "plugin", "doctor", "codex", "--scope", "user"]
     )
-    assert result.exit_code == 0, result.stdout
+    assert result.exit_code == 3, result.stdout
+    assert "ok=43 drifted=0 missing=0" in result.stdout
+    assert "untrusted=4" in result.stdout
+    assert "hook needs review in Codex /hooks" in result.stdout
 
 
 def test_plugin_package_codex_writes_marketplace_tree(tmp_path: Path) -> None:
@@ -236,6 +241,34 @@ def test_plugin_package_codex_writes_marketplace_tree(tmp_path: Path) -> None:
     body = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert body["name"] == "eawf"
     assert body["plugins"][0]["name"] == "eawf"
+    assert f"codex plugin marketplace add {target}" in result.stdout
+    assert "codex plugin add eawf@eawf" in result.stdout
+
+
+def test_current_codex_cli_supports_marketplace_then_plugin_add() -> None:
+    """Installed Codex exposes the two provider commands in package guidance."""
+    codex = shutil.which("codex")
+    if codex is None:
+        pytest.skip("codex CLI not installed")
+
+    marketplace_help = subprocess.run(
+        [codex, "plugin", "marketplace", "add", "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    plugin_help = subprocess.run(
+        [codex, "plugin", "add", "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert marketplace_help.returncode == 0, marketplace_help.stderr
+    assert "Add a local or Git marketplace" in marketplace_help.stdout
+    assert plugin_help.returncode == 0, plugin_help.stderr
+    assert "Install a plugin from a configured marketplace snapshot" in plugin_help.stdout
+    assert "PLUGIN[@MARKETPLACE]" in plugin_help.stdout
 
 
 def test_plugin_package_opencode_rejected(tmp_path: Path) -> None:

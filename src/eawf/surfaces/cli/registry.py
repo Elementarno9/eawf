@@ -96,6 +96,7 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("phase", "eawf.surfaces.cli.commands.lifecycle", "phase_app"),
     GroupRow("iter", "eawf.surfaces.cli.commands.lifecycle", "iter_app"),
     GroupRow("wave", "eawf.surfaces.cli.commands.lifecycle", "wave_app"),
+    GroupRow("close", "eawf.surfaces.cli.commands.close", "close_app"),
     # Evidence nouns.
     GroupRow("goal", "eawf.surfaces.cli.commands.evidence", "goal_app"),
     GroupRow("outcome", "eawf.surfaces.cli.commands.evidence", "outcome_app"),

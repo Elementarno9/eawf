@@ -15,8 +15,9 @@ The check kinds frozen for v0.3:
   state_path: str = ".ea/state.json"}``.
 * ``command_exit_zero`` — ``args`` validated by
   :class:`CommandExitZeroArgs`: ``{argv: list[str], timeout_class:
-  TimeoutClass = "standard", scope: Scope = "changed", wave_id:
-  str | None = None, wave_file_scopes: list[str] = []}``.
+  TimeoutClass = "standard", timeout_s: int | None = None, scope:
+  Scope = "changed", wave_id: str | None = None, wave_file_scopes:
+  list[str] = []}``.
 * ``verify_implements`` — ``args = {phase_id: str, diff_base: str,
   cadence: str, current_trigger: str}``. Walks closed WaveSpecs
   under ``.ea/specs/<phase_id>/`` and greps the diff against
@@ -105,9 +106,10 @@ caller (tracked in backlog item B074).
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal
+from datetime import datetime
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 
 from eawf.platform.artifacts.references import Citation
 
@@ -142,6 +144,9 @@ CheckKind = Literal[
 #: working — ``status="blocked"`` implies ``passed=False``.
 CheckStatus = Literal["pass", "fail", "blocked"]
 
+#: Maximum retained characters per subprocess output stream.
+OUTPUT_TAIL_MAX_CHARS = 8_192
+
 
 #: Timeout-class budget literal for ``command_exit_zero`` gates.
 #:
@@ -163,6 +168,39 @@ TimeoutClass = Literal["quick", "standard", "slow", "very_slow"]
 Scope = Literal["changed", "touched", "all"]
 
 
+class GateFreshnessInput(BaseModel):
+    """Optional immutable facts binding one gate execution to its inputs.
+
+    The audit runner does not persist receipts. Callers that own an
+    integration or close attempt may attach the facts they already know here;
+    :class:`CheckResult` carries them back alongside observed execution data
+    so the caller can persist one self-contained receipt.
+
+    Every field is optional because legacy/ad-hoc audit invocations do not
+    have an integration generation or durable log sink. ``None`` means
+    unavailable; the runner never invents a digest or reference.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    scope_id: str | None = Field(default=None, min_length=1)
+    criterion_id: str | None = Field(default=None, min_length=1)
+    integration_id: str | None = Field(default=None, min_length=1)
+    integrated_commit: str | None = Field(default=None, min_length=1)
+    tree_digest: str | None = Field(default=None, min_length=1)
+    contract_digest: str | None = Field(default=None, min_length=1)
+    criteria_digest: str | None = Field(default=None, min_length=1)
+    gate_manifest_digest: str | None = Field(default=None, min_length=1)
+    policy_digest: str | None = Field(default=None, min_length=1)
+    dependency_binding_digest: str | None = Field(default=None, min_length=1)
+    runner_environment_digest: str | None = Field(default=None, min_length=1)
+    runner_fingerprint: str | None = Field(default=None, min_length=1)
+    environment_fingerprint: str | None = Field(default=None, min_length=1)
+    collected_nodeid_digest: str | None = Field(default=None, min_length=1)
+    residual_manifest_digest: str | None = Field(default=None, min_length=1)
+    full_log_ref: str | None = Field(default=None, min_length=1, max_length=500)
+
+
 class CheckSpec(BaseModel):
     """One DSL-declared check.
 
@@ -176,6 +214,7 @@ class CheckSpec(BaseModel):
     kind: CheckKind
     name: str
     args: dict[str, Any] = Field(default_factory=dict)
+    freshness: GateFreshnessInput | None = None
 
 
 class CheckResult(BaseModel):
@@ -198,6 +237,26 @@ class CheckResult(BaseModel):
     passed: bool
     status: CheckStatus | None = None
     details: str | None = None
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    duration_ms: int | None = Field(default=None, ge=0)
+    timeout_class: TimeoutClass | None = None
+    resolved_timeout_seconds: int | None = Field(default=None, gt=0)
+    exit_status: int | None = None
+    argv: list[str] | None = None
+    command: str | None = None
+    stdout_tail: str | None = Field(default=None, max_length=OUTPUT_TAIL_MAX_CHARS)
+    stderr_tail: str | None = Field(default=None, max_length=OUTPUT_TAIL_MAX_CHARS)
+    stdout_digest: str | None = Field(default=None, min_length=1)
+    stderr_digest: str | None = Field(default=None, min_length=1)
+    selected_file_digest: str | None = Field(default=None, min_length=1)
+    collected_nodeid_digest: str | None = Field(default=None, min_length=1)
+    residual_manifest_digest: str | None = Field(default=None, min_length=1)
+    runner_fingerprint: str | None = Field(default=None, min_length=1)
+    environment_fingerprint: str | None = Field(default=None, min_length=1)
+    full_log_ref: str | None = Field(default=None, min_length=1, max_length=500)
+    freshness_key: str | None = Field(default=None, min_length=1)
+    freshness: GateFreshnessInput | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -233,6 +292,25 @@ class CheckResult(BaseModel):
             )
         return data
 
+    @model_validator(mode="after")
+    def _execution_timing_consistent(self) -> CheckResult:
+        """Require complete, ordered timing facts when execution timing is present.
+
+        Raises:
+            ValueError: when only one timestamp is present, timestamps are
+                timezone-naive, or the end precedes the start.
+        """
+        if (self.started_at is None) != (self.ended_at is None):
+            raise ValueError("started_at and ended_at must be provided together")
+        if self.started_at is None:
+            return self
+        assert self.ended_at is not None
+        if self.started_at.tzinfo is None or self.ended_at.tzinfo is None:
+            raise ValueError("started_at and ended_at must be timezone-aware")
+        if self.ended_at < self.started_at:
+            raise ValueError("ended_at must not precede started_at")
+        return self
+
 
 class CommandExitZeroArgs(BaseModel):
     """Strict args schema for the ``command_exit_zero`` check kind (W15).
@@ -247,6 +325,10 @@ class CommandExitZeroArgs(BaseModel):
 
     argv: list[str] = Field(min_length=1)
     timeout_class: TimeoutClass = "standard"
+    #: Explicit per-gate timeout propagated from top-level
+    #: :attr:`eawf.kernel.spec.common.GateSpec.timeout_s`. When present it
+    #: wins over :attr:`timeout_class`; ``None`` selects the class default.
+    timeout_s: StrictInt | None = Field(default=None, gt=0)
     scope: Scope = "changed"
     #: Optional wave id; resolved into ``diff_base = derive_wave_sha(wave_id) + "~1"``
     #: when set, with a ``git merge-base HEAD main`` fallback when the
@@ -256,6 +338,25 @@ class CommandExitZeroArgs(BaseModel):
     #: scope's file set. Callers pass the wave's own ``file_scopes`` so
     #: the runner does not need to load ``state.json``.
     wave_file_scopes: list[str] = Field(default_factory=list)
+    #: Optional repo-relative artifacts produced by the gate. When declared,
+    #: the runner requires each file after execution and records its exact
+    #: content digest on the receipt.
+    collected_nodeids_path: str | None = None
+    collected_nodeids_expected_digest: (
+        Annotated[
+            str,
+            Field(pattern=r"^[0-9a-f]{64}$"),
+        ]
+        | None
+    ) = None
+    residual_manifest_path: str | None = None
+    residual_manifest_expected_digest: (
+        Annotated[
+            str,
+            Field(pattern=r"^[0-9a-f]{64}$"),
+        ]
+        | None
+    ) = None
     #: Audit-skill metadata. The ``/audit`` skill stashes the originating
     #: success-criterion text inside the spec's ``args`` so it can pull
     #: it back out when rendering findings (see
@@ -263,6 +364,19 @@ class CommandExitZeroArgs(BaseModel):
     #: runner ignores it; this field exists only to satisfy
     #: ``extra="forbid"`` on the args schema.
     criterion: str | None = None
+
+    @field_validator("collected_nodeids_path", "residual_manifest_path")
+    @classmethod
+    def _manifest_path_is_repo_relative(cls, value: str | None) -> str | None:
+        """Reject empty, absolute, or parent-traversing manifest paths."""
+        if value is None:
+            return None
+        from pathlib import PurePath
+
+        path = PurePath(value)
+        if not value.strip() or path.is_absolute() or ".." in path.parts:
+            raise ValueError("manifest path must be non-empty and repo-relative")
+        return value
 
     @model_validator(mode="after")
     def _argv_all_str(self) -> CommandExitZeroArgs:
@@ -273,6 +387,33 @@ class CommandExitZeroArgs(BaseModel):
         """
         if not all(isinstance(a, str) for a in self.argv):
             raise ValueError("argv entries must be strings")
+        return self
+
+    @model_validator(mode="after")
+    def _manifest_paths_require_expected_digests(self) -> CommandExitZeroArgs:
+        """Require each declared manifest path and baseline digest as a pair.
+
+        Raises:
+            ValueError: when either a path or its expected digest is supplied
+                without the other half of the exact-comparison contract.
+        """
+        pairs = (
+            (
+                "collected_nodeids",
+                self.collected_nodeids_path,
+                self.collected_nodeids_expected_digest,
+            ),
+            (
+                "residual_manifest",
+                self.residual_manifest_path,
+                self.residual_manifest_expected_digest,
+            ),
+        )
+        for label, path, expected_digest in pairs:
+            if (path is None) != (expected_digest is None):
+                raise ValueError(
+                    f"{label}_path and {label}_expected_digest must be provided together"
+                )
         return self
 
 
@@ -368,6 +509,7 @@ class CheckFile(BaseModel):
 
 
 __all__ = [
+    "OUTPUT_TAIL_MAX_CHARS",
     "CheckFile",
     "CheckKind",
     "CheckResult",
@@ -375,6 +517,7 @@ __all__ = [
     "CheckStatus",
     "CitationResolvesArgs",
     "CommandExitZeroArgs",
+    "GateFreshnessInput",
     "MockupGoldenDiffArgs",
     "Scope",
     "TimeoutClass",

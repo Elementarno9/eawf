@@ -153,7 +153,7 @@ def test_status_json_emits_parseable_object(running_daemon: E2EEnv) -> None:
     assert payload["pid"] == _read_pidfile_pid(running_daemon.pid_file)
     assert payload["active_subscriptions"] == 0
     assert payload["in_flight_mutations"] == 0
-    assert payload["protocol_version"] == "1"
+    assert payload["protocol_version"] == "2"
 
 
 # --------------------------------------------------------------------------- #
@@ -175,7 +175,7 @@ def test_pidfile_records_protocol_and_timestamp(running_daemon: E2EEnv) -> None:
     lines = running_daemon.pid_file.read_text(encoding="utf-8").splitlines()
     assert len(lines) >= 3
     assert lines[0].strip().isdigit()
-    assert lines[1].strip() == "1"  # PROTOCOL_VERSION
+    assert lines[1].strip() == "2"  # PROTOCOL_VERSION
     # ISO-8601-ish boot timestamp on the third line.
     assert lines[2].strip().startswith("20")
 

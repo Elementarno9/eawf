@@ -260,6 +260,45 @@ def test_close_lock_hold_bounded_by_commit_not_gate_runtime(
     )
 
 
+def test_close_required_auditor_tier_finishes_before_state_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A required verdict/auditor run is part of lock-free pre-flight."""
+    from eawf.runtime.daemon.methods import state as daemon_state
+    from eawf.runtime.lock import portalock
+
+    state_path = tmp_path / ".ea" / "state.json"
+    _write_state(state_path)
+    ctx = _build_ctx(tmp_path, state_path)
+    gate_finished: list[float] = []
+    seen_tiers: list[str] = []
+
+    async def _slow_full_gate(*args: Any, tier: str = "all", **kwargs: Any) -> list[Any]:
+        seen_tiers.append(tier)
+        await asyncio.sleep(_PREFLIGHT_SLEEP_S)
+        gate_finished.append(time.monotonic())
+        return []
+
+    monkeypatch.setattr(daemon_state, "_enforce_wave_close_gate", _slow_full_gate)
+    monkeypatch.setattr(daemon_state, "_validate_wave_close_gate_refs", lambda *a, **k: None)
+    monkeypatch.setattr(
+        daemon_state,
+        "_compute_wave_close_readiness",
+        lambda *a, **k: None,
+    )
+    recorder = _LockHoldRecorder(portalock.acquire)
+    monkeypatch.setattr(portalock, "acquire", recorder)
+
+    async def body() -> None:
+        await mutate(ctx, _close_mutation())
+
+    _run(body)
+    assert seen_tiers == ["all"]
+    assert gate_finished
+    assert min(recorder.acquired_at) >= gate_finished[0]
+    assert max(recorder.holds) < _PREFLIGHT_SLEEP_S
+
+
 def test_close_refused_when_wave_row_changes_during_preflight(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

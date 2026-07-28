@@ -47,7 +47,11 @@ from pathlib import Path
 from typing import Literal
 
 import eawf
-from eawf.runtime.runtimes.codex.hook_map import codex_hook_name
+from eawf.runtime.runtimes.codex.hook_map import (
+    CODEX_HOOK_EVENT_TYPES,
+    codex_hook_event_name,
+    codex_hook_name,
+)
 from eawf.runtime.runtimes.codex.skills import (
     render_codex_agent_toml,
     render_codex_skill,
@@ -84,6 +88,8 @@ _DEFAULT_TIMESTAMP: str = "1970-01-01T00:00:00+00:00"
 _MANIFEST_DIR: str = ".codex-plugin"
 _MANIFEST_FILE: str = "plugin.json"
 _SIDECAR_FILE: str = ".eawf-managed.json"
+_HOOK_CONFIG_FILE: str = "hooks.json"
+_HOOK_TIMEOUT_SECONDS: int = 10
 
 
 @dataclass(frozen=True)
@@ -103,6 +109,7 @@ class InstallResult:
     skills: list[FileDelta] = field(default_factory=list)
     agents: list[FileDelta] = field(default_factory=list)
     hooks: list[FileDelta] = field(default_factory=list)
+    hook_config: FileDelta | None = None
     manifest: FileDelta | None = None
     sidecar: FileDelta | None = None
     config: FileDelta | None = None
@@ -244,6 +251,10 @@ def _hook_target(plugin_root: Path, spec: HookSpec) -> Path:
     return plugin_root / "hooks" / f"{codex_hook_name(spec.event_type)}.sh"
 
 
+def _hook_config_target(plugin_root: Path) -> Path:
+    return plugin_root / "hooks" / _HOOK_CONFIG_FILE
+
+
 def _manifest_target(plugin_root: Path) -> Path:
     return plugin_root / _MANIFEST_DIR / _MANIFEST_FILE
 
@@ -260,6 +271,34 @@ def _render_agent_toml(spec: AgentSpec) -> str:
     return render_codex_agent_toml(spec)
 
 
+def _codex_hook_specs() -> tuple[HookSpec, ...]:
+    """Return Eä hook specs supported and consumed on Codex."""
+    by_event = {spec.event_type: spec for spec in HOOK_REGISTRY}
+    return tuple(by_event[event_type] for event_type in CODEX_HOOK_EVENT_TYPES)
+
+
+def _render_hook_config() -> bytes:
+    """Render Codex's provider-native ``hooks/hooks.json`` document."""
+    hooks: dict[str, list[dict[str, object]]] = {}
+    for spec in _codex_hook_specs():
+        event_name = codex_hook_event_name(spec.event_type)
+        hooks[event_name] = [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": (
+                            f'"${{PLUGIN_ROOT}}/hooks/{codex_hook_name(spec.event_type)}.sh"'
+                        ),
+                        "timeout": _HOOK_TIMEOUT_SECONDS,
+                    }
+                ]
+            }
+        ]
+    body = {"hooks": hooks}
+    return (json.dumps(body, sort_keys=True, indent=2) + "\n").encode("utf-8")
+
+
 def _render_manifest() -> bytes:
     """Render the Codex-native ``.codex-plugin/plugin.json`` body.
 
@@ -270,11 +309,8 @@ def _render_manifest() -> bytes:
     no top-level ``agents`` key in ``plugin.json``. Custom agents are
     emitted as standalone scope config files under ``.codex/agents``.
 
-    ``hooks`` is an array of ``{event_type, path}`` objects (one per
-    registered hook), matching the sidecar payload shape in
-    :func:`_build_sidecar_body`. The prior shape emitted the literal
-    directory string ``"./hooks/"``, which Codex tried to open as a
-    config file and surfaced as ``Is a directory (os error 21)``.
+    ``hooks`` points at the provider-native ``hooks/hooks.json`` document.
+    Hook event keys live in that document as supported PascalCase Codex names.
 
     URL fields (``websiteURL``, ``privacyPolicyURL``,
     ``termsOfServiceURL``) and asset paths (``composerIcon``, ``logo``)
@@ -282,19 +318,12 @@ def _render_manifest() -> bytes:
     that may not exist on disk would violate the PII / path-hygiene
     rule and could break the manifest schema for downstream installs.
     """
-    hooks_payload = [
-        {
-            "event_type": spec.event_type.value,
-            "path": f"hooks/{codex_hook_name(spec.event_type)}.sh",
-        }
-        for spec in HOOK_REGISTRY
-    ]
     manifest: dict[str, object] = {
         "name": _PLUGIN_NAME,
         "version": _PLUGIN_VERSION,
         "description": _PLUGIN_DESCRIPTION,
         "skills": "./skills/",
-        "hooks": hooks_payload,
+        "hooks": "./hooks/hooks.json",
         "interface": {
             "displayName": "Eä Workflow",
             "shortDescription": (
@@ -324,10 +353,10 @@ def _build_sidecar_body(timestamp: str) -> dict[str, object]:
     agents_payload = [{"name": spec.role, "version": spec.version} for spec in AGENT_REGISTRY]
     hooks_payload = [
         {
-            "event_type": spec.event_type.value,
+            "event_type": codex_hook_event_name(spec.event_type),
             "path": f"hooks/{codex_hook_name(spec.event_type)}.sh",
         }
-        for spec in HOOK_REGISTRY
+        for spec in _codex_hook_specs()
     ]
     body: dict[str, object] = {
         "version": _PLUGIN_VERSION,
@@ -336,6 +365,7 @@ def _build_sidecar_body(timestamp: str) -> dict[str, object]:
         "skills": skills_payload,
         "agents": agents_payload,
         "hooks": hooks_payload,
+        "hook_config": "hooks/hooks.json",
     }
     body_json = json.dumps(body, sort_keys=True, separators=(",", ":"))
     body["hash"] = hashlib.blake2b(body_json.encode("utf-8"), digest_size=8).hexdigest()
@@ -477,7 +507,7 @@ def _persist_manifest(
             generated_at=timestamp,
             scope=scope,
         )
-    for hook_spec in HOOK_REGISTRY:
+    for hook_spec in _codex_hook_specs():
         path = _hook_target(plugin_root, hook_spec)
         body = render_hook_sh(hook_spec.event_type, runtime="codex").encode("utf-8")
         region_id = f"plugin.codex.hook.{hook_spec.event_type.value}"
@@ -490,6 +520,18 @@ def _persist_manifest(
             generated_at=timestamp,
             scope=scope,
         )
+
+    hook_config_path = _hook_config_target(plugin_root)
+    hook_config_body = _render_hook_config()
+    new_generated[f"{hook_config_path.as_posix()}::plugin.codex.hook_config"] = ManifestEntry(
+        target=hook_config_path.as_posix(),
+        region_id="plugin.codex.hook_config",
+        version=_PLUGIN_VERSION,
+        hash=hashlib.blake2b(hook_config_body, digest_size=8).hexdigest(),
+        generator=_GENERATOR,
+        generated_at=timestamp,
+        scope=scope,
+    )
 
     manifest_body = _render_manifest()
     new_generated[f"{_manifest_target(plugin_root).as_posix()}::plugin.codex.manifest"] = (
@@ -593,8 +635,14 @@ def install_plugin(
             dry_run=dry_run,
             chmod_mode=_HOOK_FILE_MODE,
         )
-        for hook_spec in HOOK_REGISTRY
+        for hook_spec in _codex_hook_specs()
     ]
+    hook_config_delta = _write_managed_file(
+        _hook_config_target(plugin_root),
+        _render_hook_config(),
+        force=force,
+        dry_run=dry_run,
+    )
 
     manifest_delta = _write_managed_file(
         _manifest_target(plugin_root), _render_manifest(), force=force, dry_run=dry_run
@@ -608,6 +656,7 @@ def install_plugin(
     logger.info(
         f"install_plugin runtime=codex scope={scope} plugin_root={plugin_root} "
         f"skills={len(skill_deltas)} agents={len(agent_deltas)} hooks={len(hook_deltas)} "
+        f"hook_config={hook_config_delta.action} "
         f"manifest={manifest_delta.action} sidecar={sidecar_delta.action} "
         f"config={config_delta.action} dry_run={dry_run}"
     )
@@ -617,6 +666,7 @@ def install_plugin(
         skills=skill_deltas,
         agents=agent_deltas,
         hooks=hook_deltas,
+        hook_config=hook_config_delta,
         manifest=manifest_delta,
         sidecar=sidecar_delta,
         config=config_delta,
@@ -640,10 +690,11 @@ def expected_paths(
         paths[f"plugin.codex.agent.{agent_spec.role}"] = _agent_target(
             target_dir, agent_spec, scope=scope, home=home
         )
-    for hook_spec in HOOK_REGISTRY:
+    for hook_spec in _codex_hook_specs():
         paths[f"plugin.codex.hook.{hook_spec.event_type.value}"] = _hook_target(
             plugin_root, hook_spec
         )
+    paths["plugin.codex.hook_config"] = _hook_config_target(plugin_root)
     paths["plugin.codex.manifest"] = _manifest_target(plugin_root)
     paths["plugin.codex.sidecar"] = _sidecar_target(plugin_root)
     return paths, _config_target(target_dir, scope=scope, home=home)

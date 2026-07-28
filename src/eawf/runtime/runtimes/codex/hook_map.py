@@ -1,9 +1,9 @@
-"""Mapping table from Eä HookEventType to Codex CLI hook names (P14-W06).
+"""Codex hook-package event selection and name mapping.
 
-Codex exposes a different hook event vocabulary than Claude Code; this
-module pins the translation so the install renderer never inlines a
-literal mapping. Adding a new hook event requires extending the table
-plus the matching :class:`HookEventType` member upstream.
+Only lifecycle events consumed by Eä are installed. Codex hook configuration
+uses PascalCase provider event names while Eä's CLI uses lowercase
+:class:`HookEventType` values. Keeping both names explicit prevents internal
+lifecycle names from leaking into ``hooks/hooks.json``.
 """
 
 from __future__ import annotations
@@ -12,12 +12,31 @@ from typing import Final
 
 from eawf.runtime.hooks.event import HookEventType
 
-# Codex names mirror the upstream session-event vocabulary documented in
-# the Codex CLI agent SDK. Each Eä HookEventType maps to one Codex hook
-# script filename (without extension) under ``.codex/hooks/``.
-CODEX_HOOK_NAMES: Final[dict[HookEventType, str]] = {event: event.value for event in HookEventType}
+CODEX_HOOK_EVENT_NAMES: Final[dict[HookEventType, str]] = {
+    HookEventType.SESSION_START: "SessionStart",
+    HookEventType.SUBAGENT_START: "SubagentStart",
+    HookEventType.SUBAGENT_STOP: "SubagentStop",
+    HookEventType.SESSION_END: "SessionEnd",
+}
+
+CODEX_HOOK_EVENT_TYPES: Final[tuple[HookEventType, ...]] = tuple(CODEX_HOOK_EVENT_NAMES)
 
 
 def codex_hook_name(event_type: HookEventType) -> str:
-    """Return the Codex-side hook script stem for *event_type*."""
-    return CODEX_HOOK_NAMES[event_type]
+    """Return the managed shell-script stem for *event_type*."""
+    if event_type not in CODEX_HOOK_EVENT_NAMES:
+        raise KeyError(f"unsupported Codex hook event: {event_type.value!r}")
+    return event_type.value
+
+
+def codex_hook_event_name(event_type: HookEventType) -> str:
+    """Return the provider's PascalCase event name for *event_type*."""
+    return CODEX_HOOK_EVENT_NAMES[event_type]
+
+
+__all__ = [
+    "CODEX_HOOK_EVENT_NAMES",
+    "CODEX_HOOK_EVENT_TYPES",
+    "codex_hook_event_name",
+    "codex_hook_name",
+]

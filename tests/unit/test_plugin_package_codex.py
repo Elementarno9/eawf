@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from eawf.runtime.runtimes.codex import PublishSource, package_plugin
-from eawf.surfaces.render.hooks import HOOK_REGISTRY
+from eawf.runtime.runtimes.codex.hook_map import CODEX_HOOK_EVENT_TYPES
 from eawf.surfaces.render.skills import SKILL_REGISTRY
 
 
@@ -26,9 +26,11 @@ def test_package_writes_marketplace_and_plugin_tree(tmp_path: Path) -> None:
     assert result.manifest is not None
     assert result.manifest.action == "created"
     assert len(result.skills) == len(SKILL_REGISTRY)
-    assert len(result.hooks) == len(HOOK_REGISTRY)
-    # Codex requires each skill on disk as a directory containing SKILL.md.
+    assert len(result.hooks) == len(CODEX_HOOK_EVENT_TYPES)
     plugin_root = target / "plugins" / "eawf"
+    assert result.hook_config is not None
+    assert result.hook_config.path == plugin_root / "hooks" / "hooks.json"
+    # Codex requires each skill on disk as a directory containing SKILL.md.
     for spec in SKILL_REGISTRY:
         skill_dir = plugin_root / "skills" / spec.skill_name
         assert skill_dir.is_dir(), skill_dir
@@ -37,11 +39,12 @@ def test_package_writes_marketplace_and_plugin_tree(tmp_path: Path) -> None:
 
 def test_marketplace_json_has_required_codex_schema_fields(tmp_path: Path) -> None:
     """Per Codex marketplace schema: name, interface.displayName, plugins[]
-    with name/source/policy/category per plugin.
+        with name/source/policy/category per plugin.
 
-    The default ``package_plugin`` call keeps the ``local`` source so the
-    dev ``codex plugin marketplace add ./path`` flow is unchanged — the
-    published ``git-subdir`` form is opt-in via ``publish_source``.
+        The default ``package_plugin`` call keeps the ``local`` source so the
+    dev ``codex plugin marketplace add ./path`` plus
+    ``codex plugin add eawf@eawf`` flow is unchanged — the
+        published ``git-subdir`` form is opt-in via ``publish_source``.
     """
     target = tmp_path / "pkg"
     package_plugin(target)

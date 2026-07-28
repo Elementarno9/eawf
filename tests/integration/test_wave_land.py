@@ -16,10 +16,17 @@ from pathlib import Path
 
 import pytest
 
-from eawf.kernel.state.enums import WaveStatus, WorktreeStatus
+from eawf.kernel.state.enums import (
+    DependencyStage,
+    WaveIntegrationKind,
+    WaveStatus,
+    WorktreeStatus,
+)
 from eawf.kernel.state.models import (
     Iter,
     Wave,
+    WaveDependencyBarrier,
+    wave_dependency_key,
 )
 from eawf.runtime.worktree.create import create_worktree
 from eawf.runtime.worktree.wave_land import (
@@ -27,6 +34,11 @@ from eawf.runtime.worktree.wave_land import (
     wave_land_batch,
 )
 from eawf.surfaces.cli import errors as cli_errors
+from eawf.workflow.lifecycle.integration import (
+    bind_start_dependencies,
+    create_wave_integration,
+    latest_wave_integration,
+)
 from tests.integration.test_worktree_create import _claimed_state, _make_repo
 
 pytestmark = pytest.mark.skipif(
@@ -72,6 +84,144 @@ def test_wave_land_runs_cherry_pick_and_closes_wave(tmp_path: Path) -> None:
     assert result.worktree_cleaned is True
     # Cleanup ran -> on-disk worktree directory is gone.
     assert not (repo / record.path).exists()
+
+
+def test_wave_land_can_stop_at_integration_for_async_close(tmp_path: Path) -> None:
+    """Daemon mode records immutable integration and leaves Wave close pending."""
+    repo = _make_repo(tmp_path / "repo")
+    state = _claimed_state()
+    record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
+    _commit_in((repo / record.path), name="hello.txt", content="x\n", msg="add hello")
+
+    result = wave_land(
+        state,
+        repo_root=repo,
+        wave_id="P05-I01-W01",
+        defer_close=True,
+    )
+
+    assert state.waves["P05-I01-W01"].status == WaveStatus.CLAIMED
+    assert result.closed is False
+    assert result.integration_id in state.wave_integrations
+    assert result.worktree_cleaned is True
+    assert not (repo / record.path).exists()
+
+
+def test_wave_land_reclaimed_candidate_appends_integration_generation(
+    tmp_path: Path,
+) -> None:
+    """A reclaimed wave landing commit B supersedes integration A."""
+    repo = _make_repo(tmp_path / "repo")
+    state = _claimed_state()
+    record_a = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
+    _commit_in((repo / record_a.path), name="a.txt", content="a\n", msg="add a")
+
+    first_result = wave_land(
+        state,
+        repo_root=repo,
+        wave_id="P05-I01-W01",
+        defer_close=True,
+    )
+    first = state.wave_integrations[first_result.integration_id]
+    record_b = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
+    _commit_in((repo / record_b.path), name="b.txt", content="b\n", msg="add b")
+
+    second_result = wave_land(
+        state,
+        repo_root=repo,
+        wave_id="P05-I01-W01",
+        defer_close=True,
+    )
+    second = state.wave_integrations[second_result.integration_id]
+
+    assert second.generation == 2
+    assert second.supersedes_id == first.id
+    assert second.candidate_sha != first.candidate_sha
+    assert second.integrated_sha == second_result.merged_commit
+    assert latest_wave_integration(state, "P05-I01-W01") is second
+
+
+def test_wave_land_repaired_merged_record_replays_only_new_commit(
+    tmp_path: Path,
+) -> None:
+    """A repair on the kept worktree does not replay its prior commit."""
+    repo = _make_repo(tmp_path / "repo")
+    state = _claimed_state()
+    record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
+    worktree = repo / record.path
+    _commit_in(worktree, name="a.txt", content="a\n", msg="add a")
+    first_result = wave_land(
+        state,
+        repo_root=repo,
+        wave_id="P05-I01-W01",
+        defer_close=True,
+        keep_worktree=True,
+    )
+    first = state.wave_integrations[first_result.integration_id]
+    _commit_in(worktree, name="b.txt", content="b\n", msg="add b")
+
+    second_result = wave_land(
+        state,
+        repo_root=repo,
+        wave_id="P05-I01-W01",
+        defer_close=True,
+        keep_worktree=True,
+    )
+    second = state.wave_integrations[second_result.integration_id]
+
+    assert len(second_result.commits) == 1
+    assert second.generation == 2
+    assert second.supersedes_id == first.id
+    assert second.candidate_sha != first.candidate_sha
+    assert (repo / "a.txt").read_text(encoding="utf-8") == "a\n"
+    assert (repo / "b.txt").read_text(encoding="utf-8") == "b\n"
+
+
+def test_wave_land_contract_change_appends_then_exact_repeat_reuses(
+    tmp_path: Path,
+) -> None:
+    """Contract drift creates one generation; an exact repeat stays idempotent."""
+    repo = _make_repo(tmp_path / "repo")
+    state = _claimed_state()
+    record = create_worktree(state, repo_root=repo, wave_id="P05-I01-W01")
+    _commit_in((repo / record.path), name="a.txt", content="a\n", msg="add a")
+
+    first_result = wave_land(
+        state,
+        repo_root=repo,
+        wave_id="P05-I01-W01",
+        defer_close=True,
+        keep_worktree=True,
+    )
+    first = state.wave_integrations[first_result.integration_id]
+    state.waves["P05-I01-W01"].file_scopes.append("tests/contract/")
+
+    second_result = wave_land(
+        state,
+        repo_root=repo,
+        wave_id="P05-I01-W01",
+        defer_close=True,
+        keep_worktree=True,
+    )
+    second = state.wave_integrations[second_result.integration_id]
+    repeat_result = wave_land(
+        state,
+        repo_root=repo,
+        wave_id="P05-I01-W01",
+        defer_close=True,
+        keep_worktree=True,
+    )
+
+    assert second.generation == 2
+    assert second.spec_digest != first.spec_digest
+    assert second.base_sha == first.base_sha
+    assert second.candidate_sha == first.candidate_sha
+    assert second.integrated_sha == first.integrated_sha
+    assert second.tree_sha == first.tree_sha
+    assert second.diff_digest == first.diff_digest
+    assert repeat_result.integration_id == second.id
+    assert repeat_result.commits == []
+    assert len(state.wave_integrations) == 2
 
 
 def test_wave_land_default_outcome_text(tmp_path: Path) -> None:
@@ -189,6 +339,170 @@ def test_wave_land_batch_runs_in_dep_order(tmp_path: Path) -> None:
     # Both waves landed and closed.
     assert state.waves["P05-I01-W01"].status == WaveStatus.CLOSED
     assert state.waves["P05-I01-W02"].status == WaveStatus.CLOSED
+
+
+def test_wave_land_batch_deferred_close_unlocks_integrated_downstream(
+    tmp_path: Path,
+) -> None:
+    """An upstream integration unlocks a relaxed downstream in one batch."""
+    repo = _make_repo(tmp_path / "repo")
+    state = _claimed_state()
+    upstream_id = "P05-I01-W01"
+    downstream_id = "P05-I01-W02"
+    state.waves[downstream_id] = Wave(
+        id=downstream_id,
+        iter_id="P05-I01",
+        title="W2",
+        status=WaveStatus.CLAIMED,
+        deps=[upstream_id],
+        file_scopes=["src/eawf/dispatch/"],
+        claim_session_id="SES-002",
+        opened_at=_DT,
+    )
+    state.iters["P05-I01"].wave_ids = [upstream_id, downstream_id]
+    edge_key = wave_dependency_key(downstream_id, upstream_id)
+    state.wave_dependency_barriers[edge_key] = WaveDependencyBarrier(
+        wave_id=downstream_id,
+        dep_wave_id=upstream_id,
+        start_after=DependencyStage.INTEGRATED,
+        land_after=DependencyStage.INTEGRATED,
+        reason="downstream may land on the immutable upstream integration",
+    )
+    upstream = create_worktree(state, repo_root=repo, wave_id=upstream_id)
+    _commit_in((repo / upstream.path), name="upstream.txt", content="u\n", msg="upstream")
+    downstream = create_worktree(state, repo_root=repo, wave_id=downstream_id)
+    _commit_in(
+        (repo / downstream.path),
+        name="downstream.txt",
+        content="d\n",
+        msg="downstream",
+    )
+
+    result = wave_land_batch(
+        state,
+        repo_root=repo,
+        keep_worktree=True,
+        defer_close=True,
+    )
+
+    assert result.failed_wave is None
+    assert result.skipped == []
+    assert result.barrier_requirements == {}
+    assert [row.wave_id for row in result.landed] == [upstream_id, downstream_id]
+    assert all(row.closed is False for row in result.landed)
+    assert state.waves[upstream_id].status is WaveStatus.CLAIMED
+    assert state.waves[downstream_id].status is WaveStatus.CLAIMED
+    assert latest_wave_integration(state, upstream_id) is not None
+    assert latest_wave_integration(state, downstream_id) is not None
+
+
+def test_wave_land_batch_ready_only_reports_verified_barrier(
+    tmp_path: Path,
+) -> None:
+    """Strict downstream is skipped with its required stage, never waited."""
+    repo = _make_repo(tmp_path / "repo")
+    state = _claimed_state()
+    upstream_id = "P05-I01-W01"
+    downstream_id = "P05-I01-W02"
+    state.waves[downstream_id] = Wave(
+        id=downstream_id,
+        iter_id="P05-I01",
+        title="W2",
+        status=WaveStatus.CLAIMED,
+        deps=[upstream_id],
+        file_scopes=["src/eawf/dispatch/"],
+        claim_session_id="SES-002",
+        opened_at=_DT,
+    )
+    state.iters["P05-I01"].wave_ids = [upstream_id, downstream_id]
+    edge_key = wave_dependency_key(downstream_id, upstream_id)
+    state.wave_dependency_barriers[edge_key] = WaveDependencyBarrier(
+        wave_id=downstream_id,
+        dep_wave_id=upstream_id,
+        start_after=DependencyStage.INTEGRATED,
+        land_after=DependencyStage.VERIFIED,
+        reason="downstream requires verified upstream evidence",
+    )
+    upstream = create_worktree(state, repo_root=repo, wave_id=upstream_id)
+    _commit_in((repo / upstream.path), name="upstream.txt", content="u\n", msg="upstream")
+    downstream = create_worktree(state, repo_root=repo, wave_id=downstream_id)
+    _commit_in(
+        (repo / downstream.path),
+        name="downstream.txt",
+        content="d\n",
+        msg="downstream",
+    )
+
+    result = wave_land_batch(
+        state,
+        repo_root=repo,
+        ready_only=True,
+        keep_worktree=True,
+        defer_close=True,
+    )
+
+    assert result.failed_wave is None
+    assert [row.wave_id for row in result.landed] == [upstream_id]
+    assert result.skipped == [downstream_id]
+    assert result.barrier_requirements == {downstream_id: ("verified",)}
+    assert latest_wave_integration(state, downstream_id) is None
+    assert state.waves[downstream_id].status is WaveStatus.CLAIMED
+
+
+def test_wave_land_batch_ready_only_honors_integrated_land_barrier(
+    tmp_path: Path,
+) -> None:
+    """ready-only uses the shared barrier contract, not closed-only status."""
+    repo = _make_repo(tmp_path / "repo")
+    state = _claimed_state()
+    upstream_id = "P05-I01-W01"
+    downstream_id = "P05-I01-W02"
+    state.waves[upstream_id].status = WaveStatus.IN_PROGRESS
+    state.waves[downstream_id] = Wave(
+        id=downstream_id,
+        iter_id="P05-I01",
+        title="W2",
+        status=WaveStatus.CLAIMED,
+        deps=[upstream_id],
+        file_scopes=["src/eawf/dispatch/"],
+        claim_session_id="SES-002",
+        opened_at=_DT,
+    )
+    state.iters["P05-I01"].wave_ids = [upstream_id, downstream_id]
+    edge_key = wave_dependency_key(downstream_id, upstream_id)
+    state.wave_dependency_barriers[edge_key] = WaveDependencyBarrier(
+        wave_id=downstream_id,
+        dep_wave_id=upstream_id,
+        start_after=DependencyStage.INTEGRATED,
+        land_after=DependencyStage.INTEGRATED,
+        reason="downstream may land on the immutable upstream integration",
+    )
+    create_wave_integration(
+        state,
+        wave_id=upstream_id,
+        base_sha="a" * 40,
+        candidate_sha="b" * 40,
+        integrated_sha="c" * 40,
+        tree_sha="d" * 40,
+        diff_digest="upstream-diff",
+        spec_digest="upstream-spec",
+        kind=WaveIntegrationKind.LAND,
+        now=_DT,
+    )
+    bind_start_dependencies(state, wave_id=downstream_id, now=_DT)
+    record = create_worktree(state, repo_root=repo, wave_id=downstream_id)
+    _commit_in((repo / record.path), name="downstream.txt", content="d\n", msg="downstream")
+
+    result = wave_land_batch(
+        state,
+        repo_root=repo,
+        ready_only=True,
+        keep_worktree=True,
+    )
+
+    assert result.skipped == []
+    assert [landed.wave_id for landed in result.landed] == [downstream_id]
+    assert state.waves[downstream_id].status == WaveStatus.CLOSED
 
 
 def test_wave_land_batch_stops_on_first_failure(tmp_path: Path) -> None:

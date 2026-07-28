@@ -19,6 +19,8 @@ Notes:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from pathlib import Path
 
@@ -27,9 +29,22 @@ from pydantic import ValidationError
 
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.audit_dsl.models import CheckFile, CheckResult, CheckSpec
-from eawf.workflow.audit_dsl.registry import CHECK_REGISTRY
+from eawf.workflow.audit_dsl.registry import (
+    BeforeGateExecute,
+    execute_check,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _invocation_key(spec: CheckSpec) -> str:
+    """Return canonical execution identity for one typed check spec."""
+    payload = json.dumps(
+        spec.model_dump(mode="json"),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def load_spec(path: Path) -> list[CheckSpec]:
@@ -68,6 +83,7 @@ def run_checks(
     specs: list[CheckSpec],
     *,
     cwd: Path | None = None,
+    before_execute: BeforeGateExecute | None = None,
 ) -> list[CheckResult]:
     """Dispatch every spec via :data:`CHECK_REGISTRY` and collect results.
 
@@ -76,6 +92,9 @@ def run_checks(
         cwd: Directory the checks run against. Defaults to
             :func:`Path.cwd` so glob/file lookups resolve against the
             caller's working tree.
+        before_execute: Optional freshness-key callback invoked immediately
+            before any deterministic check. Returning a result suppresses
+            execution and reuses that terminal or fail-closed result.
 
     Returns:
         One :class:`CheckResult` per input spec, in declaration order.
@@ -87,10 +106,25 @@ def run_checks(
     """
     base = (cwd or Path.cwd()).resolve()
     out: list[CheckResult] = []
+    executed: dict[str, CheckResult] = {}
     for spec in specs:
-        fn = CHECK_REGISTRY[spec.kind]
+        invocation_key = _invocation_key(spec)
+        previous = executed.get(invocation_key)
+        if previous is not None:
+            logger.debug(
+                f"run_checks status=reuse name={spec.name!r} kind={spec.kind!r} "
+                f"invocation_key={invocation_key!r}"
+            )
+            out.append(previous)
+            continue
         logger.debug(f"run_checks dispatching name={spec.name} kind={spec.kind}")
-        out.append(fn(spec, base))
+        result = execute_check(
+            spec,
+            base,
+            before_execute=before_execute,
+        )
+        executed[invocation_key] = result
+        out.append(result)
     return out
 
 

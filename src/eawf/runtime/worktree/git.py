@@ -25,6 +25,7 @@ which can do disk work proportional to repo size.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import shutil
 import subprocess
@@ -418,6 +419,55 @@ def head_sha(repo: Path) -> str:
             kind="IntegrityViolation",
         )
     return res.stdout.strip()
+
+
+def commit_sha(repo: Path, ref: str) -> str:
+    """Resolve *ref* to one canonical 40-character commit SHA."""
+    res = _run(["git", "-C", str(repo), "rev-parse", "--verify", f"{ref}^{{commit}}"])
+    if res.returncode != 0:
+        detail = (res.stderr or res.stdout).strip()
+        raise cli_errors.UserError(
+            f"cannot resolve commit ref {ref!r}: {detail or 'unknown'}",
+            kind="InvalidInput",
+        )
+    return res.stdout.strip()
+
+
+def tree_sha(repo: Path, ref: str) -> str:
+    """Resolve *ref* to one canonical 40-character tree SHA."""
+    commit = commit_sha(repo, ref)
+    res = _run(["git", "-C", str(repo), "rev-parse", "--verify", f"{commit}^{{tree}}"])
+    if res.returncode != 0:
+        detail = (res.stderr or res.stdout).strip()
+        raise cli_errors.UserError(
+            f"cannot resolve tree for {ref!r}: {detail or 'unknown'}",
+            kind="InvalidInput",
+        )
+    return res.stdout.strip()
+
+
+def diff_digest(repo: Path, *, base_sha: str, head_sha: str) -> str:
+    """Return SHA-256 of the exact binary diff between two commits."""
+    res = _run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            base_sha,
+            head_sha,
+        ],
+        timeout=_SLOW_TIMEOUT,
+    )
+    if res.returncode != 0:
+        detail = (res.stderr or res.stdout).strip()
+        raise cli_errors.StateConflict(
+            f"cannot digest integration diff {base_sha!r}..{head_sha!r}: {detail or 'unknown'}",
+            kind="IntegrityViolation",
+        )
+    return hashlib.sha256(res.stdout.encode("utf-8")).hexdigest()
 
 
 def branch_delete(repo: Path, *, name: str) -> bool:

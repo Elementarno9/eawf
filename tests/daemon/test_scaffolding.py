@@ -138,8 +138,8 @@ def _with_server(
             sock_path.unlink()
 
 
-def test_protocol_version_is_string_1() -> None:
-    assert PROTOCOL_VERSION == "1"
+def test_protocol_version_is_string_2() -> None:
+    assert PROTOCOL_VERSION == "2"
 
 
 def test_method_registry_lists_daemon_namespace() -> None:

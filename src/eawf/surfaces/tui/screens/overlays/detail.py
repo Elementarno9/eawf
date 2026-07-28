@@ -61,7 +61,9 @@ from eawf.kernel.spec.common import (
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     BacklogStatus,
+    CloseAttemptStatus,
     IncidentStatus,
+    MeasurementStatus,
     StoreKind,
     WaveStatus,
 )
@@ -553,25 +555,72 @@ def _wave_metrics(wave: Wave, cost_rollup: WaveSessionRollup | None) -> tuple[tu
     if wave.effort_bucket is not None:
         rows.append(("size", wave.effort_bucket.value))
     runtime_eu = _wave_runtime_eu(wave)
-    rows.append(("eu", EMPTY_STATE if runtime_eu is None else f"{runtime_eu:.2f} EU"))
+    rows.append(
+        (
+            "eu",
+            (
+                "unavailable — no ended runtime attempt"
+                if runtime_eu is None
+                else f"{runtime_eu:.2f} EU"
+            ),
+        )
+    )
     if wave.effort_bucket is not None:
         rows.append(("estimate", f"{BUCKET_EU[wave.effort_bucket]:.2f} EU"))
-    consumed = (
-        0
+    rollup_consumed = (
+        None
         if cost_rollup is None
         else cost_rollup.input_tokens
         + cost_rollup.output_tokens
         + cost_rollup.cache_read_tokens
         + cost_rollup.cache_write_tokens
     )
-    if consumed <= 0:
-        tokens_cell = EMPTY_STATE
+    observed_usage = [
+        session
+        for session in wave.sessions.values()
+        if session.measurement_status is MeasurementStatus.USAGE_OBSERVED
+    ]
+    if rollup_consumed is not None and rollup_consumed > 0:
+        consumed: int | None = rollup_consumed
+    elif observed_usage:
+        consumed = sum(
+            (session.input_tokens or 0)
+            + (session.output_tokens or 0)
+            + (session.cache_creation_input_tokens or 0)
+            + (session.cache_read_input_tokens or 0)
+            for session in observed_usage
+        )
+    else:
+        consumed = None
+    if consumed is None:
+        tokens_cell = f"unavailable — {_measurement_unavailable_reason(wave)}"
     elif wave.token_budget is not None:
         tokens_cell = f"{format_tokens(consumed)} / {format_tokens(wave.token_budget)} budget"
     else:
         tokens_cell = format_tokens(consumed)
     rows.append(("tokens", tokens_cell))
+    measured_costs = [
+        session.cost_usd for session in observed_usage if session.cost_usd is not None
+    ]
+    if cost_rollup is not None and cost_rollup.cost_usd > 0:
+        cost_cell = f"${cost_rollup.cost_usd:.4f}"
+    elif measured_costs:
+        cost_cell = f"${sum(measured_costs):.4f}"
+    else:
+        cost_cell = f"unavailable — {_measurement_unavailable_reason(wave)}"
+    rows.append(("cost", cost_cell))
     return tuple(rows)
+
+
+def _measurement_unavailable_reason(wave: Wave) -> str:
+    """Return latest persisted reason why usage evidence is unavailable."""
+    sessions = sorted(wave.sessions.values(), key=lambda row: (row.started_at, row.attempt))
+    for session in reversed(sessions):
+        if session.measurement_reason is not None:
+            return session.measurement_reason
+    if sessions:
+        return sessions[-1].measurement_status.value
+    return "no runtime measurement recorded"
 
 
 def _completion_metrics(closed: int, total: int) -> tuple[tuple[str, str], ...]:
@@ -725,8 +774,82 @@ def _dispatch_history_rows(wave: Wave) -> tuple[tuple[str, str], ...]:
         value = f"{ann.note.value} ({runtime})"
         if ann.reason is not None:
             value = f"{value} — {ann.reason}"
-        rows.append((f"attempt {ann.attempt}", value))
+        rows.append((f"dispatch {ann.attempt}", value))
     return tuple(rows)
+
+
+def _report_only_rows(
+    reports: Iterable[AgentReportRow],
+    observed_attempts: frozenset[int],
+) -> tuple[tuple[str, str], ...]:
+    """Label report evidence that has no observed runtime attempt."""
+    rows: list[tuple[str, str]] = []
+    for report in reports:
+        header = report.payload.header
+        if header.attempt in observed_attempts:
+            continue
+        rows.append(
+            (
+                f"report {header.attempt} ({header.role.value})",
+                f"{report.payload.body.verdict.value} · report-only evidence · "
+                "runtime, timing, tokens, EU, and cost unavailable",
+            )
+        )
+    return tuple(rows)
+
+
+def _close_attempt_rows(state: State, wave_id: str) -> tuple[tuple[str, str], ...]:
+    """Render latest durable close-worker progress without changing wave status."""
+    attempts = [row for row in state.close_attempts.values() if row.wave_id == wave_id]
+    if not attempts:
+        return ()
+    latest = max(attempts, key=lambda row: (row.generation, row.requested_at, row.id))
+    anchor = latest.started_at or latest.requested_at
+    stop = latest.terminal_at or latest.updated_at
+    elapsed = max(0.0, (stop - anchor).total_seconds())
+    rows: list[tuple[str, str]] = [
+        ("close stage", latest.status.value),
+        ("close elapsed", _format_elapsed(elapsed)),
+        (
+            "close gates",
+            f"{len(latest.gate_receipt_ids)}/{len(latest.required_gate_ids)} receipts",
+        ),
+    ]
+    if latest.audit_requirement.value != "none":
+        rows.append(
+            (
+                "close audit",
+                latest.audit_report_id or f"{latest.audit_requirement.value} · pending",
+            )
+        )
+    if latest.required_operator_actions:
+        rows.append(
+            (
+                "close action required",
+                " / ".join(action.value for action in latest.required_operator_actions),
+            )
+        )
+    if latest.status is CloseAttemptStatus.STALE and latest.invalidation_causes:
+        rows.append(("close stale", "; ".join(latest.invalidation_causes)))
+    if latest.status is CloseAttemptStatus.CANCELLED:
+        rows.append(("close cancel", latest.failure_kind or "cancelled"))
+    elif latest.failure_kind is not None:
+        rows.append(("close failure", latest.failure_kind))
+    if latest.failure_detail_ref is not None:
+        rows.append(("close diagnostic", latest.failure_detail_ref))
+    return tuple(rows)
+
+
+def _format_elapsed(seconds: float) -> str:
+    """Return compact elapsed time for close-worker progress."""
+    rounded = int(seconds)
+    minutes, secs = divmod(rounded, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}m"
+    if minutes:
+        return f"{minutes}m {secs:02d}s"
+    return f"{secs}s"
 
 
 def _auditor_verdict_rows(
@@ -833,12 +956,15 @@ def _wave_card(
         error_kind_by_attempt=error_kind_by_attempt,
     )
     evidence: list[tuple[str, str]] = list(_auditor_verdict_rows(report_rows))
-    evidence.extend(attempt_rollup_rows(attempt_rollup))
+    observed_attempts = frozenset(wave.sessions)
+    evidence.extend(attempt_rollup_rows(attempt_rollup, observed_attempts=observed_attempts))
+    evidence.extend(_report_only_rows(report_rows, observed_attempts))
     # Provenance + dispatch history: the claimed-at work-start fact (em-dash
     # sentinel when unclaimed, never a fabricated start time) plus one row
     # per dispatch annotation, appending any runtime-switch reason so the
     # operator sees why a runtime swap happened.
     evidence.extend(_dispatch_history_rows(wave))
+    evidence.extend(_close_attempt_rows(state, wave.id))
 
     # The cost tab joins each session attempt back to its priced telemetry
     # session and renders the per-attempt cost columns + an aggregate cost

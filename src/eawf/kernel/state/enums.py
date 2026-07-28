@@ -116,6 +116,92 @@ class WaveStatus(StrEnum):
     ABANDONED = "abandoned"
 
 
+class WaveIntegrationStatus(StrEnum):
+    """Lifecycle position of one immutable wave-integration generation."""
+
+    INTEGRATED = "integrated"
+    VERIFIED = "verified"
+    SUPERSEDED = "superseded"
+    FAILED = "failed"
+
+
+class WaveIntegrationKind(StrEnum):
+    """How an immutable wave-integration generation entered state."""
+
+    LAND = "land"
+    ADOPT = "adopt"
+    REPAIR = "repair"
+
+
+class CloseAttemptStatus(StrEnum):
+    """Durable close-worker lifecycle, orthogonal to :class:`WaveStatus`."""
+
+    QUEUED = "queued"
+    PREPARING = "preparing"
+    CHECKING = "checking"
+    AUDITING = "auditing"
+    READY = "ready"
+    APPLYING = "applying"
+    CLOSED = "closed"
+    BLOCKED = "blocked"
+    STALE = "stale"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class CloseOperatorAction(StrEnum):
+    """Operator choices exposed after the bounded close repair is exhausted."""
+
+    SPLIT = "split"
+    DEFER = "defer"
+    ABORT = "abort"
+
+
+class DependencyStage(StrEnum):
+    """Fact strength required at one wave-dependency boundary."""
+
+    INTEGRATED = "integrated"
+    VERIFIED = "verified"
+    CLOSED = "closed"
+
+
+class AuditRequirement(StrEnum):
+    """Whether a close attempt needs independent audit evidence."""
+
+    NONE = "none"
+    OPTIONAL = "optional"
+    REQUIRED = "required"
+
+
+class GateReceiptResult(StrEnum):
+    """Terminal result recorded by one deterministic gate receipt."""
+
+    PASS = "pass"
+    FAIL = "fail"
+    BLOCKED = "blocked"
+    ERROR = "error"
+    TIMEOUT = "timeout"
+    CANCELLED = "cancelled"
+
+
+class MeasurementQuality(StrEnum):
+    """Evidence quality of a persisted runtime measurement."""
+
+    EXACT = "exact"
+    RECONSTRUCTED = "reconstructed"
+    ESTIMATED = "estimated"
+    UNAVAILABLE = "unavailable"
+
+
+class MeasurementStatus(StrEnum):
+    """Observed usage state without treating missing counters as zero."""
+
+    USAGE_OBSERVED = "usage_observed"
+    MODEL_WORK_OBSERVED = "model_work_observed"
+    NO_TOKEN_EVIDENCE = "no_token_evidence"
+    USAGE_UNAVAILABLE = "usage_unavailable"
+
+
 class EffortBucket(StrEnum):
     XS = "XS"
     S = "S"
@@ -610,6 +696,7 @@ class StoreKind(StrEnum):
     RESEARCH_ROUND = "research_round"
     OPERATOR_INPUT = "operator_input"
     JURY_BALLOT = "jury_ballot"
+    GATE_RECEIPT = "gate_receipt"
 
 
 class ArtifactKind(StrEnum):

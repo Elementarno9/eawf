@@ -47,6 +47,7 @@ from typing import TYPE_CHECKING, Annotated, Final, Literal, Protocol, runtime_c
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.state.enums import MeasurementQuality, MeasurementStatus
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.kinds.event import Event, EventKind, EventPayload
@@ -197,6 +198,9 @@ class SpawnResult(BaseModel):
             carries one (claude ``total_cost_usd``). A later metering
             writer prices independently via the Decimal ledger; this is a
             cross-check only.
+        measurement_quality: Provenance quality of the parsed usage.
+        measurement_status: Whether token usage was actually observed.
+        measurement_reason: Machine-readable cause when usage is unavailable.
         started_at: When the subprocess started.
         ended_at: When the subprocess exited.
     """
@@ -210,13 +214,16 @@ class SpawnResult(BaseModel):
     subprocess_pid: Annotated[int, Field(ge=1)]
     exit_status: int
     text: str
-    input_tokens: Annotated[int, Field(ge=0)] = 0
-    output_tokens: Annotated[int, Field(ge=0)] = 0
-    cache_creation_input_tokens: Annotated[int, Field(ge=0)] = 0
-    cache_creation_5m_input_tokens: Annotated[int, Field(ge=0)] = 0
-    cache_creation_1h_input_tokens: Annotated[int, Field(ge=0)] = 0
-    cache_read_input_tokens: Annotated[int, Field(ge=0)] = 0
+    input_tokens: Annotated[int, Field(ge=0)] | None = 0
+    output_tokens: Annotated[int, Field(ge=0)] | None = 0
+    cache_creation_input_tokens: Annotated[int, Field(ge=0)] | None = 0
+    cache_creation_5m_input_tokens: Annotated[int, Field(ge=0)] | None = 0
+    cache_creation_1h_input_tokens: Annotated[int, Field(ge=0)] | None = 0
+    cache_read_input_tokens: Annotated[int, Field(ge=0)] | None = 0
     cost_usd_reported: Decimal | None = None
+    measurement_quality: MeasurementQuality = MeasurementQuality.EXACT
+    measurement_status: MeasurementStatus = MeasurementStatus.USAGE_OBSERVED
+    measurement_reason: Annotated[str, Field(min_length=1, max_length=200)] | None = None
     started_at: UtcDatetime
     ended_at: UtcDatetime
 

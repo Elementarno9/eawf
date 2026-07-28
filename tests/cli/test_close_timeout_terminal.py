@@ -139,7 +139,9 @@ class _TimeoutClient:
         *,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
-        return {}  # daemon.ping -> reachable
+        if method == "close.submit":
+            raise TimeoutError("close submit response timed out")
+        return {}
 
     def state_mutate(
         self, mutation: Any, *, idempotency_key: str | None = None, repo_root: str | None = None
@@ -166,12 +168,38 @@ class _TransportErrorClient:
         *,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
-        return {}  # daemon.ping -> reachable
+        if method == "close.submit":
+            raise RuntimeError("connection reset mid-write")
+        return {}
 
     def state_mutate(
         self, mutation: Any, *, idempotency_key: str | None = None, repo_root: str | None = None
     ) -> dict[str, Any]:
         raise RuntimeError("connection reset mid-write")
+
+
+class _OldProtocolClient:
+    """DaemonClient stand-in reporting the pre-v0.6.2 close protocol."""
+
+    def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+        pass
+
+    def __enter__(self) -> _OldProtocolClient:
+        return self
+
+    def __exit__(self, *_args: Any) -> None:
+        return None
+
+    def call(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        if method == "daemon.ping":
+            return {"protocol_version": "1"}
+        raise AssertionError(f"unexpected RPC after protocol mismatch: {method}")
 
 
 def _enable_proxy(monkeypatch: pytest.MonkeyPatch, *, client: type) -> None:
@@ -209,29 +237,38 @@ def test_close_rpc_timeout_is_terminal_no_state_write(
     assert _close_events(workspace) == []
 
 
+def test_close_rpc_rejects_mixed_cli_daemon_protocol(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Close refuses an old daemon before submitting any mutation."""
+    _bootstrap_claimed_wave(workspace)
+    _enable_proxy(monkeypatch, client=_OldProtocolClient)
+
+    result = runner.invoke(app, ["wave", "close", _WAVE_ID, "--outcome", "done"])
+
+    assert result.exit_code != 0, result.output
+    assert "close protocol mismatch" in result.output
+    assert "both run v0.6.2" in result.output
+    assert _read_wave_status(workspace) == "claimed"
+    assert _close_events(workspace) == []
+
+
 # --- CR-02: transport fallback stamps ``daemon-fallback`` -------------------
 
 
-def test_transport_fallback_close_stamps_daemon_fallback(
+def test_transport_failure_does_not_fall_back_to_synchronous_close(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A RuntimeError transport fallback closes in-process, stamped distinctly.
-
-    The close still lands (the in-process WAL-backed writer carries it), but its
-    event's ``close_mechanism`` is ``"daemon-fallback"`` -- distinct from a
-    gate-passed ``"daemon"`` close -- so an audit can see it skipped the daemon
-    close gate on a fallback.
-    """
+    """A transport failure cannot bypass durable close with an inline write."""
     _bootstrap_claimed_wave(workspace)
     _enable_proxy(monkeypatch, client=_TransportErrorClient)
 
     res = runner.invoke(app, ["wave", "close", _WAVE_ID, "--outcome", "done"])
 
-    assert res.exit_code == 0, res.output
-    assert _read_wave_status(workspace) == "closed"
-    closes = _close_events(workspace)
-    assert len(closes) == 1
-    assert closes[0]["payload"]["extras"]["close_mechanism"] == "daemon-fallback"
+    assert res.exit_code == 4, res.output
+    assert "connection reset" in res.output
+    assert _read_wave_status(workspace) == "claimed"
+    assert _close_events(workspace) == []
 
 
 # --- pure-function coverage of the new ``transport_fallback`` parameter ------

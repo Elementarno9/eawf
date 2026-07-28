@@ -11,17 +11,22 @@ that module is listed with its members.
 | `AgentSessionStatus` | `active`, `checkpointed`, `closed`, `stale`, `failed` |
 | `ArtifactKind` | `audit_report`, `notebook`, `dataset`, `model`, `backtest`, `strategy`, `binary`, `scene`, `playtest_session`, `cve_ref`, `research_brief`, `plan_spec`, `agent_report`, `math_explainer` |
 | `AuditKind` | `evaluation`, `ship-gate`, `incident`, `review` |
+| `AuditRequirement` | `none`, `optional`, `required` |
 | `AuditStatus` | `pending`, `running`, `complete`, `failed` |
 | `AuditVerdict` | `pass`, `minor`, `major` |
 | `BacklogPriority` | `P0`, `P1`, `P2`, `P3` |
 | `BacklogStatus` | `open`, `in_progress`, `closed`, `deferred` |
 | `CampaignStatus` | `active`, `converged`, `cancelled` |
 | `ClaimStatus` | `open`, `supported`, `refuted`, `superseded` |
+| `CloseAttemptStatus` | `queued`, `preparing`, `checking`, `auditing`, `ready`, `applying`, `closed`, `blocked`, `stale`, `failed`, `cancelled` |
+| `CloseOperatorAction` | `split`, `defer`, `abort` |
 | `Confidence` | `high`, `medium`, `low` |
 | `DecisionStatus` | `active`, `superseded`, `reversed`, `obsolete` |
+| `DependencyStage` | `integrated`, `verified`, `closed` |
 | `DispatchNote` | `fresh_dispatch`, `continue_from_session`, `continue_failed_fell_back_to_fresh`, `switch_on_error`, `switch_manual` |
 | `EffortBucket` | `XS`, `S`, `M`, `L`, `XL` |
 | `FlowStatus` | `pending`, `in_progress`, `paused`, `blocked`, `done`, `abandoned`, `superseded` |
+| `GateReceiptResult` | `pass`, `fail`, `blocked`, `error`, `timeout`, `cancelled` |
 | `GoalStatus` | `open`, `achieved`, `abandoned` |
 | `Health` | `ok`, `needs_setup`, `degraded` |
 | `HypothesisStatus` | `pending`, `confirmed`, `rejected`, `inconclusive`, `deferred` |
@@ -33,6 +38,8 @@ that module is listed with its members.
 | `IterTrigger` | `reactive`, `proactive`, `none` |
 | `McpRisk` | `read`, `read-write`, `admin` |
 | `McpStatus` | `not_configured`, `configured`, `installed`, `degraded`, `disabled` |
+| `MeasurementQuality` | `exact`, `reconstructed`, `estimated`, `unavailable` |
+| `MeasurementStatus` | `usage_observed`, `model_work_observed`, `no_token_evidence`, `usage_unavailable` |
 | `MemoryStatus` | `active`, `stale`, `superseded`, `pruned` |
 | `MemoryTier` | `working`, `archival`, `retrieval` |
 | `OpenQuestionStatus` | `open`, `answered`, `blocked`, `dropped` |
@@ -47,10 +54,12 @@ that module is listed with its members.
 | `ScopeTier` | `workspace`, `repo`, `phase`, `iter`, `wave` |
 | `SkillEnvelopeStatus` | `ok`, `needs_user`, `blocked`, `failed`, `partial` |
 | `SpecStatus` | `draft`, `ready`, `implemented`, `archived` |
-| `StoreKind` | `research`, `audit`, `incident`, `estimate`, `actual`, `memory`, `decision`, `event`, `evidence`, `flow`, `researcher_report`, `planner_report`, `executor_report`, `auditor_report`, `reviewer_report`, `polisher_report`, `operator_report`, `domain_specialist_report`, `subscription_lag`, `config_updated`, `registry_updated`, `spec_updated`, `research_campaign`, `research_round`, `operator_input`, `jury_ballot` |
+| `StoreKind` | `research`, `audit`, `incident`, `estimate`, `actual`, `memory`, `decision`, `event`, `evidence`, `flow`, `researcher_report`, `planner_report`, `executor_report`, `auditor_report`, `reviewer_report`, `polisher_report`, `operator_report`, `domain_specialist_report`, `subscription_lag`, `config_updated`, `registry_updated`, `spec_updated`, `research_campaign`, `research_round`, `operator_input`, `jury_ballot`, `gate_receipt` |
 | `TrackKind` | `strategy`, `model`, `target`, `feature`, `service` |
 | `TrackStatus` | `active`, `planned`, `deferred`, `retired` |
 | `Urgency` | `low`, `normal`, `high`, `urgent` |
 | `UserDecisionKind` | `pause`, `fleet_fork` |
+| `WaveIntegrationKind` | `land`, `adopt`, `repair` |
+| `WaveIntegrationStatus` | `integrated`, `verified`, `superseded`, `failed` |
 | `WaveStatus` | `pending`, `claimed`, `in_progress`, `closed`, `failed`, `abandoned` |
 | `WorktreeStatus` | `active`, `conflicted`, `merged`, `abandoned` |

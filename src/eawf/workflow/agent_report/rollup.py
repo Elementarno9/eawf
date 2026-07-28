@@ -14,6 +14,7 @@ from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
     DispatchNote,
+    MeasurementStatus,
     WaveStatus,
 )
 from eawf.kernel.state.ids import natural_key
@@ -73,14 +74,21 @@ class WaveAttemptTimelineRow:
 
 @dataclass(frozen=True)
 class PerWaveAttemptRollup:
-    """Per-wave attempt/retry/block/token rollup."""
+    """Per-wave attempt/retry/block/token rollup.
+
+    ``token_total`` is ``None`` when no attempt has a runtime token
+    measurement. When some attempts are measured and others are not, it holds
+    the known subtotal and ``unmeasured_token_attempt_count`` exposes that the
+    subtotal is partial. A measured zero remains the integer ``0``.
+    """
 
     wave_id: str
     attempts: tuple[WaveAttemptTimelineRow, ...]
     attempt_count: int
     retry_count: int
     blocked_count: int
-    token_total: int
+    token_total: int | None
+    unmeasured_token_attempt_count: int
     error_kind_breakdown: dict[str, int]
 
 
@@ -357,6 +365,8 @@ def per_wave_attempt_rollup(
 
     rows: list[WaveAttemptTimelineRow] = []
     token_total = 0
+    measured_token_attempt_count = 0
+    unmeasured_token_attempt_count = 0
     blocked_count = 0
     retry_count = 0
     error_kind_counter: Counter[str] = Counter()
@@ -367,6 +377,9 @@ def per_wave_attempt_rollup(
         tokens = _session_token_total(session)
         if tokens is not None:
             token_total += tokens
+            measured_token_attempt_count += 1
+        else:
+            unmeasured_token_attempt_count += 1
         retry = _retry_label(attempt_no, annotation)
         if retry != "initial":
             retry_count += 1
@@ -394,7 +407,8 @@ def per_wave_attempt_rollup(
         attempt_count=len(rows),
         retry_count=retry_count,
         blocked_count=blocked_count,
-        token_total=token_total,
+        token_total=token_total if measured_token_attempt_count else None,
+        unmeasured_token_attempt_count=unmeasured_token_attempt_count,
         error_kind_breakdown=dict(sorted(error_kind_counter.items())),
     )
 
@@ -488,7 +502,7 @@ def _latest_annotation_by_attempt(
 
 def _session_token_total(session: SessionAttempt | None) -> int | None:
     """Return total tracked tokens for one session attempt."""
-    if session is None:
+    if session is None or session.measurement_status is not MeasurementStatus.USAGE_OBSERVED:
         return None
     values = (
         session.input_tokens,

@@ -36,6 +36,7 @@ def test_render_hook_sh_codex_runtime_sets_runtime_codex() -> None:
     output = render_hook_sh(HookEventType.SESSION_END, runtime="codex")
     assert "eawf hook run session_end --runtime codex" in output
     assert "--runtime claude" not in output
+    assert "--runtime codex >/dev/null" in output
 
 
 def test_render_hook_sh_bootstraps_path_and_resolves_uv() -> None:
