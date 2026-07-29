@@ -6,7 +6,7 @@
       │  Configuration                                                                                           │
       │  ≡ save layer: repo  (L cycles: global local)                                                            │
       │                                                                                                          │
-      │   audit  daemon  estimation  flow  planning  preferences  prose  research  runtime  ship  statusline  t  │
+      │   audit  daemon  estimation  flow  planning  preferences  prose  research  review  runtime  ship  statu  │
       │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
       │  >  preferences.auto_choose   [choice]       <off>                                                       │
       │     preferences.scope_size    [choice]       <M>                                                         │

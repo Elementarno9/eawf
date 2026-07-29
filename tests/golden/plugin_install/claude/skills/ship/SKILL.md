@@ -41,7 +41,7 @@ The per-criterion close gate runs `run_oracle` (`workflow/verify/oracle.run_orac
 
 ## Decision surfaces
 
-`gh pr create`, `gh pr merge`, and any push to a protected branch are irreversible/visible-to-others actions per AGENTS.md — surface the final confirm through `AskUserQuestion` (options: `proceed` / `defer` / `abort`) unless `vcs.auto_push`, `vcs.pr_open`, and the merge strategy are pre-resolved by config.
+`gh pr create`, `gh pr merge`, and any push to a protected branch are irreversible/visible-to-others actions per AGENTS.md — surface the final confirm through `AskUserQuestion` (options: `proceed` / `defer` / `abort`). Config cannot bypass protected-action confirmations.
 
 ## Output contract
 

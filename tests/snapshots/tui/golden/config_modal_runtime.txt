@@ -6,12 +6,12 @@
       │  Configuration                                                                                           │
       │  ≡ save layer: repo  (L cycles: global local)                                                            │
       │                                                                                                          │
-      │   flow  planning  preferences  prose  research  runtime  ship  statusline  telemetry  ui  vcs  verify    │
+      │  lanning  preferences  prose  research  review  runtime  ship  statusline  telemetry  ui  vcs  verify    │
       │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-      │  >  runtime.adapter_catalog.claude.enabled   [bool]         <true>                                       │
-      │     runtime.adapter_catalog.codex.enabled    [bool]         <false>                                      │
-      │     runtime.adapter_catalog.opencode.enabled [bool]         <false>                                      │
-      │     runtime.default                          [choice]       <claude>                                     │
+      │  >  runtime.default          [choice]       <claude-code>                                                │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │

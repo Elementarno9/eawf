@@ -6,7 +6,7 @@
       │  Configuration                                                                                           │
       │  ≡ save layer: repo  (L cycles: global local)                                                            │
       │                                                                                                          │
-      │   audit  daemon  estimation  flow  planning  preferences  prose  research  runtime  ship  statusline  t  │
+      │   audit  daemon  estimation  flow  planning  preferences  prose  research  review  runtime  ship  statu  │
       │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
       │  >  dispatch.role_tier_token_cap           [int]          2400                                           │
       │     planning.approval                      [choice]       <ask>                                          │
