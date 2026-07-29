@@ -35,7 +35,7 @@
       }
     ],
     "generated_at": "1970-01-01T00:00:00+00:00",
-    "hash": "d4d2682dd0f7a7a0",
+    "hash": "b1e600f67fd62ff4",
     "hooks": [
       {
         "event_type": "session_end",
@@ -152,7 +152,7 @@
         "version": "1.0"
       }
     ],
-    "version": "0.6.3"
+    "version": "0.6.4"
   },
   "hooks": {
     "Stop": [
