@@ -22,6 +22,10 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.models import State
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon.close_workspace import CloseWorkspaceError
+from eawf.runtime.daemon.gate_receipt_hygiene import (
+    diagnostic_log_path,
+    diagnostic_path,
+)
 from eawf.runtime.daemon.methods.close import (
     _CLOSE_TASKS,
     _close_task_key,
@@ -634,7 +638,21 @@ def test_gate_receipt_is_durable_idempotent_and_binds_full_log(
     assert len(receipt_path.read_bytes().splitlines()) == 1
     state = State.model_validate_json(state_path.read_bytes())
     assert state.close_attempts[attempt_id].gate_receipt_ids == [first]
-    assert (repo / log_ref).read_text(encoding="utf-8") == "full diagnostic output\n"
+    assert diagnostic_log_path(state_path, first).read_text(encoding="utf-8") == (
+        "full diagnostic output\n"
+    )
+    local_diagnostic = orjson.loads(diagnostic_path(state_path, first).read_bytes())
+    assert local_diagnostic["argv"] == ["uv", "run", "pytest"]
+    assert local_diagnostic["details"] == "returncode=0"
+    durable_payload = orjson.loads(receipt_path.read_bytes().splitlines()[0])["payload"]
+    assert {
+        "argv",
+        "command",
+        "details",
+        "stdout_tail",
+        "stderr_tail",
+        "full_log_ref",
+    }.isdisjoint(durable_payload)
     assert reusable_pass_gate_ids(
         ctx,
         repo_root=repo,
@@ -736,15 +754,17 @@ def test_file_exists_result_persists_terminal_receipt_without_command_facts(
     ]
     receipt = rows[0]["payload"]
     assert receipt["gate_id"] == "G-FILE"
-    assert receipt["argv"] is None
+    assert "argv" not in receipt
     assert receipt["argv_digest"] is None
     assert receipt["resolved_timeout_seconds"] is None
     assert receipt["started_at"]
     assert receipt["ended_at"]
-    assert receipt["runner_digest"] == "runner"
-    assert receipt["environment_digest"] == "environment"
-    assert receipt["full_log_ref"] == proof_ref.as_posix()
-    assert (repo / proof_ref).is_file()
+    assert receipt["runner_digest"] == ("sha256:" + hashlib.sha256(b"runner").hexdigest())
+    assert receipt["environment_digest"] == ("sha256:" + hashlib.sha256(b"environment").hexdigest())
+    assert "full_log_ref" not in receipt
+    assert diagnostic_log_path(state_path, receipt_id).is_file()
+    diagnostic = orjson.loads(diagnostic_path(state_path, receipt_id).read_bytes())
+    assert diagnostic["details"] == "path=payload.txt exists=True"
 
 
 def test_blocked_attempt_has_one_bounded_resume(

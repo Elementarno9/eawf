@@ -1,10 +1,8 @@
-"""``/flow`` skill — composite controller running the six core skills in order.
+"""``/flow`` skill — composite controller running the delivery stages in order.
 
-Per `docs/architecture/workflow.md` ``/flow`` drives a one-click ADD iteration:
-research → prep → execute (includes audit) → ship. ``/flow`` runs all six
-core skills sequentially
-(research → prep → audit → ship → review → polish), accumulating per-step
-envelopes under :attr:`FlowBody.steps`.
+``/flow`` runs research → prep → audit → polish → ship sequentially,
+accumulating per-step envelopes under :attr:`FlowBody.steps`. The PR-review
+pass remains inside ship.
 
 Short-circuit semantics (the W03 acceptance contract):
 
@@ -27,8 +25,8 @@ Honoured ``ctx.args`` keys:
 
 - ``topic`` — free-form description recorded on :attr:`FlowBody.topic`.
 - ``stop_after`` — short-circuit before the named step (matches §14's
-  ``--stop-after`` flag). v0.1 honours the canonical names
-  ``research|prep|audit|ship|review|polish``.
+  ``--stop-after`` flag). Recognised names are
+  ``research|prep|audit|polish|ship``.
 - ``args_per_step`` — optional dict of ``skill_name → ctx.args`` to
   forward to specific steps; absent steps inherit the flow's own args.
 - ``resume_from`` — Phase 5 W02. Optional :class:`FlowCheckpointPayload`
@@ -83,6 +81,7 @@ from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.render.envelope import EnvelopeWarning, OutputEnvelope, SkillName
 from eawf.workflow.skills.audit import AuditSkill
 from eawf.workflow.skills.bodies.flow import FlowBody
+from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.workflow.skills.engine import (
     ActionRun,
     Skill,
@@ -105,7 +104,6 @@ from eawf.workflow.skills.polish import PolishSkill
 from eawf.workflow.skills.prep import PrepSkill
 from eawf.workflow.skills.registry import register
 from eawf.workflow.skills.research import ResearchSkill
-from eawf.workflow.skills.review import ReviewSkill
 from eawf.workflow.skills.ship import ShipSkill
 
 logger = logging.getLogger(__name__)
@@ -118,9 +116,8 @@ _CORE_FLOW_ORDER: tuple[tuple[SkillName, type[Skill]], ...] = (
     ("/research", ResearchSkill),
     ("/prep", PrepSkill),
     ("/audit", AuditSkill),
-    ("/ship", ShipSkill),
-    ("/review", ReviewSkill),
     ("/polish", PolishSkill),
+    ("/ship", ShipSkill),
 )
 
 
@@ -262,6 +259,64 @@ def _resolve_max_repair_cycles(
         )
         return _config_max_repair_cycles(state_path)
     return value
+
+
+def _resolve_advance_after(
+    args: dict[str, Any], state_path: Path, warnings: list[EnvelopeWarning]
+) -> dict[str, bool]:
+    """Resolve deterministic flow transition gates from config and CLI compatibility."""
+    from eawf.kernel.config.layered import merge_config
+
+    stages = ("research", "prep", "audit", "polish")
+    resolved = dict.fromkeys(stages, False)
+    workspace_root = _workspace_root_for_state(state_path)
+    try:
+        merged, _sources = merge_config(repo=workspace_root, workspace=workspace_root)
+    except Exception as exc:  # pragma: no cover - defensive only
+        logger.debug(f"_resolve_advance_after merge_error={exc!r}")
+        merged = {}
+    flow = merged.get("flow") if isinstance(merged, dict) else None
+    configured = flow.get("advance_after") if isinstance(flow, dict) else None
+    if isinstance(configured, dict):
+        for stage in stages:
+            value = configured.get(stage)
+            if isinstance(value, bool):
+                resolved[stage] = value
+
+    raw = args.get("advance_after", args.get("auto_accept"))
+    if raw is None:
+        return resolved
+    if raw is True:
+        return dict.fromkeys(stages, True)
+    tokens = _transition_override_tokens(raw)
+    if tokens is None:
+        warnings.append(
+            EnvelopeWarning(
+                code="invalid_advance_after",
+                detail=f"ignored flow transition override {raw!r}",
+            )
+        )
+        return resolved
+    for token in tokens:
+        if token not in resolved:
+            warnings.append(
+                EnvelopeWarning(
+                    code="invalid_advance_after",
+                    detail=f"ignored unknown flow stage {token!r}",
+                )
+            )
+            continue
+        resolved[token] = True
+    return resolved
+
+
+def _transition_override_tokens(raw: Any) -> list[str] | None:
+    """Normalize CLI transition overrides; return ``None`` for invalid shapes."""
+    if isinstance(raw, str):
+        return [token.strip().lower() for token in raw.split(",") if token.strip()]
+    if isinstance(raw, list):
+        return [str(token).strip().lower() for token in raw]
+    return None
 
 
 def _stop_after_short_name(skill_name: SkillName) -> str:
@@ -594,6 +649,7 @@ class _FlowInputs:
     start_index: int
     caps: dict[str, float] = field(default_factory=dict)
     max_repair_cycles: int = _DEFAULT_MAX_REPAIR_CYCLES
+    advance_after: dict[str, bool] = field(default_factory=dict)
     warnings: list[EnvelopeWarning] = field(default_factory=list)
 
 
@@ -627,6 +683,7 @@ class _FlowRun:
     steps: list[dict[str, Any]] = field(default_factory=list)
     repair_commands: list[str] | None = None
     last_safe_checkpoint_id: str | None = None
+    user_question: UserQuestion | None = None
 
 
 @register
@@ -673,6 +730,7 @@ class FlowSkill(SkillAction):
             start_index=0 if resume_from is None else resume_from.step_index + 1,
             caps=_parse_caps(args.get("caps"), warnings),
             max_repair_cycles=_resolve_max_repair_cycles(args, run.state_path, warnings),
+            advance_after=_resolve_advance_after(args, run.state_path, warnings),
             warnings=warnings,
         )
 
@@ -808,6 +866,37 @@ class FlowSkill(SkillAction):
                     {"stop_after": inputs.stop_after, "flow_id": inputs.flow_id},
                 )
                 break
+            stage = _stop_after_short_name(skill_name)
+            if (
+                idx < len(self.flow_order) - 1
+                and stage in inputs.advance_after
+                and not inputs.advance_after[stage]
+            ):
+                next_skill = self.flow_order[idx + 1][0]
+                flow_run.user_question = UserQuestion(
+                    question=f"{skill_name} completed. Advance to {next_skill}?",
+                    options=[
+                        UserQuestionOption(
+                            label="continue",
+                            description="Resume from this safe checkpoint and run the next stage.",
+                        ),
+                        UserQuestionOption(
+                            label="defer",
+                            description="Leave the flow paused for a later resume.",
+                        ),
+                    ],
+                )
+                self._trace(
+                    run,
+                    "flow.transition_pause",
+                    f"flow: pause after {skill_name} before {next_skill}",
+                    {
+                        "flow_id": inputs.flow_id,
+                        "completed_skill": skill_name,
+                        "next_skill": next_skill,
+                    },
+                )
+                break
         return flow_run
 
     def _run_one_step(
@@ -890,8 +979,10 @@ class FlowSkill(SkillAction):
         )
 
     def _render(self, run: ActionRun, inputs: _FlowInputs, outcome: _FlowRun) -> SkillResult:
-        terminal_status = short_circuit_terminal_status(
-            [s["header"]["status"] for s in outcome.steps]
+        terminal_status = (
+            "needs_user"
+            if outcome.user_question is not None
+            else short_circuit_terminal_status([s["header"]["status"] for s in outcome.steps])
         )
         evt_type = "flow.resume_end" if inputs.resume_from is not None else "flow.end"
         self._trace(
@@ -919,7 +1010,7 @@ class FlowSkill(SkillAction):
             topic=str(inputs.topic) if inputs.topic is not None else None,
             steps=outcome.steps,
             terminal_status=terminal_status,
-            user_question=None,
+            user_question=outcome.user_question,
             resume_from_checkpoint_id=inputs.resume_from_id,
             drift=None,
         )

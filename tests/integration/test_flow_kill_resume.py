@@ -184,21 +184,24 @@ def test_flow_kill_after_research_resume_completes(
     )
 
     runner = CliRunner()
-    result = runner.invoke(app, ["--json", "flow", "run", "--resume"])
+    result = runner.invoke(
+        app,
+        ["--json", "flow", "run", "--resume"],
+        input='{"advance_after": true}',
+    )
     assert result.exit_code == 0, result.stdout
 
     payload = json.loads(result.stdout)
     body = payload["body"]
     assert body["resume_from_checkpoint_id"] == "EV-ckpt0000001"
     assert body["drift"] is None
-    # Resume executes /prep through /polish — five steps.
-    assert len(body["steps"]) == 5
+    # Resume executes /prep through /ship — four steps.
+    assert len(body["steps"]) == 4
     assert [s["header"]["skill"] for s in body["steps"]] == [
         "/prep",
         "/audit",
-        "/ship",
-        "/review",
         "/polish",
+        "/ship",
     ]
 
 
@@ -215,7 +218,11 @@ def test_flow_kill_via_failing_step_leaves_safe_checkpoint(
     monkeypatch.setattr(FlowSkill, "flow_order", patched)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["--json", "flow", "run", "--topic", "demo"])
+    result = runner.invoke(
+        app,
+        ["--json", "flow", "run", "--topic", "demo"],
+        input='{"advance_after": true}',
+    )
     # /prep raises → engine wraps to ``failed`` → exit 4.
     assert result.exit_code == 2, result.stdout
 

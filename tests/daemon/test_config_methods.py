@@ -125,7 +125,7 @@ def test_set_layer_value_mutates_yaml(tmp_path: Path) -> None:
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["vcs", "auto_commit"],
+                "key_path": ["flow", "advance_after", "audit"],
                 "value": True,
             },
         )
@@ -135,11 +135,11 @@ def test_set_layer_value_mutates_yaml(tmp_path: Path) -> None:
         # File on disk reflects the new value.
         assert config_yaml.exists()
         body_disk = yaml.safe_load(config_yaml.read_text())
-        assert body_disk == {"vcs": {"auto_commit": True}}
+        assert body_disk == {"flow": {"advance_after": {"audit": True}}}
 
         # Subsequent read reflects the new value.
         read_result: dict[str, Any] = await read(ctx, {"layer": "repo"})
-        assert read_result["config"] == {"vcs": {"auto_commit": True}}
+        assert read_result["config"] == {"flow": {"advance_after": {"audit": True}}}
 
     _run(body)
 
@@ -148,19 +148,19 @@ def test_set_layer_value_preserves_other_keys(tmp_path: Path) -> None:
     """Deep-set updates the named key without clobbering siblings."""
     ctx, repo = _build_ctx(tmp_path=tmp_path)
     config_yaml = repo / ".ea" / "config.yaml"
-    config_yaml.write_text("vcs:\n  auto_commit: false\n  pr_template: iter\n")
+    config_yaml.write_text("flow:\n  advance_after:\n    audit: false\n    polish: false\n")
 
     async def body() -> None:
         await set_layer_value(
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["vcs", "auto_commit"],
+                "key_path": ["flow", "advance_after", "audit"],
                 "value": True,
             },
         )
         body_disk = yaml.safe_load(config_yaml.read_text())
-        assert body_disk == {"vcs": {"auto_commit": True, "pr_template": "iter"}}
+        assert body_disk == {"flow": {"advance_after": {"audit": True, "polish": False}}}
 
     _run(body)
 
@@ -176,7 +176,7 @@ def test_set_layer_value_publishes_envelope(tmp_path: Path) -> None:
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["vcs", "auto_commit"],
+                "key_path": ["flow", "advance_after", "audit"],
                 "value": True,
             },
         )
@@ -184,7 +184,7 @@ def test_set_layer_value_publishes_envelope(tmp_path: Path) -> None:
         env = sub.queue[0]
         assert env.kind is StoreKind.CONFIG_UPDATED
         assert env.payload["layer"] == "repo"
-        assert env.payload["key_path"] == ["vcs", "auto_commit"]
+        assert env.payload["key_path"] == ["flow", "advance_after", "audit"]
         assert env.payload["value"] is True
 
     _run(body)
@@ -199,7 +199,7 @@ def test_set_layer_value_idempotency_replays(tmp_path: Path) -> None:
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["vcs", "auto_commit"],
+                "key_path": ["flow", "advance_after", "audit"],
                 "value": True,
                 "idempotency_key": "key-1",
             },
@@ -208,7 +208,7 @@ def test_set_layer_value_idempotency_replays(tmp_path: Path) -> None:
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["vcs", "auto_commit"],
+                "key_path": ["flow", "advance_after", "audit"],
                 "value": False,  # different value, same key
                 "idempotency_key": "key-1",
             },
@@ -245,7 +245,7 @@ def test_set_layer_value_rejects_unknown_layer(tmp_path: Path) -> None:
                 ctx,
                 {
                     "layer": "bogus",
-                    "key_path": ["vcs", "auto_commit"],
+                    "key_path": ["flow", "advance_after", "audit"],
                     "value": True,
                 },
             )
@@ -282,19 +282,26 @@ def test_set_layer_value_sequential_writes_preserve_both_keys(tmp_path: Path) ->
     async def body() -> None:
         await set_layer_value(
             ctx,
-            {"layer": "repo", "key_path": ["vcs", "auto_commit"], "value": True},
+            {
+                "layer": "repo",
+                "key_path": ["flow", "advance_after", "audit"],
+                "value": True,
+            },
         )
         await set_layer_value(
             ctx,
-            {"layer": "repo", "key_path": ["audit", "fix_safe"], "value": True},
+            {
+                "layer": "repo",
+                "key_path": ["flow", "advance_after", "polish"],
+                "value": True,
+            },
         )
 
     _run(body)
 
     body_disk = yaml.safe_load(config_yaml.read_text())
     assert body_disk == {
-        "vcs": {"auto_commit": True},
-        "audit": {"fix_safe": True},
+        "flow": {"advance_after": {"audit": True, "polish": True}},
     }
 
 
@@ -431,7 +438,7 @@ def test_set_layer_value_rejects_leaf_not_writable_from_target_layer(tmp_path: P
 def test_set_layer_value_allows_leaf_writable_from_target_layer(tmp_path: Path) -> None:
     """A leaf whose allowlist includes the target layer still writes (no false positive).
 
-    ``vcs.auto_commit`` IS writable from ``repo``, so the gate must let the
+    ``flow.advance_after.audit`` is writable from ``repo``, so the gate must let the
     write through -- the fix rejects only genuinely-unauthorized writes. The
     repo layer is anchored under the synthetic ``tmp_path`` repo, so no real
     config file is touched.
@@ -444,7 +451,7 @@ def test_set_layer_value_allows_leaf_writable_from_target_layer(tmp_path: Path) 
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["vcs", "auto_commit"],
+                "key_path": ["flow", "advance_after", "audit"],
                 "value": True,
             },
         )
@@ -489,7 +496,7 @@ def test_config_updated_payload_rejects_unknown_operation() -> None:
 def test_unset_layer_value_removes_leaf_and_prunes_empty_parent(tmp_path: Path) -> None:
     ctx, repo = _build_ctx(tmp_path=tmp_path)
     config_yaml = repo / ".ea" / "config.yaml"
-    config_yaml.write_text("audit:\n  fix_safe: true\nvcs:\n  auto_commit: false\n")
+    config_yaml.write_text("flow:\n  advance_after:\n    audit: true\n    polish: false\n")
     bus = ctx.bus
     assert isinstance(bus, EventBus)
     sub = bus.register(connection_id="cfg-unset")
@@ -497,7 +504,7 @@ def test_unset_layer_value_removes_leaf_and_prunes_empty_parent(tmp_path: Path) 
     async def body() -> None:
         result = await unset_layer_value(
             ctx,
-            {"layer": "repo", "key_path": ["audit", "fix_safe"]},
+            {"layer": "repo", "key_path": ["flow", "advance_after", "audit"]},
         )
         assert result["removed"] is True
         assert result["envelope"]["payload"]["operation"] == "unset"
@@ -507,18 +514,18 @@ def test_unset_layer_value_removes_leaf_and_prunes_empty_parent(tmp_path: Path) 
         assert envelope.kind is StoreKind.CONFIG_UPDATED
         payload = ConfigUpdatedPayload.model_validate(envelope.payload)
         assert payload.operation == "unset"
-        assert payload.key_path == ["audit", "fix_safe"]
+        assert payload.key_path == ["flow", "advance_after", "audit"]
         assert payload.value is None
 
     _run(body)
 
-    assert yaml.safe_load(config_yaml.read_text()) == {"vcs": {"auto_commit": False}}
+    assert yaml.safe_load(config_yaml.read_text()) == {"flow": {"advance_after": {"polish": False}}}
 
 
 def test_unset_layer_value_absent_is_noop_without_envelope(tmp_path: Path) -> None:
     ctx, repo = _build_ctx(tmp_path=tmp_path)
     config_yaml = repo / ".ea" / "config.yaml"
-    config_yaml.write_text("vcs:\n  auto_commit: false\n")
+    config_yaml.write_text("flow:\n  advance_after:\n    audit: false\n")
     before = config_yaml.read_bytes()
     bus = ctx.bus
     assert isinstance(bus, EventBus)
@@ -527,7 +534,7 @@ def test_unset_layer_value_absent_is_noop_without_envelope(tmp_path: Path) -> No
     async def body() -> None:
         result = await unset_layer_value(
             ctx,
-            {"layer": "repo", "key_path": ["audit", "fix_safe"]},
+            {"layer": "repo", "key_path": ["flow", "advance_after", "polish"]},
         )
         assert result["removed"] is False
         assert result["envelope"] is None
@@ -545,7 +552,7 @@ def test_unset_layer_value_missing_file_is_noop(tmp_path: Path) -> None:
     async def body() -> None:
         result = await unset_layer_value(
             ctx,
-            {"layer": "repo", "key_path": ["audit", "fix_safe"]},
+            {"layer": "repo", "key_path": ["flow", "advance_after", "audit"]},
         )
         assert result["removed"] is False
         assert result["envelope"] is None
@@ -594,14 +601,14 @@ def test_unset_layer_value_rejects_nonwritable_layer(tmp_path: Path) -> None:
 def test_unset_layer_value_idempotency_replays_result(tmp_path: Path) -> None:
     ctx, repo = _build_ctx(tmp_path=tmp_path)
     config_yaml = repo / ".ea" / "config.yaml"
-    config_yaml.write_text("audit:\n  fix_safe: true\n")
+    config_yaml.write_text("flow:\n  advance_after:\n    audit: true\n")
 
     async def body() -> None:
         first = await unset_layer_value(
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["audit", "fix_safe"],
+                "key_path": ["flow", "advance_after", "audit"],
                 "idempotency_key": "unset-1",
             },
         )
@@ -609,7 +616,7 @@ def test_unset_layer_value_idempotency_replays_result(tmp_path: Path) -> None:
             ctx,
             {
                 "layer": "repo",
-                "key_path": ["audit", "fix_safe"],
+                "key_path": ["flow", "advance_after", "audit"],
                 "idempotency_key": "unset-1",
             },
         )
@@ -628,7 +635,7 @@ def test_unset_layer_value_idempotency_replays_result(tmp_path: Path) -> None:
 def test_set_layer_value_branch_writes_subdir_file(tmp_path: Path) -> None:
     """Branch layer writes ``.ea/branches/<branch>.yaml`` (subdir form).
 
-    Uses ``prose.level`` because it is one of the few branch-writable leaves;
+    Uses ``project.goals`` because it is one of the few branch-writable leaves;
     the writable-layers gate (P29-I08-W28) rejects a key whose allowlist
     excludes ``branch``.
     """
@@ -639,8 +646,8 @@ def test_set_layer_value_branch_writes_subdir_file(tmp_path: Path) -> None:
             ctx,
             {
                 "layer": "branch",
-                "key_path": ["prose", "level"],
-                "value": "strict",
+                "key_path": ["project", "goals"],
+                "value": ["ship safely"],
                 "branch": "feature/p25-w14",
             },
         )
@@ -648,7 +655,7 @@ def test_set_layer_value_branch_writes_subdir_file(tmp_path: Path) -> None:
         target = repo / ".ea" / "branches" / "feature" / "p25-w14.yaml"
         assert target.exists()
         body_disk = yaml.safe_load(target.read_text())
-        assert body_disk == {"prose": {"level": "strict"}}
+        assert body_disk == {"project": {"goals": ["ship safely"]}}
 
     _run(body)
 
@@ -657,15 +664,15 @@ def test_set_layer_value_branch_rejects_missing_branch_name(tmp_path: Path) -> N
     ctx, _ = _build_ctx(tmp_path=tmp_path)
 
     async def body() -> None:
-        # ``prose.level`` is branch-writable, so the missing-branch-name check
+        # ``project.goals`` is branch-writable, so the missing-branch-name check
         # (not the writable-layers gate) is what fires here.
         with pytest.raises(ValueError, match="branch name required"):
             await set_layer_value(
                 ctx,
                 {
                     "layer": "branch",
-                    "key_path": ["prose", "level"],
-                    "value": "strict",
+                    "key_path": ["project", "goals"],
+                    "value": ["ship safely"],
                 },
             )
 
@@ -727,7 +734,7 @@ def test_set_wave_value_rejects_non_wave_writable_leaf(tmp_path: Path) -> None:
                 ctx,
                 {
                     "wave_id": "P25-W14",
-                    "key_path": ["vcs", "auto_commit"],
+                    "key_path": ["flow", "advance_after", "audit"],
                     "value": True,
                 },
             )

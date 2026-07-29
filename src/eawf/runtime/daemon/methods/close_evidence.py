@@ -17,10 +17,19 @@ from eawf.kernel.state.enums import (
     StoreKind,
 )
 from eawf.kernel.state.models import CloseAttempt, State
-from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.kinds.gate_receipt import GateReceipt
+from eawf.kernel.store.kinds.gate_receipt import (
+    GateDiagnostic,
+    GateReceipt,
+    canonical_gate_digest,
+)
 from eawf.kernel.store.paths import store_path
+from eawf.runtime.daemon.gate_receipt_hygiene import (
+    append_gate_receipt,
+    diagnostic_id,
+    scrub_gate_receipt_store,
+    write_gate_diagnostic,
+)
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.workflow.audit_dsl.models import CheckResult, GateFreshnessInput
 
@@ -115,7 +124,8 @@ def gate_freshness_inputs(
             full_log_ref=(
                 Path(".ea")
                 / "local"
-                / "close-logs"
+                / "gate-diagnostics"
+                / "incoming"
                 / attempt.id
                 / f"gate-{hashlib.sha256(gate_id.encode()).hexdigest()[:16]}.log"
             ).as_posix(),
@@ -133,22 +143,6 @@ def _gate_receipt_result(result: CheckResult) -> GateReceiptResult:
             return GateReceiptResult.TIMEOUT
         return GateReceiptResult.BLOCKED
     return GateReceiptResult.FAIL
-
-
-def _receipt_exists(path: Path, receipt_id: str) -> bool:
-    """Return whether a receipt id is already present in the append-only store."""
-    if not path.is_file():
-        return False
-    for line in path.read_bytes().splitlines():
-        if not line:
-            continue
-        try:
-            payload = orjson.loads(line)
-        except orjson.JSONDecodeError:
-            continue
-        if payload.get("id") == receipt_id:
-            return True
-    return False
 
 
 def _load_gate_receipt(path: Path, receipt_id: str) -> GateReceipt | None:
@@ -191,12 +185,14 @@ def _reuse_existing_gate_receipt(
         and existing.integration_id == attempt.integration_id
         and existing.integrated_sha == attempt.integrated_sha
         and existing.tree_sha == attempt.tree_sha
-        and existing.contract_digest == attempt.spec_digest
-        and existing.criteria_digest == attempt.criteria_digest
-        and existing.gate_manifest_digest == attempt.gate_manifest_digest
-        and existing.policy_digest == attempt.policy_digest
-        and existing.dependency_binding_digest == attempt.dependency_binding_digest
-        and existing.runner_environment_digest == attempt.runner_environment_digest
+        and existing.contract_digest == canonical_gate_digest(attempt.spec_digest)
+        and existing.criteria_digest == canonical_gate_digest(attempt.criteria_digest)
+        and existing.gate_manifest_digest == canonical_gate_digest(attempt.gate_manifest_digest)
+        and existing.policy_digest == canonical_gate_digest(attempt.policy_digest)
+        and existing.dependency_binding_digest
+        == canonical_gate_digest(attempt.dependency_binding_digest)
+        and existing.runner_environment_digest
+        == canonical_gate_digest(attempt.runner_environment_digest)
     )
     if not exact:
         logger.warning(
@@ -223,6 +219,7 @@ def reusable_pass_gate_ids(
     attempt_id: str,
 ) -> set[str]:
     """Return gates with pass receipts bound to the attempt's frozen inputs."""
+    scrub_gate_receipt_store(_state_path(ctx, repo_root))
     state = _load_state(ctx, repo_root)
     attempt = state.close_attempts.get(attempt_id)
     if attempt is None or not attempt.gate_receipt_ids:
@@ -248,12 +245,14 @@ def reusable_pass_gate_ids(
             and receipt.integration_id == attempt.integration_id
             and receipt.integrated_sha == attempt.integrated_sha
             and receipt.tree_sha == attempt.tree_sha
-            and receipt.contract_digest == attempt.spec_digest
-            and receipt.criteria_digest == attempt.criteria_digest
-            and receipt.gate_manifest_digest == attempt.gate_manifest_digest
-            and receipt.policy_digest == attempt.policy_digest
-            and receipt.dependency_binding_digest == attempt.dependency_binding_digest
-            and receipt.runner_environment_digest == attempt.runner_environment_digest
+            and receipt.contract_digest == canonical_gate_digest(attempt.spec_digest)
+            and receipt.criteria_digest == canonical_gate_digest(attempt.criteria_digest)
+            and receipt.gate_manifest_digest == canonical_gate_digest(attempt.gate_manifest_digest)
+            and receipt.policy_digest == canonical_gate_digest(attempt.policy_digest)
+            and receipt.dependency_binding_digest
+            == canonical_gate_digest(attempt.dependency_binding_digest)
+            and receipt.runner_environment_digest
+            == canonical_gate_digest(attempt.runner_environment_digest)
         ):
             reusable.add(receipt.gate_id)
     return reusable
@@ -332,6 +331,7 @@ def persist_gate_receipt(
     result: CheckResult,
 ) -> str | None:
     """Persist one complete deterministic receipt and bind it to its attempt."""
+    scrub_gate_receipt_store(_state_path(ctx, repo_root))
     state = _load_state(ctx, repo_root)
     attempt = state.close_attempts.get(attempt_id)
     if attempt is None:
@@ -395,16 +395,35 @@ def persist_gate_receipt(
     if found:
         return existing_id
     source_log = execution_root / result.full_log_ref
-    destination_log = repo_root / result.full_log_ref
     if not source_log.is_file():
         logger.warning(
             f"persist_gate_receipt status=skip attempt={attempt_id!r} gate={gate_id!r} "
             f"reason=proof-missing ref={result.full_log_ref!r}"
         )
         return None
-    if source_log != destination_log and source_log.is_file():
-        destination_log.parent.mkdir(parents=True, exist_ok=True)
-        destination_log.write_bytes(source_log.read_bytes())
+    log_bytes = source_log.read_bytes()
+    local_diagnostic = GateDiagnostic(
+        id=diagnostic_id(receipt_id),
+        receipt_id=receipt_id,
+        attempt_id=attempt_id,
+        scope_id=attempt.wave_id,
+        criterion_id=criterion_id,
+        gate_id=gate_id,
+        captured_at=result.ended_at,
+        argv=result.argv,
+        command=result.command,
+        details=result.details,
+        stdout_tail=result.stdout_tail,
+        stderr_tail=result.stderr_tail,
+        source_log_ref=result.full_log_ref,
+        log_digest=hashlib.sha256(log_bytes).hexdigest(),
+        log_present=True,
+    )
+    write_gate_diagnostic(
+        _state_path(ctx, repo_root),
+        local_diagnostic,
+        log_bytes=log_bytes,
+    )
     receipt = GateReceipt(
         id=receipt_id,
         scope_id=attempt.wave_id,
@@ -413,18 +432,16 @@ def persist_gate_receipt(
         integration_id=attempt.integration_id,
         integrated_sha=attempt.integrated_sha,
         tree_sha=attempt.tree_sha,
-        contract_digest=attempt.spec_digest,
-        criteria_digest=attempt.criteria_digest,
-        gate_manifest_digest=attempt.gate_manifest_digest,
-        policy_digest=attempt.policy_digest,
-        dependency_binding_digest=attempt.dependency_binding_digest,
-        runner_environment_digest=attempt.runner_environment_digest,
-        runner_digest=result.runner_fingerprint,
-        environment_digest=result.environment_fingerprint,
+        contract_digest=canonical_gate_digest(attempt.spec_digest),
+        criteria_digest=canonical_gate_digest(attempt.criteria_digest),
+        gate_manifest_digest=canonical_gate_digest(attempt.gate_manifest_digest),
+        policy_digest=canonical_gate_digest(attempt.policy_digest),
+        dependency_binding_digest=canonical_gate_digest(attempt.dependency_binding_digest),
+        runner_environment_digest=canonical_gate_digest(attempt.runner_environment_digest),
+        runner_digest=canonical_gate_digest(result.runner_fingerprint),
+        environment_digest=canonical_gate_digest(result.environment_fingerprint),
         freshness_key=result.freshness_key,
-        argv=result.argv,
         argv_digest=_digest(result.argv) if result.argv is not None else None,
-        command=result.command,
         timeout_class=result.timeout_class,
         resolved_timeout_seconds=(
             float(result.resolved_timeout_seconds)
@@ -435,29 +452,34 @@ def persist_gate_receipt(
         ended_at=result.ended_at,
         duration_ms=result.duration_ms,
         result=_gate_receipt_result(result),
-        details=result.details,
         exit_status=result.exit_status,
-        stdout_tail=result.stdout_tail,
-        stderr_tail=result.stderr_tail,
-        stdout_digest=result.stdout_digest,
-        stderr_digest=result.stderr_digest,
-        full_log_ref=result.full_log_ref,
-        selected_file_digest=result.selected_file_digest,
-        collected_nodeid_digest=result.collected_nodeid_digest,
-        residual_manifest_digest=result.residual_manifest_digest,
+        stdout_digest=(
+            canonical_gate_digest(result.stdout_digest)
+            if result.stdout_digest is not None
+            else None
+        ),
+        stderr_digest=(
+            canonical_gate_digest(result.stderr_digest)
+            if result.stderr_digest is not None
+            else None
+        ),
+        selected_file_digest=(
+            canonical_gate_digest(result.selected_file_digest)
+            if result.selected_file_digest is not None
+            else None
+        ),
+        collected_nodeid_digest=(
+            canonical_gate_digest(result.collected_nodeid_digest)
+            if result.collected_nodeid_digest is not None
+            else None
+        ),
+        residual_manifest_digest=(
+            canonical_gate_digest(result.residual_manifest_digest)
+            if result.residual_manifest_digest is not None
+            else None
+        ),
     )
-    if not _receipt_exists(receipt_path, receipt.id):
-        append_envelope(
-            receipt_path,
-            Envelope(
-                id=receipt.id,
-                kind=StoreKind.GATE_RECEIPT,
-                scope_id=receipt.scope_id,
-                created_at=receipt.ended_at,
-                summary=(f"gate {receipt.gate_id} {receipt.result.value} for {receipt.scope_id}"),
-                payload=receipt.model_dump(mode="json"),
-            ),
-        )
+    append_gate_receipt(_state_path(ctx, repo_root), receipt)
     row = _load_state(ctx, repo_root).close_attempts.get(attempt_id)
     if row is not None and receipt.id not in row.gate_receipt_ids:
         _commit_attempt(

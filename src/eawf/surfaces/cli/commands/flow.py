@@ -150,8 +150,7 @@ def run_cmd(
         typer.Option(
             "--stop-after",
             help=(
-                "Run only up to (and including) this step. "
-                "One of research|prep|audit|ship|review|polish."
+                "Run only up to (and including) this step. One of research|prep|audit|polish|ship."
             ),
         ),
     ] = None,

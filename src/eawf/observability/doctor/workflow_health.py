@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from eawf.observability.doctor.checks import (
-    CheckResult,
     check_active_phase_without_iter,
     check_cli_daemon_version,
     check_iter_audit_links,
@@ -14,6 +13,7 @@ from eawf.observability.doctor.checks import (
     check_recent_actuals,
     check_stale_session_count,
 )
+from eawf.observability.doctor.models import CheckResult
 
 if TYPE_CHECKING:
     from collections.abc import Callable

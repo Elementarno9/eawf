@@ -39,6 +39,10 @@ from eawf.runtime.daemon.service_install import (
 # ---------------------------------------------------------------------
 
 
+def _rooted(*parts: str) -> str:
+    return Path("/").joinpath(*parts).as_posix()
+
+
 class _StubProcess:
     """Minimal stand-in for :class:`subprocess.CompletedProcess`."""
 
@@ -653,18 +657,71 @@ def test_service_status_macos_not_installed(
 # ---------------------------------------------------------------------
 
 
-def test_render_systemd_template_substitutes_runtime_dir(tmp_path: Path) -> None:
+def test_render_systemd_template_substitutes_runtime_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The systemd template renders with the runtime dir substituted."""
+    eawfd = _rooted("opt", "eawf", "bin", "eawfd")
+    python = _rooted("opt", "python", "bin", "python")
+    uv = _rooted("opt", "uv", "bin", "uv")
+    transient = _rooted("private", "transient", "bin")
+    monkeypatch.setattr(
+        service_install,
+        "_resolve_eawfd_binary",
+        lambda: [eawfd],
+    )
+    monkeypatch.setattr(service_install.sys, "executable", python)
+    monkeypatch.setattr(
+        service_install.shutil,
+        "which",
+        lambda name: uv if name == "uv" else None,
+    )
+    monkeypatch.setenv("PATH", transient)
     body = service_install._render_template(
         "eawfd.service.j2",
         runtime_dir_value=tmp_path / "runtime",
     )
     assert f'Environment="EAWF_RUNTIME_DIR={tmp_path / "runtime"}"' in body
+    expected_path = ":".join(
+        [
+            str(Path(eawfd).parent),
+            str(Path(python).parent),
+            str(Path(uv).parent),
+            _rooted("opt", "homebrew", "bin"),
+            _rooted("usr", "local", "bin"),
+            _rooted("usr", "bin"),
+            _rooted("bin"),
+            _rooted("usr", "sbin"),
+            _rooted("sbin"),
+        ]
+    )
+    assert f'Environment="PATH={expected_path}"' in body
+    assert transient not in body
     assert "[Unit]" in body and "[Service]" in body and "[Install]" in body
 
 
-def test_render_launchd_template_substitutes_runtime_dir(tmp_path: Path) -> None:
+def test_render_launchd_template_substitutes_runtime_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The launchd template renders with the runtime dir substituted."""
+    eawfd = _rooted("opt", "eawf", "bin", "eawfd")
+    python = _rooted("opt", "python", "bin", "python")
+    uv = _rooted("opt", "uv", "bin", "uv")
+    transient = _rooted("private", "transient", "bin")
+    monkeypatch.setattr(
+        service_install,
+        "_resolve_eawfd_binary",
+        lambda: [eawfd],
+    )
+    monkeypatch.setattr(service_install.sys, "executable", python)
+    monkeypatch.setattr(
+        service_install.shutil,
+        "which",
+        lambda name: uv if name == "uv" else None,
+    )
+    monkeypatch.setenv("PATH", transient)
     body = service_install._render_template(
         "dev.eawf.eawfd.plist.j2",
         runtime_dir_value=tmp_path / "runtime",
@@ -677,6 +734,22 @@ def test_render_launchd_template_substitutes_runtime_dir(tmp_path: Path) -> None
     assert "<key>SuccessfulExit</key>" in body
     assert "<false/>" in body
     assert "<key>KeepAlive</key>\n    <dict>" in body
+    assert "<key>PATH</key>" in body
+    expected_path = ":".join(
+        [
+            str(Path(eawfd).parent),
+            str(Path(python).parent),
+            str(Path(uv).parent),
+            _rooted("opt", "homebrew", "bin"),
+            _rooted("usr", "local", "bin"),
+            _rooted("usr", "bin"),
+            _rooted("bin"),
+            _rooted("usr", "sbin"),
+            _rooted("sbin"),
+        ]
+    )
+    assert f"<string>{expected_path}</string>" in body
+    assert transient not in body
 
 
 # ---------------------------------------------------------------------

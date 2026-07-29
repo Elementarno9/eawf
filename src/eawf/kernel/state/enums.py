@@ -697,6 +697,8 @@ class StoreKind(StrEnum):
     OPERATOR_INPUT = "operator_input"
     JURY_BALLOT = "jury_ballot"
     GATE_RECEIPT = "gate_receipt"
+    LEGACY_AUDIT_DISPOSITION = "legacy_audit_disposition"
+    COMMIT_REPIN = "commit_repin"
 
 
 class ArtifactKind(StrEnum):

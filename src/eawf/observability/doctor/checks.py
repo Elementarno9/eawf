@@ -32,17 +32,18 @@ from __future__ import annotations
 
 import logging
 import os
-import socket
-import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import ValidationError
 
 from eawf.kernel.config.layered import get_dotted, merge_config
 from eawf.kernel.config.profile import KNOWN_PROFILES
 from eawf.kernel.config.registry import LEAF_KEY_REGISTRY
 from eawf.kernel.state.resolve import resolve_with_reason
+from eawf.observability.doctor import daemon_checks
+from eawf.observability.doctor.models import CheckResult as CheckResult
+from eawf.observability.doctor.models import CheckStatus as CheckStatus
 from eawf.platform.install.instrument_probe import probe
 from eawf.surfaces.render.agents_md import measure_agents_md_byte_cap
 from eawf.surfaces.render.drift import detect_drift
@@ -58,9 +59,6 @@ if TYPE_CHECKING:
     from eawf.runtime.daemon.service_install import SupervisedAgentReport
 
 logger = logging.getLogger(__name__)
-
-
-CheckStatus = Literal["ok", "warn", "fail"]
 
 
 # The single-file ``state.json`` model holds to roughly this many waves before
@@ -84,27 +82,9 @@ STATE_WAVE_WARN_THRESHOLD = int(STATE_WAVE_SCALE_CEILING * STATE_WAVE_WARN_FRACT
 # operability summary, not a historical accounting report.
 RECENT_ACTUAL_WINDOW = 20
 
-# Doctor is interactive and must never hang behind a dead runtime socket.
-DAEMON_VERSION_PROBE_TIMEOUT_SECONDS = 0.2
-
-
-class CheckResult(BaseModel):
-    """Single doctor check outcome.
-
-    Attributes:
-        name: Stable machine identifier (``"tools_available"``, ...).
-        status: ``ok`` (everything fine), ``warn`` (functional but degraded),
-            or ``fail`` (broken — the doctor surface still completes, but the
-            CLI exits non-zero).
-        detail: Short human message. ``None`` when the check has nothing
-            interesting to add beyond ``status``.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    status: CheckStatus
-    detail: str | None = None
+# Compatibility seam: callers and tests historically patched this name on
+# ``checks``. The public wrapper below reads it at call time.
+_probe_running_daemon_version = daemon_checks.probe_running_daemon_version
 
 
 def _resolve_anchor(workspace: Path | None) -> Path | None:
@@ -326,10 +306,21 @@ def check_reserved_config_keys(*, workspace: Path | None) -> CheckResult:
             detail=f"reserved config inspection skipped: {exc}",
         )
 
+    from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS
+
     configured: list[tuple[str, object, str]] = []
     for key, entry in LEAF_KEY_REGISTRY.items():
         source = sources.get(key)
         if not entry.reserved or source is None or source == "built-in":
+            continue
+        try:
+            value = get_dotted(merged, key)
+        except KeyError:
+            continue
+        configured.append((key, value, source))
+    for key in sorted(DEPRECATED_LEAF_KEYS - set(LEAF_KEY_REGISTRY)):
+        source = sources.get(key)
+        if source is None or source == "built-in":
             continue
         try:
             value = get_dotted(merged, key)
@@ -694,7 +685,13 @@ def check_active_phase_without_iter(*, workspace: Path | None) -> CheckResult:
 
 
 def check_stale_session_count(*, workspace: Path | None) -> CheckResult:
-    """Summarize historical agent sessions still marked STALE."""
+    """Warn only for stale sessions that still affect live lifecycle state.
+
+    A stale session attached solely to a terminal wave is historical
+    provenance, not a live health fault. A stale session remains actionable
+    when it is still named by ``current.active_session_ids`` or its scope is a
+    non-terminal wave.
+    """
     name = "stale_session_count"
     if workspace is None:
         return CheckResult(name=name, status="ok", detail="no workspace anchor")
@@ -703,25 +700,53 @@ def check_stale_session_count(*, workspace: Path | None) -> CheckResult:
         return loaded
     state, _state_path = loaded
 
-    from eawf.kernel.state.enums import AgentSessionStatus
+    from eawf.kernel.state.enums import AgentSessionStatus, WaveStatus
 
-    stale_count = sum(
-        session.status is AgentSessionStatus.STALE for session in state.agent_sessions.values()
+    terminal_wave_statuses = {
+        WaveStatus.CLOSED,
+        WaveStatus.FAILED,
+        WaveStatus.ABANDONED,
+    }
+    stale_sessions = {
+        session_id: session
+        for session_id, session in state.agent_sessions.items()
+        if session.status is AgentSessionStatus.STALE
+    }
+    active_pointers = set(state.current.active_session_ids)
+    actionable_ids = sorted(
+        session_id
+        for session_id, session in stale_sessions.items()
+        if session_id in active_pointers
+        or (
+            (wave := state.waves.get(session.scope_id)) is not None
+            and wave.status not in terminal_wave_statuses
+        )
     )
-    if stale_count:
+    historical_count = len(stale_sessions) - len(actionable_ids)
+    if actionable_ids:
+        shown = ", ".join(actionable_ids[:5])
+        suffix = f" (+{len(actionable_ids) - 5} more)" if len(actionable_ids) > 5 else ""
         return CheckResult(
             name=name,
             status="warn",
-            detail=f"{stale_count} historical agent session(s) marked stale",
+            detail=(
+                f"{len(actionable_ids)} stale session(s) still affect live state: "
+                f"{shown}{suffix}; {historical_count} historical"
+            ),
         )
-    return CheckResult(name=name, status="ok", detail="0 stale agent sessions")
+    return CheckResult(
+        name=name,
+        status="ok",
+        detail=f"{historical_count} terminal-scope stale session(s) historical",
+    )
 
 
 def check_recent_actuals(*, workspace: Path | None) -> CheckResult:
-    """Summarize missing or zero-token/zero-cost actuals for recent closes.
+    """Summarize recent close metrics without treating absence or zero as faults.
 
-    A numeric zero alone does not prove that no usage occurred. This row only
-    reports what state records so operators can inspect unavailable telemetry.
+    Missing telemetry is informational, as is an explicitly recorded zero-use
+    actual. Warn only when a present actual contradicts the closed wave it is
+    keyed to.
     """
     name = "recent_actuals"
     if workspace is None:
@@ -731,7 +756,7 @@ def check_recent_actuals(*, workspace: Path | None) -> CheckResult:
         return loaded
     state, _state_path = loaded
 
-    from eawf.kernel.state.enums import WaveStatus
+    from eawf.kernel.state.enums import ActualStatus, WaveStatus
 
     closed = [wave for wave in state.waves.values() if wave.status is WaveStatus.CLOSED]
     closed.sort(
@@ -751,19 +776,30 @@ def check_recent_actuals(*, workspace: Path | None) -> CheckResult:
         and actual.actual_tokens == 0
         and actual.actual_cost_usd == 0.0
     ]
-    if missing_ids or zero_ids:
+    contradictory_ids = [
+        wave.id
+        for wave in sampled
+        if (actual := actuals.get(wave.id)) is not None
+        and (actual.scope_id != wave.id or actual.status is not ActualStatus.DONE)
+    ]
+    if contradictory_ids:
+        shown = ", ".join(contradictory_ids[:5])
+        suffix = f" (+{len(contradictory_ids) - 5} more)" if len(contradictory_ids) > 5 else ""
         return CheckResult(
             name=name,
             status="warn",
             detail=(
-                f"last {len(sampled)} closed wave(s): {len(missing_ids)} missing actual(s), "
-                f"{len(zero_ids)} zero-token/zero-cost actual(s); zeros do not prove no usage"
+                f"last {len(sampled)} closed wave(s): {len(contradictory_ids)} "
+                f"contradictory actual(s): {shown}{suffix}"
             ),
         )
     return CheckResult(
         name=name,
         status="ok",
-        detail=f"last {len(sampled)} closed wave(s) have nonzero recorded actuals",
+        detail=(
+            f"last {len(sampled)} closed wave(s): {len(missing_ids)} metrics unavailable, "
+            f"{len(zero_ids)} measured zero-use"
+        ),
     )
 
 
@@ -775,16 +811,22 @@ def check_iter_audit_links(*, workspace: Path | None) -> CheckResult:
     loaded = _load_state_for_check(workspace, name=name)
     if isinstance(loaded, CheckResult):
         return loaded
-    state, _state_path = loaded
+    state, state_path = loaded
 
     from eawf.kernel.state.enums import AuditKind, IterStatus
     from eawf.workflow.lifecycle._audit_acceptance import (
         ITER_CLOSE_AUDIT_CHECK_ORDER,
         assess_close_audit,
     )
+    from eawf.workflow.lifecycle.legacy_audit import (
+        disposition_matches,
+        load_legacy_audit_dispositions,
+    )
 
     invalid: list[str] = []
     closed_count = 0
+    acknowledged_count = 0
+    dispositions = load_legacy_audit_dispositions(state_path)
     for iter_id, iter_row in sorted(state.iters.items()):
         if iter_row.status is not IterStatus.CLOSED:
             continue
@@ -798,7 +840,16 @@ def check_iter_audit_links(*, workspace: Path | None) -> CheckResult:
             require_passing_check=True,
         )
         if assessment.issue is not None:
-            invalid.append(f"{iter_id}={assessment.issue.value}")
+            issue = assessment.issue.value
+            if disposition_matches(
+                dispositions,
+                iter_id=iter_id,
+                audit_id=iter_row.audit_id,
+                issue=issue,
+            ):
+                acknowledged_count += 1
+            else:
+                invalid.append(f"{iter_id}={issue}")
     if invalid:
         shown = ", ".join(invalid[:5])
         suffix = f" (+{len(invalid) - 5} more)" if len(invalid) > 5 else ""
@@ -810,70 +861,11 @@ def check_iter_audit_links(*, workspace: Path | None) -> CheckResult:
     return CheckResult(
         name=name,
         status="ok",
-        detail=f"{closed_count} closed iter audit link(s) accepted",
+        detail=(
+            f"{closed_count - acknowledged_count} closed iter audit link(s) accepted; "
+            f"{acknowledged_count} acknowledged legacy-unverified"
+        ),
     )
-
-
-def _daemon_ping_request() -> bytes:
-    """Return a newline-framed read-only daemon ping request."""
-    import json
-
-    payload = {
-        "jsonrpc": "2.0",
-        "id": "doctor-version-probe",
-        "method": "daemon.ping",
-        "params": {},
-    }
-    return json.dumps(payload).encode("utf-8") + b"\n"
-
-
-def _version_from_ping_response(response_bytes: bytes) -> str | None:
-    """Extract a daemon version from one JSON-RPC response frame."""
-    import json
-
-    try:
-        response = json.loads(response_bytes.rstrip(b"\n").decode("utf-8"))
-    except UnicodeDecodeError, json.JSONDecodeError:
-        return None
-    result = response.get("result") if isinstance(response, dict) else None
-    version = result.get("version") if isinstance(result, dict) else None
-    return version if isinstance(version, str) and version else None
-
-
-def _probe_running_daemon_version() -> str | None:
-    """Read an existing daemon's version without starting or restarting it."""
-    from eawf.runtime.daemon.runtime_dir import runtime_dir
-
-    request = _daemon_ping_request()
-    if sys.platform == "win32":
-        from eawf.runtime.daemon.windows_pipe import default_pipe_name, pipe_client_call
-
-        try:
-            response = pipe_client_call(
-                default_pipe_name(),
-                request,
-                wait_ms=max(1, int(DAEMON_VERSION_PROBE_TIMEOUT_SECONDS * 1000)),
-            )
-        except Exception:
-            return None
-        return _version_from_ping_response(response)
-
-    sock_path = runtime_dir() / "eawfd.sock"
-    if not sock_path.exists():
-        return None
-    try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe_socket:
-            probe_socket.settimeout(DAEMON_VERSION_PROBE_TIMEOUT_SECONDS)
-            probe_socket.connect(str(sock_path))
-            probe_socket.sendall(request)
-            reader = probe_socket.makefile("rb")
-            try:
-                response = reader.readline()
-            finally:
-                reader.close()
-    except OSError:
-        return None
-    return _version_from_ping_response(response) if response else None
 
 
 def check_cli_daemon_version(
@@ -881,37 +873,8 @@ def check_cli_daemon_version(
     probe_version: Callable[[], str | None] | None = None,
 ) -> CheckResult:
     """Compare installed CLI and running daemon versions without spawning."""
-    from eawf import __version__
-
-    name = "cli_daemon_version"
-    probe_version = probe_version or _probe_running_daemon_version
-    try:
-        daemon_version = probe_version()
-    except Exception as exc:
-        return CheckResult(
-            name=name,
-            status="warn",
-            detail=f"running daemon version probe failed: {exc}",
-        )
-    if daemon_version is None:
-        return CheckResult(
-            name=name,
-            status="ok",
-            detail=f"CLI {__version__}; no running daemon version available",
-        )
-    if daemon_version != __version__:
-        return CheckResult(
-            name=name,
-            status="warn",
-            detail=(
-                f"version skew: CLI {__version__}, running daemon {daemon_version}; "
-                "restart daemon after install"
-            ),
-        )
-    return CheckResult(
-        name=name,
-        status="ok",
-        detail=f"CLI and running daemon both {__version__}",
+    return daemon_checks.check_cli_daemon_version(
+        probe_version=probe_version or _probe_running_daemon_version
     )
 
 
@@ -1054,6 +1017,8 @@ def check_launchd_agent(
     - ``loaded`` -- the agent is registered and will respawn the daemon;
     - drift -- the plist / unit points at a STALE binary (a pre-upgrade
       ``service-enable`` that never re-ran);
+    - executable -- the configured program still exists and has execute
+      permission;
     - a RIVAL daemon PID coexisting with the supervised one (multi-daemon).
 
     Returns ``ok`` when there is no supervised agent, or a loaded agent with
@@ -1077,6 +1042,12 @@ def check_launchd_agent(
     issues: list[str] = []
     if report.drift:
         issues.append(f"unit points at stale binary program={report.program!r}")
+    if report.path_drift:
+        issues.append("unit PATH is missing or stale")
+    if report.installed and report.program is not None:
+        program = Path(report.program)
+        if not program.is_file() or not os.access(program, os.X_OK):
+            issues.append(f"unit program is not executable program={report.program!r}")
     if report.rival_pid is not None:
         issues.append(f"rival daemon pid={report.rival_pid} alongside the supervised agent")
     if issues:

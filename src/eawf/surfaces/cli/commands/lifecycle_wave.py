@@ -1069,9 +1069,27 @@ def wave_close_cmd(
     # Resolve the commit ref BEFORE any state mutation so a bad ref
     # fails the precondition without touching state.json.
     resolved_sha: str | None = None
+    resolved_identity_digest: str | None = None
     if commit_ref is not None:
         try:
             resolved_sha = _resolve_commit_sha(commit_ref)
+            repo_root = _resolve_repo_root_for_drift(flags.workspace)
+            from eawf.workflow.lifecycle.wave_sha import (
+                commit_identity_digest,
+                commit_matches_wave,
+            )
+
+            if not commit_matches_wave(resolved_sha, wave_id, repo_root=repo_root):
+                raise cli_errors.UserError(
+                    f"commit {resolved_sha!r} does not identify wave {wave_id!r}",
+                    kind="InvalidInput",
+                )
+            resolved_identity_digest = commit_identity_digest(resolved_sha, repo_root=repo_root)
+            if resolved_identity_digest is None:
+                raise cli_errors.UserError(
+                    f"cannot compute commit identity for {resolved_sha!r}",
+                    kind="InvalidInput",
+                )
         except cli_errors.CliError as err:
             cli_errors.emit_error(err, flags=flags)
             return
@@ -1116,6 +1134,7 @@ def wave_close_cmd(
             wave_id=wave_id,
             outcome=outcome,
             resolved_sha=resolved_sha,
+            commit_identity_digest=resolved_identity_digest,
             tokens_consumed=tokens_consumed,
             no_runtime_waiver=no_runtime,
             wait=wait_for_terminal,
@@ -1200,6 +1219,7 @@ def wave_close_cmd(
         )
         if resolved_sha is not None:
             wave.commit = resolved_sha
+            wave.commit_identity_digest = resolved_identity_digest
         if repo_root is not None:
             drift_warnings.extend(check_wave_criteria_drift(wave, repo_root))
         close_succeeded[0] = True

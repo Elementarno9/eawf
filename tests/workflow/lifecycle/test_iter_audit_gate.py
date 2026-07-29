@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -19,6 +20,10 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.models import Audit, CurrentPointers, Project, State
 from eawf.workflow.lifecycle._audit_acceptance import AUDIT_MINOR_BACKLOG_TRIAGE
 from eawf.workflow.lifecycle._errors import LifecycleGuardError
+from eawf.workflow.lifecycle.legacy_audit import (
+    acknowledge_invalid_iter_audits,
+    load_legacy_audit_dispositions,
+)
 from eawf.workflow.lifecycle.transitions import close_iter, open_iter, open_phase
 
 _ITER_ID = "P01-I01"
@@ -176,6 +181,32 @@ def test_close_iter_strict_false_preserves_unchecked_audit_compatibility() -> No
 
     assert closed.status is IterStatus.CLOSED
     assert closed.audit_id == "AUD-PHANTOM"
+
+
+def test_legacy_missing_audit_gets_unverified_idempotent_disposition(
+    tmp_path: Path,
+) -> None:
+    state = _state()
+    state.iters[_ITER_ID].status = IterStatus.CLOSED
+    state.iters[_ITER_ID].closed_at = _NOW
+    state.iters[_ITER_ID].audit_id = None
+    state_path = tmp_path / ".ea" / "state.json"
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text(state.model_dump_json(), encoding="utf-8")
+
+    assert acknowledge_invalid_iter_audits(
+        state_path,
+        reason="legacy close predates strict audit links",
+    ) == (1, 0)
+    assert acknowledge_invalid_iter_audits(
+        state_path,
+        reason="legacy close predates strict audit links",
+    ) == (0, 1)
+    rows = load_legacy_audit_dispositions(state_path)
+    assert len(rows) == 1
+    assert rows[0].iter_id == _ITER_ID
+    assert rows[0].audit_id is None
+    assert rows[0].disposition == "acknowledged_legacy_unverified"
 
 
 def test_close_iter_strict_pass_stores_exact_audit_id() -> None:

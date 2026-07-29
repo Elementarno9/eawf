@@ -212,7 +212,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         key="runtime.default",
         domain="runtime",
         type="str",
-        default="claude",
+        default="claude-code",
         writable_layers=_WRITABLE_GWR,
         description="Deprecated alias of runtime.preference[0].",
     ),
@@ -220,7 +220,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         key="runtime.adapters",
         domain="runtime",
         type="list_str",
-        default=("claude",),
+        default=("claude-code",),
         writable_layers=_WRITABLE_GWR,
         description="Legacy v1.1 selector; superseded by runtime.preference.",
     ),
@@ -228,7 +228,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         key="runtime.preference",
         domain="runtime",
         type="list_str",
-        default=("claude",),
+        default=("claude-code",),
         writable_layers=_WRITABLE_RUNTIME_PREFERENCE,
         description="C08-canonical fallback ladder; first entry is primary.",
     ),
@@ -265,6 +265,30 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="list_str",
         default=(),
         writable_layers=_WRITABLE_GWR,
+    ),
+    LeafKey(
+        key="runtime.models.claude",
+        domain="runtime",
+        type="list_str",
+        default=(),
+        writable_layers=_WRITABLE_GWR,
+        description="Optional cheap/mid/top model ladder for the Claude runtime.",
+    ),
+    LeafKey(
+        key="runtime.models.codex",
+        domain="runtime",
+        type="list_str",
+        default=(),
+        writable_layers=_WRITABLE_GWR,
+        description="Optional cheap/mid/top model ladder for the Codex runtime.",
+    ),
+    LeafKey(
+        key="runtime.models.opencode",
+        domain="runtime",
+        type="list_str",
+        default=(),
+        writable_layers=_WRITABLE_GWR,
+        description="Optional cheap/mid/top model ladder for the opencode runtime.",
     ),
     # Per-adapter sub-keys (claude / codex / opencode).
     LeafKey(
@@ -923,6 +947,15 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
+        key="review.default_level",
+        domain="review",
+        type="literal",
+        default="medium",
+        writable_layers=_WRITABLE_GWR,
+        choices=("low", "medium", "high"),
+        description="Default /review finding-confidence threshold.",
+    ),
+    LeafKey(
         key="review.template",
         domain="review",
         type="str",
@@ -938,13 +971,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
     ),
     # --- polish ------------------------------------------------------------
     LeafKey(
-        key="polish.auto_apply_safe",
-        domain="polish",
-        type="bool",
-        default=False,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
         key="polish.include_memory",
         domain="polish",
         type="bool",
@@ -958,61 +984,33 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=True,
         writable_layers=_WRITABLE_GWR,
     ),
-    LeafKey(
-        key="polish.deletion_policy",
-        domain="polish",
-        type="str",
-        default="recoverable_with_reason",
-        writable_layers=_WRITABLE_GWR,
-    ),
     # --- flow --------------------------------------------------------------
     LeafKey(
-        key="flow.auto_accept.research",
+        key="flow.advance_after.research",
         domain="flow",
         type="bool",
         default=False,
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
-        key="flow.auto_accept.prep",
+        key="flow.advance_after.prep",
         domain="flow",
         type="bool",
         default=False,
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
-        key="flow.auto_accept.audit",
+        key="flow.advance_after.audit",
         domain="flow",
         type="bool",
         default=False,
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
-        key="flow.auto_accept.ship",
+        key="flow.advance_after.polish",
         domain="flow",
         type="bool",
         default=False,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="flow.auto_accept.review",
-        domain="flow",
-        type="bool",
-        default=False,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="flow.auto_accept.polish",
-        domain="flow",
-        type="bool",
-        default=False,
-        writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="flow.ask_on_decisions",
-        domain="flow",
-        type="bool",
-        default=True,
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
@@ -1141,12 +1139,6 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="str",
         default="ask",
         writable_layers=_WRITABLE_GWR,
-    ),
-    LeafKey(
-        key="vcs.auto_push", domain="vcs", type="str", default="ask", writable_layers=_WRITABLE_GWR
-    ),
-    LeafKey(
-        key="vcs.pr_open", domain="vcs", type="str", default="ask", writable_layers=_WRITABLE_GWR
     ),
     LeafKey(
         key="vcs.pr_merge_method",
@@ -1599,10 +1591,20 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "estimation.eu_basis": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
     "estimation.eu_minutes": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
     "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_enforce",
+    "flow.advance_after.audit": "eawf.workflow.skills.flow.FlowSkill._run_steps",
+    "flow.advance_after.polish": "eawf.workflow.skills.flow.FlowSkill._run_steps",
+    "flow.advance_after.prep": "eawf.workflow.skills.flow.FlowSkill._run_steps",
+    "flow.advance_after.research": "eawf.workflow.skills.flow.FlowSkill._run_steps",
+    "flow.max_repair_cycles": "eawf.workflow.skills.flow._config_max_repair_cycles",
     "planning.max_parallel_waves": ("eawf.workflow.lifecycle._capacity.resolve_max_parallel_waves"),
     "prep.auto_resume": "eawf.workflow.skills.prep.PrepSkill._resolve_auto_resume",
     "research.agent_count": "eawf.workflow.skills.research.ResearchSkill._resolve_agents",
+    "research.auto_save": "eawf.workflow.skills.research.ResearchSkill._gather",
     "research.default_depth": "eawf.workflow.skills.research.ResearchSkill._resolve_depth",
+    "review.default_level": "eawf.workflow.skills.review.ReviewSkill.action",
+    "runtime.models.claude": "eawf.kernel.config.layered.resolve_runtime_tier_models",
+    "runtime.models.codex": "eawf.kernel.config.layered.resolve_runtime_tier_models",
+    "runtime.models.opencode": "eawf.kernel.config.layered.resolve_runtime_tier_models",
     "ship.gauntlet": "eawf.workflow.skills.ship._resolve_gauntlet",
     "telemetry.db_kind": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
     "telemetry.enabled": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
@@ -1618,16 +1620,65 @@ _CONSUMER_BY_KEY: dict[str, str] = {
 _INTERACTIVE_KEYS = {entry.key for entry in CONFIG_REGISTRY}
 _HOOK_POLICY_KEYS = {entry.key for entry in _DECLARED_LEAF_KEYS if entry.key.startswith("hooks.")}
 _BEHAVIOR_KEYS = _INTERACTIVE_KEYS | _HOOK_POLICY_KEYS
-_RESERVED_BEHAVIOR_KEYS: frozenset[str] = frozenset(_BEHAVIOR_KEYS - _CONSUMER_BY_KEY.keys())
+_DECLARATIVE_CONSUMER = "eawf.kernel.config.layered.merge_config"
+_DEPRECATED_KEYS: frozenset[str] = frozenset(
+    {
+        "audit.fix_safe",
+        "flow.auto_accept.audit",
+        "flow.auto_accept.polish",
+        "flow.auto_accept.prep",
+        "flow.auto_accept.research",
+        "flow.auto_accept.review",
+        "flow.auto_accept.ship",
+        "polish.auto_apply_safe",
+        "polish.deletion_policy",
+        "runtime.adapter_catalog.claude.agents_path",
+        "runtime.adapter_catalog.claude.enabled",
+        "runtime.adapter_catalog.claude.plugin_install",
+        "runtime.adapter_catalog.claude.skills_path",
+        "runtime.adapter_catalog.codex.enabled",
+        "runtime.adapter_catalog.codex.status",
+        "runtime.adapter_catalog.opencode.enabled",
+        "runtime.adapter_catalog.opencode.status",
+        "ship.require_audit_pass",
+        "ship.require_memory_review",
+        "vcs.auto_push",
+        "vcs.pr_open",
+    }
+)
+DEPRECATED_LEAF_KEYS: frozenset[str] = _DEPRECATED_KEYS
+_RESERVED_BEHAVIOR_KEYS: frozenset[str] = frozenset(
+    (_BEHAVIOR_KEYS - _CONSUMER_BY_KEY.keys()) | _DEPRECATED_KEYS
+)
 
 
 def _bind_behavior_metadata(entry: LeafKey) -> LeafKey:
     """Attach the audited consumer-or-reserved classification to *entry*."""
-    if entry.key in _RESERVED_BEHAVIOR_KEYS:
-        return entry.model_copy(update={"consumer": None, "reserved": True})
+    if entry.consumer is not None:
+        consumer_kind = "skill" if entry.consumer.startswith("eawf.workflow.skills.") else "engine"
+        return entry.model_copy(update={"consumer_kind": consumer_kind, "reserved": False})
+    if entry.key in _DEPRECATED_KEYS:
+        return entry.model_copy(
+            update={"consumer": None, "consumer_kind": "deprecated", "reserved": True}
+        )
     consumer = _CONSUMER_BY_KEY.get(entry.key)
     if consumer is not None:
-        return entry.model_copy(update={"consumer": consumer, "reserved": False})
+        consumer_kind = "skill" if consumer.startswith("eawf.workflow.skills.") else "engine"
+        return entry.model_copy(
+            update={"consumer": consumer, "consumer_kind": consumer_kind, "reserved": False}
+        )
+    if entry.key in _INTERACTIVE_KEYS:
+        return entry.model_copy(
+            update={
+                "consumer": _DECLARATIVE_CONSUMER,
+                "consumer_kind": "declarative",
+                "reserved": False,
+            }
+        )
+    if entry.key in _RESERVED_BEHAVIOR_KEYS:
+        return entry.model_copy(
+            update={"consumer": None, "consumer_kind": "reserved", "reserved": True}
+        )
     return entry
 
 
@@ -1639,9 +1690,8 @@ _DECLARED_KEYS = {entry.key for entry in _LEAF_KEYS}
 assert not (_BEHAVIOR_KEYS - _DECLARED_KEYS), (
     f"interactive config keys missing from leaf catalog: {sorted(_BEHAVIOR_KEYS - _DECLARED_KEYS)}"
 )
-assert not (_CONSUMER_BY_KEY.keys() - _BEHAVIOR_KEYS), (
-    f"consumer binding targets non-behaviour leaf: "
-    f"{sorted(_CONSUMER_BY_KEY.keys() - _BEHAVIOR_KEYS)}"
+assert not (_CONSUMER_BY_KEY.keys() - _DECLARED_KEYS), (
+    f"consumer binding targets undeclared leaf: {sorted(_CONSUMER_BY_KEY.keys() - _DECLARED_KEYS)}"
 )
 assert all(
     (entry.consumer is not None) ^ entry.reserved

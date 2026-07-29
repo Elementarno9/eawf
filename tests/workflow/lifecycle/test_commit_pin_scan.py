@@ -11,14 +11,13 @@ Covers the library layer behind ``eawf wave verify-commits``:
   in-process mutator that re-pins the two repairable kinds and reports
   the rest as skipped.
 
-The scan reuses :func:`~eawf.workflow.lifecycle.wave_sha.derive_wave_sha`,
-so the tests monkeypatch it (and ``shutil.which``) to keep the fixtures
-isolated from a real git repo -- mirroring
-``tests/unit/test_drift_reconciler.py``.
+The scan builds reachable-identity and first-parent indexes, so tests
+monkeypatch those indexes to stay isolated from a real git repo.
 """
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -103,21 +102,55 @@ def _state_with_waves(waves: list[dict[str, Any]]) -> State:
 
 def _git_on_path(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.shutil.which", lambda _: "/usr/bin/git")
-    # ``scan_commit_pins`` builds a shared SHA index once (W10). These tests
-    # patch ``derive_wave_sha`` directly, so stub the builder to an empty map
-    # so no live ``git log`` runs and the patched derive answers.
-    monkeypatch.setattr(
-        "eawf.workflow.lifecycle.wave_sha.build_wave_sha_index",
-        lambda repo_root=None: {},
-    )
 
 
 def _patch_derive(monkeypatch: pytest.MonkeyPatch, table: dict[str, str | None]) -> None:
-    """Make ``derive_wave_sha`` return ``table[wid]`` (default ``None``)."""
+    """Build deterministic reachable + first-parent indexes from *table*."""
+    reachable = {sha: {wave_id} for wave_id, sha in table.items() if sha is not None}
+    candidates = {wave_id: [sha] for wave_id, sha in table.items() if sha is not None}
     monkeypatch.setattr(
-        "eawf.workflow.lifecycle.wave_sha.derive_wave_sha",
-        lambda wid, repo_root=None, index=None: table.get(wid),
+        "eawf.workflow.lifecycle.wave_sha._reachable_wave_keys",
+        lambda repo_root=None: reachable,
     )
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha._first_parent_wave_candidates",
+        lambda repo_root=None: candidates,
+    )
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha.commit_identity_digest",
+        lambda commit, repo_root=None: f"sha256:{'0' * 64}",
+    )
+
+
+def _patch_legacy_pin_history(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    wave_id: str,
+    candidate_shas: list[str],
+    identity_digests: dict[str, str],
+    subjects: dict[str, str],
+) -> None:
+    """Model an existing pinned object outside reachable integration history."""
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha._reachable_wave_keys",
+        lambda repo_root=None: {sha: {wave_id} for sha in candidate_shas},
+    )
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha._first_parent_wave_candidates",
+        lambda repo_root=None: {wave_id: candidate_shas},
+    )
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha.commit_identity_digest",
+        lambda commit, repo_root=None: identity_digests.get(commit),
+    )
+
+    def run_git(
+        args: list[str], *, repo_root: Path | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        subject = subjects[args[-1]]
+        return subprocess.CompletedProcess(args, 0, stdout=f"{subject}\n", stderr="")
+
+    monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha._run_git", run_git)
 
 
 # ---- scan_commit_pins: clean / boundary ------------------------------------
@@ -170,6 +203,135 @@ def test_scan_commit_pins_pinned_mismatch_is_repairable(
     assert issue.state_commit == "a" * 40
     assert issue.git_commit == "b" * 40
     assert issue.repairable is True
+
+
+def test_scan_commit_pins_existing_unreachable_wrong_identity_repairs_unique_title_match(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Legacy wrong-wave pin repairs only to one uniquely titled commit."""
+    _git_on_path(monkeypatch)
+    wave_id = "P28-I01-W01"
+    pinned = "a" * 40
+    selected = "b" * 40
+    unrelated = "d" * 40
+    old_digest = f"sha256:{'0' * 64}"
+    selected_digest = f"sha256:{'1' * 64}"
+    _patch_legacy_pin_history(
+        monkeypatch,
+        wave_id=wave_id,
+        candidate_shas=[selected, unrelated],
+        identity_digests={
+            pinned: old_digest,
+            selected: selected_digest,
+            unrelated: f"sha256:{'2' * 64}",
+        },
+        subjects={
+            selected: f"[{wave_id}] fix: repair registry index",
+            unrelated: f"[{wave_id}] docs: refresh operator guide",
+        },
+    )
+    payload = _wave_payload(wave_id, commit=pinned)
+    payload["title"] = "Repair registry index"
+    state = _state_with_waves([payload])
+
+    issues = scan_commit_pins(state)
+
+    assert len(issues) == 1
+    issue = issues[0]
+    assert issue.kind == "pinned_mismatch"
+    assert issue.state_commit == pinned
+    assert issue.git_commit == selected
+    assert issue.git_identity_digest == selected_digest
+    assert issue.repair_basis == "unique_legacy_title_match"
+    assert issue.repairable is True
+
+    repaired, skipped = repair_commit_pins(state, issues)
+
+    assert skipped == []
+    assert len(repaired) == 1
+    assert repaired[0].basis == "unique_legacy_title_match"
+    assert state.waves[wave_id].commit == selected
+    assert state.waves[wave_id].commit_identity_digest == selected_digest
+
+
+def test_scan_commit_pins_duplicate_semantic_successors_stay_unresolved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two first-parent commits with the stored identity are not a unique repair."""
+    _git_on_path(monkeypatch)
+    wave_id = "P28-I01-W01"
+    pinned = "a" * 40
+    first = "b" * 40
+    second = "c" * 40
+    shared_digest = f"sha256:{'1' * 64}"
+    _patch_legacy_pin_history(
+        monkeypatch,
+        wave_id=wave_id,
+        candidate_shas=[first, second],
+        identity_digests={
+            pinned: shared_digest,
+            first: shared_digest,
+            second: shared_digest,
+        },
+        subjects={
+            first: f"[{wave_id}] fix: repair registry index",
+            second: f"[{wave_id}] fix: repair registry index",
+        },
+    )
+    state = _state_with_waves([_wave_payload(wave_id, commit=pinned)])
+
+    issues = scan_commit_pins(state)
+
+    assert len(issues) == 1
+    assert issues[0].kind == "ambiguous_successor"
+    assert issues[0].repairable is False
+    assert issues[0].git_commit is None
+
+
+def test_scan_commit_pins_existing_unreachable_wrong_identity_ambiguous_stays_unresolved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Equal title matches from distinct identities never choose a repair target."""
+    _git_on_path(monkeypatch)
+    wave_id = "P28-I01-W01"
+    pinned = "a" * 40
+    first = "b" * 40
+    second = "c" * 40
+    _patch_legacy_pin_history(
+        monkeypatch,
+        wave_id=wave_id,
+        candidate_shas=[first, second],
+        identity_digests={
+            pinned: f"sha256:{'0' * 64}",
+            first: f"sha256:{'1' * 64}",
+            second: f"sha256:{'2' * 64}",
+        },
+        subjects={
+            first: f"[{wave_id}] fix: repair registry index",
+            second: f"[{wave_id}] fix: repair registry index",
+        },
+    )
+    payload = _wave_payload(wave_id, commit=pinned)
+    payload["title"] = "Repair registry index"
+    state = _state_with_waves([payload])
+
+    issues = scan_commit_pins(state)
+
+    assert len(issues) == 1
+    issue = issues[0]
+    assert issue.kind == "ambiguous_successor"
+    assert issue.state_commit == pinned
+    assert issue.git_commit is None
+    assert issue.git_identity_digest is None
+    assert issue.repair_basis is None
+    assert issue.repairable is False
+
+    repaired, skipped = repair_commit_pins(state, issues)
+
+    assert repaired == []
+    assert skipped == issues
+    assert state.waves[wave_id].commit == pinned
+    assert state.waves[wave_id].commit_identity_digest is None
 
 
 def test_scan_commit_pins_unpinned_derivable_is_repairable(

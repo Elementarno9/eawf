@@ -17,8 +17,8 @@ closes that gap with two pieces:
   + ``frozen`` make it a closed, immutable fact about one validated spawn.
 * :func:`assist_with_schema` — the **bounded re-ask loop**. It drives an
   injected spawn callable, validates each spawn's ``text`` against the forced
-  schema, and on a schema mismatch re-prompts (appending a correction notice
-  naming the validation failure) up to a fixed retry ceiling. Exhausting the
+  schema, and on a schema mismatch sends a correction-only prompt naming the
+  validation failure up to a fixed retry ceiling. Exhausting the
   ceiling raises :class:`LLMAssistError` carrying every rejected attempt — a
   *typed* failure, never an infinite loop and never a silent pass of an
   unvalidated body.
@@ -61,6 +61,7 @@ logger = logging.getLogger(__name__)
 #: up to ``DEFAULT_MAX_ATTEMPTS - 1`` re-asks. Bounded so a model that never
 #: emits schema-valid output terminates in a typed failure rather than looping.
 DEFAULT_MAX_ATTEMPTS: int = 3
+_MAX_REJECTED_RESPONSE_CHARS: int = 6_000
 
 #: A callable that performs one spawn for a given prompt and returns the
 #: transient :class:`~eawf.runtime.runtimes.adapter.SpawnResult`. Injected into
@@ -191,28 +192,30 @@ def _failure_from_exc(
     )
 
 
-def _reask_prompt(*, base_prompt: str, failure: SchemaAttemptFailure) -> str:
-    """Build the re-ask prompt that names the prior failure to the model.
+def _reask_prompt(*, failure: SchemaAttemptFailure, previous_response: str) -> str:
+    """Build an envelope-only correction prompt from the rejected response.
 
-    Appends a correction notice to *base_prompt* so the next spawn knows its
-    previous answer was rejected and why. Keeping the original prompt verbatim
-    (rather than mutating it) preserves the dispatched contract while steering
-    the retry.
+    Retries may run in a fresh serving session. Carry bounded rejected output
+    plus the validation error so the model can repair the envelope without
+    repeating task analysis or using tools.
 
     Args:
-        base_prompt: The original rendered prompt.
         failure: The most recent rejection to surface to the model.
 
     Returns:
-        The original prompt plus a ``## Output correction required`` notice.
+        A compact ``## Output correction required`` notice.
     """
+    bounded = previous_response[-_MAX_REJECTED_RESPONSE_CHARS:]
     return (
-        f"{base_prompt}\n\n"
         "## Output correction required\n\n"
         f"Your previous response (attempt {failure.attempt}) was rejected: "
         f"{failure.reason} — {failure.detail}\n\n"
-        "Respond with ONLY a single JSON object that validates against the "
-        "required agent_end report schema. No prose, no code fences."
+        "Previous response:\n"
+        f"{bounded}\n\n"
+        "Repair only the response envelope. Do not re-analyze the task and do "
+        "not use tools. Respond with exactly one corrected JSON object that "
+        "validates against the required agent_end report schema. No prose or "
+        "code fences."
     )
 
 
@@ -230,8 +233,8 @@ async def assist_with_schema(
     forced schema via *validator*. On a clean parse the validated body is
     wrapped in an :class:`LLMAssistResult` and returned. On a schema mismatch
     (unparseable JSON or a :class:`pydantic.ValidationError`) the loop records a
-    typed :class:`SchemaAttemptFailure`, re-prompts with a correction notice
-    naming the failure, and spawns again — up to *max_attempts* total spawns.
+    typed :class:`SchemaAttemptFailure`, sends a correction-only notice naming
+    the failure, and spawns again — up to *max_attempts* total spawns.
     Exhausting the ceiling raises :class:`LLMAssistError` carrying every
     rejected attempt.
 
@@ -279,7 +282,10 @@ async def assist_with_schema(
                 f"assist_with_schema bind_attempt={attempt} runtime={result.runtime!r} "
                 f"session={result.session_id!r} status=rejected reason={failure.reason}"
             )
-            current_prompt = _reask_prompt(base_prompt=prompt, failure=failure)
+            current_prompt = _reask_prompt(
+                failure=failure,
+                previous_response=result.text,
+            )
             continue
         logger.info(
             f"assist_with_schema bind_attempt={attempt} runtime={result.runtime!r} "

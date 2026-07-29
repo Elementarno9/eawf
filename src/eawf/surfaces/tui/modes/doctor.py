@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Literal
 
 from textual.app import ComposeResult
+from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Static
 
@@ -184,6 +185,7 @@ _GATHER_GROUP: str = "doctor-health"
 #: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
 #: tokens stay pinned to the canonical vocabulary.
 _DOCTOR_HINTS: tuple[str, ...] = (
+    render_hint_label("f", "fix"),
     render_hint_label("w/r/u", "scope"),
     render_hint_label("/", "palette"),
     render_hint_label("?", "help"),
@@ -627,6 +629,10 @@ class DoctorModeScreen(ScopeScreen):
     """
 
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _DOCTOR_HINTS
+    BINDINGS: ClassVar[list[BindingType]] = [
+        *ScopeScreen.BINDINGS,
+        Binding("f", "repair", "fix", show=False),
+    ]
 
     DEFAULT_CSS: ClassVar[str] = """
     DoctorModeScreen #doctor-health {
@@ -670,6 +676,66 @@ class DoctorModeScreen(ScopeScreen):
         """Apply the footer hints, paint a placeholder, then kick the gather."""
         super().on_mount()
         self._paint_placeholder()
+        self.refresh_health()
+
+    async def action_repair(self) -> None:
+        """Open the shared digest-guarded Doctor repair preview."""
+        from eawf.observability.doctor.repair import (
+            build_repair_plan,
+            render_repair_plan,
+        )
+        from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
+
+        state_path = getattr(self.app, "_state_path", None)
+        if state_path is None:
+            self.app.notify("Doctor fix needs a managed workspace", severity="warning")
+            return
+        workspace = state_path.parent.parent
+        try:
+            plan = await asyncio.to_thread(build_repair_plan, workspace)
+        except Exception as exc:
+            self.app.notify(f"Doctor preview failed: {exc}", severity="error")
+            return
+        if not plan.actions:
+            message = render_repair_plan(plan)
+            severity: Literal["information", "warning"] = (
+                "information" if plan.status == "healthy" else "warning"
+            )
+            self.app.notify(message, severity=severity)
+            return
+        self._pending_repair_plan = plan
+        prompt = f"{render_repair_plan(plan)}\n\nApply this Doctor repair plan?"
+        self.app.push_screen(ConfirmModal(prompt), self._repair_confirmed)
+
+    def _repair_confirmed(self, confirmed: bool | None) -> None:
+        """Dispatch the exact preview after modal confirmation."""
+        if not confirmed:
+            return
+        plan = getattr(self, "_pending_repair_plan", None)
+        if plan is None:
+            self.app.notify("Doctor preview expired", severity="warning")
+            return
+        self.run_worker(
+            self._apply_repair(plan),
+            group="doctor-repair",
+            exclusive=True,
+        )
+
+    async def _apply_repair(self, plan: object) -> None:
+        """Apply the confirmed plan off-thread, then refresh health."""
+        from eawf.observability.doctor.repair import DoctorRepairPlan
+        from eawf.surfaces.doctor_repair import apply_repair_plan
+
+        typed_plan = DoctorRepairPlan.model_validate(plan)
+        try:
+            result = await asyncio.to_thread(apply_repair_plan, typed_plan)
+        except Exception as exc:
+            self.app.notify(f"Doctor repair failed: {exc}", severity="error")
+            return
+        self.app.notify(
+            f"Doctor repair applied: {result['applied_count']} action(s)",
+            severity="information",
+        )
         self.refresh_health()
 
     def refresh_health(self) -> None:

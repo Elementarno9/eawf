@@ -191,15 +191,19 @@ def test_built_in_defaults_carry_prose_block() -> None:
     assert cfg.level is ProseLevel.STANDARD
 
 
-def test_legacy_body_without_prose_migrates_unchanged() -> None:
-    """A canonical 1.0 body lacking ``prose`` is left untouched by migration."""
+def test_legacy_body_without_prose_normalizes_runtime_id() -> None:
+    """A canonical 1.0 body still normalizes the legacy runtime identifier."""
     payload = {
         "schema_version": "1.0",
         "runtime": {"adapters": ["claude"], "preference": ["claude"]},
     }
     upgraded, changed = migrate_config_payload(payload)
-    assert changed is False
+    assert changed is True
     assert "prose" not in upgraded
+    assert upgraded["runtime"] == {
+        "adapters": ["claude-code"],
+        "preference": ["claude-code"],
+    }
     # The section model still defaults cleanly for such a body.
     assert ProseConfig().level is ProseLevel.STANDARD
 

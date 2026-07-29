@@ -103,8 +103,6 @@ class VcsConfig(BaseModel):
     checkpoint_requires_commit: bool
     protected_branches: list[str]
     auto_commit: str
-    auto_push: str
-    pr_open: str
     pr_merge_method: str
     squash_allowed: bool
     delete_branch_after_merge: bool

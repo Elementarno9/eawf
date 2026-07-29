@@ -1,4 +1,4 @@
-"""Registry-aligned ``rich_help_panel`` assignments for the ``eawf`` CLI.
+"""Stable ``rich_help_panel`` assignments for the ``eawf`` CLI.
 
 The interactive ``eawf config`` menu groups operator-tunable keys by the
 :data:`eawf.kernel.config.registry.CONFIG_REGISTRY` tab — alphabetical tabs and
@@ -10,9 +10,8 @@ Public API:
 
 - :data:`COMMAND_PANELS` — command name → panel name (panel name is one of
   the :data:`eawf.kernel.config.registry.CONFIG_REGISTRY` tabs).
-- :data:`PANEL_ORDER` — alphabetical tuple of panel names, resolved lazily
-  (PEP 562 ``__getattr__`` → :func:`_panel_order`) so the registry import
-  stays off the cold ``import eawf.surfaces.cli.app`` path.
+- :data:`PANEL_ORDER` — alphabetical tuple of assigned panel names, resolved
+  lazily (PEP 562 ``__getattr__`` → :func:`_panel_order`).
 - :func:`panel_for` — resolve a command name to its panel.
 - :class:`RegistryOrderedTyperGroup` — :class:`typer.core.TyperGroup`
   subclass that returns commands sorted by ``(panel, name)`` so Rich's
@@ -54,7 +53,7 @@ logger = logging.getLogger(__name__)
 
 @functools.cache
 def _panel_order() -> tuple[str, ...]:
-    """Return the alphabetical tuple of panel names, sourced from the registry.
+    """Return the alphabetical tuple of assigned command-panel names.
 
     The :mod:`eawf.kernel.config.registry` import is function-local so the
     cold ``import eawf.surfaces.cli.app`` path (shell completion, every xdist
@@ -64,11 +63,9 @@ def _panel_order() -> tuple[str, ...]:
     one-time sort.
 
     Returns:
-        The registry tab names in alphabetical order.
+        Assigned command-panel names in alphabetical order.
     """
-    from eawf.kernel.config.registry import tabs_sorted
-
-    return tabs_sorted()
+    return tuple(sorted(set(COMMAND_PANELS.values())))
 
 
 def __getattr__(name: str) -> Any:

@@ -199,12 +199,12 @@ def mode_action_key_rows() -> tuple[tuple[str, tuple[tuple[str, str], ...]], ...
     attribute) so the shared :class:`~eawf.surfaces.tui.scopes.ScopeScreen`
     chrome (palette / help / quit -- already documented under the global
     section) is not re-listed, and a mode that declares no action keys of
-    its own (e.g. Feed / Doctor / Evidence) yields an empty row tuple rather
-    than the inherited chrome.
+    its own (e.g. Feed / Evidence) yields an empty row tuple rather than the
+    inherited chrome. Exact inherited key/action pairs are also omitted when
+    a subclass spreads a base class' bindings into its own list.
 
-    Each yielded :class:`~textual.binding.Binding` becomes a
-    ``(key, description)`` row; no binding the mode declares is dropped, so
-    the coverage test can assert every own-binding has a help row.
+    Each remaining :class:`~textual.binding.Binding` becomes a
+    ``(key, description)`` row.
 
     Returns:
         One ``(mode_title, ((key, description), ...))`` pair per non-Home
@@ -220,10 +220,16 @@ def mode_action_key_rows() -> tuple[tuple[str, tuple[tuple[str, str], ...]], ...
         if cls is None:
             continue
         own_bindings = cls.__dict__.get("BINDINGS", ())
+        inherited_pairs = {
+            (binding.key, binding.action)
+            for base in cls.__mro__[1:]
+            for binding in base.__dict__.get("BINDINGS", ())
+            if isinstance(binding, Binding)
+        }
         rows = tuple(
             (binding.key, binding.description)
             for binding in own_bindings
-            if isinstance(binding, Binding)
+            if isinstance(binding, Binding) and (binding.key, binding.action) not in inherited_pairs
         )
         sections.append((spec.title, rows))
     return tuple(sections)

@@ -128,15 +128,19 @@ def test_built_in_defaults_carry_preferences_block() -> None:
     assert cfg.solution_bias is SolutionBias.BALANCED
 
 
-def test_legacy_body_without_preferences_migrates_unchanged() -> None:
-    """A canonical 1.0 body lacking ``preferences`` is left untouched by migration."""
+def test_legacy_body_without_preferences_normalizes_runtime_id() -> None:
+    """A canonical 1.0 body normalizes the legacy Claude runtime identifier."""
     payload = {
         "schema_version": "1.0",
         "runtime": {"adapters": ["claude"], "preference": ["claude"]},
     }
     upgraded, changed = migrate_config_payload(payload)
-    assert changed is False
+    assert changed is True
     assert "preferences" not in upgraded
+    assert upgraded["runtime"] == {
+        "adapters": ["claude-code"],
+        "preference": ["claude-code"],
+    }
     # The section model still defaults cleanly for such a body.
     assert PreferencesConfig().auto_choose is AutoChoose.OFF
 

@@ -133,9 +133,9 @@ def test_migrate_payload_synthesises_runtime_preference_from_adapters() -> None:
         "runtime": {"adapters": ["claude", "codex"]},
     }
     upgraded, _ = migrate_config_payload(payload)
-    assert upgraded["runtime"]["preference"] == ["claude", "codex"]
+    assert upgraded["runtime"]["preference"] == ["claude-code", "codex"]
     # Adapters list retained for deprecation-shim compatibility.
-    assert upgraded["runtime"]["adapters"] == ["claude", "codex"]
+    assert upgraded["runtime"]["adapters"] == ["claude-code", "codex"]
 
 
 def test_migrate_payload_preserves_existing_runtime_preference() -> None:
@@ -148,7 +148,7 @@ def test_migrate_payload_preserves_existing_runtime_preference() -> None:
         },
     }
     upgraded, _ = migrate_config_payload(payload)
-    assert upgraded["runtime"]["preference"] == ["codex", "claude"]
+    assert upgraded["runtime"]["preference"] == ["codex", "claude-code"]
 
 
 def test_migrate_payload_preserves_existing_telemetry_overrides() -> None:
@@ -163,10 +163,14 @@ def test_migrate_payload_preserves_existing_telemetry_overrides() -> None:
     assert upgraded["telemetry"]["window_default"] == "7d"
 
 
-def test_migrate_payload_missing_marker_raises_validation_failed() -> None:
-    """An absent ``schema_version`` is corruption; refuse it."""
-    with pytest.raises(ValidationError, match="missing required key"):
-        migrate_config_payload({"planning": {"approval": "ask"}})
+def test_migrate_payload_missing_marker_normalizes_legacy_layer() -> None:
+    """An absent marker identifies a schema-less legacy layer."""
+    upgraded, changed = migrate_config_payload({"planning": {"approval": "ask"}})
+    assert changed is True
+    assert upgraded == {
+        "schema_version": "1.0",
+        "planning": {"approval": "ask"},
+    }
 
 
 def test_migrate_payload_unknown_marker_raises_validation_failed() -> None:

@@ -458,7 +458,8 @@ def test_e1_degraded_banner_clears_when_transport_recovers(tmp_path: Path) -> No
             banner = app.screen.query(f"#{DEGRADED_BANNER_ID}").first(Static)
             assert not banner.has_class(DEGRADED_BANNER_HIDDEN_CLASS)
             await app._on_degraded(False)
-            await settle_screen(pilot, quiesce=False)
+            # ``set_class`` is synchronous. Assert before the live binder can
+            # race this direct callback probe with its own transport verdict.
             assert banner.has_class(DEGRADED_BANNER_HIDDEN_CLASS)
 
     asyncio.run(body())

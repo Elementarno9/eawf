@@ -6,23 +6,19 @@ P11:
 - ``planning.auto_plan`` exists and defaults to ``False`` — the
   ``/prep`` skill body relies on this gate to decide whether to enter
   Claude Code plan mode before dispatching waves.
-- ``flow.auto_accept`` exists with a per-stage ``bool`` map covering
-  every step of the six-skill canonical flow, each defaulting to
-  ``False`` (i.e. "ask the operator between every stage" out of the
-  box).
-- ``flow.ask_on_decisions`` defaults to ``True`` so skill bodies
-  remain encouraged to surface discrete decisions through
-  ``AskUserQuestion``.
+- ``flow.advance_after`` exists with a per-transition ``bool`` map,
+  each defaulting to ``False`` (i.e. "ask the operator between every
+  stage" out of the box).
 - ``_PREP_BODY`` references ``planning.auto_plan`` and the Claude
   Code plan-mode primitive.
-- ``_FLOW_BODY`` references ``flow.auto_accept`` and surfaces the
+- ``_FLOW_BODY`` references ``flow.advance_after`` and surfaces the
   inter-stage gate through ``AskUserQuestion``.
 - Every other core skill body (``_RESEARCH_BODY``, ``_AUDIT_BODY``,
   ``_SHIP_BODY``, ``_REVIEW_BODY``, ``_POLISH_BODY``) mentions
   ``AskUserQuestion`` so operators do not get bounced to free-text
   prompts.
 - ``prep`` and ``flow`` ``argument_hint`` strings expose the new
-  ``--auto-plan`` and ``--auto-accept`` flags respectively.
+  ``--auto-plan`` and ``--advance-after`` flags respectively.
 """
 
 from __future__ import annotations
@@ -45,8 +41,6 @@ _FLOW_STAGES: tuple[str, ...] = (
     "research",
     "prep",
     "audit",
-    "ship",
-    "review",
     "polish",
 )
 
@@ -88,7 +82,7 @@ _SECTION4_HINT_OPTIONS: dict[str, tuple[str, ...]] = {
     "roadmap": ("--dry-run", "--criteria-from-brief"),
     "spike": ("--rounds", "--axes-per-round", "--worktree"),
     "flow": (
-        "--auto-accept",
+        "--advance-after",
         "--stop-after",
         "--resume",
         "--args-per-step",
@@ -113,17 +107,17 @@ def test_planning_auto_plan_defaults_false() -> None:
     assert planning["auto_plan"] is False
 
 
-def test_flow_auto_accept_covers_every_stage_default_false() -> None:
+def test_flow_advance_after_covers_every_transition_default_false() -> None:
     flow = BUILT_IN_DEFAULTS["flow"]
-    assert "auto_accept" in flow
-    auto = flow["auto_accept"]
-    assert set(auto) == set(_FLOW_STAGES)
-    for stage, value in auto.items():
-        assert value is False, f"flow.auto_accept.{stage} should default to False"
+    assert "advance_after" in flow
+    advance_after = flow["advance_after"]
+    assert set(advance_after) == set(_FLOW_STAGES)
+    for stage, value in advance_after.items():
+        assert value is False, f"flow.advance_after.{stage} should default to False"
 
 
-def test_flow_ask_on_decisions_defaults_true() -> None:
-    assert BUILT_IN_DEFAULTS["flow"]["ask_on_decisions"] is True
+def test_flow_removed_ask_on_decisions_knob_is_absent() -> None:
+    assert "ask_on_decisions" not in BUILT_IN_DEFAULTS["flow"]
 
 
 def test_prep_body_documents_planned_scope_activation() -> None:
@@ -137,14 +131,14 @@ def test_prep_body_documents_planned_scope_activation() -> None:
 
 def test_flow_body_documents_per_stage_gate_and_ask_user_question() -> None:
     body = _spec("flow").body
-    assert "flow.auto_accept" in body
+    assert "flow.advance_after" in body
     assert "AskUserQuestion" in body
 
 
-def test_flow_argument_hint_advertises_auto_accept_flag() -> None:
+def test_flow_argument_hint_advertises_advance_after_flag() -> None:
     hint = _spec("flow").argument_hint
     assert "<task-slug>" in hint
-    assert "--auto-accept=<stage>[,<stage>...]" in hint
+    assert "--advance-after=<stage>[,<stage>...]" in hint
 
 
 def test_remaining_core_skill_bodies_mention_ask_user_question() -> None:
@@ -199,13 +193,13 @@ def test_touched_body_carries_options_section(name: str) -> None:
     )
 
 
-def test_flow_options_documents_model_executed_auto_accept() -> None:
-    """CR-02: the flow ``## Options`` note that auto-accept is model-executed."""
+def test_flow_options_documents_engine_enforced_advance_after() -> None:
+    """CR-02: flow ``## Options`` documents the enforced transition override."""
     body = _spec("flow").body
     options = body.split("## Options", 1)[1]
-    assert "flow.auto_accept" in options
-    assert "executed by YOU (the model)" in options
-    assert "does NOT enforce auto-accept" in options
+    assert "--advance-after" in options
+    assert "engine-enforced override" in options
+    assert "transition pause" in options
 
 
 def test_ship_options_documents_model_executed_dry_run() -> None:

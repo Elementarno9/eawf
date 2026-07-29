@@ -33,6 +33,8 @@ from eawf.kernel.state.models import State
 from eawf.workflow.lifecycle.wave_sha import (
     _parse_index,
     build_wave_sha_index,
+    commit_identity_digest,
+    commit_matches_wave,
     derive_wave_sha,
     detect_git_state_drift,
 )
@@ -177,6 +179,33 @@ def test_derive_wave_sha_via_index_tries_alt_prefix_form(tmp_path: Path) -> None
     assert derive_wave_sha("P30-I01-W03", index=index) == sha
 
 
+@_GIT
+def test_commit_matches_wave_rejects_wrong_future_close_pin(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    sha = _commit(tmp_path, name="a.txt", msg="[P30-I07-W02] feat: other wave")
+
+    assert commit_matches_wave(sha, "P30-I07-W02", repo_root=tmp_path) is True
+    assert commit_matches_wave(sha, "P30-I07-W01", repo_root=tmp_path) is False
+
+
+@_GIT
+def test_commit_identity_digest_survives_rebase_twin(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    _commit(tmp_path, name="base.txt", msg="chore: base")
+    _run(tmp_path, "switch", "-q", "-c", "topic")
+    original = _commit(tmp_path, name="wave.txt", msg="[P30-I07-W01] feat: stable patch")
+    _run(tmp_path, "switch", "-q", "main")
+    _commit(tmp_path, name="other.txt", msg="chore: move parent")
+    _run(tmp_path, "cherry-pick", original)
+    rebased = _run(tmp_path, "rev-parse", "HEAD")
+
+    assert rebased != original
+    assert commit_identity_digest(original, repo_root=tmp_path) == commit_identity_digest(
+        rebased,
+        repo_root=tmp_path,
+    )
+
+
 # ---- twin-commit determinism (criterion 3) ---------------------------------
 
 
@@ -217,10 +246,10 @@ def test_twin_commit_no_phantom_pinned_mismatch(tmp_path: Path) -> None:
 # ---- single-pass + timing (criterion 1) ------------------------------------
 
 
-def test_detect_drift_uses_single_git_log_subprocess(
+def test_detect_drift_uses_two_bulk_git_log_subprocesses(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """The whole-state reconciler shells out ONCE, not per closed wave."""
+    """The reconciler uses two bulk logs, never one subprocess per wave."""
     git_log_calls: list[list[str]] = []
 
     # Build a one-pass log payload that resolves every wave to its own SHA.
@@ -233,7 +262,7 @@ def test_detect_drift_uses_single_git_log_subprocess(
         sha = f"{n:040x}"
         sha_by_wave[wid] = sha
         subject = f"[{wid}] feat: w{n}"
-        records.append(sep_rec + sep_field.join((sha, "refs/heads/main", subject, "")))
+        records.append(sep_rec + sep_field.join((sha, subject, "")))
     fake_log = "".join(records)
 
     class _Completed:
@@ -258,9 +287,8 @@ def test_detect_drift_uses_single_git_log_subprocess(
     drifts = detect_git_state_drift(state, repo_root=tmp_path)
     elapsed = time.perf_counter() - start
 
-    # Single bulk-path subprocess, not one per closed wave.
-    assert len(git_log_calls) == 1
-    assert "--source" in git_log_calls[0]
+    assert len(git_log_calls) == 2
+    assert any("--first-parent" in call for call in git_log_calls)
     # Every pin matches its derived SHA -> no drift.
     assert drifts == []
     # Comfortably under the 2s budget (this is a pure dict lookup loop).
@@ -275,7 +303,7 @@ def test_detect_drift_single_pass_classifies_mismatch(
     sep_rec = "\x00"
     sep_field = "\x1f"
     # git derives "b"*40 for the wave; state pins "a"*40 -> mismatch.
-    record = sep_rec + sep_field.join(("b" * 40, "refs/heads/main", "[P30-I07-W01] feat: w1", ""))
+    record = sep_rec + sep_field.join(("b" * 40, "[P30-I07-W01] feat: w1", ""))
 
     class _Completed:
         returncode = 0
@@ -288,6 +316,8 @@ def test_detect_drift_single_pass_classifies_mismatch(
         if cmd[:2] == ["git", "log"]:
             git_log_calls.append(cmd)
             return _Completed(record)
+        if cmd[:2] == ["git", "show"]:
+            return _Completed("same semantic content")
         return _Completed("")
 
     monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.shutil.which", lambda _: "/usr/bin/git")
@@ -295,7 +325,7 @@ def test_detect_drift_single_pass_classifies_mismatch(
 
     state = _state_with_waves([_wave_payload("P30-I07-W01", commit="a" * 40)])
     drifts = detect_git_state_drift(state, repo_root=tmp_path)
-    assert len(git_log_calls) == 1
+    assert len(git_log_calls) == 2
     assert len(drifts) == 1
     assert drifts[0].kind == "pinned_mismatch"
     assert drifts[0].git_commit == "b" * 40

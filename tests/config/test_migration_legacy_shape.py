@@ -6,8 +6,7 @@ rejects + the ``_normalise_runtime_adapters`` shim warns about on every
 CLI invocation:
 
 * top-level ``lifecycle`` block — superseded by per-iter depth tracking;
-* top-level ``plugins`` block — superseded by
-  ``runtime.adapter_catalog``;
+* top-level ``plugins`` block — superseded by canonical runtime selectors;
 * ``runtime.kind`` scalar — superseded by ``runtime.adapters`` (list)
   plus ``runtime.preference`` (ordered fallback ladder per D14).
 
@@ -33,7 +32,7 @@ def test_cleanup_drops_top_level_lifecycle_on_1_0() -> None:
     payload = {
         "schema_version": "1.0",
         "lifecycle": {"depth": "phase"},
-        "runtime": {"adapters": ["claude"], "preference": ["claude"]},
+        "runtime": {"adapters": ["claude-code"], "preference": ["claude-code"]},
     }
     upgraded, changed = migrate_config_payload(payload)
     assert changed is True
@@ -46,7 +45,7 @@ def test_cleanup_drops_top_level_plugins_on_1_0() -> None:
     payload = {
         "schema_version": "1.0",
         "plugins": {"enabled": []},
-        "runtime": {"adapters": ["claude"], "preference": ["claude"]},
+        "runtime": {"adapters": ["claude-code"], "preference": ["claude-code"]},
     }
     upgraded, changed = migrate_config_payload(payload)
     assert changed is True
@@ -57,7 +56,7 @@ def test_cleanup_rewrites_runtime_kind_into_adapters_and_preference() -> None:
     """A ``1.0`` body with bare ``runtime.kind`` lands on the C08 keys."""
     payload = {
         "schema_version": "1.0",
-        "runtime": {"kind": "claude-code"},
+        "runtime": {"kind": "claude"},
     }
     upgraded, changed = migrate_config_payload(payload)
     assert changed is True
@@ -94,6 +93,27 @@ def test_cleanup_synthesises_preference_when_only_adapters_set() -> None:
     }
     upgraded, _ = migrate_config_payload(payload)
     assert upgraded["runtime"]["preference"] == ["opencode"]
+
+
+def test_cleanup_promotes_adapter_catalog_with_canonical_runtime_ids() -> None:
+    """Enabled legacy adapter rows become canonical selectors."""
+    payload = {
+        "schema_version": "1.0",
+        "runtime": {
+            "adapter_catalog": {
+                "claude": {"enabled": True},
+                "codex": {"enabled": True},
+                "opencode": {"enabled": False},
+            }
+        },
+    }
+
+    upgraded, changed = migrate_config_payload(payload)
+
+    assert changed is True
+    assert "adapter_catalog" not in upgraded["runtime"]
+    assert upgraded["runtime"]["adapters"] == ["claude-code", "codex"]
+    assert upgraded["runtime"]["preference"] == ["claude-code", "codex"]
 
 
 def test_cleanup_renames_default_subproject_to_default_track() -> None:
@@ -162,7 +182,7 @@ def test_cleanup_no_op_on_already_canonical_body() -> None:
     """A body free of legacy signals returns ``changed=False``."""
     payload = {
         "schema_version": "1.0",
-        "runtime": {"adapters": ["claude"], "preference": ["claude"]},
+        "runtime": {"adapters": ["claude-code"], "preference": ["claude-code"]},
         "profiles": {"enabled": ["core"]},
     }
     upgraded, changed = migrate_config_payload(payload)
@@ -186,7 +206,7 @@ def test_cleanup_idempotent_double_run() -> None:
 
 
 def test_cleanup_preserves_unrelated_operator_keys() -> None:
-    """Operator-added top-level sections (e.g. ``flow``) survive the cleanup."""
+    """Operator values survive while deprecated flow paths are renamed."""
     payload = {
         "schema_version": "1.0",
         "flow": {"auto_accept": {"research": True}},
@@ -196,8 +216,8 @@ def test_cleanup_preserves_unrelated_operator_keys() -> None:
     }
     upgraded, _ = migrate_config_payload(payload)
     assert "lifecycle" not in upgraded
-    assert upgraded["flow"] == {"auto_accept": {"research": True}}
-    assert upgraded["polish"] == {"auto_apply_safe": True}
+    assert upgraded["flow"] == {"advance_after": {"research": True}}
+    assert "polish" not in upgraded
 
 
 def test_cleanup_does_not_mutate_input() -> None:
@@ -256,7 +276,10 @@ def test_migrate_file_canonical_1_0_body_no_backup(tmp_path: Path) -> None:
         yaml.safe_dump(
             {
                 "schema_version": "1.0",
-                "runtime": {"adapters": ["claude"], "preference": ["claude"]},
+                "runtime": {
+                    "adapters": ["claude-code"],
+                    "preference": ["claude-code"],
+                },
             },
         ),
         encoding="utf-8",

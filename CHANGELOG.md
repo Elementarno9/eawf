@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.6.5]
+
+### Fixed
+- **Gate receipts no longer commit raw diagnostics.** Durable receipts retain only reproducibility identities, bindings, timing, results, and digests; raw command/output observations move to gitignored local sidecars. Doctor provides an atomic, idempotent scrub for legacy receipt stores while preserving receipt IDs and state references.
+- **Doctor can preview and apply guarded repository repairs.** The CLI and TUI share typed repair plans for configuration normalization, legacy audit dispositions, commit re-pins, managed-rule sync, receipt scrubbing, and supervised-daemon refresh. Historical audit anomalies remain explicitly unverified, and commit repairs require a unique first-parent identity.
+- **Configuration now reflects the active five-stage flow.** Legacy auto-accept leaves migrate to `flow.advance_after.{research,prep,audit,polish}`; deprecated no-op knobs stay hidden; every catalog leaf is classified; workspace profile overlays are composed from the target repository.
+- **Codex Doctor follows the active marketplace installation.** User-scope discovery uses Codex’s plugin inventory, validates one enabled versioned cache, leaves dormant direct trees untouched, and supports an explicit plugin root. SessionEnd hooks use Codex’s three-second limit while other lifecycle hooks retain ten seconds.
+- **Doctor health and evidence rendering are honest-empty.** Terminal session history and absent zero-use telemetry are informational, unavailable report metrics render as `metrics unavailable`, and evidence reports use a headed table.
+- **Supervised daemons receive a deterministic executable path.** Doctor detects stale launchd/systemd definitions, and confirmed repair re-renders and restarts them. Schema correction retries now request only one corrected JSON envelope from bounded prior output and validation context.
+
 ## [0.6.4]
 
 ### Fixed

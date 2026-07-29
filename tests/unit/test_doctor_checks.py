@@ -142,8 +142,6 @@ def test_check_reserved_config_keys_without_explicit_value_is_ok(
 @pytest.mark.parametrize(
     ("key", "config", "value"),
     [
-        ("planning.auto_plan", {"planning": {"auto_plan": True}}, True),
-        ("planning.approval", {"planning": {"approval": "auto"}}, "auto"),
         ("audit.fix_safe", {"audit": {"fix_safe": True}}, True),
         ("flow.auto_accept.audit", {"flow": {"auto_accept": {"audit": True}}}, True),
         ("flow.auto_accept.polish", {"flow": {"auto_accept": {"polish": True}}}, True),
@@ -153,7 +151,7 @@ def test_check_reserved_config_keys_without_explicit_value_is_ok(
         ("flow.auto_accept.ship", {"flow": {"auto_accept": {"ship": True}}}, True),
     ],
 )
-def test_check_reserved_config_keys_fails_unsafe_automation_claims(
+def test_check_reserved_config_keys_fails_unsafe_deprecated_automation_claims(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     key: str,
@@ -173,7 +171,7 @@ def test_check_reserved_config_keys_fails_unsafe_automation_claims(
     assert "have no effect" in (result.detail or "")
 
 
-def test_check_reserved_config_keys_warns_for_other_explicit_reserved_value(
+def test_check_reserved_config_keys_accepts_consumed_repair_cycle_value(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
@@ -186,9 +184,8 @@ def test_check_reserved_config_keys_warns_for_other_explicit_reserved_value(
 
     result = checks.check_reserved_config_keys(workspace=tmp_path)
 
-    assert result.status == "warn"
-    assert "flow.max_repair_cycles=3 (repo)" in (result.detail or "")
-    assert "have no effect" in (result.detail or "")
+    assert result.status == "ok"
+    assert "no reserved config keys" in (result.detail or "")
 
 
 def test_check_reserved_config_keys_reports_all_unsafe_repo_values(
@@ -199,11 +196,11 @@ def test_check_reserved_config_keys_reports_all_unsafe_repo_values(
         lambda **_: (
             {
                 "audit": {"fix_safe": True},
-                "planning": {"auto_plan": True},
+                "flow": {"auto_accept": {"audit": True}},
             },
             {
                 "audit.fix_safe": "repo",
-                "planning.auto_plan": "repo",
+                "flow.auto_accept.audit": "repo",
             },
         ),
     )
@@ -212,7 +209,7 @@ def test_check_reserved_config_keys_reports_all_unsafe_repo_values(
 
     assert result.status == "fail"
     assert "audit.fix_safe" in (result.detail or "")
-    assert "planning.auto_plan" in (result.detail or "")
+    assert "flow.auto_accept.audit" in (result.detail or "")
 
 
 def test_check_reserved_config_keys_warns_when_merge_fails(
@@ -505,11 +502,11 @@ def test_run_all_detects_sanitized_workflow_failure_shape(
     by_name = {result.name: result for result in results}
 
     assert by_name["active_phase_without_iter"].status == "warn"
-    assert by_name["stale_session_count"].status == "warn"
-    assert "1 historical" in (by_name["stale_session_count"].detail or "")
-    assert by_name["recent_actuals"].status == "warn"
-    assert "1 missing" in (by_name["recent_actuals"].detail or "")
-    assert "1 zero-token/zero-cost" in (by_name["recent_actuals"].detail or "")
+    assert by_name["stale_session_count"].status == "ok"
+    assert "1 terminal-scope" in (by_name["stale_session_count"].detail or "")
+    assert by_name["recent_actuals"].status == "ok"
+    assert "1 metrics unavailable" in (by_name["recent_actuals"].detail or "")
+    assert "1 measured zero-use" in (by_name["recent_actuals"].detail or "")
     assert by_name["iter_audit_links"].status == "warn"
     assert "not_found" in (by_name["iter_audit_links"].detail or "")
     assert by_name["cli_daemon_version"].status == "warn"
@@ -531,6 +528,42 @@ def test_state_diagnostic_without_workspace_is_ok(check: Any) -> None:
     result = check(workspace=None)
     assert result.status == "ok"
     assert "no workspace anchor" in (result.detail or "")
+
+
+def test_check_stale_session_count_warns_for_live_pointer(tmp_path: Path) -> None:
+    """A stale session still named by the active pointer remains actionable."""
+    from eawf.kernel.state.models import State
+
+    _write_sanitized_workflow_failure_shape(tmp_path)
+    state_path = tmp_path / ".ea" / "state.json"
+    state = State.model_validate_json(state_path.read_text(encoding="utf-8"))
+    state.current.active_session_ids = ["SES-STALE"]
+    state_path.write_text(state.model_dump_json(indent=2), encoding="utf-8")
+
+    result = checks.check_stale_session_count(workspace=tmp_path)
+
+    assert result.status == "warn"
+    assert "SES-STALE" in (result.detail or "")
+    assert "still affect live state" in (result.detail or "")
+
+
+def test_check_recent_actuals_warns_for_contradictory_scope(tmp_path: Path) -> None:
+    """A present actual keyed to a different scope is a real health warning."""
+    from eawf.kernel.state.models import State
+
+    _write_sanitized_workflow_failure_shape(tmp_path)
+    state_path = tmp_path / ".ea" / "state.json"
+    state = State.model_validate_json(state_path.read_text(encoding="utf-8"))
+    assert state.actuals is not None
+    actual = state.actuals["P01-I01-W02"]
+    state.actuals["P01-I01-W02"] = actual.model_copy(update={"scope_id": "P01-I01-W01"})
+    state_path.write_text(state.model_dump_json(indent=2), encoding="utf-8")
+
+    result = checks.check_recent_actuals(workspace=tmp_path)
+
+    assert result.status == "warn"
+    assert "contradictory actual" in (result.detail or "")
+    assert "P01-I01-W02" in (result.detail or "")
 
 
 def test_check_cli_daemon_version_absent_match_skew_and_error() -> None:
@@ -770,11 +803,41 @@ def test_check_launchd_agent_no_agent_ok() -> None:
     assert "no supervised" in (result.detail or "")
 
 
-def test_check_launchd_agent_loaded_clean_ok() -> None:
+def test_check_launchd_agent_loaded_clean_ok(tmp_path: Path) -> None:
     """A loaded agent with no drift and no rival is a healthy install (``ok``)."""
-    result = checks.check_launchd_agent(detector=lambda: _agent_report())
+    program = tmp_path / "eawfd"
+    program.write_text("#!/bin/sh\n", encoding="utf-8")
+    program.chmod(0o755)
+    result = checks.check_launchd_agent(detector=lambda: _agent_report(program=str(program)))
     assert result.status == "ok"
     assert "loaded" in (result.detail or "")
+
+
+def test_check_launchd_agent_stale_service_path_warns(tmp_path: Path) -> None:
+    """A pre-v0.6.5 unit missing the deterministic PATH needs repair."""
+    program = tmp_path / "eawfd"
+    program.write_text("#!/bin/sh\n", encoding="utf-8")
+    program.chmod(0o755)
+    result = checks.check_launchd_agent(
+        detector=lambda: _agent_report(
+            program=str(program),
+            path_drift=True,
+        )
+    )
+    assert result.status == "warn"
+    assert "PATH is missing or stale" in (result.detail or "")
+
+
+def test_check_launchd_agent_non_executable_program_warns(tmp_path: Path) -> None:
+    """An installed unit whose program cannot execute is actionable drift."""
+    program = tmp_path / "eawfd"
+    program.write_text("#!/bin/sh\n", encoding="utf-8")
+    program.chmod(0o644)
+
+    result = checks.check_launchd_agent(detector=lambda: _agent_report(program=str(program)))
+
+    assert result.status == "warn"
+    assert "not executable" in (result.detail or "")
 
 
 def test_check_launchd_agent_drift_warns() -> None:

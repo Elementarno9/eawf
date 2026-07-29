@@ -345,6 +345,20 @@ def _coerce_scalar(raw: str) -> Any:
 _LEGACY_RUNTIME_WARN_EMITTED = False
 
 
+def _normalise_overlay_in_memory(overlay: dict[str, Any]) -> None:
+    """Apply the canonical config migration to one overlay without persisting it."""
+    if not overlay:
+        return
+    from eawf.kernel.config.migration import migrate_config_payload
+
+    had_marker = "schema_version" in overlay
+    normalised, _changed = migrate_config_payload(overlay)
+    if not had_marker:
+        normalised.pop("schema_version", None)
+    overlay.clear()
+    overlay.update(normalised)
+
+
 def _normalise_runtime_adapters(overlay: dict[str, Any]) -> None:
     """In-place legacy-kind shim: synthesise ``runtime.adapters`` from ``runtime.kind``.
 
@@ -433,6 +447,7 @@ def merge_config(
 
     # Layer 2: global.
     global_overlay = load_yaml_layer(global_config_path())
+    _normalise_overlay_in_memory(global_overlay)
     _normalise_runtime_adapters(global_overlay)
     merged, sources = _deep_merge_with_sources(
         base=merged,
@@ -444,6 +459,7 @@ def merge_config(
     # Layer 3: workspace (only if anchor provided).
     if workspace is not None:
         ws_overlay = load_yaml_layer(workspace_config_path(workspace))
+        _normalise_overlay_in_memory(ws_overlay)
         _normalise_runtime_adapters(ws_overlay)
         merged, sources = _deep_merge_with_sources(
             base=merged,
@@ -455,6 +471,7 @@ def merge_config(
     # Layer 4-6: repo + branch + local (only if anchor provided).
     if repo is not None:
         repo_overlay = load_yaml_layer(repo_config_path(repo))
+        _normalise_overlay_in_memory(repo_overlay)
         _normalise_runtime_adapters(repo_overlay)
         merged, sources = _deep_merge_with_sources(
             base=merged,
@@ -471,6 +488,7 @@ def merge_config(
             branch_file = branch_config_path(repo, effective_branch)
             if branch_file.exists():
                 branch_overlay = load_yaml_layer(branch_file)
+                _normalise_overlay_in_memory(branch_overlay)
                 _normalise_runtime_adapters(branch_overlay)
                 merged, sources = _deep_merge_with_sources(
                     base=merged,
@@ -481,6 +499,7 @@ def merge_config(
 
         # Layer 6: local.
         local_overlay = load_yaml_layer(local_config_path(repo))
+        _normalise_overlay_in_memory(local_overlay)
         _normalise_runtime_adapters(local_overlay)
         merged, sources = _deep_merge_with_sources(
             base=merged,
@@ -491,19 +510,19 @@ def merge_config(
 
     # Layer 7: wave (daemon RAM; library callers pass the dict in).
     if wave_overlay:
-        # Wave overlay is transient — do NOT apply the legacy-adapter
-        # shim here, the daemon already typed the values when it wrote
-        # them to the per-wave map.
+        normalised_wave_overlay = dict(wave_overlay)
+        _normalise_overlay_in_memory(normalised_wave_overlay)
         merged, sources = _deep_merge_with_sources(
             base=merged,
             base_sources=sources,
-            overlay=dict(wave_overlay),
+            overlay=normalised_wave_overlay,
             overlay_layer="wave",
         )
 
     # Layer 8: env.
     env_overlay = _collect_env_overrides(effective_env)
     if env_overlay:
+        _normalise_overlay_in_memory(env_overlay)
         _normalise_runtime_adapters(env_overlay)
         merged, sources = _deep_merge_with_sources(
             base=merged,
@@ -515,6 +534,7 @@ def merge_config(
     # Layer 9: CLI overrides.
     if overrides:
         normalised_overrides: Any = dict(overrides)
+        _normalise_overlay_in_memory(normalised_overrides)
         _normalise_runtime_adapters(normalised_overrides)
         merged, sources = _deep_merge_with_sources(
             base=merged,

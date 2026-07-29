@@ -27,6 +27,7 @@ from eawf.surfaces.cli.commands.plugin import (
     _normalise_sync_runtimes,
     _resolve_target,
     _scope_tip_banner,
+    _validate_plugin_root,
     _validate_runtime,
     _validate_scope,
     plugin_app,
@@ -63,7 +64,14 @@ logger = logging.getLogger(__name__)
 
 
 def _install_codex(
-    *, target: Path, scope: str, scope_lit: Scope, force: bool, dry_run: bool, flags: GlobalFlags
+    *,
+    target: Path,
+    scope: str,
+    scope_lit: Scope,
+    force: bool,
+    dry_run: bool,
+    plugin_root: Path | None,
+    flags: GlobalFlags,
 ) -> None:
     """Run + report the codex ``plugin install`` arm.
 
@@ -76,7 +84,13 @@ def _install_codex(
     )
 
     try:
-        codex_result = codex_install_plugin(target, scope=scope_lit, force=force, dry_run=dry_run)
+        codex_result = codex_install_plugin(
+            target,
+            scope=scope_lit,
+            force=force,
+            dry_run=dry_run,
+            plugin_root=plugin_root,
+        )
     except CodexIntegrityViolation as exc:
         cli_errors.emit_error(
             cli_errors.StateConflict(str(exc), kind="IntegrityViolation"),
@@ -180,6 +194,16 @@ def install_cmd(
         bool,
         typer.Option("--dry-run", help="Render the tree but do not write any bytes."),
     ] = False,
+    plugin_root: Annotated[
+        Path | None,
+        typer.Option(
+            "--plugin-root",
+            help=(
+                "Explicit Codex plugin root. Overrides scope-derived and "
+                "marketplace-cache discovery."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Render a runtime plugin tree."""
     from eawf.runtime.runtimes.claude.plugin_install import (
@@ -191,6 +215,7 @@ def install_cmd(
     try:
         _validate_runtime(runtime)
         _validate_scope(scope, runtime=runtime)
+        _validate_plugin_root(runtime, plugin_root)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
@@ -205,6 +230,7 @@ def install_cmd(
             scope_lit=scope_lit,
             force=force,
             dry_run=dry_run,
+            plugin_root=plugin_root,
             flags=flags,
         )
         return
@@ -250,6 +276,16 @@ def update_cmd(
             help="Install location: 'project' (default) or 'user' (cross-project).",
         ),
     ] = "project",
+    plugin_root: Annotated[
+        Path | None,
+        typer.Option(
+            "--plugin-root",
+            help=(
+                "Explicit Codex plugin root. Overrides scope-derived and "
+                "marketplace-cache discovery."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Re-render a runtime plugin tree, aborting on hand-edits."""
     from eawf.runtime.runtimes.claude.plugin_install import IntegrityViolation
@@ -267,6 +303,7 @@ def update_cmd(
     try:
         _validate_runtime(runtime)
         _validate_scope(scope, runtime=runtime)
+        _validate_plugin_root(runtime, plugin_root)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
@@ -274,7 +311,12 @@ def update_cmd(
     scope_lit = cast(Scope, scope)
     if runtime == "codex":
         try:
-            codex_result = codex_install_plugin(target, scope=scope_lit, force=False)
+            codex_result = codex_install_plugin(
+                target,
+                scope=scope_lit,
+                force=False,
+                plugin_root=plugin_root,
+            )
         except CodexIntegrityViolation as exc:
             cli_errors.emit_error(
                 cli_errors.StateConflict(str(exc), kind="IntegrityViolation"), flags=flags
@@ -315,7 +357,14 @@ def update_cmd(
     emit_json_or_text(_install_payload(result), _install_text(result), flags=flags)
 
 
-def _doctor_single_runtime(*, runtime: str, scope: str, target: Path, flags: GlobalFlags) -> None:
+def _doctor_single_runtime(
+    *,
+    runtime: str,
+    scope: str,
+    target: Path,
+    plugin_root: Path | None,
+    flags: GlobalFlags,
+) -> None:
     """Run the per-runtime drift sweep for a single named runtime.
 
     Validates *runtime* / *scope*, dispatches to the codex / opencode /
@@ -327,17 +376,32 @@ def _doctor_single_runtime(*, runtime: str, scope: str, target: Path, flags: Glo
     """
     from eawf.runtime.runtimes.claude.plugin_doctor import doctor_plugin
     from eawf.runtime.runtimes.codex import doctor_plugin as codex_doctor_plugin
+    from eawf.runtime.runtimes.codex.plugin_install import (
+        IntegrityViolation as CodexIntegrityViolation,
+    )
     from eawf.runtime.runtimes.opencode import doctor_plugin as opencode_doctor_plugin
 
     try:
         _validate_runtime(runtime)
         _validate_scope(scope, runtime=runtime)
+        _validate_plugin_root(runtime, plugin_root)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
     scope_lit = cast(Scope, scope)
     if runtime == "codex":
-        codex_report = codex_doctor_plugin(target, scope=scope_lit)
+        try:
+            codex_report = codex_doctor_plugin(
+                target,
+                scope=scope_lit,
+                plugin_root=plugin_root,
+            )
+        except CodexIntegrityViolation as exc:
+            cli_errors.emit_error(
+                cli_errors.StateConflict(str(exc), kind="IntegrityViolation"),
+                flags=flags,
+            )
+            return
         emit_json_or_text(
             _codex_doctor_payload(codex_report),
             _codex_doctor_text(codex_report),
@@ -395,6 +459,16 @@ def doctor_cmd(
             ),
         ),
     ] = False,
+    plugin_root: Annotated[
+        Path | None,
+        typer.Option(
+            "--plugin-root",
+            help=(
+                "Explicit Codex plugin root. Overrides scope-derived and "
+                "marketplace-cache discovery."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Report drift in an installed runtime plugin tree."""
     from eawf.runtime.runtimes.claude.plugin_doctor import doctor_plugin_strict
@@ -402,6 +476,11 @@ def doctor_cmd(
 
     flags: GlobalFlags = ctx.obj
     target = _resolve_target(flags)
+    try:
+        _validate_plugin_root(runtime, plugin_root)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
     if strict and runtime not in (None, "claude"):
         cli_errors.emit_error(
             cli_errors.UserError(
@@ -444,7 +523,13 @@ def doctor_cmd(
             raise typer.Exit(exit_codes.STATE_CONFLICT)
         return
 
-    _doctor_single_runtime(runtime=runtime, scope=scope, target=target, flags=flags)
+    _doctor_single_runtime(
+        runtime=runtime,
+        scope=scope,
+        target=target,
+        plugin_root=plugin_root,
+        flags=flags,
+    )
 
 
 @plugin_app.command(name="package")

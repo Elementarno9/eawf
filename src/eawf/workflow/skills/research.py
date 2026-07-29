@@ -234,12 +234,21 @@ class ResearchSkill(SkillAction):
             depth=depth,
             topic=topic,
             brief_id=f"BR-{uuid.uuid4().hex[:8].upper()}",
-            final_requested=_bool_arg(run.args, "final", "save", default=False),
+            final_requested=self._resolve_auto_save(run),
             blitz_enabled=_bool_arg(run.args, "blitz", default=True),
             rounds=self._resolve_rounds(run),
             agents=self._resolve_agents(run),
             budget=_int_arg(run.args, "budget", default=None),
         )
+
+    def _resolve_auto_save(self, run: ActionRun) -> bool:
+        """Resolve explicit save/final flags before the research.auto_save leaf."""
+        if "final" in run.args or "save" in run.args:
+            return _bool_arg(run.args, "final", "save", default=False)
+        merged = self._merged_config(run.state_path)
+        research = merged.get("research")
+        value = research.get("auto_save", False) if isinstance(research, dict) else False
+        return value if isinstance(value, bool) else False
 
     @staticmethod
     def _resolve_rounds(run: ActionRun) -> int:

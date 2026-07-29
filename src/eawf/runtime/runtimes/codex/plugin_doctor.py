@@ -26,13 +26,13 @@ from eawf.runtime.runtimes.codex.hook_map import (
 )
 from eawf.runtime.runtimes.codex.plugin_install import (
     _DEFAULT_TIMESTAMP,
-    _HOOK_TIMEOUT_SECONDS,
     Scope,
     _agent_target,
     _codex_hook_specs,
     _config_target,
     _hook_config_target,
     _hook_target,
+    _hook_timeout_seconds,
     _manifest_target,
     _plugin_root,
     _render_agent_toml,
@@ -136,7 +136,13 @@ def _classify_entry(
         )
 
 
-def _detect_legacy_paths(target_dir: Path, *, plugin_root: Path) -> list[Path]:
+def _detect_legacy_paths(
+    target_dir: Path,
+    *,
+    plugin_root: Path,
+    scope: Scope,
+    home: Path | None,
+) -> list[Path]:
     """Return stale Codex plugin paths from prior installer layouts.
 
     ``.codex/agents`` is no longer legacy: it is the current Codex
@@ -152,6 +158,11 @@ def _detect_legacy_paths(target_dir: Path, *, plugin_root: Path) -> list[Path]:
     plugin_agents = plugin_root / "agents"
     if plugin_agents.is_dir():
         legacy.append(plugin_agents)
+    if scope == "user":
+        base = home if home is not None else Path.home()
+        direct_root = base / ".codex" / "plugins" / "eawf"
+        if direct_root.is_dir() and direct_root.resolve() != plugin_root.resolve():
+            legacy.append(direct_root)
     return legacy
 
 
@@ -182,16 +193,13 @@ def _normalized_hook_hash(spec: HookSpec) -> str:
     optional handler fields, canonicalizes JSON object keys recursively, then
     prefixes the SHA-256 digest with ``sha256:``.
     """
-    timeout = _HOOK_TIMEOUT_SECONDS
-    if spec.event_type.value == "session_end":
-        timeout = min(max(timeout, 1), 3)
     identity = {
         "event_name": spec.event_type.value,
         "hooks": [
             {
                 "async": False,
                 "command": f'"${{PLUGIN_ROOT}}/hooks/{codex_hook_name(spec.event_type)}.sh"',
-                "timeout": timeout,
+                "timeout": _hook_timeout_seconds(spec),
                 "type": "command",
             }
         ],
@@ -284,6 +292,7 @@ def doctor_plugin(
     *,
     scope: Scope = "project",
     home: Path | None = None,
+    plugin_root: Path | None = None,
 ) -> DoctorReport:
     """Inspect the installed Codex plugin tree at *scope*.
 
@@ -294,7 +303,12 @@ def doctor_plugin(
     semantically compared excluding its timestamp/hash pair.
     """
     target_dir = Path(target_dir).resolve()
-    plugin_root = _plugin_root(target_dir, scope=scope, home=home)
+    plugin_root = _plugin_root(
+        target_dir,
+        scope=scope,
+        home=home,
+        plugin_root=plugin_root,
+    )
     ok: list[DoctorEntry] = []
     drifted: list[DoctorEntry] = []
     missing: list[DoctorEntry] = []
@@ -388,7 +402,12 @@ def doctor_plugin(
             )
         )
 
-    legacy = _detect_legacy_paths(target_dir, plugin_root=plugin_root) if scope == "project" else []
+    legacy = _detect_legacy_paths(
+        target_dir,
+        plugin_root=plugin_root,
+        scope=scope,
+        home=home,
+    )
     return DoctorReport(
         target_dir=target_dir,
         plugin_root=plugin_root,

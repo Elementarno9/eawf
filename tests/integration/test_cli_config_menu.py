@@ -159,6 +159,11 @@ def _capture_save_calls(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]
     return recorded
 
 
+def _editable_entries() -> tuple[registry.ConfigKey, ...]:
+    """Return only entries the catalog exposes to operators."""
+    return tuple(entry for tab in registry.tabs_sorted() for entry in registry.keys_for_tab(tab))
+
+
 def test_menu_happy_path_saves_via_layer_helper(
     repo_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -170,7 +175,7 @@ def test_menu_happy_path_saves_via_layer_helper(
     """
     # The first registered choice-typed entry — picked so the test does not
     # bind to a specific tab/key.
-    choice_entry = next(e for e in registry.CONFIG_REGISTRY if e.type == "choice")
+    choice_entry = next(e for e in _editable_entries() if e.type == "choice")
     assert choice_entry.choices is not None
     answer = choice_entry.choices[-1]
 
@@ -191,7 +196,7 @@ def test_menu_happy_path_bool_uses_confirm_widget(
     repo_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A bool entry routes through ``questionary.confirm``."""
-    bool_entry = next(e for e in registry.CONFIG_REGISTRY if e.type == "bool")
+    bool_entry = next(e for e in _editable_entries() if e.type == "bool")
     _patch_questionary(
         monkeypatch,
         select_answers=[bool_entry.tab, f"{bool_entry.key} — {bool_entry.label}"],
@@ -211,7 +216,7 @@ def test_menu_happy_path_int_coerces_text_answer(
     """An int entry pulls a text widget; the coerced value is the stored int."""
     int_entry = next(
         e
-        for e in registry.CONFIG_REGISTRY
+        for e in _editable_entries()
         if e.type == "int" and e.min_value is not None and e.max_value is not None
     )
     # Pick a midpoint that satisfies the range so coercion succeeds.
@@ -237,7 +242,7 @@ def test_menu_tabs_widget_lists_tabs_alphabetical(
     repo_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The first ``select`` widget exposes tabs in alphabetical order."""
-    bool_entry = next(e for e in registry.CONFIG_REGISTRY if e.type == "bool")
+    bool_entry = next(e for e in _editable_entries() if e.type == "bool")
     calls = _patch_questionary(
         monkeypatch,
         select_answers=[bool_entry.tab, f"{bool_entry.key} — {bool_entry.label}"],
@@ -257,7 +262,7 @@ def test_menu_fields_widget_lists_keys_alphabetical(
     repo_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The second ``select`` widget exposes keys alphabetical within the tab."""
-    bool_entry = next(e for e in registry.CONFIG_REGISTRY if e.type == "bool")
+    bool_entry = next(e for e in _editable_entries() if e.type == "bool")
     calls = _patch_questionary(
         monkeypatch,
         select_answers=[bool_entry.tab, f"{bool_entry.key} — {bool_entry.label}"],
@@ -296,7 +301,7 @@ def test_menu_cancellation_at_value_step_returns_user_declined(
     repo_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ctrl-C at the value prompt is also ``USER_ERROR``."""
-    bool_entry = next(e for e in registry.CONFIG_REGISTRY if e.type == "bool")
+    bool_entry = next(e for e in _editable_entries() if e.type == "bool")
     _patch_questionary(
         monkeypatch,
         select_answers=[bool_entry.tab, f"{bool_entry.key} — {bool_entry.label}"],
@@ -313,9 +318,7 @@ def test_menu_invalid_int_input_rejects_with_exit_3(
     repo_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An int that violates the registered range fails with InvalidInput."""
-    int_entry = next(
-        e for e in registry.CONFIG_REGISTRY if e.type == "int" and e.max_value is not None
-    )
+    int_entry = next(e for e in _editable_entries() if e.type == "int" and e.max_value is not None)
     out_of_range = str(int(int_entry.max_value) + 100)  # type: ignore[arg-type]
     _patch_questionary(
         monkeypatch,

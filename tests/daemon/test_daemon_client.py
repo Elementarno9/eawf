@@ -169,12 +169,15 @@ def test_client_round_trips_config_unset_over_real_rpc(
     repo = tmp_path / "repo"
     config_path = repo / ".ea" / "config.yaml"
     config_path.parent.mkdir(parents=True)
-    config_path.write_text("audit:\n  fix_safe: true\n", encoding="utf-8")
+    config_path.write_text(
+        "flow:\n  advance_after:\n    audit: true\n",
+        encoding="utf-8",
+    )
 
     with DaemonClient(runtime_dir=server.runtime_dir) as client:
         result = client.config_unset_layer_value(
             layer="repo",
-            key_path=["audit", "fix_safe"],
+            key_path=["flow", "advance_after", "audit"],
             repo_root=str(repo),
         )
 

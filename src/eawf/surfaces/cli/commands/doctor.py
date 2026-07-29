@@ -674,6 +674,130 @@ def _run_runtime_drift_check(runtime_id: str) -> tuple[dict[str, Any], str]:
     return payload, text
 
 
+def _repair_plan_text(plan: Any) -> str:
+    """Render one concise repair preview shared by prompt and output."""
+    from eawf.observability.doctor.repair import render_repair_plan
+
+    return render_repair_plan(plan)
+
+
+def _append_repair_guidance(
+    payload: dict[str, Any],
+    text: str,
+    *,
+    workspace: Path | None,
+) -> tuple[dict[str, Any], str]:
+    """Add read-only repair availability without prompting or mutating."""
+    if workspace is None:
+        return payload, text
+    from eawf.observability.doctor.repair import build_repair_plan
+
+    try:
+        plan = build_repair_plan(workspace)
+    except Exception as exc:
+        logger.debug(f"_append_repair_guidance status=unavailable err={exc!s}")
+        return payload, text
+    payload["repair"] = {
+        "status": plan.status,
+        "action_count": len(plan.actions),
+        "unresolved_findings": plan.unresolved_findings,
+        "preview_command": plan.rerun_command.removesuffix(" --yes"),
+    }
+    if not plan.actions:
+        return payload, text
+    preview_command = plan.rerun_command.removesuffix(" --yes")
+    return (
+        payload,
+        f"{text}\nrepair: {len(plan.actions)} action(s) available\nrun: {preview_command}",
+    )
+
+
+def _run_doctor_repair(flags: GlobalFlags) -> None:
+    """Preview or apply the shared Doctor repair plan."""
+    from eawf.observability.doctor.checks import resolve_anchor
+    from eawf.observability.doctor.repair import build_repair_plan
+    from eawf.surfaces.doctor_repair import apply_repair_plan
+
+    anchor = resolve_anchor(flags.workspace)
+    if anchor is None:
+        emit_error(
+            ValidationError("doctor --fix requires an EAWF-managed workspace"),
+            flags=flags,
+        )
+        return
+    plan = build_repair_plan(anchor)
+    preview_text = _repair_plan_text(plan)
+    if not plan.actions:
+        emit_json_or_text(
+            plan.model_dump(mode="json"),
+            preview_text,
+            flags=flags,
+        )
+        return
+    if not flags.no_input and not flags.json_output:
+        typer.echo(preview_text)
+        if not typer.confirm("Apply this repair plan?", default=False):
+            typer.echo(f"not applied; rerun: {plan.rerun_command}")
+            return
+    else:
+        plan.status = "needs_user"
+        emit_json_or_text(
+            plan.model_dump(mode="json"),
+            f"{preview_text}\nrerun: {plan.rerun_command}",
+            flags=flags,
+        )
+        return
+    try:
+        result = apply_repair_plan(plan)
+    except Exception as exc:
+        emit_error(
+            ValidationError(f"doctor repair failed: {exc}"),
+            flags=flags,
+        )
+        return
+    emit_json_or_text(
+        result,
+        f"doctor repair applied: {result['applied_count']} action(s)",
+        flags=flags,
+    )
+
+
+def _run_doctor_repair_yes(flags: GlobalFlags) -> None:
+    """Apply one Doctor plan without prompting."""
+    from eawf.observability.doctor.checks import resolve_anchor
+    from eawf.observability.doctor.repair import build_repair_plan
+    from eawf.surfaces.doctor_repair import apply_repair_plan
+
+    anchor = resolve_anchor(flags.workspace)
+    if anchor is None:
+        emit_error(
+            ValidationError("doctor --fix requires an EAWF-managed workspace"),
+            flags=flags,
+        )
+        return
+    plan = build_repair_plan(anchor)
+    if not plan.actions:
+        emit_json_or_text(
+            plan.model_dump(mode="json"),
+            _repair_plan_text(plan),
+            flags=flags,
+        )
+        return
+    try:
+        result = apply_repair_plan(plan)
+    except Exception as exc:
+        emit_error(
+            ValidationError(f"doctor repair failed: {exc}"),
+            flags=flags,
+        )
+        return
+    emit_json_or_text(
+        result,
+        f"doctor repair applied: {result['applied_count']} action(s)",
+        flags=flags,
+    )
+
+
 @doctor_app.callback(invoke_without_command=True)
 def doctor(
     ctx: typer.Context,
@@ -709,6 +833,20 @@ def doctor(
             help="Emit a machine-readable JSON envelope (overrides root --json).",
         ),
     ] = False,
+    fix: Annotated[
+        bool,
+        typer.Option(
+            "--fix",
+            help="Preview digest-guarded repairs, then apply after one confirmation.",
+        ),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            help="Apply the Doctor repair preview without an interactive prompt.",
+        ),
+    ] = False,
 ) -> None:
     """Run install-readiness checks."""
     from eawf.observability.doctor import checks as doctor_checks
@@ -721,6 +859,20 @@ def doctor(
         no_input=flags.no_input,
         workspace=flags.workspace,
     )
+
+    if yes and not fix:
+        emit_error(
+            ValidationError("--yes requires --fix"),
+            flags=effective_flags,
+        )
+        return
+
+    if fix:
+        if yes:
+            _run_doctor_repair_yes(effective_flags)
+        else:
+            _run_doctor_repair(effective_flags)
+        return
 
     if runtime is not None:
         try:
@@ -761,6 +913,7 @@ def doctor(
 
     # P28-I02-W01: drift reconciler — git/state + plugin cross-scope dup.
     payload, text = _append_drift_checks(payload, text, workspace=anchor)
+    payload, text = _append_repair_guidance(payload, text, workspace=anchor)
 
     emit_json_or_text(payload, text, flags=effective_flags)
     if overall_status(results) == "fail":

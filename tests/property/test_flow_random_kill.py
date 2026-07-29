@@ -2,7 +2,7 @@
 
 Hypothesis (per spec §6.3):
 
-- ``kill_at`` ranges across all six step indices.
+- ``kill_at`` ranges across all five step indices.
 - ``tamper`` chooses one of {None, state, git, profile} to perturb the
   workspace between checkpoint write and resume.
 
@@ -187,7 +187,11 @@ def test_random_kill_at_every_step_resume_converges_or_refuses_cleanly(
             monkeypatch.setattr(flow_module, "_current_git_head", lambda root: parent_git_head)
 
         runner = CliRunner()
-        result = runner.invoke(app, ["--json", "flow", "run", "--resume"])
+        result = runner.invoke(
+            app,
+            ["--json", "flow", "run", "--resume"],
+            input='{"advance_after": true}',
+        )
 
         # Property: either the resume converges (exit 0) OR refuses on
         # drift (exit 8 with a populated drift body).

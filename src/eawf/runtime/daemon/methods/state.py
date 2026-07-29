@@ -748,6 +748,8 @@ def _apply_wave_close(
     commit = params.get("commit")
     if commit is not None:
         wave.commit = str(commit)
+        identity_digest = params.get("commit_identity_digest")
+        wave.commit_identity_digest = str(identity_digest) if identity_digest is not None else None
 
 
 def _resolve_wave_track_id(state: State, wave_id: str) -> str | None:
@@ -1733,7 +1735,7 @@ def _build_durable_audit_context(
     """
     from eawf.kernel.state.enums import GateReceiptResult
     from eawf.kernel.state.urn import build as build_urn
-    from eawf.kernel.store.kinds.gate_receipt import GateReceipt
+    from eawf.kernel.store.kinds.gate_receipt import GateReceipt, canonical_gate_digest
     from eawf.workflow.dispatch.verdict import DurableAuditContext, DurableAuditCriterion
 
     canonical_state, _ = _read_state(state_path)
@@ -1764,12 +1766,15 @@ def _build_durable_audit_context(
                 or receipt.integration_id != attempt.integration_id
                 or receipt.integrated_sha != attempt.integrated_sha
                 or receipt.tree_sha != attempt.tree_sha
-                or receipt.contract_digest != attempt.spec_digest
-                or receipt.criteria_digest != attempt.criteria_digest
-                or receipt.gate_manifest_digest != attempt.gate_manifest_digest
-                or receipt.policy_digest != attempt.policy_digest
-                or receipt.dependency_binding_digest != attempt.dependency_binding_digest
-                or receipt.runner_environment_digest != attempt.runner_environment_digest
+                or receipt.contract_digest != canonical_gate_digest(attempt.spec_digest)
+                or receipt.criteria_digest != canonical_gate_digest(attempt.criteria_digest)
+                or receipt.gate_manifest_digest
+                != canonical_gate_digest(attempt.gate_manifest_digest)
+                or receipt.policy_digest != canonical_gate_digest(attempt.policy_digest)
+                or receipt.dependency_binding_digest
+                != canonical_gate_digest(attempt.dependency_binding_digest)
+                or receipt.runner_environment_digest
+                != canonical_gate_digest(attempt.runner_environment_digest)
             ):
                 raise LifecycleError(
                     f"gate receipt does not match frozen close attempt: {envelope.id!r}"

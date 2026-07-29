@@ -78,4 +78,4 @@ def test_merge_v11_overlay_wins(tmp_path: Path) -> None:
     )
     merged, _sources = merge_config(workspace=workspace, repo=repo_dir, env={})
     assert merged["runtime"]["adapters"] == ["opencode"]
-    assert merged["schema_version"] == "1.1"
+    assert merged["schema_version"] == "1.0"

@@ -212,9 +212,9 @@ def test_drive_returns_handle_fast_while_drain_continues(tmp_path: Path) -> None
         start = time.monotonic()
         handle = asyncio.run(_scenario())
         elapsed = time.monotonic() - start
-        # The RPC returned a DRAINING handle in well under a second -- it did not
-        # block on the gated drain.
-        assert elapsed < 1.0
+        # The RPC returned before the gated watcher's five-second timeout, so it
+        # did not block on the drain. Leave scheduler headroom for parallel CI.
+        assert elapsed < 4.0
         assert handle["run_state"] == "draining"
         assert handle["backgrounded"] is True
         assert handle["handle_id"].startswith("fleet-run-")

@@ -1,11 +1,8 @@
 """Unit tests for :mod:`eawf.surfaces.cli.help_panels`.
 
-Cover the boundary cases of the panel mapping helpers plus the drift guard
-that ties the panel set back to the metadata registry — a future tab rename
-in :data:`eawf.kernel.config.registry.CONFIG_REGISTRY` must surface here. The
-guard lives in this test (not at module import) so the registry chain stays
-off the cold ``import eawf.surfaces.cli.app`` path; :data:`PANEL_ORDER` is
-resolved lazily through the module's PEP 562 ``__getattr__``.
+Cover the boundary cases of the panel mapping helpers and the derived
+alphabetical ordering. :data:`PANEL_ORDER` is resolved lazily through the
+module's PEP 562 ``__getattr__``.
 """
 
 from __future__ import annotations
@@ -14,13 +11,12 @@ import importlib
 
 import pytest
 
-from eawf.kernel.config.registry import tabs_sorted
 from eawf.surfaces.cli import help_panels
 
 
-def test_panel_order_matches_registry_tabs_sorted() -> None:
-    """:data:`help_panels.PANEL_ORDER` mirrors :func:`tabs_sorted` exactly."""
-    assert tabs_sorted() == help_panels.PANEL_ORDER
+def test_panel_order_matches_assigned_command_panels() -> None:
+    """:data:`help_panels.PANEL_ORDER` covers every assigned command panel."""
+    assert tuple(sorted(set(help_panels.COMMAND_PANELS.values()))) == help_panels.PANEL_ORDER
 
 
 def test_panel_order_is_alphabetical() -> None:
@@ -30,18 +26,9 @@ def test_panel_order_is_alphabetical() -> None:
     assert list(help_panels.PANEL_ORDER) == sorted(help_panels.PANEL_ORDER)
 
 
-def test_command_panels_are_a_subset_of_registry_tabs() -> None:
-    """The values of :data:`COMMAND_PANELS` are a subset of the registry tabs.
-
-    This is the drift guard that used to run at module import via
-    ``_assert_panels_match_registry`` — relocated here so a
-    :data:`eawf.kernel.config.registry.CONFIG_REGISTRY` tab rename still
-    forces a coordinated edit without pulling the registry onto the cold
-    CLI tree-build path. Reads :func:`tabs_sorted` directly so the test
-    does not depend on the lazy ``PANEL_ORDER`` accessor.
-    """
-    unknown = set(help_panels.COMMAND_PANELS.values()) - set(tabs_sorted())
-    assert not unknown, f"unknown panel(s) in COMMAND_PANELS: {sorted(unknown)}"
+def test_command_panels_are_nonempty_labels() -> None:
+    """Every command-panel assignment carries a renderable label."""
+    assert all(panel.strip() for panel in help_panels.COMMAND_PANELS.values())
 
 
 def test_module_getattr_rejects_unknown_attribute() -> None:
@@ -72,16 +59,10 @@ def test_panel_for_unknown_command_returns_none() -> None:
 def test_command_panels_subset_check_catches_injected_drift(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Error path: a bogus panel name is flagged by the subset check.
-
-    Injects a panel value absent from the registry tabs and asserts the
-    drift computation surfaces it — proving the relocated guard still bites
-    after a future tab rename. The real module mapping is restored by
-    monkeypatch teardown.
-    """
+    """A newly assigned panel enters the derived order deterministically."""
     monkeypatch.setitem(help_panels.COMMAND_PANELS, "phony-cmd", "not-a-tab")
-    unknown = set(help_panels.COMMAND_PANELS.values()) - set(tabs_sorted())
-    assert "not-a-tab" in unknown
+    help_panels._panel_order.cache_clear()
+    assert "not-a-tab" in help_panels.PANEL_ORDER
 
 
 def test_panel_order_resolves_lazily_and_survives_reload() -> None:
@@ -91,7 +72,7 @@ def test_panel_order_resolves_lazily_and_survives_reload() -> None:
     importlib.reload(help_panels)
     # Sanity: the public surface survives reload.
     assert "RegistryOrderedTyperGroup" in dir(help_panels)
-    assert tabs_sorted() == help_panels.PANEL_ORDER
+    assert tuple(sorted(set(help_panels.COMMAND_PANELS.values()))) == help_panels.PANEL_ORDER
 
 
 def test_registry_ordered_group_sorts_commands_by_panel_then_name() -> None:

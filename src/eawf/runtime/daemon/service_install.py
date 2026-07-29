@@ -190,6 +190,39 @@ def _resolve_eawfd_binary() -> list[str]:
     return [sys.executable, "-m", "eawf.runtime.daemon.main"]
 
 
+def _resolve_service_path(eawfd_argv: list[str]) -> str:
+    """Return the deterministic ``PATH`` inherited by the supervised daemon.
+
+    Service managers do not reliably inherit the interactive shell's PATH.
+    Pin canonical executable directories for eawfd, Python, and uv before a
+    fixed system search path. Never serialize the installer's arbitrary shell
+    PATH into a persistent service definition.
+    """
+    entries: list[str] = []
+    candidates: list[Path] = []
+    for executable in (eawfd_argv[0], sys.executable, shutil.which("uv")):
+        if executable:
+            path = Path(executable)
+            if path.is_absolute():
+                candidates.append(path.parent)
+    candidates.extend(
+        Path("/").joinpath(*parts)
+        for parts in (
+            ("opt", "homebrew", "bin"),
+            ("usr", "local", "bin"),
+            ("usr", "bin"),
+            ("bin",),
+            ("usr", "sbin"),
+            ("sbin",),
+        )
+    )
+    for candidate in candidates:
+        entry = str(candidate)
+        if entry not in entries:
+            entries.append(entry)
+    return os.pathsep.join(entries)
+
+
 def _render_template(name: str, *, runtime_dir_value: Path) -> str:
     """Render *name* with template variables substituted.
 
@@ -200,6 +233,8 @@ def _render_template(name: str, *, runtime_dir_value: Path) -> str:
       element is the program name the supervisor displays.
     - ``eawfd_program``: First element of ``eawfd_argv`` for plist
       ``Program`` keys that take a single string.
+    - ``service_path``: Stable executable-dir-first PATH inherited by the
+      daemon and its dispatched runtime subprocesses.
 
     Args:
         name: Template filename under the resolved template directory
@@ -222,10 +257,12 @@ def _render_template(name: str, *, runtime_dir_value: Path) -> str:
     )
     template = env.get_template(name)
     eawfd_argv = _resolve_eawfd_binary()
+    service_path = _resolve_service_path(eawfd_argv)
     return template.render(
         runtime_dir=str(runtime_dir_value),
         eawfd_argv=eawfd_argv,
         eawfd_program=eawfd_argv[0],
+        service_path=service_path,
     )
 
 
@@ -819,6 +856,8 @@ class SupervisedAgentReport:
     program: str | None
     drift: bool
     rival_pid: int | None
+    service_path: str | None = None
+    path_drift: bool = False
 
 
 def _pid_is_alive(pid: int) -> bool:
@@ -889,6 +928,20 @@ def _plist_program(path: Path) -> str | None:
     return None
 
 
+def _plist_service_path(path: Path) -> str | None:
+    """Return ``EnvironmentVariables.PATH`` from a launchd plist."""
+    try:
+        with path.open("rb") as handle:
+            data = plistlib.load(handle)
+    except OSError, ValueError, ExpatError:
+        return None
+    environment = data.get("EnvironmentVariables") if isinstance(data, dict) else None
+    if not isinstance(environment, dict):
+        return None
+    value = environment.get("PATH")
+    return str(value) if value is not None else None
+
+
 def _systemd_program(path: Path) -> str | None:
     """Return the ``ExecStart=`` program token from the systemd unit at *path*."""
     try:
@@ -901,6 +954,20 @@ def _systemd_program(path: Path) -> str | None:
             _key, _sep, rhs = stripped.partition("=")
             tokens = rhs.split()
             return tokens[0] if tokens else None
+    return None
+
+
+def _systemd_service_path(path: Path) -> str | None:
+    """Return the PATH value from one systemd unit."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        stripped = line.strip()
+        prefix = 'Environment="PATH='
+        if stripped.startswith(prefix) and stripped.endswith('"'):
+            return stripped[len(prefix) : -1]
     return None
 
 
@@ -923,17 +990,20 @@ def _detect_launchd(runner: _ServiceRunner) -> SupervisedAgentReport:
         )
     installed = False
     program: str | None = None
+    service_path: str | None = None
     try:
         plist_path = _launchd_plist_path()
         installed = plist_path.exists()
         if installed:
             program = _plist_program(plist_path)
+            service_path = _plist_service_path(plist_path)
     except ServiceInstallError, KeyError, OSError:
         installed = False
     printed = runner(["launchctl", "print", target])
     loaded = printed.returncode == 0
     supervised_pid = _parse_launchctl_pid(printed.stdout) if loaded else None
     drift = installed and program is not None and program != _resolve_eawfd_binary()[0]
+    path_drift = installed and service_path != _resolve_service_path(_resolve_eawfd_binary())
     return SupervisedAgentReport(
         supervisor="launchd",
         label=label,
@@ -942,6 +1012,8 @@ def _detect_launchd(runner: _ServiceRunner) -> SupervisedAgentReport:
         program=program,
         drift=drift,
         rival_pid=_detect_rival_pid(supervised_pid),
+        service_path=service_path,
+        path_drift=path_drift,
     )
 
 
@@ -951,6 +1023,7 @@ def _detect_systemd(runner: _ServiceRunner) -> SupervisedAgentReport:
     unit_path = _systemd_unit_path()
     installed = unit_path.exists()
     program = _systemd_program(unit_path) if installed else None
+    service_path = _systemd_service_path(unit_path) if installed else None
     active = runner(["systemctl", "--user", "is-active", unit])
     loaded = active.stdout.strip() == "active"
     supervised_pid: int | None = None
@@ -962,6 +1035,7 @@ def _detect_systemd(runner: _ServiceRunner) -> SupervisedAgentReport:
             main_pid = 0
         supervised_pid = main_pid if main_pid > 0 else None
     drift = installed and program is not None and program != _resolve_eawfd_binary()[0]
+    path_drift = installed and service_path != _resolve_service_path(_resolve_eawfd_binary())
     return SupervisedAgentReport(
         supervisor="systemd",
         label=unit,
@@ -970,6 +1044,8 @@ def _detect_systemd(runner: _ServiceRunner) -> SupervisedAgentReport:
         program=program,
         drift=drift,
         rival_pid=_detect_rival_pid(supervised_pid),
+        service_path=service_path,
+        path_drift=path_drift,
     )
 
 

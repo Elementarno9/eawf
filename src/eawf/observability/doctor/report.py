@@ -16,7 +16,7 @@ from typing import Any
 from rich.console import Console
 from rich.table import Table
 
-from eawf.observability.doctor.checks import CheckResult
+from eawf.observability.doctor.models import CheckResult
 
 logger = logging.getLogger(__name__)
 

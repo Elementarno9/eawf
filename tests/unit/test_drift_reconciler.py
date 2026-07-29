@@ -146,27 +146,25 @@ def _state_with_waves(waves: list[dict[str, Any]]) -> State:
 
 
 @pytest.fixture(autouse=True)
-def _stub_index(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keep the W10 one-pass index off real git so the patched ``derive_wave_sha`` answers.
-
-    ``detect_git_state_drift`` now builds a shared SHA index once and passes
-    it into ``derive_wave_sha(... index=...)``. These tests patch
-    ``derive_wave_sha`` directly, so the index content is irrelevant -- stub
-    the builder to an empty map so no live ``git log`` runs.
-    """
+def _stub_git_graph(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep reachability, first-parent, and identity probes off real git."""
     monkeypatch.setattr(
-        "eawf.workflow.lifecycle.wave_sha.build_wave_sha_index",
+        "eawf.workflow.lifecycle.wave_sha._reachable_wave_keys",
         lambda repo_root=None: {},
+    )
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha._first_parent_wave_candidates",
+        lambda repo_root=None: {},
+    )
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha.commit_identity_digest",
+        lambda commit, repo_root=None: None,
     )
 
 
 def test_detect_git_state_drift_no_closed_waves_is_clean(monkeypatch: pytest.MonkeyPatch) -> None:
     """Open waves are not part of the reconciler set."""
     monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.shutil.which", lambda _: "/usr/bin/git")
-    monkeypatch.setattr(
-        "eawf.workflow.lifecycle.wave_sha.derive_wave_sha",
-        lambda wid, repo_root=None, index=None: None,
-    )
     state = _state_with_waves([_wave_payload(status="pending")])
     assert detect_git_state_drift(state) == []
 
@@ -177,8 +175,12 @@ def test_detect_git_state_drift_clean_when_pinned_matches(
     monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.shutil.which", lambda _: "/usr/bin/git")
     sha40 = "a" * 40
     monkeypatch.setattr(
-        "eawf.workflow.lifecycle.wave_sha.derive_wave_sha",
-        lambda wid, repo_root=None, index=None: sha40,
+        "eawf.workflow.lifecycle.wave_sha._reachable_wave_keys",
+        lambda repo_root=None: {sha40: {"[P28-I01-W01]"}},
+    )
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha._first_parent_wave_candidates",
+        lambda repo_root=None: {"[P28-I01-W01]": [sha40]},
     )
     state = _state_with_waves([_wave_payload(status="closed", commit=sha40)])
     assert detect_git_state_drift(state) == []
@@ -186,10 +188,6 @@ def test_detect_git_state_drift_clean_when_pinned_matches(
 
 def test_detect_git_state_drift_pinned_but_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.shutil.which", lambda _: "/usr/bin/git")
-    monkeypatch.setattr(
-        "eawf.workflow.lifecycle.wave_sha.derive_wave_sha",
-        lambda wid, repo_root=None, index=None: None,
-    )
     state = _state_with_waves([_wave_payload(status="closed", commit="a" * 40)])
     drifts = detect_git_state_drift(state)
     assert len(drifts) == 1
@@ -200,24 +198,33 @@ def test_detect_git_state_drift_pinned_but_missing(monkeypatch: pytest.MonkeyPat
 
 def test_detect_git_state_drift_pinned_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.shutil.which", lambda _: "/usr/bin/git")
+    pinned = "a" * 40
+    successor = "b" * 40
     monkeypatch.setattr(
-        "eawf.workflow.lifecycle.wave_sha.derive_wave_sha",
-        lambda wid, repo_root=None, index=None: "b" * 40,
+        "eawf.workflow.lifecycle.wave_sha._reachable_wave_keys",
+        lambda repo_root=None: {
+            pinned: set(),
+            successor: {"[P28-I01-W01]"},
+        },
     )
-    state = _state_with_waves([_wave_payload(status="closed", commit="a" * 40)])
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha._first_parent_wave_candidates",
+        lambda repo_root=None: {"[P28-I01-W01]": [successor]},
+    )
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha.commit_identity_digest",
+        lambda commit, repo_root=None: "sha256:" + "c" * 64,
+    )
+    state = _state_with_waves([_wave_payload(status="closed", commit=pinned)])
     drifts = detect_git_state_drift(state)
     assert len(drifts) == 1
     assert drifts[0].kind == "pinned_mismatch"
-    assert drifts[0].state_commit == "a" * 40
-    assert drifts[0].git_commit == "b" * 40
+    assert drifts[0].state_commit == pinned
+    assert drifts[0].git_commit == successor
 
 
 def test_detect_git_state_drift_closed_no_pin(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.shutil.which", lambda _: "/usr/bin/git")
-    monkeypatch.setattr(
-        "eawf.workflow.lifecycle.wave_sha.derive_wave_sha",
-        lambda wid, repo_root=None, index=None: None,
-    )
     state = _state_with_waves([_wave_payload(status="closed", commit=None)])
     drifts = detect_git_state_drift(state)
     assert len(drifts) == 1
@@ -240,14 +247,19 @@ def test_detect_git_state_drift_closed_unfindable_when_git_missing(
 def test_detect_git_state_drift_prefix_match_is_clean(monkeypatch: pytest.MonkeyPatch) -> None:
     """A short prefix in state.commit reconciles with the full git SHA."""
     monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.shutil.which", lambda _: "/usr/bin/git")
+    sha40 = "abc1234" + "0" * 33
     monkeypatch.setattr(
-        "eawf.workflow.lifecycle.wave_sha.derive_wave_sha",
-        lambda wid, repo_root=None, index=None: "abc1234" + "0" * 33,
+        "eawf.workflow.lifecycle.wave_sha._reachable_wave_keys",
+        lambda repo_root=None: {sha40: {"[P28-I01-W01]"}},
+    )
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha._first_parent_wave_candidates",
+        lambda repo_root=None: {"[P28-I01-W01]": [sha40]},
     )
     # Wave.commit is ShaStr (40-hex), so we use the full 40-hex but
     # the derived SHA matches at the start — the helper is
     # prefix-tolerant in either direction.
-    state = _state_with_waves([_wave_payload(status="closed", commit="abc1234" + "0" * 33)])
+    state = _state_with_waves([_wave_payload(status="closed", commit=sha40)])
     assert detect_git_state_drift(state) == []
 
 

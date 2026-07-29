@@ -391,9 +391,7 @@ def test_build_durable_audit_context_reads_bound_persisted_receipt(
         runner_digest="4" * 64,
         environment_digest="5" * 64,
         freshness_key="7" * 64,
-        argv=["pytest"],
         argv_digest="6" * 64,
-        command="pytest",
         timeout_class="quick",
         resolved_timeout_seconds=30.0,
         started_at=_T0,
@@ -401,7 +399,6 @@ def test_build_durable_audit_context_reads_bound_persisted_receipt(
         duration_ms=0,
         result="pass",
         exit_status=0,
-        full_log_ref=".ea/local/gates/G-01.log",
     )
     append_envelope(
         store_path(state_path, StoreKind.GATE_RECEIPT),

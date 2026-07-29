@@ -58,7 +58,11 @@ def _seed_repo_with_claimed_wave(
     for i, content in enumerate(("one\n", "two\n", "three\n")):
         (repo / "f.txt").write_text(content, encoding="utf-8")
         subprocess.run(["git", "add", "."], cwd=repo, check=True)
-        subprocess.run(["git", "commit", "-q", "-m", f"c{i}"], cwd=repo, check=True)
+        subprocess.run(
+            ["git", "commit", "-q", "-m", f"[P05-I01-W01] test: c{i}"],
+            cwd=repo,
+            check=True,
+        )
         sha = subprocess.run(
             ["git", "rev-parse", "HEAD"],
             cwd=repo,

@@ -445,8 +445,7 @@ read off real history rather than recomputed.
 `gh pr create`, `gh pr merge`, and any push to a protected branch are
 irreversible/visible-to-others actions per AGENTS.md — surface the
 final confirm through `AskUserQuestion` (options: `proceed` / `defer`
-/ `abort`) unless `vcs.auto_push`, `vcs.pr_open`, and the merge
-strategy are pre-resolved by config.
+/ `abort`). Config cannot bypass protected-action confirmations.
 
 ## Output contract
 
@@ -508,9 +507,8 @@ _POLISH_BODY = """# /polish
 
 - `--scope=<dir|file>` — narrow the sweep from the default entire
   `src/eawf/` to one directory or file.
-- `--auto-apply-safe` — auto-apply the small "safe" subset (formatting,
-  comment phrasing) without an `AskUserQuestion` prompt; config leaf
-  `polish.auto_apply_safe`. Default false.
+- `--auto-apply-safe` — explicitly auto-apply the small "safe" subset
+  (formatting, comment phrasing) for this invocation.
 - `--category naming|docstrings|logs|errors|dead-code` — filter the
   sweep to one check category. Default is all categories.
 
@@ -525,11 +523,10 @@ _POLISH_BODY = """# /polish
 
 ## Decision surfaces
 
-Public-API renames, dead-code deletions, and anything matching
-`polish.deletion_policy` MUST be raised via `AskUserQuestion`
-(options: `apply` / `defer-to-backlog` / `skip`) instead of asking
-in free text. `polish.auto_apply_safe=true` bypasses the prompt for
-the small "safe" subset only (formatting, comment phrasing).
+Public-API renames and dead-code deletions MUST be raised via
+`AskUserQuestion` (options: `apply` / `defer-to-backlog` / `skip`)
+instead of asking in free text. No persisted config bypasses this
+protected decision.
 
 ## Output contract
 
@@ -972,23 +969,23 @@ _FLOW_BODY = f"""# /flow
    so its claim path carries the operator gotchas:
    {_GOTCHA_DISPATCH_RESUME}
 2. **Inter-stage gate (default).** After each step returns
-   `status=ok`, check `flow.auto_accept.<stage>` (via
-   `uv run eawf config get flow.auto_accept.<stage>`). When `false`
-   (the default) and the stage was not listed in `--auto-accept`,
+   `status=ok`, check `flow.advance_after.<stage>` (via
+   `uv run eawf config get flow.advance_after.<stage>`). When `false`
+   (the default) and the stage was not listed in `--advance-after`,
    ask the operator via `AskUserQuestion` whether to proceed —
-   options: `proceed` / `skip-next` / `stop`. When `true`, advance
-   without a prompt. Between a wave close and the next stage:
+   options: `continue` / `defer`. When `true`, advance without this
+   flow-level pause. Protected `needs_user`, deletion, push, PR, and
+   ship confirmations remain mandatory. Between a wave close and the next stage:
    {_GOTCHA_STATE_BOOKKEEPING}
 3. On any non-`ok` status (`blocked`, `needs_user`, `failed`,
    `partial`), short-circuit with the failing step's repair commands.
 
 ## Options
 
-- `--auto-accept=<stage>[,<stage>...]` — the inter-stage gate is
-  executed by YOU (the model) against `flow.auto_accept.<stage>`; the
-  flow engine reads only `stop_after` / `args_per_step` / `resume_from`
-  and does NOT enforce auto-accept. Listing a stage advances past its
-  gate without the operator prompt.
+- `--advance-after=<stage>[,<stage>...]` — engine-enforced override
+  for this run. Listing a completed stage skips only its flow-level
+  transition pause. The legacy `--auto-accept` spelling remains an
+  input alias during migration.
 - `--stop-after=<stage>` — engine-parsed (`ctx.args["stop_after"]`);
   halt the pipeline after the named stage. Default none (full run).
 - `--resume` / `--resume-from` — engine-parsed
@@ -1006,9 +1003,9 @@ _FLOW_BODY = f"""# /flow
 ## Pre-flight checklist
 
 - [ ] All upstream skills are installed.
-- [ ] Per-stage `flow.auto_accept` flags reflect the operator's
-      intended cadence (review existing values; default is "ask each
-      time" for every stage).
+- [ ] Per-stage `flow.advance_after` flags reflect the operator's
+      intended cadence for `research`, `prep`, `audit`, and `polish`
+      (default is "ask each time").
 
 ## Decision surfaces
 
@@ -1810,7 +1807,7 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
             " on any non-ok status."
         ),
         argument_hint=(
-            "<task-slug> [--auto-accept=<stage>[,<stage>...]] [--stop-after=<stage>]"
+            "<task-slug> [--advance-after=<stage>[,<stage>...]] [--stop-after=<stage>]"
             " [--resume] [--args-per-step=<json>] [--caps=eu=..,usd=..]"
             " [--max-repair-cycles=<n>]"
         ),

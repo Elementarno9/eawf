@@ -193,40 +193,12 @@ def _resolve_enabled_profiles(target: Path) -> list[str]:
             strings, or the layered merge raises (malformed YAML in any
             layer).
     """
-    from eawf.kernel.config.layered import merge_config
-    from eawf.platform.profiles.loader import list_profiles
+    from eawf.platform.profiles.selection import resolve_enabled_profiles
 
     try:
-        merged, _sources = merge_config(repo=target, workspace=target)
+        return resolve_enabled_profiles(target)
     except Exception as exc:
-        raise cli_errors.UserError(
-            f"layered config merge failed: {exc}", kind="InvalidInput"
-        ) from exc
-
-    profiles_section = merged.get("profiles") if isinstance(merged, dict) else None
-    if not isinstance(profiles_section, dict):
-        return []
-    raw_enabled = profiles_section.get("enabled")
-    if raw_enabled is None:
-        return []
-    if not isinstance(raw_enabled, list):
-        raise cli_errors.UserError(
-            f"profiles.enabled must be a list of profile ids; got {type(raw_enabled).__name__}",
-            kind="InvalidInput",
-        )
-    enabled = [p for p in raw_enabled if isinstance(p, str)]
-    if len(enabled) != len(raw_enabled):
-        raise cli_errors.UserError(
-            "profiles.enabled entries must all be strings", kind="InvalidInput"
-        )
-    known = set(list_profiles())
-    unknown = sorted(set(enabled) - known)
-    if unknown:
-        raise cli_errors.UserError(
-            f"unknown profile(s) in profiles.enabled: {unknown}; choose from {sorted(known)}",
-            kind="InvalidInput",
-        )
-    return enabled
+        raise cli_errors.UserError(f"profile selection failed: {exc}", kind="InvalidInput") from exc
 
 
 def _seed_shadow(
@@ -253,11 +225,16 @@ def _seed_shadow(
 def _render_into(
     *,
     target_root: Path,
+    profile_workspace: Path,
     enabled_profiles: list[str],
     generator: str,
     write_manifest: bool,
 ) -> tuple[RenderResult, Manifest, Manifest]:
     """Run the AGENTS.md + CLAUDE.md + manifest pipeline against *target_root*.
+
+    Profile discovery stays anchored at *profile_workspace*. Dry-run and check
+    render into a shadow tree, but their profiles must still resolve from the
+    real ``--target`` workspace and its ``.ea/profiles`` overlay.
 
     Returns:
         ``(agents_result, manifest_before, manifest_after)`` — the renderer
@@ -275,7 +252,9 @@ def _render_into(
     from eawf.surfaces.render.manifest import load as load_manifest
     from eawf.surfaces.render.manifest import save_atomic as save_manifest_atomic
 
-    composed = compose([load_profile(p) for p in enabled_profiles])
+    composed = compose(
+        [load_profile(profile_id, workspace=profile_workspace) for profile_id in enabled_profiles]
+    )
     agents_md_path = (target_root / _AGENTS_MD).resolve()
     claude_md_path = (target_root / _CLAUDE_MD).resolve()
     manifest_path = (target_root / _MANIFEST_RELPATH).resolve()
@@ -443,6 +422,7 @@ def sync_cmd(
             try:
                 agents_result, _before, _after = _render_into(
                     target_root=shadow,
+                    profile_workspace=target_dir,
                     enabled_profiles=enabled_profiles,
                     generator="eawf-sync",
                     write_manifest=True,  # in shadow, not the real workspace
@@ -494,6 +474,7 @@ def sync_cmd(
     try:
         agents_result, _before, _after = _render_into(
             target_root=target_dir,
+            profile_workspace=target_dir,
             enabled_profiles=enabled_profiles,
             generator="eawf-sync",
             write_manifest=True,

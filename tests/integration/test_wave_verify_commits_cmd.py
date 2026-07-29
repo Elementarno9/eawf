@@ -131,19 +131,22 @@ def _seed_state(state_dir: Path, *, waves: dict[str, str | None]) -> Path:
 @pytest.fixture
 def git_available(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.shutil.which", lambda _: "/usr/bin/git")
-    # ``scan_commit_pins`` now builds a shared SHA index once (W10). These
-    # tests patch ``derive_wave_sha`` directly, so stub the builder to an
-    # empty map -- no live ``git log`` runs and the patched derive answers.
-    monkeypatch.setattr(
-        "eawf.workflow.lifecycle.wave_sha.build_wave_sha_index",
-        lambda repo_root=None: {},
-    )
 
 
 def _patch_derive(monkeypatch: pytest.MonkeyPatch, table: dict[str, str | None]) -> None:
+    reachable = {sha: {wave_id} for wave_id, sha in table.items() if sha is not None}
+    candidates = {wave_id: [sha] for wave_id, sha in table.items() if sha is not None}
     monkeypatch.setattr(
-        "eawf.workflow.lifecycle.wave_sha.derive_wave_sha",
-        lambda wid, repo_root=None, index=None: table.get(wid),
+        "eawf.workflow.lifecycle.wave_sha._reachable_wave_keys",
+        lambda repo_root=None: reachable,
+    )
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha._first_parent_wave_candidates",
+        lambda repo_root=None: candidates,
+    )
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha.commit_identity_digest",
+        lambda commit, repo_root=None: f"sha256:{'0' * 64}",
     )
 
 

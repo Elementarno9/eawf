@@ -88,50 +88,52 @@ def test_writable_layers_global_only_without_anchors() -> None:
 
 
 def test_current_value_dirty_wins() -> None:
-    entry = registry_lookup("audit.fix_safe")
+    entry = registry_lookup("flow.advance_after.audit")
     assert entry is not None
-    merged = {"audit": {"fix_safe": False}}
-    assert current_value(entry, merged, {"audit.fix_safe": True}) is True
+    merged = {"flow": {"advance_after": {"audit": False}}}
+    assert current_value(entry, merged, {"flow.advance_after.audit": True}) is True
 
 
 def test_current_value_falls_back_to_default() -> None:
-    entry = registry_lookup("audit.fix_safe")
+    entry = registry_lookup("flow.advance_after.audit")
     assert entry is not None
     assert current_value(entry, {}, {}) == entry.default
 
 
 def test_toggle_bool_flips() -> None:
-    entry = registry_lookup("audit.fix_safe")
+    entry = registry_lookup("flow.advance_after.audit")
     assert entry is not None
-    assert toggle_bool(entry, {"audit": {"fix_safe": False}}, {}) == {"audit.fix_safe": True}
+    assert toggle_bool(entry, {"flow": {"advance_after": {"audit": False}}}, {}) == {
+        "flow.advance_after.audit": True
+    }
 
 
 def test_toggle_bool_noop_on_non_bool() -> None:
-    entry = registry_lookup("planning.approval")
+    entry = registry_lookup("audit.default_level")
     assert entry is not None
     assert toggle_bool(entry, {}, {}) == {}
 
 
 def test_cycle_choice_wraps() -> None:
-    entry = registry_lookup("planning.approval")  # choices ("ask", "auto", "never")
+    entry = registry_lookup("audit.default_level")  # choices ("quick", "standard", "deep")
     assert entry is not None
-    merged = {"planning": {"approval": "never"}}
+    merged = {"audit": {"default_level": "deep"}}
     # Cycling forward from the last choice wraps to the first.
-    assert cycle_choice(entry, merged, {}, step=1) == {"planning.approval": "ask"}
+    assert cycle_choice(entry, merged, {}, step=1) == {"audit.default_level": "quick"}
 
 
 def test_cycle_choice_forward_a_b_c() -> None:
     """Forward-cycle steps a -> b -> c (the Enter-mutator direction)."""
-    entry = registry_lookup("planning.approval")  # ("ask", "auto", "never")
+    entry = registry_lookup("audit.default_level")  # ("quick", "standard", "deep")
     assert entry is not None
-    after_first = cycle_choice(entry, {"planning": {"approval": "ask"}}, {}, step=1)
-    assert after_first == {"planning.approval": "auto"}
+    after_first = cycle_choice(entry, {"audit": {"default_level": "quick"}}, {}, step=1)
+    assert after_first == {"audit.default_level": "standard"}
     after_second = cycle_choice(entry, {}, after_first, step=1)
-    assert after_second == {"planning.approval": "never"}
+    assert after_second == {"audit.default_level": "deep"}
 
 
 def test_format_value_bool_lowercase() -> None:
-    entry = registry_lookup("audit.fix_safe")
+    entry = registry_lookup("flow.advance_after.audit")
     assert entry is not None
     assert format_value(entry, True) == "true"
     assert format_value(entry, False) == "false"
@@ -185,9 +187,9 @@ def test_toggle_multichoice_item_noop_for_unknown_item() -> None:
 
 def test_toggle_multichoice_item_noop_on_non_multichoice() -> None:
     """A non-multichoice field routes through harmlessly (dirty unchanged)."""
-    entry = registry_lookup("planning.approval")  # choice, not multichoice
+    entry = registry_lookup("audit.default_level")  # choice, not multichoice
     assert entry is not None
-    assert toggle_multichoice_item(entry, {}, {}, item="ask") == {}
+    assert toggle_multichoice_item(entry, {}, {}, item="quick") == {}
 
 
 def test_toggle_multichoice_item_round_trip_drop_if_unchanged() -> None:
@@ -215,19 +217,19 @@ def test_toggle_multichoice_item_round_trip_drop_if_unchanged() -> None:
 
 
 def test_enter_action_bool_toggles() -> None:
-    entry = registry_lookup("audit.fix_safe")  # bool
+    entry = registry_lookup("flow.advance_after.audit")  # bool
     assert entry is not None
     assert enter_action(entry, False, row_width=80) == "toggle"
 
 
 def test_enter_action_choice_cycles() -> None:
-    entry = registry_lookup("planning.approval")  # choice
+    entry = registry_lookup("audit.default_level")  # choice
     assert entry is not None
     assert enter_action(entry, "ask", row_width=80) == "cycle"
 
 
 def test_enter_action_int_inline() -> None:
-    entry = registry_lookup("audit.flaky_retry_count")  # int
+    entry = registry_lookup("flow.max_repair_cycles")  # int
     assert entry is not None
     assert enter_action(entry, 2, row_width=80) == "inline"
 
@@ -278,7 +280,11 @@ def test_enter_action_str_over_row_width_popup() -> None:
 
 def test_needs_popup_edit_false_for_non_str() -> None:
     """Non-``str`` types never use the popup (toggle / cycle / inline only)."""
-    for key in ("audit.fix_safe", "planning.approval", "audit.flaky_retry_count"):
+    for key in (
+        "flow.advance_after.audit",
+        "audit.default_level",
+        "flow.max_repair_cycles",
+    ):
         entry = registry_lookup(key)
         assert entry is not None
         assert needs_popup_edit(entry, entry.default, row_width=1) is False
@@ -300,7 +306,7 @@ def test_save_dirty_fields_routes_through_save_fn_not_state_json() -> None:
 
     repo = Path("/tmp/repo")
     saved = save_dirty_fields(
-        {"audit.fix_safe": True, "planning.approval": "auto"},
+        {"flow.advance_after.audit": True, "audit.default_level": "standard"},
         layer="repo",
         workspace=None,
         repo=repo,
@@ -312,7 +318,7 @@ def test_save_dirty_fields_routes_through_save_fn_not_state_json() -> None:
     assert all(target.endswith(".yaml") for target in targets), targets
     assert not any("state.json" in target for target in targets), targets
     keys = {call["key"] for call in calls}
-    assert keys == {"audit.fix_safe", "planning.approval"}
+    assert keys == {"flow.advance_after.audit", "audit.default_level"}
 
 
 def test_save_dirty_fields_empty_is_noop() -> None:
@@ -628,18 +634,16 @@ def test_curated_keys_stay_subset_of_leaf_catalog() -> None:
 # ---------------------------------------------------------------------------
 
 #: The ``flow.*`` scalar keys curated into ``CONFIG_REGISTRY`` so the
-#: workflow auto-accept / decision / budget toggles surface under a ``flow``
-#: tab. Each is a writable scalar leaf (bool, or the soft/hard budget enum
-#: surfaced as a ``choice``) -- never a locked, security, or structural key.
+#: workflow transition / repair / budget controls surface under a ``flow``
+#: tab. Each is a writable scalar leaf -- never a locked, security, or
+#: structural key.
 _FLOW_KEYS: tuple[str, ...] = (
-    "flow.ask_on_decisions",
-    "flow.auto_accept.audit",
-    "flow.auto_accept.polish",
-    "flow.auto_accept.prep",
-    "flow.auto_accept.research",
-    "flow.auto_accept.review",
-    "flow.auto_accept.ship",
+    "flow.advance_after.audit",
+    "flow.advance_after.polish",
+    "flow.advance_after.prep",
+    "flow.advance_after.research",
     "flow.budget.enforce",
+    "flow.max_repair_cycles",
 )
 
 
@@ -751,7 +755,7 @@ def test_is_editable_key_omits_leaf_not_writable_from_layers() -> None:
 
 def test_is_editable_key_keeps_writable_scalar() -> None:
     """A curated key writable from an offered layer stays editable."""
-    entry = registry_lookup("vcs.auto_commit")
+    entry = registry_lookup("flow.advance_after.audit")
     assert entry is not None
     assert is_editable_key(entry, ("global", "repo", "local")) is True
 
@@ -795,7 +799,7 @@ def test_is_security_key_detects_security_domain() -> None:
         default="ask_first",
     )
     assert is_security_key(sec) is True
-    non_sec = registry_lookup("vcs.auto_commit")
+    non_sec = registry_lookup("flow.advance_after.audit")
     assert non_sec is not None
     assert is_security_key(non_sec) is False
 
@@ -918,9 +922,9 @@ def test_non_security_edit_stages_without_confirm() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            entry = registry_lookup("audit.fix_safe")
+            entry = registry_lookup("flow.advance_after.audit")
             assert entry is not None
-            modal._merged = {"audit": {"fix_safe": False}}
+            modal._merged = {"flow": {"advance_after": {"audit": False}}}
             modal._commit_staged(entry, {entry.key: True})
             await pilot.pause()
             # No confirm modal: the edit staged directly.
@@ -1316,8 +1320,9 @@ def test_config_enter_toggles_bool() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            _seek_field(modal, "audit.fix_safe")
-            entry = modal._active_field()  # audit.fix_safe (bool)
+            _goto_tab(modal, "flow")
+            _seek_field(modal, "flow.advance_after.audit")
+            entry = modal._active_field()  # flow.advance_after.audit (bool)
             assert entry is not None and entry.type == "bool"
             before = current_value(entry, modal._merged, modal._view.dirty)
             await pilot.press("enter")
@@ -1339,9 +1344,9 @@ def test_config_enter_cycles_choice_a_b_c_a() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            _goto_tab(modal, "planning")
+            _goto_tab(modal, "audit")
             await pilot.pause()
-            _seek_field(modal, "planning.approval")
+            _seek_field(modal, "audit.default_level")
             entry = modal._active_field()
             assert entry is not None and entry.type == "choice"
             choices = list(entry.choices or ())
@@ -1378,7 +1383,8 @@ def test_config_enter_opens_inline_edit_for_int() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            _seek_field(modal, "audit.flaky_retry_count")
+            _goto_tab(modal, "planning")
+            _seek_field(modal, "planning.max_parallel_waves")
             await pilot.pause()
             entry = modal._active_field()
             assert entry is not None and entry.type == "int"
@@ -1401,17 +1407,18 @@ def test_config_inline_edit_commit_stages_value() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            _seek_field(modal, "audit.flaky_retry_count")  # int, 0..5
+            _goto_tab(modal, "planning")
+            _seek_field(modal, "planning.max_parallel_waves")
             await pilot.pause()
             entry = modal._active_field()
             assert entry is not None
             await pilot.press("enter")  # open inline editor
             await pilot.pause()
-            modal.query_one("#config-inline-input", Input).value = "4"
+            modal.query_one("#config-inline-input", Input).value = "5"
             await pilot.press("enter")  # commit
             await pilot.pause()
             assert modal._editing_key is None  # editor torn down
-            assert modal._view.dirty.get(entry.key) == 4  # coerced int, not "4"
+            assert modal._view.dirty.get(entry.key) == 5  # coerced int, not "5"
 
     asyncio.run(body())
 
@@ -1463,8 +1470,9 @@ def test_config_toggle_twice_clears_dirty() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            _seek_field(modal, "audit.fix_safe")
-            entry = modal._active_field()  # audit.fix_safe (bool)
+            _goto_tab(modal, "flow")
+            _seek_field(modal, "flow.advance_after.audit")
+            entry = modal._active_field()  # flow.advance_after.audit (bool)
             assert entry is not None and entry.type == "bool"
             await pilot.press("enter")  # toggle once → dirty
             await pilot.pause()
@@ -1491,7 +1499,8 @@ def test_config_inline_edit_input_renders_wider_than_one_cell() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            _seek_field(modal, "audit.flaky_retry_count")  # int
+            _goto_tab(modal, "planning")
+            _seek_field(modal, "planning.max_parallel_waves")
             await pilot.pause()
             await pilot.press("enter")  # open inline editor
             await pilot.pause()
@@ -1516,7 +1525,8 @@ def test_config_inline_edit_label_aligns_with_static_row() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            modal.field_index = 1  # audit.flaky_retry_count (int)
+            _goto_tab(modal, "planning")
+            _seek_field(modal, "planning.max_parallel_waves")
             await pilot.pause()
             entry = modal._active_field()
             assert entry is not None
@@ -1530,13 +1540,13 @@ def test_config_inline_edit_label_aligns_with_static_row() -> None:
 
 def test_meta_line_prefixes_three_spaces_for_alignment() -> None:
     """``_meta_line`` leads with three spaces (caret + dirty + separator)."""
-    entry = registry_lookup("audit.flaky_retry_count")
+    entry = registry_lookup("planning.max_parallel_waves")
     assert entry is not None
     modal = ConfigModal(workspace=None, repo=Path("/tmp/repo"))
     line = modal._meta_line(entry)
-    assert line.startswith("   audit.flaky_retry_count")
+    assert line.startswith("   planning.max_parallel_waves")
     # The key column matches the static row (caret + dirty + space = 3).
-    assert line.index("audit.flaky_retry_count") == 3
+    assert line.index("planning.max_parallel_waves") == 3
 
 
 def test_config_inline_edit_type_cell_aligns_with_static_row() -> None:
@@ -1554,7 +1564,8 @@ def test_config_inline_edit_type_cell_aligns_with_static_row() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            modal.field_index = 1  # audit.flaky_retry_count (int)
+            _goto_tab(modal, "planning")
+            _seek_field(modal, "planning.max_parallel_waves")
             await pilot.pause()
             entry = modal._active_field()
             assert entry is not None
@@ -1651,7 +1662,8 @@ def test_config_inline_edit_esc_cancels_without_mutation() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            _seek_field(modal, "audit.flaky_retry_count")
+            _goto_tab(modal, "planning")
+            _seek_field(modal, "planning.max_parallel_waves")
             await pilot.pause()
             entry = modal._active_field()
             assert entry is not None
@@ -1677,7 +1689,8 @@ def test_config_inline_edit_out_of_range_int_shows_error_no_mutation() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            _seek_field(modal, "audit.flaky_retry_count")  # max 5
+            _goto_tab(modal, "planning")
+            _seek_field(modal, "planning.max_parallel_waves")
             await pilot.pause()
             entry = modal._active_field()
             assert entry is not None
@@ -2104,7 +2117,8 @@ def test_config_hint_flips_during_inline_edit() -> None:
             await pilot.pause()
             modal = _push_config(app)
             await pilot.pause()
-            _seek_field(modal, "audit.flaky_retry_count")  # int field
+            _goto_tab(modal, "planning")
+            _seek_field(modal, "planning.max_parallel_waves")
             await pilot.pause()
             await pilot.press("enter")  # open inline editor
             await pilot.pause()
