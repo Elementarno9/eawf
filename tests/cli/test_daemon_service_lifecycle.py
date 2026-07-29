@@ -103,10 +103,13 @@ def test_detect_windows_reports_none_without_shelling(
 def test_evict_launchd_runs_bootout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """launchd eviction shells out to ``launchctl bootout`` for the label."""
     monkeypatch.setattr(service_install, "_invoking_uid", lambda: 501)
-    rec = _RecordingRunner()
+    rec = _RecordingRunner(returncode=1)
     target = service_install.evict_supervised_agent(platform="darwin", runner=rec)
     assert target == "gui/501/dev.eawf.eawfd"
-    assert rec.calls == [["launchctl", "bootout", "gui/501/dev.eawf.eawfd"]]
+    assert rec.calls == [
+        ["launchctl", "bootout", "gui/501/dev.eawf.eawfd"],
+        ["launchctl", "print", "gui/501/dev.eawf.eawfd"],
+    ]
 
 
 def test_evict_systemd_runs_stop(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -133,10 +136,19 @@ def test_stop_evict_service_does_not_respawn_for_shutdown_rpc(
 
     _force_launchd(monkeypatch, tmp_path)
     timeline: list[str] = []
+    unloaded = False
 
     def _rec_runner(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+        nonlocal unloaded
         timeline.append(" ".join(cmd))
-        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="pid = 4242\n", stderr="")
+        if cmd[1] == "bootout":
+            unloaded = True
+        return subprocess.CompletedProcess(
+            args=cmd,
+            returncode=1 if cmd[1] == "print" and unloaded else 0,
+            stdout="" if unloaded else "pid = 4242\n",
+            stderr="",
+        )
 
     def _rec_rpc(method: str, params: dict[str, object]) -> dict[str, object]:
         timeline.append(f"rpc:{method}")

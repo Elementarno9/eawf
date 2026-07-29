@@ -241,7 +241,13 @@ def test_enable_service_macos_renders_plist_and_invokes_launchctl(
     """``enable_service`` writes the plist + runs the expected commands."""
     recorder = _install_run_recorder(
         monkeypatch,
-        responses=[_StubProcess(), _StubProcess(), _StubProcess(), _StubProcess()],
+        responses=[
+            _StubProcess(),
+            _StubProcess(returncode=1),
+            _StubProcess(),
+            _StubProcess(),
+            _StubProcess(),
+        ],
     )
     _seed_pid_file(stub_runtime_dir, pid=11111)
     monkeypatch.setattr(service_install, "_wait_for_daemon_ready", lambda: 11111)
@@ -271,13 +277,18 @@ def test_enable_service_macos_renders_plist_and_invokes_launchctl(
         "bootout",
         "gui/501/dev.eawf.eawfd",
     ]
-    assert recorder.calls[1][:3] == ["launchctl", "bootstrap", "gui/501"]
-    assert recorder.calls[2] == [
+    assert recorder.calls[1] == [
+        "launchctl",
+        "print",
+        "gui/501/dev.eawf.eawfd",
+    ]
+    assert recorder.calls[2][:3] == ["launchctl", "bootstrap", "gui/501"]
+    assert recorder.calls[3] == [
         "launchctl",
         "enable",
         "gui/501/dev.eawf.eawfd",
     ]
-    assert recorder.calls[3] == [
+    assert recorder.calls[4] == [
         "launchctl",
         "kickstart",
         "gui/501/dev.eawf.eawfd",
@@ -297,7 +308,13 @@ def test_enable_service_macos_uses_sudo_uid_when_run_as_root(
     # what's under test; do not stub it here.
     recorder = _install_run_recorder(
         monkeypatch,
-        responses=[_StubProcess(), _StubProcess(), _StubProcess(), _StubProcess()],
+        responses=[
+            _StubProcess(),
+            _StubProcess(returncode=1),
+            _StubProcess(),
+            _StubProcess(),
+            _StubProcess(),
+        ],
     )
     _seed_pid_file(stub_runtime_dir, pid=22222)
     monkeypatch.setattr(service_install, "_wait_for_daemon_ready", lambda: 22222)
@@ -313,8 +330,8 @@ def test_enable_service_macos_uses_sudo_uid_when_run_as_root(
     assert envelope.platform == "darwin"
     assert envelope.pid == 22222
     assert plist_path.exists()
-    assert recorder.calls[1][:3] == ["launchctl", "bootstrap", "gui/501"]
-    assert recorder.calls[1][3] == str(plist_path)
+    assert recorder.calls[2][:3] == ["launchctl", "bootstrap", "gui/501"]
+    assert recorder.calls[2][3] == str(plist_path)
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="macOS-only launchd path")
@@ -348,7 +365,13 @@ def test_enable_service_macos_boots_out_before_bootstrap(
     """Idempotent enable issues bootout BEFORE bootstrap in argv order."""
     recorder = _install_run_recorder(
         monkeypatch,
-        responses=[_StubProcess(), _StubProcess(), _StubProcess(), _StubProcess()],
+        responses=[
+            _StubProcess(),
+            _StubProcess(returncode=1),
+            _StubProcess(),
+            _StubProcess(),
+            _StubProcess(),
+        ],
     )
     _seed_pid_file(stub_runtime_dir, pid=33333)
     monkeypatch.setattr(service_install, "_wait_for_daemon_ready", lambda: 33333)
@@ -363,6 +386,92 @@ def test_enable_service_macos_boots_out_before_bootstrap(
 
     verbs = [call[1] for call in recorder.calls if call[0] == "launchctl"]
     assert verbs.index("bootout") < verbs.index("bootstrap")
+
+
+def test_enable_launchd_waits_for_async_bootout_before_bootstrap(
+    monkeypatch: pytest.MonkeyPatch,
+    stub_runtime_dir: Path,
+    stub_launchd_plist: Path,
+) -> None:
+    """Bootstrap waits until launchd no longer prints the evicted target."""
+    recorder = _install_run_recorder(
+        monkeypatch,
+        responses=[
+            _StubProcess(),
+            _StubProcess(returncode=0),
+            _StubProcess(returncode=1),
+            _StubProcess(),
+            _StubProcess(),
+            _StubProcess(),
+        ],
+    )
+    sleeps: list[float] = []
+    monkeypatch.setattr(service_install.time, "sleep", sleeps.append)
+    monkeypatch.setattr(service_install, "_launchd_uid_target", lambda: "gui/501")
+    monkeypatch.setattr(service_install, "_wait_for_daemon_ready", lambda: 44444)
+
+    envelope = service_install._enable_launchd()
+
+    assert envelope.pid == 44444
+    assert sleeps == [service_install._LAUNCHD_UNLOAD_POLL_INTERVAL_SECONDS]
+    assert [call[1] for call in recorder.calls] == [
+        "bootout",
+        "print",
+        "print",
+        "bootstrap",
+        "enable",
+        "kickstart",
+    ]
+
+
+def test_enable_launchd_aborts_when_bootout_remains_registered(
+    monkeypatch: pytest.MonkeyPatch,
+    stub_runtime_dir: Path,
+    stub_launchd_plist: Path,
+) -> None:
+    """A bounded unload timeout prevents bootstrap into a removing job."""
+    recorder = _install_run_recorder(
+        monkeypatch,
+        responses=[_StubProcess(), _StubProcess(returncode=0)],
+    )
+    monotonic = iter([0.0, service_install._LAUNCHD_UNLOAD_TIMEOUT_SECONDS])
+    monkeypatch.setattr(service_install.time, "monotonic", lambda: next(monotonic))
+    monkeypatch.setattr(service_install, "_launchd_uid_target", lambda: "gui/501")
+
+    with pytest.raises(ServiceInstallError, match="did not unload"):
+        service_install._enable_launchd()
+
+    assert [call[1] for call in recorder.calls] == ["bootout", "print"]
+
+
+def test_restart_service_macos_does_not_bootout_twice(
+    monkeypatch: pytest.MonkeyPatch,
+    stub_runtime_dir: Path,
+    stub_launchd_plist: Path,
+) -> None:
+    """Restart trusts the lifecycle eviction and only gates then bootstraps."""
+    recorder = _install_run_recorder(
+        monkeypatch,
+        responses=[
+            _StubProcess(returncode=1),
+            _StubProcess(),
+            _StubProcess(),
+            _StubProcess(),
+        ],
+    )
+    monkeypatch.setattr(service_install.sys, "platform", "darwin")
+    monkeypatch.setattr(service_install, "_launchd_uid_target", lambda: "gui/501")
+    monkeypatch.setattr(service_install, "_wait_for_daemon_ready", lambda: 55555)
+
+    envelope = service_install.restart_service()
+
+    assert envelope.pid == 55555
+    assert [call[1] for call in recorder.calls] == [
+        "print",
+        "bootstrap",
+        "enable",
+        "kickstart",
+    ]
 
 
 # ---------------------------------------------------------------------

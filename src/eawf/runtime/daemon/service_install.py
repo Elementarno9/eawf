@@ -95,6 +95,24 @@ _WINDOWS_SERVICE_NAME = "eawfd"
 # Per-OS readiness wait window (seconds).
 _PID_WAIT_TIMEOUT_SECONDS = 10.0
 _PID_WAIT_POLL_INTERVAL_SECONDS = 0.25
+_LAUNCHD_UNLOAD_TIMEOUT_SECONDS = 2.0
+_LAUNCHD_UNLOAD_POLL_INTERVAL_SECONDS = 0.05
+
+
+#: Runner seam for supervised-agent management and launchd unload polling.
+_ServiceRunner = Callable[[list[str]], subprocess.CompletedProcess[str]]
+
+
+def _default_service_runner(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run *cmd* capturing output; never raise on non-zero or missing binary."""
+    logger.info(f"_default_service_runner cmd={cmd!r}")
+    try:
+        return subprocess.run(cmd, check=False, capture_output=True, text=True)
+    except FileNotFoundError:
+        return subprocess.CompletedProcess(args=cmd, returncode=127, stdout="", stderr="")
+
+
+_service_runner: _ServiceRunner = _default_service_runner
 
 
 class ServiceStatus(StrEnum):
@@ -292,6 +310,54 @@ def _run(cmd: list[str], *, check: bool = True) -> subprocess.CompletedProcess[s
     return result
 
 
+def _wait_for_launchd_unloaded(
+    target: str,
+    *,
+    runner: _ServiceRunner | None = None,
+    timeout_seconds: float = _LAUNCHD_UNLOAD_TIMEOUT_SECONDS,
+) -> None:
+    """Wait until launchd removes *target* from the user's GUI domain.
+
+    ``launchctl bootout`` can return before the service definition disappears.
+    Bootstrapping during that short removal window fails with rc=5 (EIO).
+
+    Args:
+        target: Fully-qualified launchd service target.
+        runner: Injectable command runner.
+        timeout_seconds: Positive bounded wait.
+
+    Raises:
+        ServiceInstallError: When launchd still reports the target at timeout.
+    """
+    if timeout_seconds <= 0:
+        raise ServiceInstallError(
+            f"launchd unload timeout must be positive, got {timeout_seconds!r}"
+        )
+    run = runner if runner is not None else _service_runner
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        printed = run(["launchctl", "print", target])
+        if printed.returncode != 0:
+            return
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(_LAUNCHD_UNLOAD_POLL_INTERVAL_SECONDS)
+    raise ServiceInstallError(
+        f"launchd agent did not unload within {timeout_seconds:.1f}s target={target!r}"
+    )
+
+
+def _evict_launchd(
+    target: str,
+    *,
+    runner: _ServiceRunner | None = None,
+) -> None:
+    """Boot out *target* and wait for asynchronous removal to finish."""
+    run = runner if runner is not None else _service_runner
+    run(["launchctl", "bootout", target])
+    _wait_for_launchd_unloaded(target, runner=run)
+
+
 def _wait_for_pid_file(timeout_seconds: float = _PID_WAIT_TIMEOUT_SECONDS) -> int:
     """Block until the daemon writes its PID file or *timeout* elapses.
 
@@ -429,7 +495,7 @@ def _launchd_uid_target() -> str:
     return f"gui/{_invoking_uid()}"
 
 
-def _enable_launchd() -> ServiceEnvelope:
+def _enable_launchd(*, evict_existing: bool = True) -> ServiceEnvelope:
     """Render the plist, bootstrap + enable + kickstart, await RPC readiness."""
     plist_path = _launchd_plist_path()
     plist_path.parent.mkdir(parents=True, exist_ok=True)
@@ -438,15 +504,17 @@ def _enable_launchd() -> ServiceEnvelope:
     logger.info(f"_enable_launchd wrote plist={plist_path}")
 
     uid_target = _launchd_uid_target()
-    # Tear down any already-loaded instance first: re-running bootstrap
-    # against a loaded agent fails rc=5 (EIO, "already bootstrapped"),
-    # and the bootout also picks up plist changes (e.g. updated
-    # ProgramArguments) on upgrade. The non-zero "not loaded" exit on a
-    # fresh install is expected and swallowed.
-    _run(["launchctl", "bootout", f"{uid_target}/{_LAUNCHD_LABEL}"], check=False)
+    target = f"{uid_target}/{_LAUNCHD_LABEL}"
+    if evict_existing:
+        _evict_launchd(target)
+    else:
+        # Restart callers already evicted the owner before waiting for the
+        # daemon singleton. Still gate bootstrap on launchd's asynchronous
+        # definition removal.
+        _wait_for_launchd_unloaded(target)
     _run(["launchctl", "bootstrap", uid_target, str(plist_path)])
-    _run(["launchctl", "enable", f"{uid_target}/{_LAUNCHD_LABEL}"])
-    _run(["launchctl", "kickstart", f"{uid_target}/{_LAUNCHD_LABEL}"])
+    _run(["launchctl", "enable", target])
+    _run(["launchctl", "kickstart", target])
     pid = _wait_for_daemon_ready()
     return ServiceEnvelope(
         event_type="daemon_service_enabled",
@@ -657,6 +725,8 @@ def restart_service() -> ServiceEnvelope:
     """
     if sys.platform == "win32":
         return _restart_windows()
+    if sys.platform == "darwin":
+        return _enable_launchd(evict_existing=False)
     return enable_service()
 
 
@@ -707,43 +777,6 @@ def service_status() -> ServiceStatus:
 # forking a rival; and the doctor surface reports the agent state. All three
 # route through the injectable :data:`_service_runner` seam so the lifecycle
 # suite captures + orders every supervisor call without touching the host.
-
-
-#: Runner seam: a callable that runs an argv and returns the completed process.
-_ServiceRunner = Callable[[list[str]], subprocess.CompletedProcess[str]]
-
-
-def _default_service_runner(cmd: list[str]) -> subprocess.CompletedProcess[str]:
-    """Run *cmd* capturing output; never raise on non-zero or missing binary.
-
-    Unlike :func:`_run`, this never raises. A non-zero exit is a signal the
-    caller interprets (an unloaded agent, an inactive unit) rather than a
-    failure, and a missing supervisor binary (``launchctl`` absent on Linux,
-    ``systemctl`` absent in a minimal container) collapses to a synthetic
-    ``rc=127`` so detection degrades to "no supervised agent" instead of
-    crashing the doctor surface.
-
-    Args:
-        cmd: Argv to execute.
-
-    Returns:
-        The completed process, or a synthetic ``rc=127`` result when the
-        binary is not on ``PATH``.
-    """
-    logger.info(f"_default_service_runner cmd={cmd!r}")
-    try:
-        return subprocess.run(cmd, check=False, capture_output=True, text=True)
-    except FileNotFoundError:
-        return subprocess.CompletedProcess(args=cmd, returncode=127, stdout="", stderr="")
-
-
-#: Injectable subprocess runner for the supervised-agent management calls
-#: (``launchctl print`` / ``bootout``, ``systemctl is-active`` / ``show`` /
-#: ``stop``). The default shells out; the lifecycle suite swaps this for a
-#: recording stub so no launchctl / systemctl call ever touches the host under
-#: test. Keeping the seam at module scope lets the parameter-free Typer daemon
-#: verbs still route through an injectable point.
-_service_runner: _ServiceRunner = _default_service_runner
 
 
 def _current_platform() -> str:
@@ -1006,7 +1039,7 @@ def evict_supervised_agent(
     run = runner if runner is not None else _service_runner
     if plat == "darwin":
         target = f"{_launchd_uid_target()}/{_LAUNCHD_LABEL}"
-        run(["launchctl", "bootout", target])
+        _evict_launchd(target, runner=run)
         logger.info(f"evict_supervised_agent booted-out target={target!r}")
         return target
     if plat.startswith("linux"):

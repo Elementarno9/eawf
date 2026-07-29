@@ -115,7 +115,7 @@ def start_daemon(*, runtime_dir: Path | None = None) -> DaemonLifecycleResult:
         if installed:
             if loaded and supervisor != "windows":
                 evict_supervised_agent()
-            envelope = restart_service() if supervisor == "windows" else enable_service()
+            envelope = restart_service() if loaded or supervisor == "windows" else enable_service()
             if envelope.pid is None:
                 raise DaemonLifecycleError("service start returned no daemon pid")
             return DaemonLifecycleResult(

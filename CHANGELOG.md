@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.6.4]
+
+### Fixed
+- **macOS daemon restarts now wait for launchd to finish unloading the previous LaunchAgent.** The restart path polls the user service domain until the old job disappears before bootstrapping its replacement, preventing the transient `Bootstrap failed: 5: Input/output error` race after a successful `bootout`.
+
 ## [0.6.3]
 
 ### Fixed

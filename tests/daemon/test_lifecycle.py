@@ -51,6 +51,45 @@ def test_start_daemon_spawns_after_stale_runtime(
     assert result.previous_pid is None
 
 
+def test_start_daemon_loaded_service_uses_post_eviction_restart(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A loaded service is evicted once before its restart-only start path."""
+    timeline: list[str] = []
+    monkeypatch.setattr(lifecycle, "daemon_pid_if_ready", lambda _runtime: None)
+    monkeypatch.setattr(lifecycle, "_service_installed", lambda: (True, "launchd", True))
+    monkeypatch.setattr(
+        lifecycle,
+        "evict_supervised_agent",
+        lambda: timeline.append("evict") or "target",
+    )
+    monkeypatch.setattr(
+        lifecycle,
+        "enable_service",
+        lambda: (_ for _ in ()).throw(AssertionError("enable would boot out twice")),
+    )
+    monkeypatch.setattr(
+        lifecycle,
+        "restart_service",
+        lambda: (
+            timeline.append("restart")
+            or ServiceEnvelope(
+                event_type="daemon_service_enabled",
+                platform="darwin",
+                unit="dev.eawf.eawfd",
+                pid=42,
+            )
+        ),
+    )
+
+    result = start_daemon(runtime_dir=tmp_path)
+
+    assert timeline == ["evict", "restart"]
+    assert result.pid == 42
+    assert result.supervisor == "launchd"
+
+
 def test_restart_daemon_unsupervised_orders_shutdown_wait_spawn(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
