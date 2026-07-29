@@ -16,9 +16,8 @@ description: "Repo-wide consistency sweep. Aligns naming, docstring style, log f
 
 - `--scope=<dir|file>` — narrow the sweep from the default entire
   `src/eawf/` to one directory or file.
-- `--auto-apply-safe` — auto-apply the small "safe" subset (formatting,
-  comment phrasing) without an `AskUserQuestion` prompt; config leaf
-  `polish.auto_apply_safe`. Default false.
+- `--auto-apply-safe` — explicitly auto-apply the small "safe" subset
+  (formatting, comment phrasing) for this invocation.
 - `--category naming|docstrings|logs|errors|dead-code` — filter the
   sweep to one check category. Default is all categories.
 
@@ -33,11 +32,10 @@ description: "Repo-wide consistency sweep. Aligns naming, docstring style, log f
 
 ## Decision surfaces
 
-Public-API renames, dead-code deletions, and anything matching
-`polish.deletion_policy` MUST be raised via `AskUserQuestion`
-(options: `apply` / `defer-to-backlog` / `skip`) instead of asking
-in free text. `polish.auto_apply_safe=true` bypasses the prompt for
-the small "safe" subset only (formatting, comment phrasing).
+Public-API renames and dead-code deletions MUST be raised via
+`AskUserQuestion` (options: `apply` / `defer-to-backlog` / `skip`)
+instead of asking in free text. No persisted config bypasses this
+protected decision.
 
 ## Output contract
 

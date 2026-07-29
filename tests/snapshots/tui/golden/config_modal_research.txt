@@ -6,7 +6,7 @@
       │  Configuration                                                                                           │
       │  ≡ save layer: repo  (L cycles: global local)                                                            │
       │                                                                                                          │
-      │  stimation  flow  planning  preferences  prose  research  runtime  ship  statusline  telemetry  ui  vcs  │
+      │  stimation  flow  planning  preferences  prose  research  review  runtime  ship  statusline  telemetry   │
       │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
       │  >  research.agent_count     [int]          4                                                            │
       │     research.auto_save       [bool]         <false>                                                      │

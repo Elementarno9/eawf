@@ -1,7 +1,7 @@
 ---
 name: flow
 description: "Run /research → /prep → /audit → /polish → /ship sequentially; review folds into /ship as the PR-review pass. Short-circuit on any non-ok status."
-argument-hint: "<task-slug> [--auto-accept=<stage>[,<stage>...]] [--stop-after=<stage>] [--resume] [--args-per-step=<json>] [--caps=eu=..,usd=..] [--max-repair-cycles=<n>]"
+argument-hint: "<task-slug> [--advance-after=<stage>[,<stage>...]] [--stop-after=<stage>] [--resume] [--args-per-step=<json>] [--caps=eu=..,usd=..] [--max-repair-cycles=<n>]"
 user-invocable: true
 disable-model-invocation: true
 ---
@@ -11,12 +11,12 @@ disable-model-invocation: true
 ## Canonical algorithm
 
 1. Run `/research` → `/prep` → `/audit` → `/polish` → `/ship` sequentially. The PR-review pass is folded into `/ship` (it reads the remote review comments, addresses feedback by appending waves to the current iter, then bundles iter + phase close in the final pre-merge commit per the `iter-phase-close-timing` rule in AGENTS.md). The `/prep` stage claims and dispatches waves, so its claim path carries the operator gotchas: Run `uv run eawf dispatch resume` before EVERY claim batch. A shared-daemon test run or TUI mount leaks `dispatch_paused=true` into the live claim path; the pause gate is unconditional. If resume reports success but claims still reject, restart the daemon — the flag can persist in a stale process.
-2. **Inter-stage gate (default).** After each step returns `status=ok`, check `flow.auto_accept.<stage>` (via `uv run eawf config get flow.auto_accept.<stage>`). When `false` (the default) and the stage was not listed in `--auto-accept`, ask the operator via `AskUserQuestion` whether to proceed — options: `proceed` / `skip-next` / `stop`. When `true`, advance without a prompt. Between a wave close and the next stage: After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + the typed stores under `.ea/store/`, e.g. audit/decision/evidence) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close. The event store (`.ea/store/event.jsonl`) is gitignored — it is the raw-stdout firehose; never `git add -f` it.
+2. **Inter-stage gate (default).** After each step returns `status=ok`, check `flow.advance_after.<stage>` (via `uv run eawf config get flow.advance_after.<stage>`). When `false` (the default) and the stage was not listed in `--advance-after`, ask the operator via `AskUserQuestion` whether to proceed — options: `continue` / `defer`. When `true`, advance without this flow-level pause. Protected `needs_user`, deletion, push, PR, and ship confirmations remain mandatory. Between a wave close and the next stage: After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + the typed stores under `.ea/store/`, e.g. audit/decision/evidence) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close. The event store (`.ea/store/event.jsonl`) is gitignored — it is the raw-stdout firehose; never `git add -f` it.
 3. On any non-`ok` status (`blocked`, `needs_user`, `failed`, `partial`), short-circuit with the failing step's repair commands.
 
 ## Options
 
-- `--auto-accept=<stage>[,<stage>...]` — the inter-stage gate is executed by YOU (the model) against `flow.auto_accept.<stage>`; the flow engine reads only `stop_after` / `args_per_step` / `resume_from` and does NOT enforce auto-accept. Listing a stage advances past its gate without the operator prompt.
+- `--advance-after=<stage>[,<stage>...]` — engine-enforced override for this run. Listing a completed stage skips only its flow-level transition pause. The legacy `--auto-accept` spelling remains an input alias during migration.
 - `--stop-after=<stage>` — engine-parsed (`ctx.args["stop_after"]`); halt the pipeline after the named stage. Default none (full run).
 - `--resume` / `--resume-from` — engine-parsed (`ctx.args["resume_from"]`); replay from the recorded checkpoint and refuse on drift. Default off.
 - `--args-per-step=<json>` — engine-parsed (`ctx.args["args_per_step"]`); per-stage argument overrides. Default inherits the flow args.
@@ -26,7 +26,7 @@ disable-model-invocation: true
 ## Pre-flight checklist
 
 - [ ] All upstream skills are installed.
-- [ ] Per-stage `flow.auto_accept` flags reflect the operator's intended cadence (review existing values; default is "ask each time" for every stage).
+- [ ] Per-stage `flow.advance_after` flags reflect the operator's intended cadence for `research`, `prep`, `audit`, and `polish` (default is "ask each time").
 
 ## Decision surfaces
 

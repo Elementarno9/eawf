@@ -4,14 +4,14 @@
       ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
       │                                                                                                          │
       │  Configuration                                                                                           │
-      │  ≡ save layer: global  (L cycles: repo local)                                                            │
+      │  ≡ save layer: local  (L cycles: global repo)                                                            │
       │                                                                                                          │
-      │   flow  planning  preferences  prose  research  runtime  ship  statusline  telemetry  ui  vcs  verify    │
+      │  lanning  preferences  prose  research  review  runtime  ship  statusline  telemetry  ui  vcs  verify    │
       │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-      │  >  runtime.adapter_catalog.claude.enabled   [bool]         <true>  (read-only)                          │
-      │     runtime.adapter_catalog.codex.enabled    [bool]         <false>  (read-only)                         │
-      │     runtime.adapter_catalog.opencode.enabled [bool]         <false>  (read-only)                         │
-      │     runtime.default                          [choice]       <claude>                                     │
+      │  >  runtime.default          [choice]       <claude-code>  (read-only)                                   │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │

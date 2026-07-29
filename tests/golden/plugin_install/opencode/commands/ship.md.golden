@@ -81,8 +81,7 @@ read off real history rather than recomputed.
 `gh pr create`, `gh pr merge`, and any push to a protected branch are
 irreversible/visible-to-others actions per AGENTS.md — surface the
 final confirm through `AskUserQuestion` (options: `proceed` / `defer`
-/ `abort`) unless `vcs.auto_push`, `vcs.pr_open`, and the merge
-strategy are pre-resolved by config.
+/ `abort`). Config cannot bypass protected-action confirmations.
 
 ## Output contract
 

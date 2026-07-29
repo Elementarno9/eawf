@@ -6,11 +6,11 @@
       │  Configuration                                                                                           │
       │  ≡ save layer: repo  (L cycles: global local)  ·  1 unsaved                                              │
       │                                                                                                          │
-      │   audit  daemon  estimation  flow  planning  preferences  prose  research  runtime  ship  statusline  t  │
-      │  ╸━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-      │     audit.default_level      [choice]       <standard>                                                   │
-      │  >◐ audit.fix_safe           [bool]         <true>                                                       │
-      │     audit.flaky_retry_count  [int]          1                                                            │
+      │   audit  daemon  estimation  flow  planning  preferences  prose  research  review  runtime  ship  statu  │
+      │  ━━━━━━━╸━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+      │     daemon.idle_timeout_seconds       [int]          300                                                 │
+      │  >◐ daemon.proxy_enabled              [bool]         <false>                                             │
+      │     daemon.session_handle_ttl_seconds [int]          86400                                               │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │
