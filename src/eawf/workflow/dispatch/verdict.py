@@ -597,9 +597,13 @@ def build_auditor_prompt(
             "\n"
             "Emit exactly one `criteria` row for every required criterion above,\n"
             "in the same order, using its full criterion text. Every row MUST\n"
-            "carry at least one `evidence_refs` entry. For a deterministic row,\n"
-            'at least one entry MUST use `kind: "store_record"` and cite one of\n'
-            "that criterion's mapped GateReceipt URNs exactly. The aggregate\n"
+            "carry at least one `evidence_refs` entry. Evidence `kind` MUST be\n"
+            "exactly one of `audit`, `artifact`, `decision`, `store_record`, or\n"
+            "`external_url`. A GateReceipt is a store record, never a separate\n"
+            'evidence kind: cite it as `{"kind":"store_record","ref":"'
+            '<mapped GateReceipt URN>"}`, never with `kind: "gate_receipt"`. For a\n'
+            "deterministic row, at least one entry MUST cite one of that\n"
+            "criterion's mapped GateReceipt URNs exactly. The aggregate\n"
             "verdict MUST agree with those rows: pass / pass-with-followups\n"
             "requires every row to pass; fail / blocked requires at least one\n"
             "row to fail. A close-ready verdict cannot carry refutations."
@@ -700,6 +704,10 @@ def parse_auditor_report_body(
     normalized = _coerce_confidence(raw)
     if durable_context is None:
         return _AUDITOR_BODY_ADAPTER.validate_python(normalized)
+    normalized = _coerce_durable_gate_receipt_evidence(
+        normalized,
+        context=durable_context,
+    )
     adapter: TypeAdapter[AuditorReportBody] = TypeAdapter(
         Annotated[
             AuditorReportBody,
@@ -709,6 +717,93 @@ def parse_auditor_report_body(
         ]
     )
     return adapter.validate_python(normalized)
+
+
+def _coerce_durable_gate_receipt_evidence(
+    raw: object,
+    *,
+    context: DurableAuditContext,
+) -> object:
+    """Canonicalize the model-only GateReceipt evidence alias.
+
+    ``gate_receipt`` is a store kind, not an :data:`EvidenceKind`. Live
+    auditors can nevertheless emit the resource's domain name as the evidence
+    kind even when the prompt asks for ``store_record``. Accept that one
+    unambiguous spelling only at the durable LLM-output boundary and only when
+    its reference exactly matches a GateReceipt URN frozen into this close
+    context. The typed report therefore remains canonical on persistence;
+    ordinary agent-report parsing and unbound receipt claims stay strict.
+    """
+    if not isinstance(raw, dict):
+        return raw
+    criteria = raw.get("criteria")
+    if not isinstance(criteria, list):
+        return raw
+
+    changed = False
+    normalized_criteria: list[object] = []
+    for index, row in enumerate(criteria):
+        if index >= len(context.criteria):
+            normalized_criteria.append(row)
+            continue
+        normalized_row, row_changed = _normalize_durable_criterion_evidence(
+            row,
+            criterion=context.criteria[index],
+        )
+        normalized_criteria.append(normalized_row)
+        changed = changed or row_changed
+    if changed:
+        logger.info(
+            "_coerce_durable_gate_receipt_evidence "
+            f"wave={context.wave_id!r} alias='gate_receipt' canonical='store_record'"
+        )
+        return {**raw, "criteria": normalized_criteria}
+    return raw
+
+
+def _normalize_durable_criterion_evidence(
+    row: object,
+    *,
+    criterion: DurableAuditCriterion,
+) -> tuple[object, bool]:
+    """Canonicalize aliases only for their exact deterministic criterion."""
+    if (
+        not criterion.deterministic
+        or not criterion.gate_receipt_urns
+        or not isinstance(row, dict)
+        or "evidence_refs" not in row
+    ):
+        return row, False
+    normalized_refs, changed = _normalize_bound_gate_receipt_refs(
+        row["evidence_refs"],
+        mapped_urns=set(criterion.gate_receipt_urns),
+    )
+    if not changed:
+        return row, False
+    return {**row, "evidence_refs": normalized_refs}, True
+
+
+def _normalize_bound_gate_receipt_refs(
+    value: object,
+    *,
+    mapped_urns: set[str],
+) -> tuple[object, bool]:
+    """Return evidence refs with exact bound GateReceipt aliases canonicalized."""
+    if not isinstance(value, list):
+        return value, False
+    changed = False
+    normalized: list[object] = []
+    for ref in value:
+        if (
+            isinstance(ref, dict)
+            and ref.get("kind") == "gate_receipt"
+            and ref.get("ref") in mapped_urns
+        ):
+            normalized.append({**ref, "kind": "store_record"})
+            changed = True
+        else:
+            normalized.append(ref)
+    return normalized, changed
 
 
 #: Cutoffs for reading a numeric confidence as an enum bucket. A model asked for
