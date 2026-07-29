@@ -65,7 +65,7 @@ logger = logging.getLogger(__name__)
 
 daemon_app = typer.Typer(
     name="daemon",
-    help="Manage the eawfd background daemon (run, ping, status, stop, logs, reclaim).",
+    help="Manage the eawfd background daemon.",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -96,9 +96,11 @@ async def _rpc_call(method: str, params: dict[str, Any]) -> dict[str, Any]:
         DaemonSpawnTimeoutError: When the auto-spawn never produces a
             live socket within the timeout window.
     """
+    # Readiness, not path existence, decides whether a daemon is live. A
+    # process killed before its finally-block can leave a stale UDS node;
+    # ``auto_spawn_daemon`` probes RPC readiness and safely replaces it.
+    auto_spawn_daemon(runtime_dir())
     sock_path = socket_path()
-    if not sock_path.exists():
-        auto_spawn_daemon(runtime_dir())
     reader, writer = await asyncio.open_unix_connection(path=str(sock_path))
     try:
         request: dict[str, Any] = {
@@ -223,6 +225,67 @@ def run_cmd(
     raise typer.Exit(code=rc)
 
 
+def _emit_lifecycle_result(
+    result: Any,
+    *,
+    flags: GlobalFlags,
+) -> None:
+    """Render a daemon start/restart library result."""
+    payload = {
+        "action": result.action,
+        "pid": result.pid,
+        "previous_pid": result.previous_pid,
+        "supervisor": result.supervisor,
+    }
+    previous = result.previous_pid if result.previous_pid is not None else "none"
+    text = (
+        f"daemon {result.action} pid={result.pid} previous_pid={previous} "
+        f"supervisor={result.supervisor}"
+    )
+    emit_json_or_text(payload, text, flags=flags)
+
+
+@daemon_app.command("start")
+def start_cmd(ctx: typer.Context) -> None:
+    """Ensure the current daemon release is running."""
+    from eawf.runtime.daemon.lifecycle import DaemonLifecycleError, start_daemon
+
+    flags: GlobalFlags = ctx.obj
+    try:
+        result = start_daemon()
+    except DaemonLifecycleError as exc:
+        typer.echo(f"daemon start failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    _emit_lifecycle_result(result, flags=flags)
+
+
+@daemon_app.command("restart")
+def restart_cmd(
+    ctx: typer.Context,
+    no_drain: Annotated[
+        bool,
+        typer.Option(
+            "--no-drain",
+            help="Exit the old daemon without waiting for in-flight mutations.",
+        ),
+    ] = False,
+    timeout: Annotated[
+        int,
+        typer.Option("--timeout", help="Drain and stop window in seconds (1-600)."),
+    ] = 30,
+) -> None:
+    """Restart the daemon with the current executable and protocol."""
+    from eawf.runtime.daemon.lifecycle import DaemonLifecycleError, restart_daemon
+
+    flags: GlobalFlags = ctx.obj
+    try:
+        result = restart_daemon(drain=not no_drain, timeout_seconds=timeout)
+    except DaemonLifecycleError as exc:
+        typer.echo(f"daemon restart failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    _emit_lifecycle_result(result, flags=flags)
+
+
 def _emit_or_fail(
     response: dict[str, Any],
     text_template: str,
@@ -283,19 +346,21 @@ def status_cmd(ctx: typer.Context) -> None:
     )
 
 
-def _handle_supervised_agent_on_stop(*, evict_service: bool) -> None:
+def _handle_supervised_agent_on_stop(*, evict_service: bool) -> bool:
     """Detect a supervised eawfd agent and evict-or-warn before the stop RPC.
 
-    A launchd LaunchAgent (macOS) or systemd user unit (Linux) restarts the
-    daemon on exit, so a plain ``daemon.shutdown`` is undone the moment it
-    lands. When ``--evict-service`` is set we boot the agent out FIRST -- so
-    the eviction precedes the shutdown RPC and no KeepAlive / Restart can race
-    the stop -- otherwise we warn loudly that the stop will be reversed. A
-    daemon that is not under a loaded supervisor is a no-op.
+    A loaded launchd LaunchAgent or systemd user unit owns process lifecycle.
+    When ``--evict-service`` is set, supervisor eviction itself performs the
+    stop; the caller must not send an auto-spawning RPC afterward. Without the
+    flag, the agent remains registered and may stay dormant after a successful
+    daemon shutdown.
 
     Args:
-        evict_service: When True, boot the loaded agent out before the RPC;
+        evict_service: When True, boot the loaded agent out;
             when False, emit a loud warning and leave the agent loaded.
+
+    Returns:
+        True when supervisor eviction owns process termination.
     """
     from eawf.runtime.daemon.service_install import (
         detect_supervised_agent,
@@ -304,20 +369,20 @@ def _handle_supervised_agent_on_stop(*, evict_service: bool) -> None:
 
     report = detect_supervised_agent()
     if not report.loaded:
-        return
+        return False
     if evict_service:
         target = evict_supervised_agent()
         typer.echo(
             f"evicted {report.supervisor} agent {target!r} before shutdown",
             err=True,
         )
-        return
+        return True
     typer.echo(
-        f"WARNING: {report.supervisor} agent {report.label!r} is loaded and will "
-        "restart the daemon after shutdown; pass --evict-service to boot it out "
-        "for the stop window",
+        f"WARNING: {report.supervisor} agent {report.label!r} remains loaded; "
+        "pass --evict-service to unload it for the stop window",
         err=True,
     )
+    return False
 
 
 @daemon_app.command("stop")
@@ -339,15 +404,24 @@ def stop_cmd(
         typer.Option(
             "--evict-service",
             help=(
-                "Boot out a loaded launchd/systemd agent before the shutdown "
-                "RPC so a KeepAlive/Restart cannot immediately undo the stop."
+                "Stop and unload a loaded launchd/systemd agent without "
+                "auto-spawning a replacement."
             ),
         ),
     ] = False,
 ) -> None:
     """Request graceful daemon shutdown."""
     flags: GlobalFlags = ctx.obj
-    _handle_supervised_agent_on_stop(evict_service=evict_service)
+    service_evicted = _handle_supervised_agent_on_stop(evict_service=evict_service)
+    if service_evicted:
+        # launchctl bootout / systemctl stop owns process termination. Do not
+        # issue an auto-spawning RPC after the supervisor removed the socket.
+        emit_json_or_text(
+            {"shutdown_at": None, "drained": False, "service_evicted": True},
+            "daemon service stopped drained=False",
+            flags=flags,
+        )
+        return
     params: dict[str, Any] = {"drain": not no_drain, "timeout_seconds": timeout}
     try:
         response = _run_rpc("daemon.shutdown", params)

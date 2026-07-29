@@ -240,6 +240,32 @@ def _daemon_ping_request() -> bytes:
     return json.dumps(request).encode("utf-8") + b"\n"
 
 
+def _daemon_shutdown_request(*, drain: bool, timeout_seconds: int) -> bytes:
+    """Return a newline-terminated ``daemon.shutdown`` request frame.
+
+    This control request deliberately does not auto-spawn. Lifecycle callers
+    use it to stop a process that is already present; starting a replacement
+    merely to shut it down would turn stale-runtime recovery into a race.
+
+    Args:
+        drain: Whether the daemon should drain in-flight mutations.
+        timeout_seconds: Drain window forwarded to the daemon.
+
+    Returns:
+        Encoded JSON-RPC request frame.
+    """
+    request = {
+        "jsonrpc": "2.0",
+        "id": "lifecycle-shutdown",
+        "method": "daemon.shutdown",
+        "params": {
+            "drain": drain,
+            "timeout_seconds": timeout_seconds,
+        },
+    }
+    return json.dumps(request).encode("utf-8") + b"\n"
+
+
 def _pid_from_ping_response(response_bytes: bytes) -> int | None:
     """Return the daemon PID from a JSON-RPC ping response frame."""
     try:
@@ -253,6 +279,18 @@ def _pid_from_ping_response(response_bytes: bytes) -> int | None:
     except OSError, UnicodeDecodeError, json.JSONDecodeError:
         return None
     return None
+
+
+def _result_from_response(response_bytes: bytes) -> dict[str, object] | None:
+    """Return a JSON-RPC result object, or ``None`` for an invalid frame."""
+    try:
+        response = json.loads(response_bytes.rstrip(b"\n").decode("utf-8"))
+    except UnicodeDecodeError, json.JSONDecodeError:
+        return None
+    if not isinstance(response, dict):
+        return None
+    result = response.get("result")
+    return result if isinstance(result, dict) else None
 
 
 def _ping_daemon_once(runtime_dir: Path) -> int | None:
@@ -296,6 +334,69 @@ def _ping_daemon_once(runtime_dir: Path) -> int | None:
     if not line:
         return None
     return _pid_from_ping_response(line)
+
+
+def daemon_pid_if_ready(runtime_dir: Path) -> int | None:
+    """Return the ready daemon PID without spawning a process."""
+    return _ping_daemon_once(runtime_dir)
+
+
+def request_daemon_shutdown(
+    runtime_dir: Path,
+    *,
+    drain: bool,
+    timeout_seconds: int,
+) -> dict[str, object] | None:
+    """Request shutdown from an existing daemon without auto-spawning.
+
+    Args:
+        runtime_dir: Daemon runtime directory.
+        drain: Whether to drain in-flight mutations before exit.
+        timeout_seconds: Drain window in seconds.
+
+    Returns:
+        Shutdown result object, or ``None`` when no daemon accepts the
+        control connection.
+
+    Raises:
+        ValueError: When ``timeout_seconds`` falls outside ``0..600``.
+        RuntimeError: When a daemon responds with an error or malformed
+            success envelope.
+    """
+    if timeout_seconds < 0 or timeout_seconds > 600:
+        raise ValueError(f"timeout_seconds must be between 0 and 600, got {timeout_seconds!r}")
+    request = _daemon_shutdown_request(drain=drain, timeout_seconds=timeout_seconds)
+    if sys.platform == "win32":
+        from eawf.runtime.daemon.windows_pipe import default_pipe_name, pipe_client_call
+
+        try:
+            response = pipe_client_call(
+                default_pipe_name(),
+                request,
+                wait_ms=max(1, timeout_seconds * 1000),
+            )
+        except OSError:
+            return None
+    else:
+        sock_path = runtime_dir / "eawfd.sock"
+        if not sock_path.exists():
+            return None
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as control:
+                control.settimeout(max(1.0, float(timeout_seconds)))
+                control.connect(str(sock_path))
+                control.sendall(request)
+                reader = control.makefile("rb")
+                try:
+                    response = reader.readline()
+                finally:
+                    reader.close()
+        except OSError:
+            return None
+    result = _result_from_response(response)
+    if result is None:
+        raise RuntimeError("daemon returned invalid shutdown response")
+    return result
 
 
 def wait_for_daemon_ready(
@@ -512,5 +613,7 @@ __all__ = [
     "DaemonSpawnTimeout",
     "DaemonSpawnTimeoutError",
     "auto_spawn_daemon",
+    "daemon_pid_if_ready",
+    "request_daemon_shutdown",
     "wait_for_daemon_ready",
 ]

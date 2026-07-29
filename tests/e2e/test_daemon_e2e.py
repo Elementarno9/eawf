@@ -134,6 +134,41 @@ def test_ping_twice_reuses_same_daemon(e2e_env: E2EEnv) -> None:
     assert _read_pidfile_pid(e2e_env.pid_file) == pid_after_first
 
 
+def test_ping_recovers_stale_socket_and_spawns(e2e_env: E2EEnv) -> None:
+    """A refused stale UDS node cannot suppress cold-spawn."""
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as stale:
+        stale.bind(str(e2e_env.sock_file))
+    assert e2e_env.sock_file.exists()
+
+    result = e2e_env.run_eawf("daemon", "ping")
+    try:
+        assert result.returncode == 0, result.stderr
+        assert e2e_env.pid_file.exists()
+        assert _proc_alive(_read_pidfile_pid(e2e_env.pid_file))
+    finally:
+        e2e_env.run_eawf("daemon", "stop")
+
+
+def test_restart_turns_over_pid_and_remains_ready(e2e_env: E2EEnv) -> None:
+    """Explicit restart replaces the old process and returns a ready daemon."""
+    first = e2e_env.run_eawf("daemon", "ping")
+    assert first.returncode == 0, first.stderr
+    previous_pid = _read_pidfile_pid(e2e_env.pid_file)
+
+    restarted = e2e_env.run_eawf("daemon", "restart", "--timeout", "10")
+    try:
+        assert restarted.returncode == 0, restarted.stderr
+        current_pid = _read_pidfile_pid(e2e_env.pid_file)
+        assert current_pid != previous_pid
+        assert f"previous_pid={previous_pid}" in restarted.stdout
+        assert f"pid={current_pid}" in restarted.stdout
+        ping = e2e_env.run_eawf("daemon", "ping")
+        assert ping.returncode == 0, ping.stderr
+        assert f"pid={current_pid}" in ping.stdout
+    finally:
+        e2e_env.run_eawf("daemon", "stop")
+
+
 def test_status_reports_zero_counters_on_warm_daemon(running_daemon: E2EEnv) -> None:
     """``daemon status`` against a warm daemon prints zeroed counters."""
     result = running_daemon.run_eawf("daemon", "status")

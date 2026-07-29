@@ -24,6 +24,7 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.runtime.daemon import service_install
+from eawf.runtime.daemon.lifecycle import DaemonLifecycleResult
 from eawf.surfaces.cli.app import app
 
 pytestmark = pytest.mark.unit
@@ -116,17 +117,17 @@ def test_evict_systemd_runs_stop(monkeypatch: pytest.MonkeyPatch) -> None:
     assert rec.calls == [["systemctl", "--user", "stop", "eawfd.service"]]
 
 
-# ---- daemon stop --evict-service: bootout BEFORE the shutdown RPC -----------
+# ---- daemon stop --evict-service: supervisor owns termination ---------------
 
 
-def test_stop_evict_service_boots_out_before_shutdown_rpc(
+def test_stop_evict_service_does_not_respawn_for_shutdown_rpc(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``stop --evict-service`` calls ``launchctl bootout`` before the RPC.
+    """``stop --evict-service`` lets ``launchctl bootout`` own termination.
 
-    A single shared timeline records the real launchctl calls (via the runner
-    seam) and the shutdown RPC (via ``_run_rpc``); the bootout must precede the
-    RPC so a launchd KeepAlive cannot race the stop.
+    Issuing the normal RPC after bootout can cold-spawn an unsupervised rival
+    when launchd already removed the socket. The control path must therefore
+    stop after supervisor eviction.
     """
     import eawf.surfaces.cli.commands.daemon as daemon_cmd
 
@@ -149,9 +150,9 @@ def test_stop_evict_service_boots_out_before_shutdown_rpc(
 
     bootout = "launchctl bootout gui/501/dev.eawf.eawfd"
     assert bootout in timeline
-    assert "rpc:daemon.shutdown" in timeline
-    assert timeline.index(bootout) < timeline.index("rpc:daemon.shutdown")
+    assert "rpc:daemon.shutdown" not in timeline
     assert "evicted" in res.output
+    assert "service stopped" in res.output
 
 
 def test_stop_without_evict_warns_loudly(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -213,6 +214,49 @@ def test_run_boots_when_no_agent_loaded(tmp_path: Path, monkeypatch: pytest.Monk
     res = runner.invoke(app, ["daemon", "run", "--foreground"])
     assert res.exit_code == 0, res.output
     assert booted == [True]
+
+
+# ---- daemon start/restart: thin CLI dispatch -------------------------------
+
+
+def test_start_dispatches_to_lifecycle_library(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``daemon start`` renders the typed library result."""
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.lifecycle.start_daemon",
+        lambda: DaemonLifecycleResult(
+            action="started",
+            pid=42,
+            previous_pid=None,
+            supervisor="none",
+        ),
+    )
+
+    res = runner.invoke(app, ["daemon", "start"])
+
+    assert res.exit_code == 0, res.output
+    assert "daemon started pid=42 previous_pid=none supervisor=none" in res.output
+
+
+def test_restart_forwards_no_drain_and_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``daemon restart`` forwards bounded shutdown options unchanged."""
+    calls: list[tuple[bool, int]] = []
+
+    def _restart(*, drain: bool, timeout_seconds: int) -> DaemonLifecycleResult:
+        calls.append((drain, timeout_seconds))
+        return DaemonLifecycleResult(
+            action="restarted",
+            pid=42,
+            previous_pid=41,
+            supervisor="launchd",
+        )
+
+    monkeypatch.setattr("eawf.runtime.daemon.lifecycle.restart_daemon", _restart)
+
+    res = runner.invoke(app, ["daemon", "restart", "--no-drain", "--timeout", "7"])
+
+    assert res.exit_code == 0, res.output
+    assert calls == [(False, 7)]
+    assert "previous_pid=41" in res.output
 
 
 # ---- daemon service-status: fold in the daemon-health advisories ------------

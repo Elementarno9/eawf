@@ -91,6 +91,14 @@ def _repo_with_state(tmp_path: Path) -> tuple[Path, Path, Any]:
     return repo, state_path, ctx
 
 
+def test_resume_durable_close_attempts_missing_boot_state_is_noop(tmp_path: Path) -> None:
+    """Service boot without a repo anchor keeps daemon RPC available."""
+    state_path = tmp_path / "missing" / ".ea" / "state.json"
+    ctx = _build_ctx(tmp_path, state_path)
+
+    assert resume_durable_close_attempts(ctx) == 0
+
+
 async def _wait_terminal(ctx: Any, repo: Path, ref: str) -> dict[str, Any]:
     for _ in range(200):
         result = await status(ctx, {"ref": ref, "repo_root": str(repo)})

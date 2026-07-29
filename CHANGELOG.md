@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.6.3]
+
+### Fixed
+- **Daemon upgrades can now be restarted explicitly and safely.** `eawf daemon start` ensures the current release is ready, while `eawf daemon restart` drains and replaces the old process, re-renders installed launchd/systemd services, restarts the Windows service, and recovers stale sockets without spawning a rival daemon.
+- **Service boot no longer requires a repository anchor.** Durable-close recovery treats an absent boot state file as an empty workload, so an upgraded global daemon reaches RPC readiness before any workspace is selected.
+- **Service eviction no longer triggers an accidental cold-spawn.** `eawf daemon stop --evict-service` leaves termination to the supervisor instead of issuing a follow-up RPC that could create an unsupervised replacement.
+
 ## [0.6.2]
 
 ### Added

@@ -1071,7 +1071,13 @@ def resume_durable_close_attempts(ctx: MethodContext) -> int:
     """Schedule unfinished attempts after daemon restart."""
     if ctx.state_path is None:
         return 0
-    repo_root = Path(ctx.state_path).resolve().parent.parent
+    state_path = Path(ctx.state_path)
+    if not state_path.exists():
+        logger.info(
+            f"resume_durable_close_attempts state-absent path={state_path.name!r} resumed=0"
+        )
+        return 0
+    repo_root = state_path.resolve().parent.parent
     state = _load_state(ctx, repo_root)
     resumed = 0
     for attempt in state.close_attempts.values():
