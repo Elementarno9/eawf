@@ -892,6 +892,79 @@ def test_build_auditor_prompt_names_exact_durable_close_context() -> None:
     ):
         assert value in prompt
     assert "cite one of" in prompt
+    assert "`audit`, `artifact`, `decision`, `store_record`, or\n`external_url`" in prompt
+    assert 'never with `kind: "gate_receipt"`' in prompt
+    assert '{"kind":"store_record","ref":"<mapped GateReceipt URN>"}' in prompt
+
+
+def test_parse_durable_auditor_body_canonicalizes_bound_gate_receipt_alias() -> None:
+    """A live-model GateReceipt alias binds on the first durable parse."""
+    raw = _durable_auditor_body()
+    raw["criteria"][0]["evidence_refs"][0]["kind"] = "gate_receipt"
+
+    body = parse_auditor_report_body(raw, durable_context=_durable_context())
+
+    assert body.criteria[0].evidence_refs[0].kind == "store_record"
+    assert raw["criteria"][0]["evidence_refs"][0]["kind"] == "gate_receipt"
+
+
+def test_parse_auditor_report_body_rejects_gate_receipt_alias_without_context() -> None:
+    """Ordinary report parsing keeps the canonical EvidenceKind vocabulary."""
+    raw = _durable_auditor_body()
+    raw["criteria"][0]["evidence_refs"][0]["kind"] = "gate_receipt"
+
+    with pytest.raises(ValidationError, match="literal_error"):
+        parse_auditor_report_body(raw)
+
+
+def test_parse_durable_auditor_body_rejects_unbound_gate_receipt_alias() -> None:
+    """The model-only alias cannot bless a receipt outside the frozen context."""
+    raw = _durable_auditor_body()
+    raw["criteria"][0]["evidence_refs"] = [
+        {
+            "kind": "gate_receipt",
+            "ref": f"urn:eawf:v1:store:{_WAVE_ID}/gate_receipt/GR-wrong",
+        }
+    ]
+
+    with pytest.raises(ValidationError):
+        parse_auditor_report_body(raw, durable_context=_durable_context())
+
+
+def test_parse_durable_auditor_body_rejects_alias_on_nondeterministic_row() -> None:
+    """A receipt alias cannot cross criterion-specific durable bindings."""
+    raw = _durable_auditor_body()
+    raw["criteria"][1]["evidence_refs"] = [{"kind": "gate_receipt", "ref": _RECEIPT_URN}]
+
+    with pytest.raises(ValidationError, match="literal_error"):
+        parse_auditor_report_body(raw, durable_context=_durable_context())
+
+
+def test_parse_durable_auditor_body_rejects_body_level_gate_receipt_alias() -> None:
+    """Only deterministic criterion evidence receives the model-boundary alias."""
+    raw = _durable_auditor_body()
+    raw["evidence_refs"] = [{"kind": "gate_receipt", "ref": _RECEIPT_URN}]
+
+    with pytest.raises(ValidationError, match="literal_error"):
+        parse_auditor_report_body(raw, durable_context=_durable_context())
+
+
+def test_parse_durable_auditor_body_rejects_malformed_gate_receipt_ref() -> None:
+    """Malformed receipt aliases remain invalid instead of being guessed."""
+    raw = _durable_auditor_body()
+    raw["criteria"][0]["evidence_refs"] = [{"kind": "gate_receipt", "ref": None}]
+
+    with pytest.raises(ValidationError):
+        parse_auditor_report_body(raw, durable_context=_durable_context())
+
+
+def test_parse_durable_auditor_body_rejects_receipt_urn_as_artifact() -> None:
+    """A mapped receipt still needs canonical store_record semantics."""
+    raw = _durable_auditor_body()
+    raw["criteria"][0]["evidence_refs"][0]["kind"] = "artifact"
+
+    with pytest.raises(ValidationError, match="must cite a mapped GateReceipt URN"):
+        parse_auditor_report_body(raw, durable_context=_durable_context())
 
 
 @pytest.mark.parametrize(
@@ -1002,6 +1075,38 @@ def test_produce_durable_verdict_reasks_invalid_evidence(
     assert result.assist_result.attempts_used == 2
     assert result.assist_result.prior_failures[0].reason == "schema_mismatch"
     assert result.append_result.envelope.id
+
+
+def test_produce_durable_verdict_accepts_gate_receipt_alias_without_reask(
+    tmp_path: Path,
+) -> None:
+    """A bound live-model alias persists canonically on the first response."""
+    state, state_path, events_path = _write_state(tmp_path, effort_bucket="L")
+    wave = state.waves[_WAVE_ID]
+    raw = _durable_auditor_body()
+    raw["criteria"][0]["evidence_refs"][0]["kind"] = "gate_receipt"
+    spawn = _RecordingSpawn([json.dumps(raw)])
+
+    result = _run(
+        produce_wave_verdict(
+            state=state,
+            state_path=state_path,
+            events_path=events_path,
+            wave=wave,
+            spawn=spawn,
+            repo_root=tmp_path,
+            durable_context=_durable_context(),
+        )
+    )
+
+    assert spawn.calls == 1
+    assert result.assist_result.attempts_used == 1
+    assert result.assist_result.prior_failures == []
+    assert result.assist_result.body.criteria[0].evidence_refs[0].kind == "store_record"
+    assert (
+        result.append_result.envelope.payload["body"]["criteria"][0]["evidence_refs"][0]["kind"]
+        == "store_record"
+    )
 
 
 # --------------------------------------------------------------------------- #

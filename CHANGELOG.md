@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.6.6]
+
+### Fixed
+- **Durable close accepts the model’s GateReceipt evidence alias without weakening the canonical schema.** Exact, criterion-bound `gate_receipt` evidence emitted by a live auditor is canonicalized to `store_record` only at the durable LLM-output boundary. Unbound, non-deterministic, body-level, malformed, and ordinary report aliases remain invalid; persisted reports keep the closed `EvidenceKind` vocabulary.
+
 ## [0.6.5]
 
 ### Fixed
