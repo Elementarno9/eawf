@@ -54,7 +54,7 @@ that module is listed with its members.
 | `ScopeTier` | `workspace`, `repo`, `phase`, `iter`, `wave` |
 | `SkillEnvelopeStatus` | `ok`, `needs_user`, `blocked`, `failed`, `partial` |
 | `SpecStatus` | `draft`, `ready`, `implemented`, `archived` |
-| `StoreKind` | `research`, `audit`, `incident`, `estimate`, `actual`, `memory`, `decision`, `event`, `evidence`, `flow`, `researcher_report`, `planner_report`, `executor_report`, `auditor_report`, `reviewer_report`, `polisher_report`, `operator_report`, `domain_specialist_report`, `subscription_lag`, `config_updated`, `registry_updated`, `spec_updated`, `research_campaign`, `research_round`, `operator_input`, `jury_ballot`, `gate_receipt` |
+| `StoreKind` | `research`, `audit`, `incident`, `estimate`, `actual`, `memory`, `decision`, `event`, `evidence`, `flow`, `researcher_report`, `planner_report`, `executor_report`, `auditor_report`, `reviewer_report`, `polisher_report`, `operator_report`, `domain_specialist_report`, `subscription_lag`, `config_updated`, `registry_updated`, `spec_updated`, `research_campaign`, `research_round`, `operator_input`, `jury_ballot`, `gate_receipt`, `legacy_audit_disposition`, `commit_repin` |
 | `TrackKind` | `strategy`, `model`, `target`, `feature`, `service` |
 | `TrackStatus` | `active`, `planned`, `deferred`, `retired` |
 | `Urgency` | `low`, `normal`, `high`, `urgent` |

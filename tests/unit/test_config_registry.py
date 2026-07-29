@@ -31,14 +31,25 @@ from eawf.kernel.config.registry import (
 )
 from eawf.surfaces.cli.errors import UserError
 
-#: The adapter-enable + budget keys promoted into the operator-tunable
-#: registry (P29-I13-W18). Each must now resolve as a recognized,
-#: layer-aware config key so the TUI config modal (W19) can surface it.
-_PROMOTED_KEYS: tuple[str, ...] = (
+#: Active promoted keys remain operator-tunable and layer-aware.
+_ACTIVE_PROMOTED_KEYS: tuple[str, ...] = ("flow.budget.multiplier",)
+
+#: Legacy adapter-catalog leaves remain readable for migration only.
+_DEPRECATED_ADAPTER_KEYS: tuple[str, ...] = (
     "runtime.adapter_catalog.claude.enabled",
     "runtime.adapter_catalog.codex.enabled",
     "runtime.adapter_catalog.opencode.enabled",
-    "flow.budget.multiplier",
+)
+
+#: Newly wired interactive leaves must stay visible and consumed.
+_ACTIVE_CONSUMED_KEYS: tuple[str, ...] = (
+    "flow.advance_after.audit",
+    "flow.advance_after.polish",
+    "flow.advance_after.prep",
+    "flow.advance_after.research",
+    "flow.max_repair_cycles",
+    "research.auto_save",
+    "review.default_level",
 )
 
 
@@ -87,8 +98,12 @@ def test_tabs_sorted_is_alphabetical() -> None:
 
 
 def test_tabs_sorted_covers_every_registry_tab() -> None:
-    """No tab in the registry is hidden from the menu."""
-    expected = {entry.tab for entry in CONFIG_REGISTRY}
+    """Every tab containing an active registry row is visible."""
+    expected = {
+        entry.tab
+        for entry in CONFIG_REGISTRY
+        if (leaf := LEAF_KEY_REGISTRY.get(entry.key)) is not None and not leaf.reserved
+    }
     assert set(tabs_sorted()) == expected
 
 
@@ -363,7 +378,7 @@ def test_is_known_key_unknown_returns_false() -> None:
 # --- W18: promoted adapter-enable + budget keys ------------------------------
 
 
-@pytest.mark.parametrize("key", _PROMOTED_KEYS)
+@pytest.mark.parametrize("key", _ACTIVE_PROMOTED_KEYS)
 def test_promoted_key_is_registered(key: str) -> None:
     # Each promoted key resolves to a CONFIG_REGISTRY entry, so the operator-
     # tunable menu + the TUI config modal both surface it.
@@ -372,14 +387,14 @@ def test_promoted_key_is_registered(key: str) -> None:
     assert entry.key == key
 
 
-@pytest.mark.parametrize("key", _PROMOTED_KEYS)
+@pytest.mark.parametrize("key", _ACTIVE_PROMOTED_KEYS)
 def test_promoted_key_is_recognized_as_known(key: str) -> None:
     # boundary: a promoted registry key is reported known regardless of merged
     # content, so a write to it is no longer rejected as an unknown key.
     assert is_known_key({}, key)
 
 
-@pytest.mark.parametrize("key", _PROMOTED_KEYS)
+@pytest.mark.parametrize("key", _ACTIVE_PROMOTED_KEYS)
 def test_promoted_key_is_layer_aware(key: str) -> None:
     # The promoted keys are layer-aware: each has a leaf-catalog row declaring
     # its writable layers, which the W19 config-modal lock reads to decide
@@ -391,15 +406,34 @@ def test_promoted_key_is_layer_aware(key: str) -> None:
     assert leaf.writable_layers, f"promoted key {key!r} declares no writable layer"
 
 
-def test_adapter_enable_keys_are_repo_locked() -> None:
-    # The adapter-enable keys are writable only on the repo layer, so they
-    # render read-only on every other layer the modal can target -- the exact
-    # lock W19's snapshot pins.
-    for key in (
-        "runtime.adapter_catalog.claude.enabled",
-        "runtime.adapter_catalog.codex.enabled",
-        "runtime.adapter_catalog.opencode.enabled",
-    ):
+@pytest.mark.parametrize("key", _DEPRECATED_ADAPTER_KEYS)
+def test_deprecated_adapter_key_is_hidden_and_reserved(key: str) -> None:
+    """Deprecated adapter leaves remain migration-readable but non-editable."""
+    assert registry_lookup(key) is None
+    assert not is_known_key({}, key)
+    for tab in tabs_sorted():
+        assert key not in {entry.key for entry in keys_for_tab(tab)}
+    leaf = LEAF_KEY_REGISTRY.get(key)
+    assert leaf is not None
+    assert leaf.reserved is True
+    assert leaf.consumer is None
+
+
+@pytest.mark.parametrize("key", _ACTIVE_CONSUMED_KEYS)
+def test_active_consumed_key_is_visible(key: str) -> None:
+    """Engine-backed replacements remain visible in the operator menu."""
+    entry = registry_lookup(key)
+    assert entry is not None
+    assert entry in keys_for_tab(entry.tab)
+    leaf = LEAF_KEY_REGISTRY.get(key)
+    assert leaf is not None
+    assert leaf.consumer is not None
+    assert leaf.reserved is False
+
+
+def test_deprecated_adapter_keys_remain_repo_scoped_for_migration() -> None:
+    """Legacy rows retain their historical layer metadata for cleanup."""
+    for key in _DEPRECATED_ADAPTER_KEYS:
         leaf = LEAF_KEY_REGISTRY.get(key)
         assert leaf is not None
         assert leaf.writable_layers == ("repo",)
@@ -409,7 +443,7 @@ def test_promoted_key_defaults_match_leaf_catalog() -> None:
     # The registry default and the leaf-catalog default must agree so the
     # modal's resolved value (merged -> registry default) matches the daemon's
     # built-in layer; a divergent default would flag a phantom dirty edit.
-    for key in _PROMOTED_KEYS:
+    for key in _ACTIVE_PROMOTED_KEYS:
         entry = registry_lookup(key)
         leaf = LEAF_KEY_REGISTRY.get(key)
         assert entry is not None and leaf is not None

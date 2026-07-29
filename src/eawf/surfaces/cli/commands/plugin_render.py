@@ -186,7 +186,7 @@ def _codex_doctor_text(report: CodexDoctorReport) -> str:
         if entry.status != "trusted":
             parts.append(f"    - {entry.event_name}: {entry.status} ({entry.reason})")
     if report.legacy_paths:
-        parts.append("  legacy paths (delete manually):")
+        parts.append("  inactive legacy paths (left untouched):")
         for path in report.legacy_paths:
             parts.append(f"    - {path}")
     return "\n".join(parts)

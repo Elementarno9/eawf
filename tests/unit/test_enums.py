@@ -516,6 +516,8 @@ def test_store_kind_values() -> None:
         # P30-I23-W17 — persisted per-juror ballots (calibration substrate).
         "jury_ballot",
         "gate_receipt",
+        "legacy_audit_disposition",
+        "commit_repin",
     }
     actual = {m.value for m in enums.StoreKind}
     assert actual == expected

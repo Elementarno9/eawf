@@ -1088,7 +1088,7 @@ def test_attempt_summary_mixed_tokens_is_explicitly_partial() -> None:
 
 
 def test_report_only_row_is_not_counted_as_observed_attempt() -> None:
-    """A report with no SessionAttempt is labelled report-only."""
+    """A report with no SessionAttempt renders in one headed report table."""
     state, wave_id = _state_with_attempted_wave()
     card = resolve_detail(
         state,
@@ -1097,7 +1097,18 @@ def test_report_only_row_is_not_counted_as_observed_attempt() -> None:
     )
     rows = dict(card.evidence)
     assert rows["attempts"].startswith("2 attempts")
-    assert "report-only evidence" in rows["report 3 (executor)"]
+    reports = rows["reports"]
+    assert isinstance(reports, PreMarkedText)
+    lines = [line.strip() for line in reports.splitlines() if line.strip()]
+    assert lines[0].startswith("[$accent][b]")
+    columns = ("report", "role", "verdict", "evidence", "metrics")
+    assert all(column in lines[0] for column in columns)
+    assert "3" in lines[1]
+    assert "executor" in lines[1]
+    assert "pass" in lines[1]
+    assert "report-only" in lines[1]
+    assert "metrics unavailable" in lines[1]
+    assert "runtime, timing, tokens, EU, and cost unavailable" not in reports
     assert "\n  3 " not in rows["attempt timeline"]
 
 

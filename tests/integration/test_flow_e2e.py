@@ -1,7 +1,7 @@
 """End-to-end integration test for the ``/flow`` skill.
 
-The W03 acceptance contract requires running ``/flow "demo"`` against a
-tmp Eä repo and collecting envelopes for all six core skills.
+The acceptance contract runs ``/flow "demo"`` against a tmp Eä repo and
+collects envelopes for all five current core skills.
 
 Drives the flow via the W07 CLI surface (``eawf --json skill run /flow``)
 so the test exercises the registry + engine + body wiring + the meta
@@ -47,7 +47,7 @@ def test_flow_demo_runs_six_core_skills(integration_repo: Path) -> None:
     result = runner.invoke(
         app,
         ["--json", "skill", "run", "/flow"],
-        input='{"topic": "demo"}',
+        input='{"topic": "demo", "advance_after": true}',
     )
     assert result.exit_code == 0, result.stdout
 
@@ -59,15 +59,14 @@ def test_flow_demo_runs_six_core_skills(integration_repo: Path) -> None:
     body = FlowBody.model_validate(env.body)
     assert body.topic == "demo"
     assert body.terminal_status == "ok"
-    # Six core-skill envelopes collected, in canonical order.
-    assert len(body.steps) == 6
+    # Five core-skill envelopes collected, in canonical order.
+    assert len(body.steps) == 5
     assert [s["header"]["skill"] for s in body.steps] == [
         "/research",
         "/prep",
         "/audit",
-        "/ship",
-        "/review",
         "/polish",
+        "/ship",
     ]
     # Every step's own status is ok in the v0.1 happy path.
     for step in body.steps:
@@ -78,7 +77,7 @@ def test_flow_demo_runs_six_core_skills(integration_repo: Path) -> None:
     events_path = integration_repo / ".ea" / "store" / "event.jsonl"
     assert events_path.exists()
     lines = events_path.read_text(encoding="utf-8").splitlines()
-    # Lower bound: 6 core skills emit several events each + the flow's
+    # Lower bound: 5 core skills emit several events each + the flow's
     # own start/end + 2 per step (start, end). Verify the canonical flow
     # events are present.
     seen_event_types: set[str] = set()

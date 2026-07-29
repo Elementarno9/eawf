@@ -716,6 +716,20 @@
           "title": "Candidate Sha",
           "type": "string"
         },
+        "commit_identity_digest": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Commit Identity Digest"
+        },
         "criteria_digest": {
           "maxLength": 128,
           "minLength": 1,
@@ -4283,6 +4297,19 @@
           ],
           "default": null,
           "title": "Commit"
+        },
+        "commit_identity_digest": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Commit Identity Digest"
         },
         "criteria_floor_waiver": {
           "anyOf": [

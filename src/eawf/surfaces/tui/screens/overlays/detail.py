@@ -73,7 +73,7 @@ from eawf.observability.telemetry.join import (
     _duration_ms_to_eu,
 )
 from eawf.observability.telemetry.store import metrics_db_path, open_store
-from eawf.surfaces.render.link_wrap import linkify_text
+from eawf.surfaces.render.link_wrap import PreMarkedText, linkify_text
 from eawf.surfaces.render.narrative import (
     NarrativeNotFoundError,
     build_narrative,
@@ -782,20 +782,44 @@ def _report_only_rows(
     reports: Iterable[AgentReportRow],
     observed_attempts: frozenset[int],
 ) -> tuple[tuple[str, str], ...]:
-    """Label report evidence that has no observed runtime attempt."""
-    rows: list[tuple[str, str]] = []
+    """Render report-only evidence as one headed table.
+
+    A typed report can exist without a matching runtime attempt. These rows
+    carry report evidence, but no runtime-derived measurements. Keep those
+    two facts in separate columns so the Evidence tab stays scannable and
+    never implies that missing telemetry invalidates the report itself.
+    """
+    columns = ("report", "role", "verdict", "evidence", "metrics")
+    report_rows: list[tuple[str, ...]] = []
     for report in reports:
         header = report.payload.header
         if header.attempt in observed_attempts:
             continue
-        rows.append(
+        report_rows.append(
             (
-                f"report {header.attempt} ({header.role.value})",
-                f"{report.payload.body.verdict.value} · report-only evidence · "
-                "runtime, timing, tokens, EU, and cost unavailable",
+                str(header.attempt),
+                header.role.value,
+                report.payload.body.verdict.value,
+                "report-only",
+                "metrics unavailable",
             )
         )
-    return tuple(rows)
+    if not report_rows:
+        return ()
+    widths = [len(column) for column in columns]
+    for report_row in report_rows:
+        widths = [max(width, len(value)) for width, value in zip(widths, report_row, strict=True)]
+    table_header = f"[$accent][b]{escape(_format_report_table_row(columns, widths))}[/][/]"
+    rendered = [table_header]
+    rendered.extend(escape(_format_report_table_row(row, widths)) for row in report_rows)
+    table = PreMarkedText("\n" + "\n".join(f"  {line}" for line in rendered))
+    return (("reports", table),)
+
+
+def _format_report_table_row(row: tuple[str, ...], widths: list[int]) -> str:
+    """Format one report-only table row with padded columns."""
+    cells = [value.ljust(width) for value, width in zip(row, widths, strict=True)]
+    return "  ".join(cells)
 
 
 def _close_attempt_rows(state: State, wave_id: str) -> tuple[tuple[str, str], ...]:

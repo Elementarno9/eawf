@@ -324,7 +324,7 @@ _SECTION4_HINT_OPTIONS: dict[str, tuple[str, ...]] = {
     "roadmap": ("--dry-run", "--criteria-from-brief"),
     "spike": ("--rounds", "--axes-per-round", "--worktree"),
     "flow": (
-        "--auto-accept",
+        "--advance-after",
         "--stop-after",
         "--resume",
         "--args-per-step",

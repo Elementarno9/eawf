@@ -96,6 +96,7 @@ class CloseSubmitParams(BaseModel):
     wave_id: str = Field(min_length=1)
     outcome: str = Field(min_length=1, max_length=1000)
     commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    commit_identity_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
     tokens_consumed: int | None = Field(default=None, ge=0)
     repo_root: str | None = None
     no_runtime_waiver: bool = False
@@ -348,6 +349,12 @@ def _create_attempt(
         state,
         wave_id=args.wave_id,
     )
+    from eawf.workflow.lifecycle.wave_sha import commit_identity_digest
+
+    identity_digest = args.commit_identity_digest or commit_identity_digest(
+        integration.integrated_sha,
+        repo_root=repo_root,
+    )
     idempotency_key = _digest(
         {
             "wave": args.wave_id,
@@ -362,6 +369,7 @@ def _create_attempt(
             "runner": runner_digest,
             "outcome": args.outcome,
             "tokens_consumed": args.tokens_consumed,
+            "commit_identity_digest": identity_digest,
             "no_runtime_waiver": args.no_runtime_waiver,
         }
     )
@@ -389,6 +397,7 @@ def _create_attempt(
         integration_id=integration.id,
         candidate_sha=integration.candidate_sha,
         integrated_sha=integration.integrated_sha,
+        commit_identity_digest=identity_digest,
         tree_sha=integration.tree_sha,
         wave_revision_digest=wave_revision_digest,
         spec_digest=integration.spec_digest,
@@ -779,6 +788,7 @@ async def _run_attempt(  # noqa: C901
                 "wave_id": attempt.wave_id,
                 "outcome": attempt.outcome,
                 "commit": attempt.integrated_sha,
+                "commit_identity_digest": attempt.commit_identity_digest,
                 "tokens_consumed": attempt.tokens_consumed,
                 "close_attempt_id": attempt.id,
                 "verification_repo_root": str(workspace.path),

@@ -165,6 +165,11 @@ def test_assist_with_schema_invalid_then_valid_re_asks_and_succeeds() -> None:
     assert spawn.prompts[0] == "solve it"
     assert "## Output correction required" in spawn.prompts[1]
     assert "schema_mismatch" in spawn.prompts[1]
+    assert "solve it" not in spawn.prompts[1]
+    assert bad in spawn.prompts[1]
+    assert "do not use tools" in spawn.prompts[1]
+    assert "exactly one corrected JSON object" in spawn.prompts[1]
+    assert spawn.prompts[1].startswith("## Output correction required")
     # The single prior failure is retained on the accepted result.
     assert len(result.prior_failures) == 1
     assert result.prior_failures[0].reason == "schema_mismatch"

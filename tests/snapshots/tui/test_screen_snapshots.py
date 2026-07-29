@@ -44,7 +44,7 @@ import pytest
 from textual.containers import VerticalScroll
 from textual.widgets import TabbedContent
 
-from eawf.kernel.config.registry import registry_lookup
+from eawf.kernel.config.registry import registry_lookup, tabs_sorted
 from eawf.kernel.state.enums import EffortBucket
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
@@ -528,7 +528,7 @@ def _open_config(app: EaApp) -> ConfigModal:
 
 
 def test_config_modal_audit_tab_snapshot() -> None:
-    """Default tab (audit): a bool + a ranged int row, plus the layer line."""
+    """Default tab (audit): a choice + ranged int row, plus the layer line."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_REPO_STATE)
@@ -560,15 +560,11 @@ def test_config_modal_planning_tab_snapshot() -> None:
 
 
 def test_config_modal_runtime_single_field_snapshot() -> None:
-    """The ``runtime`` tab: the adapter-enable bools + the default choice row.
+    """The ``runtime`` tab renders only the active ``runtime.default`` choice.
 
-    Field 0 (the first adapter-enable bool) carries the ``>`` cursor caret,
-    showing the tab is keyboard-reachable; the three
-    ``runtime.adapter_catalog.*.enabled`` bools and the ``runtime.default``
-    choice surface in alphabetical-by-key order. The modal opens on the repo
-    layer, where the repo-writable adapter keys edit in place (no read-only
-    marker); ``←`` / ``→`` leave this tab and ``Enter`` mutates the focused
-    field.
+    Field 0 carries the ``>`` cursor caret, showing the tab is
+    keyboard-reachable; ``←`` / ``→`` leave this tab and ``Enter`` cycles the
+    focused field.
     """
 
     async def body() -> None:
@@ -627,7 +623,7 @@ def test_config_modal_research_tab_snapshot() -> None:
 
 
 def test_config_modal_dirty_layer_snapshot() -> None:
-    """After an ``Enter`` toggle, the layer line shows the unsaved-count + marker."""
+    """After a bool toggle, the layer line shows the unsaved-count + marker."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_REPO_STATE)
@@ -635,10 +631,14 @@ def test_config_modal_dirty_layer_snapshot() -> None:
             await settle_screen(pilot)
             modal = _open_config(app)
             await settle_screen(pilot)
-            # ``audit.default_level`` (a choice) now sorts first in the audit
-            # tab, so target the first bool (``audit.fix_safe``) explicitly to
-            # keep this test's "toggle a bool stages a dirty edit" intent.
-            modal.field_index = 1
+            modal.query_one("#config-tabs").active = modal._tab_pane_id("daemon")  # type: ignore[attr-defined]
+            modal.set_focus(None)
+            await settle_screen(pilot)
+            modal.field_index = next(
+                index
+                for index, entry in enumerate(modal._active_fields())
+                if entry.key == "daemon.proxy_enabled"
+            )
             await settle_screen(pilot)
             await pilot.press("enter")  # toggle the bool — stages a dirty edit
             await settle_screen(pilot)
@@ -656,7 +656,7 @@ def test_config_modal_dirty_discard_prompt_snapshot() -> None:
             await settle_screen(pilot)
             _open_config(app)
             await settle_screen(pilot)
-            await pilot.press("enter")  # toggle the first bool — stages a dirty edit
+            await pilot.press("enter")  # cycle the first choice — stages a dirty edit
             await settle_screen(pilot)
             await pilot.press("escape")
             await settle_screen(pilot)
@@ -679,9 +679,11 @@ def test_config_modal_inline_edit_int_snapshot() -> None:
             await settle_screen(pilot)
             modal = _open_config(app)
             await settle_screen(pilot)
-            # audit tab order: default_level (choice), fix_safe (bool),
-            # flaky_retry_count (int) -> index 2 is the int field.
-            modal.field_index = 2  # audit.flaky_retry_count (int)
+            modal.field_index = next(
+                index
+                for index, entry in enumerate(modal._active_fields())
+                if entry.key == "audit.flaky_retry_count"
+            )
             await settle_screen(pilot)
             await pilot.press("enter")  # open the inline editor
             await settle_screen(pilot)
@@ -716,12 +718,9 @@ def test_config_modal_inline_edit_int_snapshot() -> None:
 def test_config_modal_flow_tab_snapshot() -> None:
     """The ``flow`` tab renders its curated keys, lock-filtered (W28).
 
-    W27 surfaced the curated ``flow.*`` keys (``ask_on_decisions`` + the six
-    ``auto_accept.*`` toggles + ``budget.enforce``); P29-I13-W18 promoted
-    ``budget.multiplier`` into the curated set too (writable global/workspace/
-    repo). The golden pins that curated set on the repo layer, where both
-    budget keys edit in place; the lock-filter still drops any key not
-    writable from a targetable layer.
+    The active catalog exposes four ``advance_after.*`` transition toggles,
+    both budget keys, and ``max_repair_cycles``. The golden pins that curated
+    set on the repo layer, where every row edits in place.
     """
 
     async def body() -> None:
@@ -753,8 +752,7 @@ def test_config_modal_every_surfaced_field_is_lock_filtered() -> None:
     # The modal's targetable layers for a workspace-less repo modal -- the
     # same set ``_open_config`` resolves (repo anchor, no workspace).
     layers = writable_layers_for(None, Path("/repo"))
-    tabs = ("audit", "daemon", "estimation", "flow", "planning", "preferences", "research")
-    for tab in tabs:
+    for tab in tabs_sorted():
         fields = editable_keys_for_tab(tab, layers)
         # The tab surfaces at least one field (a regression dropping a whole
         # tab's curated set is caught)...

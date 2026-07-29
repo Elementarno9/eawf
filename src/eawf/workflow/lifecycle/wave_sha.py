@@ -14,6 +14,7 @@ wave has not yet been committed. Callers (renderers, validators) treat
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -27,7 +28,7 @@ from typing import TYPE_CHECKING, Literal
 from eawf.platform.subprocess_detach import detached_subprocess_kwargs
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     from eawf.kernel.state.models import State
 
@@ -90,7 +91,13 @@ _TIER_INTEGRATION = 0
 _TIER_TRANSIENT = 1
 
 
-DriftKind = Literal["pinned_but_missing", "pinned_mismatch", "closed_no_pin", "closed_unfindable"]
+DriftKind = Literal[
+    "pinned_but_missing",
+    "pinned_mismatch",
+    "ambiguous_successor",
+    "closed_no_pin",
+    "closed_unfindable",
+]
 
 
 @dataclass(frozen=True)
@@ -302,6 +309,167 @@ def _candidate_index_keys(wave_id: str) -> list[str]:
     if _phase_and_wave(wave_id) is not None:
         keys.append(wave_id)
     return keys
+
+
+def _run_git(
+    args: list[str], *, repo_root: Path | None, timeout: float = _TIMEOUT_SECONDS
+) -> subprocess.CompletedProcess[str] | None:
+    """Run one detached read-only git command and return ``None`` on probe failure."""
+    try:
+        return subprocess.run(
+            ["git", *args],
+            cwd=str(repo_root) if repo_root else None,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+            stdin=subprocess.DEVNULL,
+            **detached_subprocess_kwargs(),
+        )
+    except subprocess.TimeoutExpired, FileNotFoundError, OSError:
+        return None
+
+
+def _normalise_commit_message(message: str) -> str:
+    return "\n".join(line.rstrip() for line in message.strip().splitlines())
+
+
+def commit_matches_wave(commit: str, wave_id: str, *, repo_root: Path | None = None) -> bool:
+    """Return whether *commit* explicitly identifies *wave_id* by prefix or trailer."""
+    out = _run_git(["show", "-s", "--format=%B", commit], repo_root=repo_root)
+    if out is None or out.returncode != 0:
+        return False
+    message = out.stdout or ""
+    subject = message.splitlines()[0] if message.splitlines() else ""
+    trailer = commit_wave_trailer(wave_id)
+    return any(subject.startswith(prefix) for prefix in _candidate_prefixes(wave_id)) or (
+        trailer is not None and trailer in message
+    )
+
+
+def commit_identity_digest(commit: str, *, repo_root: Path | None = None) -> str | None:
+    """Hash normalized full message plus semantic patch for rebase-safe identity."""
+    message = _run_git(["show", "-s", "--format=%B", commit], repo_root=repo_root)
+    patch = _run_git(
+        ["show", "--format=", "--no-ext-diff", "--no-renames", "--unified=0", commit],
+        repo_root=repo_root,
+    )
+    if message is None or patch is None or message.returncode != 0 or patch.returncode != 0:
+        return None
+    semantic_lines = [
+        line.rstrip() for line in patch.stdout.splitlines() if not line.startswith("index ")
+    ]
+    payload = (
+        _normalise_commit_message(message.stdout) + "\n\x00\n" + "\n".join(semantic_lines).strip()
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(payload).hexdigest()}"
+
+
+def _reachable_wave_keys(repo_root: Path | None) -> dict[str, set[str]]:
+    """Return every reachable commit and its explicit wave identity keys."""
+    fmt = _REC_SEP_PLACEHOLDER + _FIELD_SEP_PLACEHOLDER.join(
+        ("%H", "%s", f"%(trailers:key={_WAVE_TRAILER_NAME},valueonly)")
+    )
+    out = _run_git(["log", "--all", f"--format={fmt}"], repo_root=repo_root, timeout=20.0)
+    if out is None or out.returncode != 0:
+        return {}
+    result: dict[str, set[str]] = {}
+    for raw_record in out.stdout.split(_REC_SEP):
+        fields = raw_record.strip("\n").split(_FIELD_SEP)
+        if len(fields) != 3:
+            continue
+        sha, subject, trailers = fields
+        keys: set[str] = set()
+        prefix_match = _BRACKET_PREFIX_RE.match(subject)
+        if prefix_match:
+            keys.add(f"[{prefix_match.group(1)}]")
+        keys.update(line.strip() for line in trailers.splitlines() if line.strip())
+        result[sha] = keys
+    return result
+
+
+def _first_parent_wave_candidates(repo_root: Path | None) -> dict[str, list[str]]:
+    """Index all wave identities on the current integration first-parent."""
+    fmt = _REC_SEP_PLACEHOLDER + _FIELD_SEP_PLACEHOLDER.join(
+        ("%H", "%s", f"%(trailers:key={_WAVE_TRAILER_NAME},valueonly)")
+    )
+    out = _run_git(["log", "--first-parent", "HEAD", f"--format={fmt}"], repo_root=repo_root)
+    if out is None or out.returncode != 0:
+        return {}
+    indexed: dict[str, list[str]] = {}
+    for raw_record in out.stdout.split(_REC_SEP):
+        if not raw_record:
+            continue
+        fields = raw_record.strip("\n").split(_FIELD_SEP)
+        if len(fields) != 3:
+            continue
+        sha, subject, trailers = fields
+        keys: list[str] = []
+        prefix_match = _BRACKET_PREFIX_RE.match(subject)
+        if prefix_match:
+            keys.append(f"[{prefix_match.group(1)}]")
+        keys.extend(line.strip() for line in trailers.splitlines() if line.strip())
+        for key in keys:
+            indexed.setdefault(key, []).append(sha)
+    return indexed
+
+
+def _candidate_shas(wave_id: str, candidates: Mapping[str, list[str]]) -> list[str]:
+    """Return unique first-parent candidates for *wave_id*, newest first."""
+    found: list[str] = []
+    for key in _candidate_index_keys(wave_id):
+        for sha in candidates.get(key, []):
+            if sha not in found:
+                found.append(sha)
+    return found
+
+
+def _subject_tokens(subject: str) -> set[str]:
+    """Return meaningful lowercase tokens from a wave title or commit subject."""
+    body = _BRACKET_PREFIX_RE.sub("", subject, count=1)
+    body = re.sub(r"^\s*[a-z]+(?:\([^)]+\))?!?:\s*", "", body)
+    return {token for token in re.findall(r"[a-z0-9]+", body.casefold()) if len(token) > 1}
+
+
+def _select_legacy_candidate(
+    *,
+    wave_title: str,
+    candidate_shas: list[str],
+    repo_root: Path | None,
+    identity: Callable[[str], str | None],
+    subject_cache: dict[str, str | None],
+) -> str | None:
+    """Select one unique first-parent commit that matches the wave title."""
+    title_tokens = _subject_tokens(wave_title)
+    if not title_tokens:
+        return None
+    groups: dict[str, list[str]] = {}
+    scores: dict[str, int] = {}
+    for sha in candidate_shas:
+        digest = identity(sha)
+        if digest is None:
+            continue
+        if sha not in subject_cache:
+            result = _run_git(["show", "-s", "--format=%s", sha], repo_root=repo_root)
+            subject_cache[sha] = (
+                result.stdout.strip() if result is not None and result.returncode == 0 else None
+            )
+        subject = subject_cache[sha]
+        if subject is None:
+            continue
+        groups.setdefault(digest, []).append(sha)
+        scores[digest] = max(
+            scores.get(digest, 0),
+            len(title_tokens & _subject_tokens(subject)),
+        )
+    if not scores:
+        return None
+    best = max(scores.values())
+    winners = [digest for digest, score in scores.items() if score == best and score > 0]
+    if len(winners) != 1:
+        return None
+    winner_group = groups[winners[0]]
+    return winner_group[0] if len(winner_group) == 1 else None
 
 
 def build_wave_sha_index(repo_root: Path | None = None) -> Mapping[str, str]:
@@ -584,6 +752,170 @@ def derive_wave_sha(
     return None
 
 
+PinClassification = tuple[DriftKind | Literal["unpinned_derivable"], str | None, bool] | None
+
+
+def _classify_unpinned(candidate_shas: list[str]) -> PinClassification:
+    """Classify one closed wave with no stored commit."""
+    if len(candidate_shas) == 1:
+        return "unpinned_derivable", candidate_shas[0], True
+    if len(candidate_shas) > 1:
+        return "ambiguous_successor", None, False
+    return "closed_no_pin", None, False
+
+
+def _matching_identity_candidates(
+    *,
+    candidate_shas: list[str],
+    commit_digest: str | None,
+    identity: Callable[[str], str | None],
+) -> list[str]:
+    """Return first-parent candidates with the stored commit's identity."""
+    if commit_digest is None:
+        return []
+    return [sha for sha in candidate_shas if identity(sha) == commit_digest]
+
+
+def _select_repair_target(
+    *,
+    matching_shas: list[str],
+    candidate_shas: list[str],
+    wave_title: str,
+    repo_root: Path | None,
+    identity: Callable[[str], str | None],
+    subject_cache: dict[str, str | None],
+) -> str | None:
+    """Select a semantic target, then a unique legacy title match."""
+    if len(matching_shas) == 1:
+        return matching_shas[0]
+    if len(matching_shas) > 1:
+        return None
+    if len(candidate_shas) == 1:
+        return candidate_shas[0]
+    return _select_legacy_candidate(
+        wave_title=wave_title,
+        candidate_shas=candidate_shas,
+        repo_root=repo_root,
+        identity=identity,
+        subject_cache=subject_cache,
+    )
+
+
+def _reachable_pin_is_clean(
+    *,
+    reachable_pin: str,
+    candidate_shas: list[str],
+    wave_id: str,
+    reachable_wave_keys: Mapping[str, set[str]],
+) -> bool:
+    """Return whether a reachable pin explicitly belongs to the wave."""
+    if any(_shas_match(reachable_pin, candidate) for candidate in candidate_shas):
+        return True
+    expected_keys = set(_candidate_index_keys(wave_id))
+    return bool(reachable_wave_keys.get(reachable_pin, set()) & expected_keys)
+
+
+def _classify_unreachable_pin(
+    *,
+    matching_shas: list[str],
+    candidate_shas: list[str],
+    commit_digest: str | None,
+    wave_title: str,
+    repo_root: Path | None,
+    identity: Callable[[str], str | None],
+    subject_cache: dict[str, str | None],
+) -> PinClassification:
+    """Classify an unreachable commit object without losing legacy misbindings."""
+    if len(matching_shas) == 1:
+        return "pinned_mismatch", matching_shas[0], True
+    if len(matching_shas) > 1:
+        return "ambiguous_successor", None, False
+    if commit_digest is None or not candidate_shas:
+        return "pinned_but_missing", None, False
+    selected = _select_repair_target(
+        matching_shas=[],
+        candidate_shas=candidate_shas,
+        wave_title=wave_title,
+        repo_root=repo_root,
+        identity=identity,
+        subject_cache=subject_cache,
+    )
+    if selected is not None:
+        return "pinned_mismatch", selected, True
+    return "ambiguous_successor", None, False
+
+
+def _classify_wave_pin(
+    *,
+    wave_id: str,
+    wave_title: str,
+    pinned: str | None,
+    stored_digest: str | None,
+    reachable_shas: set[str],
+    reachable_wave_keys: Mapping[str, set[str]],
+    candidates: Mapping[str, list[str]],
+    repo_root: Path | None,
+    identity_cache: dict[str, str | None],
+    subject_cache: dict[str, str | None],
+) -> PinClassification:
+    """Classify one wave against identity-aware integration history."""
+
+    def identity(sha: str) -> str | None:
+        if sha not in identity_cache:
+            identity_cache[sha] = commit_identity_digest(sha, repo_root=repo_root)
+        return identity_cache[sha]
+
+    candidate_shas = _candidate_shas(wave_id, candidates)
+    if pinned is None:
+        return _classify_unpinned(candidate_shas)
+
+    reachable_pin = next((sha for sha in reachable_shas if _shas_match(pinned, sha)), None)
+    if (
+        reachable_pin is not None
+        and _reachable_pin_is_clean(
+            reachable_pin=reachable_pin,
+            candidate_shas=candidate_shas,
+            wave_id=wave_id,
+            reachable_wave_keys=reachable_wave_keys,
+        )
+        and (stored_digest is None or identity(reachable_pin) == stored_digest)
+    ):
+        return None
+
+    commit_digest = stored_digest or identity(pinned)
+    matching = _matching_identity_candidates(
+        candidate_shas=candidate_shas,
+        commit_digest=commit_digest,
+        identity=identity,
+    )
+    if reachable_pin is None:
+        return _classify_unreachable_pin(
+            matching_shas=matching,
+            candidate_shas=candidate_shas,
+            commit_digest=commit_digest,
+            wave_title=wave_title,
+            repo_root=repo_root,
+            identity=identity,
+            subject_cache=subject_cache,
+        )
+
+    # A reachable pin with the wrong wave identity is a legacy misbinding.
+    # Repair only when the integration first-parent has one unambiguous target.
+    if candidate_shas:
+        selected = _select_repair_target(
+            matching_shas=matching,
+            candidate_shas=candidate_shas,
+            wave_title=wave_title,
+            repo_root=repo_root,
+            identity=identity,
+            subject_cache=subject_cache,
+        )
+        if selected is not None:
+            return "pinned_mismatch", selected, True
+        return "ambiguous_successor", None, False
+    return "pinned_but_missing", None, False
+
+
 def detect_git_state_drift(
     state: State,
     *,
@@ -638,7 +970,11 @@ def detect_git_state_drift(
 
     acked = _resolve_acked_wave_ids(repo_root=repo_root, acked_wave_ids=acked_wave_ids)
     git_available = shutil.which("git") is not None
-    index = build_wave_sha_index(repo_root) if git_available else {}
+    reachable_wave_keys = _reachable_wave_keys(repo_root) if git_available else {}
+    reachable_shas = set(reachable_wave_keys)
+    candidates = _first_parent_wave_candidates(repo_root) if git_available else {}
+    identity_cache: dict[str, str | None] = {}
+    subject_cache: dict[str, str | None] = {}
 
     drifts: list[Drift] = []
     for wave_id in sorted(state.waves):
@@ -647,39 +983,44 @@ def detect_git_state_drift(
             continue
         if wave_id in acked:
             continue
-        derived = (
-            derive_wave_sha(wave_id, repo_root=repo_root, index=index) if git_available else None
-        )
         pinned = wave.commit
-        if pinned is not None:
-            if derived is None:
-                drifts.append(
-                    Drift(
-                        wave_id=wave_id,
-                        kind="pinned_but_missing",
-                        state_commit=pinned,
-                        git_commit=None,
-                    )
-                )
-            elif not _shas_match(pinned, derived):
-                drifts.append(
-                    Drift(
-                        wave_id=wave_id,
-                        kind="pinned_mismatch",
-                        state_commit=pinned,
-                        git_commit=derived,
-                    )
-                )
-            continue
-        # pinned is None
         if not git_available:
-            drifts.append(
-                Drift(wave_id=wave_id, kind="closed_unfindable", state_commit=None, git_commit=None)
+            missing_kind: DriftKind = (
+                "closed_unfindable" if pinned is None else "pinned_but_missing"
             )
+            drifts.append(Drift(wave_id=wave_id, kind=missing_kind, state_commit=pinned))
             continue
-        if derived is None:
+        classified = _classify_wave_pin(
+            wave_id=wave_id,
+            wave_title=wave.title,
+            pinned=pinned,
+            stored_digest=wave.commit_identity_digest,
+            reachable_shas=reachable_shas,
+            reachable_wave_keys=reachable_wave_keys,
+            candidates=candidates,
+            repo_root=repo_root,
+            identity_cache=identity_cache,
+            subject_cache=subject_cache,
+        )
+        if classified is None or classified[0] == "unpinned_derivable":
+            continue
+        kind, successor, _repairable = classified
+        if kind == "unpinned_derivable":
+            continue
+        if kind in {
+            "pinned_but_missing",
+            "pinned_mismatch",
+            "ambiguous_successor",
+            "closed_no_pin",
+            "closed_unfindable",
+        }:
             drifts.append(
-                Drift(wave_id=wave_id, kind="closed_no_pin", state_commit=None, git_commit=None)
+                Drift(
+                    wave_id=wave_id,
+                    kind=kind,
+                    state_commit=pinned,
+                    git_commit=successor,
+                )
             )
     logger.info(
         f"detect_git_state_drift waves={len(state.waves)} drifts={len(drifts)} "
@@ -716,9 +1057,15 @@ def _shas_match(a: str, b: str) -> bool:
 CommitPinKind = Literal[
     "pinned_but_missing",
     "pinned_mismatch",
+    "ambiguous_successor",
     "closed_no_pin",
     "closed_unfindable",
     "unpinned_derivable",
+]
+RepairBasis = Literal[
+    "semantic_identity",
+    "unique_first_parent",
+    "unique_legacy_title_match",
 ]
 
 
@@ -748,7 +1095,38 @@ class CommitPinIssue:
     kind: CommitPinKind
     state_commit: str | None = None
     git_commit: str | None = None
+    git_identity_digest: str | None = None
+    repair_basis: RepairBasis | None = None
     repairable: bool = False
+
+
+def _repair_basis(
+    *,
+    wave_id: str,
+    pinned: str | None,
+    stored_digest: str | None,
+    successor: str | None,
+    candidates: Mapping[str, list[str]],
+    repo_root: Path | None,
+    identity_cache: dict[str, str | None],
+) -> RepairBasis | None:
+    """Classify the evidence that uniquely selected one repair target."""
+    if successor is None:
+        return None
+
+    def identity(sha: str) -> str | None:
+        if sha not in identity_cache:
+            identity_cache[sha] = commit_identity_digest(sha, repo_root=repo_root)
+        return identity_cache[sha]
+
+    prior_digest = stored_digest
+    if prior_digest is None and pinned is not None:
+        prior_digest = identity(pinned)
+    if prior_digest is not None and identity(successor) == prior_digest:
+        return "semantic_identity"
+    if len(_candidate_shas(wave_id, candidates)) == 1:
+        return "unique_first_parent"
+    return "unique_legacy_title_match"
 
 
 def scan_commit_pins(
@@ -798,7 +1176,11 @@ def scan_commit_pins(
 
     acked = _resolve_acked_wave_ids(repo_root=repo_root, acked_wave_ids=acked_wave_ids)
     git_available = shutil.which("git") is not None
-    index = build_wave_sha_index(repo_root) if git_available else {}
+    reachable_wave_keys = _reachable_wave_keys(repo_root) if git_available else {}
+    reachable_shas = set(reachable_wave_keys)
+    candidates = _first_parent_wave_candidates(repo_root) if git_available else {}
+    identity_cache: dict[str, str | None] = {}
+    subject_cache: dict[str, str | None] = {}
 
     issues: list[CommitPinIssue] = []
     for wave_id in sorted(state.waves):
@@ -807,64 +1189,60 @@ def scan_commit_pins(
             continue
         if wave_id in acked:
             continue
-        derived = (
-            derive_wave_sha(wave_id, repo_root=repo_root, index=index) if git_available else None
-        )
         pinned = wave.commit
-        if pinned is not None:
-            if derived is None:
-                issues.append(
-                    CommitPinIssue(
-                        wave_id=wave_id,
-                        kind="pinned_but_missing",
-                        state_commit=pinned,
-                        git_commit=None,
-                        repairable=False,
-                    )
-                )
-            elif not _shas_match(pinned, derived):
-                issues.append(
-                    CommitPinIssue(
-                        wave_id=wave_id,
-                        kind="pinned_mismatch",
-                        state_commit=pinned,
-                        git_commit=derived,
-                        repairable=True,
-                    )
-                )
-            continue
-        # pinned is None
         if not git_available:
             issues.append(
                 CommitPinIssue(
                     wave_id=wave_id,
-                    kind="closed_unfindable",
-                    state_commit=None,
+                    kind="closed_unfindable" if pinned is None else "pinned_but_missing",
+                    state_commit=pinned,
                     git_commit=None,
                     repairable=False,
                 )
             )
             continue
-        if derived is None:
-            issues.append(
-                CommitPinIssue(
-                    wave_id=wave_id,
-                    kind="closed_no_pin",
-                    state_commit=None,
-                    git_commit=None,
-                    repairable=False,
-                )
+        classified = _classify_wave_pin(
+            wave_id=wave_id,
+            wave_title=wave.title,
+            pinned=pinned,
+            stored_digest=wave.commit_identity_digest,
+            reachable_shas=reachable_shas,
+            reachable_wave_keys=reachable_wave_keys,
+            candidates=candidates,
+            repo_root=repo_root,
+            identity_cache=identity_cache,
+            subject_cache=subject_cache,
+        )
+        if classified is None:
+            continue
+        kind, successor, repairable = classified
+        issues.append(
+            CommitPinIssue(
+                wave_id=wave_id,
+                kind=kind,
+                state_commit=pinned,
+                git_commit=successor,
+                git_identity_digest=(
+                    commit_identity_digest(successor, repo_root=repo_root)
+                    if successor is not None
+                    else None
+                ),
+                repair_basis=(
+                    _repair_basis(
+                        wave_id=wave_id,
+                        pinned=pinned,
+                        stored_digest=wave.commit_identity_digest,
+                        successor=successor,
+                        candidates=candidates,
+                        repo_root=repo_root,
+                        identity_cache=identity_cache,
+                    )
+                    if repairable
+                    else None
+                ),
+                repairable=repairable,
             )
-        else:
-            issues.append(
-                CommitPinIssue(
-                    wave_id=wave_id,
-                    kind="unpinned_derivable",
-                    state_commit=None,
-                    git_commit=derived,
-                    repairable=True,
-                )
-            )
+        )
     logger.info(
         f"scan_commit_pins waves={len(state.waves)} issues={len(issues)} "
         f"acked={len(acked)} git_available={git_available}"
@@ -888,6 +1266,8 @@ class RepairAction:
     kind: CommitPinKind
     old_commit: str | None
     new_commit: str
+    identity_digest: str | None = None
+    basis: RepairBasis = "unique_first_parent"
 
 
 def repair_commit_pins(
@@ -930,12 +1310,15 @@ def repair_commit_pins(
             continue
         old_commit = wave.commit
         wave.commit = issue.git_commit
+        wave.commit_identity_digest = issue.git_identity_digest
         repaired.append(
             RepairAction(
                 wave_id=issue.wave_id,
                 kind=issue.kind,
                 old_commit=old_commit,
                 new_commit=issue.git_commit,
+                identity_digest=issue.git_identity_digest,
+                basis=issue.repair_basis or "unique_first_parent",
             )
         )
         logger.info(

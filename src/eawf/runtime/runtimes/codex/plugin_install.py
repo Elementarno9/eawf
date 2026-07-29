@@ -41,10 +41,13 @@ import json
 import logging
 import os
 import re
+import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 import eawf
 from eawf.runtime.runtimes.codex.hook_map import (
@@ -90,6 +93,7 @@ _MANIFEST_FILE: str = "plugin.json"
 _SIDECAR_FILE: str = ".eawf-managed.json"
 _HOOK_CONFIG_FILE: str = "hooks.json"
 _HOOK_TIMEOUT_SECONDS: int = 10
+_SESSION_END_HOOK_TIMEOUT_SECONDS: int = 3
 
 
 @dataclass(frozen=True)
@@ -118,6 +122,64 @@ class InstallResult:
 
 class IntegrityViolation(Exception):  # noqa: N818 — mirrors the kind="IntegrityViolation" CLI error bucket
     """Raised when a managed plugin file has drifted from its recorded hash."""
+
+
+class _CodexPluginListRow(BaseModel):
+    """Strict installed-plugin row from ``codex plugin list --json``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    plugin_id: str = Field(alias="pluginId")
+    name: str
+    marketplace_name: str = Field(alias="marketplaceName")
+    version: str
+    installed: bool
+    enabled: bool
+    source: dict[str, object]
+    marketplace_source: dict[str, object] | None = Field(
+        default=None,
+        alias="marketplaceSource",
+    )
+    install_policy: str = Field(alias="installPolicy")
+    auth_policy: str = Field(alias="authPolicy")
+
+
+class _CodexPluginList(BaseModel):
+    """Strict top-level Codex plugin inventory."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    installed: list[_CodexPluginListRow]
+    available: list[dict[str, object]]
+
+
+class _CodexManifestInterface(BaseModel):
+    """Strict interface block emitted by this plugin."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str = Field(alias="displayName")
+    short_description: str = Field(alias="shortDescription")
+    long_description: str = Field(alias="longDescription")
+    developer_name: str = Field(alias="developerName")
+    category: str
+    capabilities: list[str]
+    default_prompt: list[str] = Field(alias="defaultPrompt")
+    screenshots: list[object]
+    brand_color: str = Field(alias="brandColor")
+
+
+class _CodexPluginManifest(BaseModel):
+    """Strict identity contract for a validated marketplace cache root."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    version: str
+    description: str
+    skills: str
+    hooks: str
+    interface: _CodexManifestInterface
 
 
 def _classify(path: Path, payload: bytes) -> str:
@@ -207,15 +269,91 @@ def _write_config(target_dir: Path, *, scope: Scope, home: Path | None, dry_run:
     return FileDelta(path=config_path, action=action)
 
 
-def _plugin_root(target_dir: Path, *, scope: Scope, home: Path | None = None) -> Path:
+def _marketplace_plugin_root(home: Path | None = None) -> Path | None:
+    """Return the enabled Codex marketplace cache root for Eä, when present.
+
+    ``codex plugin list --json`` is the authority for enabled installations.
+    The selected row must be unique and its versioned cache root must resolve
+    below Codex's cache directory with a matching strict plugin manifest.
+
+    Raises:
+        IntegrityViolation: When Codex reports malformed, multiple, or
+            cache-inconsistent enabled EAWF installations.
+    """
+    base = home if home is not None else Path.home()
+    command_env = dict(os.environ)
+    command_env["HOME"] = str(base)
+    try:
+        result = subprocess.run(
+            ["codex", "plugin", "list", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+            stdin=subprocess.DEVNULL,
+            env=command_env,
+        )
+    except FileNotFoundError:
+        return None
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise IntegrityViolation("cannot query Codex marketplace plugins") from exc
+    if result.returncode != 0:
+        raise IntegrityViolation("cannot query Codex marketplace plugins")
+    try:
+        inventory = _CodexPluginList.model_validate_json(result.stdout)
+    except ValidationError as exc:
+        raise IntegrityViolation("invalid Codex plugin inventory") from exc
+    matches = [
+        row
+        for row in inventory.installed
+        if row.installed
+        and row.enabled
+        and row.name == _PLUGIN_NAME
+        and row.marketplace_name == _PLUGIN_NAME
+        and row.plugin_id == f"{_PLUGIN_NAME}@{_PLUGIN_NAME}"
+    ]
+    if not matches:
+        return None
+    if len(matches) != 1:
+        raise IntegrityViolation("multiple enabled EAWF marketplace installations")
+    row = matches[0]
+    cache_base = (base / ".codex" / "plugins" / "cache").resolve()
+    root = (cache_base / row.marketplace_name / row.name / row.version).resolve()
+    try:
+        root.relative_to(cache_base)
+        manifest = _CodexPluginManifest.model_validate_json(_manifest_target(root).read_bytes())
+    except (OSError, ValidationError, ValueError) as exc:
+        raise IntegrityViolation("enabled EAWF marketplace cache is invalid") from exc
+    if manifest.name != row.name or manifest.version != row.version:
+        raise IntegrityViolation("enabled EAWF marketplace cache identity mismatch")
+    return root
+
+
+def _plugin_root(
+    target_dir: Path,
+    *,
+    scope: Scope,
+    home: Path | None = None,
+    plugin_root: Path | None = None,
+) -> Path:
     """Return ``<plugin_root>`` for *scope* — Codex-native plugin dir.
 
+    An explicit *plugin_root* always wins. User scope then prefers an enabled
+    Codex marketplace cache before falling back to the legacy direct-install
+    location.
+
     - ``project`` → ``<target_dir>/.codex/plugins/eawf/``
-    - ``user``    → ``<home>/.codex/plugins/eawf/`` (``home`` defaults to
-      :func:`pathlib.Path.home`; the kwarg exists for tests).
+    - ``user``    → enabled marketplace cache, else
+      ``<home>/.codex/plugins/eawf/`` (``home`` defaults to
+      :func:`pathlib.Path.home`; the kwargs exist for tests).
     """
+    if plugin_root is not None:
+        return Path(plugin_root).expanduser().resolve()
     if scope == "project":
         return target_dir / ".codex" / "plugins" / _PLUGIN_NAME
+    marketplace_root = _marketplace_plugin_root(home)
+    if marketplace_root is not None:
+        return marketplace_root
     base = home if home is not None else Path.home()
     return base / ".codex" / "plugins" / _PLUGIN_NAME
 
@@ -277,6 +415,13 @@ def _codex_hook_specs() -> tuple[HookSpec, ...]:
     return tuple(by_event[event_type] for event_type in CODEX_HOOK_EVENT_TYPES)
 
 
+def _hook_timeout_seconds(spec: HookSpec) -> int:
+    """Return Codex's event-specific command timeout for *spec*."""
+    if spec.event_type.value == "session_end":
+        return _SESSION_END_HOOK_TIMEOUT_SECONDS
+    return _HOOK_TIMEOUT_SECONDS
+
+
 def _render_hook_config() -> bytes:
     """Render Codex's provider-native ``hooks/hooks.json`` document."""
     hooks: dict[str, list[dict[str, object]]] = {}
@@ -290,7 +435,7 @@ def _render_hook_config() -> bytes:
                         "command": (
                             f'"${{PLUGIN_ROOT}}/hooks/{codex_hook_name(spec.event_type)}.sh"'
                         ),
-                        "timeout": _HOOK_TIMEOUT_SECONDS,
+                        "timeout": _hook_timeout_seconds(spec),
                     }
                 ]
             }
@@ -331,8 +476,8 @@ def _render_manifest() -> bytes:
             ),
             "longDescription": (
                 "Eä Workflow (eawf) is an agent-driven software development framework. "
-                "Skills wrap the research → plan → execute → audit → ship → review → polish "
-                "pipeline; hooks gate state mutations on lifecycle events."
+                "Skills wrap the research → prep → audit → polish → ship pipeline; "
+                "the PR-review pass stays inside ship, and hooks gate state mutations."
             ),
             "developerName": "Eä Workflow",
             "category": "Productivity",
@@ -582,6 +727,7 @@ def install_plugin(
     dry_run: bool = False,
     timestamp: str | None = None,
     home: Path | None = None,
+    plugin_root: Path | None = None,
 ) -> InstallResult:
     """Render the Codex CLI plugin tree under *target_dir* / user home.
 
@@ -600,6 +746,8 @@ def install_plugin(
             Defaults to ``"1970-01-01T00:00:00+00:00"`` for byte
             stability across runs.
         home: Override for ``Path.home()`` (tests pass ``tmp_path``).
+        plugin_root: Explicit Codex plugin root. Overrides scope-derived and
+            marketplace-cache discovery.
 
     Raises:
         IntegrityViolation: when a managed file under the plugin root
@@ -607,7 +755,12 @@ def install_plugin(
     """
     target_dir = Path(target_dir).resolve()
     ts = timestamp or _DEFAULT_TIMESTAMP
-    plugin_root = _plugin_root(target_dir, scope=scope, home=home)
+    plugin_root = _plugin_root(
+        target_dir,
+        scope=scope,
+        home=home,
+        plugin_root=plugin_root,
+    )
 
     skill_deltas = [
         _write_managed_file(
@@ -679,10 +832,16 @@ def expected_paths(
     *,
     scope: Scope = "project",
     home: Path | None = None,
+    plugin_root: Path | None = None,
 ) -> tuple[Mapping[str, Path], Path]:
     """Return ``({region_id: path, ...}, config_path)`` for *target_dir* at *scope*."""
     target_dir = Path(target_dir).resolve()
-    plugin_root = _plugin_root(target_dir, scope=scope, home=home)
+    plugin_root = _plugin_root(
+        target_dir,
+        scope=scope,
+        home=home,
+        plugin_root=plugin_root,
+    )
     paths: dict[str, Path] = {}
     for spec in SKILL_REGISTRY:
         paths[f"plugin.codex.skill.{spec.skill_name}"] = _skill_target(plugin_root, spec)

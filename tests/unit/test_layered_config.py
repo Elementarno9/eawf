@@ -37,6 +37,7 @@ from eawf.kernel.config.registry import (
     leaf_key_lookup,
     leaf_keys_by_domain,
 )
+from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS
 
 
 @pytest.fixture(autouse=True)
@@ -239,6 +240,45 @@ def test_empty_wave_overlay_noop(tmp_path: Path) -> None:
     assert sources["planning.approval"] == "repo"
 
 
+@pytest.mark.parametrize(
+    "layer",
+    ["global", "workspace", "repo", "branch", "local", "wave"],
+)
+def test_legacy_flow_transition_normalizes_in_memory_per_layer(
+    layer: str,
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    repo = tmp_path / "repo"
+    branch = "main"
+    body = "flow:\n  auto_accept:\n    audit: true\n"
+    paths = {
+        "global": tmp_path / "fake-global.yaml",
+        "workspace": workspace / ".ea" / "config.yaml",
+        "repo": repo / ".ea" / "config.yaml",
+        "branch": repo / ".ea" / "branches" / f"{branch}.yaml",
+        "local": repo / ".ea" / "local" / "config.yaml",
+    }
+    source_path = paths.get(layer)
+    if source_path is not None:
+        _write_yaml(source_path, body)
+
+    merged, sources = merge_config(
+        workspace=workspace if layer == "workspace" else None,
+        repo=repo if layer in {"repo", "branch", "local"} else None,
+        env={},
+        cli_overrides={},
+        branch=branch,
+        wave_overlay=({"flow": {"auto_accept": {"audit": True}}} if layer == "wave" else None),
+    )
+
+    assert merged["flow"]["advance_after"]["audit"] is True
+    assert "auto_accept" not in merged["flow"]
+    assert sources["flow.advance_after.audit"] == layer
+    if source_path is not None:
+        assert source_path.read_text(encoding="utf-8") == body
+
+
 # --- Full nine-layer ordering ------------------------------------------------
 
 
@@ -355,11 +395,18 @@ _EXPECTED_CONFIG_CONSUMERS: dict[str, str] = {
     "dispatch.role_tier_token_cap": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "estimation.eu_basis": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
     "estimation.eu_minutes": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
+    "flow.advance_after.audit": "eawf.workflow.skills.flow.FlowSkill._run_steps",
+    "flow.advance_after.polish": "eawf.workflow.skills.flow.FlowSkill._run_steps",
+    "flow.advance_after.prep": "eawf.workflow.skills.flow.FlowSkill._run_steps",
+    "flow.advance_after.research": "eawf.workflow.skills.flow.FlowSkill._run_steps",
     "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_enforce",
+    "flow.max_repair_cycles": "eawf.workflow.skills.flow._config_max_repair_cycles",
     "planning.max_parallel_waves": ("eawf.workflow.lifecycle._capacity.resolve_max_parallel_waves"),
     "prep.auto_resume": "eawf.workflow.skills.prep.PrepSkill._resolve_auto_resume",
     "research.agent_count": "eawf.workflow.skills.research.ResearchSkill._resolve_agents",
+    "research.auto_save": "eawf.workflow.skills.research.ResearchSkill._gather",
     "research.default_depth": "eawf.workflow.skills.research.ResearchSkill._resolve_depth",
+    "review.default_level": "eawf.workflow.skills.review.ReviewSkill.action",
     "ship.gauntlet": "eawf.workflow.skills.ship._resolve_gauntlet",
     "telemetry.db_kind": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
     "telemetry.enabled": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
@@ -373,10 +420,20 @@ _EXPECTED_CONFIG_CONSUMERS: dict[str, str] = {
 }
 
 _EXPECTED_CATALOG_ONLY_CONSUMERS: dict[str, str] = {
+    "runtime.models.claude": "eawf.kernel.config.layered.resolve_runtime_tier_models",
+    "runtime.models.codex": "eawf.kernel.config.layered.resolve_runtime_tier_models",
+    "runtime.models.opencode": "eawf.kernel.config.layered.resolve_runtime_tier_models",
     "verify.juror_wall_clock_seconds": (
         "eawf.workflow.verify.readiness._overlay_repo_verify_leaves"
     ),
     "verify.odr_blocking": "eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
+}
+
+_DECLARATIVE_CONSUMER = "eawf.kernel.config.layered.merge_config"
+_EXPECTED_DECLARATIVE_CONSUMERS: dict[str, str] = {
+    entry.key: _DECLARATIVE_CONSUMER
+    for entry in CONFIG_REGISTRY
+    if entry.key not in _EXPECTED_CONFIG_CONSUMERS and entry.key not in DEPRECATED_LEAF_KEYS
 }
 
 
@@ -388,34 +445,75 @@ def test_config_consumer_set_is_exact_and_importable() -> None:
         if entry.consumer is not None
     }
 
-    expected = _EXPECTED_CONFIG_CONSUMERS | _EXPECTED_CATALOG_ONLY_CONSUMERS
+    expected = (
+        _EXPECTED_CONFIG_CONSUMERS
+        | _EXPECTED_CATALOG_ONLY_CONSUMERS
+        | _EXPECTED_DECLARATIVE_CONSUMERS
+    )
     assert actual == expected
-    assert len(actual) == 20
     assert {
         key: value for key, value in actual.items() if key in {row.key for row in CONFIG_REGISTRY}
-    } == _EXPECTED_CONFIG_CONSUMERS
+    } == _EXPECTED_CONFIG_CONSUMERS | _EXPECTED_DECLARATIVE_CONSUMERS
     for key, consumer in actual.items():
         resolved = pydoc.locate(consumer)
         assert resolved is not None, (key, consumer)
         assert callable(resolved), (key, consumer, resolved)
 
 
-def test_reserved_config_leaf_set_is_exact() -> None:
-    behavior_keys = {entry.key for entry in CONFIG_REGISTRY} | {
-        key for key in LEAF_KEY_REGISTRY if key.startswith("hooks.")
+def test_every_config_leaf_has_exact_consumer_classification() -> None:
+    kinds = {entry.consumer_kind for entry in LEAF_KEY_REGISTRY.values()}
+    assert kinds == {"engine", "skill", "declarative", "deprecated", "reserved"}
+    assert {
+        key for key, entry in LEAF_KEY_REGISTRY.items() if entry.consumer_kind == "deprecated"
+    } == DEPRECATED_LEAF_KEYS & set(LEAF_KEY_REGISTRY)
+    assert {key for key, entry in LEAF_KEY_REGISTRY.items() if entry.consumer_kind == "skill"} == {
+        "audit.default_level",
+        "flow.advance_after.audit",
+        "flow.advance_after.polish",
+        "flow.advance_after.prep",
+        "flow.advance_after.research",
+        "flow.max_repair_cycles",
+        "prep.auto_resume",
+        "research.agent_count",
+        "research.auto_save",
+        "research.default_depth",
+        "review.default_level",
+        "ship.gauntlet",
     }
-    expected = behavior_keys - _EXPECTED_CONFIG_CONSUMERS.keys()
+    for key, entry in LEAF_KEY_REGISTRY.items():
+        if entry.consumer_kind in {"engine", "skill"}:
+            assert entry.consumer is not None, key
+            assert entry.reserved is False, key
+        elif entry.consumer_kind in {"deprecated", "reserved"}:
+            assert entry.consumer is None, key
+            assert entry.reserved is True, key
+        else:
+            assert entry.consumer_kind == "declarative", key
+            assert entry.reserved is False, key
+            expected_consumer = _EXPECTED_DECLARATIVE_CONSUMERS.get(key)
+            assert entry.consumer == expected_consumer, key
+
+
+def test_reserved_config_leaf_set_is_exact() -> None:
+    hook_keys = {key for key in LEAF_KEY_REGISTRY if key.startswith("hooks.")}
+    expected = hook_keys | (DEPRECATED_LEAF_KEYS & set(LEAF_KEY_REGISTRY))
     reserved = {key for key, entry in LEAF_KEY_REGISTRY.items() if entry.reserved}
 
-    assert len(expected) == 63
     assert reserved == expected
     assert {
         "audit.fix_safe",
-        "flow.max_repair_cycles",
-        "planning.approval",
-        "planning.auto_plan",
-        "ship.require_audit_pass",
+        "hooks.enabled",
+        "runtime.adapter_catalog.claude.enabled",
+        "runtime.adapter_catalog.codex.enabled",
+        "runtime.adapter_catalog.opencode.enabled",
     } <= reserved
+    for key in ("planning.approval", "planning.auto_plan"):
+        entry = leaf_key_lookup(key)
+        assert entry.consumer == _DECLARATIVE_CONSUMER
+        assert entry.reserved is False
+    repair_cycles = leaf_key_lookup("flow.max_repair_cycles")
+    assert repair_cycles.consumer == "eawf.workflow.skills.flow._config_max_repair_cycles"
+    assert repair_cycles.reserved is False
     strict_audit = leaf_key_lookup("verify.require_iter_audit_accepted")
     assert strict_audit.consumer == "eawf.workflow.lifecycle.iter_.close_iter"
     assert strict_audit.reserved is False

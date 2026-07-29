@@ -143,6 +143,15 @@ def _validate_scope(scope: str, *, runtime: str) -> None:
         )
 
 
+def _validate_plugin_root(runtime: str | None, plugin_root: Path | None) -> None:
+    """Reject ``--plugin-root`` outside the Codex-specific lifecycle surface."""
+    if plugin_root is not None and runtime != "codex":
+        raise cli_errors.UserError(
+            f"--plugin-root applies to the codex runtime only (got {runtime!r})",
+            kind="InvalidInput",
+        )
+
+
 def _claude_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
     """Return ``True`` when no CC-marketplace conflict blocks ``install claude``.
 

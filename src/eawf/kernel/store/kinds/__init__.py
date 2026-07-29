@@ -8,6 +8,7 @@ from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.kinds.actual import ActualPayload
 from eawf.kernel.store.kinds.agent_report import AgentReportPayload
 from eawf.kernel.store.kinds.audit import AuditPayload
+from eawf.kernel.store.kinds.commit_repin import CommitRepinProvenance
 from eawf.kernel.store.kinds.config_updated import ConfigUpdatedPayload
 from eawf.kernel.store.kinds.decision import DecisionPayload
 from eawf.kernel.store.kinds.estimate import EstimatePayload
@@ -17,6 +18,7 @@ from eawf.kernel.store.kinds.flow import FlowPayload
 from eawf.kernel.store.kinds.gate_receipt import GateReceipt
 from eawf.kernel.store.kinds.incident import IncidentPayload
 from eawf.kernel.store.kinds.jury_ballot import JuryBallotPayload
+from eawf.kernel.store.kinds.legacy_audit_disposition import LegacyAuditDisposition
 from eawf.kernel.store.kinds.memory import MemoryPayload
 from eawf.kernel.store.kinds.operator_input import OperatorInputPayload
 from eawf.kernel.store.kinds.registry_updated import RegistryUpdatedPayload
@@ -54,4 +56,6 @@ PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     StoreKind.OPERATOR_INPUT: OperatorInputPayload,
     StoreKind.JURY_BALLOT: JuryBallotPayload,
     StoreKind.GATE_RECEIPT: GateReceipt,
+    StoreKind.LEGACY_AUDIT_DISPOSITION: LegacyAuditDisposition,
+    StoreKind.COMMIT_REPIN: CommitRepinProvenance,
 }

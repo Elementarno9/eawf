@@ -72,19 +72,49 @@ def _seed_state(workspace: Path) -> None:
     state.write_text("{}", encoding="utf-8")
 
 
+def _repair_plan(workspace: Path) -> Any:
+    from eawf.observability.doctor.repair import DoctorRepairAction, DoctorRepairPlan
+
+    digest = f"sha256:{'0' * 64}"
+    return DoctorRepairPlan(
+        workspace=str(workspace),
+        preview_digest=digest,
+        actions=[
+            DoctorRepairAction(
+                action_id="lifecycle.sync",
+                scope="repo",
+                preview_digest=digest,
+                mutation_class="managed_rules",
+                record_count=1,
+                detail="refresh managed rules",
+            )
+        ],
+        rerun_command=f"eawf --workspace {workspace} doctor --fix --yes",
+    )
+
+
 def test_doctor_green_exits_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
+    monkeypatch.setattr(
+        "eawf.observability.doctor.repair.build_repair_plan",
+        lambda _workspace: _repair_plan(tmp_path),
+    )
     monkeypatch.chdir(tmp_path)
     _seed_state(tmp_path)
     result = runner.invoke(app, ["-w", str(tmp_path), "doctor"])
     assert result.exit_code == 0, result.output
     assert "tools_available" in result.output
     assert "overall: ok" in result.output
+    assert "doctor --fix" in result.output
 
 
 def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The JSON envelope lists every check the doctor surface emits."""
     monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
+    monkeypatch.setattr(
+        "eawf.observability.doctor.repair.build_repair_plan",
+        lambda _workspace: _repair_plan(tmp_path),
+    )
     monkeypatch.chdir(tmp_path)
     _seed_state(tmp_path)
     result = runner.invoke(app, ["--json", "-w", str(tmp_path), "doctor"])
@@ -92,6 +122,8 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     body = json.loads(result.output)
     assert body["ok"] is True
     assert body["status"] == "ok"
+    assert body["repair"]["action_count"] >= 1
+    assert body["repair"]["preview_command"].endswith("doctor --fix")
     names = {c["name"] for c in body["checks"]}
     assert names == {
         "tools_available",
@@ -119,12 +151,96 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     }
 
 
-def test_doctor_real_yaml_fails_truthy_reserved_auto_accept(
+def test_doctor_fix_previews_then_honors_single_rejection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_state(tmp_path)
+    plan = _repair_plan(tmp_path)
+    monkeypatch.setattr(
+        "eawf.observability.doctor.repair.build_repair_plan",
+        lambda _workspace: plan,
+    )
+    applied = False
+
+    def apply(_plan: Any) -> dict[str, Any]:
+        nonlocal applied
+        applied = True
+        return {"applied_count": 1}
+
+    monkeypatch.setattr("eawf.surfaces.doctor_repair.apply_repair_plan", apply)
+
+    result = runner.invoke(
+        app,
+        ["-w", str(tmp_path), "doctor", "--fix"],
+        input="n\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "doctor repair preview: 1 action(s)" in result.output
+    assert "Apply this repair plan?" in result.output
+    assert "not applied; rerun:" in result.output
+    assert applied is False
+
+
+def test_doctor_fix_json_never_prompts_and_returns_needs_user(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_state(tmp_path)
+    plan = _repair_plan(tmp_path)
+    monkeypatch.setattr(
+        "eawf.observability.doctor.repair.build_repair_plan",
+        lambda _workspace: plan,
+    )
+
+    result = runner.invoke(
+        app,
+        ["--json", "-w", str(tmp_path), "doctor", "--fix"],
+    )
+
+    assert result.exit_code == 0, result.output
+    body = json.loads(result.output)
+    assert body["status"] == "needs_user"
+    assert body["actions"][0]["action_id"] == "lifecycle.sync"
+    assert body["rerun_command"].endswith("doctor --fix --yes")
+
+
+def test_doctor_fix_yes_applies_without_prompt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_state(tmp_path)
+    plan = _repair_plan(tmp_path)
+    monkeypatch.setattr(
+        "eawf.observability.doctor.repair.build_repair_plan",
+        lambda _workspace: plan,
+    )
+    monkeypatch.setattr(
+        "eawf.surfaces.doctor_repair.apply_repair_plan",
+        lambda _plan: {"applied_count": 1, "actions": []},
+    )
+
+    result = runner.invoke(
+        app,
+        ["-w", str(tmp_path), "doctor", "--fix", "--yes"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "doctor repair applied: 1 action(s)" in result.output
+    assert "Apply this repair plan?" not in result.output
+
+
+def test_doctor_real_yaml_normalizes_legacy_auto_accept_in_memory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
     monkeypatch.chdir(tmp_path)
-    _seed_state(tmp_path)
+    monkeypatch.setattr(
+        "eawf.observability.doctor.repair.check_launchd_agent",
+        lambda: type("Check", (), {"status": "ok"})(),
+    )
+    (tmp_path / ".ea").mkdir()
     (tmp_path / ".ea" / "config.yaml").write_text(
         "flow:\n  auto_accept:\n    prep: true\n",
         encoding="utf-8",
@@ -132,14 +248,15 @@ def test_doctor_real_yaml_fails_truthy_reserved_auto_accept(
 
     result = runner.invoke(app, ["--json", "-w", str(tmp_path), "doctor"])
 
-    assert result.exit_code == 1, result.output
+    assert result.exit_code == 0, result.output
     body = json.loads(result.output)
     finding = next(check for check in body["checks"] if check["name"] == "reserved_config_key")
-    assert finding["status"] == "fail"
-    assert "flow.auto_accept.prep" in finding["detail"]
+    assert finding["status"] == "ok"
+    assert body["repair"]["action_count"] >= 1
+    assert body["repair"]["preview_command"].endswith("doctor --fix")
 
 
-def test_doctor_real_yaml_warns_benign_reserved_value(
+def test_doctor_real_yaml_accepts_consumed_repair_cycle_value(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
@@ -155,8 +272,8 @@ def test_doctor_real_yaml_warns_benign_reserved_value(
     assert result.exit_code == 0, result.output
     body = json.loads(result.output)
     finding = next(check for check in body["checks"] if check["name"] == "reserved_config_key")
-    assert finding["status"] == "warn"
-    assert "flow.max_repair_cycles=2 (repo)" in finding["detail"]
+    assert finding["status"] == "ok"
+    assert "unsupported" not in finding["detail"]
 
 
 def test_doctor_reprobe_clears_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

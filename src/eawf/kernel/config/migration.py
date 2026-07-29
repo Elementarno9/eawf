@@ -32,6 +32,8 @@ concern.
 from __future__ import annotations
 
 import logging
+import os
+import secrets
 import time
 from collections.abc import Mapping
 from pathlib import Path
@@ -40,6 +42,8 @@ from typing import Any, Final, Literal
 import yaml
 
 from eawf.kernel.config.defaults import CONFIG_SCHEMA_VERSION
+from eawf.kernel.fsync import fsync_parent_dir
+from eawf.runtime.lock import portalock
 from eawf.surfaces.cli.errors import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -74,14 +78,12 @@ def migrate_config_payload(
         input was already ``"1.0"`` and the migration was a no-op.
 
     Raises:
-        ValidationError: When ``schema_version`` is missing entirely,
-            or is a value outside :data:`ACCEPTED_MARKERS`. Missing
-            markers are rejected because the legacy code path always
-            wrote one; an absent marker indicates corruption.
+        ValidationError: When ``schema_version`` is a value outside
+            :data:`ACCEPTED_MARKERS`. Schema-less legacy layers are
+            normalised to the current marker.
     """
-    if "schema_version" not in payload:
-        raise ValidationError("config layer missing required key 'schema_version'")
-    raw_marker = payload["schema_version"]
+    marker_missing = "schema_version" not in payload
+    raw_marker = payload.get("schema_version", CURRENT_MARKER)
     marker = str(raw_marker)
     if marker not in ACCEPTED_MARKERS:
         raise ValidationError(
@@ -97,7 +99,9 @@ def migrate_config_payload(
         # canonical, ``changed`` stays ``False`` and the call is a
         # no-op as advertised.
         cleaned = _cleanup_legacy_keys(upgraded)
-        return upgraded, cleaned
+        if marker_missing:
+            upgraded["schema_version"] = CURRENT_MARKER
+        return upgraded, cleaned or marker_missing
 
     # Legacy → "1.0" upgrade. Apply each fix in order; every step is
     # idempotent on its own so re-running mid-migration is safe.
@@ -152,11 +156,17 @@ def migrate_config_payload(
     return upgraded, True
 
 
-def migrate_config_file(path: Path) -> tuple[dict[str, Any], bool, Path | None]:
+def migrate_config_file(
+    path: Path,
+    *,
+    backup_dir: Path | None = None,
+) -> tuple[dict[str, Any], bool, Path | None]:
     """Read *path*, upgrade to the current marker, write back if changed.
 
     Args:
         path: Filesystem location of one layer YAML.
+        backup_dir: Optional local-only backup directory. Defaults to a
+            sibling backup for backward compatibility.
 
     Returns:
         ``(upgraded, changed, backup_path)``. ``upgraded`` is the new
@@ -173,35 +183,49 @@ def migrate_config_file(path: Path) -> tuple[dict[str, Any], bool, Path | None]:
         # An absent file is treated as an empty layer; nothing to upgrade.
         return {}, False, None
 
-    try:
-        raw = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise ValidationError(f"cannot read config file {path}: {exc}") from exc
+    with portalock.acquire(path, timeout=5.0):
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ValidationError(f"cannot read config file {path}: {exc}") from exc
 
-    try:
-        parsed = yaml.safe_load(raw)
-    except yaml.YAMLError as exc:
-        raise ValidationError(f"malformed YAML in {path}: {exc}") from exc
+        try:
+            parsed = yaml.safe_load(raw)
+        except yaml.YAMLError as exc:
+            raise ValidationError(f"malformed YAML in {path}: {exc}") from exc
 
-    if parsed is None:
-        return {}, False, None
-    if not isinstance(parsed, dict):
-        raise ValidationError(
-            f"config file {path} must contain a YAML mapping at the top "
-            f"level, got {type(parsed).__name__}"
-        )
+        if parsed is None:
+            return {}, False, None
+        if not isinstance(parsed, dict):
+            raise ValidationError(
+                f"config file {path} must contain a YAML mapping at the top "
+                f"level, got {type(parsed).__name__}"
+            )
 
-    old_marker = str(parsed.get("schema_version", "<missing>"))
-    upgraded, changed = migrate_config_payload(parsed)
-    if not changed:
-        return upgraded, False, None
+        old_marker = str(parsed.get("schema_version", "<missing>"))
+        upgraded, changed = migrate_config_payload(parsed)
+        if not changed:
+            return upgraded, False, None
 
-    backup = path.with_name(f"{path.name}.bak.{old_marker}.{int(time.time())}")
-    backup.write_text(raw, encoding="utf-8")
-    path.write_text(
-        yaml.safe_dump(upgraded, sort_keys=True, default_flow_style=False),
-        encoding="utf-8",
-    )
+        backup_parent = backup_dir or path.parent
+        backup_parent.mkdir(parents=True, exist_ok=True)
+        backup = backup_parent / f"{path.name}.bak.{old_marker}.{int(time.time())}"
+        backup.write_text(raw, encoding="utf-8")
+        payload = yaml.safe_dump(
+            upgraded,
+            sort_keys=True,
+            default_flow_style=False,
+        ).encode("utf-8")
+        tmp = path.with_name(f"{path.name}.tmp.{secrets.token_hex(4)}")
+        try:
+            with tmp.open("wb") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp, path)
+            fsync_parent_dir(path)
+        finally:
+            tmp.unlink(missing_ok=True)
     logger.info(
         f"migrate_config_file path={path} from={old_marker!r} to={CURRENT_MARKER!r} backup={backup}"
     )
@@ -311,6 +335,94 @@ def _rename_memory_store_names(payload: dict[str, Any]) -> bool:
     return True
 
 
+def _pop_leaf(payload: dict[str, Any], section: str, key: str) -> bool:
+    """Remove one obsolete nested leaf and prune an empty section."""
+    body = payload.get(section)
+    if not isinstance(body, dict) or key not in body:
+        return False
+    del body[key]
+    if not body:
+        del payload[section]
+    return True
+
+
+def _migrate_flow_transitions(payload: dict[str, Any]) -> bool:
+    """Rename legacy auto-accept stages to explicit completed-stage transitions."""
+    flow = payload.get("flow")
+    if not isinstance(flow, dict):
+        return False
+    changed = False
+    legacy = flow.pop("auto_accept", None)
+    if legacy is not None:
+        changed = True
+    if isinstance(legacy, dict):
+        current = flow.get("advance_after")
+        if not isinstance(current, dict):
+            current = {}
+            flow["advance_after"] = current
+        for stage in ("research", "prep", "audit", "polish"):
+            value = legacy.get(stage)
+            if isinstance(value, bool) and stage not in current:
+                current[stage] = value
+    if "ask_on_decisions" in flow:
+        del flow["ask_on_decisions"]
+        changed = True
+    if not flow:
+        del payload["flow"]
+    return changed
+
+
+def _migrate_adapter_catalog(payload: dict[str, Any]) -> bool:
+    """Promote enabled legacy adapter rows into the canonical selector lists."""
+    runtime = payload.get("runtime")
+    if not isinstance(runtime, dict) or "adapter_catalog" not in runtime:
+        return False
+    catalog = runtime.pop("adapter_catalog")
+    if isinstance(catalog, dict):
+        enabled = [
+            "claude-code" if adapter == "claude" else adapter
+            for adapter in ("claude", "codex", "opencode")
+            if isinstance(catalog.get(adapter), dict) and catalog[adapter].get("enabled") is True
+        ]
+        adapters = runtime.get("adapters")
+        if not isinstance(adapters, list):
+            adapters = []
+        canonical = [str(item) for item in adapters if isinstance(item, str)]
+        for adapter in enabled:
+            if adapter not in canonical:
+                canonical.append(adapter)
+        if canonical:
+            runtime["adapters"] = canonical
+            preference = runtime.get("preference")
+            if not isinstance(preference, list) or not preference:
+                runtime["preference"] = list(canonical)
+    return True
+
+
+def _normalize_runtime_ids(payload: dict[str, Any]) -> bool:
+    """Rewrite the legacy ``claude`` selector alias to ``claude-code``."""
+    runtime = payload.get("runtime")
+    if not isinstance(runtime, dict):
+        return False
+    changed = False
+    if runtime.get("default") == "claude":
+        runtime["default"] = "claude-code"
+        changed = True
+    for key in ("adapters", "preference"):
+        values = runtime.get(key)
+        if not isinstance(values, list):
+            continue
+        normalized: list[Any] = []
+        for value in values:
+            canonical = "claude-code" if value == "claude" else value
+            if canonical not in normalized:
+                normalized.append(canonical)
+        if normalized != values:
+            runtime[key] = normalized
+            changed = True
+    return changed
+
+
 def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
     """Strip legacy keys + rewrite renamed config leaves.
 
@@ -320,8 +432,7 @@ def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
     1. Top-level ``lifecycle`` block — the pre-C08 wizard wrote
        ``{depth: phase}`` here; nothing in the runtime reads it any
        more (the wave allocator pins depth from the iter, not config).
-    2. Top-level ``plugins`` block — superseded by the per-runtime
-       ``runtime.adapter_catalog`` map.
+    2. Top-level ``plugins`` block — superseded by runtime selectors.
     3. ``runtime.kind`` scalar — superseded by ``runtime.adapters``
        (list) + ``runtime.preference`` (ordered fallback). The shim in
        :mod:`eawf.kernel.config.layered` warns on every CLI invocation until
@@ -350,6 +461,24 @@ def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
 
     changed = _rename_project_default_track(payload) or changed
     changed = _rename_memory_store_names(payload) or changed
+    changed = _migrate_flow_transitions(payload) or changed
+    changed = _migrate_adapter_catalog(payload) or changed
+    changed = _normalize_runtime_ids(payload) or changed
+
+    for section, key in (
+        ("audit", "fix_safe"),
+        ("ship", "require_audit_pass"),
+        ("ship", "require_memory_review"),
+        ("polish", "auto_apply_safe"),
+        ("polish", "deletion_policy"),
+        ("vcs", "auto_push"),
+        ("vcs", "pr_open"),
+    ):
+        changed = _pop_leaf(payload, section, key) or changed
+
+    if "hooks" in payload:
+        del payload["hooks"]
+        changed = True
 
     # ``telemetry.export.endpoint`` was dropped when telemetry became
     # strict-local (no external export target); strip the orphan leaf so
@@ -376,6 +505,7 @@ def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
     # populated without a second migration pass.
     if changed:
         _shim_runtime_preference(payload)
+        changed = _normalize_runtime_ids(payload) or changed
 
     return changed
 

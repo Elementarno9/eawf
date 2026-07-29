@@ -1493,8 +1493,8 @@ async def _bind_role_report(
     Args:
         accepted: The already-completed spawn whose ``text`` is validated
             first (reused so the initial spawn is not repeated).
-        prompt: The rendered dispatch prompt; the assist loop appends a
-            correction notice to it on a re-ask.
+        prompt: The rendered dispatch prompt used for the initial attempt.
+            Re-asks send a compact correction-only notice.
         serving_runtime: The runtime the accepted spawn ran on, recorded for
             the trace log.
         spawn_once: The closure that drives one fresh spawn on the serving
@@ -1920,8 +1920,8 @@ async def _spawn_and_dispatch(
     async def _spawn_correction(reask_prompt: str) -> SpawnResult:
         # A re-ask spawns the correction prompt on the serving runtime's
         # adapter + the model the accepted spawn was requested with (the
-        # runtime the accepted spawn ran on), so the model sees the
-        # validation-failure notice the assist loop appended.
+        # runtime the accepted spawn ran on), so the model sees the compact
+        # validation-failure notice from the assist loop.
         _validate_spawn_attempt(state_path, wave_id)
         return await adapter.spawn_session(
             reask_prompt,

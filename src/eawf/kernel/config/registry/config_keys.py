@@ -111,14 +111,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
     ),
     ConfigKey(
         tab="audit",
-        key="audit.fix_safe",
-        label="Reserved: apply safe audit fixes",
-        type="bool",
-        default=False,
-        description="Reserved for compatibility; /audit never mutates source automatically.",
-    ),
-    ConfigKey(
-        tab="audit",
         key="audit.flaky_retry_count",
         label="Retries for flaky audit checks",
         type="int",
@@ -245,59 +237,35 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
     ),
     ConfigKey(
         tab="flow",
-        key="flow.ask_on_decisions",
-        label="Surface a prompt at workflow decision points",
+        key="flow.advance_after.audit",
+        label="Advance from /audit to /polish",
         type="bool",
-        default=True,
-        description="When True, the flow pauses for operator input at decision gates.",
+        default=False,
+        description="When True, /flow advances after audit without a flow-level pause.",
     ),
     ConfigKey(
         tab="flow",
-        key="flow.auto_accept.audit",
-        label="Auto-accept the /audit step",
+        key="flow.advance_after.polish",
+        label="Advance from /polish to /ship",
         type="bool",
         default=False,
-        description="When True, /audit proceeds without an operator confirmation gate.",
+        description="When True, /flow advances after polish without a flow-level pause.",
     ),
     ConfigKey(
         tab="flow",
-        key="flow.auto_accept.polish",
-        label="Auto-accept the /polish step",
+        key="flow.advance_after.prep",
+        label="Advance from /prep to /audit",
         type="bool",
         default=False,
-        description="When True, /polish proceeds without an operator confirmation gate.",
+        description="When True, /flow advances after prep without a flow-level pause.",
     ),
     ConfigKey(
         tab="flow",
-        key="flow.auto_accept.prep",
-        label="Auto-accept the /prep step",
+        key="flow.advance_after.research",
+        label="Advance from /research to /prep",
         type="bool",
         default=False,
-        description="When True, /prep proceeds without an operator confirmation gate.",
-    ),
-    ConfigKey(
-        tab="flow",
-        key="flow.auto_accept.research",
-        label="Auto-accept the /research step",
-        type="bool",
-        default=False,
-        description="When True, /research proceeds without an operator confirmation gate.",
-    ),
-    ConfigKey(
-        tab="flow",
-        key="flow.auto_accept.review",
-        label="Auto-accept the /review step",
-        type="bool",
-        default=False,
-        description="When True, /review proceeds without an operator confirmation gate.",
-    ),
-    ConfigKey(
-        tab="flow",
-        key="flow.auto_accept.ship",
-        label="Auto-accept the /ship step",
-        type="bool",
-        default=False,
-        description="When True, /ship proceeds without an operator confirmation gate.",
+        description="When True, /flow advances after research without a flow-level pause.",
     ),
     ConfigKey(
         tab="flow",
@@ -320,10 +288,10 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
     ConfigKey(
         tab="flow",
         key="flow.max_repair_cycles",
-        label="Reserved: max repair cycles per flow stage",
+        label="Max repair cycles per flow stage",
         type="int",
         default=3,
-        description="Reserved for compatibility; this value does not bound repair execution.",
+        description="Maximum bounded repair re-entry count for a failing flow stage.",
         min_value=0,
     ),
     ConfigKey(
@@ -359,22 +327,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         label="Require /research for residual unknowns",
         type="bool",
         default=True,
-    ),
-    ConfigKey(
-        tab="flow",
-        key="polish.auto_apply_safe",
-        label="Auto-apply safe polish groups",
-        type="bool",
-        default=False,
-        description="When True, /polish applies safe finding groups without the report-only pause.",
-    ),
-    ConfigKey(
-        tab="flow",
-        key="polish.deletion_policy",
-        label="Polish deletion policy",
-        type="str",
-        default="recoverable_with_reason",
-        description="How /polish treats deletions; policy changes surface via AskUserQuestion.",
     ),
     ConfigKey(
         tab="preferences",
@@ -460,37 +412,21 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         choices=("docs", "web", "both"),
     ),
     ConfigKey(
-        tab="runtime",
-        key="runtime.adapter_catalog.claude.enabled",
-        label="Enable the Claude runtime adapter",
-        type="bool",
-        default=True,
-        description="When True, the Claude adapter is available for dispatch.",
-    ),
-    ConfigKey(
-        tab="runtime",
-        key="runtime.adapter_catalog.codex.enabled",
-        label="Enable the Codex runtime adapter",
-        type="bool",
-        default=False,
-        description="When True, the Codex adapter is available for dispatch.",
-    ),
-    ConfigKey(
-        tab="runtime",
-        key="runtime.adapter_catalog.opencode.enabled",
-        label="Enable the opencode runtime adapter",
-        type="bool",
-        default=False,
-        description="When True, the opencode adapter is available for dispatch.",
+        tab="review",
+        key="review.default_level",
+        label="Default review confidence threshold",
+        type="choice",
+        default="medium",
+        choices=("low", "medium", "high"),
     ),
     ConfigKey(
         tab="runtime",
         key="runtime.default",
         label="Default runtime adapter",
         type="choice",
-        default="claude",
+        default="claude-code",
         description="Selected when no per-command override is supplied.",
-        choices=("claude", "codex", "opencode"),
+        choices=("claude-code", "codex", "opencode"),
     ),
     ConfigKey(
         tab="ship",
@@ -501,21 +437,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         description="full (default, mandatory for migration/iter-close) runs all gates; "
         "scoped is for re-runs only.",
         choices=("full", "scoped"),
-    ),
-    ConfigKey(
-        tab="ship",
-        key="ship.require_audit_pass",
-        label="Reserved: require audit pass before ship",
-        type="bool",
-        default=True,
-        description="Reserved for compatibility; this value does not gate ship.",
-    ),
-    ConfigKey(
-        tab="ship",
-        key="ship.require_memory_review",
-        label="Block ship until memory review is recorded",
-        type="bool",
-        default=True,
     ),
     ConfigKey(
         tab="statusline",
@@ -679,14 +600,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
     ),
     ConfigKey(
         tab="vcs",
-        key="vcs.auto_push",
-        label="Auto-push policy",
-        type="choice",
-        default="ask",
-        choices=("ask", "auto", "never"),
-    ),
-    ConfigKey(
-        tab="vcs",
         key="vcs.conventions.release.agent_driven",
         label="Agent-driven release cadence",
         type="choice",
@@ -705,14 +618,6 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
             "per-phase = phase close prepares release."
         ),
         choices=("manual", "per-phase"),
-    ),
-    ConfigKey(
-        tab="vcs",
-        key="vcs.pr_open",
-        label="Open PR automatically on ship",
-        type="choice",
-        default="ask",
-        choices=("ask", "auto", "never"),
     ),
     ConfigKey(
         tab="vcs",
@@ -773,7 +678,7 @@ def tabs_sorted() -> tuple[str, ...]:
     Used by the menu's outer ``select`` widget; the sort is performed once
     per invocation so callers never depend on the storage order.
     """
-    return tuple(sorted({entry.tab for entry in CONFIG_REGISTRY}))
+    return tuple(sorted({entry.tab for entry in _editable_registry()}))
 
 
 def keys_for_tab(tab: str) -> tuple[ConfigKey, ...]:
@@ -783,8 +688,19 @@ def keys_for_tab(tab: str) -> tuple[ConfigKey, ...]:
         tab: Tab name (case-sensitive). Unknown tabs return an empty tuple
             so the menu can defensively render an empty list.
     """
-    matched = [entry for entry in CONFIG_REGISTRY if entry.tab == tab]
+    matched = [entry for entry in _editable_registry() if entry.tab == tab]
     return tuple(sorted(matched, key=lambda e: e.key))
+
+
+def _editable_registry() -> tuple[ConfigKey, ...]:
+    """Return operator keys backed by active, non-reserved catalog rows."""
+    from eawf.kernel.config.registry.leaf_catalog import LEAF_KEY_REGISTRY
+
+    return tuple(
+        entry
+        for entry in CONFIG_REGISTRY
+        if (leaf := LEAF_KEY_REGISTRY.get(entry.key)) is not None and not leaf.reserved
+    )
 
 
 def registry_lookup(key: str) -> ConfigKey | None:

@@ -127,7 +127,7 @@ class _ConfigSchema(BaseModel):
     worktrees: dict[str, Any]
     acceptance: dict[str, Any]
     security: dict[str, Any]
-    hooks: dict[str, Any]
+    hooks: dict[str, Any] = Field(default_factory=dict)
     mcp: dict[str, Any]
     statusline: dict[str, Any]
     docs: dict[str, Any]

@@ -189,8 +189,17 @@ def test_mode_action_key_rows_cover_every_own_binding() -> None:
         assert title in help_sections, f"mode {name!r} missing its help subsection"
         help_keys = {key for key, _ in help_sections[title]}
         own_bindings = cls.__dict__.get("BINDINGS", ())
+        inherited_pairs = {
+            (binding.key, binding.action)
+            for base in cls.__mro__[1:]
+            for binding in base.__dict__.get("BINDINGS", ())
+            if isinstance(binding, Binding)
+        }
         for binding in own_bindings:
-            if isinstance(binding, Binding):
+            if (
+                isinstance(binding, Binding)
+                and (binding.key, binding.action) not in inherited_pairs
+            ):
                 assert binding.key in help_keys, (
                     f"binding {binding.key!r} of mode {name!r} has no help row"
                 )
@@ -211,6 +220,7 @@ def test_mode_action_key_rows_omit_inherited_chrome() -> None:
     # / quit), which already lives under the global section.
     sections = dict(mode_action_key_rows())
     assert sections["Feed"] == ()
+    assert dict(sections["Doctor"]) == {"f": "fix"}
     # The inherited chrome keys never leak into any mode subsection.
     all_keys = {key for rows in sections.values() for key, _ in rows}
     assert "slash" not in all_keys
@@ -304,22 +314,25 @@ def test_help_renders_mode_action_and_reference_sections() -> None:
             assert "Autopilot" in shot
             assert "dispatch" in shot
             # The honest "(navigation only)" note appears for a mode that
-            # declares no own action keys (Doctor / Evidence / Feed). The
-            # offset accounts for the Trust mode's verifier + calibration
-            # action-key rows AND the Sandbox mode's nav action-key rows, which
-            # push the no-action modes further down.
-            container.scroll_to(y=44, animate=False)
-            await pilot.pause()
-            await app.workers.wait_for_complete()
-            assert "(navigation only)" in capture_screen_text(app)
+            # declares no own action keys (Evidence / Feed). Find it by content
+            # so adding a legitimate mode action does not make this viewport
+            # assertion brittle.
+            navigation_only = ""
+            for offset in range(40, 73, 4):
+                container.scroll_to(y=offset, animate=False)
+                await pilot.pause()
+                navigation_only = capture_screen_text(app)
+                if "(navigation only)" in navigation_only:
+                    break
+            assert "(navigation only)" in navigation_only
             # Scroll further to the reference-nav section (alt-arrow nav).
-            # The Sandbox mode's own action-key rows -- plus the Watch mode's
-            # ``g`` grid-toggle action-key row (W22) -- push this section further
-            # down the card than the pre-9-mode layout placed it.
-            container.scroll_to(y=72, animate=False)
-            await pilot.pause()
-            await app.workers.wait_for_complete()
-            ref = capture_screen_text(app)
+            ref = ""
+            for offset in range(68, 101, 4):
+                container.scroll_to(y=offset, animate=False)
+                await pilot.pause()
+                ref = capture_screen_text(app)
+                if "Reference navigation" in ref:
+                    break
             assert "Reference navigation" in ref
             assert "alt+left" in ref
 

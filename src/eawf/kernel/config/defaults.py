@@ -88,16 +88,16 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "trusted": {},
     },
     "runtime": {
-        "default": "claude",
+        "default": "claude-code",
         # ``adapters`` is the user-facing selector list. Built-in default
         # opts the project into the Claude adapter only; the wizard /
         # workspace overlay extends or replaces it.
-        "adapters": ["claude"],
+        "adapters": ["claude-code"],
         # ``preference`` is the C08-canonical fallback ladder; first entry
         # is primary. The legacy-shim path in :mod:`eawf.kernel.config.layered`
         # synthesises ``preference`` from ``adapters`` when only the
         # latter is present.
-        "preference": ["claude"],
+        "preference": ["claude-code"],
         # Fallback policy applied when the primary runtime rejects a
         # dispatch (rate-limit / server error / timeout / API error).
         "fallback": {
@@ -121,19 +121,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
             "review",
             "polish",
         ],
-        # ``adapter_catalog`` holds the per-adapter config blocks. Indexed
-        # by adapter id; the runtime spine reads it after consulting
-        # ``adapters`` for the selector list.
-        "adapter_catalog": {
-            "claude": {
-                "enabled": True,
-                "plugin_install": "ask",
-                "skills_path": ".claude/skills",
-                "agents_path": ".claude/agents",
-            },
-            "codex": {"enabled": False, "status": "planned"},
-            "opencode": {"enabled": False, "status": "deferred"},
-        },
     },
     "ui": {
         "bare_command": "tui",
@@ -266,7 +253,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         # Default /audit check-plan breadth: quick narrows to a smoke set,
         # standard is the full default set, deep is the widest.
         "default_level": "standard",
-        "fix_safe": False,
         "flaky_retry_count": 1,
     },
     # ``/prep`` runtime knobs. ``auto_resume`` leads /prep's emitted claim
@@ -279,37 +265,28 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         # Ship gauntlet breadth: full (default, mandatory for migration waves
         # + iter close) runs every gate; scoped is legal only for re-runs.
         "gauntlet": "full",
-        "require_audit_pass": True,
-        "require_memory_review": True,
         "use_vcs_policy": True,
     },
     "review": {
+        "default_level": "medium",
         "post_default": "ask",
         "template": "default",
         "require_checks_before_approve": True,
     },
     "polish": {
-        "auto_apply_safe": False,
         "include_memory": True,
         "include_agent_memory": True,
-        "deletion_policy": "recoverable_with_reason",
     },
     "flow": {
-        # Per-stage gates. When False (default), ``/flow`` asks the operator
-        # via ``AskUserQuestion`` before advancing past the named step. Set
-        # the per-stage flag to True (or pass ``--auto-accept=<stage>[,...]``)
-        # to advance without a prompt.
-        "auto_accept": {
+        # Per-transition gates. A true value authorises advancing after the
+        # named completed stage. Protected actions inside the next skill keep
+        # their own explicit confirmation requirements.
+        "advance_after": {
             "research": False,
             "prep": False,
             "audit": False,
-            "ship": False,
-            "review": False,
             "polish": False,
         },
-        # Encourage subagent prompts and skill bodies to surface discrete
-        # decisions through ``AskUserQuestion`` rather than free-text prompts.
-        "ask_on_decisions": True,
         # Per-wave token-budget enforcement. ``soft`` (default) warns and
         # lets the wave continue past its cap; ``hard`` halts the wave at
         # the cap via the SIGTERM->SIGKILL ladder. ``multiplier`` scales
@@ -344,8 +321,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "checkpoint_requires_commit": True,
         "protected_branches": ["main", "master"],
         "auto_commit": "ask",
-        "auto_push": "ask",
-        "pr_open": "ask",
         "pr_merge_method": "merge",
         "squash_allowed": False,
         "delete_branch_after_merge": False,
@@ -397,14 +372,9 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "store_scan_on_finding": "block",
         "allow_destructive": "ask",
     },
-    "hooks": {
-        "policy": "mixed_strict",
-        "timeout_seconds": 30,
-        "enabled": ["state_validate", "generated_drift", "post_edit_lint"],
-        "fail_closed": ["state_validate", "secret_scan", "protected_vcs"],
-        "fail_open": ["post_edit_lint", "statusline", "memory_capture"],
-        "ask_on_fail": ["overwrite_conflict", "destructive_action"],
-    },
+    # Reserved hook settings were removed in v0.6.5. Keep the required
+    # top-level section so layered config retains a stable schema shape.
+    "hooks": {},
     "mcp": {
         "default_policy": "ask_install",
         "manage_only_owner": "eawf",

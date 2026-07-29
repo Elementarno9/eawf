@@ -520,6 +520,7 @@ class CloseAttempt(_FrozenStrictModel):
     integration_id: IdStr
     candidate_sha: ShaStr
     integrated_sha: ShaStr
+    commit_identity_digest: DigestStr | None = None
     tree_sha: ShaStr
     wave_revision_digest: DigestStr
     spec_digest: DigestStr
@@ -877,6 +878,7 @@ class Wave(_DescribedEntity):
     tokens_consumed: Annotated[int, Field(ge=0)] = 0
     outcome: str | None = None
     commit: ShaStr | None = None
+    commit_identity_digest: Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")] | None = None
     opened_at: UtcDatetime
     claimed_at: UtcDatetime | None = None
     runtime_baseline: RuntimeBaseline | None = None

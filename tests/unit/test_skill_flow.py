@@ -2,8 +2,8 @@
 
 Pin the Phase 4 W03 acceptance contract for ``/flow``:
 
-- Runs the six core skills sequentially in order
-  (research → prep → audit → ship → review → polish).
+- Runs the five core skills sequentially in order
+  (research → prep → audit → polish → ship).
 - Short-circuit semantics: on any non-``ok`` status, propagates the
   failing step's ``repair_commands`` to the flow's footer and stops.
 - ``stop_after`` flag halts cleanly with the last-run step's status.
@@ -62,22 +62,21 @@ def test_flow_skill_registered_with_canonical_name() -> None:
     assert cls is FlowSkill
 
 
-def test_flow_runs_six_core_skills_in_order(state_dir: Path) -> None:
+def test_flow_runs_current_core_skills_in_order(state_dir: Path) -> None:
     skill = FlowSkill()
-    env = run_skill(skill, _ctx({"topic": "demo"}))
+    env = run_skill(skill, _ctx({"topic": "demo", "advance_after": True}))
     assert env.header.skill == "/flow"
     body = FlowBody.model_validate(cast(dict, env.body))
     assert body.topic == "demo"
-    # Six steps run; each step is a serialised envelope dict.
-    assert len(body.steps) == 6
-    expected_order = ["/research", "/prep", "/audit", "/ship", "/review", "/polish"]
+    assert len(body.steps) == 5
+    expected_order = ["/research", "/prep", "/audit", "/polish", "/ship"]
     actual_order = [s["header"]["skill"] for s in body.steps]
     assert actual_order == expected_order
 
 
 def test_flow_terminal_status_ok_when_every_step_ok(state_dir: Path) -> None:
     skill = FlowSkill()
-    env = run_skill(skill, _ctx({"topic": "demo"}))
+    env = run_skill(skill, _ctx({"topic": "demo", "advance_after": True}))
     # Each core skill v0.1 stub returns status=ok by default.
     body = FlowBody.model_validate(cast(dict, env.body))
     assert env.header.status == "ok"
@@ -120,7 +119,7 @@ def test_flow_short_circuits_on_first_non_ok(
     monkeypatch.setattr(FlowSkill, "flow_order", patched_order)
 
     skill = FlowSkill()
-    env = run_skill(skill, _ctx({"topic": "demo"}))
+    env = run_skill(skill, _ctx({"topic": "demo", "advance_after": True}))
     assert env.header.status == "blocked"
     # The flow's footer carries the failing step's repair commands.
     assert env.footer.repair_commands == ["brew install git"]
@@ -143,7 +142,10 @@ def test_flow_stop_after_research_runs_only_one_step(state_dir: Path) -> None:
 
 def test_flow_stop_after_with_leading_slash_normalised(state_dir: Path) -> None:
     skill = FlowSkill()
-    env = run_skill(skill, _ctx({"topic": "demo", "stop_after": "/prep"}))
+    env = run_skill(
+        skill,
+        _ctx({"topic": "demo", "stop_after": "/prep", "advance_after": ["research"]}),
+    )
     body = FlowBody.model_validate(cast(dict, env.body))
     assert len(body.steps) == 2
     assert [s["header"]["skill"] for s in body.steps] == ["/research", "/prep"]
@@ -151,9 +153,12 @@ def test_flow_stop_after_with_leading_slash_normalised(state_dir: Path) -> None:
 
 def test_flow_unrecognised_stop_after_runs_full_pipeline(state_dir: Path) -> None:
     skill = FlowSkill()
-    env = run_skill(skill, _ctx({"topic": "demo", "stop_after": "wat"}))
+    env = run_skill(
+        skill,
+        _ctx({"topic": "demo", "stop_after": "wat", "advance_after": True}),
+    )
     body = FlowBody.model_validate(cast(dict, env.body))
-    assert len(body.steps) == 6
+    assert len(body.steps) == 5
 
 
 def test_flow_emits_at_least_step_start_end_per_skill(state_dir: Path) -> None:

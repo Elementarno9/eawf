@@ -289,6 +289,29 @@ def _evict_expired(cache: dict[str, Any], *, now: float) -> None:
         cache.pop(k, None)
 
 
+def _cached_replay(
+    cache: dict[str, Any],
+    *,
+    idempotency_key: str | None,
+    operation: str,
+    layer: str,
+    key_path: list[str],
+) -> dict[str, Any] | None:
+    """Return a cached mutation result with replay metadata."""
+    if idempotency_key is None:
+        return None
+    cached = cache.get(idempotency_key)
+    if cached is None or not hasattr(cached, "result"):
+        return None
+    result = dict(cached.result)
+    result["idempotent_replay"] = True
+    logger.info(
+        f"_cached_replay operation={operation} idempotent_replay=true "
+        f"layer={layer} key_path={key_path} key={idempotency_key!r}"
+    )
+    return result
+
+
 # ---- Layer-path resolution --------------------------------------------------
 
 
@@ -522,6 +545,8 @@ async def set_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[st
     # typo or a stale CLI build.
     dotted = ".".join(args.key_path)
     entry = leaf_key_lookup(dotted)  # raises ValueError on unknown.
+    if entry.reserved:
+        raise ValueError(f"validation_failed: config leaf {dotted!r} is deprecated")
 
     state_path = _resolve_state_anchor(repo_root=args.repo_root, ctx=ctx)
     # Resolve (and so validate) the target layer first: a bogus layer name
@@ -543,16 +568,15 @@ async def set_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[st
     cache = _idempotency_cache(ctx)
     now_mono = time.monotonic()
     _evict_expired(cache, now=now_mono)
-    if args.idempotency_key is not None:
-        cached = cache.get(args.idempotency_key)
-        if cached is not None and hasattr(cached, "result"):
-            result = dict(cached.result)
-            result["idempotent_replay"] = True
-            logger.info(
-                f"set_layer_value idempotent_replay layer={args.layer} "
-                f"key_path={args.key_path} key={args.idempotency_key!r}"
-            )
-            return result
+    replay = _cached_replay(
+        cache,
+        idempotency_key=args.idempotency_key,
+        operation="set_layer_value",
+        layer=args.layer,
+        key_path=args.key_path,
+    )
+    if replay is not None:
+        return replay
 
     # Daemon-internal portalock — defense in depth so a CLI fallback
     # write does not race with the daemon's mutator.
@@ -618,6 +642,8 @@ async def unset_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[
 
     dotted = ".".join(args.key_path)
     entry = leaf_key_lookup(dotted)
+    if entry.reserved:
+        raise ValueError(f"validation_failed: config leaf {dotted!r} is deprecated")
     state_path = _resolve_state_anchor(repo_root=args.repo_root, ctx=ctx)
     target = _resolve_layer_path(args.layer, state_path=state_path, branch=args.branch)
     if args.layer not in entry.writable_layers:
@@ -628,16 +654,15 @@ async def unset_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[
     cache = _idempotency_cache(ctx)
     now_mono = time.monotonic()
     _evict_expired(cache, now=now_mono)
-    if args.idempotency_key is not None:
-        cached = cache.get(args.idempotency_key)
-        if cached is not None and hasattr(cached, "result"):
-            result = dict(cached.result)
-            result["idempotent_replay"] = True
-            logger.info(
-                f"unset_layer_value idempotent_replay layer={args.layer} "
-                f"key_path={args.key_path} key={args.idempotency_key!r}"
-            )
-            return result
+    replay = _cached_replay(
+        cache,
+        idempotency_key=args.idempotency_key,
+        operation="unset_layer_value",
+        layer=args.layer,
+        key_path=args.key_path,
+    )
+    if replay is not None:
+        return replay
 
     from eawf.runtime.lock import portalock
 
@@ -768,6 +793,8 @@ async def set_wave_value(ctx: MethodContext, params: dict[str, Any]) -> dict[str
     args = SetWaveValueParams.model_validate(params)
     dotted = ".".join(args.key_path)
     entry = leaf_key_lookup(dotted)  # raises ValueError on unknown.
+    if entry.reserved:
+        raise ValueError(f"validation_failed: config leaf {dotted!r} is deprecated")
     if "wave" not in entry.writable_layers:
         raise ValueError(f"validation_failed: leaf {dotted!r} is not writable from the wave layer")
 

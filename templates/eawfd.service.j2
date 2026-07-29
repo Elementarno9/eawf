@@ -9,6 +9,7 @@ Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
 Environment="EAWF_RUNTIME_DIR={{ runtime_dir }}"
+Environment="PATH={{ service_path }}"
 
 [Install]
 WantedBy=default.target

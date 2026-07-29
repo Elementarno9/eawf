@@ -36,6 +36,7 @@ LeafKeyType = Literal[
     "any",
     "literal",
 ]
+ConsumerKind = Literal["engine", "skill", "declarative", "deprecated", "reserved"]
 
 
 class LeafKey(BaseModel):
@@ -59,8 +60,10 @@ class LeafKey(BaseModel):
             for other shapes.
         consumer: Importable module or qualified symbol that consumes this
             leaf's behaviour. ``None`` for non-behavioural and reserved leaves.
-        reserved: Whether the leaf is accepted only for compatibility and has
-            no production behaviour. A leaf cannot be both consumed and reserved.
+        consumer_kind: How the value is consumed. Every leaf is classified as
+            engine, skill, declarative, deprecated, or reserved.
+        reserved: Whether the leaf is hidden from editing because it is
+            deprecated or reserved. A leaf cannot be both consumed and reserved.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -73,6 +76,7 @@ class LeafKey(BaseModel):
     description: str = ""
     choices: tuple[str, ...] | None = None
     consumer: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)] | None = None
+    consumer_kind: ConsumerKind = "declarative"
     reserved: bool = False
 
     @field_validator("writable_layers")
@@ -107,6 +111,9 @@ class LeafKey(BaseModel):
         """Reject contradictory consumed-and-reserved metadata."""
         if self.consumer is not None and self.reserved:
             raise ValueError("config leaf cannot declare both consumer and reserved")
+        hidden_kind = self.consumer_kind in {"deprecated", "reserved"}
+        if self.reserved != hidden_kind:
+            raise ValueError("hidden config leaf must use consumer_kind='deprecated' or 'reserved'")
         return self
 
 
@@ -132,3 +139,6 @@ _WRITABLE_RUNTIME_PREFERENCE: tuple[str, ...] = (
     "wave",
 )
 _WRITABLE_NONE: tuple[str, ...] = ()  # locked / code-only
+
+
+__all__ = ["ConsumerKind", "LeafKey", "LeafKeyType"]

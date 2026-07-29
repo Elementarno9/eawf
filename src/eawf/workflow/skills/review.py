@@ -92,6 +92,21 @@ def _coerce_bool(value: Any) -> bool:
     return bool(value)
 
 
+def _config_default_level(state_path: Any) -> str:
+    """Resolve review.default_level from the active repo's layered config."""
+    from eawf.kernel.config.layered import merge_config
+
+    repo = state_path.parent.parent
+    try:
+        merged, _sources = merge_config(repo=repo, workspace=repo)
+    except Exception as exc:  # pragma: no cover - defensive only
+        logger.debug(f"_config_default_level merge_error={exc!r}")
+        return "medium"
+    review = merged.get("review") if isinstance(merged, dict) else None
+    value = review.get("default_level") if isinstance(review, dict) else None
+    return _coerce_level(value)
+
+
 @register
 class ReviewSkill(Skill):
     """Concrete ``/review`` skill (Phase 4 W02)."""
@@ -111,7 +126,9 @@ class ReviewSkill(Skill):
         head = str(args.get("head") or "HEAD")
         recommendation = _coerce_recommendation(args.get("recommendation"))
         do_post = _coerce_bool(args.get("post", False))
-        level = _coerce_level(args.get("level"))
+        level = _coerce_level(
+            args["level"] if "level" in args else _config_default_level(state_path)
+        )
         criteria_wave = str(args.get("criteria") or args.get("criteria_wave") or "") or None
 
         persisted_records: list[str] = []

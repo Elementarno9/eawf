@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import tomllib
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -35,6 +36,66 @@ _TRUSTED_HOOK_HASHES = {
     "subagent_stop": "sha256:f9c8f2c77aa7a2e2bf3625625684421e77fd5e097c63cb569360f9ea9c03a33c",
     "session_end": "sha256:0b68efff9048a85638caee762a85997b402f95bfd974ab4e34111469d46a6dca",
 }
+
+
+def _plugin_list_result(*rows: dict[str, object]) -> SimpleNamespace:
+    return SimpleNamespace(
+        args=["codex", "plugin", "list", "--json"],
+        returncode=0,
+        stdout=json.dumps({"installed": list(rows), "available": []}),
+        stderr="",
+    )
+
+
+def _marketplace_row(*, version: str = eawf.__version__) -> dict[str, object]:
+    return {
+        "pluginId": "eawf@eawf",
+        "name": "eawf",
+        "marketplaceName": "eawf",
+        "version": version,
+        "installed": True,
+        "enabled": True,
+        "source": {"source": "git-subdir"},
+        "marketplaceSource": {"sourceType": "git"},
+        "installPolicy": "AVAILABLE",
+        "authPolicy": "ON_INSTALL",
+    }
+
+
+def _write_marketplace_manifest(root: Path, *, version: str = eawf.__version__) -> None:
+    path = root / ".codex-plugin" / "plugin.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps(
+            {
+                "name": "eawf",
+                "version": version,
+                "description": "test",
+                "skills": "./skills/",
+                "hooks": "./hooks/hooks.json",
+                "interface": {
+                    "displayName": "Eä Workflow",
+                    "shortDescription": "test",
+                    "longDescription": "test",
+                    "developerName": "Eä Workflow",
+                    "category": "Productivity",
+                    "capabilities": ["Write"],
+                    "defaultPrompt": ["test"],
+                    "screenshots": [],
+                    "brandColor": "#000000",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+@pytest.fixture(autouse=True)
+def _empty_codex_marketplace(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "eawf.runtime.runtimes.codex.plugin_install.subprocess.run",
+        lambda *_args, **_kwargs: _plugin_list_result(),
+    )
 
 
 @pytest.fixture()
@@ -139,6 +200,107 @@ def test_install_creates_plugin_layout(tmp_path: Path, fake_home: Path, scope: s
         assert spec.body.splitlines()[0] in parsed["developer_instructions"]
 
 
+def test_user_scope_resolves_enabled_marketplace_cache(
+    tmp_path: Path,
+    fake_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """User-scope lifecycle verbs target Codex's active marketplace cache."""
+    monkeypatch.setattr(
+        "eawf.runtime.runtimes.codex.plugin_install.subprocess.run",
+        lambda *_args, **_kwargs: _plugin_list_result(_marketplace_row()),
+    )
+    cache_root = fake_home / ".codex" / "plugins" / "cache" / "eawf" / "eawf" / eawf.__version__
+    _write_marketplace_manifest(cache_root)
+
+    paths, _config = expected_paths(tmp_path, scope="user", home=fake_home)
+
+    assert all(
+        cache_root == path or cache_root in path.parents
+        for region_id, path in paths.items()
+        if not region_id.startswith("plugin.codex.agent.")
+    )
+
+
+def test_user_scope_rejects_multiple_enabled_marketplace_installs(
+    tmp_path: Path,
+    fake_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "eawf.runtime.runtimes.codex.plugin_install.subprocess.run",
+        lambda *_args, **_kwargs: _plugin_list_result(
+            _marketplace_row(),
+            _marketplace_row(),
+        ),
+    )
+
+    with pytest.raises(IntegrityViolation, match="multiple enabled"):
+        expected_paths(tmp_path, scope="user", home=fake_home)
+
+
+def test_user_doctor_reports_direct_tree_as_inactive_marketplace_legacy(
+    tmp_path: Path,
+    fake_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "eawf.runtime.runtimes.codex.plugin_install.subprocess.run",
+        lambda *_args, **_kwargs: _plugin_list_result(_marketplace_row()),
+    )
+    cache_root = fake_home / ".codex" / "plugins" / "cache" / "eawf" / "eawf" / eawf.__version__
+    _write_marketplace_manifest(cache_root)
+    direct_root = fake_home / ".codex" / "plugins" / "eawf"
+    direct_root.mkdir(parents=True)
+
+    report = doctor_plugin(tmp_path, scope="user", home=fake_home)
+
+    assert report.plugin_root == cache_root
+    assert direct_root in report.legacy_paths
+    assert direct_root.is_dir()
+
+
+def test_user_scope_falls_back_to_direct_tree_without_marketplace(
+    tmp_path: Path,
+    fake_home: Path,
+) -> None:
+    paths, _config = expected_paths(tmp_path, scope="user", home=fake_home)
+    direct_root = fake_home / ".codex" / "plugins" / "eawf"
+
+    assert all(
+        direct_root == path or direct_root in path.parents
+        for region_id, path in paths.items()
+        if not region_id.startswith("plugin.codex.agent.")
+    )
+
+
+def test_explicit_plugin_root_overrides_scope_resolution(
+    tmp_path: Path,
+    fake_home: Path,
+) -> None:
+    """Explicit roots let lifecycle verbs inspect/update a mounted cache."""
+    explicit_root = tmp_path / "mounted-plugin"
+
+    result = install_plugin(
+        tmp_path,
+        scope="user",
+        home=fake_home,
+        plugin_root=explicit_root,
+    )
+    _write_hook_trust_config(fake_home)
+    report = doctor_plugin(
+        tmp_path,
+        scope="user",
+        home=fake_home,
+        plugin_root=explicit_root,
+    )
+
+    assert result.manifest is not None
+    assert result.manifest.path == explicit_root / ".codex-plugin" / "plugin.json"
+    assert report.plugin_root == explicit_root
+    assert report.clean is True
+
+
 @pytest.mark.parametrize("scope", ["project", "user"])
 def test_install_idempotent_second_run_unchanged(
     tmp_path: Path, fake_home: Path, scope: str
@@ -233,6 +395,7 @@ def test_install_codex_emits_manifest_toml(tmp_path: Path, fake_home: Path, scop
         handler = hooks_body["hooks"][event_name][0]["hooks"][0]
         assert handler["type"] == "command"
         assert codex_hook_name(event_type) in handler["command"]
+        assert handler["timeout"] == (3 if event_name == "SessionEnd" else 10)
     assert "interface" in body
     iface = body["interface"]
     assert iface["displayName"] == "Eä Workflow"

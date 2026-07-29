@@ -160,6 +160,29 @@ def test_plugin_install_codex_writes_native_layout(
     assert "enabled = true" in text
 
 
+def test_plugin_install_codex_accepts_explicit_plugin_root(tmp_path: Path) -> None:
+    """``--plugin-root`` reaches the Codex installer without scope guessing."""
+    _equip_ea_dir(tmp_path)
+    plugin_root = tmp_path / "mounted-cache" / "eawf"
+
+    result = runner.invoke(
+        app,
+        [
+            "-w",
+            str(tmp_path),
+            "plugin",
+            "install",
+            "codex",
+            "--plugin-root",
+            str(plugin_root),
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert (plugin_root / ".codex-plugin" / "plugin.json").is_file()
+    assert str(plugin_root) in result.stdout
+
+
 @pytest.mark.parametrize("scope", ["project", "user"])
 def test_plugin_install_opencode_drops_plugins_array(
     tmp_path: Path, scope: str, monkeypatch: pytest.MonkeyPatch

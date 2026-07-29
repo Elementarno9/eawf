@@ -42,18 +42,14 @@ def _receipt(freshness_key: str) -> GateReceipt:
         runner_digest="5" * 64,
         environment_digest="6" * 64,
         freshness_key=freshness_key,
-        argv=["gate"],
         argv_digest="7" * 64,
-        command="gate",
         timeout_class="quick",
         resolved_timeout_seconds=60,
         started_at=observed_at,
         ended_at=observed_at,
         duration_ms=0,
         result=GateReceiptResult.PASS,
-        details="gate passed",
         exit_status=0,
-        full_log_ref=".ea/local/logs/gate.log",
     )
 
 
@@ -81,8 +77,6 @@ def _file_receipt(freshness_key: str) -> GateReceipt:
         ended_at=observed_at,
         duration_ms=0,
         result=GateReceiptResult.PASS,
-        details="path=sentinel exists=True",
-        full_log_ref=".ea/local/logs/file-proof.log",
     )
 
 
@@ -165,7 +159,7 @@ def test_completed_claim_reconstructs_exact_result(
         residual_manifest_digest="c" * 64,
         runner_fingerprint=receipt.runner_digest,
         environment_fingerprint=receipt.environment_digest,
-        full_log_ref=receipt.full_log_ref,
+        full_log_ref=".ea/local/gate-diagnostics/output.log",
         freshness_key=freshness_key,
     )
 
@@ -327,7 +321,7 @@ def test_file_exists_terminal_receipt_reuses_without_execution(
     assert calls == 0
     assert result is not None
     assert result.status == "pass"
-    assert result.details == receipt.details
+    assert result.details == f"reused gate receipt {receipt.id}"
     assert result.argv is None
     assert result.resolved_timeout_seconds is None
     assert result.stdout_tail is None

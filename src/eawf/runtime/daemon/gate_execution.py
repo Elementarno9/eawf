@@ -21,6 +21,11 @@ from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.gate_receipt import GateReceipt
 from eawf.kernel.store.paths import store_path
+from eawf.runtime.daemon.gate_receipt_hygiene import (
+    diagnostic_log_path,
+    load_gate_diagnostic,
+    scrub_gate_receipt_store,
+)
 from eawf.runtime.lock import portalock
 from eawf.workflow.audit_dsl.models import (
     CheckResult,
@@ -69,6 +74,7 @@ def _load_claim(path: Path) -> GateExecutionClaim | None:
 
 
 def _load_receipt(state_path: Path, receipt_id: str) -> GateReceipt | None:
+    scrub_gate_receipt_store(state_path)
     path = store_path(state_path, StoreKind.GATE_RECEIPT)
     if not path.is_file():
         return None
@@ -107,16 +113,27 @@ def _receipt_status(
 def _result_from_receipt(
     receipt: GateReceipt,
     *,
+    state_path: Path,
     spec: CheckSpec,
     freshness_key: str,
 ) -> CheckResult:
     passed, status = _receipt_status(receipt)
+    diagnostic = load_gate_diagnostic(state_path, receipt.id)
+    local_log = diagnostic_log_path(state_path, receipt.id)
+    log_ref: str | None = None
+    if local_log.is_file():
+        try:
+            log_ref = local_log.relative_to(state_path.parent.parent).as_posix()
+        except ValueError:
+            log_ref = None
     return CheckResult(
         name=spec.name,
         kind=spec.kind,
         passed=passed,
         status=status,
-        details=receipt.details,
+        details=(
+            diagnostic.details if diagnostic is not None else f"reused gate receipt {receipt.id}"
+        ),
         started_at=receipt.started_at,
         ended_at=receipt.ended_at,
         duration_ms=receipt.duration_ms,
@@ -127,10 +144,10 @@ def _result_from_receipt(
             else None
         ),
         exit_status=receipt.exit_status,
-        argv=receipt.argv,
-        command=receipt.command,
-        stdout_tail=receipt.stdout_tail,
-        stderr_tail=receipt.stderr_tail,
+        argv=diagnostic.argv if diagnostic is not None else None,
+        command=diagnostic.command if diagnostic is not None else None,
+        stdout_tail=diagnostic.stdout_tail if diagnostic is not None else None,
+        stderr_tail=diagnostic.stderr_tail if diagnostic is not None else None,
         stdout_digest=receipt.stdout_digest,
         stderr_digest=receipt.stderr_digest,
         selected_file_digest=receipt.selected_file_digest,
@@ -138,7 +155,7 @@ def _result_from_receipt(
         residual_manifest_digest=receipt.residual_manifest_digest,
         runner_fingerprint=receipt.runner_digest,
         environment_fingerprint=receipt.environment_digest,
-        full_log_ref=receipt.full_log_ref,
+        full_log_ref=log_ref,
         freshness_key=freshness_key,
         freshness=spec.freshness,
     )
@@ -211,6 +228,7 @@ def claim_gate_execution(
                 return CheckResult.model_validate(claim.result_payload)
             return _result_from_receipt(
                 receipt,
+                state_path=state_path,
                 spec=spec,
                 freshness_key=freshness_key,
             )

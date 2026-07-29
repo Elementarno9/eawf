@@ -67,12 +67,12 @@ _CLAIMED_SIGIL = glyph(Sigil.CLAIMED, mode="unicode")
 _OVERVIEW_SIGIL = chrome("overview", mode="unicode")
 _DISPATCH_CARET = chrome("dispatch", mode="unicode")
 
-#: The flow tab carries one of each chip-bearing shape: a bool, a choice
+#: The flow tab carries one of each chip-bearing shape: a transition bool, a choice
 #: (``flow.budget.enforce`` -> ``soft`` / ``hard``), and a float
 #: (``flow.budget.multiplier``). The budget keys are global/workspace/repo-
 #: writable, so the repo layer renders them editable (no read-only lock).
 _FLOW_TAB = "flow"
-_FLOW_BOOL = "flow.ask_on_decisions"
+_FLOW_BOOL = "flow.advance_after.audit"
 _FLOW_CHOICE = "flow.budget.enforce"
 _FLOW_FLOAT = "flow.budget.multiplier"
 
