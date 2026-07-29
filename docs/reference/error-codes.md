@@ -70,9 +70,7 @@ both ends negotiate the newer minor.
 
 ### DAEMON_SPAWN_FAILED
 
-Auto-spawning the daemon process failed. Bucket: `DAEMON_UNREACHABLE (4)`.
-Check `eawf daemon logs --lines 200` for the spawn error, then start it
-manually with `eawf daemon start`.
+Auto-spawning the daemon process failed. Bucket: `DAEMON_UNREACHABLE (4)`. Check `eawf daemon logs --tail 200` for the spawn error, then start it manually with `eawf daemon start`.
 
 ### DAEMON_LOCK_HELD
 
@@ -81,9 +79,7 @@ A sibling writer holds the daemon mutation lock. Bucket: `STATE_CONFLICT
 
 ### DAEMON_SOCKET_UNREACHABLE
 
-The daemon UDS socket refused the connection or is stale. Bucket:
-`DAEMON_UNREACHABLE (4)`. Run `eawf daemon start` then retry; pass
-`--daemonless` for read-only verbs.
+The daemon UDS socket refused the connection or is stale. Bucket: `DAEMON_UNREACHABLE (4)`. Run `eawf daemon restart` then retry; pass `--daemonless` for read-only verbs.
 
 ## Scope / lifecycle
 

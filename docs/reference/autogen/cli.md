@@ -168,7 +168,7 @@ Manage layered configuration (built-in / global / workspace / repo / local).
 
 ### `eawf daemon`
 
-Manage the eawfd background daemon (run, ping, status, stop, logs, reclaim).
+Manage the eawfd background daemon.
 
 | Verb | Summary |
 |---|---|
@@ -176,10 +176,12 @@ Manage the eawfd background daemon (run, ping, status, stop, logs, reclaim).
 | `ping` | Probe daemon liveness and report version + PID. |
 | `reclaim` | Reclaim disk: sweep the WAL once and trim aged state.json backups. |
 | `replay-wal` | Inspect poisoned WAL records or GC the done window. |
+| `restart` | Restart the daemon with the current executable and protocol. |
 | `run` | Boot the daemon process. |
 | `service-disable` | Stop + uninstall the eawfd service. Idempotent. |
 | `service-enable` | Install + start the eawfd service via the native OS supervisor. |
 | `service-status` | Report the supervisor-level service state plus daemon-health advisories. |
+| `start` | Ensure the current daemon release is running. |
 | `status` | Print operational counters from the running daemon. |
 | `stop` | Request graceful daemon shutdown. |
 

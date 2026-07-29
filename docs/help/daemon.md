@@ -10,19 +10,17 @@ one-shot / recovery shell).
 ## Lifecycle
 
 ```text
-eawf daemon enable    # install the autostart service (opt-in)
-eawf daemon start     # spawn the daemon now
-eawf daemon status    # show pid, socket, protocol version, uptime
-eawf daemon stop      # graceful stop (use --drain to finish in-flight work)
-eawf daemon disable   # remove the autostart service
-eawf daemon logs      # tail the daemon log (--lines N, --follow)
-eawf daemon ping      # round-trip health check
+eawf daemon service-enable   # install + start the autostart service (opt-in)
+eawf daemon start            # ensure the current daemon is running
+eawf daemon restart          # drain, stop, and start the current release
+eawf daemon status           # show pid, protocol version, uptime, counters
+eawf daemon stop             # graceful stop (--no-drain skips the drain)
+eawf daemon service-disable  # stop + remove the autostart service
+eawf daemon logs --tail 200  # print recent daemon log lines
+eawf daemon ping             # round-trip health check
 ```
 
-The CLI cold-spawns the daemon automatically on the first mutating call when
-it is not already running. The spawn is silent unless you pass `--verbose`
-(or set `EAWF_VERBOSE=1`), which surfaces the spawn step, IPC framing, and
-WAL transitions on stderr.
+The CLI cold-spawns the daemon automatically on the first daemon RPC or mutating call when it is not already running. The spawn is silent unless `EAWF_VERBOSE=1` is set. `restart` re-renders an installed launchd/systemd service so upgrades do not leave the supervisor pointing at an old binary.
 
 ## Transport
 
@@ -40,12 +38,8 @@ write must go through the canonical mutator or its portalocker fallback.
 
 ## Troubleshooting
 
-- **`4 DAEMON_UNREACHABLE`** — connection refused, stale pid, or the daemon
-  is shutting down. Run `eawf daemon status`, then `eawf daemon start`. On
-  restart the daemon replays its write-ahead log.
-- **Protocol mismatch (`data.kind="ProtocolMismatch"`)** — the CLI and
-  daemon disagree on protocol version. Upgrade with `uv tool upgrade eawf`,
-  then `eawf daemon stop` and retry.
+- **`4 DAEMON_UNREACHABLE`** — connection refused, stale pid, or the daemon is shutting down. Run `eawf daemon restart`. Stale sockets are recovered automatically, and the new daemon replays its write-ahead log.
+- **Protocol mismatch (`data.kind="ProtocolMismatch"`)** — the CLI and daemon disagree on protocol version. Upgrade with `uv tool upgrade eawf`, then run `eawf daemon restart`.
 - **Lock conflict (`3 STATE_CONFLICT`)** — another writer holds the lock.
   Retry shortly or run `eawf doctor` to inspect holders.
 - **Subscription dropped (`data.kind="SubscriptionDropped"`)** — a

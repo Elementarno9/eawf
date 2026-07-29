@@ -542,6 +542,34 @@ def _enable_windows() -> ServiceEnvelope:
     )
 
 
+def _restart_windows() -> ServiceEnvelope:
+    """Restart an installed Windows service and await RPC readiness.
+
+    Raises:
+        ServiceInstallError: When pywin32 is unavailable or the service
+            cannot be started.
+    """
+    try:  # pragma: no cover - win32-only branch
+        win32serviceutil: Any = importlib.import_module("win32serviceutil")
+    except ImportError as exc:  # pragma: no cover - win32-only branch
+        raise ServiceInstallError("pywin32 not importable") from exc
+    try:  # pragma: no cover - win32-only branch
+        win32serviceutil.StopService(_WINDOWS_SERVICE_NAME)
+    except Exception as exc:  # pragma: no cover - already stopped
+        logger.info(f"_restart_windows stop swallowed={exc!s}")
+    try:  # pragma: no cover - win32-only branch
+        win32serviceutil.StartService(_WINDOWS_SERVICE_NAME)
+    except Exception as exc:  # pragma: no cover - win32-only branch
+        raise ServiceInstallError(f"windows service start failed: {exc!s}") from exc
+    pid = _wait_for_daemon_ready()
+    return ServiceEnvelope(
+        event_type="daemon_service_restarted",
+        platform="win32",
+        unit=_WINDOWS_SERVICE_NAME,
+        pid=pid,
+    )
+
+
 def _disable_windows() -> ServiceEnvelope:
     """Stop + remove the pywin32 service.
 
@@ -612,6 +640,24 @@ def enable_service() -> ServiceEnvelope:
     if sys.platform == "win32":
         return _enable_windows()
     raise ServiceInstallError(f"service install unsupported on {sys.platform!r}")
+
+
+def restart_service() -> ServiceEnvelope:
+    """Start the current service definition after its prior owner stopped.
+
+    POSIX callers evict a loaded agent before entering this function. Reusing
+    the enable path then re-renders the unit with the current executable and
+    starts it. Windows keeps the installed SCM registration and restarts it.
+
+    Returns:
+        Service lifecycle envelope carrying the ready daemon PID.
+
+    Raises:
+        ServiceInstallError: When the platform or supervisor action fails.
+    """
+    if sys.platform == "win32":
+        return _restart_windows()
+    return enable_service()
 
 
 def disable_service() -> ServiceEnvelope:

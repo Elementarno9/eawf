@@ -276,6 +276,32 @@ def test_read_pid_file_handles_garbage(tmp_path: Path) -> None:
     assert spawn_mod._read_pid_file(pid_file) is None
 
 
+def test_request_daemon_shutdown_missing_socket_does_not_spawn(tmp_path: Path) -> None:
+    """Control shutdown returns absent instead of cold-spawning."""
+    assert (
+        spawn_mod.request_daemon_shutdown(
+            tmp_path,
+            drain=True,
+            timeout_seconds=30,
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize("timeout_seconds", [-1, 601])
+def test_request_daemon_shutdown_rejects_timeout_boundary(
+    tmp_path: Path,
+    timeout_seconds: int,
+) -> None:
+    """Control shutdown enforces daemon method bounds before transport."""
+    with pytest.raises(ValueError, match="between 0 and 600"):
+        spawn_mod.request_daemon_shutdown(
+            tmp_path,
+            drain=True,
+            timeout_seconds=timeout_seconds,
+        )
+
+
 def test_default_spawn_poll_timeout_is_20s_on_win32() -> None:
     """Windows service cold-starts get a wider readiness window."""
     assert spawn_mod._default_spawn_poll_timeout_seconds("win32") == 20.0
