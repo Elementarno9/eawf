@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.6.7]
+
+### Fixed
+- **Calibration CLI tests no longer expire at the 90-day window boundary.** CLI fixtures now timestamp their synthetic actual at invocation time, preserving the intended in-window sample on every calendar date and release runner.
+
 ## [0.6.6]
 
 ### Fixed

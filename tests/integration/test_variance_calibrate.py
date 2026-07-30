@@ -411,7 +411,13 @@ def _write_state(tmp_path: Path) -> Path:
     wid = "P01-I01-W01"
     state.waves[wid] = _wave(wave_id=wid, effort_bucket=EffortBucket.M)
     state.estimates = {wid: _estimate(wave_id=wid, expected_eu=1.0)}
-    state.actuals = {wid: _actual(wave_id=wid, elapsed_eu=1.5)}
+    state.actuals = {
+        wid: _actual(
+            wave_id=wid,
+            elapsed_eu=1.5,
+            updated_at=datetime.now(UTC),
+        )
+    }
     (ea_dir / "state.json").write_text(state.model_dump_json(), encoding="utf-8")
     return workspace
 
