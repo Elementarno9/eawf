@@ -261,10 +261,10 @@ def test_compose_display_version_wheel_path_returns_clean_base(
 
 
 def test_compose_display_version_default_base_is_package_version() -> None:
-    """The default base argument is the stored ``__version__`` (0.6.6)."""
+    """The default base argument is the stored ``__version__`` (0.6.7)."""
     from eawf import __version__
 
-    assert __version__ == "0.6.6"
+    assert __version__ == "0.6.7"
 
 
 def test_compose_display_version_missing_sha_falls_back_to_base(
