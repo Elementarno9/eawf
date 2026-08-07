@@ -142,7 +142,7 @@ C08 consumes:
 | **D5** | Profile authoring API | (a) YAML only at `<repo>/.ea/profiles/` + `<local-path>`; (b) Python entry-point only; (c) both | **(a) — YAML only for v0.3-v0.5** | profiles-fulfilment locked YAML-only [4:124]. AGENTS rule 2 [13] requires strict Pydantic validation on ingestion; YAML at known paths is the simplest validation surface. Python entry-points re-introduce the "any installed package can change behaviour" surface that the AGENTS contract explicitly rejects [13]. Custom YAMLs are content-hash-trust-gated per §5.5; built-in YAMLs ship with the wheel and are auto-trusted [4:151]. |
 | **D6** | Language extensibility | (a) Python is the only library impl for v0.3-v0.5; Rust/PyO3 trigger only on documented benchmark > 500ms; (b) Multi-language is first-class from v0.3; (c) Single locked language with no extras | **(a) — locked Python; PyO3 only on benchmark trigger** | Per language-fit brief verdict [10:102-119]: stay on Python 3.14+ through v0.4 ship; permit exactly one surgical PyO3 extension during v0.4 (P29 W04 / W06 event-source rebuilder + Merkle hash-tree verify), gated on the documented benchmark threshold. C08 reflects this with `language.runtime: Literal["python"]` (locked single-value) + `language.fast_extras: list[str]` (empty default; operator opts in to `eawf[fast]` per language-fit benchmark gate). The whole "code language preference" listed in C00 [1:726] reduces to one config knob; Rust / Go / TypeScript are deferred to v0.5+. |
 | **D7** | Bootstrap template flow | (a) `eawf init --profiles a,b,c` writes config + scaffolds; (b) `eawf init --template <name>` picks a named bundle; (c) Both — `--profiles` is the explicit form, `--template` is a wrapper | **(c) — both surfaces, `--template` wraps `--profiles`. Ship 3 templates v0.3 (research + engineering + reverse-engineering); defer spike + hybrid to v0.4+ (revised 2026-05-18 per Q24)** | `--profiles research,engineering` is explicit and composable. ~~`--template hybrid` is shorthand~~ — hybrid + spike templates deferred to v0.4+ per Q24 (YAGNI trim; demand-signal unclear). C04 owns `eawf init` CLI; C08 specifies the **three** templates' YAML bodies under `templates/init/<template>.yaml` and the resolution rule (`--template X --profiles Y,Z` fails — choose one). spike + hybrid catalog rows remain in §5.7 documentation table marked `v0.4+` for future YAML body authoring. |
-| **D8** | Per-profile session-policy default (V8) | (a) Single default for everyone (`hybrid`); (b) Per-profile default in the manifest; (c) Per-skill default | **(b) — per-profile in the manifest; skill manifest overrides** | Aligns with V8 [1:266-269] which explicitly names "research-profile skills may default `continue`; engineering-profile skills may default `fresh`". `ProfileBody.dispatch_session_policy: Literal["fresh","continue","hybrid"] | None = None`. Skill manifest still overrides per-skill (C04 owns). Composition rule: last-non-None-wins; if the project's profiles all leave it `None`, fall back to the global default `hybrid` (also configurable as `dispatch.session_policy_default` at the layered-config surface). |
+| **D8** | Per-profile session-policy default (V8) | (a) Single default for everyone (`hybrid`); (b) Per-profile default in the manifest; (c) Per-skill default | **(b) — per-profile in the manifest; skill manifest overrides** | Aligns with V8 [1:266-269] which explicitly names "research-profile skills may default `continue`; engineering-profile skills may default `fresh`". `ProfileBody.dispatch_session_policy: Literal["fresh","continue","hybrid"] \| None = None`. Skill manifest still overrides per-skill (C04 owns). Composition rule: last-non-None-wins; if the project's profiles all leave it `None`, fall back to the global default `hybrid` (also configurable as `dispatch.session_policy_default` at the layered-config surface). |
 | **D9** | Hook customization (project hooks vs global hooks) | (a) Two separate registration models — global at `<local-path>`, project at `<repo>/.git/hooks/` + `<repo>/.pre-commit-config.yaml`; (b) Single model, scope-tagged | **(a) — two separate models, both YAML-declared, both surfaced via profile `hooks_referenced`** | Today's surface is split: `<repo>/.pre-commit-config.yaml` carries the pre-commit hooks (project-scope); `<local-path>` carries the Claude-Code hooks (user-scope). C08 keeps the split. Profile `hooks_referenced: list[str]` accumulates hook IDs; `eawf sync` materialises them into the right destination per hook kind. The code-quality-profile proposal [12:99-110] specifies the `enforcement_hooks` field as a P21+ extension — C08 reserves the field name on the v2 schema for non-breaking forward compatibility. |
 | **D10** | Per-profile session-policy concrete defaults (revised 2026-05-18 per Q24 — trim to 3 shipped profiles) | (a) research:hybrid + engineering:hybrid + reverse-engineering:hybrid; (b) **research:continue, engineering:fresh, reverse-engineering:continue** (3 profiles v0.3); (c) None for all (skill always decides) | **(b) — per V8 [1:266-269]; spike + hybrid defaults deferred to v0.4+ per Q24** | V8 explicitly names research:continue and engineering:fresh. Reverse-engineering inherits research's evidence-driven character (continue preserves the decompilation context). ~~spike:fresh + hybrid:hybrid~~ deferred to v0.4+ along with the templates themselves. Operator may override via `dispatch.session_policy` config key at any layer. |
 | **D11** | Schema-version migration policy | (a) Auto-migrate silently on load; (b) Hard fail with upgrade hint; (c) Auto-migrate with backup + structured envelope | **(c) — auto-migrate with backup + structured envelope** | The on-disk YAML is hand-edited; a silent rewrite ((a)) loses operator-authored comments + formatting. A hard fail ((b)) blocks normal workflows on a version bump. (c) writes a backup at `<config>.bak.v<old>` before applying the migrator (one-shot Python function per bump), and emits a `config_schema_migrated` envelope so the operator sees the change. Migrators are idempotent + tested per bump. |
@@ -697,7 +697,7 @@ This is the eawf-itself bundle — research substrate + engineering ship-gate. C
 
 `eawf init` arguments:
 
-```
+```bash
 eawf init [--template <name>]
           [--profiles a,b,c]
           [--code <PROJECT-CODE>]
@@ -1219,7 +1219,7 @@ The `source_map` returned by `merge_config` [5:264-363] already records the per-
 
 Sample:
 
-```
+```bash
 $ eawf config get dispatch.session_policy_default --explain
 hybrid                                  [layer: built-in]
                                         [contributing profile: <default>]
@@ -1242,7 +1242,7 @@ The composed-profile envelope feeds **`eawf sync`** as the primary downstream co
 
 Per-runtime install destinations (`.claude/skills/`, `<local-path>`, OpenCode equivalent) are C07's territory [1:653-696]; C08 only locks the composed-profile *contract* sync reads. The full sync flow:
 
-```
+```text
 1. eawf sync reads merged config (merge_config + layered overlays).
 2. Calls compose(loaded_profile_bodies) → ComposedProfile envelope.
 3. For each composed.render_blocks: materialise into target file's managed region
@@ -1314,7 +1314,7 @@ C08 spans three discrete migration surfaces: layered-config schema bump, profile
 
 Migration is **idempotent**: re-running on already-v1.2 config is a no-op. Backup files at `<path>.bak.v1.1.<timestamp>` are kept indefinitely; operator removes manually.
 
-```
+```text
 src/eawf/config/migrate.py — new module
 
 def migrate_config_v1_1_to_v1_2(yaml_path: Path) -> MigrationReport:

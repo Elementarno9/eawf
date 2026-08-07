@@ -214,7 +214,7 @@ Total entries after BOT-02: **56**. Outside the C00-mandated 30-50 window but ea
 
 The base grammar (today's code [17:30-34]) stays:
 
-```
+```text
 urn:eawf:<version>:<kind>:<path>[?=<query>][#<fragment>]
 ```
 
@@ -659,7 +659,7 @@ class ComposedProfile(_StrictModel):  # [13:97-122] today's shape
 
 **Storage paths (V2 [1:69-73]):**
 
-```
+```text
 .ea/specs/P20/spec.md                  # PhaseSpec
 .ea/specs/P20/I03/spec.md              # IterSpec
 .ea/specs/P20/I03/W01.md               # WaveSpec
@@ -840,7 +840,7 @@ One DAG per entity. Notation: `STATUS` (enum value); `→` is a transition; the 
 
 #### 5.4.1 Repo
 
-```
+```text
               ┌─────────────────┐
               │   not-yet-init  │  (not in state — pre-`eawf init`)
               └────────┬────────┘
@@ -865,7 +865,7 @@ C03 / C05 own the CLI verbs `eawf repo archive` / `eawf repo retire` (today's CL
 
 #### 5.4.2 Subproject
 
-```
+```bash
        eawf subproject add
               │
               v
@@ -897,7 +897,7 @@ C03 / C05 own the CLI verbs `eawf repo archive` / `eawf repo retire` (today's CL
 
 Direct from `eawf.lifecycle.transitions.{open_phase, close_phase, activate_phase}` [16]:
 
-```
+```bash
    eawf roadmap propose P##
               │
               v
@@ -923,7 +923,7 @@ Direct from `eawf.lifecycle.transitions.{open_phase, close_phase, activate_phase
 
 #### 5.4.4 Iter
 
-```
+```bash
    eawf roadmap revise --add-iter
               │
               v
@@ -946,7 +946,7 @@ Closure gate: every owned wave CLOSED or ABANDONED.
 
 #### 5.4.5 Wave
 
-```
+```bash
    eawf roadmap revise --add-wave (under PLANNED phase)  OR
    eawf roadmap propose --add-wave (under ACTIVE phase, AGENTS rule 20 [11])
               │
@@ -982,7 +982,7 @@ V5 fallback (runtime switchover) does *not* change wave status — it appends a 
 
 #### 5.4.6 Hypothesis
 
-```
+```bash
    eawf hypothesis add
             │
             v
@@ -1006,7 +1006,7 @@ All terminal-except-DEFERRED transitions require `audit_id` set (§5.3.6 invaria
 
 #### 5.4.7 Decision
 
-```
+```bash
    eawf decision add
             │
             v
@@ -1025,7 +1025,7 @@ Reverse is rare; supersede is the common forward path (sets `superseded_by` on t
 
 #### 5.4.8 Audit
 
-```
+```bash
    eawf audit run
             │
             v
@@ -1053,7 +1053,7 @@ Per §5.3.8 verdict is only emitted when status is COMPLETE.
 
 #### 5.4.9 Artifact
 
-```
+```bash
    eawf artifact track <path>
             │
             v
@@ -1071,7 +1071,7 @@ No status enum today. C03 may add one if the spec graduation flow requires (DRAF
 
 #### 5.4.10 Memory
 
-```
+```bash
    eawf memory write
             │
             v
@@ -1097,7 +1097,7 @@ No status enum today. C03 may add one if the spec graduation flow requires (DRAF
 
 #### 5.4.11 Report (AgentReport)
 
-```
+```text
    agent emits AgentReportBody
             │
             v
@@ -1113,7 +1113,7 @@ No status enum — reports are events on the JSONL. The "current verdict" for `(
 
 #### 5.4.12 AgentSession
 
-```
+```text
    /agent-dispatch → daemon starts subprocess
             │
             v
@@ -1137,7 +1137,7 @@ V8 [1:228-232] makes the CHECKPOINTED→ACTIVE transition a `--continue` invocat
 
 #### 5.4.13 Event
 
-```
+```text
    any mutator path
             │
             v
@@ -1150,7 +1150,7 @@ No transitions — events are immutable. Compaction (V7 [1:191-192], R3 [29:443-
 
 #### 5.4.14 Profile
 
-```
+```bash
    eawf profile add <id>
             │
             v
@@ -1175,7 +1175,7 @@ Today's `ProfileBody` has no status enum; C08 finalises whether the status lives
 
 #### 5.4.15 Spec
 
-```
+```bash
    eawf <phase|iter|wave> spec init
             │
             v
@@ -1203,7 +1203,7 @@ Per D3 the ARCHIVED state removes the file from HEAD; the daemon-side cache hold
 
 #### 5.4.16 Runtime
 
-```
+```bash
    eawf runtime configure <id>
             │
             v
@@ -1229,7 +1229,7 @@ Per D3 the ARCHIVED state removes the file from HEAD; the daemon-side cache hold
 
 #### 5.4.17 Plugin
 
-```
+```bash
    eawf plugin install <id>
             │
             v
@@ -1250,7 +1250,7 @@ Per D3 the ARCHIVED state removes the file from HEAD; the daemon-side cache hold
 
 #### 5.4.18 McpServer + McpGrant
 
-```
+```bash
    eawf mcp add <id>
             │
             v
@@ -1291,6 +1291,7 @@ Per D3 the ARCHIVED state removes the file from HEAD; the daemon-side cache hold
 ### 5.5 Persona authority matrix
 
 Rows = personas; cols = actions. Cell value:
+
 - ✅ allowed (no operator approval)
 - 🟡 allowed with operator approval (recorded in audit)
 - 🚫 forbidden
@@ -1333,7 +1334,7 @@ Rows = personas; cols = actions. Cell value:
 
 Every assertion of "verdict X about thing Y" carries a four-link chain:
 
-```
+```text
 state.json:audits[audit_id].verdict        ← claim site
     ↑
 audit.jsonl:Envelope[audit_id].payload     ← typed CheckResult list
@@ -1382,7 +1383,7 @@ Today's `EventPayload.actor = "cli"` literal [26:17] is not forgery-resistant �
 
 The full lifecycle a phase walks from idea to ship + close, with the state-mutator and persona named at each step:
 
-```
+```text
 1. research
     persona: agent-researcher, operator
     output: brief under .ea/local/research/<YYYY-MM-DD>-<slug>.md

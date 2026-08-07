@@ -129,6 +129,7 @@ The 8 items below were in the old roadmap but **NOT** absorbed into the v0.3-v0.
 **Source:** Old P29 REPLAY W04-W08.
 
 **What:**
+
 - `eawf state replay` — walks event.jsonl, applies typed mutations, asserts `after_state_version` matches.
 - Merkle hash-tree verify — lazy build for `eawf state verify --hash-tree`; pin `__root__` in audit.jsonl nightly; O(log n) drift localisation.
 - Speculative branches — `eawf replay branch --from-event <hex> --label <name>`; read-only relative to main; 7-day TTL.
@@ -197,7 +198,7 @@ These were in the old roadmap or surface in feeder briefs (`long-term-valuable-f
 
 After C11-IMPL (P33) ships v0.5:
 
-```
+```text
 v0.4 hygiene wave           (inline; ~2-3 EU; Wave.commit drop + flow.jsonl bump + spec backfill)
                                                 ↓
 P34-EXECUTE        (~20-30 EU) IDEA-01 auto-execute kernel + UserQuestion presenters

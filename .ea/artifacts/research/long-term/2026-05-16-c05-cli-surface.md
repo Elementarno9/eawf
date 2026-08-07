@@ -23,6 +23,7 @@ Lock the v0.3 → v0.5 CLI verb-noun matrix for the `eawf` Typer dispatcher [21]
 The CLI is dispatch only per AGENTS rule 1 [11]: every CLI handler parses args, resolves the typed config / state object, calls a library function on validated typed payloads, and routes the result through `emit_json_or_text` [22]. Domain logic stays in `eawf.<subpackage>.*`. C05 names the verb surface; the library implementations live in C01..C04 + C07 + C08.
 
 **Out of scope:**
+
 - TUI launch logic for the bare `eawf` command (the TTY routes to the TUI per [21:79-86]; the cold-spawn / fallback semantics are owned by C06 [1:619-621]).
 - Skill invocation surface inside non-Typer runtimes — Claude Code `/<name>`, Codex `/<name>`, OpenCode `/<name>` (owned by C04 [5:106-114]).
 - The TUI palette verb registry that mirrors C05 (owned by C06; reads C05's verb matrix as the canonical source).
@@ -107,17 +108,17 @@ Operator-confirmed axes seeded by C00 §C05 [1:581-627] + the V1 / V5 / V6 / V7 
 
 | # | Axis | Options considered | Recommendation | Rationale |
 |---|---|---|---|---|
-| **D1** | Verb-noun arity for scope-actions | (a) one-verb-everywhere (`eawf state phase show`); (b) noun-first scope-action two-noun (`eawf phase show`, `eawf phase spec init`); (c) hybrid | **(b) — noun-first scope-action (current dominant shape)** | Today's surface is already noun-first: `eawf phase open|close|activate|reopen|prepare-close` [21:127], `eawf iter open|close|activate`, `eawf wave plan|claim|close|show|fail|update|graph|next-ready|blocks-rebuild|dispatch|dispatch-batch|review|land|fix-ci`, `eawf audit add|run|integrity|set-verdict|show|list`, etc. C03 §5.9 [4:764] confirms two-noun is preferred for spec verbs. Lifting the entire surface into one-verb-everywhere would break every script that already calls `eawf phase open P20`. There is no `eawf state phase show` today — `eawf state resolve` is the only `state` subverb [27]. Reject (a) and (c); confirm (b). |
+| **D1** | Verb-noun arity for scope-actions | (a) one-verb-everywhere (`eawf state phase show`); (b) noun-first scope-action two-noun (`eawf phase show`, `eawf phase spec init`); (c) hybrid | **(b) — noun-first scope-action (current dominant shape)** | Today's surface is already noun-first: `eawf phase open\|close\|activate\|reopen\|prepare-close` [21:127], `eawf iter open\|close\|activate`, `eawf wave plan\|claim\|close\|show\|fail\|update\|graph\|next-ready\|blocks-rebuild\|dispatch\|dispatch-batch\|review\|land\|fix-ci`, `eawf audit add\|run\|integrity\|set-verdict\|show\|list`, etc. C03 §5.9 [4:764] confirms two-noun is preferred for spec verbs. Lifting the entire surface into one-verb-everywhere would break every script that already calls `eawf phase open P20`. There is no `eawf state phase show` today — `eawf state resolve` is the only `state` subverb [27]. Reject (a) and (c); confirm (b). |
 | **D2** | Output-format flag set | (a) status-quo (`--json`, `--plain`); (b) +`--md`, `--quiet`, `--verbose`; (c) +`--yaml`, `--csv` for machine consumers | **(b) — keep `--json` + `--plain`; add `--md`, `--quiet`, `--verbose`** | `--md` round-trip is needed for the C04 envelope-to-markdown bridge [5:226-281]; `--quiet` suppresses successful-mutation banners (CI pipelines append-only events); `--verbose` opts into daemon-spawn step + IPC framing logs [3:362-376 D15 [3:148]]. `--yaml`/`--csv` are YAGNI in v0.3-v0.5; no consumer surfaces them — defer to C09 / C10. |
 | **D3** | Exit-code taxonomy | (a) compress current 0..9 into the C00 task 0..5 shape; (b) keep 0..9, add 10/11/12 for daemon classes; (c) full restructure with semantic gaps for future codes | **(a) — compress to 0..5 per C00 §C05 [1:587-588]** (operator ratified 2026-05-17, overrode draft reco (b); see §8 Q2) | Operator chose the C00 design-intent surface over backward-compat. Cascade: BREAKING change to `eawf.cli.exit_codes` [23]; single-PR cutover in W02 with `BREAKING:` CHANGELOG entry per Q2b; legacy nine-class distinctions preserved via `ErrorEnvelope.data.kind` string per Q2a; ProtocolMismatch folds into 1 USER_ERROR and RuntimeUnavailable folds into 3 STATE_CONFLICT per Q2c. Downstream CI consumers update during W02 review window. New surface: 0 OK, 1 USER_ERROR, 2 VALIDATION_ERROR, 3 STATE_CONFLICT, 4 DAEMON_UNREACHABLE, 5 INTERNAL_ERROR (§5.3). |
 | **D4** | Error envelope shape | (a) current `{error, message, exit_code, exit_name}` [24]; (b) +`suggested_next_step`, `data: dict`, `correlation_id`, `protocol_version` (daemon-mediated only) | **(b) — additive extension** | C00 §C05 goal [1:589] explicitly requires `suggested_next_step`. `data: dict` carries verb-specific context (e.g. `data.held_by_pid` for LockConflict). `correlation_id` is the JSON-RPC `id` for daemon-mediated calls; absent for daemonless. `protocol_version` surfaces on `-32004` per C02 §5.9 [3:470-490]. Backward compatible — new fields are `Optional[...]`; old consumers ignore them. |
 | **D5** | Stability tiers | (a) all-stable; (b) stable / experimental / deprecated tri-state; (c) per-verb opaque major/minor versioning | **(b) — explicit tri-state with rotation rules** | Experimental verbs (new daemon/metrics/spec/wave-switch, plus `coauthor`, `pr-review`, `wave-policy`) live max 3 alpha versions per C00 §C05 [1:594]; deprecated verbs live 1 alpha then are removed [1:594]. The tag is a Typer help-panel suffix `[experimental]` / `[deprecated]` so help readers see the lifecycle state. CI fails when an experimental verb crosses its 3-alpha threshold without being promoted to stable or removed. |
 | **D6** | Daemon escalation rule | (a) per-verb opt-in; (b) per-verb opt-out; (c) class-wide rule (mutations escalate; reads bypass) | **(c) — class-wide rule + per-verb `--daemonless` opt-out for read-only carve-outs** | V1 [1:26-30] names exactly three read-only bypass classes: CI environments, read-only one-shot CLI calls (`state show`, `wave list`, `validate`), recovery shell. CLI handlers tag themselves `mutating=True` / `read_only=True`; the wrapper around every handler picks the right path. `--daemonless` is per-call override (read-only only); `EAWF_DAEMONLESS=1` is process-scope. Mutating verbs reject the flag with `daemon_required` envelope. |
-| **D7** | Daemon control verb set | (a) `start | stop | status` (minimal); (b) `enable | disable | status | restart | logs | version`; (c) add `replay-wal | reload-config | shutdown --drain` | **(b) — task-spec set; (c) added under `--debug` flag** | C00 §C05 [1:595,610] + task brief name the (b) set explicitly. `replay-wal` (C02 §5.6 [3:430-432]) + `reload-config` (C02 §5.3.5 [3:335]) + `shutdown --drain` (C02 §5.5 [3:386]) are debug verbs; they live under `eawf daemon <verb> --debug` so they don't pollute `eawf daemon --help`. `start`/`stop` are aliases for `enable`/`disable` with an explicit foreground-mode option (`eawf daemon start --no-detach` for ad-hoc debugging). |
-| **D8** | Metrics CLI surface (V7) | (a) `show | export`; (b) +`rebuild`; (c) +`watch | alert` | **(b) — `show | export | rebuild`** | V7 [1:206-207] names `show` + `export`; `rebuild` is the operator escape hatch when the user-scope DB falls behind / corrupts. `watch`/`alert` are deferred to v0.5+ telemetry surfaces (C09 owns the alerting / TUI dashboard); the CLI surface stays minimal. Default export format priority: `prom` (Prometheus textfile) > `json` (newline-delimited) > `csv`. |
+| **D7** | Daemon control verb set | (a) `start \| stop \| status` (minimal); (b) `enable \| disable \| status \| restart \| logs \| version`; (c) add `replay-wal \| reload-config \| shutdown --drain` | **(b) — task-spec set; (c) added under `--debug` flag** | C00 §C05 [1:595,610] + task brief name the (b) set explicitly. `replay-wal` (C02 §5.6 [3:430-432]) + `reload-config` (C02 §5.3.5 [3:335]) + `shutdown --drain` (C02 §5.5 [3:386]) are debug verbs; they live under `eawf daemon <verb> --debug` so they don't pollute `eawf daemon --help`. `start`/`stop` are aliases for `enable`/`disable` with an explicit foreground-mode option (`eawf daemon start --no-detach` for ad-hoc debugging). |
+| **D8** | Metrics CLI surface (V7) | (a) `show \| export`; (b) +`rebuild`; (c) +`watch \| alert` | **(b) — `show \| export \| rebuild`** | V7 [1:206-207] names `show` + `export`; `rebuild` is the operator escape hatch when the user-scope DB falls behind / corrupts. `watch`/`alert` are deferred to v0.5+ telemetry surfaces (C09 owns the alerting / TUI dashboard); the CLI surface stays minimal. Default export format priority: `prom` (Prometheus textfile) > `json` (newline-delimited) > `csv`. |
 | **D9** | wave-switch invocation surface (V5) | (a) `eawf wave switch <wave-id> --to <runtime>`; (b) reuse `eawf wave dispatch <wave-id> --runtime <runtime>` overload; (c) two verbs, one for ladder-switch + one for one-shot dispatch | **(a) — dedicated `switch` verb** | V5 [1:148-149] names `eawf wave switch` exactly. `dispatch` already carries `--runtime` for first-spawn pick; `switch` carries the V5 reactive-fallback override semantics including idempotency-key reissue [3:147] and the `runtime_switched` event emission with `cause=manual_override`. Two verbs make the audit-trail unambiguous. |
 | **D10** | Help model | (a) Typer default + topic flags; (b) +`eawf help <topic>` prose surface; (c) +AI-summarise on miss | **(b) — register a `help` command with hand-authored prose topics** | The `eawf help <topic>` surface is the smallest prose layer the operator needs without leaving the terminal. v0.3 ships six topics: `exit-codes`, `daemon`, `profiles`, `urns`, `migration`, `streaming`. Each topic file lives under `docs/help/<topic>.md` and is rendered through the same envelope chassis. Each topic is ≤80 lines, paginated through `less -R` when stdout is a TTY. AI-summarise on miss is YAGNI — defer to v0.5+. |
-| **D11** | Shell completion install | (a) Typer `--install-completion` (current `add_completion=False` [21:32]); (b) dedicated `eawf completion install [bash|zsh|fish]` verb; (c) shell-rc auto-edit on first `eawf` run | **(b) — explicit verb** | Typer's auto-install pollutes shell-rc on first `--help` invocation — surprising. (c) is worse — never auto-edit operator dotfiles. (b) keeps the cost explicit: operator runs `eawf completion install zsh > "$fpath[1]/_eawf"` (zsh) / equivalent for bash / fish. The verb's body is a thin wrapper around `typer.completion.get_completion_inspect_parameters` then writes to stdout. |
+| **D11** | Shell completion install | (a) Typer `--install-completion` (current `add_completion=False` [21:32]); (b) dedicated `eawf completion install [bash\|zsh\|fish]` verb; (c) shell-rc auto-edit on first `eawf` run | **(b) — explicit verb** | Typer's auto-install pollutes shell-rc on first `--help` invocation — surprising. (c) is worse — never auto-edit operator dotfiles. (b) keeps the cost explicit: operator runs `eawf completion install zsh > "$fpath[1]/_eawf"` (zsh) / equivalent for bash / fish. The verb's body is a thin wrapper around `typer.completion.get_completion_inspect_parameters` then writes to stdout. |
 | **D12** | Streaming output for long ops | (a) always batch — collect all events then print; (b) `--stream` opt-in (default off); (c) auto-detect TTY + opt-out flag | **(b) — `--stream` opt-in; default off** | CI consumers want deterministic single-block stdout; humans want progress. (b) gives both at the cost of one extra flag. TTY autodetection [(c)] is brittle — `tmux` / `screen` / `nohup` confuse the heuristic. Streaming format: line-delimited JSON envelopes when `--json --stream`; line-delimited human text when `--stream` alone. EOF (`}}\n`) terminates the stream — script consumers parse line-by-line. |
 | **D13** | Per-verb `--scope` global flag | (a) keep current state (`--scope` is per-command, not root [26]); (b) hoist `--scope` to root | **(a) — keep per-command** | The root callback [26:8-13] documents the rationale: nothing in the v0.1 surface filters / anchors on `--scope` cross-cutting; subcommands that need it declare it. Hoisting promises behaviour no handler implements. Future cluster-wide scope flag is YAGNI; can be added by C09 when it lands. |
 | **D14** | Migration sequencing | (a) big-bang lift in one PR; (b) static-table refactor first (KISS-005 [6:71]) then per-cluster surface additions; (c) per-verb lifts in parallel waves | **(b) — KISS-005 lands first; new surfaces come in C05 implementation waves** | KISS-005 [6:71] is a P2 fix already enqueued. Its acceptance criterion is `uv run eawf --help` + command smoke tests pass — additive, non-breaking. After KISS-005, each new noun-app (`daemon`, `metrics`, spec verbs, `wave switch`) lands as its own wave in the C05-implementation phase. |
@@ -179,7 +180,7 @@ Every CLI command in v0.3 → v0.5 enumerated below. Columns:
 | `wave` | `graph` | stable | R | bypass-ok | 1 | |
 | `wave` | `next-ready` | stable | R | bypass-ok | 1 | |
 | `wave` | `blocks-rebuild` | stable | W | daemon | 1, 2 | |
-| `wave` | `dispatch` | experimental | W | daemon | 1, 2, 3, 4 | `--session-policy fresh|continue|hybrid` per V8 [1:249]. `--runtime <name>` first-spawn pick. |
+| `wave` | `dispatch` | experimental | W | daemon | 1, 2, 3, 4 | `--session-policy fresh\|continue\|hybrid` per V8 [1:249]. `--runtime <name>` first-spawn pick. |
 | `wave` | `dispatch-batch` | experimental | W | daemon | 1, 2, 3, 4 | |
 | `wave` | `switch` | experimental | W | daemon | 1, 3, 4 | **New** — V5 manual override [1:148-149]. `--to <runtime> [--reason <str>]`. |
 | `wave` | `fix-ci` | stable | W | daemon | 1 | |
@@ -393,8 +394,8 @@ Per C03 §5.9 [4:739-762] + D1 (two-noun shape).
 
 | Verb | Subverb | Tier | Mut | Esc | Exit codes | Notes |
 |---|---|---|---|---|---|---|
-| `metrics` | `show` | experimental | R | bypass-ok | 1 | **Promoted** from one-shot `eawf metrics` [21:379-388]. `--scope user|repo|phase` `--window 7d|30d|90d`. |
-| `metrics` | `export` | experimental | R | bypass-ok | 1 | **New** — `--format prom|json|csv` (default `prom`). |
+| `metrics` | `show` | experimental | R | bypass-ok | 1 | **Promoted** from one-shot `eawf metrics` [21:379-388]. `--scope user\|repo\|phase` `--window 7d\|30d\|90d`. |
+| `metrics` | `export` | experimental | R | bypass-ok | 1 | **New** — `--format prom\|json\|csv` (default `prom`). |
 | `metrics` | `rebuild` | experimental | W | daemon | 1, 3 | **New** — re-projects user-scope DB from per-repo `event.jsonl` + per-runtime session logs. |
 
 #### 5.1.15 TUI + completion + help
@@ -402,7 +403,7 @@ Per C03 §5.9 [4:739-762] + D1 (two-noun shape).
 | Verb | Subverb | Tier | Mut | Esc | Exit codes | Notes |
 |---|---|---|---|---|---|---|
 | `tui` | — | stable | R | bypass-ok | 1 | Per [21:362-371]. |
-| `completion` | `install` | experimental | W | n/a | 1 | **New** — `[bash|zsh|fish]`. Writes completion script to stdout for shell-rc integration per Q6. |
+| `completion` | `install` | experimental | W | n/a | 1 | **New** — `[bash\|zsh\|fish]`. Writes completion script to stdout for shell-rc integration per Q6. |
 | `completion` | `show` | experimental | R | n/a | 1 | **New** — prints script without writing. |
 | `help` | — | experimental | R | n/a | 1 | **New** — `eawf help <topic>` prose surface. Topics: `exit-codes`, `daemon`, `profiles`, `urns`, `migration`, `streaming` per Q5. |
 
@@ -507,8 +508,8 @@ _NAMES: dict[int, str] = {
 
 **New daemon classes (Q2c — no new codes; fold into existing buckets):**
 
-| Daemon class | New code | Rationale |
-|---|---|---|
+| Daemon class | New code | Symbol | Rationale |
+|---|---|---|---|
 | Daemon process unreachable | 4 | DAEMON_UNREACHABLE | Dedicated bucket per C00 §C05 [1:588]. |
 | Protocol version mismatch | 1 | USER_ERROR | Operator must run `uv tool upgrade eawf` — operator-fixable. |
 | Runtime ladder exhausted | 3 | STATE_CONFLICT | Configured-runtime fleet failed — config / state-side, not operator-input. |
@@ -644,7 +645,7 @@ class ErrorEnvelope(BaseModel):
 
 **Text-branch rendering.**
 
-```
+```yaml
 error: <message>
 hint: <suggested_next_step>
 exit_code: <exit_code> (<exit_name>)
@@ -696,7 +697,7 @@ Per D6 the rule is class-wide (mutations always escalate; reads MAY bypass). Per
 
 **Auto-spawn flow** (every mutating verb when daemon is absent):
 
-```
+```text
 1. CLI parses args; resolves GlobalFlags.
 2. Library wrapper checks for daemon liveness via PID file at $XDG_RUNTIME_DIR/eawfd/eawfd.pid
    (Linux) or <local-path> (macOS / Windows fallback).
@@ -709,7 +710,7 @@ Per D6 the rule is class-wide (mutations always escalate; reads MAY bypass). Per
 
 **`--daemonless` semantics on mutating verbs.** The wrapper rejects the flag with:
 
-```
+```yaml
 error: --daemonless rejected: <verb> is a mutating verb (requires daemon-mediated transactions per V1)
 hint: drop --daemonless and retry; daemon auto-spawns on first call
 exit_code: 1 (USER_ERROR)
@@ -720,7 +721,7 @@ kind: InvalidInput
 
 **`eawf --help`** — registry-ordered panels per [25] grouping verbs by domain tab:
 
-```
+```text
 Usage: eawf [OPTIONS] COMMAND [ARGS]...
 
 Eä Workflow — agent-driven development framework.
@@ -750,7 +751,7 @@ Eä Workflow — agent-driven development framework.
 
 **`eawf <verb> --help`** — Typer's default per-noun-app rendering. Adds a `Stability:` footer line per D5:
 
-```
+```text
 Usage: eawf wave [OPTIONS] COMMAND [ARGS]...
 
 Wave lifecycle and dispatch.
@@ -796,7 +797,7 @@ Verbs that emit `--stream` output: `wave dispatch`, `wave dispatch-batch`, `flow
 
 **NDJSON shape** (`--json --stream`):
 
-```
+```json
 {"type":"start","scope_id":"<urn>","started_at":"2026-05-16T12:00:00Z","correlation_id":"..."}
 {"type":"event","kind":"wave_claimed","payload":{...},"timestamp":"..."}
 {"type":"event","kind":"dispatch_log","line":"...","timestamp":"..."}
@@ -806,7 +807,7 @@ Verbs that emit `--stream` output: `wave dispatch`, `wave dispatch-batch`, `flow
 
 **Human shape** (`--stream` alone):
 
-```
+```json
 [12:00:00] starting wave dispatch for P20-I03-W01...
 [12:00:01] runtime: claude-code (session: s-abc123)
 [12:00:01]   dispatch log: ... (truncated; pass --verbose for full)
@@ -887,7 +888,7 @@ class StabilityRegistry:
 
 **Tier transitions.**
 
-```
+```text
 experimental ─── (3-alpha budget elapsed; no removal scheduled) ──► stable
 experimental ─── (residual use too low; flagged for removal) ─────► deprecated
 deprecated   ─── (1 alpha after deprecation announce) ─────────────► removed
@@ -1202,7 +1203,7 @@ Three concurrent change-sets:
 
 The daemon (C02) ships *before* the C05 daemon-control verbs. Sequencing:
 
-```
+```text
 1. C02 implementation phase ships `eawfd` daemon with on-demand spawn + JSON-RPC + state.mutate.
 2. C05 W01-W02 prepare CLI for daemon-mediated mutations.
 3. C05 W03 wires up the daemon CLI noun-app (enable/disable/status/restart/logs/version).
@@ -1231,7 +1232,7 @@ Until C02 ships, mutating verbs continue to use the existing in-process `_mutati
 | `CliError` subclasses (NotFound, InvalidInput, ValidationFailed, LockConflict, InstrumentMissing, UserDeclined, IntegrityViolation, HookBlocked) | Five subclasses (UserError, ValidationError, StateConflict, DaemonUnreachable, InternalError) | Renames in same PR. Legacy class names live on as `data.kind` string constants. |
 | No completion install | `eawf completion install <shell>` | Opt-in per Q6. Never edits shell-rc. |
 | No prose help | `eawf help <topic>` (six topics per Q5) | Additive. |
-| No daemon control | `eawf daemon enable | disable | status | restart | logs | version` | Additive per Q3. |
+| No daemon control | `eawf daemon enable \| disable \| status \| restart \| logs \| version` | Additive per Q3. |
 | No stability tags | `[experimental]` / `[deprecated]` Typer help-panel suffix | Additive. CI lint soft-fail 2 weeks per Q10. |
 | Manual import + `add_typer` ladder [21:114-388] | `_VERB_REGISTRY` tuple in `app.py` per Q11 | KISS-005 [6:71]; non-breaking refactor in W01. |
 | Bootstrap `eawf init` | In-process write per Q12; auto-spawn daemon after | Avoids bootstrap paradox (daemon needs state.json that init creates). |
@@ -1244,8 +1245,8 @@ All 12 axes plus the three Q2 follow-ups were ratified in a four-round blitz on 
 |---|---|---|---|---|
 | 1 | Q1 | Verb-noun arity (D1) | **Noun-first two-noun** (`eawf phase open`, `eawf phase spec init`) | ✓ |
 | 1 | Q2 | Exit-code taxonomy (D3) | **Compress 0..9 → 0..5** per C00 §C05 [1:587-588] | OVERRIDE (operator chose option (b)) |
-| 1 | Q3 | Daemon control verb set (D7) | **Six visible** (`enable | disable | status | restart | logs | version`) + debug-gated `start`/`stop`/`replay-wal`/`reload-config` | ✓ |
-| 1 | Q4 | Metrics CLI surface (D8) | **`show | export | rebuild`** | ✓ |
+| 1 | Q3 | Daemon control verb set (D7) | **Six visible** (`enable \| disable \| status \| restart \| logs \| version`) + debug-gated `start`/`stop`/`replay-wal`/`reload-config` | ✓ |
+| 1 | Q4 | Metrics CLI surface (D8) | **`show \| export \| rebuild`** | ✓ |
 | 2 | Q5 | Help-topic count (D10) | **Six topics** (`exit-codes`, `daemon`, `profiles`, `urns`, `migration`, `streaming`) | ✓ |
 | 2 | Q6 | Completion install (D11) | **Opt-in stdout write** — never edits shell-rc | ✓ |
 | 2 | Q7 | `--stream` default (D12) | **Opt-in, default off** — CI determinism wins | ✓ |

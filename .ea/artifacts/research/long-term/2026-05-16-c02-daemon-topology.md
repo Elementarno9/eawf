@@ -59,7 +59,7 @@ The current code is a CLI-as-mutator surface: `state_transaction` [11] yields a 
 | G2 | IPC protocol is stdlib-friendly, deterministic, version-tagged. JSON-RPC 2.0 over Unix domain socket (POSIX) / named pipe (Windows) is the wire. | C00 §C02 axis 1 [1:395]; C00 V6 [1:159] |
 | G3 | Auto-spawn cold-start under 400 ms on a warm cache; warm-daemon mutation under 50 ms p99 (including validator traversal). | C00 V1 [1:44] |
 | G4 | Reactive runtime fallback covers HTTP 429 / 5xx / timeout / API-error / auth-error; emits `runtime_switched` event; halts the wave with `BLOCKED` if every runtime in the ladder fails. | C00 V5 [1:127-151] |
-| G5 | Per-OS service-registration via `eawf daemon enable|disable|status`; on-demand spawn remains the default; service-file install is opt-in and fully reversible. | C00 V6 [1:153-182] |
+| G5 | Per-OS service-registration via `eawf daemon enable\|disable\|status`; on-demand spawn remains the default; service-file install is opt-in and fully reversible. | C00 V6 [1:153-182] |
 | G6 | Daemon persists per-`(wave, attempt)` session handles so retry envelopes route to the existing runtime session; `--continue` failure falls back to fresh with a `DispatchAnnotation`. | C00 V8 [1:226-271] |
 | G7 | Crash safety: write-ahead log captures the mutation intent before the transaction commits; daemon replay on startup makes incomplete writes either complete or rolled-back, never wedged half-applied. | C00 §C02 axis 6 [1:400] |
 | G8 | Resource-limit policy is profile-conditional: a default cap on concurrent dispatch (W1), a per-wave wall-clock cap with SIGTERM→SIGKILL ladder, an EU budget broker, an OOM kill threshold. | C00 §C02 axis "Resource limits" [1:373]; roadmap-synthesis §"Budget broker" [7:115-128] |
@@ -147,7 +147,7 @@ Operator-confirmed axes seeded by C00 §C02 [1:394-406] + the V5 / V6 / V8 addit
 | **D9** | Version-skew handling | (a) hard fail with structured envelope naming the upgrade command; (b) protocol-version negotiation (downgrade newer side); (c) tolerant of N-1 minor version | **(a) — hard fail, structured `protocol_version_mismatch` envelope** | Negotiation adds N×M test surface for every (CLI, daemon) pair; v0.3-v0.5 has no shipping channel guarantee yet [3:89-94]. Hard fail with `status=blocked`, `code=protocol_version_mismatch`, `details={cli_version, daemon_version, upgrade_command}` is unambiguous. CLI prints the upgrade command; operator runs it. Future v0.6+ may revisit if real shipping channels need transient cross-version coexistence. |
 | **D10** | Concurrency model | (a) asyncio + `loop.run_in_executor` for mutator; (b) threading-only; (c) Python 3.14 free-threaded build | **(a) — asyncio JSON-RPC + threaded executor for the portalocker single-writer mutator + validator traversal** | Per F5 + D49 [3:77-87, 3:144-145] this is the locked pick. `asyncio.start_unix_server` handles JSON-RPC; mutator runs in a single worker thread so portalocker is naturally serial. Validator (~787 LOC traversal [3:33]) runs inside that thread too. Free-threaded Python 3.14 retained for v0.5 if validator hot loop bottlenecks [3:21]. |
 | **D11** | Idle-timeout default | (a) 60 s; (b) 300 s (per V1); (c) 900 s; (d) configurable, no default | **(b) — 300 s (5-minute Anthropic prompt-cache TTL alignment)** | V1 [1:26] locks 300 s default. 5-minute alignment also matches the Anthropic prompt-cache TTL [4:208] so a warm-daemon dispatch reuses the cached prefix on retry. Configurable via `daemon.idle_timeout_seconds` in `<local-path>`. |
-| **D12** | Runtime-fallback retry semantics (V5) | (a) exponential backoff per-runtime before falling through to next; (b) immediate fall-through to next runtime in ladder; (c) hybrid: short backoff for `RUNTIME_RATE_LIMIT`, immediate for others | **(c) — hybrid: backoff only on `RUNTIME_RATE_LIMIT`, immediate fall-through for `RUNTIME_TIMEOUT` / `RUNTIME_SERVER_ERROR` / `RUNTIME_API_ERROR`** | 429 means "the same runtime will recover in N seconds when its rate window refreshes" [7:130-133] — backoff + retry on the same runtime first (one retry at `retry_after` from the 429 header, then fall through). 5xx + timeout + generic API error mean the runtime *did* try and failed; fall through immediately to the next runtime so the wave keeps moving. Auth-error halts the wave (`BLOCKED`) and emits an operator-notify event — never falls through silently. Configurable via `runtime.fallback.retry_policy: hybrid|backoff|immediate`. Open question: should the 429 retry budget be wall-clock-capped (e.g. max 90 s of backoff before fall-through)? §8 Q3. |
+| **D12** | Runtime-fallback retry semantics (V5) | (a) exponential backoff per-runtime before falling through to next; (b) immediate fall-through to next runtime in ladder; (c) hybrid: short backoff for `RUNTIME_RATE_LIMIT`, immediate for others | **(c) — hybrid: backoff only on `RUNTIME_RATE_LIMIT`, immediate fall-through for `RUNTIME_TIMEOUT` / `RUNTIME_SERVER_ERROR` / `RUNTIME_API_ERROR`** | 429 means "the same runtime will recover in N seconds when its rate window refreshes" [7:130-133] — backoff + retry on the same runtime first (one retry at `retry_after` from the 429 header, then fall through). 5xx + timeout + generic API error mean the runtime *did* try and failed; fall through immediately to the next runtime so the wave keeps moving. Auth-error halts the wave (`BLOCKED`) and emits an operator-notify event — never falls through silently. Configurable via `runtime.fallback.retry_policy: hybrid\|backoff\|immediate`. Open question: should the 429 retry budget be wall-clock-capped (e.g. max 90 s of backoff before fall-through)? §8 Q3. |
 | **D13** | Session-handle TTL after wave close (V8) | (a) drop on wave-close immediately; (b) 1-day TTL; (c) 7-day TTL; (d) never drop (compact on next phase close) | **(b) — 1-day TTL after wave close** | Audit replay (C01 §5.6 [2:1277-1325]) needs the session_id to reconstruct dispatch history for at least the most recent phase. Daily TTL covers same-day reopen + bug investigation. 7-day TTL accumulates session-log paths that may be deleted by Claude Code / Codex on their own retention sweep. Configurable via `daemon.session_handle_ttl_seconds: 86400`. The session-handle row is just a pointer; the source-of-truth log lives in `<local-path>` [1:244] (Claude Code) etc. |
 | **D14** | Mutation envelope shape | (a) extend current `Envelope` [2:572-583] + `EventPayload` [2:557-568]; (b) new `MutationEnvelope` Pydantic class for daemon-side; (c) generic JSON-RPC payload | **(a) — extend the current Envelope** | The Envelope already carries `schema_version`, `id`, `kind`, `scope_id`, `created_at`, `summary`, `payload`, `blob_refs`, `artifact_ids` [2:572-583]. C02 adds `protocol_version` (daemon-protocol versioning) + `idempotency_key` (V5 cross-runtime re-issue [1:392]) at the JSON-RPC framing layer, outside the Envelope body. Keeps Pydantic models stable. C03 owns the typed `Mutation` discriminated union per `payload` [2:588]; C02 wraps it in JSON-RPC. |
 | **D15** | Cold-spawn UX | (a) silent — CLI hides daemon spawn; (b) progress indicator on first call ("starting eawfd..."); (c) opt-in verbose | **(a) — silent, with `--verbose` opt-in** | V1 [1:48] explicitly mandates transparent auto-spawn. Operator runs `eawf wave claim`; either daemon was already up (no message), or it wasn't (also no message; spinner briefly shows under 400 ms latency). `--verbose` surfaces the spawn step for debugging. Cold-spawn failures (port collision, write permission, etc.) surface as `daemon_spawn_failed` envelope. |
@@ -158,7 +158,7 @@ Operator-confirmed axes seeded by C00 §C02 [1:394-406] + the V5 / V6 / V8 addit
 
 The deployed system:
 
-```
+```text
                                 ┌─────────────────────────────────┐
                                 │   operator + agent personas     │
                                 │   (terminal / TUI / web stub)    │
@@ -367,7 +367,7 @@ All RPC method names use dotted namespace `<noun>.<verb>`.
 
 **On-demand auto-spawn (V1 [1:26]).** CLI startup sequence:
 
-```
+```text
 1. Resolve runtime_dir per D5 (XDG on Linux, <local-path> on macOS, named-pipe on Windows).
 2. Read <runtime_dir>/eawfd.pid (file exists? PID alive? owned by current UID?).
 3. If alive: connect to socket; on connect-refused, treat as stale.
@@ -382,7 +382,7 @@ All RPC method names use dotted namespace `<noun>.<verb>`.
 
 **PID file shape.** Plain text:
 
-```
+```text
 <pid>\n<protocol_version>\n<started_at_iso>\n
 ```
 
@@ -398,7 +398,7 @@ All RPC method names use dotted namespace `<noun>.<verb>`.
 
 **Transaction lifecycle:**
 
-```
+```text
 1. CLI calls state.mutate(mutation, idempotency_key=K).
 2. Daemon mutator thread receives the call, acquires portalock(state.json, timeout=5).
 3. Write WAL pending: <wal_dir>/<id>.pending.json containing {mutation, idempotency_key, started_at, before_state_version}.
@@ -417,7 +417,7 @@ All RPC method names use dotted namespace `<noun>.<verb>`.
 
 **Startup replay algorithm.**
 
-```
+```text
 on daemon startup, after socket bind, before accepting connections:
 1. List <wal_dir>/*.json.
 2. For each <id>.pending.json:
@@ -441,7 +441,7 @@ on daemon startup, after socket bind, before accepting connections:
 
 **Push path.** Mutator thread, after successful WAL fsync + state-write, calls `bus.publish(envelope)`. Publish:
 
-```
+```text
 for sub in subscribers:
     if not envelope.matches(sub.scope_filter, sub.kind_filter):
         continue
@@ -466,7 +466,7 @@ Profile-conditional config (C08 owns the layered-config algorithm); C02 lists th
 |---|---|---|---|
 | Concurrent dispatch cap | `daemon.max_concurrent_dispatch` | 4 | `agent.dispatch` blocks (`-32005 resource_exhausted`) when in-flight count hits cap. |
 | Per-wave wall-clock cap | `daemon.wave_wall_clock_cap_seconds` | 1800 (30 min per [7:112]) | dispatcher asyncio task races a `asyncio.wait_for`; SIGTERM at cap, SIGKILL +15 s. |
-| Per-runtime budget broker | `runtime.<id>.eu_cap_per_phase` | none | dispatch refuses to spawn when `phase.eu_consumed + estimate > eu_cap`. Soft breaker (warn-only) for the first four weeks per roadmap-synthesis [7:127-128] — config flag `breaker_mode: warn|hard` |
+| Per-runtime budget broker | `runtime.<id>.eu_cap_per_phase` | none | dispatch refuses to spawn when `phase.eu_consumed + estimate > eu_cap`. Soft breaker (warn-only) for the first four weeks per roadmap-synthesis [7:127-128] — config flag `breaker_mode: warn\|hard` |
 | OOM kill threshold | `daemon.subprocess_rss_kb_kill` | 4194304 (4 GB) | dispatcher monitors child RSS every 10 s; SIGKILL on overshoot; emits `subprocess_oom_killed` event. |
 | Vendor 429 auto-pause | `runtime.<id>.auto_pause_on_429` | true | runtime-fallback handler (§5.12) emits `runtime_paused` event; dispatcher halts new spawns until rate window resets (parse `Retry-After` or fall through to next runtime per D12). |
 
@@ -476,7 +476,7 @@ Profile-conditional config (C08 owns the layered-config algorithm); C02 lists th
 
 **Protocol version field.** Every JSON-RPC frame carries `protocol_version: "1"` at top level (string, semver-like; v0.3-v0.5 stays at `"1"`). Daemon handshake on first request:
 
-```
+```text
 1. CLI sends request with protocol_version field.
 2. Daemon compares to its own protocol_version (single source of truth: src/eawf/daemon/__init__.py PROTOCOL_VERSION constant).
 3. If major-version mismatch: respond -32004 protocol_version_mismatch with data={cli_version, daemon_version, upgrade_command: "uv tool upgrade eawf"}.
@@ -486,7 +486,7 @@ Profile-conditional config (C08 owns the layered-config algorithm); C02 lists th
 
 **CLI handling.** On `-32004`, CLI prints (to stderr + structured `OutputEnvelope`):
 
-```
+```text
 ERROR: daemon at <runtime_dir>/eawfd.sock is protocol_version <X>; this CLI expects <Y>.
 
 Run `<upgrade_command>` then retry. If you need to keep the daemon running on the old protocol, set EAWF_DAEMONLESS=1 to bypass for read-only commands.
@@ -521,7 +521,7 @@ Install path: `<local-path>`. `%t` expands to `$XDG_RUNTIME_DIR` per D5.
 
 **`eawf daemon enable` flow.**
 
-```
+```text
 1. Read template; render to <local-path>
 2. Run `systemctl --user daemon-reload`.
 3. Run `systemctl --user enable --now eawfd.service`.
@@ -531,7 +531,7 @@ Install path: `<local-path>`. `%t` expands to `$XDG_RUNTIME_DIR` per D5.
 
 **`eawf daemon disable` flow.**
 
-```
+```text
 1. Run `systemctl --user disable --now eawfd.service`.
 2. unlink <local-path>
 3. Run `systemctl --user daemon-reload`.
@@ -583,7 +583,7 @@ Install path: `<local-path>`. `{{ runtime_dir }}` resolves to `<local-path>` per
 
 **`eawf daemon enable` flow.**
 
-```
+```text
 1. Render template to <local-path>
 2. Run `launchctl bootstrap gui/$UID <local-path>`.
 3. Run `launchctl enable gui/$UID/dev.eawf.eawfd`.
@@ -593,7 +593,7 @@ Install path: `<local-path>`. `{{ runtime_dir }}` resolves to `<local-path>` per
 
 **`eawf daemon disable` flow.**
 
-```
+```text
 1. Run `launchctl bootout gui/$UID/dev.eawf.eawfd`.
 2. unlink <local-path>
 3. Emit envelope.
@@ -651,13 +651,13 @@ if __name__ == "__main__":
 
 **Install command (per-user):**
 
-```
+```bash
 python -m eawf.daemon.win_service install --startup auto
 ```
 
 **`eawf daemon enable` Windows flow.**
 
-```
+```text
 1. Verify pywin32 is importable; if not, hint NSSM fallback below.
 2. Run `python -m eawf.daemon.win_service install --startup auto`.
 3. Run `python -m eawf.daemon.win_service start`.
@@ -667,7 +667,7 @@ python -m eawf.daemon.win_service install --startup auto
 
 **NSSM fallback (documented, not primary).** Bundled `nssm.exe` in `tools/nssm-2.24/` of the eawf wheel. Operator runs:
 
-```
+```text
 nssm install eawfd "C:\Python314\Scripts\uv.exe" tool run eawf daemon run --foreground
 nssm set eawfd AppEnvironmentExtra EAWF_RUNTIME_DIR=%LOCALAPPDATA%\eawf\runtime
 nssm start eawfd
@@ -675,7 +675,7 @@ nssm start eawfd
 
 **`eawf daemon disable` Windows flow.**
 
-```
+```text
 1. Run `python -m eawf.daemon.win_service stop`.
 2. Run `python -m eawf.daemon.win_service remove`.
 3. Emit envelope.
@@ -724,7 +724,7 @@ jobs:
 
 ### 5.12 Runtime fallback (V5) state machine
 
-```
+```text
                      ┌──────────────────────────────────┐
                      │   dispatcher.dispatch(wave_id)   │
                      │   primary = preference[0]        │
@@ -1007,7 +1007,7 @@ class RuntimeAdapter(Protocol):
 
 #### D1 — Cold-spawn CLI mutation
 
-```
+```text
 operator              CLI (eawf wave claim)     daemon         portalock    state.json
    │                          │
    │ uv run eawf wave claim    │
@@ -1054,7 +1054,7 @@ Latency budget (cold): fork + exec ~150 ms, asyncio server up ~50 ms, socket pol
 
 #### D2 — Warm-daemon mutation
 
-```
+```text
 operator              CLI                       daemon                    portalock     state.json
    │                          │
    │ eawf wave release         │
@@ -1081,7 +1081,7 @@ Warm latency: connect ~3 ms + lock ~5 ms + WAL + validate + write + event + fsyn
 
 #### D3 — TUI subscribe + receive
 
-```
+```text
 TUI                          daemon                  bus              event.jsonl
   │                          │
   │ event.subscribe          │
@@ -1114,7 +1114,7 @@ TUI                          daemon                  bus              event.json
 
 #### D4 — Agent dispatch (V8 fresh path)
 
-```
+```text
 operator        CLI (eawf flow)       daemon          dispatcher    spawn child (claude -p)
    │                  │
    │ /flow            │
@@ -1140,7 +1140,7 @@ operator        CLI (eawf flow)       daemon          dispatcher    spawn child 
 
 #### D5 — Daemon crash recovery (SIGKILL during mutation)
 
-```
+```text
 operator        CLI A                CLI B (later)           daemon (new instance)    WAL          state.json
    │                  │
    │ wave claim       │
@@ -1171,7 +1171,7 @@ operator        CLI A                CLI B (later)           daemon (new instanc
 
 #### D6 — Runtime fallback on error (V5)
 
-```
+```text
 operator         daemon                  dispatcher       claude-code (primary)     codex (next)
    │                  │
    │                  │ (D4 in flight on claude)
@@ -1197,7 +1197,7 @@ If codex also fails → fall through to opencode → if every runtime fails → 
 
 #### D7 — Session reuse on retry (V8 continue path)
 
-```
+```text
 operator        CLI (eawf wave retry)    daemon          dispatcher    claude-code
    │                  │
    │ /flow retry      │ agent.dispatch wave=P20-I03-W01

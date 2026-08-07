@@ -521,7 +521,7 @@ class DeliveryIdDedup:
 
 **Endpoint shape.**
 
-```
+```text
 POST /webhook/<source-slug>
 Headers:
   Content-Type: application/json
@@ -538,7 +538,9 @@ Body: vendor-shaped JSON (passed through to the integration handler)
 3. Loads the signing secret from the OS keyring under `secret_keyring_account`. Missing secret → `503` + emits `integration_webhook_secret_missing`.
 4. Calls `verify_hmac()`. Failure → `401` + emits `integration_<id>_webhook_signature_invalid`. Failures NEVER carry the body in the event payload (PII / data-exfiltration risk).
 5. Calls `verify_timestamp()` if `timestamp_header` is set on the manifest. Failure → `401` + emits `integration_<id>_webhook_timestamp_out_of_window`. **Per B-c11-3 [33]**: GitHub (and Jira) have NO timestamp header — listener falls through to step 5a instead.
+
 5a. **UUID dedup (B-c11-3 [33])**: if `delivery_id_header` is set on the manifest, listener consults `DeliveryIdDedup.seen()` for that source-slug + delivery UUID. Already-seen → `200 OK` immediately + emits `integration_<id>_webhook_replay_suppressed` (no handler call; vendor's retry is intentionally absorbed).
+
 6. Routes to the manifest-declared handler. Handler returns a typed `WebhookDecision` (`accept | skip | retry`). Listener responds `2xx` for accept/skip, `503` + queue-for-retry for retry.
 7. On accept, listener emits `integration_<id>_webhook_received` envelope onto the event bus; downstream subscribers (e.g. the GitHub worker's pr-state projector) consume it.
 
@@ -644,7 +646,7 @@ The closed `StoreKind` enum from C07b §5.4 [14:417-451] does NOT grow a new top
 
 **New `event_type` sub-types under `EVENT` (v0.3-v0.5):**
 
-```
+```text
 Webhook ingress (mandatory v0.4):
 - integration_<id>_webhook_received
 - integration_<id>_webhook_signature_invalid
@@ -808,7 +810,7 @@ def delete_secret(integration_id: str, field: str) -> None:
 | macOS | Keychain Services | per-user; native; same-process access never prompts. **CI gotcha (B-c11-4 [34]):** `macos-latest` runners boot with keychain **locked** — first call raises `keyring.errors.KeyringLocked` (distinct from `NoKeyringError`); CI must either unlock via `security unlock-keychain` or fall back to plaintext. |
 | Linux | Secret Service (gnome-keyring / KWallet) | requires DBus session. **B-c11-4 [34]:** when `DBUS_SESSION_BUS_ADDRESS` absent or `org.freedesktop.secrets` not registered, `keyring` raises `keyring.errors.NoKeyringError` **deterministically** (post Launchpad bug #1864204 fix). Hang risk is bounded to the DBus socket timeout (~25 s) when socket present but daemon dead — `secretstorage.check_service_availability()` guards against infinite block. |
 | Windows | Credential Manager | per-user (`CRED_PERSIST_ENTERPRISE`, HKCU); native; works in CI without setup. |
-| Headless CI (Ubuntu, locked-macOS) | `keyrings.alt.file.PlaintextKeyring` (PyPI `keyrings.alt` 5.0.2 — B-c11-4 [34]) under `$XDG_DATA_HOME/python_keyring/keyring_pass.cfg`; doctor warns when active. |
+| Headless CI (Ubuntu, locked-macOS) | `keyrings.alt.file.PlaintextKeyring` (PyPI `keyrings.alt` 5.0.2 — B-c11-4 [34]) | Stores under `$XDG_DATA_HOME/python_keyring/keyring_pass.cfg`; doctor warns when active. |
 
 **Backend selection (B-c11-4 [34]).** Load order is `PYTHON_KEYRING_BACKEND` env override → `keyringrc.cfg` → priority-max entry-point. `keyring.get_keyring()` is **safe to call as a probe** (does not touch the store). Doctor probe sequence:
 
@@ -881,7 +883,7 @@ def detect_keyring_state() -> KeyringProbeResult:
 
 ### 7.1 Net-new modules
 
-```
+```text
 src/eawf/integrations/__init__.py                    # entry-point loader
 src/eawf/integrations/base.py                        # IntegrationWorker ABC + manifest model
 src/eawf/integrations/secrets.py                     # keyring writer (single mutator)
