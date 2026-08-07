@@ -15906,8 +15906,8 @@
       "title": "AGENTS.md sync-from-decisions render path"
     },
     "B045": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-08-07T15:57:50.030207Z",
+      "commit": "6d192b6f57208fcf5b1eb6f9477744cf4aa66067",
       "created_at": "2026-05-11T08:42:26.353668Z",
       "description": "wave-close SHA normalisation (--commit accepts full SHA; store as 7-char or exclude commit-keys from secrets baseline)",
       "id": "B045",
@@ -15921,14 +15921,14 @@
         "source_brief_ids": []
       },
       "priority": "P3",
-      "resolution": null,
+      "resolution": "Abandoned in the v0.7 proposal: names a verb or record the epoch-2 cutover deletes, so no substance survives the rename.",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "wave-close SHA normalisation (--commit accepts full SHA; store as"
     },
     "B046": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-08-07T15:57:50.911380Z",
+      "commit": "6d192b6f57208fcf5b1eb6f9477744cf4aa66067",
       "created_at": "2026-05-11T08:42:27.135528Z",
       "description": "wave update --files verb (allow editing Wave.file_scopes post-plan to reflect implementation reality)",
       "id": "B046",
@@ -15942,9 +15942,9 @@
         "source_brief_ids": []
       },
       "priority": "P3",
-      "resolution": null,
+      "resolution": "Abandoned in the v0.7 proposal: names a verb or record the epoch-2 cutover deletes, so no substance survives the rename.",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "wave update --files verb (allow editing Wave.file_scopes post-plan to"
     },
     "B047": {
@@ -16157,8 +16157,8 @@
       "title": "MCP emit-and-verify hardening across Claude (.mcp.json) / Codex (TOML)"
     },
     "B063": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-08-07T15:57:59.303199Z",
+      "commit": "6d192b6f57208fcf5b1eb6f9477744cf4aa66067",
       "created_at": "2026-05-15T14:33:42.834123Z",
       "description": "AGENTS.md markdown-style rule: no manual line-wrap in generated/rendered .md (prose one-line-per-paragraph; commit messages exempt). Codify under style section + extend research/render skill output contracts so wrap habit doesn't leak into briefs, manifestos, audit reports.",
       "id": "B063",
@@ -16172,9 +16172,9 @@
         "source_brief_ids": []
       },
       "priority": "P2",
-      "resolution": null,
+      "resolution": "Abandoned in the v0.7 proposal: already shipped as a repository rule and a lint, plus a reconciliation against feature-spec text this proposal supersedes.",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "AGENTS.md markdown-style rule: no manual line-wrap in"
     },
     "B064": {
@@ -16340,55 +16340,55 @@
       "title": "Extend eawf why to incident and backlog kinds"
     },
     "B076": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-08-07T15:57:51.796564Z",
+      "commit": "6d192b6f57208fcf5b1eb6f9477744cf4aa66067",
       "created_at": "2026-06-01T21:51:58.464296Z",
       "description": "A45 audit W30 followup: methods/state.py _wave_elapsed_budget_minutes + roadmap_tree.py _wave_time_budget_minutes both re-derive the pessimistic-minutes projection that thresholds.py wave_budget_minutes now owns. Consolidate onto the shared helper (DRY). Non-blocking; the three agree by construction today.",
       "id": "B076",
       "intent": null,
       "priority": "P3",
-      "resolution": null,
+      "resolution": "Abandoned in the v0.7 proposal: names a verb or record the epoch-2 cutover deletes, so no substance survives the rename.",
       "scope_id": "P29",
-      "status": "open",
+      "status": "closed",
       "title": "Consolidate dup wave-budget projection onto wave_budget_minutes"
     },
     "B077": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-08-07T15:57:53.619976Z",
+      "commit": "6d192b6f57208fcf5b1eb6f9477744cf4aa66067",
       "created_at": "2026-06-01T23:20:59.281961Z",
       "description": "classify_egress denies a decimal-encoded metadata IP (e.g. 2852039166) via default-deny rather than the metadata-deny reason tag. Outcome is still blocked (safe); the proxy forwards only the normalized host so there is no resolver re-expansion gap. Cosmetic reason-tag precision; surfaced by the A46-P29-i03 audit.",
       "id": "B077",
       "intent": null,
       "priority": "P3",
-      "resolution": null,
+      "resolution": "Abandoned in the v0.7 proposal: internal detail of the self-built jail and egress stack, both of which retire at cutover. Both are already safe today; only a reason label and an edge case are wrong.",
       "scope_id": "P29-I03",
-      "status": "open",
+      "status": "closed",
       "title": "Tag decimal/octal-IP metadata egress as metadata-deny not default-deny"
     },
     "B078": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-08-07T15:57:54.554310Z",
+      "commit": "6d192b6f57208fcf5b1eb6f9477744cf4aa66067",
       "created_at": "2026-06-01T23:20:59.814951Z",
       "description": "jail.py _build_linux_argv re-binds the codex own-cred read-only only at its resolved path; an operator who relocates CODEX_HOME under a tmpfs-masked cred dir would need an explicit re-bind. Default codex location is unmasked, so the common path is covered. An I04 live-codex-spawn concern; surfaced by the A46-P29-i03 audit.",
       "id": "B078",
       "intent": null,
       "priority": "P3",
-      "resolution": null,
+      "resolution": "Abandoned in the v0.7 proposal: internal detail of the self-built jail and egress stack, both of which retire at cutover. Both are already safe today; only a reason label and an edge case are wrong.",
       "scope_id": "P29-I03",
-      "status": "open",
+      "status": "closed",
       "title": "Re-bind codex own-cred when CODEX_HOME sits under a masked jail dir"
     },
     "B079": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-08-07T15:57:55.481188Z",
+      "commit": "6d192b6f57208fcf5b1eb6f9477744cf4aa66067",
       "created_at": "2026-06-01T23:42:52.407571Z",
       "description": "test_repo_pyproject_excludes_keep_tree_green fails: app.py is 1482 LOC over the 1400 EAWF010 cap and absent from the pyproject exclude list. Pre-existing at the P29-I03 base 40cb293a; untouched by I03. Exclude or refactor before the I07 phase PR (full suite + coverage gate). Note: the live-zsh completion test is a separate environmental flake (A45-documented).",
       "id": "B079",
       "intent": null,
       "priority": "P2",
-      "resolution": null,
+      "resolution": "Abandoned in the v0.7 proposal: superseded by the interface rewrite. The oversized application shell, its reskin tail, and its offset-based paging are designed out by the cursor contract.",
       "scope_id": "P29",
-      "status": "open",
+      "status": "closed",
       "title": "Exclude or refactor oversized surfaces/tui/app.py for EAWF010"
     },
     "B080": {
@@ -16431,16 +16431,16 @@
       "title": "Wire cross-vendor jury (W08) into the close gate for high-risk waves"
     },
     "B083": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-08-07T15:57:56.378351Z",
+      "commit": "6d192b6f57208fcf5b1eb6f9477744cf4aa66067",
       "created_at": "2026-06-02T03:50:06.870106Z",
       "description": "surfaces/tui/app.py is 1491 LOC (over the 1400 EAWF010 advisory cap), grandfathered in the exclude list. Was already over-cap before P29-I04; I04 live-view waves touched it (un-grandfather-on-touch). Extract cohesive collaborators (mode wiring / feed-listener seam / scope plumbing) into modules to drop it under cap and off the exclude.",
       "id": "B083",
       "intent": null,
       "priority": "P2",
-      "resolution": null,
+      "resolution": "Abandoned in the v0.7 proposal: superseded by the interface rewrite. The oversized application shell, its reskin tail, and its offset-based paging are designed out by the cursor contract.",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Extract-module split of surfaces/tui/app.py (EAWF010 over-cap)"
     },
     "B084": {
@@ -16626,16 +16626,16 @@
       "title": "Seed real SVG golden so the T5 pixel-diff runs in CI"
     },
     "B098": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-08-07T15:58:00.247356Z",
+      "commit": "6d192b6f57208fcf5b1eb6f9477744cf4aa66067",
       "created_at": "2026-06-06T20:31:12.196988Z",
       "description": "generator.coverage_diff uses (units, covered_span_ids:set, deferrals); FS11 spec text says (units, criteria, deferrals). Deviation is documented in source + preserves determinism; amend the spec text or add a criteria-keyed adapter to remove the doc/impl drift.",
       "id": "B098",
       "intent": null,
       "priority": "P3",
-      "resolution": null,
+      "resolution": "Abandoned in the v0.7 proposal: already shipped as a repository rule and a lint, plus a reconciliation against feature-spec text this proposal supersedes.",
       "scope_id": "P29",
-      "status": "open",
+      "status": "closed",
       "title": "Reconcile coverage_diff signature with the FS11 spec text"
     },
     "B099": {
@@ -16665,16 +16665,16 @@
       "title": "Remove dead SVG golden placeholder guard in test_svg_oracle"
     },
     "B101": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-08-07T15:57:57.316995Z",
+      "commit": "6d192b6f57208fcf5b1eb6f9477744cf4aa66067",
       "created_at": "2026-06-11T12:48:06.919639Z",
       "description": "Deferred from P30-I15 reskin-vs-live UI-parity polish (W13-W16): wave-detail overview counts-quad + deps mini-DAG glance; feed dispatch/audit/veto chrome-sigils (needs a chrome-glyph feed render path); palette per-verb stage sigils (mock verbs do not match the registry); plan-preview effort rollup; state-aware attention idle verb; sandbox group-by-session (list restructure + new golden); trust side-by-side panes. All low-severity; the high-value parity fixes shipped in W13-W16.",
       "id": "B101",
       "intent": null,
       "priority": "P3",
-      "resolution": null,
+      "resolution": "Abandoned in the v0.7 proposal: superseded by the interface rewrite. The oversized application shell, its reskin tail, and its offset-based paging are designed out by the cursor contract.",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "TUI reskin-parity tail: deferred cosmetic surface fixes"
     },
     "B102": {
@@ -16730,16 +16730,16 @@
       "title": "Layered visual oracle for full-screen TUI modes"
     },
     "B106": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-08-07T15:57:58.297498Z",
+      "commit": "6d192b6f57208fcf5b1eb6f9477744cf4aa66067",
       "created_at": "2026-07-01T12:01:10.136323Z",
       "description": "Count-based store cursor (agent_watch.py:1985-1987, len(lines)>cursor) vs the shifting lines[-500:] backfill window (agent_watch.py:722, limit=500): once a spawn exceeds 500 output lines, len(lines) plateaus while the window shifts, so the poll tail freezes and drops later chunks. Use a content/seq identity anchor instead of len(). Surfaced by W58 fresh-context audit AR-auditor-P30-I20-W58-01.",
       "id": "B106",
       "intent": null,
       "priority": "P2",
-      "resolution": null,
+      "resolution": "Abandoned in the v0.7 proposal: superseded by the interface rewrite. The oversized application shell, its reskin tail, and its offset-based paging are designed out by the cursor contract.",
       "scope_id": "P30-I20-W58",
-      "status": "open",
+      "status": "closed",
       "title": "Watch tail freezes past 500 output lines from cap-shift"
     },
     "B107": {
@@ -16834,16 +16834,16 @@
       "title": "Give the cross-runtime lifecycle invariants a spawn-free driver"
     },
     "B114": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-08-07T15:57:52.693909Z",
+      "commit": "6d192b6f57208fcf5b1eb6f9477744cf4aa66067",
       "created_at": "2026-07-14T10:30:31.243423Z",
       "description": "P30-I25-W41 is CLOSED with an outcome but carries no Wave.commit and has no matching wave-prefixed commit on the branch: its two deliverables landed under sibling wave commits (cd31b63d, ff6a6a8f). The work is present; the provenance is not derivable by git log --grep, which is how wave_sha resolves an unpinned wave. Pin the SHA or record the absorption.",
       "id": "B114",
       "intent": null,
       "priority": "P3",
-      "resolution": null,
+      "resolution": "Abandoned in the v0.7 proposal: names a verb or record the epoch-2 cutover deletes, so no substance survives the rename.",
       "scope_id": "P30",
-      "status": "open",
+      "status": "closed",
       "title": "Reconcile the P30-I25-W41 commit-less ledger row"
     },
     "B115": {
@@ -17003,29 +17003,29 @@
       "title": "Relabel the remaining research-steer honesty gaps"
     },
     "B128": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-08-07T15:58:01.130159Z",
+      "commit": "6d192b6f57208fcf5b1eb6f9477744cf4aa66067",
       "created_at": "2026-07-15T04:37:02.144302Z",
       "description": "P30-I26-W06 raised the doctor byte cap to 64 KiB (interim) so doctor is not red on the ~52 KiB default AGENTS.md. Verify Codex's actual global+project truncation limit and trim AGENTS.md (or re-tighten the cap) so the guidance tail is not silently dropped for Codex users.",
       "id": "B128",
       "intent": null,
       "priority": "P1",
-      "resolution": null,
+      "resolution": "Closed as a duplicate of B124, which survives and carries the work forward.",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Verify Codex's real project-doc cap and trim AGENTS.md"
     },
     "B129": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-08-07T15:58:02.023666Z",
+      "commit": "6d192b6f57208fcf5b1eb6f9477744cf4aa66067",
       "created_at": "2026-07-15T04:37:02.937997Z",
       "description": "P30-I26-W09 removed the 7 handler-less hooks from plugin_install, but plugin_package.py and hook_map.render_plugin_hooks_json still emit all 17 wrappers and wire 8 in manifest hooks.json. Same idle-contract class; finish the cleanup.",
       "id": "B129",
       "intent": null,
       "priority": "P2",
-      "resolution": null,
+      "resolution": "Closed as a duplicate of B125, which survives and carries the work forward.",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Delete the marketplace packager's idle hook wrappers"
     },
     "B130": {
@@ -17042,16 +17042,16 @@
       "title": "Make check_affordance_parity press-free"
     },
     "B131": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-08-07T15:58:02.924250Z",
+      "commit": "6d192b6f57208fcf5b1eb6f9477744cf4aa66067",
       "created_at": "2026-07-15T04:37:04.486489Z",
       "description": "P30-I26-W03 relabelled the TUI steer control, but kernel/state/models.py steer_notes + kernel/store/kinds/research_round.py docstrings still claim notes shaped the round dispatch set, and the b-broadcast channel makes the same never-reaches-a-running-round claim. Same truth-defect class.",
       "id": "B131",
       "intent": null,
       "priority": "P2",
-      "resolution": null,
+      "resolution": "Closed as a duplicate of B127, which survives and carries the work forward.",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Relabel the remaining research-steer honesty gaps"
     },
     "B132": {
@@ -34838,7 +34838,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-08-07T15:57:10.723649Z",
+  "updated_at": "2026-08-07T15:58:02.924250Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {},
