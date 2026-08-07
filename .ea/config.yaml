@@ -7,7 +7,7 @@ acceptance:
   required_before_ship:
   - state
 flow:
-  auto_accept:
+  advance_after:
     audit: true
     polish: true
     research: true
@@ -15,8 +15,6 @@ mcp:
   enabled: []
 planning:
   max_parallel_waves: 10
-polish:
-  auto_apply_safe: true
 profiles:
   enabled:
   - core
