@@ -1,13 +1,13 @@
 """Pydantic v2 telemetry row models (vendored shape, retyped).
 
 These rows are the typed projection target for the observability subsystem
-(C09 §5.9.2). Each model is retyped from the upstream agent-lens dataclasses
-(see :mod:`eawf.observability.telemetry`'s ``_AGENT_LENS_AUDIT_COMMIT.txt`` for upstream
+(C09 §5.9.2). Each model is retyped from the upstream prototype's dataclasses
+(see :mod:`eawf.observability.telemetry`'s ``_VENDOR_PROVENANCE.txt`` for upstream
 provenance) into a strict Pydantic v2 ``BaseModel`` with
 ``ConfigDict(extra="forbid")`` so the projection rejects unknown columns at
 the boundary instead of silently dropping data.
 
-Closed enums new to eawf (not present in the agent-lens upstream) live here
+Closed enums new to eawf (not present in the upstream prototype) live here
 alongside the rows that consume them:
 
 - :data:`EndMarker` — session end-state classifier; the ``runtime_switched``
@@ -69,7 +69,7 @@ EndMarker = Literal[
 """Session end-state classifier.
 
 ``runtime_switched`` is the V5 extension (eawf-specific); the remaining
-members are vendored from the agent-lens upstream.
+members are vendored from the upstream prototype.
 """
 
 
@@ -194,7 +194,7 @@ class TelemetryCompaction(BaseModel):
 
 
 class TelemetryRuntimeSwitch(BaseModel):
-    """One row per V5 runtime switchover (NEW vs agent-lens)."""
+    """One row per V5 runtime switchover (NEW vs the upstream prototype)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -266,7 +266,7 @@ class TelemetryDispatchCost(BaseModel):
 
 
 class TelemetryIncident(BaseModel):
-    """One row per recorded incident (NEW vs agent-lens; V7)."""
+    """One row per recorded incident (NEW vs the upstream prototype; V7)."""
 
     model_config = ConfigDict(extra="forbid")
 

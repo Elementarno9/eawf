@@ -103,7 +103,7 @@ C08 inherits four verdicts from C00 and consumes two cluster deps (C01 entity ca
 
 **C08 binding.** §5.2 field registry adds `runtime.preference: list[str]`, `runtime.fallback.on_errors: list[str]`, `runtime.fallback.retry_policy: Literal["hybrid","backoff","immediate"]` (per C02 D12 [3:145]), `runtime.fallback.max_backoff_seconds: int` (per C02 §8 Q3 open). The per-scope override threads through layered config (user > workspace > repo > branch > local > env > cli); per-wave override lives in the wave layer.
 
-### V7 — Telemetry: vendor agent-lens schema, rebuild inside eawf [1:184-224]
+### V7 — Telemetry: vendor the telemetry-prototype schema, rebuild inside eawf [1:184-224]
 
 > "Telemetry opt-in by default — `telemetry.enabled: false` until operator sets it. No data leaves the machine without explicit `telemetry.export.endpoint` config (no implicit phone-home). Per-repo `event.jsonl` remains canonical; user-scope DB is a projection."
 

@@ -77,7 +77,7 @@ Affected here: `eawf wave switch <wave-id> --to <runtime>` exposes the operator-
 
 Affected here: §5.1's `eawf daemon` noun-app — `enable | disable | status | restart | logs | version`. `enable`/`disable` write/remove the per-OS service file (systemd `--user` unit / launchd plist / pywin32 service per C02 D2 [3:135] + §5.10 [3:493-650]). `status`/`restart`/`logs`/`version` are runtime-control verbs that go via the daemon's `daemon.*` RPC method set [3:330-336].
 
-### V7 — Telemetry: vendor agent-lens schema, rebuild inside eawf [1:184-224]
+### V7 — Telemetry: vendor the telemetry-prototype schema, rebuild inside eawf [1:184-224]
 
 Affected here: §5.1's `eawf metrics` noun-app — `show | export | rebuild`. `show` reads the user-scope DuckDB / SQLite store at `<local-path>` [1:191]; `export` emits Prometheus textfile / JSON / CSV; `rebuild` reprocesses the per-repo `event.jsonl` projections + per-runtime session logs [1:194-197].
 

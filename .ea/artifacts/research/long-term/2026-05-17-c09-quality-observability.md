@@ -16,7 +16,7 @@
 
 ## 1. Purpose + scope statement
 
-Locks the **quality + observability spine** that every eawf-managed repo inherits: the test taxonomy and coverage gates, the pre-commit hook inventory, the CI pipeline shape (with per-OS matrix per V6), the perf bench harness, the snapshot-fixture surface, and the observability + telemetry subsystem (V7 vendor-and-rebuild of `agent-lens`, structured log spec, correlation-ID tracing across daemon RPC + skill chain + agent dispatch, metrics catalog, Prometheus textfile export, opt-in default).
+Locks the **quality + observability spine** that every eawf-managed repo inherits: the test taxonomy and coverage gates, the pre-commit hook inventory, the CI pipeline shape (with per-OS matrix per V6), the perf bench harness, the snapshot-fixture surface, and the observability + telemetry subsystem (V7 vendor-and-rebuild of the upstream telemetry prototype, structured log spec, correlation-ID tracing across daemon RPC + skill chain + agent dispatch, metrics catalog, Prometheus textfile export, opt-in default).
 
 This cluster makes **eight C00-locked verdicts implementable** in concrete schemas, CLI verbs, hook configs, and CI workflows:
 
@@ -25,11 +25,11 @@ This cluster makes **eight C00-locked verdicts implementable** in concrete schem
 - **V3** [C00:77-97] — profile-specific test inclusion (research-profile tests skip the engineering-profile coverage gate; engineering-profile tests skip the spike-profile snapshot churn).
 - **V5** [C00:128-152] — `runtime_switched` event sub-types extend the audit replay; switchover frequency is a first-class metric.
 - **V6** [C00:154-183] — per-OS CI matrix (Linux + macOS + Windows runners) with portalocker `fcntl` vs `LockFileEx` parity verified on each runner.
-- **V7** [C00:185-225] — vendor the `agent-lens` schema [C09-prework:1] into `src/eawf/telemetry/`, back the user-scope projection with DuckDB (SQLite fallback gated by measurement), opt-in by default.
+- **V7** [C00:185-225] — vendor the telemetry-prototype schema [C09-prework:1] into `src/eawf/telemetry/`, back the user-scope projection with DuckDB (SQLite fallback gated by measurement), opt-in by default.
 - **V8** [C00:227-272] — session-reuse metrics (per-`(wave_id, attempt_id)` token + cache + turn counts) and context-window pressure tracking (turns-to-compaction histogram).
 - **V9** [C00:274-315] — per-runtime plugin sync drift surfaced via `eawf plugin doctor`; CI gate fails on drift.
 
-Out of scope per C00 [818-836]: hosted monitoring (v0.5+), distributed tracing (overkill for a local-only daemon). HTML report (agent-lens `report` verb) is **not** vendored in v0.3-v0.5 — TUI `/metrics` overlay [C06:884-953] covers the operator-facing view; HTML revisited in v0.5+ if demand emerges.
+Out of scope per C00 [818-836]: hosted monitoring (v0.5+), distributed tracing (overkill for a local-only daemon). HTML report (the prototype's `report` verb) is **not** vendored in v0.3-v0.5 — TUI `/metrics` overlay [C06:884-953] covers the operator-facing view; HTML revisited in v0.5+ if demand emerges.
 
 ## 2. Goals + non-goals
 
@@ -43,7 +43,7 @@ Out of scope per C00 [818-836]: hosted monitoring (v0.5+), distributed tracing (
 - **G6** Snapshot fixtures (state.json, envelope, dispatch render, TUI screen, plugin-install delta, plan-view render, agent-report golden) live under `tests/golden/<surface>/` with a single `eawf snapshot update` verb to refresh them.
 - **G7** Structured log spec is enforceable: every `logger.info` / `logger.error` follows the AGENTS naming convention `<funcname> key=value key=value`; the doc-verify hook lints log lines that diverge. Sensitive-data scrubbing happens at emit, not at sink.
 - **G8** Correlation IDs flow end-to-end: `request_id` (daemon RPC), `wave_id` (skill dispatch), `attempt_id` (per-runtime invocation) — all three present on every event written by a dispatched subagent, all three searchable via `grep`.
-- **G9** Telemetry subsystem (V7) vendored, deprecates `agent-lens`. Schema versioned. Opt-in by default; no implicit phone-home. Local-only DB unless `telemetry.export.endpoint` set.
+- **G9** Telemetry subsystem (V7) vendored, retires the prototype. Schema versioned. Opt-in by default; no implicit phone-home. Local-only DB unless `telemetry.export.endpoint` set.
 - **G10** Incident-cause taxonomy promotes `Incident.root_cause` from free string to closed enum so audit-replay produces typed rows the projection can group.
 - **G11** Event-kind extensions for V5 (`runtime_switched`, `session_continued`, `session_failover`) are typed `EventPayload` subclasses, persisted on `event.jsonl`, projected into DuckDB rows by the V7 pipeline.
 
@@ -52,11 +52,11 @@ Out of scope per C00 [818-836]: hosted monitoring (v0.5+), distributed tracing (
 - **NG1** Hosted SaaS monitoring (Datadog / Honeycomb / Grafana Cloud push) — deferred to v0.5+.
 - **NG2** Distributed tracing (multi-host span propagation) — local-only daemon means span-emit is sufficient; OTel exporter design ships in C10 packaging if demanded post-v0.5.
 - **NG3** Auto-fix coverage drops via test generation — operator owns test writing; CI surfaces the drop.
-- **NG4** HTML report generator vendored from `agent-lens` — TUI overlay covers the surface.
+- **NG4** HTML report generator vendored from the telemetry prototype — TUI overlay covers the surface.
 - **NG5** Per-file coverage gates — too noisy; per-package only.
 - **NG6** Anomaly detection layered into V7 in v0.3 — Axis-D rolling z-score [5:420-424] lands in a follow-up phase once V7 collects 4+ weeks of warn-only data.
 - **NG7** Replacing presidio with a custom ML scrubber — vendoring presidio is opt-in (extras-gated dep); regex-only is the default scrubber.
-- **NG8** Re-implementing the hook-proposer from `agent-lens` (`agent-lens propose hooks`) — orthogonal to V7's telemetry goal; revisit in C10 onboarding if denial patterns warrant.
+- **NG8** Re-implementing the telemetry prototype's hook-proposer verb, which read denial patterns out of session logs and suggested pre-commit hooks — orthogonal to V7's telemetry goal; revisit in C10 onboarding if denial patterns warrant.
 
 ## 3. Prior verdicts cited
 
@@ -67,7 +67,7 @@ Out of scope per C00 [818-836]: hosted monitoring (v0.5+), distributed tracing (
 - **V3 composable profiles** [C00:77-97]. CI test-selection respects the active profile bundle — research-profile repos run a different subset than engineering-profile repos.
 - **V5 reactive runtime switchover** [C00:128-152]. Switchover emits `runtime_switched` event; switchover frequency is a metric.
 - **V6 per-OS daemon** [C00:154-183]. CI matrix exercises portalocker on Linux/macOS/Windows; on-demand-spawn path tested on all three.
-- **V7 vendor agent-lens schema** [C00:185-225]. This cluster's load-bearing verdict. Schema attribution: see Provenance.
+- **V7 vendor the telemetry-prototype schema** [C00:185-225]. This cluster's load-bearing verdict. Schema attribution: see Provenance.
 - **V8 hybrid session reuse** [C00:227-272]. Session-reuse metrics (turn count per `(wave, attempt)`, cache-hit ratio, context-window pressure as turns-to-compaction).
 - **V9 native per-runtime plugins** [C00:274-315]. `eawf plugin doctor` drift gate runs in CI.
 
@@ -132,7 +132,7 @@ Out of scope per C00 [818-836]: hosted monitoring (v0.5+), distributed tracing (
 | D5 | Trace correlation grain | (a) `request_id` only; (b) `+ wave_id`; (c) `+ wave_id + attempt_id` | **(c)** | (a) loses the dispatch graph; (b) loses retry detail; (c) makes `grep wave=W17 attempt=2` trivial and matches V8 session-reuse metrics. |
 | D6 | Metrics tile inventory | (a) Six fixed tiles per C06; (b) Six default + plugin-contributed extra tiles; (c) Operator-configurable per `telemetry.tiles` | **(a) for v0.3-v0.5; (b) flagged for v0.5+** | C06 already specs six; (b)/(c) are scope creep without a plugin manifest API for tiles (not yet specced). |
 | D7 | Telemetry DB | (a) DuckDB; (b) SQLite; (c) both via abstract store | **(c) abstract store; default SQLite per [B01 blitz r1]** | Measurement in `[28]` against operator's real `event.jsonl` (694 rows, 340 KB) shows SQLite wins 5-189× across every op + 0 MB install (DuckDB native lib = 38.1 MB). DuckDB break-even is at ~100K rows; eawf retention math projects ~240 rows/year/repo → ~400 years to break-even. DuckDB stays as opt-in via `telemetry.db_kind=duckdb` for power users on >10K rows. |
-| D8 | agent-lens audit access path | (a) Operator grants gh repo read on the private repo; (b) operator drops a tarball under `.ea/local/research/long-term/agent-lens-snapshot.tar.gz`; (c) operator opens a vendor branch in eawf | **(a) confirmed** (audit memo [22] succeeded) | (a) worked with operator's existing PAT (Bash `gh api repos/Elementarno9/agent-lens/...`); no tarball needed. Audit memo cites HEAD commit for reproducibility. |
+| D8 | Telemetry-prototype audit access path | (a) Operator grants read access to the prototype source; (b) operator drops a tarball under `.ea/local/research/long-term/telemetry-prototype-snapshot.tar.gz`; (c) operator opens a vendor branch in eawf | **(a) confirmed** (audit memo [22] succeeded) | (a) worked — the operator granted read access to the prototype source directly; no tarball needed. Audit memo pins the audited source revision for reproducibility. |
 | D9 | Telemetry export priority | (a) Prometheus textfile only; (b) Prom + OTLP/JSON + CSV; (c) Prom + CSV (skip OTLP until OTel gen-ai SC stabilises) | **(c)** | Prom textfile is the v0.3 default per V7; CSV opens spreadsheet workflows; OTLP gen-ai SC still "Development" status [5:621] — defer to v0.5+. |
 | D10 | Per-OS CI runner budget | (a) Linux only; (b) **Linux + macOS + Windows on every push**; (c) Linux + Windows on every push + macOS merge-only | **(b) Matrix B — macOS every PR (revised 2026-05-18 per Q17)** | ~~Matrix D (macOS merge-only) deferred macOS drift detection to post-merge; raises risk of platform-specific bugs landing.~~ **Per operator Q17 (2026-05-18): macOS every PR.** Higher runner cost (~2-4× Linux per-min) but catches platform drift early. Workflow template ships configurable for private downstreams that need the budget-conscious Matrix D — `EAWF_CI_MACOS_GATE=merge-only` env override surfaces the alternate matrix without forking the workflow. |
 | D11 | Coverage tool | (a) `pytest-cov` (current); (b) `coverage.py` standalone; (c) `slipcover` for speed | **(a)** | Already wired; speed not a bottleneck (CI bottleneck is mypy + pre-commit + integration tests, not coverage instrumentation). |
@@ -472,7 +472,7 @@ class EventPayload(BaseModel):
 src/eawf/telemetry/
 ├── __init__.py
 ├── models.py              # Pydantic v2 row models (vendored shape, retyped)
-├── pricing.py             # Decimal ModelPricing dict — B12-snapshot embed per R1 ratification (2026-05-17 12:00 UTC fetch from Anthropic canonical pricing page). agent-lens snapshot stale (Opus 4.x = 3× over-bill, Haiku 4.5 = 25% under-bill). Extended schema: cache_write_5m + cache_write_1h split + pricing_version + fetched_at metadata. See §5.9.6.1 for the snapshot table. Weekly CI cron `eawf telemetry pricing-currency-check` opens auto-PR on drift.
+├── pricing.py             # Decimal ModelPricing dict — B12-snapshot embed per R1 ratification (2026-05-17 12:00 UTC fetch from Anthropic canonical pricing page). Telemetry-prototype snapshot stale (Opus 4.x = 3× over-bill, Haiku 4.5 = 25% under-bill). Extended schema: cache_write_5m + cache_write_1h split + pricing_version + fetched_at metadata. See §5.9.6.1 for the snapshot table. Weekly CI cron `eawf telemetry pricing-currency-check` opens auto-PR on drift.
 ├── store/
 │   ├── __init__.py
 │   ├── base.py            # AbstractMetricsStore protocol
@@ -492,7 +492,7 @@ src/eawf/telemetry/
     └── format.py          # table / json / prom render
 ```
 
-#### 5.9.2 Schema (Pydantic v2, retyped from agent-lens dataclasses)
+#### 5.9.2 Schema (Pydantic v2, retyped from telemetry-prototype dataclasses)
 
 ```python
 # src/eawf/telemetry/models.py
@@ -513,7 +513,7 @@ class TelemetryProject(BaseModel):
     first_seen: datetime | None
     last_seen: datetime | None
     has_settings_local: bool = False
-    has_agents_md: bool = False                       # eawf-specific (was has_claude_md in agent-lens)
+    has_agents_md: bool = False                       # eawf-specific (was has_claude_md in the prototype)
     has_eawf_state: bool = False                      # NEW
 
 
@@ -522,9 +522,9 @@ class TelemetrySession(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_id: str
     project_id: str
-    runtime: Literal["claude", "codex", "opencode"]   # NEW vs agent-lens (CC-only)
-    wave_id: str | None                                # NEW vs agent-lens
-    attempt_id: str | None                             # NEW vs agent-lens
+    runtime: Literal["claude", "codex", "opencode"]   # NEW vs the prototype (CC-only)
+    wave_id: str | None                                # NEW vs the prototype
+    attempt_id: str | None                             # NEW vs the prototype
     session_log_path: str
     started_at: datetime | None
     ended_at: datetime | None
@@ -585,7 +585,7 @@ class TelemetryCompaction(BaseModel):
     trigger: str | None
 
 
-class TelemetryRuntimeSwitch(BaseModel):                # NEW vs agent-lens; V5
+class TelemetryRuntimeSwitch(BaseModel):                # NEW vs the prototype; V5
     model_config = ConfigDict(extra="forbid")
     wave_id: str
     attempt_id_from: str
@@ -596,7 +596,7 @@ class TelemetryRuntimeSwitch(BaseModel):                # NEW vs agent-lens; V5
     ts: datetime
 
 
-class TelemetryIncident(BaseModel):                     # NEW vs agent-lens; V7
+class TelemetryIncident(BaseModel):                     # NEW vs the prototype; V7
     model_config = ConfigDict(extra="forbid")
     incident_id: str
     severity: IncidentSeverity                          # closed enum per current code
@@ -896,7 +896,7 @@ Every metric below is projected from the typed sources above and surfaces in eit
 | M21 | `eawf_subagent_dispatch_total` | counter | `TelemetrySession.subagent_dispatch_count` summed | (none) | Cumulative across all sessions |
 | M22 | `eawf_tool_call_errors_total` | counter | `TelemetryToolCall.is_error=true` count | tool_name, error_kind | Per-tool error attribution |
 | M23 | `eawf_compaction_total` | counter | `TelemetryCompaction` row count | runtime | Per-runtime compaction count |
-| M24 | `eawf_orphan_uuid_rate` | gauge | `TelemetrySession.parent_uuid_orphan_rate` | (none) | Trust signal vendored from agent-lens |
+| M24 | `eawf_orphan_uuid_rate` | gauge | `TelemetrySession.parent_uuid_orphan_rate` | (none) | Trust signal vendored from the telemetry prototype |
 | M25 | `eawf_plugin_doctor_drift_total` | counter | `event_type=plugin_drift_detected` events | runtime | V9 drift signal |
 | M26 | `eawf_estimate_actual_variance_pct` | gauge | (actual EU - planned EU) / planned EU × 100 | scope, phase | Feeds C06 VarianceTile |
 | M27 | `eawf_wal_recovery_total` | counter | `event_type=wal_recovery` events | (none) | Daemon-side WAL recovery; V1 |
@@ -935,7 +935,7 @@ PRICING_FETCHED_AT = datetime(2026, 5, 17, 12, 0, 0, tzinfo=timezone.utc)
 
 
 PRICING: dict[str, ModelPricing] = {
-    # Opus 4.x — $5 / $25 per MTok (2026-05-17 rates; previously $15/$75 in agent-lens snapshot)
+    # Opus 4.x — $5 / $25 per MTok (2026-05-17 rates; previously $15/$75 in the prototype snapshot)
     "claude-opus-4-7":   ModelPricing(
         input_per_token=Decimal("5e-6"),
         output_per_token=Decimal("25e-6"),
@@ -991,7 +991,7 @@ PRICING: dict[str, ModelPricing] = {
         pricing_version=PRICING_VERSION,
         fetched_at=PRICING_FETCHED_AT,
     ),
-    # Haiku 4.5 — $1 / $5 per MTok (2026-05-17 rates; previously $0.80/$4 in agent-lens snapshot)
+    # Haiku 4.5 — $1 / $5 per MTok (2026-05-17 rates; previously $0.80/$4 in the prototype snapshot)
     "claude-haiku-4-5-20251001": ModelPricing(
         input_per_token=Decimal("1e-6"),
         output_per_token=Decimal("5e-6"),
@@ -1217,7 +1217,7 @@ EventPayloadUnion = Annotated[
 | F13 | `eawf bench` runs in parallel with operator work | Bench saturates CPU | Operator-driven CLI commands slow down | Bench harness sets `os.nice(10)` on Linux/macOS; `IDLE_PRIORITY_CLASS` on Windows |
 | F14 | Coverage drop due to dead code added by another phase | CI gate (overall ≥60%) fails | Coverage drop ≥1 percentage point with no test added | Operator either adds test or deletes dead code per AGENTS rule 6 |
 | F15 | Cross-OS line-ending drift in golden files | Hook 3 (trailing-whitespace) + git's `core.autocrlf` interaction | `\r\n` vs `\n` diff on Windows checkout | `.gitattributes` pins `*.txt linguist-language=Text` + `eol=lf` for `tests/golden/**`; golden writer always writes `\n` |
-| F16 | agent-lens schema diverges after vendoring | Operator pushes a new agent-lens commit; eawf telemetry rows don't include the new fields | Audit-replay missing rows | C09 implementation phase pins the audit-source commit SHA in `src/eawf/telemetry/_AGENT_LENS_AUDIT_COMMIT.txt`; mismatch on next vendor sweep triggers a re-audit |
+| F16 | Telemetry-prototype schema diverges after vendoring — closed; the prototype is retired | No upstream remains to publish a newer schema, so eawf telemetry rows cannot fall behind one | Audit-replay missing rows (unreachable while the prototype stays retired) | C09 implementation phase pins the audited source revision in `src/eawf/telemetry/_VENDOR_PROVENANCE.txt`; were the prototype ever revived, a mismatch on the next vendor sweep would trigger a re-audit |
 | F17 | Per-OS CI matrix runs out of free-tier minutes | GHA billing surface | Email from billing | Drop the second-LTS slot from each OS (`ubuntu-22.04`, `macos-26`) — already proposed in §5.4 |
 | F18 | Sensitive-data scrubber strips a legitimate path inside a CLI error message | `Cannot find /usr/local/etc/eawf/config.yaml` → `Cannot find <scrubbed>/etc/eawf/config.yaml` | Operator-facing error confusing | Scrubber regex is anchored at the three user-home roots only (macOS, Linux, Windows); `/usr/local/...`-rooted paths are kept |
 | F19 | Plugin-doctor drift gate flakes after a successful sync | `eawf plugin sync` succeeded but checksum drifts between sync and doctor invocation | Concurrent edit to AGENTS.md | Sync + doctor share a `<local-path>` portalock; doctor reads the post-sync checksum from the same lock-scope |
@@ -1257,10 +1257,10 @@ Surface: `src/eawf/telemetry/`, `src/eawf/cli/commands/metrics.py`, `tests/golde
 
 Waves:
 
-- **Q3-W01** Vendor + retype agent-lens models as Pydantic v2 under `src/eawf/telemetry/models.py`. **Commit `PRICING` dict per the §5.9.6.1 snapshot** (R1 ratification; `pricing_version="2026.05.17"`). Audit-commit pinning at `_AGENT_LENS_AUDIT_COMMIT.txt`. Closed enums (`EndMarker`, `ToolCallErrorKind`, `RuntimeErrorClass`). Add `eawf telemetry pricing-currency-check` sub-verb that emits typed `PricingDriftReport` + bumps `PRICING_VERSION` on auto-PR.
+- **Q3-W01** Vendor + retype the telemetry-prototype models as Pydantic v2 under `src/eawf/telemetry/models.py`. **Commit `PRICING` dict per the §5.9.6.1 snapshot** (R1 ratification; `pricing_version="2026.05.17"`). Audit-revision pinning at `_VENDOR_PROVENANCE.txt`. Closed enums (`EndMarker`, `ToolCallErrorKind`, `RuntimeErrorClass`). Add `eawf telemetry pricing-currency-check` sub-verb that emits typed `PricingDriftReport` + bumps `PRICING_VERSION` on auto-PR.
 - **Q3-W02** `AbstractMetricsStore` + `DuckDBStore` + `SQLiteStore`. Schema DDL generated from Pydantic. `init_schema` idempotent. Bench `telemetry_rebuild` baseline.
-- **Q3-W03** Per-runtime source adapters under `src/eawf/telemetry/sources/`: `event_jsonl.py` (eawf canonical), `claude_session.py` (port from agent-lens parser), `codex_session.py` (new), `opencode_session.py` (new, SQLite read-only mode + JSON aggregation over `part.data` per [B06 blitz r6] [33]). OpenCode adapter scope grows to include drizzle-migration-fingerprint check + degrade-gracefully on schema drift. Estimated effort: ~100 LOC each JSONL adapter; ~200-300 LOC for OpenCode adapter. Each implements the `SessionSource` protocol.
-- **Q3-W04** Vendored aggregator (`src/eawf/telemetry/aggregator.py`) — port `aggregate_session` from agent-lens; replace substring incident classifiers with typed `Incident.cause` lookups.
+- **Q3-W03** Per-runtime source adapters under `src/eawf/telemetry/sources/`: `event_jsonl.py` (eawf canonical), `claude_session.py` (port from the telemetry prototype's parser), `codex_session.py` (new), `opencode_session.py` (new, SQLite read-only mode + JSON aggregation over `part.data` per [B06 blitz r6] [33]). OpenCode adapter scope grows to include drizzle-migration-fingerprint check + degrade-gracefully on schema drift. Estimated effort: ~100 LOC each JSONL adapter; ~200-300 LOC for OpenCode adapter. Each implements the `SessionSource` protocol.
+- **Q3-W04** Vendored aggregator (`src/eawf/telemetry/aggregator.py`) — port `aggregate_session` from the telemetry prototype; replace substring incident classifiers with typed `Incident.cause` lookups.
 - **Q3-W05** `eawf metrics show | export | rebuild | info` CLI dispatch + library. Prometheus-textfile exporter. CSV exporter. JSON exporter. `--scrubber regex|presidio` + `--presidio-model en_core_web_sm|md|lg` flags per [B08 blitz r8] [35]; presidio path gates on `eawf[telemetry-scrub]` extras with informative error. Goldens for each output format.
 - **Q3-W06** Telemetry opt-in default (`telemetry.enabled=false`) wired through C08 config loader; one-time onboarding nudge when operator runs `eawf metrics show` on a disabled telemetry config.
 - **Q3-W07** **D7 decision-envelope commit** (formerly: "bench-then-decide" — superseded by [B01 blitz r1]). Single-commit `[P##-CORE] state: telemetry-db-default decision per blitz r1 verdict (SQLite, DuckDB opt-in)`. References the blitz brief in the decision envelope's `body.evidence_ref`. No re-bench; the blitz measurement on operator's live `event.jsonl` already settled the default.
@@ -1310,15 +1310,15 @@ These are the `AskUserQuestion` seeds for the C09 ratification round. Each carri
 
 Recommendation: **SQLite default; DuckDB opt-in** — per measurement.
 
-### Q2 — agent-lens audit access confirmed?
+### Q2 — telemetry-prototype audit access confirmed?
 
-**Question:** The pre-work audit memo (`.ea/local/research/long-term/2026-05-17-agent-lens-audit.md`) succeeded via the operator's `gh` PAT. Confirm continued access for the C09 implementation phase's vendoring work?
+**Question:** The pre-work audit memo (`.ea/local/research/long-term/2026-05-17-telemetry-prototype-audit.md`) succeeded via the read access the operator granted to the prototype source. Confirm continued access for the C09 implementation phase's vendoring work?
 
 | Option | Description |
 |---|---|
 | **Yes — gh PAT (Recommended)** | Implementation phase fetches files on demand via `gh api`. |
-| Operator drops tarball | Operator exports a `.ea/local/research/long-term/agent-lens-snapshot-<SHA>.tar.gz` for offline vendoring. |
-| Operator flips repo public | agent-lens v0.2.0 timeline; operator may flip earlier for vendoring convenience. |
+| Operator drops tarball | Operator exports a `.ea/local/research/long-term/telemetry-prototype-snapshot-<SHA>.tar.gz` for offline vendoring. |
+| Operator flips repo public | The prototype's v0.2.0 timeline; operator may flip earlier for vendoring convenience. |
 
 ### Q3 — Telemetry export format priority
 
@@ -1438,8 +1438,8 @@ Recommendation: **SQLite default; DuckDB opt-in** — per measurement.
 [19] `tests/unit/`, `tests/integration/`, `tests/golden/`, `tests/property/`, `tests/eval/` — current test layout (audited 2026-05-17).
 [20] `tests/conftest.py` — current root fixture (`tmp_repo`).
 [21] `tests/eval/conftest.py` — eval-harness `SkillContext` fixture.
-[22] `.ea/local/research/long-term/2026-05-17-agent-lens-audit.md` — pre-work audit memo. Cite for V7 vendor schema attribution.
-[23] `https://github.com/Elementarno9/agent-lens` — operator's private telemetry repo. Audit-source commit pinned at `main@2026-04-30T05:25:25Z`.
+[22] `.ea/local/research/long-term/2026-05-17-telemetry-prototype-audit.md` — pre-work audit memo. Cite for V7 vendor schema attribution.
+[23] `telemetry-prototype source` — the operator's upstream telemetry prototype, read under a direct access grant for the V7 audit. Audit-source revision pinned at `main@2026-04-30T05:25:25Z`.
 [24] `.ea/local/research/yagni-kiss-dry-codebase-review-2026-05-15.md` — current codebase shape (LOC distribution, longest files, KISS-001..007 backlog).
 [25] DuckDB documentation, file-format compatibility — `https://duckdb.org/docs/internals/storage` (cite for F10 pin rationale).
 [26] Prometheus textfile collector format v0.0.4 — `https://github.com/prometheus/node_exporter#textfile-collector` (cite for §5.9.5 exporter shape).
@@ -1453,7 +1453,7 @@ Recommendation: **SQLite default; DuckDB opt-in** — per measurement.
 [34] `.ea/local/research/long-term/2026-05-17-c09-blitz-gha-wallclock-variance.md` — B07 blitz r7: per-OS GHA timing variance (Linux 6-7%, macOS 13-16%, cross-OS 86%); per-OS thresholds + per-OS baseline files verdict.
 [35] `.ea/local/research/long-term/2026-05-17-c09-blitz-presidio-install-footprint.md` — B08 blitz r8: presidio 157-dep + 750 MB model closure; regex-default reaffirmed; `eawf[telemetry-scrub]` extras + explicit model download.
 [36] `.ea/local/research/long-term/2026-05-17-c09-blitz-snapshot-tooling-churn.md` — B09 blitz r9: 110 goldens, 41 commits/90d; syrupy migration ROI negative; keep-custom verdict.
-[37] `.ea/local/research/long-term/2026-05-17-c09-blitz-pricing-currency.md` — B12 blitz r12: vendored agent-lens PRICING dict is stale (Opus 4.x 3× over-bill; Haiku 4.5 25% under-bill); re-source from Anthropic canonical at Q3-W01; weekly CI currency-check.
+[37] `.ea/local/research/long-term/2026-05-17-c09-blitz-pricing-currency.md` — B12 blitz r12: the vendored telemetry-prototype PRICING dict is stale (Opus 4.x 3× over-bill; Haiku 4.5 25% under-bill); re-source from Anthropic canonical at Q3-W01; weekly CI currency-check.
 [38] `.ea/local/research/long-term/2026-05-17-c09-blitz-hook-wallclock.md` — B11 blitz r11: pre-commit 4.89s --all-files, ~0.5-1.5s per-commit; hooks 16-19 + doc-verify add ~0.5s commit, ~7-15s push; conditional-skip helper mandatory.
 [39] `.ea/local/research/long-term/2026-05-17-c09-blitz-codex-schema-verify.md` — B10 blitz r10: Codex JSONL shape verified against C07a §5.4; adapter ~100-150 LOC.
 [40] `https://platform.claude.com/docs/en/about-claude/pricing` — canonical Anthropic pricing page (2026-05-17 source-of-truth for PRICING dict).
@@ -1467,7 +1467,7 @@ Recommendation: **SQLite default; DuckDB opt-in** — per measurement.
 - `last_revised=2026-05-18 (audit-driven: D10 flipped to Matrix B macOS-every-PR per Q17; coverage gate per-package with documented exceptions per Q16 — 9-layer model with state.json-recorded waivers; SQLite confirmed locked per Q18; pricing source + cadence locked per G-34; ruff custom-rule feasibility flagged for G-28 re-verification; trace IDs required for mutations per G-32)`
 - `audit_consumed=2026-05-17-spec-series-combined-audit.md (3 MAJOR Claude findings; 12 Codex issues)`
 - `authority_binding=Q1 (2026-05-18): telemetry projector = 4th daemon-internal writer (was originally 4th separate canonical mutator); folds into daemon per migration DAG.`
-- `pre-work=.ea/local/research/long-term/2026-05-17-agent-lens-audit.md`
+- `pre-work=.ea/local/research/long-term/2026-05-17-telemetry-prototype-audit.md`
 - `blitz-r1=.ea/local/research/long-term/2026-05-17-c09-blitz-duckdb-sqlite.md (SQLite default)`
 - `blitz-r2=.ea/local/research/long-term/2026-05-17-c09-blitz-gha-matrix-budget.md (Matrix D)`
 - `blitz-r3=.ea/local/research/long-term/2026-05-17-c09-blitz-cache-mislayer-tuning.md (ratio>10 + floor 2000)`
@@ -1481,7 +1481,7 @@ Recommendation: **SQLite default; DuckDB opt-in** — per measurement.
 - `blitz-r11=.ea/local/research/long-term/2026-05-17-c09-blitz-hook-wallclock.md (current 4.89s --all-files; conditional-skip helper required)`
 - `blitz-r12=.ea/local/research/long-term/2026-05-17-c09-blitz-pricing-currency.md (PRICING dict stale; refresh at Q3-W01 + weekly CI gate)`
 - `ratified_2026-05-17_via_AUQ=status:accepted; R1:commit B12-snapshot numbers now (§5.9.6.1); R2:windows ±15% provisional + Q2-W05 revisit wave; R3+R4: not selected — defaults stand (LEGACY_FREE_TEXT retained sentinel, Q1-W00 ships)`
-- `agent_lens_audit_source_commit=main@2026-04-30T05:25:25Z (Elementarno9/agent-lens; gh api, read-only)`
+- `telemetry_prototype_audit_source_commit=main@2026-04-30T05:25:25Z (upstream telemetry prototype; read-only source access granted by the operator)`
 - `vendored_ideas=one-pass-record-materialisation+retry-window-sliding-dict, end-marker-classifier-order, file_meta-last_offset-incremental-scan, per-token-pricing-dict-longest-prefix-match, share-artifact-detail-vs-aggregate-split (all credited to [22][23])`
 - `dependent_clusters_read=C00,C01,C02,C03,C04,C05,C06,C07a,C07b,C08`
 - `operator_verdicts_pending=Q1..Q10 (AskUserQuestion round on cluster ratification)`
