@@ -31,7 +31,7 @@ Fixing the EU basis broke the waves carrying the fix, and the failure was unreco
 
 W35 and W36 were CLAIMED against baselines recorded under the OLD (wall-clock) basis: `api_duration_ms = 65,988,667`. Once W34 landed, their next capture measured the same session under the new basis and read `19,284,744` — a **backwards counter**, which `_counter_delta` raised on. The baseline lives on disk, so every retry of the close compared against it and raised again. No operator action could clear it: **the two waves were permanently unclosable, stranded by the very fix they carried.** The daemon proved it live:
 
-```
+```text
 LifecycleError: runtime counter api_duration_ms decreased: baseline=65988667 latest=19284744
 ```
 

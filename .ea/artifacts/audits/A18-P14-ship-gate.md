@@ -16,6 +16,7 @@ surfaced after A17 closed P14-I02:
   never saw our agents/skills.
 
 Two commits, plus a follow-up:
+
 - `de84745` `[P14-I03-CORE]` state reopen
 - `6e04966` `[P14-I03-W01]` code + tests for B1+B3+B4
 - `3rd commit` `[P14-I03-W01]` opencode command body uses
