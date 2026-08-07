@@ -93,6 +93,27 @@ def test_eawf014_ignores_lists_and_fences() -> None:
     assert check_014(markdown) == []
 
 
+def test_eawf014_ignores_multi_digit_ordered_list_markers() -> None:
+    """An ordered list is skipped whatever the width of its marker.
+
+    A single-character delimiter probe reads the ``0`` of ``10.`` as the
+    delimiter, so every item past the ninth used to register as prose and
+    the whole tail of a long list looked like one wrapped paragraph.
+    """
+    markdown = textwrap.dedent(
+        """
+        1. First item with no terminal punctuation
+        2. Second item
+        9. Ninth item
+        10. Tenth item
+        11. Eleventh item
+        22) Paren-delimited item
+        100: Colon-delimited item
+        """
+    )
+    assert check_014(markdown) == []
+
+
 def test_eawf014_ignores_yaml_frontmatter() -> None:
     markdown = textwrap.dedent(
         """
