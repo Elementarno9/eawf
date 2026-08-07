@@ -56,8 +56,16 @@ _INLINE_CODE = re.compile(r"`[^`]*`")
 # A reference-table row: ``[N] ...`` / ``- [N] ...`` / a markdown table row
 # whose first cell is a ``[N]`` marker. Mirrors EAWF013's reference-row guard
 # plus the table-row form the brief's worked example uses (``| [a] | ... |``).
-_REFERENCE_ROW = re.compile(r"^\s*(?:[-*]\s+)?\[[0-9A-Za-z]+\](?::|\s+`|\s+https?://|\s+\.)")
+# Any content after the marker makes it a reference row: enumerating the
+# shapes a reference may take misses every row naming its source in words.
+_REFERENCE_ROW = re.compile(r"^\s*(?:[-*]\s+)?\[[0-9A-Za-z]+\](?::|\s+\S)")
 _TABLE_REFERENCE_ROW = re.compile(r"^\s*\|\s*\[[0-9A-Za-z]+\]\s*\|")
+
+# The ``## References`` heading, with or without section numbering. Artifacts
+# that number their sections write ``## 9. References``; matching the bare
+# spelling alone leaves the whole reference list to be scanned as body prose,
+# so every cited URL in it reports as an inline bare URL.
+_REFERENCES_HEADING = re.compile(r"^(?:\d+[.)]\s*)?references$", re.IGNORECASE)
 
 # The maximum inline ``path:line`` references tolerated inside one prose block.
 # The third reference is the first violation: two reads fine, three is soup.
@@ -133,7 +141,7 @@ def _iter_prose_lines(source: str) -> list[tuple[int, str]]:
         if in_fence:
             continue
         if stripped.startswith("## "):
-            in_references = stripped[3:].strip().casefold() == "references"
+            in_references = bool(_REFERENCES_HEADING.match(stripped[3:].strip()))
             rows.append((lineno, ""))
             continue
         if in_references:

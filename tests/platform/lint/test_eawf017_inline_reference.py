@@ -180,3 +180,28 @@ def test_violation_render_shape() -> None:
     assert rendered.startswith("1:")
     assert "EAWF017" in rendered
     assert "inline bare URL" in rendered
+
+
+# ---- References-section detection -------------------------------------------
+
+
+def test_numbered_references_heading_is_recognised() -> None:
+    """``## 9. References`` opens the reference list, same as ``## References``.
+
+    Artifacts that number their sections write the numbered form. Matching only
+    the bare spelling leaves the whole list to be scanned as body prose, so
+    every URL cited in it reports as an inline bare URL.
+    """
+    markdown = (
+        "Body prose with no URL.\n\n"
+        "## 9. References\n\n"
+        "[17] tmux server pattern - https://example.org/tmux\n\n"
+        "[18] systemd user services - https://example.org/systemd\n"
+    )
+    assert check_source(markdown) == []
+
+
+def test_reference_row_naming_its_source_in_words_is_skipped() -> None:
+    """A reference row is skipped however it names its source."""
+    markdown = "[13] Textual docs - https://example.org/textual\n"
+    assert check_source(markdown) == []
