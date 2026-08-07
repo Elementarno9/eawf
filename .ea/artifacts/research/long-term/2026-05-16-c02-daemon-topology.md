@@ -80,7 +80,7 @@ The current code is a CLI-as-mutator surface: `state_transaction` [11] yields a 
 | NG7 | CLI verb-noun matrix surface. | C05 owns it; C02 specifies only the *daemon* surface (RPC methods). |
 | NG8 | Profile composition algorithm. | C08 owns it. |
 | NG9 | Spec-cache implementation. | C03 owns it; C01 reserves `<local-path>`. |
-| NG10 | Agent-lens schema vendoring. | V7 → C09. |
+| NG10 | Telemetry-prototype schema vendoring. | V7 → C09. |
 
 ## 3. Prior verdicts cited
 

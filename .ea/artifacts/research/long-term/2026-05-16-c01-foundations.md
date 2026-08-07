@@ -57,7 +57,7 @@ C01 locks the **universal vocabulary** every downstream cluster depends on. With
 | NG2 | CLI verb-noun matrix. | C05 owns it [1:539-583]. |
 | NG3 | Skill registry contract + `needs_user` handshake. | C04 owns it [1:485-534]. |
 | NG4 | Schema versioning tooling (migration runners, golden fixtures, `VersionedState` union). | C03 owns it [1:430-479]. |
-| NG5 | Telemetry DB schema (DuckDB vs SQLite, agent-lens vendoring). | C09 owns it [1:769-841]. |
+| NG5 | Telemetry DB schema (DuckDB vs SQLite, telemetry-prototype vendoring). | C09 owns it [1:769-841]. |
 | NG6 | TUI widget catalog or scope dispatch ladder. | C06 owns it [1:587-644]. |
 | NG7 | Per-runtime adapter shape. | C07 owns it [1:649-712]. |
 | NG8 | External integration surface (GitHub bridge, Slack, Linear). | C11 owns it [1:897-930]. |
@@ -102,7 +102,7 @@ C01 inherits eight verdicts from C00 [1:22-271]; below are the relevant passages
 
 **C01 binding:** Persona `daemon` defined as a single OS-user-scoped service in the authority matrix; no multi-user daemon variant in v0.3 → v0.5. The trust model (§5.6) assumes one daemon per OS user; cross-user federation is C07/v0.5+ work.
 
-### V7 — Telemetry: vendor agent-lens schema, rebuild inside eawf [1:184-224]
+### V7 — Telemetry: vendor the telemetry-prototype schema, rebuild inside eawf [1:184-224]
 
 > "Telemetry lives inside eawf, not as a separate sidecar ... Storage: User-scope DuckDB ... fed by per-repo `event.jsonl` projections (`incident`, `audit_*`, `agent_end`, `wave_close`, `runtime_switched` events) ... per-runtime session logs ... per-dispatch envelope metadata."
 

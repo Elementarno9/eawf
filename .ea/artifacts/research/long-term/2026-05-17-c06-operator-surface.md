@@ -151,9 +151,9 @@ C03 §5.7 [4:588-712] specifies the `verify_implements` audit-DSL kind. C06's au
 
 The dispatch-history surface — `DispatchAnnotation` rows on the wave per C02 §5.13 [3:826-841] — is reachable via the `/wave dispatch` palette verb; the overlay lists each attempt's `runtime_from / runtime_to / cause / occurred_at`.
 
-### V7 — Telemetry: vendor agent-lens schema, rebuild inside eawf [1:184-224]
+### V7 — Telemetry: vendor the telemetry-prototype schema, rebuild inside eawf [1:184-224]
 
-> "Telemetry lives inside eawf, not as a separate sidecar. Audit the private agent-lens repo, extract its data model + visualization patterns + storage choices, then implement the equivalent under `src/eawf/telemetry/` backed by a user-scope store at `<local-path>`."
+> "Telemetry lives inside eawf, not as a separate sidecar. Audit the telemetry prototype, extract its data model + visualization patterns + storage choices, then implement the equivalent under `src/eawf/telemetry/` backed by a user-scope store at `<local-path>`."
 
 **C06 binding.** Per D9 the `/metrics` overlay renders a 3×2 dashboard tile grid backed by the daemon's telemetry projection. The tile inventory:
 

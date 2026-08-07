@@ -22,7 +22,7 @@ This brief is the **ideas backlog** for v0.5+/v0.6+ planning. Not a roadmap — 
 | P23 KERNEL: quota auto-pause/resume on 429 | C07a V5 runtime fallback + C02 §5.12 fallback state machine | ✅ Absorbed |
 | P23 KERNEL: worktree pre-created + clean | C07b §5.1 worktree subsystem + Q13 `.ea/worktrees/` | ✅ Absorbed |
 | P24 COST: cost ledger + Decimal pricing | C09 §5.9 metrics catalog + C09-IMPL W06 pricing source | ✅ Absorbed |
-| P24 COST: harness session log ingestion | C09 V8 session-reuse metrics + agent-lens vendor (V7) | ✅ Absorbed |
+| P24 COST: harness session log ingestion | C09 V8 session-reuse metrics + telemetry-prototype vendor (V7) | ✅ Absorbed |
 | P24 COST: minimal OTel scaffold | C09 telemetry projector (V7; folded into daemon per Q1) | ✅ Absorbed |
 | P25 CACHE: KV-cache dispatch prefix | C07a §5.6 cache-control hooks per runtime (D4) | ✅ Absorbed |
 | P25 CACHE: cache_creation vs cache_read alarms | C09 cache-mislayer alarm (CROSS.F35 / G-26) | ✅ Absorbed |

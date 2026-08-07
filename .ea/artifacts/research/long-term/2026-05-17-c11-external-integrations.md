@@ -47,7 +47,7 @@ Load-bearing. Profiles declare `integrations:` contributions; the loader compose
 
 Cited for **outbound** integration calls only (e.g. GitHub API hits a 429). Integration workers reuse the same backoff-and-pause primitives as the runtime ladder, but do NOT participate in the runtime preference ladder itself — an integration call has no "fall back to another runtime" notion.
 
-### V7 — Telemetry: vendor agent-lens schema, rebuild inside eawf [1:184-224]
+### V7 — Telemetry: vendor the telemetry-prototype schema, rebuild inside eawf [1:184-224]
 
 Cited for the metrics surface: every integration call emits a `dispatch_cost`-shaped event (or a new `integration_call` sub-type — §5.7) so the user-scope DuckDB projects per-integration latency / error / retry counts.
 

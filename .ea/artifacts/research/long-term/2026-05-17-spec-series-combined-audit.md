@@ -25,7 +25,7 @@ See §"Iteration outcome 2026-05-18" at bottom for full per-stage table.
 
 ## Purpose
 
-Two independent audit passes ran in parallel over the same spec corpus (`.ea/local/research/long-term/2026-05-16-c00-spec-index.md` + C01..C11 + 33 blitzes + 7 feeders + agent-lens audit + dispatch-prompts). Claude fleet dispatched 13 subagents writing `_audit/*-findings.md`. Codex dispatched its own subagent fleet writing `2026-05-17-long-term-spec- critical-review.md`. This brief reconciles, merges, and stratifies the two outputs into one operator-facing document.
+Two independent audit passes ran in parallel over the same spec corpus (`.ea/local/research/long-term/2026-05-16-c00-spec-index.md` + C01..C11 + 33 blitzes + 7 feeders + telemetry-prototype audit + dispatch-prompts). Claude fleet dispatched 13 subagents writing `_audit/*-findings.md`. Codex dispatched its own subagent fleet writing `2026-05-17-long-term-spec- critical-review.md`. This brief reconciles, merges, and stratifies the two outputs into one operator-facing document.
 
 Both audits converge on the same primary verdict: **the spec series is not directly buildable into a v0.3-v0.5 roadmap without a normalization pass first**. They diverge on degree:
 - Claude calls it "needs amendment" — ~12-15 EU of fix-up unblocks
@@ -574,7 +574,7 @@ Rough per-cluster estimate (Claude):
 | C07a | 20-25 | per-runtime adapter + plugin sync/doctor + capability matrix |
 | C07b | 15-20 | commit-prefix lint + glyph + worktree + multi-repo + event-log |
 | C08 | 15-20 | layered config + composition + bootstrap + 5 profiles |
-| C09 | 25-30 | 5+ hooks + Pilot snapshot + telemetry projector + agent-lens vendor + bench |
+| C09 | 25-30 | 5+ hooks + Pilot snapshot + telemetry projector + telemetry-prototype vendor + bench |
 | C10 | 15-20 | docs IA + mkdocs + migration tooling + EU calibration + release |
 | C11 | 15-20 | GitHub bridge + webhook + keyring + Linear/Jira opt-in |
 | **Total** | **248-322** | spread across ~50-70 waves over ~12-18 months |
@@ -1657,7 +1657,7 @@ Q1..Q22 resolved during P21 prep AUQ pass. Recorded here so Stage 0 waves can co
 
 [13] `.ea/local/research/long-term/2026-05-17-c11-external-integrations.md` — C11 (1167 LOC)
 
-[14] `.ea/local/research/long-term/2026-05-17-agent-lens-audit.md` — V7 audit memo (304 LOC)
+[14] `.ea/local/research/long-term/2026-05-17-telemetry-prototype-audit.md` — V7 audit memo (304 LOC)
 
 [15] `.ea/local/research/long-term/dispatch-prompts.md` — dispatch prompts (883 LOC)
 

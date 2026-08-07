@@ -77,7 +77,7 @@ The brief locks ten subsurfaces:
 - **V3** [1:76-96] — Composable profile bundle with declared precedence. Affects C10: per-profile tutorials (G6) — each profile bundle gets one tutorial; per-profile bootstrap-template flow consumes C08 D7 [8:139-145].
 - **V4** [1:99-126] — Cluster-sequential batching under `.ea/local/research/long-term/`. Affects C10: C10 ships near the end of the brief series; release cadence (G1) aligns to cluster-batch closes for beta channel.
 - **V6** [1:154-183] — Cross-platform daemon with per-OS native service surface. Affects C10: §5.3 packaging matrix + §5.4 service-file distribution (G3) implement V6's release-packaging affects line [1:182-183].
-- **V7** [1:184-224] — Telemetry vendor-and-rebuild `agent-lens`; opt-in by default; no implicit phone-home. Affects C10: §5.6 telemetry contract (G5); §5.16 onboarding flow includes a telemetry-opt-in path.
+- **V7** [1:184-224] — Telemetry vendor-and-rebuild of the upstream telemetry prototype; opt-in by default; no implicit phone-home. Affects C10: §5.6 telemetry contract (G5); §5.16 onboarding flow includes a telemetry-opt-in path.
 - **V9** [1:274-315] — Native per-runtime plugins remain first-class distribution channel. Affects C10: packaging matrix ships canonical `build/<runtime>-plugin/` trees inside the PyPI wheel under `eawf/_data/plugins/<runtime>/`; install / upgrade docs cover `eawf plugin sync` invocation (G2 + G9).
 
 ### From C01 (Foundations) [2]
@@ -649,16 +649,16 @@ plugin manifests, hook scripts, and skill / command definitions sync'd
 from the canonical eawf source.
 ```
 
-#### 5.8.3 Telemetry / agent-lens attribution
+#### 5.8.3 Telemetry / upstream-prototype attribution
 
-Per V7 [1:222-223] and C09 [9:Audit-Source-pinning section]: the `src/eawf/telemetry/_AGENT_LENS_AUDIT_COMMIT.txt` file pins the audit-source commit and `src/eawf/telemetry/__init__.py` carries:
+Per V7 [1:222-223] and C09 [9:Audit-Source-pinning section]: the `src/eawf/telemetry/_VENDOR_PROVENANCE.txt` file pins the audit-source revision and `src/eawf/telemetry/__init__.py` carries:
 
 ```python
 """Eä telemetry subsystem.
 
-Schema + projection algorithm vendored from `agent-lens`
-(https://github.com/Elementarno9/agent-lens) at commit pinned in
-`_AGENT_LENS_AUDIT_COMMIT.txt`. See C09 §5.9 for the audit trail.
+Schema + projection algorithm vendored from the upstream telemetry
+prototype, at the revision pinned in `_VENDOR_PROVENANCE.txt`.
+See C09 §5.9 for the audit trail.
 
 Re-licensing under MIT (the eawf license). No third-party code is
 redistributed; only the schema shape + algorithm logic was vendored
@@ -731,7 +731,7 @@ docs/
 │   ├── 0004-cluster-sequential-batching.md # V4
 │   ├── 0005-runtime-fallback-reactive.md   # V5
 │   ├── 0006-per-os-native-service.md       # V6
-│   ├── 0007-telemetry-vendor-agent-lens.md # V7
+│   ├── 0007-telemetry-vendor-prototype.md  # V7
 │   ├── 0008-hybrid-session-reuse.md        # V8
 │   ├── 0009-native-per-runtime-plugins.md  # V9
 │   └── 0010-...                            # additional decisions accumulated through v0.3 → v0.5
@@ -1674,7 +1674,7 @@ None required mid-rollout. Each phase ships behind a flag-free additive surface.
 [24] `https://squidfunk.github.io/mkdocs-material/` — mkdocs-material upstream docs (D9).
 [25] `https://github.com/bruce-szalwinski/mkdocs-typer` — mkdocs-typer plugin (D9 auto-CLI-ref).
 [26] `https://asciinema.org/` — asciinema format (D12 + D13 quickstart + tutorial casts).
-[27] `https://github.com/Elementarno9/agent-lens` — vendored schema source per V7 [1:187]; attribution in `src/eawf/telemetry/__init__.py`.
+[27] `telemetry-prototype source` — the operator's upstream telemetry prototype, the vendored schema source per V7 [1:187]; attribution in `src/eawf/telemetry/__init__.py`.
 [28] `https://github.com/anthropics/claude-code` — Claude Code runtime (attribution per V9 [1:283]).
 [29] `https://github.com/openai/codex` — Codex CLI runtime (attribution).
 [30] `https://github.com/sst/opencode` — OpenCode runtime (attribution).

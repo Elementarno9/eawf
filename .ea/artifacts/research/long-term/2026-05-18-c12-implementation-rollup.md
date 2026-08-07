@@ -23,7 +23,7 @@ Per operator Q4 (2026-05-18) + audit BOT-05: every cluster brief omitted its imp
 | C07a | 20-25 | 4-6 | per-runtime adapter (claude-code/codex/opencode) + plugin sync/doctor + capability matrix 8×3 + KISS-001/KISS-004 (Q23) |
 | C07b | 15-20 | 3-5 | commit-prefix lint + glyph + worktree (Q13: `.ea/worktrees/`) + multi-repo + event-log + KISS-007 import cycle (Q23) |
 | C08 | 13-18 | 3-5 | layered config + composition + bootstrap + **3 profiles** (Q24 trim from 5) + field registry (−2 EU) |
-| C09 | 27-32 | 6-8 | hooks + Pilot snapshot + telemetry projector + agent-lens vendor + bench + Q17 macOS-every-PR + KISS-006 indexed validation + Q25 EAWF010 LOC-cap lint (+2 EU) |
+| C09 | 27-32 | 6-8 | hooks + Pilot snapshot + telemetry projector + telemetry-prototype vendor + bench + Q17 macOS-every-PR + KISS-006 indexed validation + Q25 EAWF010 LOC-cap lint (+2 EU) |
 | C10 | 15-20 | 3-5 | docs IA + mkdocs + migration tooling + EU calibration + release |
 | ~~C11~~ | ~~14-18~~ | ~~3-5~~ | **C11-IMPL DROPPED from v0.3-v0.5 per operator decision 2026-05-18 post-blitz.** gh CLI shell-outs in skill bodies stay as current pattern. C11 cluster spec stays ratified for v0.4+ when WriteRetryPolicy/keyring/polling/doctor demand surfaces. −14-18 EU. |
 | **Total** | **236-306** | **51-74** | EU bucket calibration: 1 EU ≈ 25-30 min focused work with agent throughput; XL task = 5-8 EU = 2-4h. Aggregate ~120-150 hours focused work; calendar ~1-4 months at operator pacing (2-10 EU/day). Audit's "12-18 months" estimate carried traditional-developer calibration and is superseded 2026-05-18. |
@@ -144,7 +144,7 @@ Each sub-cluster claims its own waves per its brief.
 - W01 — Hook inventory + pre-commit + pre-push
 - W02 — Coverage gate per-package (Q16) + macOS-every-PR CI matrix (Q17)
 - W03 — Telemetry projector subsystem (folded into daemon per Q1)
-- W04 — agent-lens vendor + DuckDB→SQLite migration
+- W04 — telemetry-prototype vendor + DuckDB→SQLite migration
 - W05 — Bench harness + bench fixture seeds
 - W06 — Pricing source + cadence + stale warning
 - W07 — Ruff custom rule feasibility verification + EAWF002/EAWF003 + **EAWF010 (per-module LOC cap 700 with documented exceptions per Q25)**
