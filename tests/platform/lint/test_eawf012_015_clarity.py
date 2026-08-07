@@ -66,6 +66,30 @@ def test_eawf013_accepts_dense_citation_and_reference_rows() -> None:
     assert check_013(markdown) == []
 
 
+def test_eawf013_accepts_reference_row_naming_its_source_in_words() -> None:
+    """A reference row is exempt however it names its source.
+
+    Enumerating the shapes a reference may take -- a backticked path, a bare
+    URL, a period -- misses every row that names its source in plain words,
+    and reports the row as a detached marker.
+    """
+    markdown = (
+        "## References\n\n"
+        "[5] AGENTS.md -- non-negotiable rules\n\n"
+        "[13] (reserved)\n\n"
+        "[17] tmux server pattern -- https://example.org/tmux\n"
+    )
+    assert check_013(markdown) == []
+
+
+def test_eawf013_still_flags_a_marker_with_nothing_after_it() -> None:
+    """The case the rule exists for: a marker alone on its line."""
+    markdown = "The claim ends here.\n[1]\n"
+    violations = check_013(markdown)
+    assert len(violations) == 1
+    assert "detached from its claim" in violations[0].reason
+
+
 def test_eawf014_flags_plain_paragraph_hard_wrap() -> None:
     markdown = textwrap.dedent(
         """

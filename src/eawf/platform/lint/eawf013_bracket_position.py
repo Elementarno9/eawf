@@ -18,7 +18,14 @@ _CITATION = r"\[(?:\d+)(?:,\s*\d+)*\]"
 _AFTER_PUNCTUATION = re.compile(rf"[.!?;:]\s+{_CITATION}")
 _ORPHANED = re.compile(rf"^\s*{_CITATION}(?:\s|$)")
 _SPACED_FROM_PUNCTUATION = re.compile(rf"{_CITATION}\s+[.!?;:]")
-_REFERENCE_ROW = re.compile(r"^\s*(?:[-*]\s+)?\[\d+\](?::|\s+`|\s+https?://|\s+\.)")
+#: A reference-list row: a citation marker at the start of the line, followed
+#: by the thing it names. Enumerating the shapes a reference may take (a
+#: backticked path, a bare URL, a period) misses every row that names its
+#: source in plain words -- ``[5] AGENTS.md -- non-negotiable rules`` -- and
+#: reports it as a detached marker. Any content after the marker makes it a
+#: reference row; a marker with nothing after it is still caught by
+#: :data:`_ORPHANED`, which is the case this rule exists to find.
+_REFERENCE_ROW = re.compile(r"^\s*(?:[-*]\s+)?\[\d+\](?::|\s+\S)")
 
 
 @dataclass(frozen=True)
