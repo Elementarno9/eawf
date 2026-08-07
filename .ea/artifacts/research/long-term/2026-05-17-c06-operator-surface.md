@@ -1,11 +1,17 @@
 # C06 — Operator Surface (TUI + Web stub) — Eä framework long-term specs
 
 **Cluster:** C06 (Operator Surface — Textual TUI architecture + widget catalog + `/` palette + modal stack + daemon-push reactivity + theming + web-stub WS bridge + asciinema)
+
 **Title:** Operator Surface (TUI + Web stub)
+
 **Status:** `local-draft`, `accepted` (operator ratified D1..D24 + 5 /blitz rounds Q1..Q16 + Q-new1..Q-new5 on 2026-05-17 via AUQ — see §10 Provenance for the 6 override deltas: D4, Q4, Q12, Q15, Q6, Q-new1)
+
 **Created:** `2026-05-17T00:00:00Z`
+
 **Author:** `claude-opus-4-7`
+
 **Depends on:** C00 [1] (V1, V2, V3, V5, V7 load-bearing), C02 [3] (daemon JSON-RPC + event-subscribe + runtime-fallback events), C03 [4] (PhaseSpec / IterSpec / WaveSpec render source), C04 [5] (skill envelopes + needs-user handshake + plan-mode preview + Edit Plan subagent)
+
 **Consumed by:** C09 (TUI perf budget + snapshot fixtures + per-OS render matrix), C10 (operator onboarding flow + asciinema docs + TUI install/upgrade), C11 (PR / Linear / Slack overlay integrations consume TUI palette surface)
 
 ## 1. Purpose + scope statement

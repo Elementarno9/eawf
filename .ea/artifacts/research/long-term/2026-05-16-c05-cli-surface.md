@@ -1,12 +1,19 @@
 # C05 — CLI Surface — Eä framework long-term specs
 
 **Cluster:** C05 (CLI Surface — verb-noun matrix, output formats, exit codes, error envelopes, help model, shell completion, daemon escalation, streaming output, stability tiers)
+
 **Title:** CLI Surface
+
 **Status:** `accepted` (ratified 2026-05-17 — 4-round AskUserQuestion blitz over §8 axes; see §8 ratified-verdict table)
+
 **Created:** `2026-05-16T00:00:00Z`
+
 **Ratified:** `2026-05-17T00:00:00Z`
+
 **Author:** `claude-opus-4-7`
+
 **Depends on:** C01 (URN + entity catalog + scope vocabulary) [2]; C02 (daemon IPC + protocol-version + error-code table + escalation rules) [3]; C03 (PhaseSpec/IterSpec/WaveSpec verbs) [4]; C04 (skill catalog + envelope contract) [5]
+
 **Consumed by:** C06 (palette verb registry — TUI mirrors CLI verbs); C07 (subsystem CLI verbs — runtime, plugin, mcp); C09 (help-model docs + verb stability lints); C10 (operator-facing docs + shell-completion install path); C11 (external integrations call CLI verbs)
 
 ## 1. Purpose + scope statement
@@ -1273,35 +1280,65 @@ All 12 axes plus the three Q2 follow-ups were ratified in a four-round blitz on 
 ## 9. References
 
 [1] `.ea/local/research/long-term/2026-05-16-c00-spec-index.md` — Eä framework long-term spec index (verdicts V1..V9, cluster catalog)
+
 [2] `.ea/local/research/long-term/2026-05-16-c01-foundations.md` — Foundations: URN + entity catalog + lifecycle
+
 [3] `.ea/local/research/long-term/2026-05-16-c02-daemon-topology.md` — Daemon + topology + security
+
 [4] `.ea/local/research/long-term/2026-05-16-c03-spec-infrastructure.md` — Spec infrastructure (Phase / Iter / Wave specs)
+
 [5] `.ea/local/research/long-term/2026-05-16-c04-workflow-skills.md` — Workflow & skills (catalog + envelope contract)
+
 [6] `.ea/local/research/yagni-kiss-dry-codebase-review-2026-05-15.md` — YAGNI / KISS / DRY codebase review (KISS-005 root-app simplification)
+
 [7] `.ea/local/research/2026-05-15-long-term-roadmap-synthesis.md` — locked roadmap-synthesis verdicts
+
 [8] `.ea/local/research/2026-05-15-long-term-features-deep.md` — long-term features deep dive (cache-control, EU)
+
 [9] `src/eawf/lock/portalock.py` — portalocker-backed sibling-file locking (referenced by C02 §5.6)
+
 [10] `src/eawf/state/models.py` — typed `State` model used by `_mutation.state_transaction`
+
 [11] `AGENTS.md` — non-negotiable rules + workflow lifecycle (rules 1, 2, 4, 8, 11, 16, 17, 19, 20, 21 cited)
+
 [12] `src/eawf/state/writer.py` — `atomic_write_json_locked` (tempfile + os.replace pattern)
+
 [13] (reserved)
+
 [14] `src/eawf/state/registry.py` — `<local-path>` writer per AGENTS rule 4 [11]
+
 [15] `src/eawf/state/ids.py` — phase/iter/wave id regexes
+
 [16] `src/eawf/lifecycle/transitions.py` — lifecycle closure invariants
+
 [17] `src/eawf/urn.py` — URN grammar + parser (C01 §5.2 source-of-truth)
+
 [18] `src/eawf/daemon/__init__.py` (PROTOCOL_VERSION constant — defined by C02 implementation)
+
 [19] (reserved)
+
 [20] (reserved)
+
 [21] `src/eawf/cli/app.py` — current Typer root callback + manual import + `add_typer` ladder (KISS-005 target [6:48])
+
 [22] `src/eawf/cli/output.py` — `emit_json_or_text` unified emission helper
+
 [23] `src/eawf/cli/exit_codes.py` — current exit-code constants (0..9)
+
 [24] `src/eawf/cli/errors.py` — `CliError` taxonomy + `emit_error` envelope shape
+
 [25] `src/eawf/cli/help_panels.py` — `RegistryOrderedTyperGroup` + `COMMAND_PANELS` per-panel ordering
+
 [26] `src/eawf/cli/flags.py` — `GlobalFlags` dataclass + `--scope` non-hoist rationale
+
 [27] `src/eawf/cli/commands/state.py` — current `state resolve` subverb (only `state` subverb today)
+
 [28] `src/eawf/cli/_mutation.py` — `state_transaction` context manager (replaced by daemon path in V1 mutating verbs)
+
 [29] `src/eawf/cli/commands/workspace.py` — workspace noun-app (init / add-repo / remove-repo / validate / status / registry-list / registry-status)
+
 [30] `docs/reference/exit-codes.md` — canonical exit-code reference (referenced by [23])
+
 [31] `https://www.jsonrpc.org/specification` — JSON-RPC 2.0 wire spec (C02 IPC protocol)
 
 ## Provenance

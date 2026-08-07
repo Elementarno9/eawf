@@ -1060,40 +1060,75 @@ Recommendation (b): the catalog should describe commitments. Wishlist items live
 ## 9. References
 
 [1] `.ea/local/research/long-term/2026-05-16-c00-spec-index.md` — C00 spec index (V1..V9; cluster catalog; cross-cluster invariants)
+
 [2] `.ea/local/research/long-term/2026-05-16-c01-foundations.md` — vocabulary + URN + entities + lifecycle
+
 [3] `.ea/local/research/long-term/2026-05-16-c02-daemon-topology.md` — daemon + topology + security spine (event.subscribe at §5.3.2 [3:304-310]; subscription bus + backpressure at §5.7 [3:433-456]; idempotency window 60 s at Q7 [3:262]; service registration at §5.10 [3:493-650])
+
 [4] `.ea/local/research/long-term/2026-05-16-c03-spec-infrastructure.md` — spec infrastructure
+
 [5] `.ea/local/research/long-term/2026-05-16-c04-workflow-skills.md` — workflow skills (loop / schedule / review / ship)
+
 [6] `.ea/local/research/long-term/2026-05-16-c05-cli-surface.md` — CLI surface (verb-noun matrix at §5.1; ship surfaces at §5.1.11 [6:347-360]; daemon verbs at §5.1.13 [6:371-385]; static registration at §5.11 [6:1005-1124])
+
 [7] `.ea/local/research/2026-05-11-tui-ux-resolved.md` — TUI UX resolved decisions (events overlay [7:304-326]; detail backdrop [7:586-606])
+
 [8] `.ea/local/research/long-term/2026-05-16-c04-workflow-skills.md` — `/loop` skill body
+
 [9] `.ea/local/research/2026-05-11-mcp-via-eawf.md` — MCP integration pattern (ownership marker `__eawf_owner` per integration entry; §1.1 [9:14-22]; manifest schema parity §4.3 [9:209-232])
+
 [10] `src/eawf/runtimes/claude/plugin_install.py` — current plugin-install entry; pattern reused for integration manifest doctor
+
 [11] `src/eawf/render/skills.py:321,333,349` — current `gh pr create / merge / diff` references in skill bodies (verified path:line per AGENTS verify-before-claim)
+
 [12] `.ea/local/research/long-term/2026-05-16-c07a-runtime-skill-dispatch.md` — runtime / skill / agent dispatch (plugin manifest at §5.7 [12:310-370]; capability matrix at Q6 [12:578])
+
 [13] `.ea/local/research/long-term/2026-05-17-c06-operator-surface.md` — operator surface TUI + web stub (modal stack inventory at §5.7 [13:740-757]; daemon-push protocol binding at §5.8 [13:775-827]; V5 runtime-switched banner at §5.9 [13:829-883])
+
 [14] `.ea/local/research/long-term/2026-05-16-c07b-vcs-worktree-events.md` — VCS / worktree / events / render / brand (event / audit log at §5.4 [14:353-471]; EventPayload at [14:399-412]; closed StoreKind at [14:417-451]; renderer chassis at [14:497-510]; brand glyph ASCII-in-commits at Q11 [14:785]; registry path Windows at Q5 [14:728-748])
+
 [15] `.ea/local/research/long-term/2026-05-16-c08-configurability-profiles.md` — config + profile composition (`integrations:` profile field; loader)
+
 [16] `.ea/local/research/long-term/2026-05-15-long-term-roadmap-synthesis.md:132,221,286` — 429 vendor-pause pattern extended by V5; reused for integration outbound retry
+
 [17] `AGENTS.md` — non-negotiable rules (rule 1 CLI is dispatch; rule 2 strict config; rule 4 single-canonical-mutator extended here; rule 16 secrets/PII hygiene; rule 17 naming conventions)
+
 [18] `src/eawf/state/models.py` — `Wave` state model home for `WaveLinkages` extension
+
 [19] `src/eawf/store/event.py` — current envelope writer (canonical append; pattern reused)
+
 [20] `src/eawf/store/append.py` — canonical `append_envelope` writer
+
 [21] `src/eawf/render/skills.py` — full file context for §11 references
+
 [22] `https://github.com/jaraco/keyring` — `keyring` package (cross-platform secret storage)
+
 [23] `https://docs.aiohttp.org/` — `aiohttp` HTTP server (webhook listener stack)
+
 [24] `https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries` — GitHub HMAC webhook signing
+
 [25] `https://api.slack.com/authentication/verifying-requests-from-slack` — Slack `v0:` prefix HMAC signing (deferred integration; spec reference)
+
 [26] `https://developer.atlassian.com/cloud/jira/platform/webhooks/` — Jira webhook signing (deferred; spec reference)
+
 [27] `https://developers.linear.app/docs/graphql/webhooks` — Linear webhook signing (deferred; spec reference)
+
 [28] `https://developers.google.com/calendar/api/guides/push` — Google Calendar push channels (deferred; domain-verification dependency)
+
 [29] `https://developers.notion.com/reference/intro` — Notion API (deferred; spec reference)
+
 [30] `https://cli.github.com/manual/gh_pr_create` — `gh pr create` reference (bridge wraps this verb)
+
 [31] `.ea/local/research/long-term/2026-05-17-c11-blitz-deps.md` — B-c11-1 dep-gate blitz: `aiohttp` + `keyring` transitive availability + version-pin verification
+
 [32] `.ea/local/research/long-term/2026-05-17-c11-blitz-gh-cli.md` — B-c11-2 gh CLI behavioural blitz: merge-strategy enforcement, `GH_PROMPT_DISABLED`, `gh auth status` exit codes, `gh api rate_limit` shape, body-via-stdin, version floor
+
 [33] `.ea/local/research/long-term/2026-05-17-c11-blitz-webhook-signing.md` — B-c11-3 webhook signing blitz: GitHub / Slack / Linear / Jira / Notion HMAC schemes; per-vendor `WebhookSigningSpec` shapes; GitHub timestamp-absence correction
+
 [34] `.ea/local/research/long-term/2026-05-17-c11-blitz-keyring-backends.md` — B-c11-4 keyring backend matrix blitz: Linux DBus deterministic raise, `keyrings.alt` status, account string restriction, macOS CI locked-keychain, two-phase probe sketch, CI matrix table
+
 [35] `.ea/local/research/long-term/2026-05-17-c11-blitz-asyncio-cap.md` — B-c11-5 asyncio per-task memory-cap + aiohttp AppRunner blitz: `RLIMIT_AS` process-level scope confirmation; no per-asyncio-task cap primitive; AppRunner+TCPSite pattern; explicit `client_max_size` wiring requirement
+
 [36] `.ea/local/research/long-term/2026-05-17-c11-blitz-gh-idempotency.md` — B-c11-7 gh write-verb idempotency blitz: `pr.create` + `release.create` NOT server-idempotent; `pr.merge` partially safe; `WriteRetryPolicy` Pydantic shape + per-verb instances; `issue.create` deliberately excluded
 
 ## 10. Amendment log (B-c11-1..4 fold-back, 2026-05-17)

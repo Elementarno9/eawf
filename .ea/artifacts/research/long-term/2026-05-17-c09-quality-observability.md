@@ -1,11 +1,17 @@
 # C09 — Quality + Observability — Eä framework long-term specs
 
 **Cluster ID:** C09
+
 **Title:** Quality + Observability
+
 **Status:** `accepted` (ratified 2026-05-17 via AskUserQuestion: status-flip + R1 PRICING snapshot embed + R2 Windows ±15% provisional)
+
 **Created:** `2026-05-17`
+
 **Author:** `claude-opus-4-7`
+
 **Depends on:** C01, C02, C03, C04, C05, C06, C07a, C07b, C08
+
 **Consumed by:** C10
 
 ## 1. Purpose + scope statement
@@ -209,7 +215,7 @@ Locked inventory. Each row: hook id, stage, what catches, repair command.
 | 13 | `commit-prefix-lint` | commit-msg | Missing `[P##-W##]` / `[P##-CORE]` prefix or unknown type | re-write commit message per AGENTS rule 14 |
 | 14 | `mypy-pre-push` | pre-push | mypy strict errors over `src/` | `uv run mypy src/` — add types, fix errors |
 | 15 | `eawf doc verify --strict` | pre-push *(promoted from manual per D16)* | Doc drift between AGENTS.md, schema docs, CLI ref | run `uv run eawf doc verify` — investigate diff; update docs |
-| 16 | `path-leak-lint` *(NEW; C09)* | pre-commit | `/Users/`, `<local-path>`, `C:\\Users\\` in any staged blob | scrub the literal; re-stage |
+| 16 | `path-leak-lint` *(NEW; C09)* | pre-commit | a macOS, Linux or Windows user-home path root, or a `<local-path>` placeholder, in any staged blob | scrub the literal; re-stage |
 | 17 | `email-leak-lint` *(NEW; C09)* | pre-commit | Email addresses not in the canonical `pyproject.toml authors` allowlist | scrub or add to allowlist (only canonical author rows allowed) |
 | 18 | `log-format-lint` *(NEW; C09)* | pre-commit | `logger.{info,warning,error}` call sites not matching the `<funcname> key=value` regex per AGENTS naming conventions | re-write log line to the canonical shape. Implementation: `ruff check --select EAWF001` custom rule reusing ruff's AST per [B11 blitz r11] [38] (avoids double-parse; halves cost) |
 | 19 | `plugin-doctor-drift` *(NEW; C09 via V9)* | pre-push | `eawf plugin doctor --strict` reports drift in `build/<runtime>-plugin/` | `eawf plugin sync`. Conditional skip per [B11 blitz r11] [38]: bail fast if `git diff origin/main...HEAD --name-only` shows no AGENTS.md / skill / plugin changes (drops ~5s → ~50ms on no-relevant-change pushes) |
@@ -1213,7 +1219,7 @@ EventPayloadUnion = Annotated[
 | F15 | Cross-OS line-ending drift in golden files | Hook 3 (trailing-whitespace) + git's `core.autocrlf` interaction | `\r\n` vs `\n` diff on Windows checkout | `.gitattributes` pins `*.txt linguist-language=Text` + `eol=lf` for `tests/golden/**`; golden writer always writes `\n` |
 | F16 | agent-lens schema diverges after vendoring | Operator pushes a new agent-lens commit; eawf telemetry rows don't include the new fields | Audit-replay missing rows | C09 implementation phase pins the audit-source commit SHA in `src/eawf/telemetry/_AGENT_LENS_AUDIT_COMMIT.txt`; mismatch on next vendor sweep triggers a re-audit |
 | F17 | Per-OS CI matrix runs out of free-tier minutes | GHA billing surface | Email from billing | Drop the second-LTS slot from each OS (`ubuntu-22.04`, `macos-26`) — already proposed in §5.4 |
-| F18 | Sensitive-data scrubber strips a legitimate path inside a CLI error message | `Cannot find /usr/local/etc/eawf/config.yaml` → `Cannot find <scrubbed>/etc/eawf/config.yaml` | Operator-facing error confusing | Scrubber regex is anchored at home-dir prefixes only (`/Users/`, `/home/`, `C:\\Users\\`); `/usr/local/...`-rooted paths are kept |
+| F18 | Sensitive-data scrubber strips a legitimate path inside a CLI error message | `Cannot find /usr/local/etc/eawf/config.yaml` → `Cannot find <scrubbed>/etc/eawf/config.yaml` | Operator-facing error confusing | Scrubber regex is anchored at the three user-home roots only (macOS, Linux, Windows); `/usr/local/...`-rooted paths are kept |
 | F19 | Plugin-doctor drift gate flakes after a successful sync | `eawf plugin sync` succeeded but checksum drifts between sync and doctor invocation | Concurrent edit to AGENTS.md | Sync + doctor share a `<local-path>` portalock; doctor reads the post-sync checksum from the same lock-scope |
 | F20 | DuckDB query latency on large DB | Operator with many repos; user-scope query takes seconds | `eawf metrics show --scope user` slow | Add covering indexes on `(scope, started_at)`, `(project_id, runtime)`; bench harness `telemetry_rebuild_jumbo` verifies budget |
 | F21 | OpenCode SQLite schema drift | OpenCode drizzle migration adds/removes tables; adapter's row parsing breaks | Per [B06 blitz r6] [33] — observed already (13→15 tables since C07a was written) | Adapter checks `__drizzle_migrations` fingerprint at startup; on unknown fingerprint, emits `Incident(cause=EXTERNAL_API_FAILURE, summary="opencode schema drift")` and skips OpenCode projection; operator updates adapter |

@@ -1,11 +1,17 @@
 # C08 — Configurability + Profile composition — Eä framework long-term specs
 
 **Cluster:** C08 (Configurability + Profile composition — layered config taxonomy, field registry, profile manifest, composition loader, conflict + override grammar, bootstrap templates, schema migration)
+
 **Title:** Configurability + Profile composition
+
 **Status:** `local-draft`, `accepted` (operator ratified §4 D1-D12 + §8 Q1-Q15 on 2026-05-16)
+
 **Created:** `2026-05-16T00:00:00Z`
+
 **Author:** `claude-opus-4-7`
+
 **Depends on:** C00 (verdicts V3, V5, V7, V8) [1], C01 (Profile entity URN kind + lifecycle; persona authority matrix; entity catalog) [2], C02 (daemon RPC `daemon.reload_config` + `runtime.set_preference` methods; config layer is daemon-mediated mutator) [3]
+
 **Consumed by:** C03 (spec validators are profile-gated), C04 (skill manifest contributes via profile; `dispatch.session_policy` per profile), C05 (`eawf config` + `eawf profile` verb-noun surface), C06 (TUI config modal reads merged config + provenance), C10 (per-profile docs + bootstrap-template tutorials)
 
 ## 1. Purpose + scope statement

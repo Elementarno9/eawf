@@ -1,8 +1,11 @@
 # Spec Series Combined Audit — Claude + Codex synthesis
 
 **Cluster ID:** SYN-COMBINED (synthesis — meta-audit, no implementation)
+
 **Status:** `consumed` (Stage-0 iteration applied 2026-05-18; per-cluster R-versions landed; see §"Iteration outcome 2026-05-18" appended below)
+
 **Created:** `2026-05-17T00:00:00Z`
+
 **Authors:** `claude-opus-4-7` + `codex-cli`
 **Inputs:**
 - `_audit/C00..C11-findings.md` + `_audit/CROSS-findings.md` (13 parallel Claude audits, ~1,160 findings)
@@ -22,70 +25,44 @@ See §"Iteration outcome 2026-05-18" at bottom for full per-stage table.
 
 ## Purpose
 
-Two independent audit passes ran in parallel over the same spec corpus
-(`.ea/local/research/long-term/2026-05-16-c00-spec-index.md` + C01..C11 +
-33 blitzes + 7 feeders + agent-lens audit + dispatch-prompts). Claude
-fleet dispatched 13 subagents writing `_audit/*-findings.md`. Codex
-dispatched its own subagent fleet writing `2026-05-17-long-term-spec-
-critical-review.md`. This brief reconciles, merges, and stratifies the
-two outputs into one operator-facing document.
+Two independent audit passes ran in parallel over the same spec corpus (`.ea/local/research/long-term/2026-05-16-c00-spec-index.md` + C01..C11 + 33 blitzes + 7 feeders + agent-lens audit + dispatch-prompts). Claude fleet dispatched 13 subagents writing `_audit/*-findings.md`. Codex dispatched its own subagent fleet writing `2026-05-17-long-term-spec- critical-review.md`. This brief reconciles, merges, and stratifies the two outputs into one operator-facing document.
 
-Both audits converge on the same primary verdict: **the spec series is
-not directly buildable into a v0.3-v0.5 roadmap without a normalization
-pass first**. They diverge on degree:
+Both audits converge on the same primary verdict: **the spec series is not directly buildable into a v0.3-v0.5 roadmap without a normalization pass first**. They diverge on degree:
 - Claude calls it "needs amendment" — ~12-15 EU of fix-up unblocks
   `/roadmap propose`.
 - Codex calls it "blocked-for-roadmap" — formal gate framework (12
   gates) + revised cluster order (C00R..C11R) required.
 
-This brief adopts the harsher (Codex) verdict at the top but preserves
-Claude's concrete fix lists underneath. The combined work is a
-**Stage-0 normalization phase** (~25-40 EU) before any implementation
-phase opens.
+This brief adopts the harsher (Codex) verdict at the top but preserves Claude's concrete fix lists underneath. The combined work is a **Stage-0 normalization phase** (~25-40 EU) before any implementation phase opens.
 
 ## Reconciled verdict
 
 **Whole-set verdict:** `blocked-for-roadmap` (per Codex; supported by
+
 Claude).
 
-**Reasoning.** The spec series contains genuinely useful architecture
-that should be preserved. But authority, status, writer, lifecycle,
-schema, and date premises conflict across clusters in ways that
-single-cluster ratification cannot resolve. Six categories block
-roadmap construction:
+**Reasoning.** The spec series contains genuinely useful architecture that should be preserved. But authority, status, writer, lifecycle, schema, and date premises conflict across clusters in ways that single-cluster ratification cannot resolve. Six categories block roadmap construction:
 
 1. **Authority before architecture** (Codex G001 + Claude Theme 4).
-   C00 V1 routes all future stateful writes through daemon; AGENTS
-   rule 4 + 17 preserve three canonical mutators (state-CLI, layered-
-   config writer, registry writer). Specs propose violating the
-   non-negotiable; no governance reconciliation exists.
+   C00 V1 routes all future stateful writes through daemon; AGENTS rule 4 + 17 preserve three canonical mutators (state-CLI, layered- config writer, registry writer). Specs propose violating the non-negotiable; no governance reconciliation exists.
 
 2. **Status ledger non-authoritative** (Codex G003 + Claude B01).
-   Index status table reads `not-started` for every cluster; ~70% of
-   briefs claim `accepted` in their own front-matter; several
-   `accepted` briefs depend on `needs-user` upstreams.
+   Index status table reads `not-started` for every cluster; ~70% of briefs claim `accepted` in their own front-matter; several `accepted` briefs depend on `needs-user` upstreams.
 
 3. **Future-date false premise** (Codex G004 — Claude missed). C07a
-   D2 cites SDK release `2026-06-15` as shipped; current date is
-   `2026-05-17`. Adapter design targets unavailable APIs.
+   D2 cites SDK release `2026-06-15` as shipped; current date is `2026-05-17`. Adapter design targets unavailable APIs.
 
 4. **Event schema authority unclear** (Codex G007 + Claude Theme 10).
-   Event envelope, event payload, telemetry payload, webhook payload
-   all defined in different clusters (C02, C06, C07b, C09, C11). Risk:
+   Event envelope, event payload, telemetry payload, webhook payload all defined in different clusters (C02, C06, C07b, C09, C11). Risk:
    four incompatible event models ship.
 
 5. **Principal/authorization deferred but relied on** (Codex G008 +
-   Claude CROSS.F2). C01 D4 defers Principal to v0.5+; C09 V7 cost-
-   by-principal, C04 skill loading, C11 external integrations all need
-   it.
+   Claude CROSS.F2). C01 D4 defers Principal to v0.5+; C09 V7 cost- by-principal, C04 skill loading, C11 external integrations all need it.
 
 6. **Sensitive-info hygiene non-uniform** (Codex G005 + Claude B15 +
-   Theme 9). C02 SessionAttempt `session_log_path`, C09 telemetry
-   goldens, C11 event payload temp paths, 3 blitz Scrub-claim-vs-body
-   contradictions. PII leaks through committed surfaces.
+   Theme 9). C02 SessionAttempt `session_log_path`, C09 telemetry goldens, C11 event payload temp paths, 3 blitz Scrub-claim-vs-body contradictions. PII leaks through committed surfaces.
 
-These are the six top-level **gating** issues. Below the gates, the
-clusters themselves are usable.
+These are the six top-level **gating** issues. Below the gates, the clusters themselves are usable.
 
 **Per-cluster verdicts (reconciled).**
 
@@ -106,42 +83,33 @@ clusters themselves are usable.
 | C11 | pass-with-followups | needs-revision | **needs-revision** (4 BLOCKERS) |
 | Pre-C feeders | extract-only | extract-only | **extract-only** |
 
-**Total cluster briefs at `needs-revision`:** 13 of 13. **None** are
-ratifiable as-is.
+**Total cluster briefs at `needs-revision`:** 13 of 13. **None** are ratifiable as-is.
 
 ## Bottom-line answer to operator's four questions
 
 1. **Is the spec series implementable as-is?** **No.** Stage 0
-   normalization is the prerequisite. ~25-40 EU of work; ~1-2 weeks
-   sustained.
+   normalization is the prerequisite. ~25-40 EU of work; ~1-2 weeks sustained.
 
 2. **What must change before `/roadmap propose` claims a v0.3-v0.5
    phase?** Three things, in order:
    - (a) The six gating issues above. Each resolves in its own
-     workstream; some have prerequisites on each other (authority
-     map → writer migration; event schema → consumers).
+     workstream; some have prerequisites on each other (authority map → writer migration; event schema → consumers).
    - (b) The 12-gate roadmap-gate framework (§"Roadmap gate" below).
      Every gate must pass before any phase opens.
    - (c) The concrete 247-item TO-DO list (§"Combined TO-DO" below).
 
 3. **What is the implementation EU envelope?** Per Claude estimate:
-   **250-340 EU** for v0.3 → v0.5 implementation (~50-70 waves over
-   12-18 months). Stage 0 normalization (this brief's output): ~25-40
-   EU. Spec phase already paid: ~90 EU. Total v0.3-v0.5 effort:
+   **250-340 EU** for v0.3 → v0.5 implementation (~50-70 waves over 12-18 months). Stage 0 normalization (this brief's output): ~25-40 EU. Spec phase already paid: ~90 EU. Total v0.3-v0.5 effort:
    **~365-470 EU**, spread across ~70-90 waves.
 
 4. **What does the operator decide before any implementation wave?**
-   Codex names 12 gates; Claude names 12 operator questions. Combined
-   list of operator-facing decisions: ~22 unique decisions (§"Open
-   questions" below).
+   Codex names 12 gates; Claude names 12 operator questions. Combined list of operator-facing decisions: ~22 unique decisions (§"Open questions" below).
 
 ---
 
 ## Index status reality
 
-C00 §337-352 status table claim **`not-started`** for every C01..C11
-row is uniformly wrong. Real status table (verified against per-brief
-front-matter):
+C00 §337-352 status table claim **`not-started`** for every C01..C11 row is uniformly wrong. Real status table (verified against per-brief front-matter):
 
 | ID  | Title | Brief LOC | C00 est. | Front-matter status | Reconciled status | Audit summary |
 |-----|-------|----------:|---------:|---------------------|-------------------|----------------|
@@ -160,18 +128,13 @@ front-matter):
 | C11 | External Integrations | 1,167 | ~700 | accepted | needs-revision | 3 bugs (Claude); 12 issues incl. HMAC text-not-bytes BLOCKER (Codex) |
 | **Total** | | **17,273** | **12,100** | | | |
 
-LOC drift: **+43%** over C00 estimate. Cluster count drift: 12 actual
-briefs (after C07 split into a/b) vs 11 cluster-slots. Implementation-
-phase EU estimate: undisclosed in every brief.
+LOC drift: **+43%** over C00 estimate. Cluster count drift: 12 actual briefs (after C07 split into a/b) vs 11 cluster-slots. Implementation- phase EU estimate: undisclosed in every brief.
 
 ---
 
 ## ✅ Combined BLOCKERS — full inventory (25 unique) — ALL CLOSED 2026-05-18
 
-Reconciled from Claude's 15 BLOCKERS + Codex's 18 B0 globals. De-
-duplicated; each blocks at least one downstream cluster from `/roadmap
-propose`. Ordered by dependency-DAG (upstream → downstream) and by
-severity within each tier.
+Reconciled from Claude's 15 BLOCKERS + Codex's 18 B0 globals. De- duplicated; each blocks at least one downstream cluster from `/roadmap propose`. Ordered by dependency-DAG (upstream → downstream) and by severity within each tier.
 
 ### Tier 0 — Governance gates (must close before any normalization)
 
@@ -180,14 +143,8 @@ severity within each tier.
 **Severity.** B0 / BLOCKER-Tier0.
 
 **Problem.** C00 V1 routes all future stateful writes through daemon
-(`.ea/state.json`, `.ea/config.yaml`, `<local-path>`,
-`<local-path>`, `event.jsonl`, `audit.jsonl`,
-`<local-path>`). AGENTS rules 4 + 17 preserve three
-distinct canonical mutators: state-CLI, layered-config writer, registry
-writer. Daemon adding write authority over the others violates rule 4
-("State CLI is the only mutator of `state.json`") unless explicitly
-amended. Telemetry projector at `<local-path>` is a
-*fourth* mutator surface that AGENTS rule 17 doesn't list at all.
+
+(`.ea/state.json`, `.ea/config.yaml`, `<local-path>`, `<local-path>`, `event.jsonl`, `audit.jsonl`, `<local-path>`). AGENTS rules 4 + 17 preserve three distinct canonical mutators: state-CLI, layered-config writer, registry writer. Daemon adding write authority over the others violates rule 4 ("State CLI is the only mutator of `state.json`") unless explicitly amended. Telemetry projector at `<local-path>` is a *fourth* mutator surface that AGENTS rule 17 doesn't list at all.
 
 **Impact.** Without explicit authority reconciliation:
 - C02 daemon implementation may proxy state writes through the existing
@@ -200,47 +157,36 @@ amended. Telemetry projector at `<local-path>` is a
 - C09 telemetry projector becomes a fourth canonical mutator OR ad-hoc
   writer.
 
-**Fix.** Write a one-page **authority map** naming, for each file +
-operation type, the canonical writer. Two paths:
+**Fix.** Write a one-page **authority map** naming, for each file + operation type, the canonical writer. Two paths:
 - (a) **Preserve** the existing three mutators; daemon **calls into**
-  them (state-CLI, layered-config writer, registry writer remain
-  canonical; daemon adds RPC + locking on top).
+  them (state-CLI, layered-config writer, registry writer remain canonical; daemon adds RPC + locking on top).
 - (b) **Supersede** AGENTS rules 4 + 17 with V1's daemon-as-sole-
-  mutator; rewrite the rules and migrate the three writers into daemon
-  internals.
+  mutator; rewrite the rules and migrate the three writers into daemon internals.
 
-Recommend (a) — backward-compatible with v0.2 invariants; daemon
-becomes an arbitration layer rather than a replacement. Document in C00
-amendment + AGENTS amendment.
+Recommend (a) — backward-compatible with v0.2 invariants; daemon becomes an arbitration layer rather than a replacement. Document in C00 amendment + AGENTS amendment.
 
 #### ✅ ~~XB02 — Specs-vs-implementation truth conflict~~ [Codex G002] — CLOSED 2026-05-18 (AGENTS rule 8 already covers; documented in C00 status table refresh)
 
 **Severity.** B0 / BLOCKER-Tier0.
 
 **Problem.** Pre-C manifesto language treats specs as authoritative
-("source of truth"). AGENTS rule 8 (verify-before-claim) says
-"Design-intent docs … are the *design intent*; the source tree is the
-*implementation*". Cluster briefs occasionally cite each other as if
-ratified spec = implementation truth.
+
+("source of truth"). AGENTS rule 8 (verify-before-claim) says "Design-intent docs … are the *design intent*; the source tree is the *implementation*". Cluster briefs occasionally cite each other as if ratified spec = implementation truth.
 
 **Impact.** Future agents quote draft specs over current behavior;
 implementation drift becomes invisible.
 
 **Fix.** Add a spec status policy to AGENTS.md (or C00 amendment):
 "**Draft specs propose**; **source verifies**; **state records reality**.
-Cite specs for intent, source for behavior. When they drift, source
-wins until specs ratify a behavior change."
+Cite specs for intent, source for behavior. When they drift, source wins until specs ratify a behavior change."
 
 #### ✅ ~~XB03 — Status ledger non-authoritative~~ [Codex G003 + Claude B01] — CLOSED 2026-05-18 (C00 status table refreshed; decision_state field added to per-brief front-matter; C07 split row landed)
 
 **Severity.** B0 / BLOCKER-Tier0.
 
-**Problem.** C00 status table is stale; per-cluster front-matter is
-inconsistent; many `accepted` briefs depend on `needs-user` upstreams
-or have unresolved internal contradictions.
+**Problem.** C00 status table is stale; per-cluster front-matter is inconsistent; many `accepted` briefs depend on `needs-user` upstreams or have unresolved internal contradictions.
 
-**Impact.** Operator-facing audit signal collapses; subagents in fresh
-sessions cannot decide which clusters to consume.
+**Impact.** Operator-facing audit signal collapses; subagents in fresh sessions cannot decide which clusters to consume.
 
 **Fix.** Per Codex G003 + Claude TO-DO A-01:
 - Flip C00 status table to reflect each brief's actual front-matter.
@@ -254,21 +200,19 @@ sessions cannot decide which clusters to consume.
 
 **Severity.** B0 / BLOCKER-Tier0.
 
-**Location.** `2026-05-16-c07a-runtime-skill-dispatch.md:107` (D2
-rationale) + c07a-blitz-sdk-gate.md.
+**Location.** `2026-05-16-c07a-runtime-skill-dispatch.md:107` (D2 rationale) + c07a-blitz-sdk-gate.md.
 
 **Problem.** C07a treats `2026-06-15` SDK release as already shipped:
 "subscription SDK ships 2026-06-15 with API-rate credit pools;
-subprocess subscription advantage expires that date". Current date is
-`2026-05-17`. The release hasn't happened; details cited may be
-inaccurate. Runtime dispatch decisions target APIs that may not exist.
+subprocess subscription advantage expires that date". Current date is `2026-05-17`. The release hasn't happened; details cited may be inaccurate. Runtime dispatch decisions target APIs that may not exist.
 
 **Impact.** P22 / P27 runtime adapter waves build against unverified
+
 API. Roadmap timeline assumes durable cutover.
 
 **Fix.** Re-date runtime assumptions; mark future SDK claims as
-**forecast** with explicit "verify after release" gate. Re-run SDK
-probe after the release date, then revise V8 SDK tradeoff matrix.
+
+**forecast** with explicit "verify after release" gate. Re-run SDK probe after the release date, then revise V8 SDK tradeoff matrix.
 
 #### ✅ ~~XB05 — Sensitive-info hygiene non-uniform~~ [Codex G005 + Claude B15 + Theme 9] — CLOSED 2026-05-18 (SessionAttempt path → opaque handle; 3 PII scrubs landed; promotion gate deferred to post-ratification commit)
 
@@ -279,14 +223,11 @@ probe after the release date, then revise V8 SDK tradeoff matrix.
 - C09 telemetry goldens (paths in fields)
 - C07b event payload tmp paths
 - 3 blitzes leak `<local-path>` paths in §body while §Scrub claims
-  clean (c07a-blitz-session-policy §4; c07a-blitz-skill-runtimes
-  Provenance; c07b-blitz-glyph-fallback L25)
+  clean (c07a-blitz-session-policy §4; c07a-blitz-skill-runtimes Provenance; c07b-blitz-glyph-fallback L25)
 
-**Impact.** Pre-commit hooks fail late; leaks enter PR text. Promotion
-from `.ea/local/` to `.ea/artifacts/` rejects.
+**Impact.** Pre-commit hooks fail late; leaks enter PR text. Promotion from `.ea/local/` to `.ea/artifacts/` rejects.
 
-**Fix.** Define scrub rules for **every** persisted field before schema
-migration:
+**Fix.** Define scrub rules for **every** persisted field before schema migration:
 - Use opaque session handles or repo-relative artifact URNs, never
   absolute paths
 - Define telemetry redaction schema; goldens use scrubbed fixture
@@ -299,44 +240,35 @@ migration:
 **Severity.** B0 / BLOCKER-Tier0.
 
 **Problem.** C01-C11 all define migrations, but no global dependency
+
 DAG exists. Each cluster assumes other contracts are already stable.
 
 **Impact.** Roadmap waves start in impossible order.
 
-**Fix.** After authority map (XB01) + writer migration plan: produce
-one migration DAG showing per-file write-path migrations + per-
-schema_version bumps + ordering dependencies. Lives in a C12 brief or
-C10 amendment.
+**Fix.** After authority map (XB01) + writer migration plan: produce one migration DAG showing per-file write-path migrations + per- schema_version bumps + ordering dependencies. Lives in a C12 brief or C10 amendment.
 
 #### ✅ ~~XB07 — Event schema authority unclear~~ [Codex G007 + Claude Theme 10] — CLOSED 2026-05-18 (C07b owns canonical Event model per Q14; D14 row added; C02/C06/C09/C11 consume)
 
 **Severity.** B0 / BLOCKER-Tier0.
 
-**Problem.** Event envelope (C02 streaming), event payload (C07b store),
-telemetry payload (C09), webhook payload (C11), TUI subscription model
-(C06) — five different cluster owners for what should be one schema.
+**Problem.** Event envelope (C02 streaming), event payload (C07b store), telemetry payload (C09), webhook payload (C11), TUI subscription model (C06) — five different cluster owners for what should be one schema.
 
 **Impact.** Four-to-five incompatible event models ship.
 
 **Fix.** Assign event-schema ownership to **one cluster** (recommend
-C07b — already owns event store). Others consume. C02 streaming
-references C07b shape; C06 + C09 + C11 consume the same Pydantic
-model.
+
+C07b — already owns event store). Others consume. C02 streaming references C07b shape; C06 + C09 + C11 consume the same Pydantic model.
 
 #### ✅ ~~XB08 — Principal/authorization model deferred but relied on~~ [Codex G008 + Claude CROSS.F2] — CLOSED 2026-05-18 (Q3: minimum Principal model lands v0.3-v0.5; actor_principal_id placeholder field)
 
 **Severity.** B0 / BLOCKER-Tier0.
 
-**Problem.** C01 D4 defers Principal to v0.5+. C09 V7 cost-by-principal
-queries structurally impossible without it; C04 skill loading (who
-ratified?); C11 external integrations (who's authenticated?); C02
-daemon RPC (who's calling?). All cite `actor: str = "cli"` hardcoded.
+**Problem.** C01 D4 defers Principal to v0.5+. C09 V7 cost-by-principal queries structurally impossible without it; C04 skill loading (who ratified?); C11 external integrations (who's authenticated?); C02 daemon RPC (who's calling?). All cite `actor: str = "cli"` hardcoded.
 
 **Impact.** Security-critical checks become best-effort strings.
 Telemetry per-principal queries impossible.
 
-**Fix.** Define **minimum** principal model before daemon write path,
-runtime dispatch, or external ingress:
+**Fix.** Define **minimum** principal model before daemon write path, runtime dispatch, or external ingress:
 - Add `Principal` Pydantic model with `id`, `kind`, `display_name`
 - Add `Cost.attributed_to: Literal["cli"] = "cli"` placeholder field
 - Defer full enforcement to v0.5+; field shape stable now so query
@@ -349,17 +281,16 @@ runtime dispatch, or external ingress:
 **Severity.** B0 / BLOCKER-Tier1.
 
 **Location.** `2026-05-16-c00-spec-index.md:1129` Provenance
+
 `supersedes=none` vs `2026-05-15-long-term-roadmap-synthesis.md:91-97`.
 
 **Problem.** Roadmap synthesis (2026-05-15) explicitly defers daemon
-(`Background daemon (eawfd) deferred`); V1 (2026-05-16) reverses to
-"daemon Day-1". One day apart; both operator-confirmed. C00 records
-`supersedes=none`.
+
+(`Background daemon (eawfd) deferred`); V1 (2026-05-16) reverses to "daemon Day-1". One day apart; both operator-confirmed. C00 records `supersedes=none`.
 
 **Fix.** Set `supersedes=2026-05-15-long-term-roadmap-synthesis.md:§
-"Trigger surface"` in C00 Provenance. Add explicit reversal paragraph
-under V1 Rationale. Open typed Decision row `D-SUP-01`. Mark
-roadmap-synthesis brief as `superseded` in §Scrub.
+
+"Trigger surface"` in C00 Provenance. Add explicit reversal paragraph under V1 Rationale. Open typed Decision row `D-SUP-01`. Mark roadmap-synthesis brief as `superseded` in §Scrub.
 
 #### ✅ ~~XB10 — V9 absent from C01 + C07a §3 prior-verdicts~~ [Claude B03, B04] — CLOSED 2026-05-18 (V9 added to both C01 §3 and C07a §3)
 
@@ -370,20 +301,21 @@ C07a §5.7/§5.9 plugin manifest + sync + doctor are load-bearing for V9.
 Both briefs cite only V1..V8 in §3.
 
 **Fix.** Add V9 to both C01 §3 and C07a §3. Update front-matter
-`Depends on:` from `V1..V8` to `V1..V9`. Quote V9 four hard non-
-negotiables.
+
+`Depends on:` from `V1..V8` to `V1..V9`. Quote V9 four hard non- negotiables.
 
 #### ✅ ~~XB11 — Windows asyncio named-pipe server is fictional~~ [Claude B05] — CLOSED 2026-05-18 (Q8 pywin32 thread + asyncio queue bridge; WindowsPipeServer code in C02 §5.13)
 
 **Severity.** B0 / BLOCKER-Tier1.
 
 **Location.** `2026-05-16-c02-daemon-topology.md:134, 232-242, 370-371,
+
 1170`.
 
 **Problem.** C02 §4 D1 claims `asyncio.start_unix_server` works on
+
 Windows via "named-pipe shim". `asyncio.start_server` is a TCP listener;
-no stdlib named-pipe server in asyncio on Windows. The locked IPC pick
-is structurally undeliverable as written.
+no stdlib named-pipe server in asyncio on Windows. The locked IPC pick is structurally undeliverable as written.
 
 **Fix.** Pick one (recommend (a)):
 - (a) `asyncio.ProactorEventLoop().start_serving_pipe(protocol_factory,
@@ -391,8 +323,7 @@ is structurally undeliverable as written.
 - (b) `pywin32 CreateNamedPipe` in dedicated thread + asyncio queue
   bridge
 
-Code prototype under `.ea/local/smoke/windows-pipe-asyncio/`. Add open
-question + cross-OS asyncio test in C02 §5.11.
+Code prototype under `.ea/local/smoke/windows-pipe-asyncio/`. Add open question + cross-OS asyncio test in C02 §5.11.
 
 #### ✅ ~~XB12 — WAL startup-replay roll-forward re-executes non-deterministic mutations~~ [Claude B06] — CLOSED 2026-05-18 (Q10 outcome-WAL; C02 D8 reversed; replay re-issues captured envelope, never re-executes mutator)
 
@@ -401,17 +332,10 @@ question + cross-OS asyncio test in C02 §5.11.
 **Location.** `2026-05-16-c02-daemon-topology.md:415-429` (§5.6).
 
 **Problem.** §5.6 step 2.b re-runs `apply + validate + write` on replay.
-Mutations call `datetime.now()`, generate UUIDs, read `git rev-parse
-HEAD`. Replay produces a *different* event with a *different* event_id.
-If original transaction did rename WAL→`applied` but crashed before
-fsync, replay emits a *second* event row — **corrupts** `event.jsonl`
-audit replay. V7 telemetry projection depends on `event.jsonl` being
-canonical.
+Mutations call `datetime.now()`, generate UUIDs, read `git rev-parse HEAD`. Replay produces a *different* event with a *different* event_id.
+If original transaction did rename WAL→`applied` but crashed before fsync, replay emits a *second* event row — **corrupts** `event.jsonl` audit replay. V7 telemetry projection depends on `event.jsonl` being canonical.
 
-**Fix.** Switch from intent-WAL to **outcome-WAL**: capture post-apply
-state diff / full envelope payload, not mutation intent. On replay: if
-`<id>.applied.json` exists, re-issue *that exact* envelope; never re-
-execute mutator. If only `<id>.pending.json` exists, treat as failed;
+**Fix.** Switch from intent-WAL to **outcome-WAL**: capture post-apply state diff / full envelope payload, not mutation intent. On replay: if `<id>.applied.json` exists, re-issue *that exact* envelope; never re- execute mutator. If only `<id>.pending.json` exists, treat as failed;
 operator re-issues; idempotency-key short-circuits.
 
 #### ✅ ~~XB13 — POSIX peer-cred recipe wrong on macOS~~ [Claude B07] — CLOSED 2026-05-18 (C02 D3 rewritten with 3 per-OS recipes: Linux SO_PEERCRED, macOS os.getpeereid, FreeBSD LOCAL_PEERCRED)
@@ -420,10 +344,8 @@ operator re-issues; idempotency-key short-circuits.
 
 **Location.** `2026-05-16-c02-daemon-topology.md:348-352` (§5.4) + §4 D3.
 
-**Problem.** Brief asserts `SOL_LOCAL` is stdlib `socket` constant on
-macOS; isn't. `LOCAL_PEERCRED` returns `xucred` without usable PID.
-Linux `SO_PEERCRED` requires `SOL_SOCKET`. One-line shim doesn't
-compile cross-platform.
+**Problem.** Brief asserts `SOL_LOCAL` is stdlib `socket` constant on macOS; isn't. `LOCAL_PEERCRED` returns `xucred` without usable PID.
+Linux `SO_PEERCRED` requires `SOL_SOCKET`. One-line shim doesn't compile cross-platform.
 
 **Fix.** Rewrite §5.4 with three concrete per-OS recipes:
 - Linux: `socket.getsockopt(SOL_SOCKET, SO_PEERCRED, struct.calcsize("3i"))`
@@ -439,31 +361,27 @@ Drop "POSIX = one API" framing. Smoke under `.ea/local/smoke/peer-cred/`.
 **Location.** `2026-05-16-c02-daemon-topology.md` §5.13 Windows-service.
 
 **Problem.** Windows Service `SvcStop` callback runs on SCM thread;
-asyncio event loop on different thread. Without `loop.call_soon_
-threadsafe(...)` bridge, daemon won't shut down cleanly. Brief
-sketches service class but never names the bridge.
+asyncio event loop on different thread. Without `loop.call_soon_ threadsafe(...)` bridge, daemon won't shut down cleanly. Brief sketches service class but never names the bridge.
 
 **Fix.** Add `_stop_event = asyncio.Event()`; `SvcStop` does
-`loop.call_soon_threadsafe(_stop_event.set)`. Main coroutine `await
-_stop_event.wait()` teardown. Cite pattern in §5.13 with worked code
-block.
+
+`loop.call_soon_threadsafe(_stop_event.set)`. Main coroutine `await _stop_event.wait()` teardown. Cite pattern in §5.13 with worked code block.
 
 #### ✅ ~~XB15 — URN_KINDS hardcoded set lacks `spec`, `phase`, `audit` etc.~~ [Claude B09] — CLOSED 2026-05-18 (C01 §5.2 URN count 25→26 corrected; expansion to 26-kind set documented as hard C01-IMPL W01 precondition)
 
 **Severity.** B0 / BLOCKER-Tier1.
 
 **Location.** `src/eawf/state/urn.py:16-29` (current 10 kinds) vs C01
+
 §5.2.2 (26 kinds).
 
 **Problem.** C03 uses `urn:eawf:v1:spec:`, `urn:eawf:v1:phase:`,
-`urn:eawf:v1:audit:` throughout; current URN_KINDS frozenset has none
-of those. URN parsing fails at runtime; spec-init / spec-validate /
-spec-render are non-functional out of the box. Hard C01 precondition.
+
+`urn:eawf:v1:audit:` throughout; current URN_KINDS frozenset has none of those. URN parsing fails at runtime; spec-init / spec-validate / spec-render are non-functional out of the box. Hard C01 precondition.
 
 **Fix.** Expand URN_KINDS to 26-kind set per C01 §5.2.2. Land in
-C01-W01 with matching golden fixture; C03 cannot ratify until URN_KINDS
-lands. Add backward-compat aliases on read for `store/<kind>` URNs
-that move (notably `agent_report`).
+
+C01-W01 with matching golden fixture; C03 cannot ratify until URN_KINDS lands. Add backward-compat aliases on read for `store/<kind>` URNs that move (notably `agent_report`).
 
 #### ✅ ~~XB16 — Six C00-named skills missing from C04 catalog~~ [Claude B10] — CLOSED 2026-05-18 (Q9 6 skills landed inline in c04b-skills.md: /coauthor /memory /agent-dispatch /compress /wave-spec /security-review)
 
@@ -471,14 +389,9 @@ that move (notably `agent_report`).
 
 **Location.** `2026-05-16-c04-workflow-skills.md` §5.1 catalog.
 
-**Problem.** C00 V2/V4 list 17 canonical skills. C04 §5.1 silently
-omits **six**: /coauthor, /memory, /agent-dispatch, /compress, /wave-
-spec, /security-review. C05 references some by name; contract
-undefined.
+**Problem.** C00 V2/V4 list 17 canonical skills. C04 §5.1 silently omits **six**: /coauthor, /memory, /agent-dispatch, /compress, /wave- spec, /security-review. C05 references some by name; contract undefined.
 
-**Fix.** Add full envelope contract + mutations + escalation for the
-six missing skills. /coauthor + /agent-dispatch interact with V8 + V1
-— spec carefully. Re-issue C04 with `verdict: needs-revision`.
+**Fix.** Add full envelope contract + mutations + escalation for the six missing skills. /coauthor + /agent-dispatch interact with V8 + V1 — spec carefully. Re-issue C04 with `verdict: needs-revision`.
 
 #### ✅ ~~XB17 — "V11 hard gate" cited 9× but V11 absent from C00 V1..V9~~ [Claude B11] — CLOSED 2026-05-18 (Q7 renamed to [P20-DIR-V11] cite-token; no new C00 verdict; c04a brief documents)
 
@@ -486,13 +399,10 @@ six missing skills. /coauthor + /agent-dispatch interact with V8 + V1
 
 **Location.** `2026-05-16-c04-workflow-skills.md` G10 + 9 cites.
 
-**Problem.** Roadmap-synthesis [69-71] mentions a "V11". P20-direction-
-brief has its own V## list with a V11. C00 V1..V9 has no V11. C04 G10
-cites "V11 hard gate" as part of `/roadmap propose|revise|apply|drop|
+**Problem.** Roadmap-synthesis [69-71] mentions a "V11". P20-direction- brief has its own V## list with a V11. C00 V1..V9 has no V11. C04 G10 cites "V11 hard gate" as part of `/roadmap propose|revise|apply|drop|
 reorder complete flow w/ V11 hard gate" — dangling reference.
 
-**Fix.** Either (a) rename C04 citations to `[P20-DIR-V11]` explicit
-cite-token, OR (b) open new C00 V10 defining the gate. Pick one path;
+**Fix.** Either (a) rename C04 citations to `[P20-DIR-V11]` explicit cite-token, OR (b) open new C00 V10 defining the gate. Pick one path;
 do not leave dangling.
 
 #### ✅ ~~XB18 — `--tab` vs `--plain` flag-name contradiction~~ [Claude B13] — CLOSED 2026-05-18 (C05 §5.2 locked `--plain` as default + ANSI-strip mode)
@@ -501,9 +411,7 @@ do not leave dangling.
 
 **Location.** `2026-05-16-c05-cli-surface.md` §5.2.4 vs §5.2.7.
 
-**Problem.** Two different default output-format flag names in
-adjacent sections. §5.1 matrix references both. CLI implementation
-cannot proceed without verdict.
+**Problem.** Two different default output-format flag names in adjacent sections. §5.1 matrix references both. CLI implementation cannot proceed without verdict.
 
 **Fix.** Pick `--plain` (avoids `--tab` collision with tab character).
 Update §5.2.4 + §5.2.7 + §5.1 matrix.
@@ -514,28 +422,25 @@ Update §5.2.4 + §5.2.7 + §5.1 matrix.
 
 **Location.** `2026-05-16-c07a-runtime-skill-dispatch.md` §5.7.
 
-**Problem.** §5.7 claims `Pydantic-validated extra='forbid'`; body
-shows YAML + `@dataclass(frozen=True)` for `SkillDispatchManifest`. No
-`BaseModel` defined. Plugin sync cannot validate manifest YAML.
+**Problem.** §5.7 claims `Pydantic-validated extra='forbid'`; body shows YAML + `@dataclass(frozen=True)` for `SkillDispatchManifest`. No `BaseModel` defined. Plugin sync cannot validate manifest YAML.
 
 **Fix.** Add `PluginManifest(BaseModel)` with `model_config =
-ConfigDict(extra="forbid")` + `schema_version: Literal["1.0"]`. Lock
-field set to §5.7 YAML body.
+
+ConfigDict(extra="forbid")` + `schema_version: Literal["1.0"]`. Lock field set to §5.7 YAML body.
 
 #### ✅ ~~XB20 — C07b branch-currency math `rhs < 0` impossible~~ [Codex C07B-I001] — CLOSED 2026-05-18 (C07b §5.1 algorithm rewritten with correct git rev-list --left-right --count semantics)
 
 **Severity.** B0 / BLOCKER-Tier1.
 
-**Location.** `2026-05-16-c07b-vcs-worktree-events.md` branch currency
-algorithm.
+**Location.** `2026-05-16-c07b-vcs-worktree-events.md` branch currency algorithm.
 
 **Problem.** `git rev-list --left-right --count A...B` returns
-`(left_count, right_count)` — both non-negative. C07b algorithm
-references `rhs < 0` as a stale-branch condition. Cannot happen.
+
+`(left_count, right_count)` — both non-negative. C07b algorithm references `rhs < 0` as a stale-branch condition. Cannot happen.
 
 **Fix.** Rewrite algorithm from actual `git rev-list --left-right
---count` semantics. Stale = `right_count > 0` (upstream has commits
-local doesn't); diverged = both > 0.
+
+--count` semantics. Stale = `right_count > 0` (upstream has commits local doesn't); diverged = both > 0.
 
 #### ✅ ~~XB21 — Cherry-pick target can default to `main`~~ [Codex C07B-I002] — CLOSED 2026-05-18 (C07b §5.1 cherry-pick captures parent_branch on WorktreeRecord at dispatch; refuses main/master/default targets)
 
@@ -543,15 +448,10 @@ local doesn't); diverged = both > 0.
 
 **Location.** `2026-05-16-c07b-vcs-worktree-events.md` cherry-pick.
 
-**Problem.** Worktree discipline (AGENTS rule 11) requires parent
-feature branch. Brief's cherry-pick algorithm defaults to current
-branch (may be `main` if subagent dispatched from wrong context).
+**Problem.** Worktree discipline (AGENTS rule 11) requires parent feature branch. Brief's cherry-pick algorithm defaults to current branch (may be `main` if subagent dispatched from wrong context).
 Worktree commits land on wrong branch.
 
-**Fix.** Capture parent branch at dispatch time (recorded in dispatch
-envelope or `Wave.parent_branch`). Cherry-pick targets the recorded
-parent, never current branch. Reject if parent is `main` (per rule 15
-branch-naming).
+**Fix.** Capture parent branch at dispatch time (recorded in dispatch envelope or `Wave.parent_branch`). Cherry-pick targets the recorded parent, never current branch. Reject if parent is `main` (per rule 15 branch-naming).
 
 #### ✅ ~~XB22 — C11 HMAC verifier signs decoded text, not raw bytes~~ [Codex C11-I004] — CLOSED 2026-05-18 (C11 §5.4 verify_signature rewritten to operate on raw bytes; body never decoded)
 
@@ -560,12 +460,10 @@ branch-naming).
 **Location.** `2026-05-17-c11-external-integrations.md` webhook signing.
 
 **Problem.** HMAC must sign raw request bytes, not text-decoded
-(.decode("utf-8")). Decoding loses byte-level fidelity (BOM, invalid
-UTF-8, locale variance). Valid signatures fail; malformed payloads
-may pass.
 
-**Fix.** Specify raw-body HMAC explicitly. Sign `request.body` (bytes)
-before any decode. Add unit test with non-UTF-8 byte sequence.
+(.decode("utf-8")). Decoding loses byte-level fidelity (BOM, invalid UTF-8, locale variance). Valid signatures fail; malformed payloads may pass.
+
+**Fix.** Specify raw-body HMAC explicitly. Sign `request.body` (bytes) before any decode. Add unit test with non-UTF-8 byte sequence.
 
 #### ✅ ~~XB23 — C11 webhook ingress exposure unresolved~~ [Codex C11-I005] — CLOSED 2026-05-18 (Q15 local polling for v0.3-v0.5; webhook listener gated to v0.6+)
 
@@ -573,9 +471,7 @@ before any decode. Add unit test with non-UTF-8 byte sequence.
 
 **Location.** `2026-05-17-c11-external-integrations.md` webhook plan.
 
-**Problem.** Mandatory webhook ingress exists without public exposure,
-tunneling, or local-only stance. How does GitHub reach the local
-daemon's `<host>:<port>`?
+**Problem.** Mandatory webhook ingress exists without public exposure, tunneling, or local-only stance. How does GitHub reach the local daemon's `<host>:<port>`?
 
 **Fix.** Pick one of:
 - (a) **Local polling** — daemon polls GitHub API; no inbound webhook
@@ -592,12 +488,11 @@ Recommend (a) for v0.3-v0.5; (b) deferred. Update C11 §webhook section.
 
 **Location.** `2026-05-17-c11-external-integrations.md` `show-secret`.
 
-**Problem.** Command prints secret to terminal. Normalises secret
-disclosure; terminal scrollback persists; shell history may capture.
+**Problem.** Command prints secret to terminal. Normalises secret disclosure; terminal scrollback persists; shell history may capture.
 
 **Fix.** Remove `show-secret`. Use one-time `generate-secret` and
-`set-secret <name>`; never display set secrets. If verification needed,
-use `verify-secret <name>` returning hash-prefix only.
+
+`set-secret <name>`; never display set secrets. If verification needed, use `verify-secret <name>` returning hash-prefix only.
 
 #### ✅ ~~XB25 — 3 PII path leaks in blitz briefs~~ [Claude B15] — CLOSED 2026-05-18 (3 PII scrubs landed in c07a-blitz-session-policy §4, c07a-blitz-skill-runtimes Provenance, c07b-blitz-glyph-fallback L25)
 
@@ -608,26 +503,19 @@ use `verify-secret <name>` returning hash-prefix only.
 - `2026-05-16-c07a-blitz-skill-runtimes.md` Provenance
 - `2026-05-16-c07b-blitz-glyph-fallback.md:25`
 
-**Problem.** AGENTS rule 16 forbids absolute paths. Each blitz's §Scrub
-claims clean. `.ea/local/` is gitignored so no remote leak; promotion
-would reject.
+**Problem.** AGENTS rule 16 forbids absolute paths. Each blitz's §Scrub claims clean. `.ea/local/` is gitignored so no remote leak; promotion would reject.
 
-**Fix.** Replace each absolute path with repo-relative form. Run path-
-leak-lint over `.ea/local/research/` post-fix to confirm clean
-baseline.
+**Fix.** Replace each absolute path with repo-relative form. Run path- leak-lint over `.ea/local/research/` post-fix to confirm clean baseline.
 
 ---
 
 ## ✅ Cross-cutting bottlenecks — ALL 10 CLOSED 2026-05-18
 
-Reconciled from Codex BOT-001..010 + Claude Themes 1-10. Combined into
-10 cross-cutting bottleneck themes that single-cluster audits cannot
-catch.
+Reconciled from Codex BOT-001..010 + Claude Themes 1-10. Combined into 10 cross-cutting bottleneck themes that single-cluster audits cannot catch.
 
 ### ✅ ~~BOT-01 — Silent supersedes of feeder briefs~~ (Theme 1) — CLOSED 2026-05-18 (D-SUP-01..05 + D-SUP-TUI-01 rows in C00 Provenance)
 
-Six cases where V verdicts override feeder-brief decisions without
-typed supersedes:
+Six cases where V verdicts override feeder-brief decisions without typed supersedes:
 - V1 supersedes roadmap-synthesis daemon-deferred (XB09 above)
 - V1 narrows manifesto Rule 6 (single dispatcher → daemon)
 - V8 narrows manifesto Rule 5 (plan-before-execute → session-reuse on retry)
@@ -635,18 +523,12 @@ typed supersedes:
 - C06 supersedes P14-direction rich-stack pick with Textual
 - V5+V8 supersede 429-vendor-pause halt-only pattern
 
-**Fix pattern.** Open typed `D-SUP-NN` Decision rows in C00 (or C00
-amendment) for each. Decisions live in `state.json`; audit replay
-dereferences them.
+**Fix pattern.** Open typed `D-SUP-NN` Decision rows in C00 (or C00 amendment) for each. Decisions live in `state.json`; audit replay dereferences them.
 
 ### ✅ ~~BOT-02 — Vocabulary gaps in C01 glossary~~ (Theme 2) — CLOSED 2026-05-18 (16 glossary rows added to C01 §5.1)
 
 16 cross-cluster contract terms missing from C01 §5.1: `dispatch.
-session_policy`, `idempotency key`, `attempt_id`, `runtime preference
-ladder`, `schema_version`, `profile.overrides`, `profile.conflicts_
-with`, `state_extensions`, `instrument_requirements`, `render_blocks`,
-`cache-control`, `runtime_switched` event, `LifecycleError`,
-`_StrictModel`, `actor`, `before_state_version` / `after_state_version`.
+session_policy`, `idempotency key`, `attempt_id`, `runtime preference ladder`, `schema_version`, `profile.overrides`, `profile.conflicts_ with`, `state_extensions`, `instrument_requirements`, `render_blocks`, `cache-control`, `runtime_switched` event, `LifecycleError`, `_StrictModel`, `actor`, `before_state_version` / `after_state_version`.
 
 C04/C07/C08 will pin these by reinventing. Drift risk real.
 
@@ -665,24 +547,17 @@ Four versioned subsystems use four literal types:
 Migration tooling must handle four formats.
 
 **Fix.** Lock `Literal["1.0"]` (string MAJOR.MINOR) project-wide.
-Daemon protocol stays composite. Audit ~20 cite locations; patch in
-hygiene wave. Pre-commit lints `schema_version: Literal["..."]`.
+Daemon protocol stays composite. Audit ~20 cite locations; patch in hygiene wave. Pre-commit lints `schema_version: Literal["..."]`.
 
 ### ✅ ~~BOT-04 — Mutator-path imprecision~~ (Theme 4) — CLOSED 2026-05-18 (Q1 supersede: daemon = sole mutator; telemetry projector folded as 4th internal subsystem; authority-map written)
 
-AGENTS rule 17 names three canonical mutators (state-CLI, layered-
-config writer, registry writer). Cluster briefs conflate. Telemetry
-projector is a *fourth* surface needing explicit binding.
+AGENTS rule 17 names three canonical mutators (state-CLI, layered- config writer, registry writer). Cluster briefs conflate. Telemetry projector is a *fourth* surface needing explicit binding.
 
-**Fix.** Amend AGENTS rule 17 to add fourth mutator: **telemetry
-projector** at `<local-path>` via single-canonical
-`src/eawf/telemetry/projector.py`. Each cluster's §V1 binding cross-
-references all four explicitly.
+**Fix.** Amend AGENTS rule 17 to add fourth mutator: **telemetry projector** at `<local-path>` via single-canonical `src/eawf/telemetry/projector.py`. Each cluster's §V1 binding cross- references all four explicitly.
 
 ### ✅ ~~BOT-05 — Implementation-phase EU envelope undisclosed~~ (Theme 5) — CLOSED 2026-05-18 (Q4: C12 implementation rollup brief authored)
 
-Spec-phase EU estimate per C00: 68 CC-session EU for 11 briefs at
-~12.1K LOC. Actual: 17.3K LOC across 13 briefs → likely 90+ EU.
+Spec-phase EU estimate per C00: 68 CC-session EU for 11 briefs at ~12.1K LOC. Actual: 17.3K LOC across 13 briefs → likely 90+ EU.
 
 **Implementation-phase EU is undisclosed in every cluster brief.**
 
@@ -704,8 +579,7 @@ Rough per-cluster estimate (Claude):
 | C11 | 15-20 | GitHub bridge + webhook + keyring + Linear/Jira opt-in |
 | **Total** | **248-322** | spread across ~50-70 waves over ~12-18 months |
 
-Stage 0 normalization (this brief's output): ~25-40 EU. Add ~90 EU
-already spent on the spec phase. **Total v0.3-v0.5 effort: ~365-470 EU.**
+Stage 0 normalization (this brief's output): ~25-40 EU. Add ~90 EU already spent on the spec phase. **Total v0.3-v0.5 effort: ~365-470 EU.**
 
 ### ✅ ~~BOT-06 — Naming convention drift~~ (Theme 6) — CLOSED 2026-05-18 (target_dir→output_dir in C04 §5.6; scope→scope_id in C02/C11 logs flagged for impl wave; EAWF002/EAWF003 ruff rules carried to G-27/G-28)
 
@@ -715,28 +589,19 @@ Spot-checked, mostly clean. Outliers:
 - `scope` bare in C02 RPC examples (Codex G009 + C02-I010)
 - `scope` bare in C11 log examples (Codex C11-I010)
 
-All preventive ruff rules. Add `EAWF002: out_dir parameter rejected`
-to C09 hook inventory. Add `EAWF003: bare scope= log key rejected;
+All preventive ruff rules. Add `EAWF002: out_dir parameter rejected` to C09 hook inventory. Add `EAWF003: bare scope= log key rejected;
 use scope_id= or domain-specific key`.
 
 ### ✅ ~~BOT-07 — `Wave.commit` field drift~~ (Theme 7) — CLOSED 2026-05-18 (Q11: drop from src/eawf/state/models.py + git-log-walk backfill in v0.4 hygiene wave; C01 Provenance notes pending drop)
 
-Cluster briefs reference `Wave.commit` despite AGENTS.md verify-before-
-claim block saying P19-W04 dropped it (C01, C04, C11). Source
-`state/models.py:239` still has the field; `lifecycle/wave_sha.py:3`
-says replaced; AGENTS.md cites the drop.
+Cluster briefs reference `Wave.commit` despite AGENTS.md verify-before- claim block saying P19-W04 dropped it (C01, C04, C11). Source `state/models.py:239` still has the field; `lifecycle/wave_sha.py:3` says replaced; AGENTS.md cites the drop.
 
-**Fix.** Either (a) drop from `state/models.py` + run git-log-walk
-backfill migration in v0.4 hygiene wave, OR (b) revise AGENTS.md to
-remove "P19-W04 dropped" claim. Currently specs *and* source are wrong
-relative to AGENTS.md.
+**Fix.** Either (a) drop from `state/models.py` + run git-log-walk backfill migration in v0.4 hygiene wave, OR (b) revise AGENTS.md to remove "P19-W04 dropped" claim. Currently specs *and* source are wrong relative to AGENTS.md.
 
 ### ✅ ~~BOT-08 — Reference-path drift to `archive/`~~ (Theme 8) — CLOSED 2026-05-18 (C00 References table rewritten with archive/ prefix for moved feeders)
 
-Six feeder briefs moved under `.ea/local/research/archive/`; C00
-references at L566, L568, L676, L755-756, L930 still pre-archive paths.
-dispatch-prompts.md uses `archive/` correctly. Subagent following C00
-hits ENOENT.
+Six feeder briefs moved under `.ea/local/research/archive/`; C00 references at L566, L568, L676, L755-756, L930 still pre-archive paths.
+dispatch-prompts.md uses `archive/` correctly. Subagent following C00 hits ENOENT.
 
 **Fix.** Prefix `archive/` to seven paths.
 
@@ -750,17 +615,13 @@ Skill envelope status enum claimed by three clusters (C03, C04, C07b).
 C04 D1 + C07b D9 list `ok | needs_user | blocked | failed | partial`.
 Codex C04-I006 flags `partial` as new beyond earlier envelope contract.
 
-**Fix.** Pin canonical catalog in C04. C03/C07b cite. Add to C01 §5.1
-glossary. Decide whether `partial` ratifies (Codex says "freeze
-envelope enum once; remove or ratify `partial`").
+**Fix.** Pin canonical catalog in C04. C03/C07b cite. Add to C01 §5.1 glossary. Decide whether `partial` ratifies (Codex says "freeze envelope enum once; remove or ratify `partial`").
 
 ---
 
 ## ✅ 12-Gate roadmap framework (Codex) — ALL 12 GATES CLOSED 2026-05-18
 
-Twelve gates must close before `/roadmap propose` opens any
-implementation phase. Each gate is a discrete normalization deliverable
-with concrete acceptance criteria.
+Twelve gates must close before `/roadmap propose` opens any implementation phase. Each gate is a discrete normalization deliverable with concrete acceptance criteria.
 
 | Gate | Title | Closes | Status | Acceptance criteria |
 |-----:|-------|--------|--------|----------------------|
@@ -800,9 +661,7 @@ G9 + G10 close last (require G3..G8 stable).
 
 ## Revised cluster order (Codex C00R..C11R)
 
-After Stage 0 normalization closes the 12 gates, cluster briefs ratify
-in this order. Each cluster is `<original>R` — same scope, normalized
-content.
+After Stage 0 normalization closes the 12 gates, cluster briefs ratify in this order. Each cluster is `<original>R` — same scope, normalized content.
 
 ```
 C00R (revised index + status ledger + decision-state model)
@@ -840,16 +699,13 @@ C11R (external integrations after security + event contracts:
        HMAC raw-bytes; webhook ingress model; secret display removed)
 ```
 
-Each cluster's R-version ratifies in a single fresh CC session per
-V4 self-containment rule. The R suffix marks the post-normalization
-version.
+Each cluster's R-version ratifies in a single fresh CC session per V4 self-containment rule. The R suffix marks the post-normalization version.
 
 ---
 
 ## ✅ Per-cluster combined findings — ALL 13 CLUSTERS RATIFIED 2026-05-18
 
-For each cluster: the reconciled verdict + Claude/Codex top issues +
-recommended R-version target.
+For each cluster: the reconciled verdict + Claude/Codex top issues + recommended R-version target.
 
 ### C00R — Spec Architecture Index (combined verdict: needs-revision)
 
@@ -878,11 +734,8 @@ recommended R-version target.
 10. V9 plugin distribution not integrated with profile/runtime ownership
 
 **R-version target.** Authority map embedded under V1. Goal enumeration
-G1..G5. Date-stamped status table. Reference paths fixed. `archive/`
-paths corrected. Cluster catalog mirrors actual filesystem. Decision-
-state field added. C07a/C07b rows split. LOC numbers re-stated with
-calibration provenance. EU envelope updated. Dense `[N]` citation
-contract relaxed for index clusters explicitly.
+
+G1..G5. Date-stamped status table. Reference paths fixed. `archive/` paths corrected. Cluster catalog mirrors actual filesystem. Decision- state field added. C07a/C07b rows split. LOC numbers re-stated with calibration provenance. EU envelope updated. Dense `[N]` citation contract relaxed for index clusters explicitly.
 
 ### C01R — Foundations (needs-revision)
 
@@ -908,11 +761,9 @@ contract relaxed for index clusters explicitly.
 - Foundation scope too wide for one wave (split candidate)
 
 **R-version target.** V9 added to §3. 16 glossary terms landed. URN_
+
 KINDS expansion specified. AgentReport migration accurately described.
-Spec lifecycle status source picked. Persona enforcement deferred or
-minimal Principal model added. Daemon-archival rewritten as status
-transition (not `git rm`). Recovery write-path defined with audit
-event emission.
+Spec lifecycle status source picked. Persona enforcement deferred or minimal Principal model added. Daemon-archival rewritten as status transition (not `git rm`). Recovery write-path defined with audit event emission.
 
 ### C02R — Daemon + Topology + Security (needs-revision; 4 BLOCKERS)
 
@@ -1244,17 +1095,13 @@ Each sub-cluster ratifies independently. Six missing skills fold into C04R-b.
 - `2026-05-15-state-history-cache-design.md` — data-shape evidence only; cache work absorbed into daemon/event-store
 - `long-term-valuable-features-2026-05-15.md` — background motivation only
 
-**Fix.** Update each feeder's front-matter to `status: extract-only`
-with explicit supersedes link. Add note to dispatch-prompts.md telling
-subagents to mine only.
+**Fix.** Update each feeder's front-matter to `status: extract-only` with explicit supersedes link. Add note to dispatch-prompts.md telling subagents to mine only.
 
 ---
 
 ## Combined TO-DO list — 106/266 applied (all B0/B1 at 100%; B2/B3 carried to impl phase)
 
-Reconciled from Claude's 126-item list + Codex's 228-item list. De-
-duplicated; severity-tagged; ordered by dependency-DAG. **266 items
-across 10 stages (0, A..I).**
+Reconciled from Claude's 126-item list + Codex's 228-item list. De- duplicated; severity-tagged; ordered by dependency-DAG. **266 items across 10 stages (0, A..I).**
 
 Severity:
 - 🟥 **B0 / BLOCKER-Tier0**: must close before any normalization gate
@@ -1567,8 +1414,7 @@ Severity:
 
 ## ✅ Open questions for operator — ALL 22 RESOLVED 2026-05-18
 
-Reconciled from Claude's 12 questions + Codex's 12-gate framework. **22
-unique decisions** before `/roadmap propose` opens any v0.3-v0.5 phase.
+Reconciled from Claude's 12 questions + Codex's 12-gate framework. **22 unique decisions** before `/roadmap propose` opens any v0.3-v0.5 phase.
 Each closes one or more BLOCKERs / bottlenecks.
 
 ### ✅ ~~Q1 — Authority map: preserve or supersede AGENTS rules 4 + 17?~~ (XB01) — RESOLVED 2026-05-18: **SUPERSEDE** (path b)
@@ -1693,35 +1539,13 @@ Once Stage 0 + Stream 1 close, `/roadmap propose` opens P22-KERNEL (or similar) 
 
 ## Critical opinion
 
-The two audit panels (Claude + Codex) converged on the same primary
-finding from independent processes: **the spec series cannot be turned
-directly into a v0.3-v0.5 roadmap**. They differ in degree —
-Claude's "needs amendment" is a softer landing, Codex's "blocked-for-
-roadmap" is harsher. The reconciled view sits closer to Codex: while
-each cluster brief is individually substantive, the cross-brief
-governance gaps (authority, status, lifecycle, event schema, sensitive-
-info hygiene, principal model) make ratifying any single cluster
-unsafe in isolation.
+The two audit panels (Claude + Codex) converged on the same primary finding from independent processes: **the spec series cannot be turned directly into a v0.3-v0.5 roadmap**. They differ in degree — Claude's "needs amendment" is a softer landing, Codex's "blocked-for- roadmap" is harsher. The reconciled view sits closer to Codex: while each cluster brief is individually substantive, the cross-brief governance gaps (authority, status, lifecycle, event schema, sensitive- info hygiene, principal model) make ratifying any single cluster unsafe in isolation.
 
-The spec phase has produced **genuine architectural value**. The V1..V9
-verdicts are mostly sound (modulo XB04 future-date and XB09 silent
-supersedes). The per-cluster designs are dense and opinionated. The
-blitz harness was a high-leverage research pattern that caught real
-bugs (gh idempotency, asyncio caps, keyring backends, OpenCode schema
-drift). The 33 blitz briefs collectively saved future implementation
-phases from a dozen rabbit holes.
+The spec phase has produced **genuine architectural value**. The V1..V9 verdicts are mostly sound (modulo XB04 future-date and XB09 silent supersedes). The per-cluster designs are dense and opinionated. The blitz harness was a high-leverage research pattern that caught real bugs (gh idempotency, asyncio caps, keyring backends, OpenCode schema drift). The 33 blitz briefs collectively saved future implementation phases from a dozen rabbit holes.
 
-The risk vector is **cross-cluster invisibility**: the spec phase
-delivered 13 ratifiable briefs but did not deliver the cross-brief
-audit trail that ties them together. There is no single document the
-operator can consult to answer "is the spec series ready?". The C00
-status table tried; it's stale by design (frozen-at-ratification per
-Codex G003). The cluster briefs cite each other by name but don't
-cite each other's *status*. Authority conflicts (XB01) are nowhere
-recorded as decisions.
+The risk vector is **cross-cluster invisibility**: the spec phase delivered 13 ratifiable briefs but did not deliver the cross-brief audit trail that ties them together. There is no single document the operator can consult to answer "is the spec series ready?". The C00 status table tried; it's stale by design (frozen-at-ratification per Codex G003). The cluster briefs cite each other by name but don't cite each other's *status*. Authority conflicts (XB01) are nowhere recorded as decisions.
 
-The path forward is **Stage 0 normalization**. It's small (~38 EU) and
-high-leverage. After Stage 0:
+The path forward is **Stage 0 normalization**. It's small (~38 EU) and high-leverage. After Stage 0:
 - Every cluster has a clean authority binding
 - Every supersedes link is typed and replayable
 - Every shared schema (events, envelopes, schema_version, status enums)
@@ -1729,24 +1553,10 @@ high-leverage. After Stage 0:
 - Every BLOCKER is closed
 - Every cluster ratifies in a single fresh CC session per V4
 
-The two audit panels disagree slightly on **whether to ratify clusters
-as-is and amend incrementally** (Claude posture) or **gate every
-cluster behind Stage 0 then re-author as C00R..C11R** (Codex posture).
-The reconciled middle is: Stage 0 happens regardless; cluster R-
-versions can be incremental amendments rather than full rewrites where
-the changes are surgical (most of C03, C05, C06, C08, C09, C10) and
-full rewrites only where the rework is structural (C00R, C01R, C02R,
-C04R split, C07aR, C07bR). The TO-DO list above is sized for the
-incremental path; if the operator picks Codex's full-rewrite path,
-double the EU on the R-version stream.
+The two audit panels disagree slightly on **whether to ratify clusters as-is and amend incrementally** (Claude posture) or **gate every cluster behind Stage 0 then re-author as C00R..C11R** (Codex posture).
+The reconciled middle is: Stage 0 happens regardless; cluster R- versions can be incremental amendments rather than full rewrites where the changes are surgical (most of C03, C05, C06, C08, C09, C10) and full rewrites only where the rework is structural (C00R, C01R, C02R, C04R split, C07aR, C07bR). The TO-DO list above is sized for the incremental path; if the operator picks Codex's full-rewrite path, double the EU on the R-version stream.
 
-**The bottom line: the spec phase paid for itself in caught
-architectural mistakes. The remaining work is to package those
-catches into a normalized roadmap-ready form. Stage 0 + Stream 1
-together cost ~63-73 EU. The implementation envelope after that is
-~250-340 EU. Total v0.3-v0.5 effort: ~365-470 EU. The operator should
-ratify the 22 operator questions, fund Stage 0, then open the first
-implementation phase.**
+**The bottom line: the spec phase paid for itself in caught architectural mistakes. The remaining work is to package those catches into a normalized roadmap-ready form. Stage 0 + Stream 1 together cost ~63-73 EU. The implementation envelope after that is ~250-340 EU. Total v0.3-v0.5 effort: ~365-470 EU. The operator should ratify the 22 operator questions, fund Stage 0, then open the first implementation phase.**
 
 ---
 
@@ -1822,19 +1632,33 @@ Q1..Q22 resolved during P21 prep AUQ pass. Recorded here so Stage 0 waves can co
 ### Source briefs reviewed
 
 [1] `.ea/local/research/long-term/2026-05-16-c00-spec-index.md` — index brief (1139 LOC)
+
 [2] `.ea/local/research/long-term/2026-05-16-c01-foundations.md` — C01 (1609 LOC)
+
 [3] `.ea/local/research/long-term/2026-05-16-c02-daemon-topology.md` — C02 (1464 LOC)
+
 [4] `.ea/local/research/long-term/2026-05-16-c03-spec-infrastructure.md` — C03 (1122 LOC)
+
 [5] `.ea/local/research/long-term/2026-05-16-c04-workflow-skills.md` — C04 (1540 LOC)
+
 [6] `.ea/local/research/long-term/2026-05-16-c05-cli-surface.md` — C05 (1324 LOC)
+
 [7] `.ea/local/research/long-term/2026-05-17-c06-operator-surface.md` — C06 (1751 LOC)
+
 [8] `.ea/local/research/long-term/2026-05-16-c07a-runtime-skill-dispatch.md` — C07a (665 LOC)
+
 [9] `.ea/local/research/long-term/2026-05-16-c07b-vcs-worktree-events.md` — C07b (858 LOC)
+
 [10] `.ea/local/research/long-term/2026-05-16-c08-configurability-profiles.md` — C08 (1453 LOC)
+
 [11] `.ea/local/research/long-term/2026-05-17-c09-quality-observability.md` — C09 (1487 LOC)
+
 [12] `.ea/local/research/long-term/2026-05-17-c10-operations.md` — C10 (1694 LOC)
+
 [13] `.ea/local/research/long-term/2026-05-17-c11-external-integrations.md` — C11 (1167 LOC)
+
 [14] `.ea/local/research/long-term/2026-05-17-agent-lens-audit.md` — V7 audit memo (304 LOC)
+
 [15] `.ea/local/research/long-term/dispatch-prompts.md` — dispatch prompts (883 LOC)
 
 [16] 33 blitz briefs under `.ea/local/research/long-term/2026-05-16-c07[ab]-blitz-*.md` + `2026-05-17-c09-blitz-*.md` + `2026-05-17-c11-blitz-*.md`
@@ -1849,12 +1673,13 @@ Q1..Q22 resolved during P21 prep AUQ pass. Recorded here so Stage 0 waves can co
 - `.ea/local/research/long-term/long-term-valuable-features-2026-05-15.md`
 
 [18] `AGENTS.md` — non-negotiable rules + workflow lifecycle
+
 [19] `src/eawf/` — current implementation (60,091 LOC)
+
 [20] `tests/` — current test suite (59,283 LOC)
+
 [21] User memory entries (under `<local-path>`):
-     `feedback_pr_merge_strategy`, `feedback_worktree_location`, `project_p14_direction`,
-     `feedback_tui_keymap_conventions`, `feedback_tui_branding`, `feedback_naming_conventions`,
-     `feedback_explicit_registry_only`, `feedback_local_artifact_naming`
+     `feedback_pr_merge_strategy`, `feedback_worktree_location`, `project_p14_direction`, `feedback_tui_keymap_conventions`, `feedback_tui_branding`, `feedback_naming_conventions`, `feedback_explicit_registry_only`, `feedback_local_artifact_naming`
 
 ## Provenance
 

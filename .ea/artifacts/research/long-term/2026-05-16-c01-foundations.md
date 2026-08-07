@@ -1,11 +1,17 @@
 # C01 — Foundations — Eä framework long-term specs
 
 **Cluster:** C01 (Foundations — vocabulary, URN scheme, entity catalog, lifecycle, persona authority)
+
 **Title:** Foundations
+
 **Status:** `local-draft`, `needs-user` (pending operator ratification of §8 open questions)
+
 **Created:** `2026-05-16T00:00:00Z`
+
 **Author:** `claude-opus-4-7`
+
 **Depends on:** C00 (verdicts V1..V8 locked; cluster catalog confirmed) [1]
+
 **Consumed by:** C02..C11 (every downstream cluster cites the entity catalog, URN grammar, or persona matrix)
 
 ## 1. Purpose + scope statement
