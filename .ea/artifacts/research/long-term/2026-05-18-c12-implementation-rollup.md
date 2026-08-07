@@ -38,7 +38,7 @@ Per operator Q4 (2026-05-18) + audit BOT-05: every cluster brief omitted its imp
 
 Implementation waves open in this order (DAG arrows = "blocked-until"):
 
-```
+```text
 C01-IMPL (URN_KINDS + Principal min model + lifecycle)
    ↓
 C02-IMPL (daemon scaffolding + outcome-WAL + per-OS service + IPC)

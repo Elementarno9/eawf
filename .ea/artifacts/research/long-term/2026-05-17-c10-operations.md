@@ -153,7 +153,7 @@ Every load-bearing axis for C10 with concrete options and recommendation. Recomm
 | **D14** | Brew formula auto-publish | (rejected) | **N/A — brew not shipped** ([Q4-refr ratified 2026-05-17]) | PyPI-permanent picks left no brew surface. CI publishes wheel + sdist only. |
 | **D15** | Docker image audience | (rejected) | **N/A — Docker image not built** ([Q4-refr ratified 2026-05-17]) | CI reproducibility served by `uv sync --frozen` against `uv.lock`. No GHCR push from release CI. |
 | **D16** | Migration prompt UX | (a) auto-run silently; (b) prompt with `[Y/n]`; (c) require explicit `eawf migrate --confirm` | **(b) — interactive prompt with backup announcement; `--no-input` mode for CI** | State migration writes a backup before running; the operator sees `state.json.bak.v<from>.<to>` path + chain length + estimated runtime. CI mode (`--no-input`) auto-accepts when the backup write succeeds. Silent auto-run (a) is too aggressive for a critical-data path. Explicit confirm (c) blocks `/flow` mid-run. |
-| **D17** | Error UX template format | (a) free-form per-error string; (b) typed `ErrorUXTemplate(cause:str, next_step:str, see:str|None)`; (c) (b) + machine-readable error-code | **(c) — typed `ErrorUXTemplate` with `error_code: str`** | Operator pastes the error code into doc-search; machines parse it from JSON envelopes. C05 [6:467-525] exit codes give the *exit-level* taxonomy; `error_code` is the *cause-level* (`SCOPE_CONFLICT`, `STATE_VALIDATION_FAILED`, etc.) per C09 incident-cause [9:1036-1100]. |
+| **D17** | Error UX template format | (a) free-form per-error string; (b) typed `ErrorUXTemplate(cause:str, next_step:str, see:str\|None)`; (c) (b) + machine-readable error-code | **(c) — typed `ErrorUXTemplate` with `error_code: str`** | Operator pastes the error code into doc-search; machines parse it from JSON envelopes. C05 [6:467-525] exit codes give the *exit-level* taxonomy; `error_code` is the *cause-level* (`SCOPE_CONFLICT`, `STATE_VALIDATION_FAILED`, etc.) per C09 incident-cause [9:1036-1100]. |
 | **D18** | Backup default | (a) `state.json.bak.v<X>.<Y>` adjacent to state.json; (b) `<local-path>`; (c) `.ea/backups/state.json.<ts>` (committed-but-gitignored) | **(a) for migration backups; (b) for snapshot backups via `eawf backup create`** | Migration backups stay adjacent so `git checkout` rollback is trivial. Manual operator-triggered snapshot backups (a different feature) go to a user-scope path so multi-repo backup-restore lives in one place. (c) conflicts with `.ea/` gitignore policy. |
 | **D19** | Variance reporting cadence | (a) weekly auto-tile in TUI; (b) on-demand `eawf metrics variance`; (c) per-phase-close ship-gate output | **(a) + (b) + (c) — all three; same projection feeds all** | The TUI tile is the daily ambient surface; the CLI is the deep-dive; the ship-gate output forms part of the phase PR body. Single projection (C09 §5.9 [9:865]) feeds all three; no redundant compute. |
 | **D20** | Per-OS service-file install location | (a) Linux `<local-path>` + macOS `<local-path>` + Windows registered via `pywin32`; (b) `/etc/...` system-wide; (c) `/opt/eawf/...` | **(a) — per-user only; matches V1 + V6 single-user invariant [1:179]** | System-wide install needs sudo at every upgrade; conflicts with V6 [1:179] "one service file per user". `/opt/eawf/...` is uncommon for a Python tool. |
@@ -168,7 +168,7 @@ Every load-bearing axis for C10 with concrete options and recommendation. Recomm
 
 Eä carries three version concepts that MUST stay aligned:
 
-```
+```yaml
 package:        eawf 0.3.0                          # pyproject.toml [project.version]
 runtime str:    eawf-0.3.0-alpha.1+phase.P20        # __version__ output
 daemon proto:   eawfd-rpc/3.0                       # JSON-RPC initialize handshake (C02)
@@ -192,13 +192,13 @@ __released_at__ = "2026-05-17T00:00:00Z"
 
 `eawf --version`:
 
-```
+```bash
 eawf 0.3.0a1
 ```
 
 `eawf --version --verbose`:
 
-```
+```bash
 eawf 0.3.0a1 (alpha; phase P20; commit 3b86f7a; released 2026-05-17T00:00:00Z)
 daemon protocol eawfd-rpc/3.0
 state schema    1.2 (compatible: 1.0..1.2)
@@ -306,7 +306,7 @@ Per Q3 + Q4-refr ratification: PyPI wheel + sdist is the complete packaging surf
 
 **Wheel contents** beyond the source tree:
 
-```
+```text
 eawf-0.3.0-py3-none-any.whl
 ├── eawf/                              # source tree
 └── eawf/_data/                        # NEW (release-bundled data)
@@ -411,7 +411,7 @@ C02 §5.10 [3:493-650] owns the canonical service-file content (systemd-user uni
 
 Migration scripts live under `src/eawf/migrations/`:
 
-```
+```text
 src/eawf/migrations/
 ├── __init__.py
 ├── v1_0_to_v1_1.py           # adds State.principal_id field; renames scope → scope_id on events
@@ -440,7 +440,7 @@ class Migration(Protocol):
 
 #### 5.5.2 `eawf migrate` CLI surface
 
-```
+```bash
 eawf migrate                                # auto-detect from + to; prompt
 eawf migrate --to 1.2                       # explicit target version
 eawf migrate --dry-run                      # show what would change; no write
@@ -502,7 +502,7 @@ def migrate_cmd(to: str | None, dry_run: bool, no_input: bool, no_backup: bool) 
 
 When the operator runs `eawf metrics show` on a `telemetry.enabled=false` config, the verb emits a one-time onboarding nudge:
 
-```
+```text
 Telemetry is disabled. Eä can project per-session metrics from your event.jsonl
 and per-runtime session logs into a user-scope DuckDB at <local-path>
 
@@ -552,7 +552,7 @@ Reference C09 §5.9.7 scrubber [9:1320-ish]. Operator-facing rules:
 
 #### 5.6.5 Disable / pause
 
-```
+```bash
 eawf config set telemetry.enabled false       # halt projection; existing DB preserved
 eawf metrics rebuild --drop                   # halt + drop the projection DB
 ```
@@ -672,7 +672,7 @@ and rewritten in Pydantic v2.
 
 `docs/` is migrated to mkdocs structure (D9):
 
-```
+```text
 docs/
 ├── index.md                                # landing page; 5-minute quickstart link + project tagline
 ├── getting-started/
@@ -1179,7 +1179,7 @@ Already covered in §5.5.3. `state.json.bak.v<from>.<to>` adjacent to `state.jso
 
 #### 5.15.2 Snapshot backups (manual)
 
-```
+```bash
 eawf backup create [--note <str>]               # writes <local-path>
 eawf backup list [--scope <urn>]                 # lists all snapshot backups
 eawf backup restore --ts <ISO8601>               # restores state.json to the snapshot
@@ -1188,7 +1188,7 @@ eawf backup prune --keep <N>                     # keeps the N most recent; dele
 
 Snapshot backup payload:
 
-```
+```text
 <local-path>
 ├── 2026-05-17T12-00-00Z/
 │   ├── state.json
@@ -1203,7 +1203,7 @@ Snapshot backup payload:
 
 `eawf backup restore` writes a pre-restore backup of the current state automatically, so restore is itself reversible:
 
-```
+```text
 <local-path>
 └── pre-restore-state.json.2026-05-17T12-30-00Z
 ```
@@ -1242,7 +1242,7 @@ Per D10. Empirical calibration from P09..P15 wave timestamps [16:24-39].
 
 #### 5.17.1 EU definition
 
-```
+```text
 1 EU = 30 minutes of active operator + agent session time.
 ```
 
@@ -1262,7 +1262,7 @@ Per archive brief [16:104-110]:
 
 #### 5.17.3 Iter + phase EU roll-up rule
 
-```
+```text
 estimated_iter_eu = ceil_to_0.25(sum(default_eu_for_each_wave_bucket))
 estimated_phase_eu = ceil_to_0.25(sum(estimated_iter_eu))
 ```
@@ -1287,7 +1287,7 @@ Per D11. Soft default + hard opt-in.
 
 #### 5.18.1 Budget hierarchy
 
-```
+```text
 phase_budget   = estimated_phase_eu × multiplier   # default multiplier 1.5 (50% safety)
 iter_budget    = estimated_iter_eu × multiplier
 wave_budget    = bucket_default_eu × multiplier
@@ -1295,7 +1295,7 @@ wave_budget    = bucket_default_eu × multiplier
 
 `multiplier` is configurable per scope via `flow.budget.multiplier`:
 
-```
+```text
 <local-path>    flow.budget.multiplier: 2.0   # operator preference
 <repo>/.ea/config.yaml: flow.budget.multiplier: 1.5   # repo override
 <repo>/.ea/state.json:  state.waves[<wave_id>].budget_eu: 2.5  # per-wave explicit
@@ -1310,14 +1310,14 @@ wave_budget    = bucket_default_eu × multiplier
 
 Setting:
 
-```
+```bash
 eawf config set flow.budget.enforce soft   # default
 eawf config set flow.budget.enforce hard   # opt-in
 ```
 
 Per-wave override at dispatch time:
 
-```
+```bash
 eawf wave dispatch <wave_id> --budget-enforce hard --budget-cap 1.5
 ```
 
@@ -1352,7 +1352,7 @@ Per D19. Same telemetry projection feeds all three surfaces (TUI tile, CLI deep-
 
 C06 [7] metrics overlay shows a 3×2 tile grid; one tile is the VarianceTile:
 
-```
+```text
 ┌── Variance ─────────────────┐
 │  P20 actual: 4.2 EU         │
 │  P20 planned: 3.5 EU        │
@@ -1363,14 +1363,14 @@ C06 [7] metrics overlay shows a 3×2 tile grid; one tile is the VarianceTile:
 
 #### 5.19.2 CLI deep-dive
 
-```
+```bash
 eawf metrics variance [--scope <urn>] [--window 7d|30d|90d]
                        [--format table|json|csv]
 ```
 
 Output:
 
-```
+```text
 Scope: repo/eawf (window: 30d)
 
 Phase | Planned EU | Actual EU | Δ %   | Status

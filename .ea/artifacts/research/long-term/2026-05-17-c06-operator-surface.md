@@ -256,7 +256,7 @@ The body of the brief — module tree, widget catalog, palette verb registry, mo
 
 ### 5.1 TUI module tree
 
-```
+```text
 src/eawf/tui_v2/                              # new tree (parallel to legacy src/eawf/tui/)
 ├── __init__.py                               # exports `EaApp`, `run_tui`
 ├── app.py                                    # EaApp(App): scope routing, key bindings, theme load
@@ -396,6 +396,7 @@ One row per widget. Type column names the Textual primitive used (or `Static` co
 Per-screen composition (concrete layouts per scope follow):
 
 **RepoScreen (2x2 quadrant)** — composes `Header` + body grid + `Footer`. Body grid:
+
 - top-left: `RoadmapTree` (scope = current repo's all phases, hybrid lazy)
 - top-right: `StatusPane`
 - bottom-left: `GitPane`
@@ -954,6 +955,7 @@ class VarianceTile(Static):
 Tile drill (Enter on focused tile) → opens a per-tile sub-overlay scoped to the drilled metric (per-wave variance table, per-cause switchover history, etc.).
 
 `/metrics` arg parsing:
+
 - `/metrics` → opens with current scope + default 7d window
 - `/metrics --scope <urn>` → filters tiles to a specific URN
 - `/metrics --window 7d|30d|90d` → switches rolling window
@@ -966,7 +968,7 @@ Per D6 — defer concrete SPA pick; specify daemon-side WebSocket bridge protoco
 
 WebSocket protocol mirrors the JSON-RPC `event.subscribe` contract:
 
-```
+```text
 client → server:  { "method": "subscribe", "params": { "scope_id": "...", "since_version": "..." } }
 server → client:  { "kind": "event.push", "event": <Envelope> }       (streaming)
 server → client:  { "kind": "subscription_dropped", "reason": "...", "code": -32008 }
@@ -1580,6 +1582,7 @@ Closing: `feature/eawf-v0.3-c06-tui` branch ready for phase-PR merge; legacy TUI
 **Schema unchanged.** No `state.json` schema bumps; the TUI is a passive consumer. State.config gains new optional fields (`tui.engine`, `tui.theme`, `tui.scope_session`) but they default to backwards-compatible values.
 
 **Pre-commit + CI.** C06 implementation phase gains:
+
 - `snapshot/svg` golden tests on every push.
 - `perf` markers run via `pytest -m perf` in a dedicated CI job.
 - `tui_v2/` paths exempted from the `.ea/specs/` allow-list per `tools/commit_prefix_lint.py` extension (no change required; existing `_STATE_ONLY_PREFIXES` is sufficient).
@@ -1595,6 +1598,7 @@ The 24 original decision rows in §4 were ratified via AUQ on 2026-05-17 (initia
 **Question.** §7 names candidate phase IDs P22..P26 for the 5-phase C06 migration. The actual phase IDs depend on the operator's roadmap state at the time of C06 implementation. Should the brief reserve these IDs, or stay placeholder?
 
 **Options.**
+
 - (a) Stay placeholder; phase IDs finalized at each phase's prep (Recommended).
 - (b) Reserve P22..P26 in `state.json` PLANNED status now.
 - (c) Defer naming until C03 implementation phase closes (since C06 depends on C03).
@@ -1606,6 +1610,7 @@ The 24 original decision rows in §4 were ratified via AUQ on 2026-05-17 (initia
 **Question.** The migration plan (§7.5) flips bare-`eawf` to `tui_v2` at P26-W03 with `EAWF_TUI_LEGACY=1` env-opt-in to legacy `src/eawf/tui/`. How long does that env flag survive?
 
 **Options.**
+
 - (a) One alpha cycle, removed at P26-W04 alongside legacy code (Recommended).
 - (b) Two alpha cycles, deprecation warning at first cycle.
 - (c) Indefinite — legacy stays reachable for v0.4+.
@@ -1617,6 +1622,7 @@ The 24 original decision rows in §4 were ratified via AUQ on 2026-05-17 (initia
 **Question.** Which SPA stack does the web-cluster brief pick?
 
 **Options (seeds for the future cluster brief).**
+
 - (a) Preact + signals — minimal bundle (~3 KB), reactive shape matches Textual.
 - (b) Lit web components — standards-friendly; can render inside any host.
 - (c) SvelteKit — most ergonomic reactivity; heavier build chain.
@@ -1629,6 +1635,7 @@ The 24 original decision rows in §4 were ratified via AUQ on 2026-05-17 (initia
 **Question.** Textual project convention names CSS files `.tcss` (Textual CSS); this brief uses `.css`. Which does C06 implementation phase land?
 
 **Options.**
+
 - (a) `.tcss` (matches Textual convention; clearer file-type discrimination) (Recommended).
 - (b) `.css` (matches generic CSS tooling; loses Textual-specific signal).
 - (c) Operator decides at implementation phase prep.
@@ -1640,6 +1647,7 @@ The 24 original decision rows in §4 were ratified via AUQ on 2026-05-17 (initia
 **Question.** When ASCII text snapshot diff fails, how does CI present the diff?
 
 **Options.**
+
 - (a) Unified diff with ANSI escape codes rendered as `\x1b[...]` literals (Recommended).
 - (b) Diff with ANSI stripped (text-only).
 - (c) HTML diff with ANSI rendered as inline colors.

@@ -146,7 +146,7 @@ Out of scope per C00 [818-836]: hosted monitoring (v0.5+), distributed tracing (
 
 ### 5.1 Test taxonomy
 
-```
+```text
 tests/
 ├── unit/               # marker: unit          fast, in-process, no I/O
 │                                              one module under test per file
@@ -227,7 +227,7 @@ Locked inventory. Each row: hook id, stage, what catches, repair command.
 
 ### 5.4 CI pipeline DAG
 
-```
+```text
                                  ┌────────────────┐
                                  │  checkout (v4) │
                                  │  fetch-depth=0 │
@@ -322,7 +322,7 @@ Current CI [12] runs `[macos-26, macos-15, ubuntu-24.04, ubuntu-22.04]` × `py3.
 
 New noun-app verb. Lives at `src/eawf/cli/commands/bench.py` per AGENTS rule 1; library lives at `src/eawf/bench/`.
 
-```
+```bash
 eawf bench list                          # show every fixture × harness
 eawf bench run [--fixture <name>] [--harness <name>]
                [--baseline .ea/bench/baseline.json] [--update-baseline]
@@ -468,7 +468,7 @@ class EventPayload(BaseModel):
 
 #### 5.9.1 Module layout
 
-```
+```text
 src/eawf/telemetry/
 ├── __init__.py
 ├── models.py              # Pydantic v2 row models (vendored shape, retyped)
@@ -819,7 +819,7 @@ def rebuild(store: AbstractMetricsStore, *, scope_id: str | None = None,
 
 #### 5.9.5 `eawf metrics` CLI surface
 
-```
+```bash
 eawf metrics show [--scope <urn>] [--window 7d|30d|90d|all]
                   [--runtime claude|codex|opencode|all]
                   [--format table|json|prom]
@@ -842,7 +842,7 @@ eawf metrics info        # cache stats: DB path, size, schema_version,
 
 **`--format prom` output** (Prometheus textfile collector v0.0.4 format):
 
-```
+```text
 # HELP eawf_tokens_total Total tokens by direction.
 # TYPE eawf_tokens_total counter
 eawf_tokens_total{direction="input",runtime="claude",scope="repo/eawf"} 812440
