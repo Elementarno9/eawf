@@ -39,7 +39,7 @@ the executor opens the wave already aware of the relevant brief.
 
 Emit a sequence of state-mutating commands the parent can apply:
 
-```
+```bash
 eawf roadmap revise <phase-id> --add-wave W01 --title "feat: ..."
     --files <globs> --success "<criterion>" [--deps W00,...]
     [--agent-role executor] [--effort-bucket S]
