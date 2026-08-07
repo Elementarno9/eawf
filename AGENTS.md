@@ -132,22 +132,23 @@ Before opening or resuming a phase, iter, or wave, verify the current branch is 
 If the working tree is dirty, preserve the dirty/untracked work before rebasing. If the branch intentionally remains behind or forked, record the reason in the plan or handoff before dispatching worktrees or starting new commits.
 
 <!-- END EAWF:managed id=branch-currency -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.4 hash=0b9a685f80a18068 -->
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.5 hash=838a6e3be7aaf5e8 -->
 ### Commit prefix
 
-``[P<NN>(-I<NN>)?(-W<NN>|-CORE)?] <type>: <summary>`` — types: ``feat``, ``fix``, ``chore``, ``docs``, ``refactor``, ``test``, ``build``, ``perf``, ``ci``, ``revert``, ``state``.
+``[P<NN>(-I<NN>)?(-W<NN>)?] <type>: <summary>`` — types: ``feat``, ``fix``, ``chore``, ``docs``, ``refactor``, ``test``, ``build``, ``perf``, ``ci``, ``revert``, ``state``.
 
 Subject grammar (post-P26-W23 + P28-W66 bare-conventional form):
 
 - **Planned wave deliverable** — ``[P<NN>-W<NN>] <type>:`` (or ``[P<NN>-I<NN>-W<NN>] <type>:`` when iter ≥ I02). The ``-W<NN>`` suffix declares the wave the commit advances.
 - **State-bookkeeping** — ``[P<NN>] state:`` (or ``[P<NN>-I<NN>] state:`` when iter ≥ I02). The ``state`` conventional-commit type IS the semantic signal for phase- scope bookkeeping; no suffix needed. Allowed paths: ``.ea/state.json``, the typed stores under ``.ea/store/`` (``audit.jsonl``, ``decision.jsonl``, ``evidence.jsonl``, the role reports), ``.secrets.baseline``, and ``.ea/specs/**``. ``.ea/store/event.jsonl`` is NOT among them: the event store is the firehose (one row per lifecycle mutation plus every spawned agent's raw stdout), so it is gitignored and stays on the machine that produced it.
-- **Legacy ``-CORE`` alias** — ``[P<NN>-CORE] state:`` (or the iter variant) remains valid for back-compat with pre-P26-W23 commits. New bookkeeping commits MAY drop the ``-CORE`` suffix; the lint accepts both forms identically.
 - **Phase/iter-scoped artifact docs** — ``[P<NN>] docs:`` (or ``[P<NN>-I<NN>] docs:``) for documentation artifacts no single wave owns (closure audits, promoted research / decision / incident briefs). Restricted to ``.ea/artifacts/**``; wave-produced docs use the ``[P<NN>-W<NN>] docs:`` form.
 - **Bare conventional-commits (out-of-phase)** — ``<type>: <summary>`` with NO bracket prefix. Accepted ONLY when ``state.current.phase_id`` is ``None`` (no ACTIVE phase) — e.g. the pre-flight chore commit between phase close and the next ``/roadmap propose``. Rejected when a phase is ACTIVE so lifecycle bookkeeping stays attributable. Enforced by ``tools/commit_prefix_lint.py``.
 
-The path whitelist for state-bookkeeping commits triggers on ``type == 'state'`` (the canonical semantic signal). The legacy ``-CORE`` suffix is also treated as a whitelist trigger so pre-P26-W23 commits continue to validate.
+The path whitelist for state-bookkeeping commits triggers on ``type == 'state'`` — the canonical, and only, semantic signal.
 
-Bare ``[P<NN>]`` is accepted for ``type == 'state'`` (any state-bookkeeping path) and ``type == 'docs'`` (restricted to ``.ea/artifacts/**``); for every other type the ``-W<NN>`` or ``-CORE`` suffix remains mandatory.
+Bare ``[P<NN>]`` is accepted for ``type == 'state'`` (any state-bookkeeping path) and ``type == 'docs'`` (restricted to ``.ea/artifacts/**``); for every other type the ``-W<NN>`` suffix remains mandatory.
+
+The ``-CORE`` suffix is retired. It survives only in commits already on the trunk, where ``git log`` reads it as the pre-P26-W23 spelling of ``[P<NN>] state:``; the lint rejects it in anything new.
 
 Non-final iter closes are still in-phase state bookkeeping: use ``[P<NN>-I<NN>] state: close iter`` while the phase remains ACTIVE. Bare conventional commits are reserved for the gap after phase close clears ``state.current.phase_id`` and before the next phase activates, such as a pre-flight chore before ``/roadmap propose``.
 
@@ -330,14 +331,14 @@ Render the plan via ``eawf roadmap show --phase <id> --md`` → ``EnterPlanMode`
 The plan-mode-first invariant applies to any future ``/prep`` cases (e.g. mid-flight scope expansion of an ACTIVE iter): the operator-facing surface is always the rendered DAG, not raw mutator commands.
 
 <!-- END EAWF:managed id=prep-plan-mode -->
-<!-- BEGIN EAWF:managed id=iter-phase-close-timing version=1.1 hash=163f8a03c0357119 -->
+<!-- BEGIN EAWF:managed id=iter-phase-close-timing version=1.1 hash=67c5ac9feba039ca -->
 ### Iter and phase close timing
 
 Iter close is gated on **audit + polish + ship CI + PR review pass**. Do not close an iter the moment its waves finish — run ``/audit`` and ``/polish`` first, then ``/ship`` (which runs the PR review pass + addresses feedback by appending waves to the same iter), then close.
 
 **Append, don't open a second iter.** When ``/audit`` or ``/polish`` surfaces follow-up work that fits the same delivery, append waves to the current iter via ``eawf roadmap revise --add-wave`` (ACTIVE-phase ``add_wave_plan`` keeps the iter ACTIVE and the new waves land PENDING). Opening a second iter under the same phase is reserved for true scope expansions or repair cycles per decision D17 (iter-bump triggers), not for routine follow-ups.
 
-**Phase close goes in the latest commit before merge.** Do not close the phase until ship CI is green AND the review-passed branch is on the remote. The phase-close mutation rides in a single ``[P<NN>] state: close iter + phase (audit=<id>)`` commit that bundles iter close + phase close (the legacy ``[P<NN>-CORE] state: ...`` form remains valid per the ``commit-prefix`` block). Merging that commit ends the phase; pre-merge close keeps ``state.json`` in sync with what reviewers approved.
+**Phase close goes in the latest commit before merge.** Do not close the phase until ship CI is green AND the review-passed branch is on the remote. The phase-close mutation rides in a single ``[P<NN>] state: close iter + phase (audit=<id>)`` commit that bundles iter close + phase close. Merging that commit ends the phase; pre-merge close keeps ``state.json`` in sync with what reviewers approved.
 
 <!-- END EAWF:managed id=iter-phase-close-timing -->
 <!-- BEGIN EAWF:managed id=entity-title-naming version=1.0 hash=07a2c7fe31667c16 -->
@@ -414,7 +415,7 @@ Per-phase release pre-flight (gates ``eawf phase close``) requires:
 Post-merge, ``.github/workflows/phase-release.yaml`` reads the annotation, tags the merge commit, and publishes release notes synthesized from the phase PR body. Repos that opt out via ``cadence: manual`` skip the gate and the workflow.
 
 <!-- END EAWF:managed id=release-process -->
-<!-- BEGIN EAWF:managed id=ship-process version=1.0 hash=b49fd8ac72a1a6b2 -->
+<!-- BEGIN EAWF:managed id=ship-process version=1.0 hash=181610cca3e5eaaf -->
 ### Ship process
 
 Ship is the phase's terminal pass, and it rides the phase-co-closing iter (the final iter of the phase) rather than a fresh iter. The ordered steps from green waves to a merged, tagged phase:
@@ -422,7 +423,7 @@ Ship is the phase's terminal pass, and it rides the phase-co-closing iter (the f
 1. **Open the phase PR.** One PR per phase, body per the ``pr-template`` (``## Summary`` + ``## Test plan`` + ``## Phase deliverables``). The PR head is the long-running ``feature/<symbol>-v<X.Y>`` branch with every worktree wave already cherry-picked in.
 2. **Pass CI gates.** Beyond the per-commit lint + test gauntlet, two gates fire only on the phase PR and so are easy to miss locally: the per-package **coverage gate** (CI parses ``coverage.xml`` against the ``[tool.eawf.coverage]`` thresholds) and the **snapshot-pairing gate** (``tools/snapshot_pairing_gate.py`` over the PR base..head range, which rejects a managed golden-surface mutation that lacks a wave-form ``test:`` subject). Run both locally before pushing the PR so they do not surface late.
 3. **Pass the review.** ``/ship`` runs the PR review pass. Address feedback by **appending waves to the same co-closing iter** via ``eawf roadmap revise --add-wave`` (ACTIVE-phase ``add_wave_plan`` keeps the iter ACTIVE and lands the new waves PENDING). Do NOT open a second iter for routine review follow-ups -- see ``iter-phase-close-timing``.
-4. **Close + merge.** Once CI is green AND the review-passed branch is on the remote, the phase-close mutation rides the single ``[P<NN>] state: close iter + phase (audit=<id>)`` commit that bundles iter close + phase close (see ``iter-phase-close-timing``). Merge with rebase (never squash) so the per-wave ``[P<NN>-W<NN>]`` / ``[P<NN>-CORE]`` history survives; the merge ends the phase.
+4. **Close + merge.** Once CI is green AND the review-passed branch is on the remote, the phase-close mutation rides the single ``[P<NN>] state: close iter + phase (audit=<id>)`` commit that bundles iter close + phase close (see ``iter-phase-close-timing``). Merge with rebase (never squash) so the per-wave ``[P<NN>-W<NN>]`` history survives; the merge ends the phase.
 5. **Tag the release.** Per the ``per_phase`` cadence the post-merge ``.github/workflows/phase-release.yaml`` reads the ``(release=v<X.Y.Z>)`` annotation off the phase-close commit, tags the merge commit, and publishes notes from the PR body -- see ``release-process`` for the pre-flight gate that ``eawf phase close`` enforces.
 
 <!-- END EAWF:managed id=ship-process -->

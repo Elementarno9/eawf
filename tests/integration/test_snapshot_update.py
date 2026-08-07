@@ -457,12 +457,17 @@ def test_gate_rejects_w00_in_paired_subject(gate: Any) -> None:
     assert gate.is_paired("[P27-I00-W01] test: bad") is False
 
 
-def test_gate_accepts_iter_and_core_variants(gate: Any) -> None:
-    """Iter, legacy CORE, and out-of-phase forms satisfy pairing grammar."""
+def test_gate_accepts_iter_and_bare_variants(gate: Any) -> None:
+    """Iter and out-of-phase forms satisfy pairing grammar; -CORE does not.
+
+    The ``-CORE`` alias is retired. The gate only ever scans an unmerged
+    base..head range, so refusing it here cannot reject an already-landed
+    commit.
+    """
     assert gate.is_paired("[P27-I02-W03] test: snapshot update spec") is True
-    assert gate.is_paired("[P27-CORE] test: snapshot update agents_md") is True
-    assert gate.is_paired("[P27-I02-CORE] test: snapshot update tui") is True
     assert gate.is_paired("test: snapshot update tui") is True
+    assert gate.is_paired("[P27-CORE] test: snapshot update agents_md") is False
+    assert gate.is_paired("[P27-I02-CORE] test: snapshot update tui") is False
 
 
 def test_gate_rejects_non_test_type(gate: Any) -> None:

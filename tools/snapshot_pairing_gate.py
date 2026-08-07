@@ -45,7 +45,7 @@ file, the subject must match one of:
 
 - ``[P##-W##] test: <summary>`` (planned wave deliverable);
 - ``[P##-I##-W##] test: <summary>`` (iter >= I02 variant);
-- ``[P##(-I##)?-CORE] test: <summary>`` (legacy bookkeeping alias).
+- ``test: <summary>`` (bare conventional, out-of-phase only).
 
 ``W00`` / ``I00`` are rejected — wave / iter indices are 1-based. A
 commit mutating golden fixtures with any other subject (wrong type,
@@ -91,14 +91,14 @@ _WATCHED_DIRS: tuple[str, ...] = tuple(
 )
 
 # ``test:`` subject forms accepted by the commit-prefix grammar. Planned
-# work uses a wave/CORE scope tag; out-of-phase work uses a bare conventional
+# work uses a wave scope tag; out-of-phase work uses a bare conventional
 # subject while no phase is active. The commit-prefix lint owns that lifecycle
 # distinction, so this gate only needs to recognise both valid test forms.
+# The retired ``-CORE`` alias is not accepted: this gate only ever scans an
+# unmerged base..head range, so no already-landed commit is replayed through it.
 # The ``(?!00)`` lookaheads reject ``I00`` / ``W00`` (1-based indices), and
 # the digit-width remains ``\d{2,}`` for 3-digit ids.
-_PAIRED_SUBJECT_RE = re.compile(
-    r"^(?:\[P\d{2,}(-I(?!00)\d{2,})?(-W(?!00)\d{2,}|-CORE)\]\s+)?test:\s+\S.*$"
-)
+_PAIRED_SUBJECT_RE = re.compile(r"^(?:\[P\d{2,}(-I(?!00)\d{2,})?-W(?!00)\d{2,}\]\s+)?test:\s+\S.*$")
 
 # Phase/iter scope key at the head of a commit subject, e.g. ``[P27-I04-W04]``
 # -> ``P27-I04`` and the bare pre-I02 form ``[P27-W19]`` -> ``P27``. Used to

@@ -74,7 +74,8 @@ def test_rejects_bare_phase_prefix_non_state_non_docs_type(tmp_path: Path, mod) 
 
     Bare ``[P##]`` is accepted only for ``type == 'state'`` (bookkeeping) or
     ``type == 'docs'`` (phase/iter-scoped artifacts). For ``feat`` / ``fix`` /
-    etc. the ``-W##`` or ``-CORE`` suffix remains mandatory.
+    etc. the ``-W##`` suffix remains mandatory (the legacy ``-CORE`` alias
+    is retired).
     """
     msg = _write_msg(tmp_path, "[P14] feat: drive-by feature\n")
     code, diag = mod.lint(msg, ["src/eawf/x.py"])
@@ -83,24 +84,30 @@ def test_rejects_bare_phase_prefix_non_state_non_docs_type(tmp_path: Path, mod) 
 
 
 def test_rejects_bare_phase_iter_prefix_non_state_non_docs_type(tmp_path: Path, mod) -> None:
-    """``[P##-I##]`` without -W##/-CORE rejected for types other than state/docs."""
+    """``[P##-I##]`` without -W## rejected for types other than state/docs."""
     msg = _write_msg(tmp_path, "[P14-I02] feat: iter-scope feature\n")
     code, _diag = mod.lint(msg, ["src/eawf/x.py"])
     assert code == 1
 
 
-def test_accepts_core_state_only_paths(tmp_path: Path, mod) -> None:
-    """Legacy ``[P##-CORE] state: ...`` form still validates (back-compat)."""
+def test_core_suffix_rejected(tmp_path: Path, mod) -> None:
+    """The retired ``-CORE`` suffix no longer matches any subject grammar.
+
+    ``[P##] state: ...`` is now the sole canonical bookkeeping form; a
+    ``-CORE``-suffixed subject falls through to the generic mismatch
+    diagnostic regardless of how whitelist-friendly the staged paths are.
+    """
     msg = _write_msg(tmp_path, "[P14-CORE] state: close W01\n")
     code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
-    assert code == 0, diag
+    assert code == 1
+    assert "commit subject rejected" in diag
 
 
 def test_accepts_bare_state_type_commit(tmp_path: Path, mod) -> None:
-    """P26-W23: bare ``[P##] state: ...`` (no -CORE suffix) is the canonical bookkeeping form.
+    """P26-W23: bare ``[P##] state: ...`` is the sole canonical bookkeeping form.
 
-    ``type == 'state'`` is the semantic signal; the bare ``[P##]`` prefix
-    is accepted because the legacy ``-CORE`` carrier is now optional.
+    ``type == 'state'`` is the semantic signal; the legacy ``-CORE`` carrier
+    is retired, so the bare ``[P##]`` prefix is the only accepted spelling.
     """
     msg = _write_msg(tmp_path, "[P26] state: close iter + phase (audit=A31-P26)\n")
     code, diag = mod.lint(msg, [".ea/state.json", ".ea/store/event.jsonl"])
@@ -108,7 +115,8 @@ def test_accepts_bare_state_type_commit(tmp_path: Path, mod) -> None:
 
 
 def test_accepts_bare_state_type_commit_with_iter_component(tmp_path: Path, mod) -> None:
-    """P26-W23: ``[P##-I##] state: ...`` (no -CORE) accepted; iter form valid for type=state."""
+    """P26-W23: ``[P##-I##] state: ...`` accepted (the -CORE suffix is retired);
+    iter form valid for type=state."""
     msg = _write_msg(tmp_path, "[P26-I02] state: close W01\n")
     code, diag = mod.lint(msg, [".ea/state.json"])
     assert code == 0, diag
@@ -117,10 +125,10 @@ def test_accepts_bare_state_type_commit_with_iter_component(tmp_path: Path, mod)
 def test_rejects_bare_state_type_touching_src(tmp_path: Path, mod) -> None:
     """P26-W23: bare ``[P##] state:`` triggers the whitelist via type=state.
 
-    The whitelist is bound to ``type == 'state'`` (the semantic signal),
-    not the legacy ``-CORE`` suffix. A bare ``[P##] state:`` commit
-    touching ``src/`` is rejected for the same reason
-    ``[P##-CORE] state:`` was previously rejected.
+    The whitelist is bound to ``type == 'state'`` (the semantic signal);
+    the legacy ``-CORE`` suffix is retired and no longer part of the
+    grammar at all. A bare ``[P##] state:`` commit touching ``src/`` is
+    rejected the same way the retired ``[P##-CORE] state:`` form used to be.
     """
     msg = _write_msg(tmp_path, "[P26] state: bogus state commit\n")
     code, diag = mod.lint(msg, [".ea/state.json", "src/eawf/foo.py"])
@@ -210,8 +218,13 @@ def test_rejects_iter_zero(tmp_path: Path, mod) -> None:
 
 
 def test_rejects_iter_zero_core(tmp_path: Path, mod) -> None:
-    """``[P##-I00-CORE]`` rejected: iter indices are 1-based."""
-    msg = _write_msg(tmp_path, "[P14-I00-CORE] state: bogus iter index\n")
+    """``[P##-I00-W##]`` rejected: iter indices are 1-based.
+
+    Rewritten from the retired ``[P##-I00-CORE]`` legacy spelling onto the
+    surviving wave form -- the ``-CORE`` suffix no longer parses at all, so
+    this isolates the I00 rejection on the form that still exists.
+    """
+    msg = _write_msg(tmp_path, "[P14-I00-W02] state: legacy iter-zero shape\n")
     code, diag = mod.lint(msg, [".ea/state.json"])
     assert code == 1
     assert "commit subject rejected" in diag
@@ -237,36 +250,23 @@ def test_rejects_unknown_type(tmp_path: Path, mod) -> None:
     assert code == 1
 
 
-def test_rejects_core_touching_src(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "[P14-CORE] state: bogus core change\n")
-    code, diag = mod.lint(msg, [".ea/state.json", "src/eawf/foo.py"])
-    assert code == 1
-    assert "non-state paths" in diag
+def test_accepts_state_touching_specs(tmp_path: Path, mod) -> None:
+    """Rewritten from the retired ``[P##-CORE] state:`` form.
 
-
-def test_legacy_core_suffix_non_state_type_touching_src_rejected(tmp_path: Path, mod) -> None:
-    """P26-W23: legacy ``-CORE`` suffix still triggers whitelist for back-compat.
-
-    Pre-P26-W23 lint enforced the whitelist on the ``-CORE`` subject
-    suffix regardless of type. To preserve D16 (CORE restricted to
-    state-only commits), the legacy suffix remains a whitelist trigger
-    even when the type is not ``state``.
+    Bare ``[P##] state:`` accepts ``.ea/specs/**`` wave-spec paths.
     """
-    msg = _write_msg(tmp_path, "[P14-CORE] feat: hypothetical legacy mis-use\n")
-    code, diag = mod.lint(msg, [".ea/state.json", "src/eawf/foo.py"])
-    assert code == 1
-    assert "non-state paths" in diag
-    assert "[P##-CORE]" in diag
-
-
-def test_accepts_core_touching_specs(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "[P14-CORE] state: wave spec\n")
+    msg = _write_msg(tmp_path, "[P14] state: wave spec\n")
     code, diag = mod.lint(msg, [".ea/specs/P14-I01-W01.md"])
     assert code == 0, diag
 
 
-def test_accepts_core_touching_secrets_baseline(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "[P14-CORE] state: reopen P14\n")
+def test_accepts_state_touching_secrets_baseline(tmp_path: Path, mod) -> None:
+    """Rewritten from the retired ``[P##-CORE] state:`` form.
+
+    Bare ``[P##] state:`` accepts ``.secrets.baseline`` alongside
+    ``state.json`` and ``event.jsonl``.
+    """
+    msg = _write_msg(tmp_path, "[P14] state: reopen P14\n")
     code, diag = mod.lint(
         msg,
         [".ea/state.json", ".ea/store/event.jsonl", ".secrets.baseline"],
@@ -281,14 +281,13 @@ def test_accepts_wave_commit_with_iter_component(tmp_path: Path, mod) -> None:
     assert code == 0, diag
 
 
-def test_accepts_core_commit_with_iter_component(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "[P14-I02-CORE] state: close W01\n")
-    code, diag = mod.lint(msg, [".ea/state.json"])
-    assert code == 0, diag
+def test_accepts_state_touching_audit_store(tmp_path: Path, mod) -> None:
+    """Rewritten from the retired ``[P##-CORE] state:`` form.
 
-
-def test_accepts_core_touching_audit_store(tmp_path: Path, mod) -> None:
-    msg = _write_msg(tmp_path, "[P14-CORE] state: register audit\n")
+    Bare ``[P##] state:`` accepts the typed audit store alongside
+    ``event.jsonl``.
+    """
+    msg = _write_msg(tmp_path, "[P14] state: register audit\n")
     code, diag = mod.lint(
         msg,
         [".ea/state.json", ".ea/store/audit.jsonl", ".ea/store/event.jsonl"],
