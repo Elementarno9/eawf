@@ -1,7 +1,9 @@
 # C12 — Implementation rollup (per-cluster EU + DAG) — Eä framework long-term specs
 
 **Cluster:** C12 (Implementation rollup — Q4 deliverable; per-cluster EU + dependency DAG for the v0.3-v0.5 implementation envelope)
+
 **Status:** `accepted` (per Q4 / BOT-05 closes 2026-05-18)
+
 **Closes:** Q4 (implementation-phase EU envelope disclosure), BOT-05 (implementation-phase EU undisclosed in every cluster brief).
 
 ## 1. Purpose
@@ -192,8 +194,11 @@ Per Q23 (all-6 closure) + Q24 (3 profiles only) + Q25 (700 LOC cap) + Q26 (delet
 ## 6. References
 
 [1] `.ea/local/research/long-term/2026-05-17-spec-series-combined-audit.md` §"Bottom-line answer to operator's four questions" + Q4 + BOT-05
+
 [2] `.ea/local/research/long-term/2026-05-18-authority-map.md` — Q1 deliverable
+
 [3] `.ea/local/research/long-term/2026-05-18-migration-dag.md` — G10 deliverable
+
 [4] All 13 cluster briefs + 4 C04 sub-cluster briefs
 
 ## 7. Provenance

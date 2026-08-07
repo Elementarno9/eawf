@@ -1,6 +1,7 @@
 # Future ideas + deferred phases — Eä framework (post v0.3-v0.5 spec series)
 
 **Created:** 2026-05-18
+
 **Purpose.** Reconcile the pre-spec-series v0.3-v0.4 roadmap proposal (`.ea/local/research/2026-05-15-v0.3-v0.4-roadmap-proposal.md`) with the ratified 13-cluster spec series + C12 implementation rollup. Maps each prior-roadmap idea to its current spec home OR records it as a future-phase candidate with target version.
 
 This brief is the **ideas backlog** for v0.5+/v0.6+ planning. Not a roadmap — does not commit phases. `/roadmap propose` consumes it when the operator picks the next phase after C11-IMPL ships.
@@ -266,8 +267,11 @@ Each IDEA above requires a spec brief before `/roadmap propose` claims its phase
 ## 6. References
 
 [1] `.ea/local/research/2026-05-15-v0.3-v0.4-roadmap-proposal.md` — original v0.3-v0.4 roadmap proposal (this brief supersedes its P22..P29 phase plan + D38..D48 decisions where v0.3-v0.5 spec series ratified)
+
 [2] `.ea/local/research/long-term/2026-05-17-spec-series-combined-audit.md` — Stage-0 audit + operator decisions Q1..Q26
+
 [3] `.ea/local/research/long-term/2026-05-18-c12-implementation-rollup.md` — current v0.3-v0.5 implementation EU envelope
+
 [4] Bio-memory + Axis B/D feeder (IDEA-04 + IDEA-02 source) — nuggets folded into §2 above; source feeder deleted in the post-v0.3 local purge.
 [5] Outcome-eval-lake + MCP-firewall + agent-router feeder — nuggets folded into §3 above; source feeder deleted in the post-v0.3 local purge.
 [6] PyO3 perf-gate feeder (IDEA-06 source) — nugget folded into §2 above; source feeder deleted in the post-v0.3 local purge.

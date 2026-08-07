@@ -1,12 +1,19 @@
 # C10 — Operations (Distribution, Docs, DX, EU) — Eä framework long-term specs
 
 **Cluster:** C10 (Operations — versioning + release channels + packaging matrix + per-OS service-file distribution + state-schema migration + telemetry contract + docs IA + per-persona onboarding + error UX template + progress / resumability / backup / remote-dev + EU calibration + budget enforcement + variance reporting)
+
 **Title:** Operations
+
 **Status:** `accepted` (operator ratified §8 Q1..Q12 on 2026-05-17 via 3-round AskUserQuestion blitz; see §10 Provenance for the 2 override deltas: Q3 PyPI-only + Q4-refr never-revisit; Q6 strict-local-no-network)
+
 **Created:** `2026-05-17T00:00:00Z`
+
 **Ratified:** `2026-05-17T00:00:00Z`
+
 **Author:** `claude-opus-4-7`
+
 **Depends on:** C00 [1] (V1 / V3 / V4 / V6 / V7 / V9 load-bearing); C01..C09 (every cluster contributes a surface C10 packages, documents, or budgets)
+
 **Consumed by:** none in this batch (C10 is the penultimate cluster — C11 consumes only external-integration surfaces; C10's distribution / docs / budget / EU outputs ship to end-operators directly).
 
 ## 1. Purpose + scope statement
@@ -552,7 +559,7 @@ eawf metrics rebuild --drop                   # halt + drop the projection DB
 
 ### 5.7 CHANGELOG auto-gen
 
-`CHANGELOG.md` follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) as already established in v0.2.0. v0.3 adds auto-generation from per-phase commit prefixes.
+`CHANGELOG.md` follows Keep a Changelog 1.1.0 [31] as already established in v0.2.0. v0.3 adds auto-generation from per-phase commit prefixes.
 
 #### 5.7.1 Generation algorithm
 
@@ -1406,7 +1413,7 @@ wave was an L-bucket (2.0 EU) but ran to 1.65 EU due to verification surface.
 | F4 | Migration backup write fails | `eawf migrate` | `OSError` from `write_text` | Refuse to migrate; emit `BACKUP_WRITE_FAILED`; next-step suggests `df -h .ea/` to check disk |
 | F5 | Migration chain partial-success | `eawf migrate` | Per-step `apply` raises | Restore from backup; emit `MIGRATION_STEP_FAILED`; next-step suggests `eawf migrate --to <last-good-version>` |
 | F6 | Telemetry projection rebuild OOM | `eawf metrics rebuild --full` on large corpus | Python `MemoryError` | Switch to `--incremental`; emit warning; document the medium/large fixture budgets per C09 [9:813] |
-| F7 | Telemetry local-file export accidentally leaks PII | Operator runs `eawf metrics export --format prom --out <shared-path>`; payload contains user path | Pre-export scrubber MUST run on every `metrics export` invocation | Scrubber refuses to write when any field still matches `/Users/` / `/home/` / `C:\Users\`; emits `EXPORT_SCRUB_REFUSED` per C09 [9:1210] |
+| F7 | Telemetry local-file export accidentally leaks PII | Operator runs `eawf metrics export --format prom --out <shared-path>`; payload contains user path | Pre-export scrubber MUST run on every `metrics export` invocation | Scrubber refuses to write when any field still matches a macOS, Linux or Windows user-home path root; emits `EXPORT_SCRUB_REFUSED` per C09 [9:1210] |
 | F8 | Doc-gen plugin fails on stale skill registry | `mkdocs build` | Plugin raises `ImportError` | `eawf doc verify --strict` catches in pre-commit; surface line + next-step `Run: uv sync --extra docs` |
 | F9 | (vacated — brew not shipped per Q4-refr 2026-05-17) | — | — | — |
 | F10 | `eawf daemon enable` writes to system-wide path | Operator runs `sudo eawf daemon enable` | sudo-elevated; writes `/etc/systemd/system/` instead of `<local-path>` | Refuse to install when EUID == 0; emit `SYSTEM_WIDE_INSTALL_REFUSED`; next-step: `Run as user: eawf daemon enable` (V6 [1:179]) |
@@ -1671,6 +1678,8 @@ None required mid-rollout. Each phase ships behind a flag-free additive surface.
 [28] `https://github.com/anthropics/claude-code` — Claude Code runtime (attribution per V9 [1:283]).
 [29] `https://github.com/openai/codex` — Codex CLI runtime (attribution).
 [30] `https://github.com/sst/opencode` — OpenCode runtime (attribution).
+
+[31] `https://keepachangelog.com/en/1.1.0/` — Keep a Changelog 1.1.0, the format `CHANGELOG.md` has followed since v0.2.0.
 
 ## 10. Provenance
 

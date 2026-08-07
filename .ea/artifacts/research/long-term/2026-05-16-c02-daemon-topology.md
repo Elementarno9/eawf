@@ -1,11 +1,17 @@
 # C02 — Daemon + Topology + Security spine — Eä framework long-term specs
 
 **Cluster:** C02 (Daemon + Topology + Security spine — IPC, lease/lock, supervisor, event bus, resource limits, per-OS service surface, runtime fallback, session-handle tracking)
+
 **Title:** Daemon + Topology + Security spine
+
 **Status:** `local-draft`, `needs-user` (pending operator ratification of §8 open questions)
+
 **Created:** `2026-05-16T00:00:00Z`
+
 **Author:** `claude-opus-4-7`
+
 **Depends on:** C00 (verdicts V1, V5, V6, V8 locked) [1], C01 (entity catalog + URN scheme + persona authority matrix) [2]
+
 **Consumed by:** C03 (specs ride daemon RPC), C04 (skills invoke daemon RPC + subscribe to push), C05 (CLI verb-noun matrix routes mutations to daemon), C06 (TUI subscribes to event bus), C07 (per-runtime adapter exposes session-handle + error-class surface), C08 (per-layer config sourced from daemon), C09 (per-OS CI matrix + structured logs sourced from daemon)
 
 ## 1. Purpose + scope statement
@@ -228,7 +234,7 @@ The deployed system:
 
 ### 5.2 IPC protocol
 
-Wire format: **JSON-RPC 2.0** ([https://www.jsonrpc.org/specification](https://www.jsonrpc.org/specification)).
+Wire format: **JSON-RPC 2.0** [22].
 
 #### 5.2.1 Framing
 
