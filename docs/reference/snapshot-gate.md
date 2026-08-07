@@ -4,7 +4,7 @@ The snapshot-pairing gate enforces the C09 §5.6 snapshot-update flow from the C
 
 ## How it works
 
-The gate walks the commits between the PR base and head. For each commit that modifies, deletes, or renames a file under a managed golden surface (status `M` / `D` / `R`), the subject must match a wave-form `test:` grammar — `[P##-W##] test: ...`, the `[P##-I##-W##] test: ...` iter variant, or the legacy `[P##(-I##)?-CORE] test: ...` alias. Pure additions (status `A`) are exempt: a brand-new surface ships its fixtures alongside the `feat:` wave that introduces it.
+The gate walks the commits between the PR base and head. For each commit that modifies, deletes, or renames a file under a managed golden surface (status `M` / `D` / `R`), the subject must match a wave-form `test:` grammar — `[P##-W##] test: ...`, the `[P##-I##-W##] test: ...` iter variant, or the bare `test: ...` conventional form accepted while no phase is active. Pure additions (status `A`) are exempt: a brand-new surface ships its fixtures alongside the `feat:` wave that introduces it.
 
 The watched directories are sourced from the same C09 §5.6 surface inventory the CLI drives (`eawf.surfaces.cli.commands.snapshot.SNAPSHOT_SURFACES`) so the gate and `eawf snapshot update --kind` cannot drift. Golden trees outside the inventory (e.g. the `tests/golden/cli/` help-panel snapshots, which refresh as a side-effect of any wave that adds a CLI command) are deliberately out of scope — they have their own per-wave refresh path.
 

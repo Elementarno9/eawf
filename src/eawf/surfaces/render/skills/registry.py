@@ -406,9 +406,7 @@ read off real history rather than recomputed.
    green CI, re-request review until clean.
 7. **Bundle close in the final pre-merge commit.** Once CI is green
    and the review-passed branch is on the remote, emit a single
-   `[P<NN>] state: close iter + phase (audit=<id>)` commit
-   (the legacy `[P<NN>-CORE] state: ...` form remains valid per the
-   `commit-prefix` block in AGENTS.md) that bundles
+   `[P<NN>] state: close iter + phase (audit=<id>)` commit that bundles
    `eawf iter close P<NN>-I<MM>` + `eawf phase close P<NN>` (no
    other touched files). The operator merges that commit to end the
    phase. This is the final instance of the per-close bookkeeping rule

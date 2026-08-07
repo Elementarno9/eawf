@@ -121,7 +121,6 @@ def _commit_golden_mutation(repo: Path, *, subject: str) -> str:
     [
         "[P30-I15-W06] test: snapshot update tui",
         "[P27-W19] test: snapshot update agents_md",  # pre-I02 bare-phase form
-        "[P30-I02-CORE] test: regen goldens",  # legacy bookkeeping alias
         "[P100-I100-W100] test: 3-digit ids parse",  # widened-grammar boundary
         "test: snapshot update agent_report",  # out-of-phase bare conventional form
     ],
@@ -134,7 +133,8 @@ def test_is_paired_accepts_wave_form_test_subjects(subject: str) -> None:
     "subject",
     [
         "[P30-I15-W06] feat: not a test subject",  # wrong type
-        "[P30-I15] test: missing wave/CORE suffix",  # no -W## / -CORE
+        "[P30-I15] test: missing wave suffix",  # no -W##
+        "[P30-I02-CORE] test: regen goldens",  # retired -CORE alias
         "[P30-W00] test: zero wave index rejected",  # 1-based reject
         "[P30-I00-W06] test: zero iter index rejected",  # 1-based reject
         "feat: bare conventional wrong type",

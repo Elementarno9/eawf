@@ -4,13 +4,11 @@ Enforces:
 
 1. Subject line must match one of three prefix grammars:
 
-   - **Wave/CORE form** (planned wave deliverable or legacy phase-
-     bookkeeping alias):
-     ``^\\[P\\d{2,}(-I\\d{2,})?(-W\\d{2,}|-CORE)\\]\\s+<type>:\\s+\\S.*$``
+   - **Wave form** (planned wave deliverable):
+     ``^\\[P\\d{2,}(-I\\d{2,})?-W\\d{2,}\\]\\s+<type>:\\s+\\S.*$``
      where ``<type>`` is one of ``feat|fix|chore|docs|refactor|test|
-     build|perf|ci|revert|state``. The ``-W##`` or ``-CORE`` suffix
-     declares whether the commit advances a planned wave or carries
-     cross-wave bookkeeping (P19-W05).
+     build|perf|ci|revert|state``. The ``-W##`` suffix declares the
+     wave the commit advances (P19-W05).
 
    - **Bare phase/iter form** (post-P26-W23): a bare
      ``[P##(-I##)?]`` prefix with ``type`` ∈ {``state``, ``docs``}:
@@ -18,10 +16,13 @@ Enforces:
      ``state`` is the canonical signal for phase/iter-scope
      bookkeeping; ``docs`` carries phase/iter-scoped documentation
      artifacts that no single wave owns (closure audits, promoted
-     research / decision / incident briefs). The ``-CORE`` suffix is
-     retained as a legacy alias on the wave/CORE form so prior commits
-     still validate, but new bookkeeping commits MAY drop the suffix —
-     the conventional-commit ``type`` IS the semantic signal.
+     research / decision / incident briefs).
+
+     The ``-CORE`` suffix is retired. It survives only in commits
+     already on the trunk, where ``git log`` reads it as the
+     pre-P26-W23 spelling of ``[P##] state:``; this lint rejects it
+     in anything new, because the conventional-commit ``type`` is
+     the semantic signal and a second carrier for it is drift.
 
    - **Bare conventional-commits form** (out-of-phase): a bare
      ``<type>: <subject>`` with no bracket prefix:
@@ -37,25 +38,16 @@ Enforces:
    3-digit ids (P100, I100, W100) are accepted once the queue grows
    that far.
 
-2. State-bookkeeping path whitelist applies to:
-
-   - any commit with ``type == "state"`` (the canonical semantic
-     signal — fires whether the subject carries ``[P##-CORE]``,
-     ``[P##-I##-CORE]``, or the bare ``[P##]`` / ``[P##-I##]`` form);
-     and
-   - any commit whose subject still carries the legacy ``-CORE``
-     suffix (back-compat with D16 — pre-P26-W23 lint enforced the
-     whitelist on the suffix; this keeps a hypothetical
-     ``[P##-CORE] feat: ...`` rejected when it touches non-state
-     paths).
+2. State-bookkeeping path whitelist applies to any commit with
+   ``type == "state"`` — the canonical, and only, semantic signal.
+   It fires on the wave form and on the bare ``[P##]`` /
+   ``[P##-I##]`` form alike.
 
    State-scoped commits MUST touch only state-bookkeeping paths
    (``.ea/state.json``, ``.ea/store/event.jsonl``,
    ``.ea/store/audit.jsonl``, ``.secrets.baseline``, and per-wave
    spec files under ``.ea/specs/``). Touching anything else is
-   rejected. The primary trigger is the conventional-commit
-   ``type``, not the subject-prefix ``-CORE`` suffix — ``type`` is
-   the semantic signal, ``-CORE`` is the legacy carrier.
+   rejected.
 
    Bare ``[P##(-I##)?] docs:`` commits are similarly path-gated:
    they MUST touch only ``.ea/artifacts/**`` (promoted documentation
@@ -98,9 +90,10 @@ _TYPES = "feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state"
 
 # Subject grammar — three accepted forms:
 #
-# 1. Wave/CORE form: ``[P##(-I##)?(-W##|-CORE)] <type>: ...`` — the
-#    pre-P26-W23 grammar; the ``-W##`` or ``-CORE`` suffix is
-#    mandatory.
+# 1. Wave form: ``[P##(-I##)?-W##] <type>: ...`` — the ``-W##``
+#    suffix is mandatory. The retired ``-CORE`` alias is no longer
+#    accepted here; ``type == "state"`` on form 2 carries what it
+#    used to.
 # 2. State-bookkeeping form: ``[P##(-I##)?] <state|docs>: ...`` —
 #    post-P26-W23 grammar; valid only when the conventional-commit
 #    type is ``state`` (any path on the state whitelist) or ``docs``
@@ -116,8 +109,8 @@ _TYPES = "feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state"
 # available ``W##`` per the feedback-commit-prefix-taxonomy memory.
 # The digit-width is ``\d{2,}`` (not ``\d{2}``) so 3+ digit ids are
 # accepted once the queue grows past P/I/W 99.
-_SUBJECT_WAVE_OR_CORE_RE = re.compile(
-    r"^\[P\d{2,}(-I(?!00)\d{2,})?(-W(?!00)\d{2,}|-CORE)\]\s+"
+_SUBJECT_WAVE_RE = re.compile(
+    r"^\[P\d{2,}(-I(?!00)\d{2,})?-W(?!00)\d{2,}\]\s+"
     rf"(?P<type>{_TYPES}):\s+\S.*$"
 )
 _SUBJECT_BARE_RE = re.compile(
@@ -125,7 +118,6 @@ _SUBJECT_BARE_RE = re.compile(
     r"(?P<type>state|docs):\s+\S.*$"
 )
 _SUBJECT_BARE_CONVENTIONAL_RE = re.compile(rf"^(?P<type>{_TYPES}):\s+\S.*$")
-_CORE_TAG_RE = re.compile(r"^\[P\d{2,}(-I(?!00)\d{2,})?-CORE\]\s+")
 _WAVE_TRAILER_NAME = "Eawf-Wave"
 _WAVE_TRAILER_RE = re.compile(
     rf"^{_WAVE_TRAILER_NAME}:\s+"
@@ -135,7 +127,7 @@ _WAVE_TRAILER_RE = re.compile(
 _BRACKET_SCOPE_RE = re.compile(
     r"^\[(?P<phase>P\d{2,})"
     r"(?:-(?P<iter>I(?!00)\d{2,}))?"
-    r"(?:(?:-(?P<wave>W(?!00)\d{2,}))|-CORE)?\]"
+    r"(?:-(?P<wave>W(?!00)\d{2,}))?\]"
 )
 _FULL_WAVE_SCOPE_RE = re.compile(
     r"^(?P<phase>P\d{2,})"
@@ -550,12 +542,11 @@ def _is_docs_bare_path(path: str) -> bool:
 
 
 def _check_scoped_paths(
-    *, commit_type: str, subject: str, staged: list[str], is_bare: bool
+    *, commit_type: str, staged: list[str], is_bare: bool
 ) -> tuple[int, str] | None:
     """Enforce the per-scope path whitelist for state- and bare-docs commits.
 
-    State-scoped commits (``type == 'state'`` or the legacy ``-CORE`` suffix,
-    which stays a trigger for back-compat with D16) must touch only
+    State-scoped commits (``type == 'state'``) must touch only
     state-bookkeeping paths. Bare ``[P##(-I##)?] docs:`` commits must touch
     only ``.ea/artifacts/**``. Wave-form ``[P##-W##] docs:`` commits are
     unrestricted (hence the *is_bare* gate on the docs branch).
@@ -563,12 +554,11 @@ def _check_scoped_paths(
     Returns a ``(1, diagnostic)`` rejection when a scoped commit strays
     outside its whitelist, else ``None``.
     """
-    if commit_type == "state" or _CORE_TAG_RE.match(subject):
+    if commit_type == "state":
         bad = [p for p in staged if not _is_state_only_path(p)]
         if bad:
-            trigger = "state-type" if commit_type == "state" else "[P##-CORE]"
             return 1, (
-                f"{trigger} commit touches non-state paths: {bad}\n"
+                f"state-type commit touches non-state paths: {bad}\n"
                 "state-scoped commits must mutate only .ea/state.json, "
                 ".ea/store/**, .secrets.baseline, or .ea/specs/**"
             )
@@ -609,7 +599,7 @@ def _match_subject(
     is the bracketed bare ``[P##(-I##)?] state|docs:`` form (which still
     needs path-whitelist enforcement).
     """
-    wave_match = _SUBJECT_WAVE_OR_CORE_RE.match(subject)
+    wave_match = _SUBJECT_WAVE_RE.match(subject)
     bare_match = _SUBJECT_BARE_RE.match(subject)
     bracketed = wave_match or bare_match
     if bracketed is not None:
@@ -648,7 +638,6 @@ def _match_subject(
         (
             f"commit subject rejected: {subject!r}\n"
             "expected '[P##-W##] <type>: <summary>', "
-            "'[P##-CORE] <type>: <summary>' (legacy bookkeeping alias), "
             "'[P##] state: <summary>' (canonical bookkeeping form), "
             "'[P##] docs: <summary>' (phase/iter-scoped artifact docs), "
             "or '<type>: <summary>' (bare conventional-commits, only when "
@@ -777,13 +766,12 @@ def lint(
     if scope_error is not None:
         return 1, scope_error
     # Bare conventional-commits (no bracket prefix) has no path whitelist;
-    # bracketed forms (wave/CORE + bare state/docs) route through the
-    # scoped-path check, which internally gates on commit_type / CORE tag
-    # / is_bare to apply the right whitelist.
+    # bracketed forms (wave + bare state/docs) route through the
+    # scoped-path check, which internally gates on commit_type / is_bare
+    # to apply the right whitelist.
     if subject.startswith("["):
         scoped = _check_scoped_paths(
             commit_type=match.group("type"),
-            subject=subject,
             staged=staged,
             is_bare=is_bare_bracketed,
         )
