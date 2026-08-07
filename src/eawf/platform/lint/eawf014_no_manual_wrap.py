@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Container
 from dataclasses import dataclass
 
 RULE_CODE = "EAWF014"
+
+#: An ordered-list marker of any width — ``1.``, ``10.``, ``22)``, ``3:``.
+#: The digit run must be matched whole: a single-character probe reads the
+#: ``0`` of ``10.`` as the delimiter and mistakes the item for prose, which
+#: makes every list longer than nine entries look like a wrapped paragraph.
+_ORDERED_MARKER = re.compile(r"^\d+[.):]\s")
 
 _BLOCK_PREFIXES = (
     "#",
@@ -44,7 +51,7 @@ def _is_plain_prose(line: str) -> bool:
         return False
     if stripped.startswith(_BLOCK_PREFIXES):
         return False
-    if len(stripped) >= 2 and stripped[0].isdigit() and stripped[1] in ".):":
+    if _ORDERED_MARKER.match(stripped):
         return False
     if stripped.startswith(("```", "~~~")):
         return False
