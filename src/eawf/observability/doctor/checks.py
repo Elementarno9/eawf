@@ -1190,12 +1190,14 @@ def check_render_output_roundtrip() -> CheckResult:
     )
 
 
-# eawf's conservative AGENTS.md budget with headroom over the current ~52 KiB
-# render; the check stays blocking but only fires on egregious growth. Verifying
-# Codex's exact project-doc truncation + trimming AGENTS.md is a P31 follow-up.
-# 65536 = 64 * 1024. A test can monkeypatch this constant to exercise the
-# over-cap path against a small fixture.
-CODEX_PROJECT_DOC_BYTE_CAP = 65536
+# Codex's measured project-doc truncation boundary: 32768 = 32 * 1024 bytes.
+# A probe whose last received rule ended mid-sentence exactly at byte 32768,
+# plus a control run that raised only the cap and then received the complete
+# final rule, pin the cut here. This is the measured boundary, not a budget
+# with headroom, so a render at or under it is exactly what Codex reads.
+# A test can monkeypatch this constant to exercise the over-cap path against a
+# small fixture.
+CODEX_PROJECT_DOC_BYTE_CAP = 32768
 
 
 def check_agents_md_byte_cap(*, workspace: Path | None) -> CheckResult:

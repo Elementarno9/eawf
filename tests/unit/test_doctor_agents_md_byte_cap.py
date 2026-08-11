@@ -123,6 +123,17 @@ def test_measure_byte_cap_propagates_region_parse_error() -> None:
 # ---- doctor check: check_agents_md_byte_cap --------------------------------
 
 
+def test_codex_project_doc_byte_cap_is_the_measured_boundary() -> None:
+    """The cap is Codex's measured truncation point, not a padded budget.
+
+    A probe run had its last received rule end mid-sentence exactly at byte
+    32768; a control run that raised only the cap received the complete final
+    rule. Pinning the constant here keeps a future "give it some headroom"
+    edit from silently reintroducing a cap the consumer does not honour.
+    """
+    assert checks.CODEX_PROJECT_DOC_BYTE_CAP == 32768
+
+
 def test_check_under_cap_passes(tmp_path: Path) -> None:
     """A small on-disk AGENTS.md is under the default cap -> ok."""
     doc = _doc_with_blocks("small")
