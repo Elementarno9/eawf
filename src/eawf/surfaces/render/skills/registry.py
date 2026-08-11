@@ -832,8 +832,8 @@ shipped but missed its briefs and the next phase is a rebuild, or when
 direction picks span scope-expansions and -reductions that need
 explicit acknowledgement. Pick a neighbour instead when one unknown
 blocks progress and a single verdict lands it (`/research`), or when
-direction is locked and an interactive surface needs a full statechart
-+ matrix + journey design (`/design`).
+direction is locked and an interactive surface needs a full statechart +
+matrix + journey design (`/design`).
 
 ## Canonical algorithm
 
@@ -1482,8 +1482,8 @@ promotes to `.ea/artifacts/` only when it informs a decision recorded in
 
 Eä-rendered skill envelope (`OutputEnvelope`) with
 `header.skill = "/math-explainer"`. Body carries the explainer slug, the
-markdown + JSON artifact paths, the claim count, the per-claim verifier
-+ assurance tally, the clarity-loop leg statuses (vale-prose / EAWF019 /
+markdown + JSON artifact paths, the claim count, the per-claim verifier +
+assurance tally, the clarity-loop leg statuses (vale-prose / EAWF019 /
 draft validate), the promotability verdict, and any residual unknowns.
 """
 

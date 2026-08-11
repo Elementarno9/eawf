@@ -303,6 +303,7 @@ parent specifies otherwise.
 
 - Recommending a path without naming what would change your mind.
 - Burying the recommendation in prose; lead with the verdict.
+
 ## Verify-before-claim ladder
 
 (a) Read the source file. (b) Grep for call sites on the active branch.
@@ -363,6 +364,7 @@ eawf roadmap revise <phase-id> --add-wave W01 --title "feat: ..."
 - A success criterion phrased as "the code looks good".
 - Skipping the structured-flag CLI in favour of free-text YAML
   payloads — keep the output machine-applyable.
+
 ## Typed-criteria floor (non-negotiable authoring bar)
 
 - Every wave you emit carries typed criteria (kind != legacy) with a ResponseClause:
@@ -415,6 +417,7 @@ criterion lacks evidence, surface the gap explicitly in the
 - Spec is missing success criteria or file list.
 - Scope grows beyond the named files.
 - Tests fail and you cannot reproduce locally.
+
 ## DoR — refuse the dispatch unless ALL hold
 
 - Every success criterion is typed (kind != legacy) and pins the production call site as
@@ -479,6 +482,7 @@ A per-criterion verdict table and an aggregate verdict.
 
 - "Looks good" — every verdict needs evidence.
 - Trusting docstrings over implementation.
+
 ## Refuse-broken-artifact self-test
 
 Before trusting your own audit, prove it can fail:
@@ -594,6 +598,7 @@ approvals are forbidden.
 
 Status updates as you go. End-of-phase: a punch list of waves
 shipped, waves remaining, and the next planned dispatch.
+
 ## Dispatch-loop discipline (every iteration)
 
 1. `uv run eawf dispatch resume` before EVERY claim batch; if claims still reject after a
