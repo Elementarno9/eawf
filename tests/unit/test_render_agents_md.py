@@ -29,6 +29,7 @@ from eawf.surfaces.render.agents_md import (
     ENTITY_TITLE_MAX,
     ZONE_REFERENCE_REGION_ID,
     ZONE_TIER0_REGION_ID,
+    ReferenceCollisionError,
     RenderResult,
     lint_entity_title,
     reference_file_path,
@@ -720,10 +721,114 @@ def test_render_agents_md_reference_placement_is_byte_stable_across_renders(
     assert expansion.read_bytes() == first_expansion
 
 
+def test_render_agents_md_reclaims_an_expansion_that_stopped_being_moved(
+    tmp_path: Path,
+) -> None:
+    """A block flipping back to root placement takes its expansion file with it."""
+    target = tmp_path / "AGENTS.md"
+    _, manifest = render_agents_md(
+        _make_composed([_reference_block("moved", "## Moved\n\nbody", "Follow the moved rule.")]),
+        target,
+        Manifest(version=1, generated={}),
+    )
+    expansion = reference_file_path(tmp_path, "moved")
+    assert expansion.exists()
+
+    render_agents_md(_make_composed([_block("moved", "## Moved\n\nbody")]), target, manifest)
+
+    assert not expansion.exists()
+
+
+def test_render_agents_md_reclaims_the_expansion_of_a_dropped_block(tmp_path: Path) -> None:
+    """Dropping the block entirely (profile disabled) reclaims its expansion too."""
+    target = tmp_path / "AGENTS.md"
+    _, manifest = render_agents_md(
+        _make_composed(
+            [
+                _reference_block("kept", "## Kept\n\nbody", "Follow the kept rule."),
+                _reference_block("dropped", "## Dropped\n\nbody", "Follow the dropped rule."),
+            ]
+        ),
+        target,
+        Manifest(version=1, generated={}),
+    )
+
+    render_agents_md(
+        _make_composed([_reference_block("kept", "## Kept\n\nbody", "Follow the kept rule.")]),
+        target,
+        manifest,
+    )
+
+    assert reference_file_path(tmp_path, "kept").exists()
+    assert not reference_file_path(tmp_path, "dropped").exists()
+
+
+def test_render_agents_md_reclaim_spares_a_hand_written_file(tmp_path: Path) -> None:
+    """The sweep only deletes files carrying the generated banner."""
+    target = tmp_path / "AGENTS.md"
+    handwritten = reference_file_path(tmp_path, "house-style")
+    handwritten.parent.mkdir(parents=True, exist_ok=True)
+    handwritten.write_text("# House style\n\nHand-written, not ours.\n", encoding="utf-8")
+
+    render_agents_md(
+        _make_composed([_reference_block("moved", "## Moved\n\nbody", "Follow the moved rule.")]),
+        target,
+        Manifest(version=1, generated={}),
+    )
+
+    assert handwritten.read_text(encoding="utf-8") == "# House style\n\nHand-written, not ours.\n"
+
+
+def test_render_agents_md_refuses_to_overwrite_a_foreign_file(tmp_path: Path) -> None:
+    """An expansion never clobbers a same-named file the renderer did not write."""
+    target = tmp_path / "AGENTS.md"
+    squatter = reference_file_path(tmp_path, "moved")
+    squatter.parent.mkdir(parents=True, exist_ok=True)
+    squatter.write_text("# Pre-existing\n\nSomeone else's page.\n", encoding="utf-8")
+    composed = _make_composed(
+        [_reference_block("moved", "## Moved\n\nbody", "Follow the moved rule.")]
+    )
+
+    with pytest.raises(ReferenceCollisionError, match=r"moved\.md"):
+        render_agents_md(composed, target, Manifest(version=1, generated={}))
+
+    assert squatter.read_text(encoding="utf-8") == "# Pre-existing\n\nSomeone else's page.\n"
+
+
+def test_render_agents_md_overwrites_its_own_expansion(tmp_path: Path) -> None:
+    """A banner-carrying expansion is the renderer's own, so a re-render rewrites it."""
+    target = tmp_path / "AGENTS.md"
+    composed = _make_composed(
+        [_reference_block("moved", "## Moved\n\nfirst body", "Follow the moved rule.")]
+    )
+    _, manifest = render_agents_md(composed, target, Manifest(version=1, generated={}))
+
+    updated = _make_composed(
+        [_reference_block("moved", "## Moved\n\nsecond body", "Follow the moved rule.")]
+    )
+    render_agents_md(updated, target, manifest)
+
+    assert "second body" in reference_file_path(tmp_path, "moved").read_text(encoding="utf-8")
+
+
 def test_render_reference_line_rejects_a_root_placed_block() -> None:
     """A root-placed block has no summary, so asking for its line is a caller bug."""
     block = _block("kept", "## Kept")
     with pytest.raises(ValueError, match="not reference-placed"):
+        render_reference_line(block)
+
+
+def test_render_reference_line_rejects_a_summary_less_reference_block() -> None:
+    """The two guard arms report distinct causes, not one catch-all message."""
+    block = RenderBlock.model_construct(
+        id="moved",
+        target="AGENTS.md",
+        body_template="## Moved",
+        placement="reference",
+        summary=None,
+        version="1.0",
+    )
+    with pytest.raises(ValueError, match="has no summary"):
         render_reference_line(block)
 
 
@@ -732,6 +837,20 @@ def test_render_reference_document_rejects_a_root_placed_block() -> None:
     block = _block("kept", "## Kept")
     with pytest.raises(ValueError, match="not reference-placed"):
         render_reference_document(block, "## Kept")
+
+
+def test_render_reference_document_rejects_a_summary_less_reference_block() -> None:
+    """The document builder splits the same two arms as the line builder."""
+    block = RenderBlock.model_construct(
+        id="moved",
+        target="AGENTS.md",
+        body_template="## Moved",
+        placement="reference",
+        summary=None,
+        version="1.0",
+    )
+    with pytest.raises(ValueError, match="has no summary"):
+        render_reference_document(block, "## Moved")
 
 
 def test_reference_file_path_lands_under_the_rule_reference_dir(tmp_path: Path) -> None:
