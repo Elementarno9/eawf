@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.6.8]
+
+### Fixed
+- **The project-doc byte cap now matches the measured truncation point.** Codex cuts a project doc at 32768 bytes, not the 65536 the doctor check carried as a conservative placeholder: a probe's last received rule ended mid-sentence exactly at byte 32768, and a control run that raised only the cap received the complete final rule. The check is blocking, so an over-cap AGENTS.md is named with the render blocks that fall past the cut.
+- **The rendered AGENTS.md fits inside that cap with no rule deleted.** A render block may now declare `placement: reference`, which keeps one line in the always-loaded file naming the obligation and linking `docs/rules/<id>.md`, where the full body is written. Twenty-one blocks that justify or elaborate rather than state a working obligation moved, taking the root from 54313 to 29075 bytes against the 32768 cap; every moved block stays reachable and whole.
+
+### Changed
+- **Affordance parity is asserted once per mode instead of three times.** The registry-wide sweep in the affordance matrix already covers every registered mode, so five duplicate invocations of the same check were removed from two sibling suites, cutting the serial TUI snapshot run from 272s to 237s. Every unique behaviour the two suites pinned -- keypress transcripts, dead-key classification, the optional state path, running-event-loop dispatch, malformed-args error paths, and the cockpit intervention keys -- is retained.
+
 ## [0.6.7]
 
 ### Fixed
