@@ -24,10 +24,27 @@ from pathlib import Path
 
 from eawf.platform.profiles import compose, load_profile
 from eawf.platform.profiles.models import ProfileBody
-from eawf.surfaces.render.agents_md import render_agents_md
+from eawf.surfaces.render.agents_md import reference_file_path, render_agents_md
 from eawf.surfaces.render.manifest import Manifest
 
 _PROFILE_ID = "quality"
+
+
+def _rendered_surface(root: Path, body: ProfileBody) -> str:
+    """Return every byte the render emitted for *body*, root plus expansions.
+
+    The code-craft rules are ``placement: reference`` blocks: AGENTS.md keeps
+    one line per rule and the full triad lands in ``docs/rules/<id>.md``. The
+    content assertions care that the text survives the compose -> render path,
+    not which of the two files holds it, so they read the concatenation.
+    """
+    parts = [(root / "AGENTS.md").read_text(encoding="utf-8")]
+    parts += [
+        reference_file_path(root, block.id).read_text(encoding="utf-8")
+        for block in body.render_blocks
+        if block.is_reference_placed
+    ]
+    return "\n".join(parts)
 
 
 def test_quality_profile_loads_and_validates() -> None:
@@ -94,7 +111,7 @@ def test_quality_profile_renders_verification_subheadings(tmp_path: Path) -> Non
     target = tmp_path / "AGENTS.md"
 
     render_agents_md(composed, target, Manifest(version=1, generated={}))
-    rendered = target.read_text(encoding="utf-8")
+    rendered = _rendered_surface(tmp_path, body)
 
     block_count = len(body.render_blocks)
     assert rendered.count("### Verification") == block_count
@@ -105,6 +122,10 @@ def test_quality_profile_renders_verification_subheadings(tmp_path: Path) -> Non
         assert block.verification is not None
         first_line = block.verification.strip().splitlines()[0]
         assert first_line in rendered, f"verification for {block.id!r} missing from render"
+    # Each moved rule stays reachable: AGENTS.md links its expansion by path.
+    root_text = target.read_text(encoding="utf-8")
+    for block in body.render_blocks:
+        assert f"docs/rules/{block.id}.md" in root_text
 
 
 def test_quality_profile_not_in_builtin_default() -> None:

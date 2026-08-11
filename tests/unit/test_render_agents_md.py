@@ -10,6 +10,8 @@ Covers:
 - Atomic write uses tempfile + ``os.replace`` (mock-based).
 - Re-rendering an unchanged composed profile reports ``regions_unchanged``
   and leaves ``regions_updated`` empty.
+- ``placement: reference`` blocks keep one line in the managed file and write
+  their full body to ``docs/rules/<id>.md``.
 """
 
 from __future__ import annotations
@@ -28,7 +30,10 @@ from eawf.surfaces.render.agents_md import (
     ZONE_TIER0_REGION_ID,
     RenderResult,
     lint_entity_title,
+    reference_file_path,
     render_agents_md,
+    render_reference_document,
+    render_reference_line,
 )
 from eawf.surfaces.render.manifest import Manifest
 
@@ -544,3 +549,94 @@ def test_lint_entity_title_empty_string_is_clean_for_style() -> None:
 def test_lint_entity_title_accepts_real_wave_titles(title: str) -> None:
     """Representative real wave titles from this phase pass the linter."""
     assert lint_entity_title(title) == []
+
+
+# ---- reference placement ---------------------------------------------------
+
+
+def _reference_block(region_id: str, body: str, summary: str) -> RenderBlock:
+    """Build a reference-placed block whose expansion holds *body*."""
+    return RenderBlock(
+        id=region_id,
+        target="AGENTS.md",
+        body_template=body,
+        placement="reference",
+        summary=summary,
+    )
+
+
+def test_render_agents_md_moves_reference_block_body_to_its_own_file(tmp_path: Path) -> None:
+    """A reference-placed block leaves one line in the root and a full sibling file."""
+    target = tmp_path / "AGENTS.md"
+    composed = _make_composed(
+        [
+            _block("kept", "## Kept\n\n- stays inline"),
+            _reference_block("moved", "## Moved\n\n- long expansion", "Follow the moved rule."),
+        ]
+    )
+
+    render_agents_md(composed, target, Manifest(version=1, generated={}))
+
+    root_text = target.read_text(encoding="utf-8")
+    assert "- stays inline" in root_text
+    assert "- long expansion" not in root_text
+    assert "`moved` — Follow the moved rule." in root_text
+    assert "docs/rules/moved.md" in root_text
+
+    expansion = reference_file_path(tmp_path, "moved").read_text(encoding="utf-8")
+    assert "- long expansion" in expansion
+    assert "Follow the moved rule." in expansion
+
+
+def test_render_agents_md_keeps_a_managed_region_for_a_reference_block(tmp_path: Path) -> None:
+    """The moved block keeps its region id, so drift + byte-cap naming still work."""
+    target = tmp_path / "AGENTS.md"
+    composed = _make_composed(
+        [_reference_block("moved", "## Moved\n\nbody", "Follow the moved rule.")]
+    )
+
+    _, manifest = render_agents_md(composed, target, Manifest(version=1, generated={}))
+
+    found = {r.id for r in regions.find_regions(target.read_text(encoding="utf-8"))}
+    assert "moved" in found
+    assert f"{target.as_posix()}::moved" in manifest.generated
+
+
+def test_render_agents_md_reference_placement_is_byte_stable_across_renders(
+    tmp_path: Path,
+) -> None:
+    """Re-rendering rewrites both halves identically (no hash-of-now drift)."""
+    target = tmp_path / "AGENTS.md"
+    composed = _make_composed(
+        [_reference_block("moved", "## Moved\n\nbody", "Follow the moved rule.")]
+    )
+    expansion = reference_file_path(tmp_path, "moved")
+
+    _, manifest = render_agents_md(composed, target, Manifest(version=1, generated={}))
+    first_root, first_expansion = target.read_bytes(), expansion.read_bytes()
+
+    render_agents_md(composed, target, manifest)
+
+    assert target.read_bytes() == first_root
+    assert expansion.read_bytes() == first_expansion
+
+
+def test_render_reference_line_rejects_a_root_placed_block() -> None:
+    """A root-placed block has no summary, so asking for its line is a caller bug."""
+    block = _block("kept", "## Kept")
+    with pytest.raises(ValueError, match="not reference-placed"):
+        render_reference_line(block)
+
+
+def test_render_reference_document_rejects_a_root_placed_block() -> None:
+    """Same fail-fast contract on the document builder."""
+    block = _block("kept", "## Kept")
+    with pytest.raises(ValueError, match="not reference-placed"):
+        render_reference_document(block, "## Kept")
+
+
+def test_reference_file_path_lands_under_the_rule_reference_dir(tmp_path: Path) -> None:
+    """The expansion path is ``<root>/docs/rules/<id>.md``, POSIX-stable."""
+    path = reference_file_path(tmp_path, "moved")
+    assert path.parent == tmp_path / "docs" / "rules"
+    assert path.name == "moved.md"

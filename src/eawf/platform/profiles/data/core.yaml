@@ -84,7 +84,9 @@ render_blocks:
 
   - id: naming-conventions
     target: AGENTS.md
-    version: "1.4"
+    version: "1.5"
+    placement: reference
+    summary: "Every cross-cutting concept has exactly one canonical name; rename an outlier to match the dominant form before merging instead of adding an adapter shim."
     body_template: |
       ### Naming conventions
 
@@ -112,7 +114,9 @@ render_blocks:
 
   - id: entity-title-naming
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "Write every entity title as an imperative noun-phrase of at most 72 characters with no trailing period, and put the long-form purpose in the description."
     rationale: |
       **Entity-title naming.** Every lifecycle and research entity (``Phase`` / ``Iter`` / ``Wave`` / ``Decision`` / ``Hypothesis`` / ``BacklogItem`` / ``Incident``) carries a bounded ``title`` and an optional long-form ``description``. The bound exists so titles stay scannable in dense renders — the roadmap tree, plan-view table, and dispatch header all lay titles out in a single fixed-width row, and an unbounded sentence either truncates with an ellipsis (losing the tail) or wraps and breaks the column. A trailing period reads as the end of a sentence, but a title is a label, not prose; the period is visual noise that the description, which IS prose, should carry instead.
     mechanism: |
@@ -187,7 +191,9 @@ render_blocks:
 
   - id: commit-prefix
     target: AGENTS.md
-    version: "1.5"
+    version: "1.6"
+    placement: reference
+    summary: "Subjects are ``[P<NN>(-I<NN>)?(-W<NN>)?] <type>: <summary>`` with type from feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state, a 3-6 bullet body, and a bracket-free bare subject only while no phase is ACTIVE."
     body_template: |
       ### Commit prefix
 
@@ -236,7 +242,9 @@ render_blocks:
 
   - id: artifact-chassis
     target: AGENTS.md
-    version: "1.1"
+    version: "1.2"
+    placement: reference
+    summary: "Durable research, plan, audit, decision, hypothesis, and incident markdown uses the renderer-owned Summary / References / Provenance / Scrub chassis, with dense citations backed by typed rows and no absolute local paths."
     body_template: |
       ### Artifact chassis and citations
 
@@ -248,7 +256,9 @@ render_blocks:
 
   - id: planned-scope-revisability
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "Scope mutability is status-tiered: PLANNED scope is freely editable, ACTIVE scope is append-only with PENDING-only wave edits, and CLOSED scope changes only via a reopen."
     body_template: |
       ### Planned-scope revisability
 
@@ -287,7 +297,9 @@ render_blocks:
 
   - id: spike-workflow
     target: AGENTS.md
-    version: "1.2"
+    version: "1.3"
+    placement: reference
+    summary: "A spike is a time-boxed read-only investigation whose brief lands under ``.ea/local/`` and feeds the next roadmap proposal or wave claim; promote it only when it ratifies a verdict."
     body_template: |
       ### Spike workflow
 
@@ -303,7 +315,9 @@ render_blocks:
 
   - id: engineering-principles
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "Reach for the simplest design that solves the immediate need: no helper, parameter, or config knob without a present-day caller, and no handling for states that cannot happen."
     rationale: |
       **Engineering principles (DRY/KISS/YAGNI).** Speculative flexibility is the dominant source of accidental complexity: an abstraction added for a caller that never arrives costs reading effort on every later edit while paying back nothing. DRY (don't repeat yourself) keeps one canonical home per behaviour; KISS (keep it simple, stupid) keeps the design no larger than the immediate need; YAGNI (you aren't gonna need it) defers anything the current change does not require.
     mechanism: |
@@ -313,7 +327,9 @@ render_blocks:
 
   - id: engineering-practice
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "Default to fail-fast at the boundary, one reason to change per unit, parsing separate from validation separate from execution, and explicit over implicit."
     rationale: |
       **Other engineering practice.** Code that fails far from its cause, mixes concerns, or signals success with ``None`` is expensive to debug and easy to break: the stack trace points at a symptom, a change to one concern risks the others, and the happy path reads ambiguously. Failing fast, separating concerns, and being explicit keep behaviour where the name and the call site say it is.
     mechanism: |
@@ -362,7 +378,9 @@ render_blocks:
 
   - id: release-process
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "Releases are opt-in per repo via the release cadence setting; the per-phase cadence gates phase close on a changelog section, a version bump, a migration note, and the release annotation."
     body_template: |
       ### Release process
 
@@ -382,7 +400,9 @@ render_blocks:
 
   - id: ship-process
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "Ship rides the phase-co-closing iter: open the one phase PR, pass CI, address review by appending waves to that same iter, then close and merge with rebase."
     body_template: |
       ### Ship process
 
@@ -408,7 +428,9 @@ render_blocks:
 
   - id: workflow-lifecycle
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "The lifecycle runs research, plan, execute waves, cherry-pick, ship phase, with a branch-currency check before opening or resuming any scope."
     body_template: |
       ## Workflow lifecycle
 
@@ -435,7 +457,9 @@ render_blocks:
 
   - id: clarity-contract
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "Every newcomer-facing artifact must be understandable without opening ``state.json``: right audience, jargon glossed on first use, motivation stated, scannable, references tabulated."
     body_template: |
       ### Doc-clarity contract (the newcomer test)
 
@@ -461,7 +485,9 @@ render_blocks:
 
   - id: memory-hygiene
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "Remember only facts that stay true across sessions; status is derivable, so query it with ``eawf status`` or ``eawf memory digest`` instead of memorizing it."
     body_template: |
       ### Memory hygiene: remember durable facts, query status
 

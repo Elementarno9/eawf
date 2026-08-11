@@ -36,10 +36,28 @@ from pathlib import Path
 
 from eawf.platform.profiles import compose, load_profile
 from eawf.platform.profiles.models import ProfileBody
-from eawf.surfaces.render.agents_md import render_agents_md
+from eawf.surfaces.render.agents_md import reference_file_path, render_agents_md
 from eawf.surfaces.render.manifest import Manifest
 
 _PROFILE_ID = "agent_driven"
+
+
+def _rendered_surface(root: Path, body: ProfileBody) -> str:
+    """Return every byte the render emitted for *body*, root plus expansions.
+
+    The divergence rules are ``placement: reference`` blocks: AGENTS.md keeps
+    one line per rule and the full triad lands in ``docs/rules/<id>.md``. The
+    content assertions care that the text survives the compose -> render path,
+    not which of the two files holds it, so they read the concatenation.
+    """
+    parts = [(root / "AGENTS.md").read_text(encoding="utf-8")]
+    parts += [
+        reference_file_path(root, block.id).read_text(encoding="utf-8")
+        for block in body.render_blocks
+        if block.is_reference_placed
+    ]
+    return "\n".join(parts)
+
 
 #: Render-block ids the agent_driven profile contributes (divergence rules).
 _DIVERGENCE_BLOCK_IDS = {
@@ -105,7 +123,7 @@ def test_agent_driven_profile_renders_divergence_rules(tmp_path: Path) -> None:
     target = tmp_path / "AGENTS.md"
 
     render_agents_md(composed, target, Manifest(version=1, generated={}))
-    rendered = target.read_text(encoding="utf-8")
+    rendered = _rendered_surface(tmp_path, body)
 
     block_count = len(body.render_blocks)
     assert rendered.count("### Verification") == block_count
@@ -129,6 +147,10 @@ def test_agent_driven_profile_renders_divergence_rules(tmp_path: Path) -> None:
     assert "do not trigger a blocking live auditor spawn" in rendered
     assert "``flow.max_repair_cycles`` does not enforce it" in rendered
     assert "audit bound to the closing head SHA" not in rendered
+    # Each moved rule stays reachable: AGENTS.md links its expansion by path.
+    root_text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    for block in body.render_blocks:
+        assert f"docs/rules/{block.id}.md" in root_text
 
 
 def test_agent_driven_profile_composes_with_core() -> None:

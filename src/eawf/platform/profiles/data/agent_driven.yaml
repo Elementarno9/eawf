@@ -31,7 +31,9 @@ instrument_requirements: []
 render_blocks:
   - id: agent-driven-phase-equals-release
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "Every closed phase ships as at least a minor release: the phase-close commit bumps the package version module and the PR merge tags that release."
     rationale: |
       In a single-operator, agent-driven repo a phase is the unit of shipped value, not an internal checkpoint — agent throughput collapses many human-weeks of work into one reviewable delivery. Treating each phase as at least a minor release keeps the published version honest about what landed and gives every phase a tag to bisect releases against. Drip- releasing per wave would churn tags faster than the value is observable.
     mechanism: |
@@ -40,7 +42,9 @@ render_blocks:
       Read the phase-close commit: it advances ``src/eawf/_version.py`` while ``pyproject.toml`` remains dynamically versioned, and the merge creates a release tag matching the new version. ``git tag --points-at <phase-close-sha>`` lists the release tag; a phase that closed without a version bump or a tag is reworked before the PR merges.
   - id: agent-driven-large-phase-pr
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "Ship one PR per phase however large it grows, keep each wave commit individually bisectable, and merge with rebase rather than squash."
     rationale: |
       The small-CL / trunk-based default exists to bound human-reviewer attention per change. Agent-driven throughput dwarfs that concern: the bottleneck is operator review of *coherent deliveries*, not line count, and a phase reviewed as one unit reads as one story. The granularity the small-CL rule buys is already present *inside* the PR — per-wave bisectable commits give per-change history without fragmenting the review surface into dozens of context-free PRs.
     mechanism: |
@@ -49,7 +53,9 @@ render_blocks:
       Confirm the phase produced exactly one PR (``gh pr list --search 'P<NN>'``) and that its commits are per-wave, each prefixed ``[P<NN>-W<NN>]`` and individually buildable. A reviewer who proposes splitting the phase into multiple PRs is overruled by this rule; a reviewer who finds a non-bisectable wave commit (two waves squashed into one) flags it for rework. The merge strategy is rebase, verified by a linear, non-squashed commit history on the target branch.
   - id: agent-driven-cadence-adr-pointer
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "The phase-equals-release and one-PR-per-phase divergences from small-CL practice are ratified by typed decisions; cite those ids in review and reverse the cadence only by superseding them."
     rationale: |
       These two divergences contradict the industry small-CL / trunk-based consensus on purpose, so a reader who hits the large-PR rule needs the evidence chain that ratified it — otherwise the rule reads as an oversight and gets "fixed" back to small-CL. Naming the decisions keeps the divergence auditable and reversible from ``state.json`` alone.
     mechanism: |
@@ -58,7 +64,9 @@ render_blocks:
       The decisions exist in ``state.json`` and surface in the rendered ``## Decisions`` section: ``eawf decisions show`` (or grep the rendered AGENTS.md) lists D07 and D10. ``docs/architecture/workflow.md`` resolves as a repo-relative path. A claim that small-CL should replace this rule is checked against D10's status — only a superseding Decision discharges the divergence.
   - id: lean-wave-verification
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "Wave success criteria name targeted tests only; the full suite and one fresh-context audit run once per iter at iter close, not once per wave."
     rationale: |
       Running the full test suite plus a fresh-context audit on every wave costs 10-30 minutes per wave and serializes iter execution. The live close gate reserves blocking auditor spawn for the high-risk band (L/XL effort, judgment roles, and security scope). Its deterministic 1-in-4 classification for mechanical waves is advisory today: sampled mechanical waves do not trigger a blocking live auditor spawn. Iter-close audit-link integrity is the patch-release guard; proof that the audit evaluated the exact closing HEAD remains deferred to the provenance model in v0.7.
     mechanism: |

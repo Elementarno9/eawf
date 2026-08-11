@@ -32,7 +32,7 @@ from eawf.platform.profiles.clarity import (
     internal_codes_in,
     is_approved_term,
 )
-from eawf.surfaces.render.agents_md import render_agents_md
+from eawf.surfaces.render.agents_md import reference_file_path, render_agents_md
 from eawf.surfaces.render.manifest import Manifest
 
 _CLARITY_BLOCK_ID = "clarity-contract"
@@ -165,12 +165,20 @@ def test_clarity_contract_block_targets_agents_md() -> None:
     assert "newcomer test" in block.body_template.casefold()
 
 
-def test_clarity_contract_renders_into_agents_md(tmp_path: Path) -> None:
-    """The clarity-contract block lands in the rendered AGENTS.md text."""
+def test_clarity_contract_renders_into_its_reference_file(tmp_path: Path) -> None:
+    """The clarity-contract expansion lands in full, linked from AGENTS.md.
+
+    The block is reference-placed, so AGENTS.md carries only the line naming
+    the obligation plus the path; the five checks and the typed-source pointer
+    live in ``docs/rules/clarity-contract.md``.
+    """
     composed = compose([load_profile("core")])
     target = tmp_path / "AGENTS.md"
     render_agents_md(composed, target, Manifest(version=1, generated={}))
-    text = target.read_text(encoding="utf-8")
+    root_text = target.read_text(encoding="utf-8")
+    assert f"docs/rules/{_CLARITY_BLOCK_ID}.md" in root_text
+
+    text = reference_file_path(tmp_path, _CLARITY_BLOCK_ID).read_text(encoding="utf-8")
     assert "Doc-clarity contract" in text
     assert "newcomer test" in text.casefold()
     # The block names the blocklist families a newcomer-facing artifact must gloss.

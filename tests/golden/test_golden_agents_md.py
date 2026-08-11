@@ -15,12 +15,22 @@ from pathlib import Path
 
 import pytest
 
+from eawf.observability.doctor.checks import CODEX_PROJECT_DOC_BYTE_CAP
 from eawf.platform.lint.eawf014_no_manual_wrap import check_source
 from eawf.platform.profiles import compose, load_profile
-from eawf.surfaces.render.agents_md import render_agents_md
+from eawf.surfaces.render.agents_md import (
+    measure_agents_md_byte_cap,
+    reference_file_path,
+    render_agents_md,
+)
 from eawf.surfaces.render.manifest import Manifest
 
 _FIXTURE_DIR: Path = Path(__file__).parent / "agents_md"
+
+#: Profiles this repo enables in ``.ea/config.yaml``. The byte-cap assertion
+#: below measures exactly that set, so the test fails for the same reason the
+#: doctor check would fail on the committed AGENTS.md.
+_REPO_PROFILE_IDS: tuple[str, ...] = ("core", "python", "research", "agent_driven", "quality")
 
 # The always-on tier-0 set tagged in ``core.yaml``. These are the
 # irreversible "no-tooling-backstop" rules: a lapse cannot be caught by
@@ -148,16 +158,80 @@ def test_core_profile_carries_memory_hygiene_convention() -> None:
     assert "derivable" in block.body_template
 
 
-def test_memory_hygiene_lands_in_rendered_agents_md(tmp_path: Path) -> None:
-    """The memory-hygiene block renders into AGENTS.md and the re-render is stable."""
+def test_memory_hygiene_lands_in_rendered_reference_file(tmp_path: Path) -> None:
+    """The memory-hygiene expansion renders in full and the re-render is stable.
+
+    The block is reference-placed, so its full body lives in
+    ``docs/rules/memory-hygiene.md`` while AGENTS.md keeps the one line that
+    names the obligation and links the expansion. Both halves are asserted so a
+    regression that drops either the pointer or the body is caught.
+    """
     composed = compose([load_profile("core")])
     target = tmp_path / "AGENTS.md"
     _, manifest = render_agents_md(composed, target, Manifest(version=1, generated={}))
     first = target.read_text(encoding="utf-8")
-    assert "### Memory hygiene: remember durable facts, query status" in first
+    expansion = reference_file_path(tmp_path, "memory-hygiene")
+
+    assert "docs/rules/memory-hygiene.md" in first
+    assert "### Memory hygiene: remember durable facts, query status" not in first
+    assert "### Memory hygiene: remember durable facts, query status" in expansion.read_text(
+        encoding="utf-8"
+    )
     # Idempotent: a second render produces byte-identical output.
     render_agents_md(composed, target, manifest)
     assert target.read_text(encoding="utf-8") == first
+
+
+def test_every_reference_placed_block_is_reachable_and_complete(tmp_path: Path) -> None:
+    """No reference-placed block loses content: it moves, and the root links it.
+
+    This is the invariant that makes the byte-cap split safe. For every block
+    the composed profile marks ``placement: reference``, the root must carry the
+    block id plus the path to the expansion, and the expansion must contain the
+    block's whole body text.
+    """
+    composed = compose([load_profile(p) for p in ("core", "python", "research")])
+    target = tmp_path / "AGENTS.md"
+    render_agents_md(composed, target, Manifest(version=1, generated={}))
+    root_text = target.read_text(encoding="utf-8")
+
+    moved = [b for b in composed.render_blocks if b.target == "AGENTS.md" and b.is_reference_placed]
+    assert moved, "the core profile must declare at least one reference-placed block"
+    for block in moved:
+        assert f"`{block.id}`" in root_text
+        assert f"docs/rules/{block.id}.md" in root_text
+        expansion = reference_file_path(tmp_path, block.id).read_text(encoding="utf-8")
+        # A structured block's triad is split by sub-headings in the render, so
+        # each authored part is checked on its own rather than as one span.
+        authored = (block.body_template, block.rationale, block.mechanism, block.verification)
+        for part in authored:
+            if part:
+                assert part.strip() in expansion, f"{block.id!r} lost content on the move"
+
+
+def test_rendered_agents_md_fits_the_project_doc_byte_cap(tmp_path: Path) -> None:
+    """The repo's own profile set renders inside the consumer's byte cap.
+
+    A consumer silently truncates the project doc at
+    :data:`~eawf.observability.doctor.checks.CODEX_PROJECT_DOC_BYTE_CAP` bytes,
+    so a render past it loses its guidance tail without any error. The split
+    into ``docs/rules/`` exists to hold this line; the assertion fails the
+    moment new prose pushes the always-loaded file back over.
+    """
+    composed = compose([load_profile(p) for p in _REPO_PROFILE_IDS])
+    target = tmp_path / "AGENTS.md"
+    render_agents_md(composed, target, Manifest(version=1, generated={}))
+
+    report = measure_agents_md_byte_cap(
+        target.read_text(encoding="utf-8"),
+        cap=CODEX_PROJECT_DOC_BYTE_CAP,
+    )
+
+    assert not report.over_cap, (
+        f"AGENTS.md renders {report.total_bytes}B against a {report.cap}B cap; "
+        f"move an elaborating block to placement=reference to bring it back under"
+    )
+    assert report.dropped_block_ids == []
 
 
 def test_core_profile_tags_expected_tier0_blocks() -> None:

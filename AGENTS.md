@@ -53,31 +53,8 @@ The CLI layer parses arguments and formats output. All domain logic lives in the
 Project codes / phase IDs follow ``^[A-Z][A-Z0-9_-]{1,15}$``. Hypothesis IDs: ``H<NN>-<NN>`` (e.g., ``H03-12``). Phase IDs in commits: ``P<NN+>`` (zero-padded, two-or-more digits, e.g., ``P00``, ``P03``, ``P100``). Iter IDs: ``I<NN+>`` and wave IDs: ``W<NN+>`` likewise. The ``\d{2,}`` width matches ``tools/commit_prefix_lint.py`` so 3-digit ids land cleanly once the queue grows past ``P99`` / ``I99`` / ``W99``.
 
 <!-- END EAWF:managed id=symbol-conventions -->
-<!-- BEGIN EAWF:managed id=naming-conventions version=1.4 hash=010fca39dfcef27e -->
-### Naming conventions
-
-To prevent drift across state models, envelopes, parameters, and log keys, every cross-cutting concept has exactly one canonical name. Outliers MUST be renamed to match the dominant form before merging, not papered over with adapter shims.
-
-**Agent role identifier** — ``agent_role`` (never ``role`` alone on a Wave / SubagentSpec field). Applies to :class:`~eawf.kernel.state.models.Wave.agent_role`, ``RoleSpec.role`` (the inner enum keeps the bare name because ``RoleSpec`` already namespaces it), CLI flags (``--agent-role``), and dispatch envelopes. The bare ``role`` remains valid inside ``RoleSpec`` because the surrounding type disambiguates.
-
-**Effort bucket parameter** — ``effort_bucket`` (never ``size`` or ``effort_size``). Applies to :class:`~eawf.kernel.state.models.Wave.effort_bucket`, CLI flags (``--effort-bucket``), planner output, and EU-projection tables. Allowed values are the closed StrEnum ``XS|S|M|L|XL``.
-
-**Evidence kind identifier** — ``evidence_kind`` (never ``kind`` alone on an EvidenceRecord field, and never ``evidence_type``). Applies to :class:`~eawf.kernel.state.models.EvidenceRecord.evidence_kind`, JSON keys, CLI flags (``--evidence-kind``), and gate-pack lookups. Bare ``kind`` remains valid on store envelopes where ``StoreKind`` already disambiguates.
-
-**State scope identifier** — ``scope_id`` (never bare ``scope``). Applies to Pydantic field names on ``State`` models (e.g. ``PluginInstall``), :class:`~eawf.surfaces.render.envelope.EnvelopeHeader`, function kwargs (e.g. ``add_artifact(scope_id=...)``, ``artifact_urn(scope_id, ...)``), JSON keys on the wire, and ``state.json`` field names. Bare ``scope`` is reserved for CLI argument names (``--scope``) and skill-context attributes (``SkillContext.scope``) where the caller maps onto the URN.
-
-**Output directory parameter** — ``output_dir`` (never ``out_dir`` or ``target_dir``). Applies to schema dumpers, plugin installers, and any helper that takes a write destination directory.
-
-**Wave / iter / phase keys in logs and dict payloads** — ``wave=<id>``, ``iter=<id>``, ``phase=<id>``. Bare keys only, never ``wave_id=<id>`` in log lines (the trailing ``_id`` is reserved for typed-model field names where the type system benefits from explicit suffix). Inside structured envelopes (``EventPayload``, ``state.json``) keep the ``_id`` suffix so the schema is unambiguous.
-
-**Log format inside library modules** — ``<funcname> key=value key=value`` form, space-separated, no leading ``:`` after the function name. f-strings only (project-wide rule 9). Example: ``logger.info(f"create_worktree wave={wave_id} branch={name!r}")``.
-
-**Error message phrasing** — lowercase leading word, no trailing period, no class-name prefix. Use ``!r`` when interpolating user input so quoting is visible. Example: ``raise ValueError(f"unknown wave: {wave_id!r}")``.
-
-**Docstring ``Raises:`` block** — Google-style ``Raises:`` block with one ``ExceptionType: explanation`` line per case. Do NOT use inline prose like ``Raises ValueError if ...`` in the summary; reserve the ``Raises:`` block for that.
-
-**Mutator-path precision in wave success criteria** — when a wave's success criterion text references a "save through" or "persist via" path, name the **canonical writer** (the daemon, per rule 4) rather than the generic phrase ``state-CLI``. The authority map ``.ea/artifacts/research/long-term/2026-05-18-authority-map.md`` names the canonical writer per file. Conflating the operator-facing surface (``uv run eawf state ...``) with the daemon-internal subsystem in criterion prose makes audits flag false positives.
-
+<!-- BEGIN EAWF:managed id=naming-conventions version=1.5 hash=6744ddeadba994c3 -->
+`naming-conventions` — Every cross-cutting concept has exactly one canonical name; rename an outlier to match the dominant form before merging instead of adding an adapter shim. Full text: [docs/rules/naming-conventions.md](docs/rules/naming-conventions.md)
 <!-- END EAWF:managed id=naming-conventions -->
 <!-- BEGIN EAWF:managed id=deletion-rule version=1.0 hash=4198ace6dc0231ae -->
 ### Deletion rule
@@ -132,30 +109,8 @@ Before opening or resuming a phase, iter, or wave, verify the current branch is 
 If the working tree is dirty, preserve the dirty/untracked work before rebasing. If the branch intentionally remains behind or forked, record the reason in the plan or handoff before dispatching worktrees or starting new commits.
 
 <!-- END EAWF:managed id=branch-currency -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.5 hash=838a6e3be7aaf5e8 -->
-### Commit prefix
-
-``[P<NN>(-I<NN>)?(-W<NN>)?] <type>: <summary>`` — types: ``feat``, ``fix``, ``chore``, ``docs``, ``refactor``, ``test``, ``build``, ``perf``, ``ci``, ``revert``, ``state``.
-
-Subject grammar (post-P26-W23 + P28-W66 bare-conventional form):
-
-- **Planned wave deliverable** — ``[P<NN>-W<NN>] <type>:`` (or ``[P<NN>-I<NN>-W<NN>] <type>:`` when iter ≥ I02). The ``-W<NN>`` suffix declares the wave the commit advances.
-- **State-bookkeeping** — ``[P<NN>] state:`` (or ``[P<NN>-I<NN>] state:`` when iter ≥ I02). The ``state`` conventional-commit type IS the semantic signal for phase- scope bookkeeping; no suffix needed. Allowed paths: ``.ea/state.json``, the typed stores under ``.ea/store/`` (``audit.jsonl``, ``decision.jsonl``, ``evidence.jsonl``, the role reports), ``.secrets.baseline``, and ``.ea/specs/**``. ``.ea/store/event.jsonl`` is NOT among them: the event store is the firehose (one row per lifecycle mutation plus every spawned agent's raw stdout), so it is gitignored and stays on the machine that produced it.
-- **Phase/iter-scoped artifact docs** — ``[P<NN>] docs:`` (or ``[P<NN>-I<NN>] docs:``) for documentation artifacts no single wave owns (closure audits, promoted research / decision / incident briefs). Restricted to ``.ea/artifacts/**``; wave-produced docs use the ``[P<NN>-W<NN>] docs:`` form.
-- **Bare conventional-commits (out-of-phase)** — ``<type>: <summary>`` with NO bracket prefix. Accepted ONLY when ``state.current.phase_id`` is ``None`` (no ACTIVE phase) — e.g. the pre-flight chore commit between phase close and the next ``/roadmap propose``. Rejected when a phase is ACTIVE so lifecycle bookkeeping stays attributable. Enforced by ``tools/commit_prefix_lint.py``.
-
-The path whitelist for state-bookkeeping commits triggers on ``type == 'state'`` — the canonical, and only, semantic signal.
-
-Bare ``[P<NN>]`` is accepted for ``type == 'state'`` (any state-bookkeeping path) and ``type == 'docs'`` (restricted to ``.ea/artifacts/**``); for every other type the ``-W<NN>`` suffix remains mandatory.
-
-The ``-CORE`` suffix is retired. It survives only in commits already on the trunk, where ``git log`` reads it as the pre-P26-W23 spelling of ``[P<NN>] state:``; the lint rejects it in anything new.
-
-Non-final iter closes are still in-phase state bookkeeping: use ``[P<NN>-I<NN>] state: close iter`` while the phase remains ACTIVE. Bare conventional commits are reserved for the gap after phase close clears ``state.current.phase_id`` and before the next phase activates, such as a pre-flight chore before ``/roadmap propose``.
-
-**Operational coupling: ship + PR-review ride the phase-co-closing iter.** The final iter of a phase is where the PR-review pass + ship CI happen; review-feedback waves append to that iter (``eawf roadmap revise --add-wave``) rather than opening a fresh iter. This keeps the phase-close mutation attributable to one iter close + the same commit (see ``iter-phase-close-timing``).
-
-Body: 3-6 bullets on what changed and why. Trailer: a recognized Claude or Codex ``Co-Authored-By`` trailer.
-
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.6 hash=57a081c4d4260873 -->
+`commit-prefix` — Subjects are ``[P<NN>(-I<NN>)?(-W<NN>)?] <type>: <summary>`` with type from feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state, a 3-6 bullet body, and a bracket-free bare subject only while no phase is ACTIVE. Full text: [docs/rules/commit-prefix.md](docs/rules/commit-prefix.md)
 <!-- END EAWF:managed id=commit-prefix -->
 <!-- BEGIN EAWF:managed id=branch-naming version=1.0 hash=8251a99a4f2ce095 -->
 ### Branch naming
@@ -175,32 +130,11 @@ Companion-doc references in rendered docs / commit messages / PR bodies / docstr
 Forward-fix only — once a leak lands in a published commit, history rewrite is the *last* resort because the blast radius (force-push, SHA churn, broken PR refs) is much larger than the prevention cost. Scrub locally before ``git add``; let ``pre-commit`` (``detect-secrets`` + custom path checks) catch the rest.
 
 <!-- END EAWF:managed id=secrets-hygiene -->
-<!-- BEGIN EAWF:managed id=artifact-chassis version=1.1 hash=5de45ce174de2661 -->
-### Artifact chassis and citations
-
-Durable research, plan, audit, decision, hypothesis, and incident markdown uses renderer-owned chassis sections: ``Summary``, ``References``, ``Provenance``, and ``Scrub``. Local drafts under ``.ea/local/`` carry an ``eawf-template`` sentinel; promoted artifacts under ``.ea/artifacts/`` do not.
-
-Citations use dense ``[N]`` markers backed by typed ``Citation`` rows. References stay repo-relative, external URL, or Eawf URN. Absolute local paths, host-local URLs, and PII must fail validation before promotion or PR text ships.
-
-**IntentBrief + NarrativeBundle.** ``/research`` outputs a typed :class:`~eawf.kernel.spec.intent.IntentBrief` whose claims carry ``evidence_refs``; a brief is promotable iff every claim has at least one resolving + entailing reference (the ``evidence_refs`` invariant). The promoted artifact wraps the brief in a :class:`~eawf.surfaces.render.narrative.NarrativeBundle` that fixes provenance to the originating session and the ``IntentBrief`` URN — researcher prose and the typed claim graph stay in lockstep through promotion.
-
+<!-- BEGIN EAWF:managed id=artifact-chassis version=1.2 hash=44b3e142a036a29a -->
+`artifact-chassis` — Durable research, plan, audit, decision, hypothesis, and incident markdown uses the renderer-owned Summary / References / Provenance / Scrub chassis, with dense citations backed by typed rows and no absolute local paths. Full text: [docs/rules/artifact-chassis.md](docs/rules/artifact-chassis.md)
 <!-- END EAWF:managed id=artifact-chassis -->
-<!-- BEGIN EAWF:managed id=workflow-lifecycle version=1.0 hash=81fb85258e76a45b -->
-## Workflow lifecycle
-
-Agent-driven lifecycle:
-
-```
-research → plan → execute waves → cherry-pick → ship phase
-```
-
-- **Research** is unstructured exploration of the proposal/plan.
-- **Branch currency gate** = fetch and compare the current branch to the intended source branch before opening or resuming a phase, iter, or wave; rebase or fast-forward first when stale.
-- **Plan** = open the next phase, enumerate waves, write per-wave success criteria.
-- **Execute** = dispatch waves. Independent waves go in parallel via worktree-isolated subagents. Sequential waves run inline.
-- **Cherry-pick** = bring worktree commits into the long-running feature branch. Never merge.
-- **Ship** = open the phase PR, run CI, address review, merge.
-
+<!-- BEGIN EAWF:managed id=workflow-lifecycle version=1.1 hash=71c70a630057d4b3 -->
+`workflow-lifecycle` — The lifecycle runs research, plan, execute waves, cherry-pick, ship phase, with a branch-currency check before opening or resuming any scope. Full text: [docs/rules/workflow-lifecycle.md](docs/rules/workflow-lifecycle.md)
 <!-- END EAWF:managed id=workflow-lifecycle -->
 <!-- BEGIN EAWF:managed id=pr-template version=1.0 hash=d92fc15954e9e6e0 -->
 ### PR template
@@ -269,17 +203,8 @@ Reports are append-only. Never overwrite or "fix" an earlier report attempt; ret
 Verdicts MUST use ``AgentReportVerdict`` exactly: ``pass``, ``pass-with-followups``, ``fail``, or ``blocked``. Report store URNs use the role-specific ``StoreKind`` such as ``executor_report`` or ``reviewer_report``.
 
 <!-- END EAWF:managed id=agent-report-contract -->
-<!-- BEGIN EAWF:managed id=planned-scope-revisability version=1.0 hash=8fb2c9a5821ede72 -->
-### Planned-scope revisability
-
-Phases and iters are first-class state records that move through ``PLANNED -> ACTIVE -> CLOSED`` (waves move through ``PENDING -> CLAIMED -> IN_PROGRESS -> CLOSED``). Mutability is status-tiered:
-
-- **PLANNED** scope is freely mutable. ``eawf roadmap revise <phase-id> --add-wave / --remove-wave / --set-deps / --retitle`` edits the phase before it activates.
-- **ACTIVE** scope is append-only at the phase level — only PENDING waves under it may still be mutated. The W01 ``edit_wave_plan`` / ``remove_wave_plan`` / ``set_wave_deps`` transitions enforce the PENDING-only invariant on their own.
-- **CLOSED** scope is immutable except via ``eawf phase reopen`` (which flips CLOSED back to ACTIVE; audit linkage is preserved for traceability).
-
-Mid-flight reshapes go through ``eawf roadmap revise <active-phase>`` too; the same PENDING-only invariant applies. Drop-and-redo (``eawf roadmap drop`` + ``eawf roadmap propose``) is the escape hatch when more than half the waves need to change.
-
+<!-- BEGIN EAWF:managed id=planned-scope-revisability version=1.1 hash=d2ec84e7cc93e285 -->
+`planned-scope-revisability` — Scope mutability is status-tiered: PLANNED scope is freely editable, ACTIVE scope is append-only with PENDING-only wave edits, and CLOSED scope changes only via a reopen. Full text: [docs/rules/planned-scope-revisability.md](docs/rules/planned-scope-revisability.md)
 <!-- END EAWF:managed id=planned-scope-revisability -->
 <!-- BEGIN EAWF:managed id=roadmap-procedure version=1.0 hash=a44fa58c7863325d -->
 ### Roadmap procedure
@@ -304,19 +229,8 @@ The canonical flow for altering the roadmap (one phase at a time):
 Bulk propose (``--bulk --from-briefs RES-12,RES-13,...``) is deferred to a follow-up phase; P19 ships phase-at-a-time only. ``/roadmap reorder`` is also deferred — operator drops + re- proposes to swap order.
 
 <!-- END EAWF:managed id=roadmap-procedure -->
-<!-- BEGIN EAWF:managed id=spike-workflow version=1.2 hash=b6211c27e25dd5e7 -->
-### Spike workflow
-
-A *spike* is a short, time-boxed, read-only investigation run before claiming a real wave — used when the next move is unclear and the operator needs a brief or experimental verdict to write the wave's success criteria. The dedicated ``/spike`` skill (v0.4) wraps the existing ``/research`` surface with the brief-naming + dispatch-prompt conventions below; legacy use of ``/research`` for spikes stays valid and renders identically.
-
-**When to spike.** Reach for a spike when (a) the wave's success criteria cannot yet be written without first reading code or running a probe, (b) two or more design alternatives need a verdict before ``/roadmap propose`` can commit to a DAG, or (c) an audit hypothesis needs an evidence sweep before ``set-verdict``. Skip the spike when the next move is obvious — go straight to ``/roadmap propose`` or ``/prep`` claim.
-
-**Where the output lives.** Spike output is a research brief under ``.ea/local/<YYYY-MM-DD>-<slug>.md`` (or the conventional ``.ea/local/research/`` sub-directory). Filenames follow the ``<date>-<slug>.md`` stem so the brief sorts chronologically and slug-matches against the wave or phase it informs. Briefs stay local-only — ``.ea/local/`` is gitignored — and are promoted to ``.ea/artifacts/`` only when they inform a decision that lives in ``state.json`` (artifact-chassis rule applies on promotion).
-
-**How the verdict feeds the workflow.** The spike's verdict is the input to the next ``/roadmap propose --phase P<NN>`` or ``/prep`` claim. Reference the brief by repo-relative path in the roadmap proposal, the wave's plan body, or the dispatch prompt — the wave dispatch renderer surfaces spike briefs whose filename matches the wave / iter / phase id under a ``## References`` section so the subagent reads them before starting work.
-
-**Spike outputs that ratify a verdict promote on commit.** A spike brief that informs a Decision row + ``set-verdict`` MUST promote from ``.ea/local/research/<date>-<slug>.md`` to ``.ea/artifacts/research/<date>-<slug>.md`` in the same commit that lands the Decision. The promotion runs the artifact-chassis validator + scrub gate. Spikes that do NOT inform a typed verdict stay local.
-
+<!-- BEGIN EAWF:managed id=spike-workflow version=1.3 hash=9fe63d701295e8dc -->
+`spike-workflow` — A spike is a time-boxed read-only investigation whose brief lands under ``.ea/local/`` and feeds the next roadmap proposal or wave claim; promote it only when it ratifies a verdict. Full text: [docs/rules/spike-workflow.md](docs/rules/spike-workflow.md)
 <!-- END EAWF:managed id=spike-workflow -->
 <!-- BEGIN EAWF:managed id=prep-plan-mode version=1.0 hash=390f282fbb12944f -->
 ### /prep always renders the DAG in plan mode
@@ -341,53 +255,14 @@ Iter close is gated on **audit + polish + ship CI + PR review pass**. Do not clo
 **Phase close goes in the latest commit before merge.** Do not close the phase until ship CI is green AND the review-passed branch is on the remote. The phase-close mutation rides in a single ``[P<NN>] state: close iter + phase (audit=<id>)`` commit that bundles iter close + phase close. Merging that commit ends the phase; pre-merge close keeps ``state.json`` in sync with what reviewers approved.
 
 <!-- END EAWF:managed id=iter-phase-close-timing -->
-<!-- BEGIN EAWF:managed id=entity-title-naming version=1.0 hash=07a2c7fe31667c16 -->
-### Rationale
-
-**Entity-title naming.** Every lifecycle and research entity (``Phase`` / ``Iter`` / ``Wave`` / ``Decision`` / ``Hypothesis`` / ``BacklogItem`` / ``Incident``) carries a bounded ``title`` and an optional long-form ``description``. The bound exists so titles stay scannable in dense renders — the roadmap tree, plan-view table, and dispatch header all lay titles out in a single fixed-width row, and an unbounded sentence either truncates with an ellipsis (losing the tail) or wraps and breaks the column. A trailing period reads as the end of a sentence, but a title is a label, not prose; the period is visual noise that the description, which IS prose, should carry instead.
-
-
-### Mechanism
-
-Write ``title`` as an imperative noun-phrase of at most 72 characters with no trailing period — e.g. ``Add bounded title to entities`` or ``Enforce sandbox deny-list at dispatch``, never ``Adds a bounded title to every entity.`` (over-cap once the clause grows, and the period is sentence noise). Put the why / the long-form purpose in ``description`` (bounded at 500 characters); the renderers surface it as a detail block under the bounded title, so the two fields split the label from the explanation rather than competing for one line.
-
-
-### Verification
-
-The model enforces the hard bound: ``title`` is ``Annotated[str, Field(min_length=1, max_length=72)]`` on every entity, so an over-72 title fails :class:`pydantic.ValidationError` at the ingestion boundary. The style backstop is :func:`eawf.surfaces.render.agents_md.lint_entity_title`, which a reviewer (or a future authoring command) runs over a candidate title to flag an over-cap or a trailing-period title before it reaches the model — the same two failure modes the bound and this rule describe.
-
+<!-- BEGIN EAWF:managed id=entity-title-naming version=1.1 hash=89c107c4724d2bae -->
+`entity-title-naming` — Write every entity title as an imperative noun-phrase of at most 72 characters with no trailing period, and put the long-form purpose in the description. Full text: [docs/rules/entity-title-naming.md](docs/rules/entity-title-naming.md)
 <!-- END EAWF:managed id=entity-title-naming -->
-<!-- BEGIN EAWF:managed id=engineering-principles version=1.0 hash=850cc1f57a4c683a -->
-### Rationale
-
-**Engineering principles (DRY/KISS/YAGNI).** Speculative flexibility is the dominant source of accidental complexity: an abstraction added for a caller that never arrives costs reading effort on every later edit while paying back nothing. DRY (don't repeat yourself) keeps one canonical home per behaviour; KISS (keep it simple, stupid) keeps the design no larger than the immediate need; YAGNI (you aren't gonna need it) defers anything the current change does not require.
-
-
-### Mechanism
-
-Reach for the simplest design that solves the immediate need. Three similar lines are better than a half-fitted helper — do not extract until a third caller actually appears. Do not add error handling, fallbacks, or validation for scenarios that cannot happen on the real call paths.
-
-
-### Verification
-
-A reviewer checks that each new helper, parameter, or config knob has a present-day caller; a helper introduced for one or two call sites, or for a use site that does not yet exist, is rejected. Defensive branches for impossible states are removed before merge.
-
+<!-- BEGIN EAWF:managed id=engineering-principles version=1.1 hash=c6bb250bd2ed16c5 -->
+`engineering-principles` — Reach for the simplest design that solves the immediate need: no helper, parameter, or config knob without a present-day caller, and no handling for states that cannot happen. Full text: [docs/rules/engineering-principles.md](docs/rules/engineering-principles.md)
 <!-- END EAWF:managed id=engineering-principles -->
-<!-- BEGIN EAWF:managed id=engineering-practice version=1.0 hash=2812144de61e9e42 -->
-### Rationale
-
-**Other engineering practice.** Code that fails far from its cause, mixes concerns, or signals success with ``None`` is expensive to debug and easy to break: the stack trace points at a symptom, a change to one concern risks the others, and the happy path reads ambiguously. Failing fast, separating concerns, and being explicit keep behaviour where the name and the call site say it is.
-
-
-### Mechanism
-
-Default to: fail-fast (raise at the boundary, not deep in a call stack); single-responsibility (each function or class has one reason to change); principle of least surprise (behaviour matches the name); separation of concerns (parsing ≠ validation ≠ execution); pure functions where viable (no hidden state); and explicit-over-implicit (named arguments over positional when arity ≥ 3, explicit returns over ``None``-as-success).
-
-
-### Verification
-
-A reviewer reads each public function's first statements (validation precedes side effects) and each call site of arity ≥ 3 (arguments passed by keyword). A function whose name implies a value but returns ``None`` on the happy path is reworked; ``uv run mypy src/`` backs the explicit-return contract via full type hints.
-
+<!-- BEGIN EAWF:managed id=engineering-practice version=1.1 hash=8b2b9d6762b50c71 -->
+`engineering-practice` — Default to fail-fast at the boundary, one reason to change per unit, parsing separate from validation separate from execution, and explicit over implicit. Full text: [docs/rules/engineering-practice.md](docs/rules/engineering-practice.md)
 <!-- END EAWF:managed id=engineering-practice -->
 <!-- BEGIN EAWF:managed id=markdown-no-manual-wrap version=1.0 hash=36955a02ca956432 -->
 ### Rendered markdown is not manually line-wrapped
@@ -397,59 +272,17 @@ Rendered and authored markdown — PR bodies, issue/review comments, audit / res
 The ~72-column wrap convention is reserved for **commit messages** (subject + body), where tooling and ``git log`` assume it. Fenced code blocks keep their own formatting. Skill output contracts inherit this rule: a skill that emits markdown emits unwrapped paragraphs.
 
 <!-- END EAWF:managed id=markdown-no-manual-wrap -->
-<!-- BEGIN EAWF:managed id=release-process version=1.0 hash=2d3ad8c22cd7bcc8 -->
-### Release process
-
-Releases are opt-in per repo via ``vcs.conventions.release.cadence``. The two supported cadences:
-
-- ``per_phase`` — agent-driven profile default; each phase PR closes with a release-readiness pre-flight gate and a post-merge auto-tag. Phase close = at least one minor version bump.
-- ``manual`` — managed-repo default; releases ride a separate operator-driven tag flow.
-
-Per-phase release pre-flight (gates ``eawf phase close``) requires:
-
-- ``CHANGELOG.md`` has a new section for the release version with at least one bullet.
-- ``__version__`` (``src/<pkg>/_version.py`` or the configured ``version_source``) advanced from the prior release.
-- A migration note exists when ``state.json`` ``schema_version`` changed since the last release.
-- The phase-close commit subject carries the optional ``(release=v<X.Y.Z>)`` annotation accepted by ``tools/commit_prefix_lint.py``.
-
-Post-merge, ``.github/workflows/phase-release.yaml`` reads the annotation, tags the merge commit, and publishes release notes synthesized from the phase PR body. Repos that opt out via ``cadence: manual`` skip the gate and the workflow.
-
+<!-- BEGIN EAWF:managed id=release-process version=1.1 hash=e9197d40232446a3 -->
+`release-process` — Releases are opt-in per repo via the release cadence setting; the per-phase cadence gates phase close on a changelog section, a version bump, a migration note, and the release annotation. Full text: [docs/rules/release-process.md](docs/rules/release-process.md)
 <!-- END EAWF:managed id=release-process -->
-<!-- BEGIN EAWF:managed id=ship-process version=1.0 hash=181610cca3e5eaaf -->
-### Ship process
-
-Ship is the phase's terminal pass, and it rides the phase-co-closing iter (the final iter of the phase) rather than a fresh iter. The ordered steps from green waves to a merged, tagged phase:
-
-1. **Open the phase PR.** One PR per phase, body per the ``pr-template`` (``## Summary`` + ``## Test plan`` + ``## Phase deliverables``). The PR head is the long-running ``feature/<symbol>-v<X.Y>`` branch with every worktree wave already cherry-picked in.
-2. **Pass CI gates.** Beyond the per-commit lint + test gauntlet, two gates fire only on the phase PR and so are easy to miss locally: the per-package **coverage gate** (CI parses ``coverage.xml`` against the ``[tool.eawf.coverage]`` thresholds) and the **snapshot-pairing gate** (``tools/snapshot_pairing_gate.py`` over the PR base..head range, which rejects a managed golden-surface mutation that lacks a wave-form ``test:`` subject). Run both locally before pushing the PR so they do not surface late.
-3. **Pass the review.** ``/ship`` runs the PR review pass. Address feedback by **appending waves to the same co-closing iter** via ``eawf roadmap revise --add-wave`` (ACTIVE-phase ``add_wave_plan`` keeps the iter ACTIVE and lands the new waves PENDING). Do NOT open a second iter for routine review follow-ups -- see ``iter-phase-close-timing``.
-4. **Close + merge.** Once CI is green AND the review-passed branch is on the remote, the phase-close mutation rides the single ``[P<NN>] state: close iter + phase (audit=<id>)`` commit that bundles iter close + phase close (see ``iter-phase-close-timing``). Merge with rebase (never squash) so the per-wave ``[P<NN>-W<NN>]`` history survives; the merge ends the phase.
-5. **Tag the release.** Per the ``per_phase`` cadence the post-merge ``.github/workflows/phase-release.yaml`` reads the ``(release=v<X.Y.Z>)`` annotation off the phase-close commit, tags the merge commit, and publishes notes from the PR body -- see ``release-process`` for the pre-flight gate that ``eawf phase close`` enforces.
-
+<!-- BEGIN EAWF:managed id=ship-process version=1.1 hash=79ff416238f54342 -->
+`ship-process` — Ship rides the phase-co-closing iter: open the one phase PR, pass CI, address review by appending waves to that same iter, then close and merge with rebase. Full text: [docs/rules/ship-process.md](docs/rules/ship-process.md)
 <!-- END EAWF:managed id=ship-process -->
-<!-- BEGIN EAWF:managed id=clarity-contract version=1.0 hash=a4e5ca023fba622a -->
-### Doc-clarity contract (the newcomer test)
-
-Every newcomer-facing artifact — commit subject + body, PR body, research / audit / decision brief, and every entity ``title`` / ``description`` — must pass one gate: *would someone who joined today understand this without opening ``state.json``?* The five checks behind that gate:
-
-- **Audience-fit** — write for a newcomer, not an insider.
-- **Jargon defined on first use** — internal codes are glossed the first time they appear in prose: lifecycle ids (``P<NN>`` / ``I<NN>`` / ``W<NN>``), cluster / decision codes (``C0<N>`` / ``D<NN>`` / ``D-SUP-<NN>``), hypothesis ids (``H<NN>-<NN>``), and screaming-snake flags (``SWITCH_*`` / ``EAWF_*``). Commit-subject type prefixes are EXEMPT — the commit-prefix rule requires them.
-- **Why-present** — say the motivation, not only the what; a ``description`` that merely restates its ``title`` fails.
-- **Scannable** — short paragraphs, headings, lists; no wall of text.
-- **Reference-hygiene** — dense ``[N]`` markers backed by a ``## References`` table; no inline ``path:line`` soup or bare URLs mid-prose.
-
-The approved-term glossary, the internal-code blocklist, and the six scored dimensions are the typed source the prose lints read: :mod:`eawf.platform.profiles.clarity`.
-
+<!-- BEGIN EAWF:managed id=clarity-contract version=1.1 hash=1be368cf10281612 -->
+`clarity-contract` — Every newcomer-facing artifact must be understandable without opening ``state.json``: right audience, jargon glossed on first use, motivation stated, scannable, references tabulated. Full text: [docs/rules/clarity-contract.md](docs/rules/clarity-contract.md)
 <!-- END EAWF:managed id=clarity-contract -->
-<!-- BEGIN EAWF:managed id=memory-hygiene version=1.0 hash=fbb8eed0a60153be -->
-### Memory hygiene: remember durable facts, query status
-
-Curated memory holds **durable facts** — decisions that outlive a session, operator preferences, hard-won gotchas, conventions. It is the wrong place for **status**, which changes every time a wave closes: the current phase and iter, what just closed, the latest verdicts, the open backlog. Memorizing status guarantees drift, because the remembered copy goes stale the moment the real state moves.
-
-The rule: a fact is worth remembering only when it stays true across sessions. Status is **derivable** from state, so it is queried on demand, never memorized. Run ``eawf status`` for the current pointers, recent decisions, and open backlog, and ``eawf memory digest`` for a glance-clear standup of what is in flight, what just closed, and what was recently decided. Both read straight from state, so the answer is always current and costs nothing to keep so.
-
-Before writing a memory entry, ask whether a query already answers it. If ``eawf status`` or ``eawf memory digest`` surfaces the fact, do not duplicate it into memory — link to the query instead.
-
+<!-- BEGIN EAWF:managed id=memory-hygiene version=1.1 hash=0228d6e82ab5bd61 -->
+`memory-hygiene` — Remember only facts that stay true across sessions; status is derivable, so query it with ``eawf status`` or ``eawf memory digest`` instead of memorizing it. Full text: [docs/rules/memory-hygiene.md](docs/rules/memory-hygiene.md)
 <!-- END EAWF:managed id=memory-hygiene -->
 <!-- BEGIN EAWF:managed id=zone-tier0 version=1.0 hash=e0ad14f457862be5 -->
 <!-- Zone 1: always-on (tier0) -->
@@ -457,131 +290,27 @@ Before writing a memory entry, ask whether a query already answers it. If ``eawf
 <!-- BEGIN EAWF:managed id=zone-reference version=1.0 hash=06f4f2b046f45f0f -->
 <!-- Zone 2: reference (lazy) -->
 <!-- END EAWF:managed id=zone-reference -->
-<!-- BEGIN EAWF:managed id=agent-driven-phase-equals-release version=1.0 hash=db252c71120f4b3c -->
-### Rationale
-
-In a single-operator, agent-driven repo a phase is the unit of shipped value, not an internal checkpoint — agent throughput collapses many human-weeks of work into one reviewable delivery. Treating each phase as at least a minor release keeps the published version honest about what landed and gives every phase a tag to bisect releases against. Drip- releasing per wave would churn tags faster than the value is observable.
-
-
-### Mechanism
-
-Every closed phase ships as at least a minor release. The phase-close commit bumps the package version in ``src/eawf/_version.py`` (e.g. ``0.3.0`` -> ``0.3.1``, or ``-> 0.4.0`` / ``-> 1.0.0`` when the phase warrants it) and the phase PR merge tags that release. ``pyproject.toml`` declares the version dynamically; it has no static ``project.version`` field to edit. The version bump and tag ride the same ``[P<NN>] state: close iter + phase`` commit that ends the phase, so the release marker and the closed state land together. Do not close a phase without bumping the version.
-
-
-### Verification
-
-Read the phase-close commit: it advances ``src/eawf/_version.py`` while ``pyproject.toml`` remains dynamically versioned, and the merge creates a release tag matching the new version. ``git tag --points-at <phase-close-sha>`` lists the release tag; a phase that closed without a version bump or a tag is reworked before the PR merges.
-
+<!-- BEGIN EAWF:managed id=agent-driven-phase-equals-release version=1.1 hash=d8c1eaa922ab8710 -->
+`agent-driven-phase-equals-release` — Every closed phase ships as at least a minor release: the phase-close commit bumps the package version module and the PR merge tags that release. Full text: [docs/rules/agent-driven-phase-equals-release.md](docs/rules/agent-driven-phase-equals-release.md)
 <!-- END EAWF:managed id=agent-driven-phase-equals-release -->
-<!-- BEGIN EAWF:managed id=agent-driven-large-phase-pr version=1.0 hash=75acdab274a770a9 -->
-### Rationale
-
-The small-CL / trunk-based default exists to bound human-reviewer attention per change. Agent-driven throughput dwarfs that concern: the bottleneck is operator review of *coherent deliveries*, not line count, and a phase reviewed as one unit reads as one story. The granularity the small-CL rule buys is already present *inside* the PR — per-wave bisectable commits give per-change history without fragmenting the review surface into dozens of context-free PRs.
-
-
-### Mechanism
-
-Ship one PR per phase. A phase PR carrying roughly +10k lines across many files is expected and acceptable, not a smell to split. Do not break a phase into many small PRs to chase a line-count target. The compensating controls are real per-wave review and a behavioural smoke gate in CI; keep per-wave commits individually bisectable (one wave per ``[P<NN>-W<NN>]`` commit) so ``git bisect`` stays sharp inside the large PR. Merge with rebase, never squash, so the per-wave history survives on the trunk.
-
-
-### Verification
-
-Confirm the phase produced exactly one PR (``gh pr list --search 'P<NN>'``) and that its commits are per-wave, each prefixed ``[P<NN>-W<NN>]`` and individually buildable. A reviewer who proposes splitting the phase into multiple PRs is overruled by this rule; a reviewer who finds a non-bisectable wave commit (two waves squashed into one) flags it for rework. The merge strategy is rebase, verified by a linear, non-squashed commit history on the target branch.
-
+<!-- BEGIN EAWF:managed id=agent-driven-large-phase-pr version=1.1 hash=4ba41b6fc871fe3e -->
+`agent-driven-large-phase-pr` — Ship one PR per phase however large it grows, keep each wave commit individually bisectable, and merge with rebase rather than squash. Full text: [docs/rules/agent-driven-large-phase-pr.md](docs/rules/agent-driven-large-phase-pr.md)
 <!-- END EAWF:managed id=agent-driven-large-phase-pr -->
-<!-- BEGIN EAWF:managed id=agent-driven-cadence-adr-pointer version=1.0 hash=4121d2e40aeba41d -->
-### Rationale
-
-These two divergences contradict the industry small-CL / trunk-based consensus on purpose, so a reader who hits the large-PR rule needs the evidence chain that ratified it — otherwise the rule reads as an oversight and gets "fixed" back to small-CL. Naming the decisions keeps the divergence auditable and reversible from ``state.json`` alone.
-
-
-### Mechanism
-
-The phase=release + large-phase-PR cadence is ratified by Decision D10 (keep one-PR-per-phase cadence) and the rebase-merge strategy by Decision D07 (rebase-and-merge; never squash). The canonical workflow reference is ``docs/architecture/workflow.md`` (VCS, commit, PR, and merge policy). Cite the Decision id, not this rule's prose, when a review or roadmap discussion questions the cadence; reverse the divergence only by superseding D10 with a new Decision row.
-
-
-### Verification
-
-The decisions exist in ``state.json`` and surface in the rendered ``## Decisions`` section: ``eawf decisions show`` (or grep the rendered AGENTS.md) lists D07 and D10. ``docs/architecture/workflow.md`` resolves as a repo-relative path. A claim that small-CL should replace this rule is checked against D10's status — only a superseding Decision discharges the divergence.
-
+<!-- BEGIN EAWF:managed id=agent-driven-cadence-adr-pointer version=1.1 hash=d2ec04bbfbdff318 -->
+`agent-driven-cadence-adr-pointer` — The phase-equals-release and one-PR-per-phase divergences from small-CL practice are ratified by typed decisions; cite those ids in review and reverse the cadence only by superseding them. Full text: [docs/rules/agent-driven-cadence-adr-pointer.md](docs/rules/agent-driven-cadence-adr-pointer.md)
 <!-- END EAWF:managed id=agent-driven-cadence-adr-pointer -->
-<!-- BEGIN EAWF:managed id=code-craft-dry version=1.0 hash=87e8b06d23a7c9f9 -->
-### Rationale
-
-Repeated logic drifts: a fix lands in one copy and the others rot. DRY (don't repeat yourself) keeps one canonical home per behaviour so a change has one place to land. The balance is KISS — three similar lines are cheaper to read than a half-fitted helper, so do not abstract until a third caller actually appears.
-
-
-### Mechanism
-
-When a third use site of the same logic appears, extract it into one named function or constant and route every caller through it. Until then, tolerate the duplication. Never introduce a parameterised helper for two call sites or for a use site that does not yet exist (YAGNI).
-
-
-### Verification
-
-grep for the literal or near-literal logic across the changed module; a reviewer confirms either a single shared definition or fewer than three copies. A new helper with only one caller is a YAGNI violation and the reviewer rejects it.
-
+<!-- BEGIN EAWF:managed id=code-craft-dry version=1.1 hash=54d9c8793398c1fd -->
+`code-craft-dry` — Extract shared logic into one named home only once a third use site appears; until then tolerate the duplication. Full text: [docs/rules/code-craft-dry.md](docs/rules/code-craft-dry.md)
 <!-- END EAWF:managed id=code-craft-dry -->
-<!-- BEGIN EAWF:managed id=code-craft-fail-fast version=1.0 hash=16f43597d049598a -->
-### Rationale
-
-An error raised deep in a call stack surfaces far from its cause, so the stack trace points at the symptom rather than the bad input. Fail-fast raises at the boundary where invalid data enters, keeping the trace short and the blame obvious.
-
-
-### Mechanism
-
-Validate inputs at the boundary (loader, CLI parse, public function entry) and raise immediately on bad data. Downstream functions accept already-validated typed objects and never re-check. Error messages start lowercase, carry no trailing period, and interpolate user input with ``!r`` so the offending value is quoted.
-
-
-### Verification
-
-Read the function's first statements: argument validation precedes any side effect. Each public function has an error-path test asserting the exception type (``TypeError`` / ``ValueError`` / ``KeyError`` / ``ValidationError``) and, when the message is part of the contract, the message substring via ``pytest.raises``.
-
+<!-- BEGIN EAWF:managed id=code-craft-fail-fast version=1.1 hash=9eeca3418f114852 -->
+`code-craft-fail-fast` — Validate inputs at the boundary and raise there, so downstream functions accept already-validated typed objects and never re-check. Full text: [docs/rules/code-craft-fail-fast.md](docs/rules/code-craft-fail-fast.md)
 <!-- END EAWF:managed id=code-craft-fail-fast -->
-<!-- BEGIN EAWF:managed id=code-craft-single-responsibility version=1.0 hash=24badd7e8553401a -->
-### Rationale
-
-A unit with one reason to change is testable in isolation and safe to edit. When parsing, validation, computation, and rendering share a function, a change to one concern risks the others and tests need elaborate setup.
-
-
-### Mechanism
-
-Give each function and class exactly one reason to change. Keep parsing separate from validation separate from execution. When one class accretes distinct concerns and outgrows roughly 300 lines or seven public methods, apply the ``refactor-god-class`` playbook: extract the lowest-coupling seam first, one concern per commit.
-
-
-### Verification
-
-Name each public method's single concern; methods that span two concerns flag the unit for extraction. The cognitive-complexity gate (EAWF011 + ruff C901) backstops this — a function over the threshold fails ``uv run pre-commit run --all-files`` before review.
-
+<!-- BEGIN EAWF:managed id=code-craft-single-responsibility version=1.1 hash=32aec20367444402 -->
+`code-craft-single-responsibility` — Give each function and class exactly one reason to change, keeping parsing, validation, and execution in separate units. Full text: [docs/rules/code-craft-single-responsibility.md](docs/rules/code-craft-single-responsibility.md)
 <!-- END EAWF:managed id=code-craft-single-responsibility -->
-<!-- BEGIN EAWF:managed id=code-craft-explicit-over-implicit version=1.0 hash=bf99576fd38d0dc6 -->
-### Rationale
-
-Implicit behaviour surprises the next reader: positional arguments at high arity transpose silently, and ``None``-as-success hides the real outcome. Explicit code matches the principle of least surprise — the behaviour reads off the call site without chasing the definition.
-
-
-### Mechanism
-
-Use named arguments over positional when a function takes three or more parameters. Return explicit values rather than ``None``-as-success. Prefer pure functions with no hidden state. Keep behaviour matching the name so a reader trusts the signature.
-
-
-### Verification
-
-Read each call site of a function with arity of three or more: arguments are passed by keyword. A function whose name implies a value but returns ``None`` on the happy path is reworked. mypy (``uv run mypy src/``) backs the explicit-return contract via full type hints.
-
+<!-- BEGIN EAWF:managed id=code-craft-explicit-over-implicit version=1.1 hash=8b487368a5b65462 -->
+`code-craft-explicit-over-implicit` — Pass arguments by keyword at arity three or more, return explicit values rather than ``None``-as-success, and keep behaviour matching the name. Full text: [docs/rules/code-craft-explicit-over-implicit.md](docs/rules/code-craft-explicit-over-implicit.md)
 <!-- END EAWF:managed id=code-craft-explicit-over-implicit -->
-<!-- BEGIN EAWF:managed id=lean-wave-verification version=1.0 hash=19d492df6af39650 -->
-### Rationale
-
-Running the full test suite plus a fresh-context audit on every wave costs 10-30 minutes per wave and serializes iter execution. The live close gate reserves blocking auditor spawn for the high-risk band (L/XL effort, judgment roles, and security scope). Its deterministic 1-in-4 classification for mechanical waves is advisory today: sampled mechanical waves do not trigger a blocking live auditor spawn. Iter-close audit-link integrity is the patch-release guard; proof that the audit evaluated the exact closing HEAD remains deferred to the provenance model in v0.7.
-
-
-### Mechanism
-
-Wave success criteria name targeted tests only (``uv run pytest <touched paths>``) — never the full suite. A mechanical wave (S/M effort, executor role, non-security) closes on criteria + evidence alone; do not describe the 1-in-4 sampler as a blocking spawn control. The full suite (the repo's acceptance ``tests`` command) and one fresh-context audit run once per iter, at iter close, in this order: polish -> full suite -> audit over the iter diff -> close. Strict close validates that the named audit exists, belongs to the iter, is complete and accepted, and carries real evidence; it does not validate evaluated HEAD. Nonblocking audit findings become backlog items (``eawf backlog add``). One repair wave and one re-audit is operator procedure, not a production limit: reserved ``flow.max_repair_cycles`` does not enforce it. Exceptions that keep the wave-level full-tree gauntlet: persisted-schema / migration waves and security-scoped waves.
-
-
-### Verification
-
-A closed mechanical wave shows no full-suite run and no blocking sampler-spawn claim. The iter close names a real accepted audit linked to that iter; do not infer an audited HEAD SHA from the link. Audit findings resolve through operator triage, and no check claims ``flow.max_repair_cycles`` enforces a one-repair-wave ceiling.
-
+<!-- BEGIN EAWF:managed id=lean-wave-verification version=1.1 hash=651f3b1285de65f5 -->
+`lean-wave-verification` — Wave success criteria name targeted tests only; the full suite and one fresh-context audit run once per iter at iter close, not once per wave. Full text: [docs/rules/lean-wave-verification.md](docs/rules/lean-wave-verification.md)
 <!-- END EAWF:managed id=lean-wave-verification -->

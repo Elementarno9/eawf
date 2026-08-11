@@ -50,8 +50,10 @@ from eawf.kernel.spec.research_campaign import ResearchProfileBlock
 from eawf.kernel.state.enums import TrackKind
 from eawf.platform.profiles.clarity import DEFAULT_OUTPUT_STYLE, OutputStyle
 from eawf.platform.render_block import (
+    DEFAULT_RENDER_BLOCK_PLACEMENT,
     DEFAULT_RENDER_BLOCK_TIER,
     DISPATCH_SYSTEM_PROMPT_TARGET,
+    RenderBlockPlacement,
     RenderBlockTier,
 )
 
@@ -496,6 +498,16 @@ class RenderBlock(BaseModel):
     for that target and forbidden for every other target (a managed-file block
     such as ``AGENTS.md`` carries no role binding). ``None`` for the legacy
     managed-file blocks.
+
+    ``placement`` decides where the block's bytes live. ``"root"`` (the
+    default, so a block that declares nothing renders exactly as it always did)
+    emits the body verbatim into the managed file. ``"reference"`` writes the
+    full body to ``docs/rules/<id>.md`` and leaves one compact line in the
+    managed file, so an expansion that only justifies or elaborates a rule
+    stops consuming the reader's always-loaded byte budget. A ``"reference"``
+    block MUST carry a ``summary`` -- the obligation in one sentence -- because
+    that is the line the managed file gets; a ``"root"`` block MUST NOT, since
+    nothing would ever read it.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -507,6 +519,8 @@ class RenderBlock(BaseModel):
     mechanism: str | None = None
     verification: str | None = None
     tier: RenderBlockTier = DEFAULT_RENDER_BLOCK_TIER
+    placement: RenderBlockPlacement = DEFAULT_RENDER_BLOCK_PLACEMENT
+    summary: str | None = None
     version: str = "1.0"
     agent_role: str | None = None
 
@@ -514,6 +528,16 @@ class RenderBlock(BaseModel):
     def is_structured(self) -> bool:
         """``True`` when this block carries the structured triad (not prose)."""
         return self.rationale is not None
+
+    @property
+    def is_reference_placed(self) -> bool:
+        """``True`` when the full body belongs in ``docs/rules/<id>.md``.
+
+        A reference-placed block contributes only its :attr:`summary` line to
+        the managed file; the renderer writes the body to its own file. See
+        :data:`~eawf.platform.render_block.RenderBlockPlacement`.
+        """
+        return self.placement == "reference"
 
     @property
     def is_role_tier(self) -> bool:
@@ -603,6 +627,32 @@ class RenderBlock(BaseModel):
             raise ValueError(
                 f"render_block id={self.id!r} sets agent_role={self.agent_role!r} "
                 f"but targets {self.target!r}: agent_role is reserved for the dispatch tier"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _summary_matches_placement(self) -> RenderBlock:
+        """Enforce ``summary`` is set iff ``placement`` is ``"reference"``.
+
+        A reference-placed block's summary IS the line the managed file
+        carries, so omitting it would leave the reader a bare link with no
+        statement of the obligation. A root-placed block renders its whole
+        body, so a summary would be unread text drifting out of sync.
+
+        Raises:
+            ValueError: when a reference-placed block omits ``summary`` (or
+                gives a blank one), or a root-placed block supplies one.
+        """
+        if self.placement == "reference":
+            if self.summary is None or not self.summary.strip():
+                raise ValueError(
+                    f"render_block id={self.id!r} is placement=reference but sets no "
+                    f"summary: the managed file needs one line stating the obligation"
+                )
+        elif self.summary is not None:
+            raise ValueError(
+                f"render_block id={self.id!r} sets summary={self.summary!r} but is "
+                f"placement={self.placement!r}: summary is reserved for reference placement"
             )
         return self
 
