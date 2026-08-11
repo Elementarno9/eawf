@@ -141,8 +141,8 @@ Before opening or resuming a phase, iter, or wave, verify the current branch is 
 If the working tree is dirty, preserve the dirty/untracked work before rebasing. If the branch intentionally remains behind or forked, record the reason in the plan or handoff before dispatching worktrees or starting new commits.
 
 <!-- END EAWF:managed id=branch-currency -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.6 hash=57a081c4d4260873 -->
-`commit-prefix` — Subjects are ``[P<NN>(-I<NN>)?(-W<NN>)?] <type>: <summary>`` with type from feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state, a 3-6 bullet body, and a bracket-free bare subject only while no phase is ACTIVE. Full text: [docs/rules/commit-prefix.md](docs/rules/commit-prefix.md)
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.6 hash=16813eba871f03ef -->
+`commit-prefix` — Subjects are ``[P<NN>(-I<NN>)?(-W<NN>)?] <type>: <summary>`` over the conventional-commit type set, with a 3-6 bullet body, and a bracket-free bare subject only while no phase is ACTIVE. Full text: [docs/rules/commit-prefix.md](docs/rules/commit-prefix.md)
 <!-- END EAWF:managed id=commit-prefix -->
 <!-- BEGIN EAWF:managed id=branch-naming version=1.0 hash=8251a99a4f2ce095 -->
 ### Branch naming
@@ -162,8 +162,8 @@ Companion-doc references in rendered docs / commit messages / PR bodies / docstr
 Forward-fix only — once a leak lands in a published commit, history rewrite is the *last* resort because the blast radius (force-push, SHA churn, broken PR refs) is much larger than the prevention cost. Scrub locally before ``git add``; let ``pre-commit`` (``detect-secrets`` + custom path checks) catch the rest.
 
 <!-- END EAWF:managed id=secrets-hygiene -->
-<!-- BEGIN EAWF:managed id=artifact-chassis version=1.2 hash=44b3e142a036a29a -->
-`artifact-chassis` — Durable research, plan, audit, decision, hypothesis, and incident markdown uses the renderer-owned Summary / References / Provenance / Scrub chassis, with dense citations backed by typed rows and no absolute local paths. Full text: [docs/rules/artifact-chassis.md](docs/rules/artifact-chassis.md)
+<!-- BEGIN EAWF:managed id=artifact-chassis version=1.2 hash=a7f65861e1b30e94 -->
+`artifact-chassis` — Durable research, audit, decision, and incident markdown uses the renderer-owned Summary / References / Provenance / Scrub chassis, with dense citations backed by typed rows and no absolute paths. Full text: [docs/rules/artifact-chassis.md](docs/rules/artifact-chassis.md)
 <!-- END EAWF:managed id=artifact-chassis -->
 <!-- BEGIN EAWF:managed id=planned-scope-revisability version=1.1 hash=d2ec84e7cc93e285 -->
 `planned-scope-revisability` — Scope mutability is status-tiered: PLANNED scope is freely editable, ACTIVE scope is append-only with PENDING-only wave edits, and CLOSED scope changes only via a reopen. Full text: [docs/rules/planned-scope-revisability.md](docs/rules/planned-scope-revisability.md)
