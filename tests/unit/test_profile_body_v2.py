@@ -27,7 +27,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from eawf.platform.profiles import load_profile
 from eawf.platform.profiles.models import (
+    RENDER_BLOCK_SUMMARY_MAX,
     ComposedProfile,
     InstrumentReq,
     ProfileBody,
@@ -241,6 +243,52 @@ def test_render_block_rejects_summary_on_root_placement() -> None:
             summary="Do the thing.",
         )
     assert "summary is reserved for reference placement" in str(excinfo.value)
+
+
+def test_render_block_accepts_a_summary_at_the_cap() -> None:
+    """A summary of exactly the cap is legal -- the bound is inclusive."""
+    block = RenderBlock(
+        id="at-cap",
+        target="AGENTS.md",
+        body_template="## Long",
+        placement="reference",
+        summary="x" * RENDER_BLOCK_SUMMARY_MAX,
+    )
+    assert len(block.summary or "") == RENDER_BLOCK_SUMMARY_MAX
+
+
+def test_render_block_rejects_an_over_cap_summary() -> None:
+    """One character past the cap is rejected at the ingestion boundary.
+
+    The summary is the line the always-loaded managed file keeps when a rule's
+    body moves out, so an unbounded one would let the body creep back into the
+    byte budget the move exists to protect.
+    """
+    with pytest.raises(ValidationError) as excinfo:
+        RenderBlock(
+            id="over-cap",
+            target="AGENTS.md",
+            body_template="## Long",
+            placement="reference",
+            summary="x" * (RENDER_BLOCK_SUMMARY_MAX + 1),
+        )
+    assert "at most 200 characters" in str(excinfo.value)
+
+
+def test_shipped_profile_summaries_are_within_the_cap() -> None:
+    """Every summary the shipped profiles declare clears the bound.
+
+    The model would reject an over-cap body at load time, so this asserts the
+    cap was chosen to fit the shipped prose rather than silently breaking a
+    profile the composer never loads in this suite.
+    """
+    over_cap = [
+        (profile_id, block.id, len(block.summary))
+        for profile_id in ("core", "python", "research", "agent_driven", "quality")
+        for block in load_profile(profile_id).render_blocks
+        if block.summary is not None and len(block.summary) > RENDER_BLOCK_SUMMARY_MAX
+    ]
+    assert over_cap == []
 
 
 def test_render_block_rejects_unknown_placement() -> None:

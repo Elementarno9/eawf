@@ -193,7 +193,7 @@ render_blocks:
     target: AGENTS.md
     version: "1.6"
     placement: reference
-    summary: "Subjects are ``[P<NN>(-I<NN>)?(-W<NN>)?] <type>: <summary>`` with type from feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state, a 3-6 bullet body, and a bracket-free bare subject only while no phase is ACTIVE."
+    summary: "Subjects are ``[P<NN>(-I<NN>)?(-W<NN>)?] <type>: <summary>`` over the conventional-commit type set, with a 3-6 bullet body, and a bracket-free bare subject only while no phase is ACTIVE."
     body_template: |
       ### Commit prefix
 
@@ -244,7 +244,7 @@ render_blocks:
     target: AGENTS.md
     version: "1.2"
     placement: reference
-    summary: "Durable research, plan, audit, decision, hypothesis, and incident markdown uses the renderer-owned Summary / References / Provenance / Scrub chassis, with dense citations backed by typed rows and no absolute local paths."
+    summary: "Durable research, audit, decision, and incident markdown uses the renderer-owned Summary / References / Provenance / Scrub chassis, with dense citations backed by typed rows and no absolute paths."
     body_template: |
       ### Artifact chassis and citations
 
