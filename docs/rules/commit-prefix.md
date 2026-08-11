@@ -1,9 +1,9 @@
 <!-- Generated from the eawf profile render block `commit-prefix`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.6 hash=a99d93a13c387b66 -->
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.6 hash=f8f7d83a9aef7602 -->
 # `commit-prefix`
 
-Subjects are ``[P<NN>(-I<NN>)?(-W<NN>)?] <type>: <summary>`` with type from feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state, a 3-6 bullet body, and a bracket-free bare subject only while no phase is ACTIVE.
+Subjects are ``[P<NN>(-I<NN>)?(-W<NN>)?] <type>: <summary>`` over the conventional-commit type set, with a 3-6 bullet body, and a bracket-free bare subject only while no phase is ACTIVE.
 
 ### Commit prefix
 

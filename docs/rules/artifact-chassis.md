@@ -1,9 +1,9 @@
 <!-- Generated from the eawf profile render block `artifact-chassis`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=artifact-chassis version=1.2 hash=4eef90bcecc26706 -->
+<!-- BEGIN EAWF:managed id=artifact-chassis version=1.2 hash=35b06e6ecaf15e0c -->
 # `artifact-chassis`
 
-Durable research, plan, audit, decision, hypothesis, and incident markdown uses the renderer-owned Summary / References / Provenance / Scrub chassis, with dense citations backed by typed rows and no absolute local paths.
+Durable research, audit, decision, and incident markdown uses the renderer-owned Summary / References / Provenance / Scrub chassis, with dense citations backed by typed rows and no absolute paths.
 
 ### Artifact chassis and citations
 

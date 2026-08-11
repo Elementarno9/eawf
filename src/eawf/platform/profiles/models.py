@@ -468,6 +468,16 @@ class InstrumentReq(BaseModel):
     version_regex: str | None = None
 
 
+#: Hard upper bound on a reference-placed block's ``summary``. The summary is
+#: the ONE line the always-loaded managed file keeps when the body moves to
+#: ``docs/rules/<id>.md``, so it is charged against the byte budget the move
+#: exists to protect: 21 summaries at 200 characters already cost ~4 KB of a
+#: 32 KB cap. An unbounded summary would let a rule creep its whole body back
+#: into the file one edit at a time. Sized just above the longest shipped
+#: summary so the bound bites on growth, not on today's prose.
+RENDER_BLOCK_SUMMARY_MAX: int = 200
+
+
 class RenderBlock(BaseModel):
     """A chunk of templated content the renderer emits into a managed file.
 
@@ -507,7 +517,10 @@ class RenderBlock(BaseModel):
     stops consuming the reader's always-loaded byte budget. A ``"reference"``
     block MUST carry a ``summary`` -- the obligation in one sentence -- because
     that is the line the managed file gets; a ``"root"`` block MUST NOT, since
-    nothing would ever read it.
+    nothing would ever read it. A summary is capped at
+    :data:`RENDER_BLOCK_SUMMARY_MAX` characters: it is the part of a moved rule
+    that still costs always-loaded bytes, so it stays one sentence rather than
+    growing back into a body.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -520,7 +533,7 @@ class RenderBlock(BaseModel):
     verification: str | None = None
     tier: RenderBlockTier = DEFAULT_RENDER_BLOCK_TIER
     placement: RenderBlockPlacement = DEFAULT_RENDER_BLOCK_PLACEMENT
-    summary: str | None = None
+    summary: Annotated[str, Field(min_length=1, max_length=RENDER_BLOCK_SUMMARY_MAX)] | None = None
     version: str = "1.0"
     agent_role: str | None = None
 
