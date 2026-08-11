@@ -1,5 +1,6 @@
 <!-- Generated from the eawf profile render block `agent-driven-phase-equals-release`. Do not hand-edit: re-run `eawf sync`. -->
 
+<!-- BEGIN EAWF:managed id=agent-driven-phase-equals-release version=1.1 hash=2c021f0df2e8a8f8 -->
 # `agent-driven-phase-equals-release`
 
 Every closed phase ships as at least a minor release: the phase-close commit bumps the package version module and the PR merge tags that release.
@@ -17,3 +18,4 @@ Every closed phase ships as at least a minor release. The phase-close commit bum
 ### Verification
 
 Read the phase-close commit: it advances ``src/eawf/_version.py`` while ``pyproject.toml`` remains dynamically versioned, and the merge creates a release tag matching the new version. ``git tag --points-at <phase-close-sha>`` lists the release tag; a phase that closed without a version bump or a tag is reworked before the PR merges.
+<!-- END EAWF:managed id=agent-driven-phase-equals-release -->

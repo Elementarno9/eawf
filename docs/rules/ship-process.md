@@ -1,5 +1,6 @@
 <!-- Generated from the eawf profile render block `ship-process`. Do not hand-edit: re-run `eawf sync`. -->
 
+<!-- BEGIN EAWF:managed id=ship-process version=1.1 hash=19f275beaf1f91a1 -->
 # `ship-process`
 
 Ship rides the phase-co-closing iter: open the one phase PR, pass CI, address review by appending waves to that same iter, then close and merge with rebase.
@@ -13,3 +14,4 @@ Ship is the phase's terminal pass, and it rides the phase-co-closing iter (the f
 3. **Pass the review.** ``/ship`` runs the PR review pass. Address feedback by **appending waves to the same co-closing iter** via ``eawf roadmap revise --add-wave`` (ACTIVE-phase ``add_wave_plan`` keeps the iter ACTIVE and lands the new waves PENDING). Do NOT open a second iter for routine review follow-ups -- see ``iter-phase-close-timing``.
 4. **Close + merge.** Once CI is green AND the review-passed branch is on the remote, the phase-close mutation rides the single ``[P<NN>] state: close iter + phase (audit=<id>)`` commit that bundles iter close + phase close (see ``iter-phase-close-timing``). Merge with rebase (never squash) so the per-wave ``[P<NN>-W<NN>]`` history survives; the merge ends the phase.
 5. **Tag the release.** Per the ``per_phase`` cadence the post-merge ``.github/workflows/phase-release.yaml`` reads the ``(release=v<X.Y.Z>)`` annotation off the phase-close commit, tags the merge commit, and publishes notes from the PR body -- see ``release-process`` for the pre-flight gate that ``eawf phase close`` enforces.
+<!-- END EAWF:managed id=ship-process -->

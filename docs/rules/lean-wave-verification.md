@@ -1,5 +1,6 @@
 <!-- Generated from the eawf profile render block `lean-wave-verification`. Do not hand-edit: re-run `eawf sync`. -->
 
+<!-- BEGIN EAWF:managed id=lean-wave-verification version=1.1 hash=570fdc700b1bfae4 -->
 # `lean-wave-verification`
 
 Wave success criteria name targeted tests only; the full suite and one fresh-context audit run once per iter at iter close, not once per wave.
@@ -17,3 +18,4 @@ Wave success criteria name targeted tests only (``uv run pytest <touched paths>`
 ### Verification
 
 A closed mechanical wave shows no full-suite run and no blocking sampler-spawn claim. The iter close names a real accepted audit linked to that iter; do not infer an audited HEAD SHA from the link. Audit findings resolve through operator triage, and no check claims ``flow.max_repair_cycles`` enforces a one-repair-wave ceiling.
+<!-- END EAWF:managed id=lean-wave-verification -->

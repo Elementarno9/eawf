@@ -1,5 +1,6 @@
 <!-- Generated from the eawf profile render block `engineering-principles`. Do not hand-edit: re-run `eawf sync`. -->
 
+<!-- BEGIN EAWF:managed id=engineering-principles version=1.1 hash=fb6567b814e4a58a -->
 # `engineering-principles`
 
 Reach for the simplest design that solves the immediate need: no helper, parameter, or config knob without a present-day caller, and no handling for states that cannot happen.
@@ -17,3 +18,4 @@ Reach for the simplest design that solves the immediate need. Three similar line
 ### Verification
 
 A reviewer checks that each new helper, parameter, or config knob has a present-day caller; a helper introduced for one or two call sites, or for a use site that does not yet exist, is rejected. Defensive branches for impossible states are removed before merge.
+<!-- END EAWF:managed id=engineering-principles -->

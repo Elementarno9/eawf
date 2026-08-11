@@ -15,10 +15,12 @@ Per ``docs/policy/agents-claude-md.md``:
   ``AGENTS.md.j2`` template (prose ``body_template`` verbatim, or a fixed
   ``Rationale``/``Mechanism``/``Verification`` layout for structured triad
   blocks). A block declaring ``placement: reference`` does NOT put that body in
-  the managed file: the body is written to ``docs/rules/<id>.md`` and the
-  managed region gets one line naming the obligation and linking the expansion,
-  which is how the always-loaded file stays inside a consumer's byte cap
-  without any rule being deleted. Then call
+  the managed file: the body is written to ``docs/rules/<id>.md`` — inside the
+  same ``BEGIN``/``END`` managed-region markers the managed file uses, so the
+  expansion is drift-checked exactly like an inline region — and the managed
+  region gets one line naming the obligation and linking the expansion, which
+  is how the always-loaded file stays inside a consumer's byte cap without any
+  rule being deleted. Then call
   :func:`~eawf.surfaces.render.regions.replace_region` so an existing block with the
   same id is replaced in-place and a brand-new block is appended.
   Anything *outside* a managed region (hand-written paragraphs above, below,
@@ -28,7 +30,11 @@ Per ``docs/policy/agents-claude-md.md``:
   portalock — same discipline as :mod:`eawf.kernel.state.writer`.
 - Update a :class:`~eawf.surfaces.render.manifest.Manifest` so drift detection
   (:mod:`eawf.surfaces.render.drift`) and ``eawf doctor`` know the renderer's view of
-  what's on disk. The caller is responsible for persisting the manifest via
+  what's on disk. Every managed region gets a row — the ones inside the managed
+  file AND the one inside each ``docs/rules/<id>.md`` expansion — so a hand-edit
+  or deletion of a moved rule is caught by the same detector, keeping the
+  "do not hand-edit" banner an enforced contract rather than a request. The
+  caller is responsible for persisting the manifest via
   :func:`~eawf.surfaces.render.manifest.save_atomic` — keeping the renderer pure means
   callers can batch multiple targets into a single manifest write.
 
@@ -188,6 +194,11 @@ def _render_block_body(env: Environment, block: RenderBlock, composed: ComposedP
     return template.render(block=block, composed=composed)
 
 
+def _reference_dir(root: Path) -> Path:
+    """Return the directory holding every reference-placed block's expansion."""
+    return Path(root).joinpath(*RULE_REFERENCE_DIR.split("/"))
+
+
 def reference_file_path(root: Path, block_id: str) -> Path:
     """Return the path holding the full body of reference-placed *block_id*.
 
@@ -196,7 +207,7 @@ def reference_file_path(root: Path, block_id: str) -> Path:
     ``<root>/docs/rules/<block_id>.md`` per
     :data:`~eawf.platform.render_block.RULE_REFERENCE_DIR`.
     """
-    return Path(root).joinpath(*RULE_REFERENCE_DIR.split("/")) / f"{block_id}.md"
+    return _reference_dir(root) / f"{block_id}.md"
 
 
 def render_reference_line(block: RenderBlock) -> str:
@@ -208,37 +219,67 @@ def render_reference_line(block: RenderBlock) -> str:
     binds them to and where to read it.
 
     Raises:
-        ValueError: *block* is not reference-placed, so it has no summary and
-            belongs in the managed file verbatim.
+        ValueError: *block* is not reference-placed, so it belongs in the
+            managed file verbatim; or it is reference-placed but carries no
+            summary, so there is no obligation to name on the line.
     """
-    if not block.is_reference_placed or block.summary is None:
+    if not block.is_reference_placed:
         raise ValueError(f"render_block is not reference-placed: {block.id!r}")
+    if block.summary is None:
+        raise ValueError(f"reference-placed render_block has no summary: {block.id!r}")
     path = f"{RULE_REFERENCE_DIR}/{block.id}.md"
     return f"`{block.id}` — {block.summary.strip()} Full text: [{path}]({path})"
 
 
-def render_reference_document(block: RenderBlock, body: str) -> str:
-    """Return the full ``docs/rules/<id>.md`` content for a reference block.
+def _reference_region_body(block: RenderBlock, body: str) -> str:
+    """Return the managed-region body of a reference block's expansion file.
 
-    The document leads with a generated-file banner (hand-edits here are lost
-    on the next render), then the block id as its title, the one-sentence
-    obligation, and the block's rendered *body* verbatim -- nothing from the
-    managed file is dropped, it only moves.
+    This is the drift-checked payload of ``docs/rules/<id>.md``: the block id
+    as a title, the one-sentence obligation, and the block's rendered *body*
+    verbatim. The generated-file banner sits *outside* the region so the
+    recorded hash covers the rule text alone.
 
     Args:
         block: The reference-placed block being expanded.
         body: The block body as rendered for the managed file.
 
     Raises:
-        ValueError: *block* is not reference-placed.
+        ValueError: *block* is not reference-placed, or is reference-placed
+            but carries no summary.
     """
-    if not block.is_reference_placed or block.summary is None:
+    if not block.is_reference_placed:
         raise ValueError(f"render_block is not reference-placed: {block.id!r}")
+    if block.summary is None:
+        raise ValueError(f"reference-placed render_block has no summary: {block.id!r}")
+    return f"# `{block.id}`\n\n{block.summary.strip()}\n\n{body.strip()}"
+
+
+def render_reference_document(block: RenderBlock, body: str) -> str:
+    """Return the full ``docs/rules/<id>.md`` content for a reference block.
+
+    The document leads with a generated-file banner (hand-edits here are lost
+    on the next render), then wraps :func:`reference_region_body` in the same
+    ``BEGIN``/``END`` managed-region markers the managed file uses. The markers
+    are what make the banner enforceable: the region flows through
+    :func:`~eawf.surfaces.render.drift.detect_drift` like any inline block, so a
+    hand-edit or deletion of a moved rule surfaces in ``eawf doctor`` instead of
+    passing unnoticed. Nothing from the managed file is dropped, it only moves.
+
+    Args:
+        block: The reference-placed block being expanded.
+        body: The block body as rendered for the managed file.
+
+    Raises:
+        ValueError: *block* is not reference-placed, or is reference-placed
+            but carries no summary.
+    """
+    region_body = _reference_region_body(block, body)
     banner = (
         f"<!-- Generated from the eawf profile render block `{block.id}`. "
         f"Do not hand-edit: re-run `eawf sync`. -->"
     )
-    return f"{banner}\n\n# `{block.id}`\n\n{block.summary.strip()}\n\n{body.strip()}\n"
+    marked = regions.replace_region("", id=block.id, version=block.version, body=region_body)
+    return f"{banner}\n\n{marked}\n"
 
 
 @dataclass
@@ -652,6 +693,23 @@ def _has_unmanaged_content(text: str) -> bool:
     return any(chunk.strip() != "" for chunk in leftover_chunks)
 
 
+@dataclass(frozen=True)
+class _ReferenceEmission:
+    """One reference-placed block's on-disk expansion, for manifest emission.
+
+    Attributes:
+        path: The ``docs/rules/<id>.md`` file the expansion was written to.
+        region_id: Managed-region id inside that file (the block id).
+        version: Version stamped on the expansion's BEGIN marker.
+        body: The region body whose hash the manifest row records.
+    """
+
+    path: Path
+    region_id: str
+    version: str
+    body: str
+
+
 def _emit_block(
     *,
     emitter: _RegionEmitter,
@@ -659,7 +717,7 @@ def _emit_block(
     composed: ComposedProfile,
     block: RenderBlock,
     root: Path,
-) -> None:
+) -> _ReferenceEmission | None:
     """Emit one render block: full body inline, or a line plus a sibling file.
 
     A ``placement: reference`` block keeps its full body out of the managed
@@ -673,16 +731,60 @@ def _emit_block(
         composed: Full composed profile, passed into the block template.
         block: The block to emit.
         root: Directory holding the managed file, parent of ``docs/rules/``.
+
+    Returns:
+        The :class:`_ReferenceEmission` describing the expansion file for a
+        reference-placed block, so the caller can record a manifest row for it;
+        ``None`` for a root-placed block, whose bytes live in the managed file
+        and are already accounted for by *emitter*.
     """
     body = _render_block_body(env, block, composed)
     if not block.is_reference_placed:
         emitter.emit(block.id, block.version, body)
-        return
-    atomic_write_text(
-        reference_file_path(root, block.id),
-        render_reference_document(block, body),
-    )
+        return None
+    path = reference_file_path(root, block.id)
+    atomic_write_text(path, render_reference_document(block, body))
     emitter.emit(block.id, block.version, render_reference_line(block))
+    return _ReferenceEmission(
+        path=path,
+        region_id=block.id,
+        version=block.version,
+        body=_reference_region_body(block, body),
+    )
+
+
+def _emit_zone(
+    *,
+    emitter: _RegionEmitter,
+    env: Environment,
+    composed: ComposedProfile,
+    blocks: list[RenderBlock],
+    root: Path,
+) -> list[_ReferenceEmission]:
+    """Emit every block of one zone, returning the expansions that were written.
+
+    Args:
+        emitter: Accumulator owning the managed-region writes.
+        env: Jinja2 environment the block bodies render through.
+        composed: Full composed profile, passed into each block template.
+        blocks: The zone's blocks, in render order.
+        root: Directory holding the managed file, parent of ``docs/rules/``.
+
+    Returns:
+        One :class:`_ReferenceEmission` per reference-placed block in *blocks*.
+    """
+    emissions: list[_ReferenceEmission] = []
+    for block in blocks:
+        emission = _emit_block(
+            emitter=emitter,
+            env=env,
+            composed=composed,
+            block=block,
+            root=root,
+        )
+        if emission is not None:
+            emissions.append(emission)
+    return emissions
 
 
 def render_agents_md(
@@ -708,7 +810,8 @@ def render_agents_md(
        append, updates rewrite the BEGIN…END span, untouched regions are
        no-ops. A ``placement: reference`` block contributes only its
        :func:`render_reference_line`; its full body is written alongside at
-       :func:`reference_file_path`.
+       :func:`reference_file_path`, inside its own managed region so the
+       expansion is drift-checked too.
     4. When *state* is supplied, append/replace a managed
        ``DECISIONS_REGION_ID`` region whose body is produced by
        :func:`render_decisions_section` against the typed
@@ -717,10 +820,13 @@ def render_agents_md(
        rather than carrying hardcoded prose in a YAML profile body.
     5. Acquire portalock on *target*, atomically write the new text via
        tempfile + ``os.replace`` (parent-dir fsync included).
-    6. Build an updated :class:`Manifest` whose entries for *target* match
-       the regions just emitted; entries for *other* targets are preserved
-       verbatim. Hash recorded is :func:`~eawf.surfaces.render.regions.compute_hash`
-       of the rendered body text — same digest the BEGIN marker carries.
+    6. Build an updated :class:`Manifest` whose entries for *target* and for
+       every ``docs/rules/<id>.md`` expansion under it match the regions just
+       emitted; entries for *other* targets are preserved verbatim. Hash
+       recorded is :func:`~eawf.surfaces.render.regions.compute_hash` of the
+       rendered body text — same digest the BEGIN marker carries. An expansion
+       row whose block is no longer reference-placed is dropped rather than
+       carried, so ``eawf doctor`` never reports a phantom "missing" region.
 
     Args:
         composed: Composed profile body whose ``render_blocks`` drive the
@@ -776,16 +882,16 @@ def render_agents_md(
     # same insert-or-replace path, so the affordance-parity invariant holds in
     # both directions (every tier0 block id lands after the Zone-1 marker and
     # before the Zone-2 marker; no tier0 id leaks into the Zone-2 span).
+    emissions: list[_ReferenceEmission] = []
     if tier0_blocks:
         emitter.emit(ZONE_TIER0_REGION_ID, ZONE_REGION_VERSION, ZONE_TIER0_BODY)
-        for block in tier0_blocks:
-            _emit_block(
-                emitter=emitter,
-                env=env,
-                composed=composed,
-                block=block,
-                root=target.parent,
-            )
+        emissions += _emit_zone(
+            emitter=emitter,
+            env=env,
+            composed=composed,
+            blocks=tier0_blocks,
+            root=target.parent,
+        )
 
     # A reference zone is needed when there are reference blocks OR when the
     # typed Decisions section is being injected (it is reference-tier content
@@ -793,14 +899,13 @@ def render_agents_md(
     needs_reference_zone = bool(reference_blocks) or state is not None
     if needs_reference_zone:
         emitter.emit(ZONE_REFERENCE_REGION_ID, ZONE_REGION_VERSION, ZONE_REFERENCE_BODY)
-        for block in reference_blocks:
-            _emit_block(
-                emitter=emitter,
-                env=env,
-                composed=composed,
-                block=block,
-                root=target.parent,
-            )
+        emissions += _emit_zone(
+            emitter=emitter,
+            env=env,
+            composed=composed,
+            blocks=reference_blocks,
+            root=target.parent,
+        )
 
     if state is not None:
         decisions_body = render_decisions_section(
@@ -820,8 +925,15 @@ def render_agents_md(
     atomic_write_text(target, new_text)
 
     # Preserve manifest entries for OTHER targets, refresh ours from this run.
+    # "Ours" spans the managed file AND every expansion under this root's
+    # docs/rules/: dropping the whole expansion prefix before re-adding this
+    # run's rows is what reclaims the row of a block that stopped being
+    # reference-placed, instead of leaving it to report "missing" forever.
+    reference_prefix = f"{_reference_dir(target.parent).as_posix()}/"
     new_generated: dict[str, ManifestEntry] = {
-        key: entry for key, entry in manifest.generated.items() if entry.target != target_str
+        key: entry
+        for key, entry in manifest.generated.items()
+        if entry.target != target_str and not entry.target.startswith(reference_prefix)
     }
     for region_id, body in emitter.bodies.items():
         composite_key = f"{target_str}::{region_id}"
@@ -830,6 +942,16 @@ def render_agents_md(
             region_id=region_id,
             version=emitter.versions[region_id],
             hash=regions.compute_hash(body),
+            generator=generator,
+            generated_at=timestamp,
+        )
+    for emission in emissions:
+        expansion_target = emission.path.as_posix()
+        new_generated[f"{expansion_target}::{emission.region_id}"] = ManifestEntry(
+            target=expansion_target,
+            region_id=emission.region_id,
+            version=emission.version,
+            hash=regions.compute_hash(emission.body),
             generator=generator,
             generated_at=timestamp,
         )
@@ -846,6 +968,7 @@ def render_agents_md(
         f"render_agents_md target={target} "
         f"added={len(emitter.added)} updated={len(emitter.updated)} "
         f"unchanged={len(emitter.unchanged)} "
+        f"expansions={len(emissions)} "
         f"hand_edits_preserved={hand_edits_preserved} "
         f"decisions_injected={state is not None}"
     )

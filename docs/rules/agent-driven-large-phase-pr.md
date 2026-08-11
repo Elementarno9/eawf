@@ -1,5 +1,6 @@
 <!-- Generated from the eawf profile render block `agent-driven-large-phase-pr`. Do not hand-edit: re-run `eawf sync`. -->
 
+<!-- BEGIN EAWF:managed id=agent-driven-large-phase-pr version=1.1 hash=8ff4fec8e1a09746 -->
 # `agent-driven-large-phase-pr`
 
 Ship one PR per phase however large it grows, keep each wave commit individually bisectable, and merge with rebase rather than squash.
@@ -17,3 +18,4 @@ Ship one PR per phase. A phase PR carrying roughly +10k lines across many files 
 ### Verification
 
 Confirm the phase produced exactly one PR (``gh pr list --search 'P<NN>'``) and that its commits are per-wave, each prefixed ``[P<NN>-W<NN>]`` and individually buildable. A reviewer who proposes splitting the phase into multiple PRs is overruled by this rule; a reviewer who finds a non-bisectable wave commit (two waves squashed into one) flags it for rework. The merge strategy is rebase, verified by a linear, non-squashed commit history on the target branch.
+<!-- END EAWF:managed id=agent-driven-large-phase-pr -->

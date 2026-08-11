@@ -1,5 +1,6 @@
 <!-- Generated from the eawf profile render block `spike-workflow`. Do not hand-edit: re-run `eawf sync`. -->
 
+<!-- BEGIN EAWF:managed id=spike-workflow version=1.3 hash=e7df900256d9ec55 -->
 # `spike-workflow`
 
 A spike is a time-boxed read-only investigation whose brief lands under ``.ea/local/`` and feeds the next roadmap proposal or wave claim; promote it only when it ratifies a verdict.
@@ -15,3 +16,4 @@ A *spike* is a short, time-boxed, read-only investigation run before claiming a 
 **How the verdict feeds the workflow.** The spike's verdict is the input to the next ``/roadmap propose --phase P<NN>`` or ``/prep`` claim. Reference the brief by repo-relative path in the roadmap proposal, the wave's plan body, or the dispatch prompt — the wave dispatch renderer surfaces spike briefs whose filename matches the wave / iter / phase id under a ``## References`` section so the subagent reads them before starting work.
 
 **Spike outputs that ratify a verdict promote on commit.** A spike brief that informs a Decision row + ``set-verdict`` MUST promote from ``.ea/local/research/<date>-<slug>.md`` to ``.ea/artifacts/research/<date>-<slug>.md`` in the same commit that lands the Decision. The promotion runs the artifact-chassis validator + scrub gate. Spikes that do NOT inform a typed verdict stay local.
+<!-- END EAWF:managed id=spike-workflow -->

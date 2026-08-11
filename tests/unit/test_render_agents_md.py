@@ -11,7 +11,8 @@ Covers:
 - Re-rendering an unchanged composed profile reports ``regions_unchanged``
   and leaves ``regions_updated`` empty.
 - ``placement: reference`` blocks keep one line in the managed file and write
-  their full body to ``docs/rules/<id>.md``.
+  their full body to ``docs/rules/<id>.md``, inside a managed region carrying a
+  manifest row so the expansion is drift-checked like an inline block.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ from eawf.surfaces.render.agents_md import (
     render_reference_document,
     render_reference_line,
 )
+from eawf.surfaces.render.drift import detect_drift
 from eawf.surfaces.render.manifest import Manifest
 
 
@@ -600,6 +602,103 @@ def test_render_agents_md_keeps_a_managed_region_for_a_reference_block(tmp_path:
     found = {r.id for r in regions.find_regions(target.read_text(encoding="utf-8"))}
     assert "moved" in found
     assert f"{target.as_posix()}::moved" in manifest.generated
+
+
+def test_render_agents_md_wraps_the_expansion_in_a_managed_region(tmp_path: Path) -> None:
+    """The expansion carries markers, so its body has a hash to check against."""
+    target = tmp_path / "AGENTS.md"
+    composed = _make_composed(
+        [_reference_block("moved", "## Moved\n\nbody", "Follow the moved rule.")]
+    )
+
+    render_agents_md(composed, target, Manifest(version=1, generated={}))
+
+    expansion = reference_file_path(tmp_path, "moved")
+    parsed = regions.find_regions(expansion.read_text(encoding="utf-8"))
+    assert [r.id for r in parsed] == ["moved"]
+    assert parsed[0].declared_hash == regions.compute_hash(parsed[0].body)
+    assert "## Moved" in parsed[0].body
+    # The banner stays outside the region so the hash covers the rule text only.
+    assert expansion.read_text(encoding="utf-8").startswith("<!-- Generated from the eawf")
+
+
+def test_render_agents_md_registers_a_manifest_entry_for_the_expansion(tmp_path: Path) -> None:
+    """The moved file gets its own manifest row keyed by ``<path>::<region_id>``."""
+    target = tmp_path / "AGENTS.md"
+    composed = _make_composed(
+        [_reference_block("moved", "## Moved\n\nbody", "Follow the moved rule.")]
+    )
+
+    _, manifest = render_agents_md(composed, target, Manifest(version=1, generated={}))
+
+    expansion = reference_file_path(tmp_path, "moved")
+    entry = manifest.generated[f"{expansion.as_posix()}::moved"]
+    assert entry.target == expansion.as_posix()
+    assert entry.region_id == "moved"
+    assert entry.version == "1.0"
+    on_disk = regions.extract_region(expansion.read_text(encoding="utf-8"), "moved")
+    assert on_disk is not None
+    assert entry.hash == regions.compute_hash(on_disk.body)
+
+
+def test_detect_drift_reports_ok_for_a_freshly_rendered_expansion(tmp_path: Path) -> None:
+    """A just-written expansion hashes to its manifest row."""
+    target = tmp_path / "AGENTS.md"
+    composed = _make_composed(
+        [_reference_block("moved", "## Moved\n\nbody", "Follow the moved rule.")]
+    )
+
+    _, manifest = render_agents_md(composed, target, Manifest(version=1, generated={}))
+
+    reports = detect_drift(reference_file_path(tmp_path, "moved"), manifest)
+    assert [(r.id, r.kind) for r in reports] == [("moved", "ok")]
+
+
+def test_detect_drift_flags_a_hand_edited_expansion(tmp_path: Path) -> None:
+    """Hand-editing a moved rule is now detectable, not silent."""
+    target = tmp_path / "AGENTS.md"
+    composed = _make_composed(
+        [_reference_block("moved", "## Moved\n\nbody", "Follow the moved rule.")]
+    )
+    _, manifest = render_agents_md(composed, target, Manifest(version=1, generated={}))
+
+    expansion = reference_file_path(tmp_path, "moved")
+    tampered = expansion.read_text(encoding="utf-8").replace("body", "smuggled obligation")
+    expansion.write_text(tampered, encoding="utf-8")
+
+    reports = detect_drift(expansion, manifest)
+    assert [(r.id, r.kind) for r in reports] == [("moved", "hand-edited")]
+
+
+def test_detect_drift_flags_a_deleted_expansion(tmp_path: Path) -> None:
+    """Deleting a moved rule reports ``missing`` rather than passing unnoticed."""
+    target = tmp_path / "AGENTS.md"
+    composed = _make_composed(
+        [_reference_block("moved", "## Moved\n\nbody", "Follow the moved rule.")]
+    )
+    _, manifest = render_agents_md(composed, target, Manifest(version=1, generated={}))
+
+    expansion = reference_file_path(tmp_path, "moved")
+    expansion.unlink()
+
+    reports = detect_drift(expansion, manifest)
+    assert [(r.id, r.kind) for r in reports] == [("moved", "missing")]
+
+
+def test_render_agents_md_drops_the_manifest_row_of_an_unmoved_block(tmp_path: Path) -> None:
+    """A block that flips back to root placement leaves no phantom expansion row."""
+    target = tmp_path / "AGENTS.md"
+    reference_composed = _make_composed(
+        [_reference_block("moved", "## Moved\n\nbody", "Follow the moved rule.")]
+    )
+    _, manifest = render_agents_md(composed=reference_composed, target=target, manifest=Manifest())
+    expansion_key = f"{reference_file_path(tmp_path, 'moved').as_posix()}::moved"
+    assert expansion_key in manifest.generated
+
+    root_composed = _make_composed([_block("moved", "## Moved\n\nbody")])
+    _, after = render_agents_md(root_composed, target, manifest)
+
+    assert expansion_key not in after.generated
 
 
 def test_render_agents_md_reference_placement_is_byte_stable_across_renders(

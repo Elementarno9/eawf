@@ -1,5 +1,6 @@
 <!-- Generated from the eawf profile render block `release-process`. Do not hand-edit: re-run `eawf sync`. -->
 
+<!-- BEGIN EAWF:managed id=release-process version=1.1 hash=fbd6ece946ecfd02 -->
 # `release-process`
 
 Releases are opt-in per repo via the release cadence setting; the per-phase cadence gates phase close on a changelog section, a version bump, a migration note, and the release annotation.
@@ -19,3 +20,4 @@ Per-phase release pre-flight (gates ``eawf phase close``) requires:
 - The phase-close commit subject carries the optional ``(release=v<X.Y.Z>)`` annotation accepted by ``tools/commit_prefix_lint.py``.
 
 Post-merge, ``.github/workflows/phase-release.yaml`` reads the annotation, tags the merge commit, and publishes release notes synthesized from the phase PR body. Repos that opt out via ``cadence: manual`` skip the gate and the workflow.
+<!-- END EAWF:managed id=release-process -->

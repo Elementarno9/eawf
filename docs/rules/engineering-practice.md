@@ -1,5 +1,6 @@
 <!-- Generated from the eawf profile render block `engineering-practice`. Do not hand-edit: re-run `eawf sync`. -->
 
+<!-- BEGIN EAWF:managed id=engineering-practice version=1.1 hash=7d613bb870f944a9 -->
 # `engineering-practice`
 
 Default to fail-fast at the boundary, one reason to change per unit, parsing separate from validation separate from execution, and explicit over implicit.
@@ -17,3 +18,4 @@ Default to: fail-fast (raise at the boundary, not deep in a call stack); single-
 ### Verification
 
 A reviewer reads each public function's first statements (validation precedes side effects) and each call site of arity ≥ 3 (arguments passed by keyword). A function whose name implies a value but returns ``None`` on the happy path is reworked; ``uv run mypy src/`` backs the explicit-return contract via full type hints.
+<!-- END EAWF:managed id=engineering-practice -->

@@ -1,5 +1,6 @@
 <!-- Generated from the eawf profile render block `code-craft-dry`. Do not hand-edit: re-run `eawf sync`. -->
 
+<!-- BEGIN EAWF:managed id=code-craft-dry version=1.1 hash=823df1929f4328d7 -->
 # `code-craft-dry`
 
 Extract shared logic into one named home only once a third use site appears; until then tolerate the duplication.
@@ -17,3 +18,4 @@ When a third use site of the same logic appears, extract it into one named funct
 ### Verification
 
 grep for the literal or near-literal logic across the changed module; a reviewer confirms either a single shared definition or fewer than three copies. A new helper with only one caller is a YAGNI violation and the reviewer rejects it.
+<!-- END EAWF:managed id=code-craft-dry -->
