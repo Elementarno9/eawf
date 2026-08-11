@@ -1,5 +1,6 @@
 <!-- Generated from the eawf profile render block `clarity-contract`. Do not hand-edit: re-run `eawf sync`. -->
 
+<!-- BEGIN EAWF:managed id=clarity-contract version=1.1 hash=a6fa5d567455439a -->
 # `clarity-contract`
 
 Every newcomer-facing artifact must be understandable without opening ``state.json``: right audience, jargon glossed on first use, motivation stated, scannable, references tabulated.
@@ -15,3 +16,4 @@ Every newcomer-facing artifact — commit subject + body, PR body, research / au
 - **Reference-hygiene** — dense ``[N]`` markers backed by a ``## References`` table; no inline ``path:line`` soup or bare URLs mid-prose.
 
 The approved-term glossary, the internal-code blocklist, and the six scored dimensions are the typed source the prose lints read: :mod:`eawf.platform.profiles.clarity`.
+<!-- END EAWF:managed id=clarity-contract -->

@@ -1,5 +1,6 @@
 <!-- Generated from the eawf profile render block `commit-prefix`. Do not hand-edit: re-run `eawf sync`. -->
 
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.6 hash=a99d93a13c387b66 -->
 # `commit-prefix`
 
 Subjects are ``[P<NN>(-I<NN>)?(-W<NN>)?] <type>: <summary>`` with type from feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state, a 3-6 bullet body, and a bracket-free bare subject only while no phase is ACTIVE.
@@ -26,3 +27,4 @@ Non-final iter closes are still in-phase state bookkeeping: use ``[P<NN>-I<NN>] 
 **Operational coupling: ship + PR-review ride the phase-co-closing iter.** The final iter of a phase is where the PR-review pass + ship CI happen; review-feedback waves append to that iter (``eawf roadmap revise --add-wave``) rather than opening a fresh iter. This keeps the phase-close mutation attributable to one iter close + the same commit (see ``iter-phase-close-timing``).
 
 Body: 3-6 bullets on what changed and why. Trailer: a recognized Claude or Codex ``Co-Authored-By`` trailer.
+<!-- END EAWF:managed id=commit-prefix -->

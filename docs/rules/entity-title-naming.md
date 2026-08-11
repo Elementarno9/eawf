@@ -1,5 +1,6 @@
 <!-- Generated from the eawf profile render block `entity-title-naming`. Do not hand-edit: re-run `eawf sync`. -->
 
+<!-- BEGIN EAWF:managed id=entity-title-naming version=1.1 hash=ebc04b9347d05744 -->
 # `entity-title-naming`
 
 Write every entity title as an imperative noun-phrase of at most 72 characters with no trailing period, and put the long-form purpose in the description.
@@ -17,3 +18,4 @@ Write ``title`` as an imperative noun-phrase of at most 72 characters with no tr
 ### Verification
 
 The model enforces the hard bound: ``title`` is ``Annotated[str, Field(min_length=1, max_length=72)]`` on every entity, so an over-72 title fails :class:`pydantic.ValidationError` at the ingestion boundary. The style backstop is :func:`eawf.surfaces.render.agents_md.lint_entity_title`, which a reviewer (or a future authoring command) runs over a candidate title to flag an over-cap or a trailing-period title before it reaches the model — the same two failure modes the bound and this rule describe.
+<!-- END EAWF:managed id=entity-title-naming -->

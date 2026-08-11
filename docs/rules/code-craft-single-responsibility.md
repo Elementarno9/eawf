@@ -1,5 +1,6 @@
 <!-- Generated from the eawf profile render block `code-craft-single-responsibility`. Do not hand-edit: re-run `eawf sync`. -->
 
+<!-- BEGIN EAWF:managed id=code-craft-single-responsibility version=1.1 hash=9088378c04ddf30d -->
 # `code-craft-single-responsibility`
 
 Give each function and class exactly one reason to change, keeping parsing, validation, and execution in separate units.
@@ -17,3 +18,4 @@ Give each function and class exactly one reason to change. Keep parsing separate
 ### Verification
 
 Name each public method's single concern; methods that span two concerns flag the unit for extraction. The cognitive-complexity gate (EAWF011 + ruff C901) backstops this — a function over the threshold fails ``uv run pre-commit run --all-files`` before review.
+<!-- END EAWF:managed id=code-craft-single-responsibility -->

@@ -1,5 +1,6 @@
 <!-- Generated from the eawf profile render block `naming-conventions`. Do not hand-edit: re-run `eawf sync`. -->
 
+<!-- BEGIN EAWF:managed id=naming-conventions version=1.5 hash=196154e40655f84f -->
 # `naming-conventions`
 
 Every cross-cutting concept has exactly one canonical name; rename an outlier to match the dominant form before merging instead of adding an adapter shim.
@@ -27,3 +28,4 @@ To prevent drift across state models, envelopes, parameters, and log keys, every
 **Docstring ``Raises:`` block** — Google-style ``Raises:`` block with one ``ExceptionType: explanation`` line per case. Do NOT use inline prose like ``Raises ValueError if ...`` in the summary; reserve the ``Raises:`` block for that.
 
 **Mutator-path precision in wave success criteria** — when a wave's success criterion text references a "save through" or "persist via" path, name the **canonical writer** (the daemon, per rule 4) rather than the generic phrase ``state-CLI``. The authority map ``.ea/artifacts/research/long-term/2026-05-18-authority-map.md`` names the canonical writer per file. Conflating the operator-facing surface (``uv run eawf state ...``) with the daemon-internal subsystem in criterion prose makes audits flag false positives.
+<!-- END EAWF:managed id=naming-conventions -->
