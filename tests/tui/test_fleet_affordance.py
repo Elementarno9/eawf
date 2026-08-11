@@ -9,14 +9,15 @@ Three bands, one per success criterion:
 
 * **C1 -- affordance parity over the FA1-FA8 footer keys.** Every key the
   Autopilot footer advertises resolves to a LIVE
-  :class:`~textual.binding.Binding` AND fires its action: the
-  :func:`~eawf.workflow.audit_dsl.kinds.affordance_parity.check_affordance_parity`
-  kind drives each advertised key through the real key->Binding path and
-  passes only when every one resolves; a synthetic advertised key with no
-  binding reds the same check (naming the offending key). The intervention
-  keys (``d`` / ``H`` / ``S`` / ``K`` / ``space`` / ``a``) are pinned to
-  their live bindings + handlers directly, and pressing each in the mounted
-  pane never classifies ``UNRESOLVED``.
+  :class:`~textual.binding.Binding` AND fires its action. The GREEN side (the
+  cockpit's advertised keys all resolve) is asserted once for every registered
+  mode -- autopilot included -- by ``test_check_affordance_parity_passes_for_
+  every_mode`` in ``tests/snapshots/tui/test_affordance_matrix.py``, so this
+  module pins only what that sweep cannot see: a synthetic advertised key with
+  no binding reds the check (naming the offending key); the intervention keys
+  (``d`` / ``H`` / ``S`` / ``K`` / ``space`` / ``a``) resolve to their live
+  bindings + handlers; pressing each in the mounted pane never classifies
+  ``UNRESOLVED``; and the footer really advertises them.
 * **C2 -- the reused RS-26 crash frame + E1 degraded banner.** An FA3 lane
   cell that raises mid-paint renders the RS-26 crash frame (the per-pane
   error boundary) while its neighbour cell + the loop survive and the App
@@ -236,24 +237,6 @@ def _exploding_cell() -> Widget:
 # ==========================================================================
 
 
-def test_autopilot_affordance_parity_check_passes() -> None:
-    """Every advertised Autopilot footer key resolves to a live binding (C1).
-
-    The ``affordance_parity`` kind enumerates the cockpit's advertised footer
-    keys and drives each through the real key->Binding path; it passes only
-    when every advertised key resolves -- the load-bearing C1 contract that no
-    advertised cockpit affordance is a dead promise.
-    """
-    spec = CheckSpec(
-        kind="affordance_parity",
-        name="autopilot-parity",
-        args={"mode": _AUTOPILOT_MODE, "state_path": _REPO_STATE_REL},
-    )
-    result = check_affordance_parity(spec, _REPO_ROOT)
-    assert result.status == "pass", result.details
-    assert result.passed is True
-
-
 def test_autopilot_affordance_parity_dead_advertised_key_reds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -263,6 +246,10 @@ def test_autopilot_affordance_parity_dead_advertised_key_reds(
     must fail the parity check rather than pass silently. Inject a synthetic
     advertised dead key (``z``); the check probes it, classifies it
     ``UNRESOLVED``, and fails naming the offending key.
+
+    Also the registry type guard: the kind returns the typed
+    :class:`CheckResult` the gate runner consumes, carrying its own kind, so
+    the cockpit-parity criterion flows through the shared evidence chassis.
     """
 
     async def _fake_advertised(
@@ -277,6 +264,8 @@ def test_autopilot_affordance_parity_dead_advertised_key_reds(
         args={"mode": _AUTOPILOT_MODE, "state_path": _REPO_STATE_REL},
     )
     result = check_affordance_parity(spec, _REPO_ROOT)
+    assert isinstance(result, CheckResult)
+    assert result.kind == "affordance_parity"
     assert result.status == "fail"
     assert result.passed is False
     assert result.details is not None
@@ -577,20 +566,3 @@ def test_autopilot_fork_inbox_auto_raises_and_shows_tier_badge(tmp_path: Path) -
             assert "HIGH" in frame
 
     asyncio.run(body())
-
-
-def test_check_affordance_parity_returns_a_check_result() -> None:
-    """The parity kind returns a typed :class:`CheckResult` (registry contract).
-
-    A thin type guard backing C1: the kind the audit DSL dispatches returns the
-    typed result the gate runner consumes, so the cockpit-parity criterion
-    flows through the same evidence chassis every other check does.
-    """
-    spec = CheckSpec(
-        kind="affordance_parity",
-        name="autopilot-typed",
-        args={"mode": _AUTOPILOT_MODE, "state_path": _REPO_STATE_REL},
-    )
-    result = check_affordance_parity(spec, _REPO_ROOT)
-    assert isinstance(result, CheckResult)
-    assert result.kind == "affordance_parity"

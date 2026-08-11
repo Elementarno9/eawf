@@ -19,11 +19,17 @@ Coverage:
   not unresolved / no-op).
 * CR-2 (returns) -- a key with no binding classifies ``UNRESOLVED`` via the
   driver, and the check flags it (naming the key).
-* boundary -- a real mode whose every footer key resolves passes
-  (``status="pass"``).
+* boundary -- the optional-``state_path`` and running-event-loop shapes of a
+  real mode still pass (``status="pass"``).
 * error-path -- the check degrades a malformed ``args`` (missing / non-str
   ``mode``, bad ``size``, missing fixture) to ``status="fail"`` rather than
   raising; the registry dispatches the kind.
+
+The "does this mode pass" question is answered ONCE, for every registered
+mode, by ``test_affordance_matrix.py``'s
+``test_check_affordance_parity_passes_for_every_mode`` sweep. Do not add a
+per-mode pass case here: each one costs a full app mount per advertised key
+and the sweep already covers the whole registry.
 """
 
 from __future__ import annotations
@@ -177,18 +183,6 @@ def test_keypress_transcript_is_deterministic_across_runs() -> None:
 # --------------------------------------------------------------------------
 # boundary: a real mode whose every footer key resolves passes
 # --------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("mode", ["home", "doctor", "autopilot"])
-def test_check_affordance_parity_real_mode_passes(mode: str) -> None:
-    spec = CheckSpec(
-        kind="affordance_parity",
-        name=f"{mode}-parity",
-        args={"mode": mode, "state_path": _REPO_STATE_REL},
-    )
-    result = check_affordance_parity(spec, _REPO_ROOT)
-    assert result.status == "pass", result.details
-    assert result.passed is True
 
 
 def test_check_affordance_parity_no_state_path_passes() -> None:
