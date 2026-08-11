@@ -52,6 +52,7 @@ Public API::
     RenderResult                    # dataclass: target + per-region status
     BlockByteSpan                   # dataclass: one block's UTF-8 byte span
     ByteCapReport                   # dataclass: byte total + dropped block ids
+    ReferenceCollisionError         # an expansion would clobber a foreign file
     lint_entity_title(title) -> list[str]
     block_byte_spans(text) -> list[BlockByteSpan]
     measure_agents_md_byte_cap(text, *, cap) -> ByteCapReport
@@ -194,9 +195,38 @@ def _render_block_body(env: Environment, block: RenderBlock, composed: ComposedP
     return template.render(block=block, composed=composed)
 
 
+#: Opening bytes of every generated expansion under ``docs/rules/``. The
+#: renderer owns a file only when it starts with this prefix: that is what
+#: distinguishes an expansion it may overwrite or reclaim from a document the
+#: repo already had at the same path.
+_REFERENCE_BANNER_PREFIX: str = "<!-- Generated from the eawf profile render block"
+
+
+class ReferenceCollisionError(Exception):
+    """Raised when an expansion would overwrite a file the renderer does not own.
+
+    The renderer creates ``docs/rules/<block-id>.md`` for every
+    ``placement: reference`` block. In a managed repo that directory may
+    already hold hand-written documentation, so a same-named file without the
+    generated-file banner is treated as a collision and the render fails
+    instead of silently destroying it.
+    """
+
+
 def _reference_dir(root: Path) -> Path:
     """Return the directory holding every reference-placed block's expansion."""
     return Path(root).joinpath(*RULE_REFERENCE_DIR.split("/"))
+
+
+def _carries_generated_banner(path: Path) -> bool:
+    """Return ``True`` when *path* opens with the generated-expansion banner.
+
+    Read as bytes so a foreign file that is not valid UTF-8 answers ``False``
+    rather than raising: the question is only "did this renderer write it".
+    """
+    prefix = _REFERENCE_BANNER_PREFIX.encode("utf-8")
+    with path.open("rb") as handle:
+        return handle.read(len(prefix)) == prefix
 
 
 def reference_file_path(root: Path, block_id: str) -> Path:
@@ -274,10 +304,7 @@ def render_reference_document(block: RenderBlock, body: str) -> str:
             but carries no summary.
     """
     region_body = _reference_region_body(block, body)
-    banner = (
-        f"<!-- Generated from the eawf profile render block `{block.id}`. "
-        f"Do not hand-edit: re-run `eawf sync`. -->"
-    )
+    banner = f"{_REFERENCE_BANNER_PREFIX} `{block.id}`. Do not hand-edit: re-run `eawf sync`. -->"
     marked = regions.replace_region("", id=block.id, version=block.version, body=region_body)
     return f"{banner}\n\n{marked}\n"
 
@@ -737,12 +764,22 @@ def _emit_block(
         reference-placed block, so the caller can record a manifest row for it;
         ``None`` for a root-placed block, whose bytes live in the managed file
         and are already accounted for by *emitter*.
+
+    Raises:
+        ReferenceCollisionError: the expansion path is already occupied by a
+            file this renderer did not write.
     """
     body = _render_block_body(env, block, composed)
     if not block.is_reference_placed:
         emitter.emit(block.id, block.version, body)
         return None
     path = reference_file_path(root, block.id)
+    if path.exists() and not _carries_generated_banner(path):
+        raise ReferenceCollisionError(
+            f"refusing to overwrite an unmanaged file at {path}: render block "
+            f"{block.id!r} expands into {RULE_REFERENCE_DIR}/, so move or delete "
+            f"that file before re-rendering"
+        )
     atomic_write_text(path, render_reference_document(block, body))
     emitter.emit(block.id, block.version, render_reference_line(block))
     return _ReferenceEmission(
@@ -787,6 +824,42 @@ def _emit_zone(
     return emissions
 
 
+def _reclaim_stale_expansions(*, root: Path, keep_ids: set[str]) -> list[Path]:
+    """Delete generated expansions whose block no longer renders into one.
+
+    A block that flips ``reference -> root``, gets renamed, or loses its
+    profile stops being written -- but its old ``docs/rules/<id>.md`` survives
+    with the full obligation text, unlinked from the managed file and read by
+    nobody. The sweep removes those orphans so the directory reflects the
+    current profile set.
+
+    Only files carrying the generated-file banner are removed: hand-written
+    documentation that shares the directory is left alone.
+
+    Args:
+        root: Directory holding the managed file, parent of ``docs/rules/``.
+        keep_ids: Block ids this render just expanded.
+
+    Returns:
+        The expansion paths that were deleted, in sorted order.
+    """
+    directory = _reference_dir(root)
+    if not directory.is_dir():
+        return []
+    reclaimed: list[Path] = []
+    for path in sorted(directory.glob("*.md")):
+        if path.stem in keep_ids or not _carries_generated_banner(path):
+            continue
+        path.unlink()
+        reclaimed.append(path)
+    if reclaimed:
+        logger.info(
+            f"reclaim_stale_expansions dir={directory} count={len(reclaimed)} "
+            f"ids={[path.stem for path in reclaimed]}"
+        )
+    return reclaimed
+
+
 def render_agents_md(
     composed: ComposedProfile,
     target: Path,
@@ -811,16 +884,21 @@ def render_agents_md(
        no-ops. A ``placement: reference`` block contributes only its
        :func:`render_reference_line`; its full body is written alongside at
        :func:`reference_file_path`, inside its own managed region so the
-       expansion is drift-checked too.
-    4. When *state* is supplied, append/replace a managed
+       expansion is drift-checked too. An expansion refuses to overwrite a
+       file the renderer did not write (:class:`ReferenceCollisionError`).
+    4. Sweep ``docs/rules/`` for generated expansions this render did not
+       write and delete them, so a block that stopped being reference-placed
+       leaves no orphan copy of its obligation behind. Hand-written files in
+       that directory are left alone.
+    5. When *state* is supplied, append/replace a managed
        ``DECISIONS_REGION_ID`` region whose body is produced by
        :func:`render_decisions_section` against the typed
        :attr:`~eawf.kernel.state.models.State.decisions` map. This is how the
        AGENTS.md "Decisions" section stays in sync with state.json
        rather than carrying hardcoded prose in a YAML profile body.
-    5. Acquire portalock on *target*, atomically write the new text via
+    6. Acquire portalock on *target*, atomically write the new text via
        tempfile + ``os.replace`` (parent-dir fsync included).
-    6. Build an updated :class:`Manifest` whose entries for *target* and for
+    7. Build an updated :class:`Manifest` whose entries for *target* and for
        every ``docs/rules/<id>.md`` expansion under it match the regions just
        emitted; entries for *other* targets are preserved verbatim. Hash
        recorded is :func:`~eawf.surfaces.render.regions.compute_hash` of the
@@ -854,6 +932,12 @@ def render_agents_md(
         ``(result, updated_manifest)`` — :class:`RenderResult` summarises the
         per-region delta; *updated_manifest* is a new value with the AGENTS.md
         entries overwritten and other targets carried through.
+
+    Raises:
+        ReferenceCollisionError: a reference-placed block's expansion path
+            already holds a file the renderer did not write.
+        RegionParseError: the existing *target* carries malformed managed-region
+            markers.
     """
     target = Path(target)
     # POSIX-form key so manifest entries are byte-identical across OSes —
@@ -906,6 +990,11 @@ def render_agents_md(
             blocks=reference_blocks,
             root=target.parent,
         )
+
+    reclaimed = _reclaim_stale_expansions(
+        root=target.parent,
+        keep_ids={emission.region_id for emission in emissions},
+    )
 
     if state is not None:
         decisions_body = render_decisions_section(
@@ -968,7 +1057,7 @@ def render_agents_md(
         f"render_agents_md target={target} "
         f"added={len(emitter.added)} updated={len(emitter.updated)} "
         f"unchanged={len(emitter.unchanged)} "
-        f"expansions={len(emissions)} "
+        f"expansions={len(emissions)} reclaimed={len(reclaimed)} "
         f"hand_edits_preserved={hand_edits_preserved} "
         f"decisions_injected={state is not None}"
     )
