@@ -182,6 +182,80 @@ def test_render_block_rejects_unknown_tier() -> None:
         )
 
 
+# --- RenderBlock placement / summary pairing --------------------------------
+
+
+def test_render_block_placement_defaults_to_root_without_summary() -> None:
+    """An undeclared block keeps rendering its whole body into the managed file."""
+    block = RenderBlock(id="core-rule", target="AGENTS.md", body_template="## Core")
+    assert block.placement == "root"
+    assert block.summary is None
+    assert not block.is_reference_placed
+
+
+def test_render_block_reference_placement_requires_summary() -> None:
+    """Reference placement carries the one line the managed file will show."""
+    block = RenderBlock(
+        id="long-rule",
+        target="AGENTS.md",
+        body_template="## Long\n\nMany paragraphs.",
+        placement="reference",
+        summary="Do the thing.",
+    )
+    assert block.is_reference_placed
+    assert block.summary == "Do the thing."
+
+
+def test_render_block_rejects_reference_placement_without_summary() -> None:
+    """A reference block with no summary would leave the root a bare link."""
+    with pytest.raises(ValidationError) as excinfo:
+        RenderBlock(
+            id="no-summary",
+            target="AGENTS.md",
+            body_template="## Long",
+            placement="reference",
+        )
+    assert "sets no summary" in str(excinfo.value)
+
+
+def test_render_block_rejects_reference_placement_with_blank_summary() -> None:
+    """A whitespace-only summary is as unusable as a missing one."""
+    with pytest.raises(ValidationError) as excinfo:
+        RenderBlock(
+            id="blank-summary",
+            target="AGENTS.md",
+            body_template="## Long",
+            placement="reference",
+            summary="   ",
+        )
+    assert "sets no summary" in str(excinfo.value)
+
+
+def test_render_block_rejects_summary_on_root_placement() -> None:
+    """A root block renders its whole body, so a summary would go unread."""
+    with pytest.raises(ValidationError) as excinfo:
+        RenderBlock(
+            id="stray-summary",
+            target="AGENTS.md",
+            body_template="## Short",
+            summary="Do the thing.",
+        )
+    assert "summary is reserved for reference placement" in str(excinfo.value)
+
+
+def test_render_block_rejects_unknown_placement() -> None:
+    """Placements are closed so the renderer cannot be handed a third mode."""
+    with pytest.raises(ValidationError):
+        RenderBlock.model_validate(
+            {
+                "id": "bad-placement",
+                "target": "AGENTS.md",
+                "body_template": "body",
+                "placement": "appendix",
+            }
+        )
+
+
 def test_render_block_rejects_both_prose_and_triad() -> None:
     """Filling both body_template and the full triad is invalid (not XOR)."""
     with pytest.raises(ValidationError) as excinfo:

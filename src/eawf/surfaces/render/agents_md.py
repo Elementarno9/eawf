@@ -14,7 +14,11 @@ Per ``docs/policy/agents-claude-md.md``:
 - For each block: render its body via Jinja2 against the bundled
   ``AGENTS.md.j2`` template (prose ``body_template`` verbatim, or a fixed
   ``Rationale``/``Mechanism``/``Verification`` layout for structured triad
-  blocks), then call
+  blocks). A block declaring ``placement: reference`` does NOT put that body in
+  the managed file: the body is written to ``docs/rules/<id>.md`` and the
+  managed region gets one line naming the obligation and linking the expansion,
+  which is how the always-loaded file stays inside a consumer's byte cap
+  without any rule being deleted. Then call
   :func:`~eawf.surfaces.render.regions.replace_region` so an existing block with the
   same id is replaced in-place and a brand-new block is appended.
   Anything *outside* a managed region (hand-written paragraphs above, below,
@@ -45,6 +49,9 @@ Public API::
     lint_entity_title(title) -> list[str]
     block_byte_spans(text) -> list[BlockByteSpan]
     measure_agents_md_byte_cap(text, *, cap) -> ByteCapReport
+    reference_file_path(root, block_id) -> Path
+    render_reference_line(block) -> str
+    render_reference_document(block, body) -> str
     render_decisions_section(decisions, *, scope_id) -> str
     render_agents_md(
         composed, target, manifest, *, generator, state, decisions_scope_id
@@ -64,6 +71,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.models import Decision, State
 from eawf.platform.profiles.models import ComposedProfile, RenderBlock
+from eawf.platform.render_block import RULE_REFERENCE_DIR
 from eawf.surfaces.render import regions
 from eawf.surfaces.render._atomic import atomic_write_text
 from eawf.surfaces.render.manifest import Manifest, ManifestEntry
@@ -178,6 +186,59 @@ def _render_block_body(env: Environment, block: RenderBlock, composed: ComposedP
     """
     template = env.get_template(_TEMPLATE_NAME)
     return template.render(block=block, composed=composed)
+
+
+def reference_file_path(root: Path, block_id: str) -> Path:
+    """Return the path holding the full body of reference-placed *block_id*.
+
+    *root* is the directory containing the managed file (the workspace anchor
+    for ``AGENTS.md``); the expansion lands at
+    ``<root>/docs/rules/<block_id>.md`` per
+    :data:`~eawf.platform.render_block.RULE_REFERENCE_DIR`.
+    """
+    return Path(root).joinpath(*RULE_REFERENCE_DIR.split("/")) / f"{block_id}.md"
+
+
+def render_reference_line(block: RenderBlock) -> str:
+    """Return the one-line managed-file body for a reference-placed *block*.
+
+    The line names the obligation (the block's ``summary``) and the path to the
+    full text, keyed by block id -- the same id the rules list already
+    cross-references -- so a reader who needs the expansion knows both what it
+    binds them to and where to read it.
+
+    Raises:
+        ValueError: *block* is not reference-placed, so it has no summary and
+            belongs in the managed file verbatim.
+    """
+    if not block.is_reference_placed or block.summary is None:
+        raise ValueError(f"render_block is not reference-placed: {block.id!r}")
+    path = f"{RULE_REFERENCE_DIR}/{block.id}.md"
+    return f"`{block.id}` — {block.summary.strip()} Full text: [{path}]({path})"
+
+
+def render_reference_document(block: RenderBlock, body: str) -> str:
+    """Return the full ``docs/rules/<id>.md`` content for a reference block.
+
+    The document leads with a generated-file banner (hand-edits here are lost
+    on the next render), then the block id as its title, the one-sentence
+    obligation, and the block's rendered *body* verbatim -- nothing from the
+    managed file is dropped, it only moves.
+
+    Args:
+        block: The reference-placed block being expanded.
+        body: The block body as rendered for the managed file.
+
+    Raises:
+        ValueError: *block* is not reference-placed.
+    """
+    if not block.is_reference_placed or block.summary is None:
+        raise ValueError(f"render_block is not reference-placed: {block.id!r}")
+    banner = (
+        f"<!-- Generated from the eawf profile render block `{block.id}`. "
+        f"Do not hand-edit: re-run `eawf sync`. -->"
+    )
+    return f"{banner}\n\n# `{block.id}`\n\n{block.summary.strip()}\n\n{body.strip()}\n"
 
 
 @dataclass
@@ -591,6 +652,39 @@ def _has_unmanaged_content(text: str) -> bool:
     return any(chunk.strip() != "" for chunk in leftover_chunks)
 
 
+def _emit_block(
+    *,
+    emitter: _RegionEmitter,
+    env: Environment,
+    composed: ComposedProfile,
+    block: RenderBlock,
+    root: Path,
+) -> None:
+    """Emit one render block: full body inline, or a line plus a sibling file.
+
+    A ``placement: reference`` block keeps its full body out of the managed
+    file (which a consumer truncates at a byte cap) by writing it under *root*
+    at ``docs/rules/<id>.md`` and leaving one line that names the obligation and
+    links the expansion. Nothing is dropped -- it moves.
+
+    Args:
+        emitter: Accumulator owning the managed-region writes.
+        env: Jinja2 environment the block body renders through.
+        composed: Full composed profile, passed into the block template.
+        block: The block to emit.
+        root: Directory holding the managed file, parent of ``docs/rules/``.
+    """
+    body = _render_block_body(env, block, composed)
+    if not block.is_reference_placed:
+        emitter.emit(block.id, block.version, body)
+        return
+    atomic_write_text(
+        reference_file_path(root, block.id),
+        render_reference_document(block, body),
+    )
+    emitter.emit(block.id, block.version, render_reference_line(block))
+
+
 def render_agents_md(
     composed: ComposedProfile,
     target: Path,
@@ -612,7 +706,9 @@ def render_agents_md(
        marker (emitted only when its tier is non-empty), followed by that
        tier's blocks rendered via Jinja2 + ``replace_region`` — insertions
        append, updates rewrite the BEGIN…END span, untouched regions are
-       no-ops.
+       no-ops. A ``placement: reference`` block contributes only its
+       :func:`render_reference_line`; its full body is written alongside at
+       :func:`reference_file_path`.
     4. When *state* is supplied, append/replace a managed
        ``DECISIONS_REGION_ID`` region whose body is produced by
        :func:`render_decisions_section` against the typed
@@ -683,7 +779,13 @@ def render_agents_md(
     if tier0_blocks:
         emitter.emit(ZONE_TIER0_REGION_ID, ZONE_REGION_VERSION, ZONE_TIER0_BODY)
         for block in tier0_blocks:
-            emitter.emit(block.id, block.version, _render_block_body(env, block, composed))
+            _emit_block(
+                emitter=emitter,
+                env=env,
+                composed=composed,
+                block=block,
+                root=target.parent,
+            )
 
     # A reference zone is needed when there are reference blocks OR when the
     # typed Decisions section is being injected (it is reference-tier content
@@ -692,7 +794,13 @@ def render_agents_md(
     if needs_reference_zone:
         emitter.emit(ZONE_REFERENCE_REGION_ID, ZONE_REGION_VERSION, ZONE_REFERENCE_BODY)
         for block in reference_blocks:
-            emitter.emit(block.id, block.version, _render_block_body(env, block, composed))
+            _emit_block(
+                emitter=emitter,
+                env=env,
+                composed=composed,
+                block=block,
+                root=target.parent,
+            )
 
     if state is not None:
         decisions_body = render_decisions_section(

@@ -21,7 +21,9 @@ instrument_requirements: []
 render_blocks:
   - id: code-craft-dry
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "Extract shared logic into one named home only once a third use site appears; until then tolerate the duplication."
     rationale: |
       Repeated logic drifts: a fix lands in one copy and the others rot. DRY (don't repeat yourself) keeps one canonical home per behaviour so a change has one place to land. The balance is KISS — three similar lines are cheaper to read than a half-fitted helper, so do not abstract until a third caller actually appears.
     mechanism: |
@@ -30,7 +32,9 @@ render_blocks:
       grep for the literal or near-literal logic across the changed module; a reviewer confirms either a single shared definition or fewer than three copies. A new helper with only one caller is a YAGNI violation and the reviewer rejects it.
   - id: code-craft-fail-fast
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "Validate inputs at the boundary and raise there, so downstream functions accept already-validated typed objects and never re-check."
     rationale: |
       An error raised deep in a call stack surfaces far from its cause, so the stack trace points at the symptom rather than the bad input. Fail-fast raises at the boundary where invalid data enters, keeping the trace short and the blame obvious.
     mechanism: |
@@ -39,7 +43,9 @@ render_blocks:
       Read the function's first statements: argument validation precedes any side effect. Each public function has an error-path test asserting the exception type (``TypeError`` / ``ValueError`` / ``KeyError`` / ``ValidationError``) and, when the message is part of the contract, the message substring via ``pytest.raises``.
   - id: code-craft-single-responsibility
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "Give each function and class exactly one reason to change, keeping parsing, validation, and execution in separate units."
     rationale: |
       A unit with one reason to change is testable in isolation and safe to edit. When parsing, validation, computation, and rendering share a function, a change to one concern risks the others and tests need elaborate setup.
     mechanism: |
@@ -48,7 +54,9 @@ render_blocks:
       Name each public method's single concern; methods that span two concerns flag the unit for extraction. The cognitive-complexity gate (EAWF011 + ruff C901) backstops this — a function over the threshold fails ``uv run pre-commit run --all-files`` before review.
   - id: code-craft-explicit-over-implicit
     target: AGENTS.md
-    version: "1.0"
+    version: "1.1"
+    placement: reference
+    summary: "Pass arguments by keyword at arity three or more, return explicit values rather than ``None``-as-success, and keep behaviour matching the name."
     rationale: |
       Implicit behaviour surprises the next reader: positional arguments at high arity transpose silently, and ``None``-as-success hides the real outcome. Explicit code matches the principle of least surprise — the behaviour reads off the call site without chasing the definition.
     mechanism: |
