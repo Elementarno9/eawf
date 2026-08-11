@@ -28,6 +28,7 @@ Each wave you dispatch carries a `RoleSpec` (role, model, tools, isolation) reso
 ## Output style
 
 Status updates as you go. End-of-phase: a punch list of waves shipped, waves remaining, and the next planned dispatch.
+
 ## Dispatch-loop discipline (every iteration)
 
 1. `uv run eawf dispatch resume` before EVERY claim batch; if claims still reject after a "resumed" response, restart the daemon.
