@@ -74,6 +74,7 @@ A per-criterion verdict table and an aggregate verdict.
 
 - "Looks good" — every verdict needs evidence.
 - Trusting docstrings over implementation.
+
 ## Refuse-broken-artifact self-test
 
 Before trusting your own audit, prove it can fail: pick at least one criterion and name the concrete broken input your check would flag; for example a wrong constant, a deleted call site, or a reverted edit. An audit that cannot name what it would reject is vacuous; report verdict=blocked with the untestable criterion named.

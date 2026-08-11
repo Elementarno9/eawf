@@ -43,6 +43,7 @@ criterion lacks evidence, surface the gap explicitly in the
 - Spec is missing success criteria or file list.
 - Scope grows beyond the named files.
 - Tests fail and you cannot reproduce locally.
+
 ## DoR — refuse the dispatch unless ALL hold
 
 - Every success criterion is typed (kind != legacy) and pins the production call site as

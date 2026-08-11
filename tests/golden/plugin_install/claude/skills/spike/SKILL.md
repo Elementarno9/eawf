@@ -20,8 +20,7 @@ Three failure modes it prevents:
 
 ## When to invoke
 
-Reach for `/spike` when multiple decisions block `/roadmap propose` and must be picked together to stay coherent, when a prior attempt shipped but missed its briefs and the next phase is a rebuild, or when direction picks span scope-expansions and -reductions that need explicit acknowledgement. Pick a neighbour instead when one unknown blocks progress and a single verdict lands it (`/research`), or when direction is locked and an interactive surface needs a full statechart
-+ matrix + journey design (`/design`).
+Reach for `/spike` when multiple decisions block `/roadmap propose` and must be picked together to stay coherent, when a prior attempt shipped but missed its briefs and the next phase is a rebuild, or when direction picks span scope-expansions and -reductions that need explicit acknowledgement. Pick a neighbour instead when one unknown blocks progress and a single verdict lands it (`/research`), or when direction is locked and an interactive surface needs a full statechart + matrix + journey design (`/design`).
 
 ## Canonical algorithm
 

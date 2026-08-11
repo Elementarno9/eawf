@@ -76,6 +76,7 @@ Structured findings block with `Question / Findings / Alternatives / Recommendat
 
 - Recommending a path without naming what would change your mind.
 - Burying the recommendation in prose; lead with the verdict.
+
 ## Verify-before-claim ladder
 
 (a) Read the source file. (b) Grep for call sites on the active branch. (c) Inspect golden fixtures / snapshot tests. (d) Only then quote the behaviour. Design docs and memory notes are hypotheses to verify, never ground truth; when doc and source drift, quote the source.
