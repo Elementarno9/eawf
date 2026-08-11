@@ -52,6 +52,21 @@ _TOOLING_BACKED_REFERENCE_BLOCK_IDS = {
     "agent-report-contract",
 }
 
+# Reference-placed blocks contributed by the two profiles the reachability
+# sweep used to skip (``agent_driven`` and ``quality``). Named explicitly so a
+# profile silently dropping out of the composed set fails loudly instead of
+# shrinking the sweep back to the core/python/research subset.
+_LATE_PROFILE_REFERENCE_BLOCK_IDS = {
+    "agent-driven-phase-equals-release",
+    "agent-driven-large-phase-pr",
+    "agent-driven-cadence-adr-pointer",
+    "lean-wave-verification",
+    "code-craft-dry",
+    "code-craft-fail-fast",
+    "code-craft-single-responsibility",
+    "code-craft-explicit-over-implicit",
+}
+
 
 @pytest.mark.golden
 @pytest.mark.parametrize(
@@ -189,14 +204,21 @@ def test_every_reference_placed_block_is_reachable_and_complete(tmp_path: Path) 
     the composed profile marks ``placement: reference``, the root must carry the
     block id plus the path to the expansion, and the expansion must contain the
     block's whole body text.
+
+    The sweep composes the repo's full enabled set, not a core/python/research
+    subset: the ``agent_driven`` and ``quality`` blocks moved in the same split
+    and went unasserted while the profile list was written out by hand here.
     """
-    composed = compose([load_profile(p) for p in ("core", "python", "research")])
+    composed = compose([load_profile(p) for p in _REPO_PROFILE_IDS])
     target = tmp_path / "AGENTS.md"
     render_agents_md(composed, target, Manifest(version=1, generated={}))
     root_text = target.read_text(encoding="utf-8")
 
     moved = [b for b in composed.render_blocks if b.target == "AGENTS.md" and b.is_reference_placed]
     assert moved, "the core profile must declare at least one reference-placed block"
+    assert {b.id for b in moved} >= _LATE_PROFILE_REFERENCE_BLOCK_IDS, (
+        "the agent_driven + quality reference blocks must be in the swept set"
+    )
     for block in moved:
         assert f"`{block.id}`" in root_text
         assert f"docs/rules/{block.id}.md" in root_text
