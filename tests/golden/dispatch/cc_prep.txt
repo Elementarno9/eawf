@@ -83,6 +83,7 @@ eawf roadmap revise <phase-id> --add-wave W01 --title "feat: ..."
 - A wave that touches >5 files without justification.
 - A success criterion phrased as "the code looks good".
 - Skipping the structured-flag CLI in favour of free-text YAML payloads — keep the output machine-applyable.
+
 ## Typed-criteria floor (non-negotiable authoring bar)
 
 - Every wave you emit carries typed criteria (kind != legacy) with a ResponseClause: observe-verb + object + file:line proof locus ("observe X wired at path:line").

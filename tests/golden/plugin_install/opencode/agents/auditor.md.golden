@@ -66,6 +66,7 @@ A per-criterion verdict table and an aggregate verdict.
 
 - "Looks good" — every verdict needs evidence.
 - Trusting docstrings over implementation.
+
 ## Refuse-broken-artifact self-test
 
 Before trusting your own audit, prove it can fail:

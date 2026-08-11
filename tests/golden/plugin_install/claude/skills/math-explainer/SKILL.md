@@ -59,6 +59,4 @@ A `MathExplainer` is constructible while its claims are ungrounded but `is_promo
 
 ## Output contract
 
-Eä-rendered skill envelope (`OutputEnvelope`) with `header.skill = "/math-explainer"`. Body carries the explainer slug, the markdown + JSON artifact paths, the claim count, the per-claim verifier
-+ assurance tally, the clarity-loop leg statuses (vale-prose / EAWF019 /
-draft validate), the promotability verdict, and any residual unknowns.
+Eä-rendered skill envelope (`OutputEnvelope`) with `header.skill = "/math-explainer"`. Body carries the explainer slug, the markdown + JSON artifact paths, the claim count, the per-claim verifier + assurance tally, the clarity-loop leg statuses (vale-prose / EAWF019 / draft validate), the promotability verdict, and any residual unknowns.
