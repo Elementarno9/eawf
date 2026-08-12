@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from eawf.observability.doctor.checks import (
     check_active_phase_without_iter,
+    check_branch_currency,
     check_cli_daemon_version,
     check_iter_audit_links,
     check_parallel_cap_enforcement,
@@ -32,6 +33,7 @@ def run_workflow_health_checks(
         check_iter_audit_links(workspace=workspace),
         check_cli_daemon_version(probe_version=daemon_version_probe),
         check_parallel_cap_enforcement(workspace=workspace),
+        check_branch_currency(workspace=workspace),
     ]
 
 
