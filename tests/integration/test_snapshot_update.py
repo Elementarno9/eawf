@@ -627,3 +627,40 @@ def test_gate_main_single_iter_blocks(
 def test_gate_main_usage_error(gate: Any) -> None:
     """Missing args → usage error exit 1."""
     assert gate.main(["prog"]) == 1
+
+
+def test_gate_ignores_python_under_a_watched_golden_dir(
+    tmp_path: Path, gate: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Editing the suite that produces goldens is not a golden mutation.
+
+    ``tests/golden/scenarios/`` holds its conftest and test module beside its
+    fixtures, so a directory-prefix match flagged a fix to the generator and
+    demanded it be relabelled a refresh.
+    """
+    repo = _init_repo(tmp_path)
+    _write_golden(repo, "tests/golden/scenarios/conftest.py", "REGEN = 'a'\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "[P27-W18] test: seed scenarios conftest")
+    base = _head(repo)
+    _write_golden(repo, "tests/golden/scenarios/conftest.py", "REGEN = 'b'\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "fix: repair the scenarios regen switch")
+    monkeypatch.chdir(repo)
+    assert gate.find_unpaired(base, _head(repo)) == []
+
+
+def test_gate_still_flags_golden_bytes_beside_python(
+    tmp_path: Path, gate: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The exemption is by extension, so fixtures in the same dir still fire."""
+    repo = _init_repo(tmp_path)
+    _write_golden(repo, "tests/golden/scenarios/fresh_repo/state.golden.json", '{"v": 1}\n')
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "[P27-W18] test: seed scenarios golden")
+    base = _head(repo)
+    _write_golden(repo, "tests/golden/scenarios/fresh_repo/state.golden.json", '{"v": 2}\n')
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "fix: sneak a golden past the gate")
+    monkeypatch.chdir(repo)
+    assert len(gate.find_unpaired(base, _head(repo))) == 1

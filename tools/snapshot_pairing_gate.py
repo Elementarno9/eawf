@@ -230,7 +230,15 @@ def scan_range(base: str, head: str) -> list[CommitRecord]:
 
 
 def _is_managed_golden(path: str) -> bool:
-    """Return whether *path* lives inside a managed snapshot surface dir."""
+    """Return whether *path* is golden bytes inside a managed surface dir.
+
+    Python under a watched directory is the suite that produces the goldens,
+    not a golden itself — ``tests/golden/scenarios/`` holds its conftest and
+    test module beside its fixtures. Requiring a ``test:`` subject to edit
+    that code forces a fix to the generator to masquerade as a refresh.
+    """
+    if path.endswith(".py"):
+        return False
     return any(path.startswith(prefix) for prefix in _WATCHED_DIRS)
 
 
