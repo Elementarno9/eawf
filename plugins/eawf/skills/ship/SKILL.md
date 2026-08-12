@@ -1,0 +1,48 @@
+---
+name: ship
+description: "Close out a phase by running the full local CI surface, opening the phase PR, and (after merge) advancing state."
+argument-hint: "<phase-id> [--dry-run] [--gauntlet=full|scoped] [--release=v<X.Y.Z>] [--skip-pr-pass]"
+user-invocable: true
+disable-model-invocation: true
+---
+
+# /ship
+
+## Cross-links
+
+`/ship` reads the phase `CloseReadiness` projection (gate-pack aggregate + `EvidenceRecord` summary + outstanding follow-ups) to decide what gates still need clearing. The phase-close commit only lands once `CloseReadiness.status == "ready"`. The phase-PR body is synthesized from the same projection so reviewer and tool see the same shape. `MEMORY` mutations driven by ship (e.g. release-notes entries) carry an explicit `MutationKind` for downstream audit.
+
+The per-criterion close gate runs `run_oracle` (`workflow/verify/oracle.run_oracle`) over each wave's `CriterionSpec`. Enforcement is profile-driven and LIVE on shipped profiles: a failing deterministic gate or a close-ready refusal BLOCKS the daemon close; only an unearned jury veto stays advisory (`jury_block_authority` gates the flip). Do not treat a green close as evidence unless deterministic evidence rows exist. The trust scorecard (`workflow/estimation/trust_scorecard.TrustScorecard`) reads the closed-wave store projection live, so ship's EU-calibration tier is read off real history rather than recomputed.
+
+## Canonical algorithm
+
+1. Resolve `<phase-id>`; verify all waves under it are complete.
+2. Run the local verification gauntlet (pre-commit, mypy, pytest, ruff). Iter-close and any schema/migration wave run ALL of `tests/` — never a scoped subset. Scoped gauntlets have hidden persisted-schema fixture fallout across six test dirs.
+3. Validate artifact markdown and PR prose against the chassis/scrub rules.
+4. Push the long-running feature branch.
+5. Open the phase PR via `gh pr create`.
+6. **PR-review pass.** Read remote review comments via `gh pr view <PR> --comments` (or the inline equivalent). For each actionable finding, append a follow-up wave to the current iter via `eawf roadmap revise --add-wave` (not a new iter — per the `iter-phase-close-timing` rule). Implement, re-push, wait for green CI, re-request review until clean.
+7. **Bundle close in the final pre-merge commit.** Once CI is green and the review-passed branch is on the remote, emit a single `[P<NN>] state: close iter + phase (audit=<id>)` commit that bundles `eawf iter close P<NN>-I<MM>` + `eawf phase close P<NN>` (no other touched files). The operator merges that commit to end the phase. This is the final instance of the per-close bookkeeping rule the iter followed throughout: After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + the typed stores under `.ea/store/`, e.g. audit/decision/evidence) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close. The event store (`.ea/store/event.jsonl`) is gitignored — it is the raw-stdout firehose; never `git add -f` it.
+
+## Options
+
+- `--dry-run` — RETAINED. Dry-run is model-executed prose semantics: the ship engine parses only `commit` / `push` / `pr` (`workflow/skills/ship.py`), NOT a `dry_run` arg, so `/ship --dry-run` means YOU (the model) render the plan and skip the irreversible steps — the engine does not gate on it.
+- `--gauntlet full|scoped` — `full` is the default and MANDATORY for a migration wave or the iter-close run; `scoped` is legal only for a re-run. Config leaf `ship.gauntlet`.
+- `--release v<X.Y.Z>` — inject the `(release=vX.Y.Z)` annotation into the phase-close commit subject as a standalone paren group (never fused into another group such as `(audit=..., release=...)`). Default none.
+- `--skip-pr-pass` — skip the step-6 PR-review pass on a re-run after a green pass. Default false.
+
+## Pre-flight checklist
+
+- [ ] All waves under `<phase-id>` are complete.
+- [ ] Cherry-picks from worktree subagents have all landed.
+- [ ] `eawf artifact validate` passes for promoted markdown.
+- [ ] CI on the latest push is green.
+- [ ] `/audit` and `/polish` have already run on the iter — phase close is gated on both per `iter-phase-close-timing`.
+
+## Decision surfaces
+
+`gh pr create`, `gh pr merge`, and any push to a protected branch are irreversible/visible-to-others actions per AGENTS.md — surface the final confirm through `AskUserQuestion` (options: `proceed` / `defer` / `abort`). Config cannot bypass protected-action confirmations.
+
+## Output contract
+
+Skill envelope carrying the PR URL, the post-merge state mutation, and any deferred follow-ups.

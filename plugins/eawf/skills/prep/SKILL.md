@@ -1,0 +1,54 @@
+---
+name: prep
+description: "Activate the next PLANNED phase: surface its DAG for operator approval, then run the activate_phase hard gate and dispatch subagents per wave."
+argument-hint: "<phase-id> [--auto-resume] [--out-of-order] [--ceremony=lite|full] [--runtime=<id>]"
+user-invocable: true
+disable-model-invocation: true
+---
+
+# /prep
+
+## Canonical algorithm
+
+`/prep` activates a PLANNED phase. The flow branches on the phase's PLANNED-queue state:
+
+1. Resolve `<phase-id>` against `state.phases`.
+2. Branch on phase status + wave plan:
+
+   - **Case A — PLANNED phase with at least one PENDING wave.** Render the plan via `eawf roadmap show --phase <id> --md`. Enter Claude Code plan mode (`EnterPlanMode`) with the rendered DAG, then surface an `AskUserQuestion` with the options `use-as-is`, `revise`, `replace`, `cancel`. On `use-as-is`, call `eawf phase activate <id>` (which runs the V11 hard gate: ≥1 wave + deps phases CLOSED). On `revise`, hand back to `/roadmap revise`. On `replace`, hand back to `/roadmap drop`
+     + `/roadmap propose`.
+   - **Case B — PLANNED phase with empty wave DAG.** Dispatch the `planner` agent (`.claude/agents/planner.md`). The planner returns a sequence of `eawf roadmap revise --add-wave` commands (or a YAML payload). **Apply the planner's commands first** through the daemon-backed roadmap surface — waves land as PENDING on the still-PLANNED iter — then render the resulting DAG via `eawf roadmap show --phase <id> --md` and enter Claude Code plan mode (`EnterPlanMode`) with that rendering. Surface `AskUserQuestion` with `approve`, `edit`, `cancel`. The operator reviews the rendered roadmap, not the planner's raw commands. Edits during plan mode are `/roadmap revise` calls (PLANNED scope is mutable). On `approve`, call `eawf phase activate <id>` (V11 hard gate).
+   - **Case C — no PLANNED phase by that id.** Reject with exit 4 and hint `Run \`eawf roadmap propose --phase <id> --title ...\` first.` for the operator.
+
+3. **Optional spike first.** Before claiming a wave whose success criteria are not yet writable, run `/research <topic>` as a *spike* (read-only) per the `spike-workflow` rule in AGENTS.md. The spike produces a brief under `.ea/local/<YYYY-MM-DD>-<slug>.md` (or the conventional `.ea/local/research/` sub-directory). When a matching spike brief exists, the plan-mode proposal in case A MUST reference it by repo-relative path so the operator and the dispatched executor read the same source-of-truth artifact — the wave dispatch renderer surfaces matching briefs under a `## References` section automatically.
+4. **Claim, then dispatch each wave under the activated iter.** Before every claim batch: Run `uv run eawf dispatch resume` before EVERY claim batch. A shared-daemon test run or TUI mount leaks `dispatch_paused=true` into the live claim path; the pause gate is unconditional. If resume reports success but claims still reject, restart the daemon — the flag can persist in a stale process. And: Pass `--out-of-order` on `eawf wave claim` for reactive, interleaved, or parallel-frontier waves; the W## monotonic sibling gate rejects them otherwise. For each parallel wave, dispatch a worktree subagent. No eawf command runs inside a worktree — a shared daemon reverts the claim (the `eawf schema dump` precedent), and any golden regen or state mutation there means STOP and report. The dispatch prompt already forbids this; never override that clause when authoring the prompt.
+5. **Land, reconcile, then record each finished wave.** For each sequential wave, run inline; cherry-pick parallel-wave commits in between as they finish. Before close: reconcile the wave's declared `file_scopes` against the executor report's `files_changed` and run `eawf wave update --files <real>` while the wave is still CLAIMED — `update --files` is rejected on CLOSED waves. Then: After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + the typed stores under `.ea/store/`, e.g. audit/decision/evidence) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close. The event store (`.ea/store/event.jsonl`) is gitignored — it is the raw-stdout firehose; never `git add -f` it.
+6. Validate the rendered plan with `eawf plan show --md`; wave tags and bucket roll-ups must match state.
+
+## Options
+
+- `--auto-resume` — emit `eawf dispatch resume` before every claim batch in `next_valid_actions`; config leaf `prep.auto_resume`. Default **true**.
+- `--out-of-order` — emitted `eawf wave claim` commands carry `--out-of-order` so the W## monotonic sibling gate does not reject reactive or parallel-frontier claims. Default false.
+- `--ceremony lite|full` — override the `compute_ceremony` recommendation the plan-mode proposal surfaces. Default is the computed recommendation.
+- `--runtime <id>` — batch runtime-ladder override applied to the emitted dispatch commands. Default is the ladder head.
+
+## Pre-flight checklist
+
+- [ ] Confirm current branch is the long-running phase branch.
+- [ ] Confirm `git status` is clean.
+- [ ] Confirm worktree subagents branch from the parent HEAD.
+- [ ] Every wave has success criteria, agent role, effort bucket, and file scope.
+- [ ] The target phase exists in `state.phases` with status `planned` (otherwise hand back to `/roadmap propose`).
+- [ ] If a spike preceded the claim, its brief path is cited in the plan-mode proposal (case A) so the dispatched subagent reads it.
+- [ ] Dispatch is resumed before every claim batch: Run `uv run eawf dispatch resume` before EVERY claim batch. A shared-daemon test run or TUI mount leaks `dispatch_paused=true` into the live claim path; the pause gate is unconditional. If resume reports success but claims still reject, restart the daemon — the flag can persist in a stale process.
+- [ ] Reactive, interleaved, or parallel-frontier claims carry the out-of-order flag: Pass `--out-of-order` on `eawf wave claim` for reactive, interleaved, or parallel-frontier waves; the W## monotonic sibling gate rejects them otherwise.
+- [ ] The declared scope is reconciled against the report before close: Before close: reconcile the wave's declared `file_scopes` against the executor report's `files_changed` and run `eawf wave update --files <real>` while the wave is still CLAIMED — `update --files` is rejected on CLOSED waves.
+- [ ] The daemon is restarted after any schema or state-model bump: After any `schema_version` or state-model bump: run `eawf daemon stop` (it respawns fresh) BEFORE the next close — a daemon still running the old model rejects the new state shape.
+
+## Decision surfaces
+
+`AskUserQuestion` is the canonical surface for the case-A `use-as-is/revise/replace/cancel` pick and the case-B `approve/edit/cancel` pick. Free-text prompts are forbidden per the project-wide approval policy.
+
+## Output contract
+
+Skill envelope describing the activated phase + dispatched waves and the expected cherry-pick order. The envelope's `body.plan_mode_approval` records the approval source (`use-as-is`, `revise`, `replace`, `planner-approve`).

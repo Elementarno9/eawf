@@ -1,0 +1,22 @@
+{
+  "interface": {
+    "displayName": "E\u00e4 Workflow (local)"
+  },
+  "name": "eawf",
+  "plugins": [
+    {
+      "category": "Productivity",
+      "name": "eawf",
+      "policy": {
+        "authentication": "ON_INSTALL",
+        "installation": "AVAILABLE"
+      },
+      "source": {
+        "path": "./plugins/eawf",
+        "ref": "plugins-dist",
+        "source": "git-subdir",
+        "url": "https://github.com/Elementarno9/eawf"
+      }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "description": "E\u00e4 Workflow plugin \u2014 agent-driven development skills and hooks.",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "brandColor": "#6B7280",
+    "capabilities": [
+      "Write"
+    ],
+    "category": "Productivity",
+    "defaultPrompt": [
+      "Use the E\u00e4 Workflow skills to drive this iteration. Start with /flow or pick a specific stage like /research, /prep, /ship."
+    ],
+    "developerName": "E\u00e4 Workflow",
+    "displayName": "E\u00e4 Workflow",
+    "longDescription": "E\u00e4 Workflow (eawf) is an agent-driven software development framework. Skills wrap the research \u2192 prep \u2192 audit \u2192 polish \u2192 ship pipeline; the PR-review pass stays inside ship, and hooks gate state mutations.",
+    "screenshots": [],
+    "shortDescription": "Agent-driven development workflow \u2014 research, plan, ship in waves."
+  },
+  "name": "eawf",
+  "skills": "./skills/",
+  "version": "0.6.8"
+}

@@ -1,0 +1,36 @@
+---
+name: review
+description: "Code review of an open PR or local diff. Surfaces issues with severity tags; no scope creep, no praise."
+argument-hint: "[<PR# | commit-range>] [--level=low|medium|high] [--criteria=<wave-id>]"
+user-invocable: true
+disable-model-invocation: false
+---
+
+# /review
+
+## Canonical algorithm
+
+1. Resolve target: PR number → `gh pr diff <PR>`; commit range → `git diff <range>`; default → `git diff main...HEAD`.
+2. Walk the diff hunk by hunk. For each hunk, read enough surrounding context to make a judgment.
+3. Apply rules in order: correctness > security > clarity > style.
+4. Tag findings: 🔴 blocker, 🟠 must-fix, 🟡 should-fix, 🔵 nit.
+5. Check artifact chassis and dense references when reviewing docs or promoted artifacts.
+
+## Options
+
+- `--level low|medium|high` — finding-confidence threshold for the pass; higher surfaces fewer, higher-confidence findings. Default `medium`; config leaf `review.default_level`.
+- `--criteria <wave-id>` — pull the named wave's success criteria into the review context so findings are graded against them. Default none.
+
+## Pre-flight checklist
+
+- [ ] Read the success criteria for the phase/wave the diff belongs to.
+- [ ] Verify any quantitative claim against `Read`/`grep`.
+- [ ] Verify markdown artifacts keep `Summary`, `References`, `Provenance`, and `Scrub` sections.
+
+## Decision surfaces
+
+When the final verdict is ambiguous (e.g. one 🟠 finding the operator might choose to defer), surface `approve | request-changes | comment-only` through `AskUserQuestion` rather than picking silently.
+
+## Output contract
+
+Skill envelope with a flat findings list grouped by file and an aggregate verdict (`approve | request-changes | comment-only`).
