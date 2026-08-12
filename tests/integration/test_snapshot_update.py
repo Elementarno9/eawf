@@ -128,6 +128,95 @@ def test_inventory_dispatch_targets_refresh_writer() -> None:
     )
 
 
+def test_inventory_agents_md_targets_refresh_writer() -> None:
+    """AGENTS.md updates collect the dedicated env-aware writer node.
+
+    The bare-module target re-ran the assertion instead of rewriting, so the
+    documented refresh path could only ever report the failure it was invoked
+    to resolve.
+    """
+    surface = resolve_surface("agents_md")
+    assert surface.regen_target == (
+        "tests/golden/test_golden_agents_md.py::test_refresh_agents_md_goldens"
+    )
+
+
+#: The switches ``run_regen`` sets. A regen target that names neither cannot be
+#: driven by ``eawf snapshot update`` however the surface is declared.
+_REFRESH_SWITCHES: tuple[str, ...] = ("EAWF_REFRESH_GOLDEN", "EAWF_SNAPSHOT_REGEN")
+
+#: Surfaces ``eawf snapshot update`` cannot drive today, by defect class.
+#: ``absent`` — the regen target does not exist, so there is nothing to run.
+#: ``no-switch`` — real target, but it reads no refresh switch, so the command
+#: re-runs the assertion it was invoked to resolve.
+#: Compared by exact equality below: this is a ratchet, not an allowlist.
+#: Repairing a surface forces its removal here, and a newly broken surface
+#: fails the test even though the mapping is non-empty.
+_KNOWN_UNREGENERABLE: dict[str, str] = {
+    "state": "absent",
+    "spec": "absent",
+    "telemetry": "absent",
+    "envelope": "no-switch",
+    "plan_view": "no-switch",
+    "agent_report": "no-switch",
+    "plugin_install": "no-switch",
+    "audit_dsl": "no-switch",
+    "metrics_export": "no-switch",
+}
+
+#: Surfaces whose golden tree is missing on disk. The pairing gate watches
+#: these paths, so it guards an empty set for each — the ``tui`` path bug
+#: (see :func:`test_inventory_tui_golden_dir_points_at_real_bytes`) again.
+_MISSING_GOLDEN_DIRS: frozenset[str] = frozenset({"state", "spec", "telemetry"})
+
+
+def _regen_defect(surface: SnapshotSurface) -> str | None:
+    """Classify why *surface* cannot be regenerated, or ``None`` when it can.
+
+    A regen target is a pytest node id, a module, or a directory. Sibling
+    conftests count: a suite may centralise its switch there, as the scenarios
+    suite does.
+    """
+    target = _REPO_ROOT / surface.regen_target.split("::")[0]
+    if not target.exists():
+        return "absent"
+    sources = (
+        sorted(target.rglob("*.py"))
+        if target.is_dir()
+        else [target, *sorted(target.parent.glob("conftest.py"))]
+    )
+    text = "\n".join(path.read_text(encoding="utf-8") for path in sources if path.is_file())
+    return None if any(switch in text for switch in _REFRESH_SWITCHES) else "no-switch"
+
+
+def test_declared_surfaces_are_regenerable_or_known_broken() -> None:
+    """``eawf snapshot update --kind <x>`` works, or the surface is enumerated.
+
+    A surface that presents as supported while re-running the assertion is the
+    gap that makes people hand-edit goldens instead.
+    """
+    defects = {
+        surface.kind: defect
+        for surface in SNAPSHOT_SURFACES.values()
+        if (defect := _regen_defect(surface)) is not None
+    }
+    assert defects == _KNOWN_UNREGENERABLE
+
+
+def test_declared_surfaces_watch_real_golden_trees() -> None:
+    """A surface's golden tree exists, or it is enumerated as missing.
+
+    The pairing gate derives its watch set from these paths, so a surface
+    naming a non-existent tree is silently unguarded rather than noisy.
+    """
+    missing = {
+        surface.kind
+        for surface in SNAPSHOT_SURFACES.values()
+        if not (_REPO_ROOT / surface.golden_dir).is_dir()
+    }
+    assert missing == set(_MISSING_GOLDEN_DIRS)
+
+
 def test_resolve_surface_returns_typed_surface() -> None:
     surface = resolve_surface("envelope")
     assert isinstance(surface, SnapshotSurface)

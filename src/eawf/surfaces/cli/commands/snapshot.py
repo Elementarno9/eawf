@@ -151,7 +151,7 @@ SNAPSHOT_SURFACES: dict[str, SnapshotSurface] = {
         SnapshotSurface(
             kind="agents_md",
             golden_dir="tests/golden/agents_md",
-            regen_target="tests/golden/test_golden_agents_md.py",
+            regen_target=("tests/golden/test_golden_agents_md.py::test_refresh_agents_md_goldens"),
             description="Rendered AGENTS.md after every sync.",
         ),
         SnapshotSurface(
