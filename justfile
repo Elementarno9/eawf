@@ -10,8 +10,12 @@ _default:
     @just --list
 
 # Drops the real-daemon e2e tier (~8s daemon spawn-wait each) and perf timing
-# (p99, flaky under local contention), then runs the TUI render snapshots
-# serial (xdist-safe but kept off the worker pool here).
+# (p99, flaky under local contention), then runs the TUI render snapshots on a
+# 4-worker pool. They were kept serial long after they needed to be: each test
+# builds its own event loop and offscreen driver inside app.run_test(), so
+# there is no shared terminal to contend over. Measured 231s serial vs 90s at
+# -n 4 across three green runs; four rather than `auto` leaves headroom on a
+# small-core runner.
 
 # EAWF_RUNTIME_DIR is redirected to a short per-invocation tmp dir so no
 # suite daemon binds a socket in -- or mutates state through -- the live
@@ -21,10 +25,11 @@ _default:
 # Parameterized test runner: `just test [MODE] [BASE]`.
 #
 #   fast     (default) parallel core, skips the real-daemon e2e tier + perf
-#            timing, then the TUI render snapshots serial. The fast inner loop;
-#            mirrors CI's parallel leg without the slow / flaky tiers.
-#   ci       reproduces .github/workflows/ci.yaml's two Pytest steps VERBATIM
-#            (parallel core, then serial TUI render + perf timing), including
+#            timing, then the TUI render snapshots on 4 workers. The fast inner
+#            loop; mirrors CI's parallel leg without the slow / flaky tiers.
+#   ci       reproduces .github/workflows/ci.yaml's three Pytest steps VERBATIM
+#            (parallel core, TUI render on 4 workers, then serial perf timing),
+#            including
 #            the ubuntu-only `--cov` gate -- the coverage flags are appended
 #            here when `uname -s` is Linux, matching the workflow's
 #            `startsWith(matrix.os, 'ubuntu-')` conditional (empty elsewhere).
@@ -41,7 +46,7 @@ test mode="fast" base="origin/main":
     case "{{mode}}" in
       fast)
         EAWF_SKIP_PERF=1 uv run pytest -n auto -m "not e2e and not eval" --ignore=tests/snapshots/tui --ignore=tests/perf/tui
-        uv run pytest -n0 tests/snapshots/tui
+        uv run pytest -n 4 tests/snapshots/tui
         ;;
       ci)
         if [ "$(uname -s)" = "Linux" ]; then
@@ -52,7 +57,8 @@ test mode="fast" base="origin/main":
           cov_serial=""
         fi
         uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/tui $cov_parallel
-        uv run pytest -n0 tests/snapshots/tui tests/perf/tui $cov_serial
+        uv run pytest -n 4 tests/snapshots/tui $cov_serial
+        uv run pytest -n0 tests/perf/tui $cov_serial
         ;;
       changed)
         scope="$(uv run python tools/changed_scope.py --base "{{base}}" --existing-only)"
@@ -79,13 +85,16 @@ test-all:
     export EAWF_RUNTIME_DIR
     trap 'rm -rf "$EAWF_RUNTIME_DIR"' EXIT
     uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/tui
-    uv run pytest -n0 tests/snapshots/tui tests/perf/tui
+    uv run pytest -n 4 tests/snapshots/tui
+    uv run pytest -n0 tests/perf/tui
 
-# TUI render snapshots + perf timing budget, serial (xdist-unsafe by design).
+# TUI render snapshots (4 workers) + perf timing budget (serial: it measures
+# latency, so a contended machine changes the number under test).
 test-tui:
     #!/usr/bin/env sh
     set -eu
     EAWF_RUNTIME_DIR="$(mktemp -d "${TMPDIR:-/tmp}/eawf-rt.XXXXXX")"
     export EAWF_RUNTIME_DIR
     trap 'rm -rf "$EAWF_RUNTIME_DIR"' EXIT
-    uv run pytest -n0 tests/snapshots/tui tests/perf/tui
+    uv run pytest -n 4 tests/snapshots/tui
+    uv run pytest -n0 tests/perf/tui

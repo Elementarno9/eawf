@@ -63,10 +63,19 @@ jobs:
         # appends the --cov flags on ubuntu and an empty string on macOS, so
         # the macOS leg runs the identical suite without coverage.
         run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/tui ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-report=xml --cov-fail-under=0' || '' }}
-      - name: Pytest (serial TUI render/timing)
+      - name: Pytest (TUI render snapshots)
+        # Four workers, not serial: each test builds its own event loop and
+        # offscreen driver inside app.run_test(), so there is no shared
+        # terminal to contend over. Measured 231s serial vs 90s at -n 4 over
+        # three consecutive green runs. Four rather than `auto` so a
+        # small-core runner does not thrash.
         # Same ubuntu-only coverage gating; --cov-append extends the parallel
         # leg's data file on ubuntu, macOS runs the suite without --cov.
-        run: uv run pytest -n0 tests/snapshots/tui tests/perf/tui ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report=xml --cov-fail-under=0' || '' }}
+        run: uv run pytest -n 4 tests/snapshots/tui ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report=xml --cov-fail-under=0' || '' }}
+      - name: Pytest (serial perf timing)
+        # Stays serial on purpose: these assert p99 latency, so a contended
+        # machine changes the number being measured.
+        run: uv run pytest -n0 tests/perf/tui ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report=xml --cov-fail-under=0' || '' }}
 
       - name: Coverage gate (per-package C09 §5.2 + TUI behavioural floor)
         # Ubuntu-only: coverage.xml is produced on the ubuntu leg alone. The
