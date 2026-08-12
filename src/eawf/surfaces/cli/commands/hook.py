@@ -2090,6 +2090,17 @@ def eawf011_cognitive_complexity(
     )
 
 
+def _marketplace_mode() -> bool:
+    """True when the eawf plugin is installed for the user via the marketplace.
+
+    Resolved through the plugin command module so the detector stays one
+    patchable seam for the gate, the doctor arm and this hook.
+    """
+    from eawf.surfaces.cli.commands import plugin as _plugin
+
+    return _plugin.detect_marketplace_install() is not None
+
+
 @hook_app.command(name="plugin-doctor-drift")
 def plugin_doctor_drift(
     ctx: typer.Context,
@@ -2123,6 +2134,18 @@ def plugin_doctor_drift(
         "drifted": [entry.region_id for entry in report.drifted],
         "missing": [entry.region_id for entry in report.missing],
     }
+    # An entirely absent local render, while the plugin is installed from the
+    # marketplace, is the intended configuration. Reporting it as drift
+    # blocked every push and pointed at `plugin sync`, which the conflict gate
+    # refuses precisely because running it would recreate the duplicate.
+    if not report.drifted and report.missing and _marketplace_mode():
+        payload["mode"] = "marketplace"
+        emit_json_or_text(
+            payload,
+            "plugin-doctor-drift: marketplace mode (no project-local render expected)",
+            flags=flags,
+        )
+        return
     if not report.clean:
         body = (
             f"plugin-doctor-drift: drift detected "

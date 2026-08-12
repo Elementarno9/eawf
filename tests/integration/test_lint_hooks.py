@@ -770,3 +770,44 @@ def test_eawf024_test_tier_cli_ignores_non_unit_path(tmp_path: Path) -> None:
         ["-w", str(tmp_path), "hook", "eawf024-test-tier-contract", "tests/integration/test_it.py"],
     )
     assert result.exit_code == 0, result.stdout
+
+
+def test_plugin_doctor_drift_reports_marketplace_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An absent local render under marketplace mode does not block the push.
+
+    The hook reported missing=37 and told the operator to run `plugin sync`,
+    which the conflict gate refuses because running it recreates the very
+    duplicate the gate exists to prevent. That deadlock blocked every push.
+    """
+    from eawf.runtime.runtimes.claude.plugin_conflict import CCPluginConflict
+
+    monkeypatch.setattr(
+        "eawf.surfaces.cli.commands.plugin.detect_marketplace_install",
+        lambda: CCPluginConflict(plugin_dir=tmp_path / "fake"),
+    )
+    monkeypatch.setattr(
+        "eawf.platform.lint._conditional.relevant_for_hook",
+        lambda *_args, **_kwargs: True,
+    )
+    result = runner.invoke(app, ["--json", "-w", str(tmp_path), "hook", "plugin-doctor-drift"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["mode"] == "marketplace"
+
+
+def test_plugin_doctor_drift_still_blocks_without_marketplace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without a marketplace install, a missing render is still real drift."""
+    monkeypatch.setattr(
+        "eawf.surfaces.cli.commands.plugin.detect_marketplace_install",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "eawf.platform.lint._conditional.relevant_for_hook",
+        lambda *_args, **_kwargs: True,
+    )
+    result = runner.invoke(app, ["-w", str(tmp_path), "hook", "plugin-doctor-drift"])
+    assert result.exit_code != 0, result.output
+    assert "drift detected" in result.output
