@@ -1,37 +1,21 @@
 """``eawf doctor`` check implementations.
 
-Each public ``check_*`` function returns a :class:`CheckResult`. Five checks
-ship after Wave W08 — together they answer the v0.1 plan §11 question "is
-this install workable?".
+Each public ``check_*`` returns a :class:`CheckResult` answering one facet of
+"is this install workable?". :func:`run_all` assembles the canonical set;
+:mod:`eawf.surfaces.cli.commands.doctor` formats it and takes the
+highest-severity status as its exit code.
 
-- :func:`check_tools_available` — runs the instrument probe and surfaces its
-  outcome (``ok``/``warn``/``fail``). On hard-tool failure the underlying
-  :class:`eawf.surfaces.cli.errors.UserError` (``kind="InstrumentMissing"``) is
-  allowed to propagate so the CLI maps it to exit code ``6``
-  (``INSTRUMENT_MISSING``). All other outcomes collapse to a non-fatal
-  :class:`CheckResult`.
-- :func:`check_state_present` — reports whether ``state.json`` resolves at
-  the workspace anchor.
-- :func:`check_config_resolves` — reports whether the layered config merge
-  succeeds for the workspace.
-- :func:`check_manifest_in_sync` — reports whether the on-disk managed-region
-  hashes match the manifest at ``.ea/indexes/generated.json`` (W08).
-- :func:`check_render_output_roundtrip` — proves the
-  :mod:`eawf.surfaces.render.envelope` JSON ⇄ markdown round-trip is byte-stable on a
-  synthetic envelope; if this regresses every skill is broken (W08).
-- :func:`check_agents_md_byte_cap` — measures the on-disk AGENTS.md byte size
-  against Codex's project-doc byte cap and **fails** (blocking) when over,
-  naming the render blocks whose guidance falls past the truncation cut.
-
-The doctor command (`eawf.surfaces.cli.commands.doctor`) consumes the list, formats it
-via :mod:`eawf.observability.doctor.report`, and selects the highest-severity status to
-drive its exit code.
+Severity convention: ``fail`` means blocking and is reserved for faults that
+make the install wrong rather than degraded — a hard tool missing, or an
+AGENTS.md past the byte cap where the truncated tail is silently unread.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import subprocess
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -114,30 +98,13 @@ def _default_probe_cache(workspace: Path) -> Path:
 
 
 def _resolve_probe_cache_path(anchor: Path | None) -> Path:
-    """Return a per-USER probe-cache path that never litters an anchor dir.
+    """Return a per-user probe-cache path: ``EA_INSTRUMENT_PROBE`` or ``~/.eawf/cache/``.
 
-    The instrument probe persists a small ``instrument-probe.json`` so a
-    repeat ``eawf doctor`` / ``eawf init`` can skip the ``shutil.which``
-    round-trip. The historical default wrote that file into
-    ``<anchor>/.ea/instrument-probe.json`` -- which meant a plain
-    ``eawf doctor`` (or ``-w`` probe) dropped a stray, gitignored-or-not
-    artifact into whatever directory it happened to resolve. The probe is a
-    machine-local cache, not project state, so it belongs in a per-user home,
-    not the repo.
-
-    Resolution order:
-
-    1. ``EA_INSTRUMENT_PROBE`` env override (honoured by
-       :func:`eawf.platform.install.instrument_probe.resolve_cache_path` too)
-       so CI can pin a scratch path.
-    2. ``~/.eawf/cache/instrument-probe.json`` -- the per-user cache home that
-       mirrors the ``~/.eawf/registry.json`` convention. A single shared cache
-       is fine: the probe answers a host-wide "are these tools on PATH?"
-       question, not a per-repo one.
-
-    The *anchor* argument is accepted for symmetry with the other anchor-aware
-    helpers but is deliberately unused -- the whole point is that the cache
-    does NOT live under the anchor.
+    The probe answers a host-wide "are these tools on PATH?" question, so its
+    cache is machine-local, not project state — writing it under the anchor
+    dropped a stray artifact into whatever directory doctor happened to
+    resolve. *anchor* is accepted for symmetry with the other anchor-aware
+    helpers and deliberately unused.
     """
     override = os.environ.get("EA_INSTRUMENT_PROBE")
     if override:
@@ -148,17 +115,10 @@ def _resolve_probe_cache_path(anchor: Path | None) -> Path:
 def _is_plugin_owned(entry: object) -> bool:
     """Return ``True`` when *entry* is a whole-file plugin render, not a region.
 
-    Plugin installers (``eawf-plugin-claude`` / ``-codex`` / ``-opencode``)
-    emit whole-file artifacts under ``.claude/`` / ``.codex/`` / ``.opencode/``
-    and record them in the manifest with a ``plugin.<runtime>.<...>`` region
-    id. Those files carry NO ``EAWF:BEGIN`` markers — they ARE the file — so
-    the region-marker drift detector would always report them ``missing``.
-
-    They are satisfied by the plugin cache, not by a local re-render, so the
-    manifest check must exclude them. When eawf runs from an installed plugin
-    the local ``.claude`` render may not exist at all; requiring it would red
-    a perfectly healthy install. Region-marked managed blocks (the
-    ``eawf-sync`` AGENTS.md regions) keep going through the drift detector.
+    Plugin artifacts ARE the file — they carry no ``EAWF:BEGIN`` markers — so
+    the region drift detector would report every one of them ``missing``. They
+    are satisfied by the plugin cache rather than a local re-render, and the
+    local render may not exist at all when eawf runs from an installed plugin.
 
     The discriminator is the ``plugin.`` region-id prefix backed by an
     ``eawf-plugin-`` generator — both must agree so a hand-crafted region id
@@ -682,6 +642,72 @@ def check_active_phase_without_iter(*, workspace: Path | None) -> CheckResult:
             detail=f"{len(offenders)} active phase(s) have no active iter: {shown}{suffix}",
         )
     return CheckResult(name=name, status="ok", detail="every active phase has an active iter")
+
+
+def _git_output(cwd: Path, *args: str) -> str | None:
+    """Return stripped stdout of a read-only git command, or ``None`` on failure."""
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(cwd), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+    except OSError, subprocess.SubprocessError:
+        return None
+    return completed.stdout.strip() if completed.returncode == 0 else None
+
+
+#: Hours after which an unrefreshed remote-tracking set is called stale. A
+#: comparison against a base ref nobody fetched is not wrong-ish, it is wrong:
+#: the local ref answers for a remote that has since moved.
+_FETCH_STALE_HOURS: int = 24
+
+
+def check_branch_currency(*, workspace: Path | None) -> CheckResult:
+    """Warn when the local base branch trails its remote, or the fetch is old.
+
+    The branch-currency rule asks for a fetch-and-compare before opening a
+    phase, iter, or wave. It was prose with no backstop, so a base ref left
+    unfetched reads as current and every comparison drawn against it inherits
+    the staleness. Warn rather than fail: trailing the remote mid-work is
+    ordinary, and this check never fetches — it only reports what is knowable
+    without touching the network.
+    """
+    name = "branch_currency"
+    if workspace is None:
+        return CheckResult(name=name, status="ok", detail="no workspace anchor")
+    loaded = _load_state_for_check(workspace, name=name)
+    if isinstance(loaded, CheckResult):
+        return loaded
+    state, _state_path = loaded
+    if state.project is None:
+        return CheckResult(name=name, status="ok", detail="no project record")
+
+    base = state.project.default_branch
+    remote_ref = f"origin/{base}"
+    if _git_output(workspace, "rev-parse", "--verify", "--quiet", remote_ref) is None:
+        return CheckResult(name=name, status="ok", detail=f"no {remote_ref} to compare")
+
+    faults: list[str] = []
+    behind = _git_output(workspace, "rev-list", "--count", f"{base}..{remote_ref}")
+    if behind is not None and behind != "0":
+        faults.append(f"local {base} is {behind} commit(s) behind {remote_ref}")
+
+    git_dir = _git_output(workspace, "rev-parse", "--git-common-dir")
+    fetch_head = Path(git_dir) if git_dir else None
+    if fetch_head is not None and not fetch_head.is_absolute():
+        fetch_head = workspace / fetch_head
+    fetch_head = fetch_head / "FETCH_HEAD" if fetch_head else None
+    if fetch_head is not None and fetch_head.is_file():
+        age_hours = (time.time() - fetch_head.stat().st_mtime) / 3600
+        if age_hours > _FETCH_STALE_HOURS:
+            faults.append(f"last fetch {age_hours:.0f}h ago")
+
+    if faults:
+        return CheckResult(name=name, status="warn", detail="; ".join(faults) + "; run git fetch")
+    return CheckResult(name=name, status="ok", detail=f"local {base} is current with {remote_ref}")
 
 
 def check_stale_session_count(*, workspace: Path | None) -> CheckResult:

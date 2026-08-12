@@ -152,7 +152,7 @@ def test_run_all_includes_mcp_drift(tmp_path: Path) -> None:
     results = run_all(workspace=tmp_path)
     names = [r.name for r in results]
     assert "mcp_drift" in names
-    assert len(results) == 19
+    assert len(results) == 20
 
 
 def test_check_config_resolves_uses_workspace_as_repo_anchor(
