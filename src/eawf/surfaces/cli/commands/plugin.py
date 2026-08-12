@@ -100,6 +100,11 @@ _SYNC_RUNTIME_IDS: dict[str, str] = {
     "opencode": "opencode",
 }
 
+#: The runtimes a bare ``plugin sync`` writes. Derived from the alias map so
+#: the two cannot drift; callers that must reason about "all runtimes" (the
+#: conflict gate) read this rather than re-listing the ids.
+_ALL_SYNC_RUNTIMES: tuple[str, ...] = tuple(sorted(set(_SYNC_RUNTIME_IDS.values())))
+
 
 plugin_app = typer.Typer(
     name="plugin",
@@ -274,11 +279,16 @@ def _opencode_user_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
 def _install_conflict_clear(*, runtime: str, scope: str, flags: GlobalFlags, force: bool) -> bool:
     """Dispatch conflict-gate detection to the runtime-specific helper.
 
-    For ``claude``: always probe (claude is project-only). For
+    For claude: always probe (claude is project-only). For
     ``codex`` / ``opencode``: probe only on a project-scope install,
     detecting a clashing user-scope install of the same plugin name.
+
+    Both spellings of the claude runtime are accepted: ``install`` takes the
+    operator-facing alias ``claude`` while ``sync`` normalises to the
+    canonical ``claude-code``. Matching one spelling let the gate fall
+    through to ``True`` for every sync.
     """
-    if runtime == "claude":
+    if runtime in {"claude", "claude-code"}:
         return _claude_conflict_clear(flags=flags, force=force)
     if scope != "project":
         return True

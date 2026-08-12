@@ -20,6 +20,7 @@ import typer
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.commands.plugin import (
+    _ALL_SYNC_RUNTIMES,
     _VALID_SCOPES,
     Scope,
     _default_package_target,
@@ -421,6 +422,34 @@ def _doctor_single_runtime(
             raise typer.Exit(exit_codes.STATE_CONFLICT)
         return
     claude_report = doctor_plugin(target)
+    # No project-local render at all, while the plugin is installed from the
+    # marketplace, is the correct state — not 37 faults. Reporting it as drift
+    # invited a reinstall that recreates the duplicate the conflict gate
+    # exists to prevent, so the nag was itself the trap.
+    # Resolved through the module, not a from-import: the detector is the
+    # patch seam the conflict-gate tests set, and a captured binding would
+    # ignore it.
+    from eawf.surfaces.cli.commands import plugin as _plugin
+
+    marketplace_only = (
+        not claude_report.ok
+        and not claude_report.drifted
+        and bool(claude_report.missing)
+        and _plugin.detect_marketplace_install() is not None
+    )
+    if marketplace_only:
+        emit_json_or_text(
+            {**_doctor_payload(claude_report), "mode": "marketplace"},
+            (
+                f"plugin doctor → {claude_report.target_dir}\n"
+                "  mode=marketplace: the eawf plugin is installed for your user, "
+                "so no project-local .claude/ render is expected.\n"
+                "  Nothing to fix. Installing one would make Claude Code see every "
+                "skill, agent and hook twice."
+            ),
+            flags=flags,
+        )
+        return
     emit_json_or_text(_doctor_payload(claude_report), _doctor_text(claude_report), flags=flags)
     if not claude_report.clean:
         raise typer.Exit(exit_codes.STATE_CONFLICT)
@@ -719,6 +748,19 @@ def sync_cmd(
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
+    # Same conflict gate `install` runs. Sync re-renders the identical trees,
+    # so without this it silently recreates a project-local duplicate of a
+    # plugin the user already has installed — the exact state install refuses
+    # to create. A dry run writes nothing, so it needs no gate.
+    #
+    # Gate the runtimes sync will actually write, not the flags it was given:
+    # an empty `canonical` means "no --runtime", which downstream expands to
+    # all three, so gating the empty list would gate nothing.
+    if not dry_run:
+        for runtime in canonical or _ALL_SYNC_RUNTIMES:
+            if not _install_conflict_clear(runtime=runtime, scope=scope, flags=flags, force=force):
+                return
+
     target = _resolve_target(flags)
     scope_lit = cast(Literal["project", "user"], scope)
     try:

@@ -51,3 +51,24 @@ def _daemonless_default(monkeypatch: pytest.MonkeyPatch) -> None:
     fixture is wired in a later wave.
     """
     monkeypatch.setenv("EAWF_DAEMONLESS", "1")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_user_plugin_probes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the user-scope plugin detectors find nothing by default.
+
+    These tests render plugin trees into tmp workspaces, but the conflict
+    gates probe the *developer's* real home. Until the claude detector was
+    repaired it always returned None here, so the suite passed by accident;
+    with it working, every install / sync / doctor test failed on a machine
+    that happens to have the plugin installed.
+
+    A test that wants a conflict patches the same target itself, and its
+    fixture runs after this one.
+    """
+    for target in (
+        "eawf.surfaces.cli.commands.plugin.detect_marketplace_install",
+        "eawf.surfaces.cli.commands.plugin.codex_detect_user_install",
+        "eawf.surfaces.cli.commands.plugin.opencode_detect_user_install",
+    ):
+        monkeypatch.setattr(target, lambda: None)

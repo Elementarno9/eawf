@@ -267,3 +267,91 @@ def test_install_codex_user_scope_skips_clash_gate(
         ],
     )
     assert res.exit_code == 0, res.output
+
+
+# --- sync runs the same gate ------------------------------------------------
+
+
+def test_sync_claude_blocks_on_conflict(
+    tmp_path: Path, fake_conflict: CCPluginConflict, _isolate_codex_opencode_user_probes: None
+) -> None:
+    """`plugin sync --runtime claude` refuses a conflicting project-local render.
+
+    Sync re-renders the identical trees install refuses to create, so without
+    this gate it silently recreated the duplicate that install had just
+    blocked.
+    """
+    res = runner.invoke(
+        app, ["--no-input", "-w", str(tmp_path), "plugin", "sync", "--runtime", "claude"]
+    )
+    assert res.exit_code != 0, res.output
+    assert not (tmp_path / ".claude" / "skills").exists()
+
+
+def test_sync_bare_blocks_on_conflict(
+    tmp_path: Path, fake_conflict: CCPluginConflict, _isolate_codex_opencode_user_probes: None
+) -> None:
+    """A bare `plugin sync` is gated too (boundary: no --runtime given).
+
+    With no ``--runtime`` the normalised list is empty and downstream expands
+    it to all three, so gating the given flags rather than the effective set
+    gated nothing at all.
+    """
+    res = runner.invoke(app, ["--no-input", "-w", str(tmp_path), "plugin", "sync"])
+    assert res.exit_code != 0, res.output
+    assert not (tmp_path / ".claude" / "skills").exists()
+
+
+def test_sync_claude_force_bypasses_conflict(
+    tmp_path: Path, fake_conflict: CCPluginConflict, _isolate_codex_opencode_user_probes: None
+) -> None:
+    """``--force`` still acknowledges the duplicate and proceeds."""
+    res = runner.invoke(
+        app,
+        ["--no-input", "-w", str(tmp_path), "plugin", "sync", "--runtime", "claude", "--force"],
+    )
+    assert res.exit_code == 0, res.output
+
+
+def test_sync_dry_run_is_not_gated(
+    tmp_path: Path, fake_conflict: CCPluginConflict, _isolate_codex_opencode_user_probes: None
+) -> None:
+    """A dry run writes no bytes, so it reports the delta rather than refusing."""
+    res = runner.invoke(
+        app,
+        ["--no-input", "-w", str(tmp_path), "plugin", "sync", "--runtime", "claude", "--dry-run"],
+    )
+    assert res.exit_code == 0, res.output
+
+
+def test_sync_no_conflict_proceeds(
+    tmp_path: Path, no_conflict: None, _isolate_codex_opencode_user_probes: None
+) -> None:
+    """Without a marketplace install, sync is unaffected."""
+    res = runner.invoke(
+        app, ["--no-input", "-w", str(tmp_path), "plugin", "sync", "--runtime", "claude"]
+    )
+    assert res.exit_code == 0, res.output
+
+
+def test_doctor_reports_marketplace_mode_instead_of_missing(
+    tmp_path: Path, fake_conflict: CCPluginConflict
+) -> None:
+    """No project-local render plus a marketplace install is `ok`, not 37 faults.
+
+    Reporting it as drift invited a reinstall that recreates the duplicate the
+    conflict gate exists to prevent, so the nag was itself the trap.
+    """
+    res = runner.invoke(app, ["-w", str(tmp_path), "plugin", "doctor", "claude"])
+    assert res.exit_code == 0, res.output
+    assert "mode=marketplace" in res.output
+    assert "missing files" not in res.output
+
+
+def test_doctor_without_marketplace_still_reports_missing(
+    tmp_path: Path, no_conflict: None
+) -> None:
+    """Without a marketplace install, an absent render is still a real fault."""
+    res = runner.invoke(app, ["-w", str(tmp_path), "plugin", "doctor", "claude"])
+    assert res.exit_code != 0, res.output
+    assert "mode=marketplace" not in res.output
