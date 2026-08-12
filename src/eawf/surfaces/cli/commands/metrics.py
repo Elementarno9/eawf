@@ -5,7 +5,7 @@ metrics (estimation calibration) from ``state.json`` — EU variance, audit
 pass rate, wave elapsed, and the planned-vs-reactive split. This is the
 read-only estimation view shipped in P20-W08.
 
-The C09 telemetry capstone (P27-I01-W16) adds four sub-verbs behind the
+The C09 telemetry capstone adds four sub-verbs behind the
 same ``metrics`` command — selected by a leading positional sub-verb so the
 existing single-command registration in :mod:`eawf.surfaces.cli.app` stays intact
 (no app-level ``add_typer`` re-wire needed):
@@ -140,7 +140,7 @@ def metrics_cmd(
 
 
 def _workflow_metrics(flags: GlobalFlags) -> None:
-    """Render the rolling estimation metrics from ``state.json`` (P20-W08).
+    """Render the rolling estimation metrics from ``state.json``.
 
     Read-only — does not acquire a lock, append events, or mutate
     ``state.json``. Failures map to the canonical CLI exit codes:

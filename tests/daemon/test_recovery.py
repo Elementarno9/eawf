@@ -268,7 +268,7 @@ def test_replay_wal_report_is_pydantic_model() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# V1 integrity-hole falsifier (P30-I16-W17).
+# V1 integrity-hole falsifier.
 #
 # The demonstrated hole: a tampered .applied.json record replayed clean --
 # its (poisoned) envelope landed in the durable event log because replay did

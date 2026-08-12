@@ -1,4 +1,4 @@
-"""Verb-inventory regression guard for the evidence command split (P27-W07).
+"""Verb-inventory regression guard for the evidence command split.
 
 The evidence handlers were split out of a single 1482-LOC
 ``cli/commands/evidence.py`` into a thin re-export shim plus four sibling

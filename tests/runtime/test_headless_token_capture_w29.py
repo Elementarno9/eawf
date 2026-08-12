@@ -36,7 +36,7 @@ from tests.daemon.test_spawn_cost_binding import (
     _write_state,
 )
 
-#: Work tokens exclude the prompt-cache READ class (P30-I25-W31): a cache read
+#: Work tokens exclude the prompt-cache READ class: a cache read
 #: re-counts the same context on every request, so its volume tracks how far into
 #: a session the wave sits rather than the work done. Cache reads stay billed in
 #: ``actual_cost_usd`` and visible per-class on the runtime snapshot.

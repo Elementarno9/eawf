@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.workflow.lifecycle.criterion_drift` (P23-I02-W01).
+"""Unit tests for :mod:`eawf.workflow.lifecycle.criterion_drift`.
 
 Coverage:
 

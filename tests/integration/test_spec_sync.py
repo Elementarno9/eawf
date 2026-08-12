@@ -1,4 +1,4 @@
-"""Integration tests for the ``spec.sync`` JSON-RPC handler (P29-I12-W05).
+"""Integration tests for the ``spec.sync`` JSON-RPC handler.
 
 ``eawf spec sync <wave-id>`` is the authoring keystone: it reads a per-wave
 spec markdown body, parses its ``eawf-wave-body`` fenced block into typed

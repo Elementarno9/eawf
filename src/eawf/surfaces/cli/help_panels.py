@@ -2,7 +2,7 @@
 
 The interactive ``eawf config`` menu groups operator-tunable keys by the
 :data:`eawf.kernel.config.registry.CONFIG_REGISTRY` tab — alphabetical tabs and
-alphabetical-by-key fields within each tab (P20-W10). This module extends the
+alphabetical-by-key fields within each tab. This module extends the
 same alphabetical convention to the top-level ``eawf --help`` listing so the
 two surfaces share one canonical grouping order.
 

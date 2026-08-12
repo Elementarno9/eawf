@@ -1,4 +1,4 @@
-"""Unit tests for the block-eighths bar renderable (P29-I13-W20).
+"""Unit tests for the block-eighths bar renderable.
 
 Pins :func:`~eawf.surfaces.render.bars.block_eighths_glyph` (the single-cell
 primitive) and :func:`~eawf.surfaces.render.bars.render_block_bar` (the

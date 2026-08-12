@@ -1,4 +1,4 @@
-"""Tests for the FA7 fleet run-summary terminal card (P30-I13-W07).
+"""Tests for the FA7 fleet run-summary terminal card.
 
 When the daemon-owned fleet auto-drain loop reaches a terminal stop, the
 Autopilot pane opens the

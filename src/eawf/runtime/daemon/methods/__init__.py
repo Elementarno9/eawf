@@ -57,7 +57,7 @@ class DaemonValidationError(ValueError):
 
 @dataclass
 class MutationInFlight:
-    """One in-flight mutation's telemetry row (P30-I23-W10).
+    """One in-flight mutation's telemetry row.
 
     Attributes:
         kind: The mutation kind value (e.g. ``wave_close``).
@@ -108,7 +108,7 @@ class MethodContext:
         wal_dir: Filesystem path to the daemon's outcome-WAL directory
             (typically ``<runtime_dir>/wal/``). Owned by
             :mod:`eawf.runtime.daemon.methods.state` for the
-            ``state.mutate`` algorithm (W09). ``None`` when the daemon
+            ``state.mutate`` algorithm. ``None`` when the daemon
             runs without an on-disk WAL (unit tests; daemonless paths).
         idempotency_cache: In-memory cache for ``state.mutate``
             idempotency replay (TTL 60 s). The cache is attached
@@ -136,7 +136,7 @@ class MethodContext:
     wal_dir: Any = field(default=None)
     idempotency_cache: Any = field(default=None)
     last_activity: float = field(default_factory=time.monotonic)
-    #: Per-mutation in-flight telemetry (P30-I23-W10): mutation_id ->
+    #: Per-mutation in-flight telemetry: mutation_id ->
     #: :class:`MutationInFlight`. Populated at the in_flight increment,
     #: cleared at decrement; ``daemon.status`` projects it and the
     #: mutation watchdog sweeps it for over-ceiling holds.

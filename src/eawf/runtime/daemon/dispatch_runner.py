@@ -450,7 +450,7 @@ def enforcement_sink(ctx: MethodContext) -> Callable[[SandboxEnforcementEvent], 
 #: (FA4, W08) rather than the typed lifecycle stream.
 AGENT_OUTPUT_EVENT_TYPE: str = "agent.output"
 
-#: The ``event_type`` the LIVE per-chunk producer (W45) stamps on its envelope.
+#: The ``event_type`` the LIVE per-chunk producer stamps on its envelope.
 #: The TUI App keys on it to route a streamed batch of stdout lines to the same
 #: agent-watch tail as the terminal ``agent.output`` row, but AS the spawn runs.
 #: Unlike the terminal type this one is a typed C09 union member so it persists.
@@ -462,7 +462,7 @@ AGENT_OUTPUT_CHUNK_EVENT_TYPE: str = "agent.output.chunk"
 _CHUNK_BATCH_LINES: int = 20
 
 #: Wall-clock budget (seconds) after which a partially-filled chunk buffer is
-#: flushed even below :data:`_CHUNK_BATCH_LINES` (W19). Codex streams its output
+#: flushed even below :data:`_CHUNK_BATCH_LINES`. Codex streams its output
 #: in bursts at turn boundaries, so a sub-batch burst would otherwise sit
 #: unpersisted -- and thus invisible to the Watch tail, which reads chunks off
 #: the event store -- until the next burst fills the count batch. Bounding the
@@ -471,7 +471,7 @@ _CHUNK_FLUSH_INTERVAL_S: float = 1.5
 
 
 def _chunk_should_flush(*, buffered: int, elapsed_s: float) -> bool:
-    """Return whether a partially-filled chunk buffer should flush now (W19).
+    """Return whether a partially-filled chunk buffer should flush now.
 
     Flushes when the buffer reached the line-count batch (:data:`_CHUNK_BATCH_LINES`)
     OR the wall-clock hold budget elapsed (:data:`_CHUNK_FLUSH_INTERVAL_S`), so a
@@ -490,7 +490,7 @@ def _chunk_should_flush(*, buffered: int, elapsed_s: float) -> bool:
 
 
 #: Ring-buffer cap on the number of raw output lines one spawned session fans to
-#: the live tail (W08). A spawn can emit a very large answer; capping the lines
+#: the live tail. A spawn can emit a very large answer; capping the lines
 #: the producer publishes bounds the event payload + the App-side
 #: ``live_output_buffer`` so the tail never grows unbounded -- the operator reads
 #: the freshest output, the oldest scrolls off. The TAIL of the output is kept
@@ -669,7 +669,7 @@ def persist_agent_output_chunk(
     the same union-validated :class:`AgentOutputChunkPayload` envelope keyed on
     *scope_id* and appends it through the canonical event writer
     (:func:`eawf.kernel.store.append.append_envelope`) WITHOUT the bus push: the
-    Watch tail's store-poll timer (W19) surfaces the row within the poll
+    Watch tail's store-poll timer surfaces the row within the poll
     interval, so the bus push is only a latency bonus the close-gate path can
     forgo. Empty output is a no-op (no empty event).
 
@@ -1132,7 +1132,7 @@ def _fallback_session(
     """Reconstruct a minimal executor session when the daemon row is missing.
 
     A jailed agent that reverts ``.ea/state.json`` mid-spawn drops its own
-    executor session from ``state.agent_sessions`` (W09). Rebuild the session
+    executor session from ``state.agent_sessions``. Rebuild the session
     from the wave's own bookkeeping -- its ``agent_role`` and the recorded
     session attempt (runtime + start time) -- so the close records the report
     and the wave closes on its verdict instead of ``emit_agent_end_report``
@@ -1290,7 +1290,7 @@ def emit_agent_end_report(
     session = state.agent_sessions.get(session_id)
     if session is None:
         # The daemon-owned session row was lost -- e.g. a jailed agent reverted
-        # .ea/state.json mid-spawn (W09). Reconstruct it from the wave's own
+        # .ea/state.json mid-spawn. Reconstruct it from the wave's own
         # bookkeeping and re-register it so the report records and the wave
         # closes on its verdict rather than KeyErroring a success into a fail.
         session = _fallback_session(
@@ -1503,7 +1503,7 @@ def run_dispatch(
     Raises:
         DispatchCloseBlockedError: Propagated from
             :func:`emit_agent_end_report` when the post-execution
-            verify gate refuses the persisted report (W57). The
+            verify gate refuses the persisted report. The
             failure is fail-fast: the C09 events have already been
             persisted, the token tally has already accrued, and the
             report row is on disk; the raise stops the close path
@@ -1557,7 +1557,7 @@ def run_dispatch(
         )
     )
 
-    # FA4 (W08): fan the spawned child's captured stdout/stderr to the live
+    # FA4: fan the spawned child's captured stdout/stderr to the live
     # output tail. The producer publishes the bounded line tail as an
     # ``agent.output`` event the TUI App routes to the agent-watch session zoom;
     # a hand-fed-outcome dispatch (no captured text) is a no-op.
@@ -1573,7 +1573,7 @@ def run_dispatch(
     # daemon-push via the bus). Skipped on a stateless context. The captured
     # spawn pgid + config-resolved enforce mode thread through so a hard-cap
     # breach can reap the live wave's process group.
-    # A campaign-scoped researcher dispatch (W14) has no execution wave to fold
+    # A campaign-scoped researcher dispatch has no execution wave to fold
     # its tokens into, so the wave-budget accrual is skipped; the dispatch_cost
     # event above still books the spend against the campaign scope.
     interlock = (

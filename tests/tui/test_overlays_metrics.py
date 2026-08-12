@@ -1,4 +1,4 @@
-"""Tests for the C06 ``MetricsModal`` 3x2 dashboard overlay (P26-W21).
+"""Tests for the C06 ``MetricsModal`` 3x2 dashboard overlay.
 
 Two layers: pure :func:`parse_metrics_args` arg parsing + the
 :data:`TILE_SPECS` grid-inventory contract (without Textual), and
@@ -139,7 +139,7 @@ def test_metric_windows_are_the_three_v7_windows() -> None:
 
 
 # --------------------------------------------------------------------------
-# tile-elapsed — local state-binding metric (W15)
+# tile-elapsed — local state-binding metric
 # --------------------------------------------------------------------------
 
 

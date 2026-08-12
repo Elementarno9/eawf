@@ -1,4 +1,4 @@
-"""CLI + render tests for ``eawf metrics jury-validation`` (P30-I09-W07).
+"""CLI + render tests for ``eawf metrics jury-validation``.
 
 The sub-verb renders the cross-vendor jury validated against its ground-truth
 cohort. Two halves are pinned:

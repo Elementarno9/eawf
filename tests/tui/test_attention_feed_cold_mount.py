@@ -1,4 +1,4 @@
-"""Cold-mount Pilot gates for the Home attention band (P29-I08-W19).
+"""Cold-mount Pilot gates for the Home attention band.
 
 These tests pin the T2 contract from
 ``.ea/local/research/2026-06-03-i08-uiux-validation-specs.md`` -- the

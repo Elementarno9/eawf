@@ -47,7 +47,7 @@ def _state_payload(*, active_wave_ids: list[str]) -> dict[str, Any]:
             "claim_session_id": "session-1",
             "opened_at": _now().isoformat(),
             "claimed_at": _now().isoformat(),
-            # Every real claim stamps a baseline (P30-I25-W26), and the
+            # Every real claim stamps a baseline, and the
             # interactive attempt row is the wave's delta AGAINST that baseline
             # (P30-I25-W31) -- a baseline-less wave has no wave-scoped truth to
             # record, so it mints no attempt. Claim-time zero origin here.

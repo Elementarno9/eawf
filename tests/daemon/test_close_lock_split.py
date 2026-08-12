@@ -1,4 +1,4 @@
-"""D-LOCK-SPLIT: lock-free close pre-flight + optimistic commit (P30-I23-W09).
+"""D-LOCK-SPLIT: lock-free close pre-flight + optimistic commit.
 
 The root wedge (ZD-R1): the whole close pipeline ran inside one
 ``portalock.acquire`` hold, so a close whose deterministic gates shell

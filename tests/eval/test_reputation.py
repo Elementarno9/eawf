@@ -1,4 +1,4 @@
-"""Verdict-to-outcome projection tests (P29-I05-W01).
+"""Verdict-to-outcome projection tests.
 
 The outcome loop closes the gap from a per-wave verdict (an AUDITOR report at
 ``base_id=wave_id``) to its realized, state-observable outcome, so a later
@@ -283,7 +283,7 @@ def test_build_verdict_outcomes_earlier_reactive_iter_does_not_refute(tmp_path: 
     _write_auditor_verdict(state_path, base_id=wave_id)
     state = _empty_state()
     state.phases["P01"] = _phase(phase_id="P01", status=PhaseStatus.CLOSED, audit_id="AUD-1")
-    # An earlier reactive iter (I01) precedes the wave's iter (I02): no refutation.
+    # An earlier reactive iter precedes the wave's iter: no refutation.
     state.iters["P01-I01"] = _iter(
         iter_id="P01-I01", status=IterStatus.CLOSED, trigger=IterTrigger.REACTIVE
     )
@@ -448,7 +448,7 @@ def test_verdict_outcome_rejects_extra_field() -> None:
         )
 
 
-# --- reliability scoring layer (P29-I05-W02) ------------------------------
+# --- reliability scoring layer ------------------------------
 
 
 def _outcome(
@@ -727,7 +727,7 @@ def test_role_reliability_rejects_extra_field() -> None:
         )
 
 
-# --- trust-tier ladder (P29-I05-W03) --------------------------------------
+# --- trust-tier ladder --------------------------------------
 
 
 def test_map_reliability_to_tier_high_lb_maps_to_a() -> None:
@@ -839,7 +839,7 @@ def test_reputation_tier_distinct_from_output_quality_trust_tier() -> None:
     assert reputation_values.isdisjoint(output_quality_values)
 
 
-# --- fleet_verdict_rollup: per-wave latest verdict (P30-I07-W09) -----------
+# --- fleet_verdict_rollup: per-wave latest verdict -----------
 
 
 def _append_auditor_verdict(

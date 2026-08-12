@@ -1,4 +1,4 @@
-"""Golden snapshot + grouping contract for the command palette (P30-I02-W18).
+"""Golden snapshot + grouping contract for the command palette.
 
 The ``/`` command palette groups its verbs into three sections --
 ``Recent`` / ``Lifecycle`` / ``All`` -- so the operator scans the

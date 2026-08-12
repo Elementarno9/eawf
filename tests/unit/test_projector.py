@@ -1,4 +1,4 @@
-"""Unit tests for the telemetry projector (P27-I01-W15).
+"""Unit tests for the telemetry projector.
 
 Covers the two load-bearing guarantees of the wave:
 

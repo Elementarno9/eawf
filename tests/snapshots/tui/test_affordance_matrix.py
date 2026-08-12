@@ -219,7 +219,7 @@ def test_matrix_fails_when_footer_advertises_a_dead_key(
 
 
 # --------------------------------------------------------------------------
-# CR-01 (W12): the sweep over NAV_SCOPES x MODE_REGISTRY reports zero
+# CR-01: the sweep over NAV_SCOPES x MODE_REGISTRY reports zero
 # unresolved advertised keys outside DEFERRED_KEYS
 # --------------------------------------------------------------------------
 

@@ -1,6 +1,6 @@
 """Mutating ``eawf memory`` verbs (add / promote / prune / gc / tier / compact).
 
-Split out of :mod:`eawf.surfaces.cli.commands.memory` (P27-I05-W09). The
+Split out of :mod:`eawf.surfaces.cli.commands.memory`. The
 :data:`memory_app` Typer group and the shared helpers (store-path
 resolvers, the confidence parser, the args-hash helper, the read-only
 state loader) live in the parent module; this module attaches the

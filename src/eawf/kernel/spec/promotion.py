@@ -56,7 +56,7 @@ ARGV_BEARING_GATE_KINDS: Final[frozenset[str]] = frozenset({"command_exit_zero"}
 
 #: Default argv-policy allowlist used when the caller does not supply one.
 #:
-#: TODO(P28-I01-W10): once the profile schema lands the
+#: TODO: once the profile schema lands the
 #: ``ProfileBody.verify.argv_allowlist`` field, the promote handler reads
 #: the allowlist from the resolved profile and passes it through to
 #: :func:`validate_argv_gates`. Until then this tuple is the conservative

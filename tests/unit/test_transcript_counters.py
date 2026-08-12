@@ -1,4 +1,4 @@
-"""Tests for the Claude session-transcript counter aggregator (P30-I25-W25).
+"""Tests for the Claude session-transcript counter aggregator.
 
 The Stop hook payload carries no counters -- only a ``transcript_path``. These
 tests pin what the aggregator makes of that file: deduplicated token tallies,

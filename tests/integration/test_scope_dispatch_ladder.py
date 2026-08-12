@@ -1,4 +1,4 @@
-"""Tests for :func:`eawf.surfaces.cli.scope.resolve_scope_tier` (P25-W08).
+"""Tests for :func:`eawf.surfaces.cli.scope.resolve_scope_tier`.
 
 The scope dispatch ladder per C07b §5.3 is "cwd → workspace > repo >
 user" with first-match-wins semantics. Concretely:

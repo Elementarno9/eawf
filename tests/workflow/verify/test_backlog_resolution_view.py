@@ -1,4 +1,4 @@
-"""Tests for the backlog-resolution close-gate wiring in readiness (P30-I10-W02).
+"""Tests for the backlog-resolution close-gate wiring in readiness.
 
 Pins two W02 contracts on the readiness layer:
 

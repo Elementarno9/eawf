@@ -1,4 +1,4 @@
-"""Fixture-driven tests for the ``aggregate_jury`` reducer (P29-I01-W06).
+"""Fixture-driven tests for the ``aggregate_jury`` reducer.
 
 The reducer is validated against committed ballot fixtures under
 ``fixtures/`` — no live agent spawn. Each fixture is a self-describing

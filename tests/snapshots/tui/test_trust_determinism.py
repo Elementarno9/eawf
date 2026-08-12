@@ -1,4 +1,4 @@
-"""Oracle-determinism ratio section in the Trust mode (P29-I13-W08).
+"""Oracle-determinism ratio section in the Trust mode.
 
 The Trust mode (digit ``4``) gains an ORACLE DETERMINISM section: the
 oracle-determinism ratio computed over the closed criteria's evidence

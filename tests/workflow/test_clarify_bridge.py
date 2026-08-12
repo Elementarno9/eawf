@@ -1,4 +1,4 @@
-"""Tests for the clarify-run -> needs_user ledger bridge (P30-I10-W12).
+"""Tests for the clarify-run -> needs_user ledger bridge.
 
 Covers :func:`eawf.workflow.skills.clarify.bridge_clarify_run_to_ledger`, the
 batch bridge that seeds the durable needs_user / OpenQuestion ledger with one

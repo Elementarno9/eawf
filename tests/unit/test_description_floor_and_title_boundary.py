@@ -1,5 +1,5 @@
 """Tests for the description-floor model validator and the title-clarity
-mutation boundary (P29-I07-W02).
+mutation boundary.
 
 Two surfaces:
 

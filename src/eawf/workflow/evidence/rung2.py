@@ -58,7 +58,7 @@ a real-model spike measures sustained entailment probabilities below
 ``ENTAIL_THRESHOLD`` on a representative terse corpus, the correct move
 is NOT to lower the threshold (that re-admits the uncertain band rung-2
 exists to refuse) but to MOVE THIS RUNG BEHIND THE JURY FLOOR in a later
-iter (I03): rung-2 becomes advisory and the rung-3 jury becomes the
+iter: rung-2 becomes advisory and the rung-3 jury becomes the
 gating verdict for text claims. The :class:`EntailmentScorer` Protocol +
 :func:`load_default_scorer` factory are the clean seam that makes that
 move a configuration change (swap the scorer / re-route the rung) rather

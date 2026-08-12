@@ -1,4 +1,4 @@
-"""Unit tests for the scrub-gated evidence export (P29-I13-W07).
+"""Unit tests for the scrub-gated evidence export.
 
 The pure :func:`~eawf.surfaces.tui.modes.evidence.export_evidence_manifest`
 emits a scrub-clean evidence manifest but REFUSES a payload carrying an

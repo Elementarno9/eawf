@@ -1,4 +1,4 @@
-"""Unit tests for the OpenCode runtime plugin installer (P14-I02-W01).
+"""Unit tests for the OpenCode runtime plugin installer.
 
 Covers the native plugin layout (``.opencode/plugins/eawf.js`` plus
 sidecar ``.eawf-managed.json``), removal of the legacy

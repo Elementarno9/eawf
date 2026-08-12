@@ -1,4 +1,4 @@
-"""Pilot tests for the VarianceTile over the unified cell-bar (P30-I02-W10).
+"""Pilot tests for the VarianceTile over the unified cell-bar.
 
 Mounts a lone :class:`~eawf.surfaces.tui.widgets.variance_tile.VarianceTile`
 in a bare host carrying the ``render_mode`` reactive (the same seam the live

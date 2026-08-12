@@ -1,4 +1,4 @@
-"""Integration: spawn-safety wiring (P30-I10-W04).
+"""Integration: spawn-safety wiring.
 
 Pins the three seams this wave wired together so the safety floor is no
 longer idle:

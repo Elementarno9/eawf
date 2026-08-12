@@ -42,7 +42,7 @@ def test_tooltip_summary_lists_refs() -> None:
     assert tooltip_summary("P28-I03-W35 and H01-02") == "wave P28-I03-W35\nhypothesis H01-02"
 
 
-# ---- inline citation linkify (W14) ------------------------------------------
+# ---- inline citation linkify ------------------------------------------
 
 
 def test_linkify_citations_rewrites_bare_marker_to_anchor_link() -> None:

@@ -66,7 +66,7 @@ class HookSpec:
         claude_event_name: Friendly Claude-side display name written
             into the synthesised payload's ``hook_event_name`` field.
             Mirrors the Claude Code hooks reference values so the
-            router (W04) dispatches correctly.
+            router dispatches correctly.
         has_handler: ``True`` when a runner-registered handler actually
             consumes this event. Only :data:`HookEventType.SESSION_END`
             has one — ``runtime.capture``, wired by

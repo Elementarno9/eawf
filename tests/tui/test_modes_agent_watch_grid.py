@@ -1,4 +1,4 @@
-"""Tests for the parallel multi-session watch grid pane (P30-I07-W08).
+"""Tests for the parallel multi-session watch grid pane.
 
 The Watch mode's grid surface lays out one tile per ACTIVE executor
 :class:`~eawf.kernel.state.models.AgentSession`; a pushed event for a session
@@ -177,7 +177,7 @@ def test_active_watchable_sessions_none_state_is_empty() -> None:
 
 
 def test_active_watchable_sessions_includes_all_watchable_roles() -> None:
-    """ACTIVE executor + researcher sessions tile (W20); non-watchable + closed drop.
+    """ACTIVE executor + researcher sessions tile; non-watchable + closed drop.
 
     A researcher is now watchable alongside the executor -- the grid tiles any
     spawned agent role, not only wave executors -- while a REVIEWER (not a

@@ -1,4 +1,4 @@
-"""Staleness-banner snapshot + pure-helper coverage for the TUI bind (P29-I13-W01).
+"""Staleness-banner snapshot + pure-helper coverage for the TUI bind.
 
 On launch the TUI binds ``state.json`` read-only. When the on-disk state
 was written under an OLDER schema than the live daemon ``State`` model

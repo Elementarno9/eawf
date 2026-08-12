@@ -1,4 +1,4 @@
-"""Drift inspector for the Eä-owned OpenCode plugin (P14-I02-W01).
+"""Drift inspector for the Eä-owned OpenCode plugin.
 
 Scope-aware: ``scope="project"`` inspects ``<target>/.opencode/plugins/``;
 ``scope="user"`` inspects ``$OPENCODE_CONFIG_DIR/plugins/`` or

@@ -271,7 +271,7 @@ def test_chunk_should_flush_below_both_thresholds_holds() -> None:
 
 
 def test_chunk_should_flush_on_time_budget_below_count() -> None:
-    """A sub-batch burst flushes once the wall-clock hold budget elapses (W19).
+    """A sub-batch burst flushes once the wall-clock hold budget elapses.
 
     The freeze fix's persistence half: a slow codex turn emitting fewer than the
     count batch would otherwise sit unpersisted until the next burst; the time

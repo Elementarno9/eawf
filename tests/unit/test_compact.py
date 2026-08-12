@@ -157,7 +157,7 @@ def test_compact_rejects_invalid_payload(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# C09 typed event-payload compatibility (P27-I02-W06)
+# C09 typed event-payload compatibility
 #
 # compact_store re-validates each EVENT row's inner payload. Before this
 # wave it only knew the flat EventPayload, so a typed C09 row (disjoint

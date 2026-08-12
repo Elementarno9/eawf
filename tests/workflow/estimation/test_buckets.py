@@ -396,7 +396,7 @@ def test_actual_eu_for_phase_sums_across_iters() -> None:
     """The phase accessor sums realized EU across every wave under its iters."""
     state = _state_with_hierarchy()
 
-    # 1.5 + 2.5 (I01) + 0.5 (I02) == 4.5 across P01.
+    # 1.5 + 2.5 + 0.5 == 4.5 across P01.
     assert actual_eu_for_phase(state, "P01") == pytest.approx(4.5)
 
 

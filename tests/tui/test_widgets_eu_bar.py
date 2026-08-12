@@ -1,4 +1,4 @@
-"""Unit + Pilot tests for the C06 ``EUBar`` widget (P26-W17).
+"""Unit + Pilot tests for the C06 ``EUBar`` widget.
 
 Covers the pure render helpers (cell-fill maths, colour band selection,
 markup string shape) and a Pilot-driven mount that confirms the bar
@@ -157,7 +157,7 @@ def test_eu_bar_set_eu_updates_reactives() -> None:
 
 
 # --------------------------------------------------------------------------
-# render_completion_bar — iter / phase closed-ratio bar (W05)
+# render_completion_bar — iter / phase closed-ratio bar
 # --------------------------------------------------------------------------
 
 
@@ -239,7 +239,7 @@ def test_render_completion_bar_empty_state_no_counter() -> None:
 
 
 # --------------------------------------------------------------------------
-# render_size_bar — wave effort-bucket bar (W05)
+# render_size_bar — wave effort-bucket bar
 # --------------------------------------------------------------------------
 
 
@@ -284,7 +284,7 @@ def test_render_size_bar_custom_width_caps_fill() -> None:
 
 
 # --------------------------------------------------------------------------
-# render_eu_bar_plain — guarded EU / token row (W05)
+# render_eu_bar_plain — guarded EU / token row
 # --------------------------------------------------------------------------
 
 
@@ -382,7 +382,7 @@ def test_ascii_mode_matches_legacy_default() -> None:
 
 
 # --------------------------------------------------------------------------
-# render_bar_rich — hex-resolved tint for Rich-parsed contexts (W22)
+# render_bar_rich — hex-resolved tint for Rich-parsed contexts
 # --------------------------------------------------------------------------
 
 

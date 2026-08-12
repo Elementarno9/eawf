@@ -1,4 +1,4 @@
-"""Tests for the legacy-to-typed criterion converter (P30-I10-W01).
+"""Tests for the legacy-to-typed criterion converter.
 
 Covers the converter that lifts a grandfathered free-form success-criterion
 STRING out of the no-op :data:`~eawf.kernel.spec.common.GRANDFATHERED_KIND`

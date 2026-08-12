@@ -1,4 +1,4 @@
-"""Tests: a fleet dispatch error records a FAILED outcome + keeps the drive alive (P30-I20-W42).
+"""Tests: a fleet dispatch error records a FAILED outcome + keeps the drive alive.
 
 The autopilot fleet drive loop only forks the narrow
 :class:`~eawf.runtime.runtimes.adapter.RuntimeSpawnError` /
@@ -364,7 +364,7 @@ def _write_state_with_closed(tmp_path: Path, closed_wave_id: str) -> Path:
 def test_terminal_wave_in_frontier_is_parked_not_respawned(tmp_path: Path) -> None:
     """A frontier wave already CLOSED on disk is PARKED (counted), never re-spawned.
 
-    Regression for the stale fleet_run churn (P30-I21-W05): an armed / reattached
+    Regression for the stale fleet_run churn: an armed / reattached
     frontier can carry a wave the operator has since closed. Without the park
     guard the loop re-claims it every round (a doomed claim), churning the run
     forever. The guard counts it as a parked failure + drops it so the run

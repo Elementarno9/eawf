@@ -169,7 +169,7 @@ class _ActiveDrive:
     handle_id: str
 
 
-#: The single active background drive (W01). At most one drive runs at a time:
+#: The single active background drive. At most one drive runs at a time:
 #: a second ``fleet.drive`` while one is in flight is rejected. Guarded by
 #: :data:`_DRIVE_LOCK` so the start / clear races stay consistent across the RPC
 #: thread + the drive thread's own terminal clear.
@@ -294,7 +294,7 @@ def _default_lane_spend(ctx: MethodContext, wave_id: str) -> LaneSpend:
     captured :attr:`~eawf.kernel.state.models.Wave.runtime_latest` off
     ``state.json`` (free read access) and computes the close-time runtime delta
     via :func:`~eawf.workflow.lifecycle.wave.compute_runtime_delta` -- the same
-    EUCAP runtime-delta read the wave-close rollup uses (I05-W06). A wave with
+    EUCAP runtime-delta read the wave-close rollup uses. A wave with
     no captured runtime (no baseline / no latest) yields a zero
     :class:`LaneSpend` so the run never accrues phantom spend. A stateless
     context or a vanished wave likewise yields zero.
@@ -503,7 +503,7 @@ def _persist_fleet_run(ctx: MethodContext, fleet_run: FleetRun | None) -> None:
     After the disk write the run transition is published to the subscription
     bus (:func:`_publish_run_transition`) so live subscribers (the TUI cockpit)
     see the run-state move without a poll tick. The drive loop runs on a worker
-    thread (W01), so the publish marshals onto the daemon event loop through
+    thread, so the publish marshals onto the daemon event loop through
     ``loop.call_soon_threadsafe`` rather than touching the ``asyncio.Event`` the
     bus sets from off the loop thread; a same-thread (event-loop) call publishes
     directly. The marshal seam is single-sourced in :func:`_publish_run_transition`.
@@ -940,7 +940,7 @@ async def _live_repair_lane(ctx: MethodContext, lane: FleetLane) -> LaneRepairOu
 _WATCH_POLL_SECONDS = 1.0
 
 #: Grace window (seconds) the watcher waits AFTER a lane's process group first
-#: reads dead before it resolves a stalled lane to a fork (W05). A clean agent
+#: reads dead before it resolves a stalled lane to a fork. A clean agent
 #: exit closes the wave a moment after the process dies, so the deadline gives
 #: that close-write time to land before declaring the lane wedged -- a healthy
 #: lane that closes within the grace never forks on the liveness probe. Tuned
@@ -1184,7 +1184,7 @@ class _LivenessWatcher:
         """Return the lane's terminal outcome this poll, or ``None`` if in flight.
 
         A vanished / terminal wave resolves immediately
-        (:func:`_status_terminal_outcome`), an open needs_user pause (W09)
+        (:func:`_status_terminal_outcome`), an open needs_user pause
         resolves ``"needs_user"``, else the lane is still in flight (``None``).
         """
         wave = load_state(state_path).waves.get(lane.wave_id)
@@ -1243,7 +1243,7 @@ def _default_watcher(ctx: MethodContext, lane: FleetLane) -> LaneOutcome:
     until it reaches a terminal status, mapping ``CLOSED`` -> a clean close and
     ``FAILED`` / ``ABANDONED`` (or a vanished wave) -> a fork. On each poll it
     ALSO probes the lane's process-group liveness and resolves a dead-but-
-    unflipped lane to a fork once the stall deadline elapses (W05), so a dead
+    unflipped lane to a fork once the stall deadline elapses, so a dead
     agent no longer wedges the lane forever; a healthy slow lane is NOT killed by
     the probe. The poll sleeps between reads so the loop never busy-spins. Tests
     inject a :class:`LaneWatcher` fake instead (or build one via
@@ -2032,7 +2032,7 @@ class _Loop:
         fork_evidence: The injected fork-evidence reader. When a lane pauses to
             a DL-6 blocking fork the reader supplies the evidence ref the queued
             :class:`FleetFork` carries.
-        cancel: Optional shutdown event the loop checks between rounds (W01).
+        cancel: Optional shutdown event the loop checks between rounds.
         classify: Optional :class:`ErrorClassifier` for the bounded spawn ladder
             (W03). When set, a lane spawn that raises ``RuntimeSpawnError`` is
             routed through :func:`spawn_lane_or_fork` so a HARD failure
@@ -2046,7 +2046,7 @@ class _Loop:
             ``None`` (the default) resolves the live :func:`_default_liveness`
             at call time; tests inject a deterministic fake.
         runtime_preference: The ``Wave.runtime_preference`` runtime ladder the
-            bounded spawn ladder's V5 switch walks past a failed runtime (W03).
+            bounded spawn ladder's V5 switch walks past a failed runtime.
         max_total_attempts: Total spawn ceiling for the bounded spawn ladder.
         repair: Optional repair hook the loop invokes on a failing-check fork
             (W03). When set, a lane the watcher reports ``"forked"`` on a failing
@@ -2086,7 +2086,7 @@ class _Loop:
     max_total_attempts: int = DEFAULT_MAX_TOTAL_ATTEMPTS
     repair: LaneRepairHook | None = None
     recompute_frontier: bool = True
-    #: Wave ids the loop has already claimed in THIS run (W04). The per-round
+    #: Wave ids the loop has already claimed in THIS run. The per-round
     #: frontier recompute excludes these so a wave the loop already dispatched is
     #: never re-claimed -- robust whether or not the spawner advanced the wave's
     #: ``state.json`` status (a fake spawner that leaves the wave PENDING would
@@ -2107,7 +2107,7 @@ class _Loop:
     def _persist(self) -> None:
         """Persist the current run snapshot through the daemon canonical writer.
 
-        Operator intervention wins (W06): a ``fleet.pause`` / ``fleet.halt`` RPC
+        Operator intervention wins: a ``fleet.pause`` / ``fleet.halt`` RPC
         can land on disk MID-round (between the round's top run-state read and
         this persist), so before writing a DRAINING in-memory run this re-reads
         the disk run-state and adopts a HELD (PAUSED / HALTED) state -- otherwise
@@ -2211,7 +2211,7 @@ class _Loop:
                 # lanes are resolved by the drain / hard-halt branch).
                 break
             wave_id = self.run.frontier.pop(0)
-            # Record the claim so the per-round frontier recompute (W04) never
+            # Record the claim so the per-round frontier recompute never
             # re-adds a wave this run already dispatched (robust even when the
             # spawner does not flip the wave's on-disk status).
             self.claimed_ids.add(wave_id)
@@ -2780,7 +2780,7 @@ class _Loop:
         draining). A genuine watcher fork is NOT enqueued -- it is a terminal
         failure, not an operator pause.
 
-        DL-7 (W03): when a genuine watcher fork (a failing check) occurs AND a
+        DL-7: when a genuine watcher fork (a failing check) occurs AND a
         repair hook is wired, the lane is first routed through the bounded
         grounded repair ladder (:func:`repair_lane_or_fork`): a resolved repair
         RE-REGISTERS the lane in flight under its incremented dispatch attempt
@@ -3279,21 +3279,21 @@ def arm_drive(
             whether a high / ui lane may auto-close or must fork. Defaults to
             :attr:`BlockAuthority.ADVISORY` (an uncalibrated jury), so a
             high / ui lane forks rather than silently auto-closing.
-        cancel: Optional shutdown event the loop checks between rounds (W01).
+        cancel: Optional shutdown event the loop checks between rounds.
             When set the loop stops claiming + returns the run still DRAINING
             for a later reattach to recover; ``None`` (the synchronous callers)
             runs uninterrupted.
         classify: Optional :class:`ErrorClassifier` enabling the bounded spawn
-            ladder (W03). When set, a lane spawn that raises ``RuntimeSpawnError``
+            ladder. When set, a lane spawn that raises ``RuntimeSpawnError``
             routes through :func:`spawn_lane_or_fork` so a spawn error FORKS the
             lane rather than aborting the run; ``None`` keeps the direct-spawn
             path.
         runtime_preference: The ``Wave.runtime_preference`` runtime ladder the
-            bounded spawn ladder's V5 switch walks (W03); empty when the wave
+            bounded spawn ladder's V5 switch walks; empty when the wave
             pins one runtime.
         max_total_attempts: Total spawn ceiling for the bounded spawn ladder.
         repair: Optional :class:`LaneRepairHook` enabling the bounded grounded
-            repair ladder (W03). When set, a failing-check fork re-dispatches up
+            repair ladder. When set, a failing-check fork re-dispatches up
             the ladder; ``None`` keeps the terminal-fork behaviour.
         recompute_frontier: When ``True`` (the default, W04) the loop recomputes
             the ready frontier off ``state.json`` each round so dep-unblocked
@@ -3581,7 +3581,7 @@ def kill_lane(
     the kill is reported successful.
 
     When no live fleet lane resolves (no fleet run armed, or no lane for the
-    pair) the kill FALLS BACK to the wave's single-wave dispatched session (W09):
+    pair) the kill FALLS BACK to the wave's single-wave dispatched session:
     a wave dispatched via ``eawf dispatch wave`` (no fleet run) records its child
     pid on the matching :class:`~eawf.kernel.state.models.SessionAttempt`, so the
     kill resolves that ``subprocess_pid`` and signals its group -- a single-wave
@@ -3614,7 +3614,7 @@ def kill_lane(
     lane = resolve_lane(run, wave_id=wave_id, attempt=attempt)
     if lane is None:
         # No live fleet lane: fall back to the single-wave dispatched session's
-        # recorded child pid (W09) so a non-fleet ``eawf dispatch wave`` spawn is
+        # recorded child pid so a non-fleet ``eawf dispatch wave`` spawn is
         # still killable.
         return _kill_session_pid(
             ctx, wave_id=wave_id, attempt=attempt, hard=hard, signal_group=signal_group
@@ -4290,7 +4290,7 @@ def start_background_drive(ctx: MethodContext, args: DriveParams) -> FleetDriveH
     already in flight raises rather than starting a concurrent run.
 
     The worker thread captures the daemon event loop so a bus publish from the
-    drain marshals onto it through ``loop.call_soon_threadsafe`` (W01), persists
+    drain marshals onto it through ``loop.call_soon_threadsafe``, persists
     every transition through the daemon canonical writer exactly as the
     synchronous form did, and clears the active-drive registry on terminal so a
     later drive can start.

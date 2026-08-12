@@ -1,6 +1,6 @@
-"""End-to-end cadence-integrity tests for ``close_phase`` against stub audits (P30-I15-W05).
+"""End-to-end cadence-integrity tests for ``close_phase`` against stub audits.
 
-The phase-wide drift checkpoint (P30-I15-W04) builds a real SHIP_GATE audit, and
+The phase-wide drift checkpoint builds a real SHIP_GATE audit, and
 :func:`eawf.workflow.lifecycle.phase.close_phase` consumes it through two
 rejection paths the close-readiness gate enforces:
 

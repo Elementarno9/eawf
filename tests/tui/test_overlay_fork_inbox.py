@@ -1,4 +1,4 @@
-"""Tests for the FA5 blocking-fork interrupt inbox overlay (P30-I13-W05).
+"""Tests for the FA5 blocking-fork interrupt inbox overlay.
 
 When the daemon-owned fleet auto-drain loop pauses a lane to a blocking fork (a
 high-risk close, an uncalibrated-jury advisory, or a needs-user split), the

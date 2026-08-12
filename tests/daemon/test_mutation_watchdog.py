@@ -1,4 +1,4 @@
-"""Per-mutation telemetry + the self-deadlock watchdog (P30-I23-W10).
+"""Per-mutation telemetry + the self-deadlock watchdog.
 
 A wedged close was invisible (``in_flight_mutations`` is a bare int) and
 recovery was a manual pkill + rm ceremony (ZD-R6). Now every in-flight

@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.workflow.dispatch.routing` (P29-I01-W23).
+"""Unit tests for :mod:`eawf.workflow.dispatch.routing`.
 
 Exercises the pure ``(agent_role, effort_bucket) -> (model, runtime)``
 routing table and its resolver, plus the ``dispatch.routing`` config leaf

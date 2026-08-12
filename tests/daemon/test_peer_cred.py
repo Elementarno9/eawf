@@ -1,4 +1,4 @@
-"""Per-OS peer-credential dispatcher coverage (W05).
+"""Per-OS peer-credential dispatcher coverage.
 
 Tests exercise :func:`eawf.runtime.daemon.auth.verify_peer_credential` on every
 supported platform via :func:`socket.socketpair` round-trips. Each

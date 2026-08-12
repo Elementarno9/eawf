@@ -1,4 +1,4 @@
-"""Tests for the Track promotion gate + out-of-scope containment (P30-I11-W08).
+"""Tests for the Track promotion gate + out-of-scope containment.
 
 Covers the guardian a Track passes before its lifecycle advances and the
 containment backstop that flags an out-of-scope wave:

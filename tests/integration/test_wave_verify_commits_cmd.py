@@ -1,4 +1,4 @@
-"""Unit tests for ``eawf wave verify-commits [--repair]`` (P29-I02-W06).
+"""Unit tests for ``eawf wave verify-commits [--repair]``.
 
 Exercises the CLI verb end-to-end against an isolated ``state.json``
 fixture under ``EA_STATE``. ``derive_wave_sha`` + ``shutil.which`` are

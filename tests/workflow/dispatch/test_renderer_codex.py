@@ -1,4 +1,4 @@
-"""Tests for the ``codex`` runtime in the dispatch envelope renderer (P28-I03-W57).
+"""Tests for the ``codex`` runtime in the dispatch envelope renderer.
 
 Pre-W57 :data:`eawf.workflow.dispatch.renderer.DISPATCH_RUNTIMES` listed
 only ``claude-code`` and ``claude-agent-sdk``; a codex-runtime wave
@@ -76,7 +76,7 @@ def test_dispatch_runtimes_includes_codex() -> None:
 
 
 def test_dispatch_runtimes_includes_opencode() -> None:
-    """The allow-list carries ``opencode`` (P29-I04-W15) so its spawn is reachable."""
+    """The allow-list carries ``opencode`` so its spawn is reachable."""
     assert "opencode" in DISPATCH_RUNTIMES
 
 
@@ -126,7 +126,7 @@ def test_codex_envelope_renders_same_prompt_as_claude_code() -> None:
 def test_unknown_runtime_error_message_lists_codex_among_supported() -> None:
     """The unsupported-runtime error names every supported entry.
 
-    ``opencode`` joined :data:`DISPATCH_RUNTIMES` (P29-I04-W15), so the
+    ``opencode`` joined :data:`DISPATCH_RUNTIMES`, so the
     unsupported example here is a genuinely-unknown runtime; the error must
     still name every supported entry including codex + opencode.
     """

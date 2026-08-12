@@ -1,4 +1,4 @@
-"""Typed subagent-spec + role library (P27-I03-W14).
+"""Typed subagent-spec + role library.
 
 Public API:
 

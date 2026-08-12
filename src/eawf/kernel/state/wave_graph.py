@@ -165,7 +165,7 @@ def edges(wave_id: str, state: State) -> WaveDagEdges:
 def edges_for_iter(iter_id: str, state: State) -> dict[str, WaveDagEdges]:
     """Return :class:`WaveDagEdges` for every wave under *iter_id*.
 
-    Iteration-scoped helper for the TUI wave-board (W03) which renders
+    Iteration-scoped helper for the TUI wave-board which renders
     one iter at a time. Result is keyed by wave id; missing iter
     returns an empty mapping (a separate validator surfaces dangling
     iter pointers).

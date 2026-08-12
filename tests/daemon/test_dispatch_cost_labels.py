@@ -1,4 +1,4 @@
-"""Runtime-label folding at the dispatch-cost telemetry ingest (P30-I23-W29).
+"""Runtime-label folding at the dispatch-cost telemetry ingest.
 
 One runtime, two spellings: the event surface writes the short
 ``RuntimeTriple`` (``claude``) while sessions / actuals carry the

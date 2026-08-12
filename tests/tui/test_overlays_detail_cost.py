@@ -1,4 +1,4 @@
-"""Tests for the wave-detail ``$`` (cost) tab + the shared cost helpers (W13).
+"""Tests for the wave-detail ``$`` (cost) tab + the shared cost helpers.
 
 Three layers: the pure cost projection
 (:mod:`eawf.surfaces.tui.screens.overlays.detail_cost`) over hand-built
@@ -6,7 +6,7 @@ telemetry rollups, the store-backed join that feeds the tab from a seeded
 metrics DB, and Pilot-driven painting of the ``$`` tab inside a mounted
 :class:`~eawf.surfaces.tui.screens.overlays.detail.DetailModal`.
 
-The success criterion (P30-I07-W13): a wave with metered
+The success criterion: a wave with metered
 :class:`~eawf.kernel.state.models.SessionAttempt` rows renders the ``$`` tab
 columns (attempt, model, in/out, cache cr/rd, cost, EU) with the four token
 classes and an aggregate cost bar; an attempt with ``priced=false`` (billable

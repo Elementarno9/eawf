@@ -1,4 +1,4 @@
-"""Unit tests for the per-rubric-item jury reducer (P29-I08-W04).
+"""Unit tests for the per-rubric-item jury reducer.
 
 Exercises :func:`eawf.observability.eval.cross_vendor_jury.reduce_per_item_ballots`
 -- the PURE reducer that lifts the holistic one-ballot-per-juror minority-veto

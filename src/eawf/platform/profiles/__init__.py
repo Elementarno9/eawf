@@ -12,7 +12,7 @@ declares:
 - ``skills_referenced`` / ``hooks_referenced`` — opt-in inventories that the
   Phase 5 skill registry consumes.
 
-Schema v2 (P25-W15) adds three composability fields on each
+Schema v2 adds three composability fields on each
 :class:`ProfileBody`:
 
 - ``conflicts_with`` — profile ids that cannot coexist with this body.

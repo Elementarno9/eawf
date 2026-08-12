@@ -429,7 +429,7 @@ def test_run_oracle_always_requirement_consults_jury(
 def test_run_oracle_jury_needs_user_held_advisory_close_proceeds(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, tmp_path: Path
 ) -> None:
-    """A NEEDS_USER jury outcome is held advisory (W09): maps to status='pass'.
+    """A NEEDS_USER jury outcome is held advisory: maps to status='pass'.
 
     An uncalibrated jury holds only advisory authority, so ANY non-pass
     outcome -- a FAIL veto or a NEEDS_USER split / sub-quorum -- is logged at

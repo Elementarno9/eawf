@@ -1,4 +1,4 @@
-"""Unit tests for the schema-forced LLMAssistResult + re-ask loop (P29-I01-W24).
+"""Unit tests for the schema-forced LLMAssistResult + re-ask loop.
 
 Pins the structured-output contract for spawned agents:
 :func:`~eawf.workflow.dispatch.llm_assist.assist_with_schema` validates a

@@ -109,7 +109,7 @@ def test_session_end_capture_hook_invokes_runtime_capture_rpc() -> None:
                 # this payload carries no model block so ``model`` stays None.
                 "harness": "claude-code",
                 "model": None,
-                # The statusline declares its OWN measure (P30-I25-W45): its cost
+                # The statusline declares its OWN measure: its cost
                 # block is a different quantity from the transcript's per-turn
                 # duration, so a flip between the two sources must read as a change
                 # of measure rather than as work.

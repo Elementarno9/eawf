@@ -1,4 +1,4 @@
-"""Tests for the ``research.*`` JSON-RPC handlers (P29-I09-W07).
+"""Tests for the ``research.*`` JSON-RPC handlers.
 
 Covers :func:`eawf.runtime.daemon.methods.research.create_campaign` plus the
 shared :func:`persist_campaign` helper. The handler is driven directly through

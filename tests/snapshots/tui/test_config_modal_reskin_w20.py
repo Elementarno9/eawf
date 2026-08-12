@@ -1,4 +1,4 @@
-"""Config-modal + edit-field cosmic-terminal reskin snapshot (P30-I02-W20).
+"""Config-modal + edit-field cosmic-terminal reskin snapshot.
 
 The reskin migrates the config modal off its hardcoded ``> *`` markers
 onto the shared sigil vocabulary: the overridden-key marker now renders

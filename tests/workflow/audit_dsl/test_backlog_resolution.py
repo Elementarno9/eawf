@@ -1,4 +1,4 @@
-"""Tests for the ``backlog_resolution`` close-gate kind (P30-I10-W02).
+"""Tests for the ``backlog_resolution`` close-gate kind.
 
 The wave's success criterion pinned by these tests: ``backlog_resolution``
 fires on at least one wave-linked backlog item -- a wave linked to a

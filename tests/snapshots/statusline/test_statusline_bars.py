@@ -1,4 +1,4 @@
-"""Snapshot test for the statusline context-usage + rate-window bars (W39).
+"""Snapshot test for the statusline context-usage + rate-window bars.
 
 The renderer surfaces a context-usage bar and a rate-window bar, each as a
 block-eighths progress glyph (reusing the W20 bars primitive). The combined

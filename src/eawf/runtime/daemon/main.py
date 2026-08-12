@@ -392,7 +392,7 @@ async def run_mutation_watchdog_loop(
 ) -> None:
     """Sweep in-flight mutations: alarm past the ceiling, abort past the limit.
 
-    The self-deadlock watchdog (P30-I23-W10). Each tick it walks
+    The self-deadlock watchdog. Each tick it walks
     ``ctx.in_flight_details``:
 
     * past *alarm_seconds* it logs a structured WARNING naming the

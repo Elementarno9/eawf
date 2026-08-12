@@ -1,4 +1,4 @@
-"""Regression tests for the focused-repo zoom lifecycle (P27-I04-W28).
+"""Regression tests for the focused-repo zoom lifecycle.
 
 Two in-session reports against the P27-I04 zoom path:
 
@@ -16,7 +16,7 @@ Two in-session reports against the P27-I04 zoom path:
   :func:`test_zoom_does_not_leak_across_scope_switch` zooms the user scope,
   switches to repo and back, and pins the returned screen un-zoomed.
 
-A third report against the same path (P29-I02-W15):
+A third report against the same path:
 
 * **Modal push destroyed the zoom.** Textual posts ``ScreenSuspend`` to
   the active scope screen when a modal is pushed on top (``c`` config,
@@ -34,7 +34,7 @@ A third report against the same path (P29-I02-W15):
   with exactly one quadrant, while a switch-away still tears down with no
   rebuild and the guard stays idempotent under a tight round-trip.
 
-A fourth report against the same path (P29-I02-W26):
+A fourth report against the same path:
 
 * **Zoom dropped keyboard focus.** Zooming hides the browse
   ``WorkspaceTable`` (``display = False``), which blurs the table that held

@@ -1,4 +1,4 @@
-"""Tests: per-wave sandbox deny-list reaches the spawn argv (P29-I04-W02).
+"""Tests: per-wave sandbox deny-list reaches the spawn argv.
 
 Exercises the deny-list seam of the opt-in live-spawn path
 (:func:`eawf.runtime.daemon.methods.agent.dispatch` with ``spawn=True``):

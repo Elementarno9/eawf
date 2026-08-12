@@ -39,7 +39,7 @@ Per-OS recipes:
   FreeBSD — we use the kernel's documented numeric values
   (``SOL_LOCAL = 0``, ``LOCAL_PEERCRED = 1`` from ``<sys/un.h>``).
 - **Windows** — DACL + post-connect SID verification, delegated to
-  :mod:`eawf.runtime.daemon.windows_security` (W02). The dispatcher catches
+  :mod:`eawf.runtime.daemon.windows_security`. The dispatcher catches
   :class:`~eawf.runtime.daemon.windows_security.WindowsAuthError` and
   re-raises as :class:`UnauthorizedError` so a caller only ever
   catches one exception type regardless of platform.

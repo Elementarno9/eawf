@@ -1,4 +1,4 @@
-"""Render the Eä-owned OpenCode plugin (P14-I02-W01).
+"""Render the Eä-owned OpenCode plugin.
 
 Native OpenCode plugin layout. The renderer drops the legacy
 workspace-root dump (``<ws>/plugin.js`` + ``<ws>/opencode.json`` with a

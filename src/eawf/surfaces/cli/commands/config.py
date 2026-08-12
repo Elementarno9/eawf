@@ -158,7 +158,7 @@ class _ConfigSchema(BaseModel):
     # ``prep`` carries the ``/prep`` runtime knobs (auto_resume). Value-shape
     # validation lives in the leaf catalog; the composed schema only needs to
     # accept the section so a default-bearing merge does not trip
-    # extra="forbid" (P30-I23-W45).
+    # extra="forbid".
     prep: dict[str, Any] = Field(default_factory=dict)
 
 

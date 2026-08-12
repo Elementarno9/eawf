@@ -1,4 +1,4 @@
-"""Golden snapshots for the FA3 parallel-session lane grid (P30-I13-W03).
+"""Golden snapshots for the FA3 parallel-session lane grid.
 
 Pins the FA3 lane grid the wave delivers, captured from the
 :class:`~eawf.surfaces.tui.modes.agent_watch.AgentWatchModeScreen` mounted IN

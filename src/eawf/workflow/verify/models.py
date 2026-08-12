@@ -47,7 +47,7 @@ CriterionStatus = Literal["pass", "fail", "blocked", "pending", "waived"]
 #: ``legacy`` views carry no gate results because the legacy
 #: :attr:`~eawf.kernel.state.models.Wave.success_criteria` field is a
 #: free-form ``list[str]``; ``spec`` views carry the criterion's typed
-#: gate results; ``floor`` views (P28-I01-W10) are synthesised one-per-
+#: gate results; ``floor`` views are synthesised one-per-
 #: :class:`~eawf.platform.profiles.models.FloorCheck` when the active
 #: profile carries a non-empty
 #: :attr:`~eawf.platform.profiles.models.VerifyBlock.floor_checks` and

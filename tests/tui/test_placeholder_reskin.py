@@ -1,4 +1,4 @@
-"""Snapshot + render tests for the placeholder mode reskin (P30-I02-W33).
+"""Snapshot + render tests for the placeholder mode reskin.
 
 The placeholder mode (:class:`~eawf.surfaces.tui.modes.placeholder.PlaceholderModeScreen`)
 is the honest-empty base for any mode whose per-pane wave has not landed.

@@ -1,4 +1,4 @@
-"""Pure installer for the global Claude Code statusline integration (W41).
+"""Pure installer for the global Claude Code statusline integration.
 
 The ``eawf cc statusline install`` wizard (the CLI surface in
 :mod:`eawf.surfaces.cli.commands.statusline`) wires the Eä statusline into the

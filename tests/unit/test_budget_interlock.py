@@ -1,4 +1,4 @@
-"""Unit tests for the daemon-side token-cap interlock (P29-I03-W05).
+"""Unit tests for the daemon-side token-cap interlock.
 
 Covers :func:`eawf.runtime.daemon.budget_interlock.enforce_token_cap` -- the
 join between the pure enforcement classifier

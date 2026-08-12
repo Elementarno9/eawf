@@ -1,4 +1,4 @@
-"""Unit + Pilot tests for the C06 ``BacklogTable`` widget (P26-W17).
+"""Unit + Pilot tests for the C06 ``BacklogTable`` widget.
 
 Covers the pure sort / filter / sort-cycle helpers (including the
 invalid-sort-key error path), the widget's row rebuild from state, the
@@ -596,7 +596,7 @@ def test_table_s_key_moves_header_glyph_to_new_column() -> None:
 
 
 # --------------------------------------------------------------------------
-# Priority tint + leading sigil (P30-I02-W09)
+# Priority tint + leading sigil
 # --------------------------------------------------------------------------
 
 #: The dark-theme (harness default) priority-tint hexes, read off the

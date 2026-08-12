@@ -1,4 +1,4 @@
-"""Unit tests for the Doctor-mode probe stdin isolation (P30-I16-W29, P30-I18-W11, P30-I19-W10).
+"""Unit tests for the Doctor-mode probe stdin isolation.
 
 The Doctor-mode health gather fans out to blocking subprocesses (the
 instrument version-probes + the per-wave ``git log`` drift scan). Inside the

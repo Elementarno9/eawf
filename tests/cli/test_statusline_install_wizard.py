@@ -1,4 +1,4 @@
-"""Tests for the ``eawf cc statusline install`` wizard (P29-I13-W41).
+"""Tests for the ``eawf cc statusline install`` wizard.
 
 Covers the happy path (a fresh global settings file gets the statusLine key
 patched in), idempotence (a re-run on an already-installed file is a no-op),

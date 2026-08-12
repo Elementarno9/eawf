@@ -29,7 +29,7 @@ running daemon required):
   ``status`` above, which still issues the W01 ``daemon.status`` RPC
   against the running socket.
 
-W04 (P30-I14) adds the one-shot reclaim verb (no running daemon
+W04 adds the one-shot reclaim verb (no running daemon
 required; reads the local runtime dir + the resolved ``.ea/`` dir):
 
 - ``reclaim`` — sweep the WAL once via the W01 GC helper (drops

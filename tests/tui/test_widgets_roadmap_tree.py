@@ -1,8 +1,8 @@
-"""Unit + Pilot tests for the C06 ``RoadmapTree`` widget (P26-W17).
+"""Unit + Pilot tests for the C06 ``RoadmapTree`` widget.
 
 Covers the V12 glyph maps (pure), tree construction from a fixture state
 (phase → iter → wave with status glyphs), the inline completion bar on
-iter / phase rows (W06), width-aware row-title ellipsis (W06), the
+iter / phase rows, width-aware row-title ellipsis, the
 empty/None-state clear path, and the Enter-on-wave →
 :class:`RoadmapTree.WaveSelected` message seam.
 """
@@ -415,7 +415,7 @@ def test_wave_completion_skips_unknown_wave_id() -> None:
 
 
 # --------------------------------------------------------------------------
-# Inline completion bar on iter / phase rows (W06)
+# Inline completion bar on iter / phase rows
 # --------------------------------------------------------------------------
 
 
@@ -467,7 +467,7 @@ def test_tree_wave_row_has_no_completion_count() -> None:
 
 
 # --------------------------------------------------------------------------
-# Wave time-burn bar — claimed_at anchor (P29-I02-W29)
+# Wave time-burn bar — claimed_at anchor
 # --------------------------------------------------------------------------
 
 
@@ -580,7 +580,7 @@ def test_enter_on_branch_does_not_post_wave_selected() -> None:
 
 
 # --------------------------------------------------------------------------
-# Plain left / right collapse-expand (P26-W37)
+# Plain left / right collapse-expand
 # --------------------------------------------------------------------------
 
 
@@ -756,7 +756,7 @@ def test_shift_arrow_parent_navigation_still_works() -> None:
 
 
 # --------------------------------------------------------------------------
-# Width-aware row-title ellipsis (W06)
+# Width-aware row-title ellipsis
 # --------------------------------------------------------------------------
 
 
@@ -879,7 +879,7 @@ def test_tree_re_truncates_on_resize() -> None:
 
 
 # --------------------------------------------------------------------------
-# Scrollbar-gutter budget (P26-I02-W12)
+# Scrollbar-gutter budget
 # --------------------------------------------------------------------------
 
 
@@ -955,7 +955,7 @@ def test_scrolled_iter_row_completion_count_not_clipped(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------
-# Flush-right bar pin — _pin_bar_right (pure) + tree integration (W03)
+# Flush-right bar pin — _pin_bar_right (pure) + tree integration
 # --------------------------------------------------------------------------
 
 
@@ -1103,7 +1103,7 @@ def test_bars_flush_right_align_across_depths() -> None:
 
 
 # --------------------------------------------------------------------------
-# Wave-row token-burn bar — tokens_consumed / token_budget (W03)
+# Wave-row token-burn bar — tokens_consumed / token_budget
 # --------------------------------------------------------------------------
 
 
@@ -1266,7 +1266,7 @@ def test_burn_marker_warns_at_80_and_errors_at_100() -> None:
 
 
 # --------------------------------------------------------------------------
-# Wave-row hybrid metric — size bar default, token-burn upgrade (W27)
+# Wave-row hybrid metric — size bar default, token-burn upgrade
 # --------------------------------------------------------------------------
 
 
@@ -1622,7 +1622,7 @@ def test_refresh_from_empty_uses_active_phase_fallback() -> None:
 
 
 # --------------------------------------------------------------------------
-# Cosmic-reskin lifecycle sigils + completion-bar close-gate (P30-I02-W06)
+# Cosmic-reskin lifecycle sigils + completion-bar close-gate
 # --------------------------------------------------------------------------
 
 

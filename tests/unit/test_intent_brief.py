@@ -995,7 +995,7 @@ def test_cli_build_intent_planned_steps_empty_string_yields_empty_list() -> None
     assert result.risks == []
 
 
-# ---- Lifecycle logger keys (W61) --------------------------------------------
+# ---- Lifecycle logger keys --------------------------------------------
 
 
 def test_edit_wave_plan_logs_intent_problem(

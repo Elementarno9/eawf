@@ -310,10 +310,10 @@ def test_emit_agent_end_report_requires_state_path() -> None:
 
 
 def test_emit_agent_end_report_unknown_session_raises(tmp_path: Path) -> None:
-    """A genuinely unresolvable session (unknown wave) fails fast (W09).
+    """A genuinely unresolvable session (unknown wave) fails fast.
 
     An unknown session id whose wave IS known is reconstructed from the wave's
-    agent_role (W09), so the KeyError only survives when the wave is unknown too
+    agent_role, so the KeyError only survives when the wave is unknown too
     -- there is then no bookkeeping to rebuild the session from.
     """
     state_path = _write_state(tmp_path)

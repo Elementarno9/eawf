@@ -207,7 +207,7 @@ def test_goto_handler_opens_reference_modal() -> None:
 
 
 # --------------------------------------------------------------------------
-# Brief viewer exempt from the modal-depth cap (P29-I09-W01)
+# Brief viewer exempt from the modal-depth cap
 # --------------------------------------------------------------------------
 
 

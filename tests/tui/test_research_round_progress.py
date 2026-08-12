@@ -1,4 +1,4 @@
-"""Tests for the W05 Round entity + progress fold (P30-I18-W05).
+"""Tests for the W05 Round entity + progress fold.
 
 Covers the real :class:`~eawf.kernel.state.models.Round` records replacing the
 synthetic board round node + the

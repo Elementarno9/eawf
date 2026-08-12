@@ -1,4 +1,4 @@
-"""Golden snapshots for the four W21 overlay reskins (P30-I02-W21).
+"""Golden snapshots for the four W21 overlay reskins.
 
 Pins the migrated cosmic-terminal sigils + block progress each of the four
 overlays now renders, captured from the modal mounted IN ISOLATION on a

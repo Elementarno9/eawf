@@ -1,4 +1,4 @@
-"""Footer-strip goldens + width-stress gate (P29-I08-W23).
+"""Footer-strip goldens + width-stress gate.
 
 Pins the T3 footer contract from
 ``.ea/local/research/2026-06-03-i08-uiux-validation-specs.md``: the footer
@@ -26,7 +26,7 @@ strip at the captured width -- whether the hints read as a comfortable,
 legible row or a cramped jumble -- is the T3 jury residual (ISO
 interaction-capability). A deterministic test can prove no word is cut, but
 not that the spacing reads well to a human eye. The cross-vendor band jury
-that would score legibility is built (W04/W05) and proven to discriminate
+that would score legibility is built and proven to discriminate
 (W08/W11) but DORMANT: the ``quality`` profile that enables the band is
 opt-in and not in the default enabled set, and the live ballot fn is idle.
 So this module ships the deterministic no-truncation gate -- the

@@ -1,4 +1,4 @@
-"""Live-behaviour probes for the new fleet / verdict panes (P30-I07-W12).
+"""Live-behaviour probes for the new fleet / verdict panes.
 
 This module audits the W05/W09/W17 Watch-mode panes against the project's four
 TUI lessons and pins the live behaviour the snapshot + Pilot tests cannot:

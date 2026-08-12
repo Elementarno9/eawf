@@ -1,4 +1,4 @@
-"""Golden + behavioural tests for the telemetry exporter (P27-I01-W16).
+"""Golden + behavioural tests for the telemetry exporter.
 
 The exporter is pure and deterministic: a seeded fixture DB renders to
 byte-identical ``prom`` / ``json`` / ``csv`` documents on every run. These

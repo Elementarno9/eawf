@@ -1,4 +1,4 @@
-"""Pilot + unit tests for the C06 ``AuditRunningModal`` overlay (P26-W20).
+"""Pilot + unit tests for the C06 ``AuditRunningModal`` overlay.
 
 Covers the pure :class:`AuditProgress` snapshot (done/total tally,
 ``with_check`` immutability + unknown-check no-op) and the overlay's

@@ -1,7 +1,7 @@
 """Pilot + unit tests for the ``ConfigModal`` config window (tui).
 
 Covers the registry-driven tabbed config overlay after the
-Enter-as-sole-mutator redesign (P26-I02-W01):
+Enter-as-sole-mutator redesign:
 
 * **registry coverage** — the modal renders a tab per
   :func:`~eawf.kernel.config.registry.tabs_sorted` and a field row per
@@ -335,7 +335,7 @@ def test_save_dirty_fields_empty_is_noop() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Surfaced hidden-leaf-key curation (W09)
+# Surfaced hidden-leaf-key curation
 # ---------------------------------------------------------------------------
 
 #: Hidden leaf keys promoted into the curated ``CONFIG_REGISTRY`` so they
@@ -457,7 +457,7 @@ def test_surfaced_int_key_range_rejects_below_minimum() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Curated preferences.* + research.* coverage (W28)
+# Curated preferences.* + research.* coverage
 # ---------------------------------------------------------------------------
 
 #: The ``preferences.*`` keys curated into ``CONFIG_REGISTRY`` so they appear
@@ -630,7 +630,7 @@ def test_curated_keys_stay_subset_of_leaf_catalog() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Curated scalar flow.* coverage (W27)
+# Curated scalar flow.* coverage
 # ---------------------------------------------------------------------------
 
 #: The ``flow.*`` scalar keys curated into ``CONFIG_REGISTRY`` so the
@@ -719,7 +719,7 @@ def test_flow_keys_stay_subset_of_leaf_catalog() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Lock-filter + security-confirm (W28)
+# Lock-filter + security-confirm
 # ---------------------------------------------------------------------------
 
 
@@ -1003,7 +1003,7 @@ def test_config_renders_every_registry_key() -> None:
 
 
 def test_surfaced_keys_render() -> None:
-    """The modal surfaces the curated hidden keys plus ``ui.toasts`` (W08)."""
+    """The modal surfaces the curated hidden keys plus ``ui.toasts``."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)

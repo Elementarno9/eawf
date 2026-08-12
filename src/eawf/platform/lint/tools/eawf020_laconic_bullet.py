@@ -1,6 +1,6 @@
 """EAWF020 — reject generic or verbose release changelog bullets.
 
-Renumbered from EAWF016 (P29-I07-W02): the title-clarity lint now owns
+Renumbered from EAWF016: the title-clarity lint now owns
 EAWF016 per the doc-clarity code map (016=title, 017=prose, 018=structure,
 019=math), so this changelog-bullet rule moved to the next free code,
 EAWF020. The rule logic is unchanged.

@@ -1,6 +1,6 @@
 """JSON-envelope + human-text renderers for ``eawf plugin ...`` results.
 
-Split out of :mod:`eawf.surfaces.cli.commands.plugin` (P27-I05-W09). These are
+Split out of :mod:`eawf.surfaces.cli.commands.plugin`. These are
 pure presentation helpers — each takes a runtime install / doctor /
 package / sync result (or report) and returns either the JSON envelope
 body (``dict``) or the human-readable text summary (``str``). They hold

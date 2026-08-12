@@ -1,4 +1,4 @@
-"""Tests for the event_jsonl + claude_session telemetry source adapters (P27-W13)."""
+"""Tests for the event_jsonl + claude_session telemetry source adapters."""
 
 from __future__ import annotations
 

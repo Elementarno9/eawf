@@ -1,6 +1,6 @@
 """Incident / decision command handlers.
 
-Split out of :mod:`eawf.surfaces.cli.commands.evidence` (P27-W07). The
+Split out of :mod:`eawf.surfaces.cli.commands.evidence`. The
 ``incident_app`` / ``decision_app`` Typer apps and the shared helpers
 live in the parent module; this module attaches the command bodies via
 ``@<app>.command(...)``.

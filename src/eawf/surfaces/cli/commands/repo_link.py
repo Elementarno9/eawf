@@ -1,6 +1,6 @@
 """``repo link`` — cross-link a repo state and a workspace state.
 
-Split out of :mod:`eawf.surfaces.cli.commands.repo` (P27-I05-W09). The
+Split out of :mod:`eawf.surfaces.cli.commands.repo`. The
 :data:`repo_app` Typer group lives in the parent module; this module
 attaches the ``repo link`` handler via ``@repo_app.command(...)`` and
 owns the link-payload loaders / resolvers / attachers / validators.

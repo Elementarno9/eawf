@@ -1,4 +1,4 @@
-"""The pre-ship multi-agent review artifact stays valid (P30-I23-W35).
+"""The pre-ship multi-agent review artifact stays valid.
 
 Three fresh-context lenses reviewed the phase diff; this suite pins the
 committed synthesis artifact (chassis sections + parseable verdict), the

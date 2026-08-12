@@ -1,4 +1,4 @@
-"""Golden snapshot + affordance parity for the Autopilot ready/blocked split (P30-I02-W11).
+"""Golden snapshot + affordance parity for the Autopilot ready/blocked split.
 
 The Autopilot mode (digit ``2``) renders the cosmetic-terminal reskin of the
 dependency frontier as a two-band split:

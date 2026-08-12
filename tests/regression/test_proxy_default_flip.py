@@ -1,4 +1,4 @@
-"""Regression: ``daemon.proxy_enabled`` default flipped to ``True`` (P24-W10).
+"""Regression: ``daemon.proxy_enabled`` default flipped to ``True``.
 
 The flip from ``False`` to ``True`` is the C02 §7.2 sub-phase c
 handoff — once it lands, every CLI mutation that routes through

@@ -1,4 +1,4 @@
-"""Affordance-parity + reused edge-frame audit for the Autopilot fleet cockpit (P30-I13-W10).
+"""Affordance-parity + reused edge-frame audit for the Autopilot fleet cockpit.
 
 This is an AUDIT wave: it pins the contracts the FA cockpit (P30-I13-W02 +
 the FA3 lane grid + RS-26 crash boundary + the E1 degraded banner +
@@ -139,7 +139,7 @@ def _wave(wave_id: str, *, status: WaveStatus, deps: list[str] | None = None, ti
 
 
 def _frontier_waves() -> dict[str, Wave]:
-    """Build a wave graph whose ready frontier is ``(W02, W03)`` (two ready rows)."""
+    """Build a wave graph whose ready frontier is ```` (two ready rows)."""
     return {
         "P01-I01-W01": _wave("P01-I01-W01", status=WaveStatus.CLOSED, title="First wave"),
         "P01-I01-W02": _wave(

@@ -1,4 +1,4 @@
-"""Subagent role registry rendering to every kept runtime (P27-I03-W14).
+"""Subagent role registry rendering to every kept runtime.
 
 The role registry is the typed counterpart to the dispatch
 :class:`~eawf.workflow.agents.specs.models.SubagentSpec`: where the spec carries
@@ -197,7 +197,7 @@ def _role_spec_from_agent_spec(spec: AgentSpec, role: AgentSessionRole) -> RoleS
     already carries them.
 
     ``stop_conditions`` and ``denied_tools`` are intentionally empty
-    here — the seam exists for future waves (W18/W30/W38) to fill the
+    here — the seam exists for future waves to fill the
     bodies without re-walking the registry.
 
     Args:

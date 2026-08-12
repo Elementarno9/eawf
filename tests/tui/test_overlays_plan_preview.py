@@ -1,4 +1,4 @@
-"""Pilot + unit tests for the C06 ``PlanPreviewModal`` overlay (P26-W20).
+"""Pilot + unit tests for the C06 ``PlanPreviewModal`` overlay.
 
 Covers the pure plan-tree builder (:func:`build_plan_tree`) against the
 state fixtures and the overlay's three-option AUQ contract: the safe

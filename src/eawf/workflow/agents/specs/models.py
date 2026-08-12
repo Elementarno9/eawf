@@ -1,4 +1,4 @@
-"""Typed subagent-spec model (P27-I03-W14).
+"""Typed subagent-spec model.
 
 A :class:`SubagentSpec` is the typed intermediate the dispatch renderer
 builds from a validated :class:`~eawf.kernel.state.models.State` snapshot. Before

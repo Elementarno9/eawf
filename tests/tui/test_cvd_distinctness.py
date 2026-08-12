@@ -1,4 +1,4 @@
-"""CVD-distinctness gate over the EA_CB lifecycle band swatches (P30-I02-W01).
+"""CVD-distinctness gate over the EA_CB lifecycle band swatches.
 
 The colourblind theme's ``status-*`` band hexes must not merely be
 byte-stable: a future palette edit that collapses two bands into the same

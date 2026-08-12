@@ -1,4 +1,4 @@
-"""Unit tests for the RoleContract projection (P28-I01-W12).
+"""Unit tests for the RoleContract projection.
 
 Exercises :func:`eawf.workflow.dispatch.renderer.build_role_contract` and the
 ``RoleContract`` projection carried by :class:`SubagentSpec`. The wave

@@ -1,4 +1,4 @@
-"""Pilot tests for the multichoice / confirm / init / PR-grid reskin (P30-I02-W22).
+"""Pilot tests for the multichoice / confirm / init / PR-grid reskin.
 
 The cosmic-terminal reskin lands the shared chrome sigils on five overlays:
 

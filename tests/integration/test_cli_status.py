@@ -436,7 +436,7 @@ def test_status_research_campaign_fold(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A staged + run campaign folds a research_campaign summary into status (W05)."""
+    """A staged + run campaign folds a research_campaign summary into status."""
     from datetime import UTC, datetime
 
     from eawf.kernel.spec.research import ResearchDepth

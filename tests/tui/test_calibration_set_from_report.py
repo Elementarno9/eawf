@@ -1,4 +1,4 @@
-"""Tests for ``calibration_set_from_report`` (P30-I09-W07).
+"""Tests for ``calibration_set_from_report``.
 
 The helper binds a jury-validation report's real Brier + ECE into the TUI
 :class:`~eawf.surfaces.tui.modals.calibration_drill.CalibrationSet` the

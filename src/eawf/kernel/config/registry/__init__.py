@@ -1,7 +1,7 @@
 """Typed metadata registry for ``eawf config`` plus the C08 leaf-key catalog.
 
 This package was split out of the former single-file
-``eawf/config/registry.py`` (P27-I05-W08) and re-exports the full public
+``eawf/config/registry.py`` and re-exports the full public
 API so every ``from eawf.kernel.config.registry import X`` import keeps working
 unchanged. The split is purely structural — responsibility-scoped
 submodules behind a stable facade:
@@ -18,7 +18,7 @@ submodules behind a stable facade:
 The two registries are related but distinct:
 
 1. :data:`CONFIG_REGISTRY` — the operator-tunable subset surfaced by the
-   interactive ``eawf config`` menu (P20-W10) and the TUI config hotkey
+   interactive ``eawf config`` menu and the TUI config hotkey
    (P20-W11). One :class:`ConfigKey` row per menu entry.
 2. :data:`LEAF_KEY_REGISTRY` — the full ~150-key catalog (P25-W14 / C08
    §5.2) covering every leaf in the layered config. The catalog is what

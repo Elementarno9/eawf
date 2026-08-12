@@ -1,4 +1,4 @@
-"""Pilot tests for the C06 ``RepoScreen`` (P26-W18).
+"""Pilot tests for the C06 ``RepoScreen``.
 
 Covers the 2x2 quadrant composition (RoadmapTree · StatusPane / GitPane ·
 BacklogTable) inside the shared chassis, the D3 zero-duplication

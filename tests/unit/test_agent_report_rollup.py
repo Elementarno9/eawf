@@ -178,7 +178,7 @@ def test_per_wave_attempt_rollup_renders_compact_utc_timestamps() -> None:
 
     The shared compact-UTC formatter renders ``YYYY-MM-DD HH:MM:SS`` -- no
     microseconds, no ``+00:00`` offset -- so a full attempt row fits the
-    operator-facing tables (P30-I22-W09).
+    operator-facing tables.
     """
     rollup = per_wave_attempt_rollup(_wave())
 

@@ -1,4 +1,4 @@
-"""Unit tests for the ``/mockup`` pick-time golden capture (P30-I04-W07).
+"""Unit tests for the ``/mockup`` pick-time golden capture.
 
 The pick handler :func:`eawf.workflow.skills.bodies.mockup.resolve_mockup_pick`
 captures the operator-picked variant as an approved ASCII golden and

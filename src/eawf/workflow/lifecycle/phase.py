@@ -778,7 +778,7 @@ def close_phase(
     ``audit_id``, or when the phase landed exactly one closed wave without an
     ACTIVE decision ratifying the scope collapse.
 
-    The ≥1-closed-wave gate (P19-W03) catches the
+    The ≥1-closed-wave gate catches the
     "single-commit-per-phase" anti-pattern where a runtime ships the
     entire phase as one commit without closing any waves first. The
     closed-iter-audit and single-wave-decision gates are enforced here (not

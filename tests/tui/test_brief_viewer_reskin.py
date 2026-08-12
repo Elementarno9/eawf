@@ -1,4 +1,4 @@
-"""Snapshot + render tests for the brief-viewer modal reskin (P30-I02-W31).
+"""Snapshot + render tests for the brief-viewer modal reskin.
 
 The research brief viewer (:class:`~eawf.surfaces.tui.modes.brief_viewer.BriefViewerScreen`,
 opened with ``d`` from the research board) is the operator-facing research

@@ -5,7 +5,7 @@ found that entity ``title`` / ``description`` are the worst-quality prose
 class: wave titles leak a conventional-commit prefix (``feat:`` / ``docs:``),
 phase and decision titles chain transient cluster codes joined by ``+``
 ("cluster-code soup"), and most descriptions are empty or merely restate the
-title. The original backfill tool (P29-I02-W09) swept only the backlog; this
+title. The original backfill tool swept only the backlog; this
 module generalizes the same safe mechanism to **all five** entity kinds —
 phase, iter, wave, backlog, decision.
 

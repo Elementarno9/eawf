@@ -34,7 +34,7 @@ keys on the short ``"claude"`` form per the C09 spec §5.11 and the
 """
 
 
-#: The one canonical runtime label a cost-by-runtime rollup keys on (W21). The
+#: The one canonical runtime label a cost-by-runtime rollup keys on. The
 #: event surface uses the short ``RuntimeTriple`` spelling (``"claude"``) while
 #: sessions / actuals use the adapter-manifest id (``"claude-code"``); both name
 #: the SAME runtime, so a rollup that groups a dispatch_cost row (``"claude"``)
@@ -44,7 +44,7 @@ _RUNTIME_LABEL_CANON: dict[str, str] = {"claude": "claude-code"}
 
 
 def canonical_runtime_label(label: str) -> str:
-    """Return the one canonical runtime label for *label* (W21).
+    """Return the one canonical runtime label for *label*.
 
     Maps the event-surface ``RuntimeTriple`` spelling (``"claude"``) onto the
     adapter-manifest id (``"claude-code"``) that sessions / actuals carry, so a

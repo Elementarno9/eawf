@@ -1,4 +1,4 @@
-"""CLI dispatch tests for ``eawf research campaign new`` (P29-I09-W07).
+"""CLI dispatch tests for ``eawf research campaign new``.
 
 Drives the Typer app via :class:`CliRunner` against a temp workspace and
 checks the campaign-staging sub-verb:

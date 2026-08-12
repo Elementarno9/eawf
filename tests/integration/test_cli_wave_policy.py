@@ -133,7 +133,7 @@ def test_blocks_rebuild_emits_typed_edges_view(workspace: Path) -> None:
 
     Confirms the W15 typed-edges surface (``WaveDagEdges`` via
     :func:`eawf.kernel.state.wave_graph.edges`) is primed by the rebuild so
-    the TUI wave-board (W03) can read the runtime DAG view off a
+    the TUI wave-board can read the runtime DAG view off a
     single call site.
     """
     _bootstrap_diamond(workspace)

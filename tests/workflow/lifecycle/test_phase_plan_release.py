@@ -3,7 +3,7 @@
 ``edit_phase_plan`` is the phase-level metadata editor mirroring
 :func:`edit_iter_plan`; it edits a PLANNED/ACTIVE phase's title /
 description / release / intent and rejects terminal (CLOSED / ARCHIVED)
-phases. The ``release`` band (W02) accepts a ``vMAJOR.MINOR.PATCH``
+phases. The ``release`` band accepts a ``vMAJOR.MINOR.PATCH``
 version and routes it through the model assignment validator.
 ``release_wave`` is the inverse of ``claim_wave`` -- it un-claims a
 claimed/in-progress wave back to PENDING. Both helpers mutate the
@@ -248,7 +248,7 @@ def test_release_wave_failed_rejected() -> None:
         release_wave(state, wave_id="P01-I01-W01")
 
 
-# ---- Phase.release field contract (W02) ------------------------------------
+# ---- Phase.release field contract ------------------------------------
 
 
 def _phase_payload(**overrides: object) -> dict[str, object]:

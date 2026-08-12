@@ -15,7 +15,7 @@ the lifecycle transitions introduced in P19-W01:
   ``--set-deps`` reshapes the dep set, ``--retitle`` rewrites the
   title. All mutations route through the P19-W01 transitions which
   enforce the PENDING-only invariant on their own. The phase-status
-  gate (P19-W12) accepts PLANNED or ACTIVE parents; for an ACTIVE
+  gate accepts PLANNED or ACTIVE parents; for an ACTIVE
   parent the wave-level PENDING check is the load-bearing invariant
   so CLOSED/CLAIMED/IN_PROGRESS waves under the same phase stay
   immutable.
@@ -1516,7 +1516,7 @@ def roadmap_show_cmd(
 
     # Markdown branch: delegate to the canonical ``plan_view`` renderer so
     # ``roadmap show --md``, ``/prep`` plan-mode, and the TUI all draw from
-    # one projection (P28-W18). The rich/plain branches stay local because
+    # one projection. The rich/plain branches stay local because
     # they carry presentation chrome (Rich table styling, ANSI dimming) that
     # the markdown surface does not.
     if md:

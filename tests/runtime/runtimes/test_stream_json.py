@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.runtime.runtimes.stream_json` (P30-I21-W02).
+"""Unit tests for :mod:`eawf.runtime.runtimes.stream_json`.
 
 Pin the shared unwrap helper both the report binder + the Watch render reuse:
 peel the claude stream-json result envelope, then strip prose / code fences to

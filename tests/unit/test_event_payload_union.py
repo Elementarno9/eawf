@@ -1,4 +1,4 @@
-"""Tests for the C09 typed event-payload discriminated union (P27-I01-W09).
+"""Tests for the C09 typed event-payload discriminated union.
 
 Pins the C09-owned ``EventPayload`` sub-classes per the C09 spec §5.11
 and the §5.8 correlation-ID chain:
@@ -311,7 +311,7 @@ def test_union_member_is_strict_base_model() -> None:
 
 
 # ---------------------------------------------------------------------------
-# validate_event_payload — typed-aware EVENT payload dispatch (P27-I02-W06)
+# validate_event_payload — typed-aware EVENT payload dispatch
 # ---------------------------------------------------------------------------
 
 

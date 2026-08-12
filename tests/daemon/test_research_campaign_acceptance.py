@@ -1,4 +1,4 @@
-"""End-to-end acceptance for the research-campaign capstone (P30-I18-W09).
+"""End-to-end acceptance for the research-campaign capstone.
 
 This is the CR-01 acceptance: it drives a whole research campaign through the
 daemon RPC surface that the W01-W08 binding landed -- ``create_campaign`` ->

@@ -694,7 +694,7 @@ def test_config_modal_inline_edit_int_snapshot() -> None:
 
 
 # --------------------------------------------------------------------------
-# Config-modal curated + lock-filtered shape (P29-I08-W29)
+# Config-modal curated + lock-filtered shape
 #
 # These pin the T6 contract from
 # ``.ea/local/research/2026-06-03-i08-uiux-validation-specs.md``: the curated
@@ -707,7 +707,7 @@ def test_config_modal_inline_edit_int_snapshot() -> None:
 # than a wall of keys -- is the T6 jury residual (ISO interaction-capability +
 # security). A deterministic test pins the rows and proves no locked key leaks,
 # but not that the layout reads well to a newcomer. The cross-vendor band jury
-# that would score it is built (W04/W05) and proven to discriminate (W08/W11)
+# that would score it is built and proven to discriminate
 # but DORMANT: the ``quality`` profile that enables the band is opt-in and not
 # in the default enabled set, and the live ballot fn is idle. So these tests
 # ship the deterministic gates and leave the scannability judgement to the
@@ -716,7 +716,7 @@ def test_config_modal_inline_edit_int_snapshot() -> None:
 
 
 def test_config_modal_flow_tab_snapshot() -> None:
-    """The ``flow`` tab renders its curated keys, lock-filtered (W28).
+    """The ``flow`` tab renders its curated keys, lock-filtered.
 
     The active catalog exposes four ``advance_after.*`` transition toggles,
     both budget keys, and ``max_repair_cycles``. The golden pins that curated

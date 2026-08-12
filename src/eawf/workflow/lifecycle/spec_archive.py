@@ -1,4 +1,4 @@
-"""Close-time spec-archive cascade helpers (P30-I14-W09).
+"""Close-time spec-archive cascade helpers.
 
 Two operator-facing entry points drive the daemon's force-archive path
 (:func:`eawf.runtime.daemon.methods.spec.archive` with ``force=True``,

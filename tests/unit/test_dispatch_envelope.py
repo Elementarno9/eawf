@@ -300,7 +300,7 @@ def test_render_dispatch_envelope_unknown_runtime_lists_supported_in_message() -
     msg = str(excinfo.value)
     assert "claude-code" in msg
     assert "claude-agent-sdk" in msg
-    # codex + opencode are supported CLI runtimes too (P29-I04-W15), so the
+    # codex + opencode are supported CLI runtimes too, so the
     # unknown-runtime message enumerates them as valid choices.
     assert "codex" in msg
     assert "opencode" in msg
@@ -328,7 +328,7 @@ def test_render_dispatch_envelope_is_pure_no_state_mutation() -> None:
     assert state.mcp_servers is before
 
 
-# ---- SandboxPolicy deny enforcement (W21) -----------------------------------
+# ---- SandboxPolicy deny enforcement -----------------------------------
 
 
 def test_render_dispatch_envelope_wave_deny_removes_projected_tool() -> None:
@@ -464,7 +464,7 @@ def test_render_dispatch_envelope_claude_code_ignores_deny_policy() -> None:
     assert envelope.allowed_tools == []
 
 
-# ---- role_contract threading (P28-I01-W13) ---------------------------------
+# ---- role_contract threading ---------------------------------
 
 
 def _seed_wave_with_role(state: State, *, role: str) -> None:
@@ -509,7 +509,7 @@ def test_render_dispatch_envelope_role_contract_none_when_no_role(runtime: str) 
 def test_render_dispatch_envelope_does_not_double_render_prompt() -> None:
     """The envelope reuses the SubagentSpec render — no double walk over the spec.
 
-    The shared-spec wiring (P28-I01-W13) builds the spec once and reads
+    The shared-spec wiring builds the spec once and reads
     both the rendered prompt body AND the typed role contract off the
     same object, so the dispatcher avoids the previous render-then-
     re-walk pattern. This test pins byte-equivalence between the
@@ -522,7 +522,7 @@ def test_render_dispatch_envelope_does_not_double_render_prompt() -> None:
     assert envelope.prompt == render_wave_prompt(state, "P01-I01-W01")
 
 
-# ---- headless report-output threading (P30-I20-W43) ------------------------
+# ---- headless report-output threading ------------------------
 
 
 @pytest.mark.parametrize("runtime", ["claude-code", "claude-agent-sdk", "codex", "opencode"])

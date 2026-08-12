@@ -1,4 +1,4 @@
-"""Tests for :mod:`eawf.kernel.spec.saturation` (P29-I01-W13).
+"""Tests for :mod:`eawf.kernel.spec.saturation`.
 
 Pins the four-gate loop-until-dry reducer:
 

@@ -777,7 +777,7 @@ def _resolve_wave_track_id(state: State, wave_id: str) -> str | None:
 def _sync_wave_close_track(state: State, mutation: Mutation) -> list[str]:
     """Recompute the closing wave's Track outcome statuses in place.
 
-    The wave-close hook half of the Track outcome reducer (P30-I11-W07): once
+    The wave-close hook half of the Track outcome reducer: once
     ``_apply_wave_close`` has flipped the wave to CLOSED, the Track that owns the
     wave has its measured outcome statuses re-derived from their samples via
     :func:`eawf.workflow.evidence.outcome.sync_track_outcomes`, so closing work
@@ -1165,7 +1165,7 @@ def _enforce_wave_verdict_gate(wave: Wave, *, state_path: Path) -> None:
 
     The daemon-side hook into the dispatch-layer verdict producer
     (P29-I04-W07). It is the DEFAULT enforcing gate and the degrade target
-    when the cross-vendor jury (P29-I04-W15) is unavailable or not opted in.
+    when the cross-vendor jury is unavailable or not opted in.
     The caller (:func:`_enforce_wave_close_gate`) has already confirmed
     ``verify_block.enforce``, so the advisory-only close paths -- and every
     wave-close test that does not enable enforcement -- are unaffected. The
@@ -1308,7 +1308,7 @@ def _jury_spawn_factory(
     stubs so no real subprocess runs.
 
     When *events_path* is supplied, each juror spawn also streams its stdout
-    LIVE to the auditor's Watch roster row (W21): the spawn binds an ``on_chunk``
+    LIVE to the auditor's Watch roster row: the spawn binds an ``on_chunk``
     callback that batches output off the count / wall-clock budget
     (:func:`~eawf.runtime.daemon.dispatch_runner._chunk_should_flush`, W19) and
     persists each batch bus-less to the auditor session scope
@@ -1366,7 +1366,7 @@ def _jury_spawn_factory(
                     denied_tools=denied,
                     timeout=timeout_seconds,
                 )
-            # Live juror-stdout tail (W21): batch chunks off the W19 count /
+            # Live juror-stdout tail: batch chunks off the W19 count /
             # time budget and persist each batch bus-less to the auditor session
             # scope so the Watch store-poll tail renders the juror's own words.
             chunk_buffer: list[str] = []
@@ -1665,7 +1665,7 @@ async def _produce_high_risk_verdict(
         return rows[-1].envelope.id if rows else None
     events_path = store_path(state_path, StoreKind.EVENT)
     # Thread events_path so the single fresh-auditor spawn streams its stdout
-    # live to the auditor's Watch roster row (W21).
+    # live to the auditor's Watch roster row.
     spawn = _jury_spawn_factory(
         state,
         wave,
@@ -2356,7 +2356,7 @@ def _compute_wave_close_extras(
     Returns:
         Dict with the ``readiness_warnings_count`` key (always set;
         ``0`` on the happy path) and — when the wave's close path
-        upserted an :class:`ActualSummary` (P28-I02-W03) — the
+        upserted an :class:`ActualSummary` — the
         ``actual_tokens`` + ``actual_cost_usd`` rollup so the
         ``wave_closed`` event publishes the close-time cost view
         without subscribers re-reading state.json. Empty dict on

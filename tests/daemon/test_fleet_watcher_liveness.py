@@ -1,4 +1,4 @@
-"""Tests: watcher liveness probe + stall deadline (P30-I17-W05).
+"""Tests: watcher liveness probe + stall deadline.
 
 The lane watcher polled the on-disk wave status FOREVER, so a dead agent (its
 process group reaped without the wave ever flipping terminal) wedged the lane

@@ -1,4 +1,4 @@
-"""Unit tests for the phase-wide SHIP_GATE drift-checkpoint audit (P30-I15-W04).
+"""Unit tests for the phase-wide SHIP_GATE drift-checkpoint audit.
 
 Covers :func:`eawf.workflow.lifecycle.phase.build_ship_gate_drift_audit`, the
 reducer that binds the I01 optimistic drift checkpoint over a phase's full

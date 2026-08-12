@@ -1,4 +1,4 @@
-"""Tests for the global needs_user inbox overlay (P29-I02-W18).
+"""Tests for the global needs_user inbox overlay.
 
 Two layers: the pure urgency-ranking helper
 (:func:`rank_pauses_by_urgency`) without Textual, and Pilot-driven

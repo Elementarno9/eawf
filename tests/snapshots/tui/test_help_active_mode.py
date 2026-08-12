@@ -1,4 +1,4 @@
-"""Active-mode highlight in the help overlay (P29-I13-W28).
+"""Active-mode highlight in the help overlay.
 
 The :class:`~eawf.surfaces.tui.screens.help.HelpScreen` "Modes (digit keys)"
 section marks the row of the mode the operator is currently in: that row

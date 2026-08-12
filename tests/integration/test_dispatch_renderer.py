@@ -128,7 +128,7 @@ def _estimate(*, wave_id: str, expected_eu: float, expected_minutes: float) -> E
     )
 
 
-# ---- Typed-spec projection (P27-I03-W14) -----------------------------------
+# ---- Typed-spec projection -----------------------------------
 
 
 def test_build_subagent_spec_returns_typed_spec() -> None:
@@ -535,7 +535,7 @@ def test_render_terminal_wave_still_emits_prompt() -> None:
     assert "# Wave P01-I01-W01: First wave" in out
 
 
-# ---- Spike-brief surfacing (P20-W14) ---------------------------------------
+# ---- Spike-brief surfacing ---------------------------------------
 
 
 def _seed_spike_brief(repo_root: Path, *, name: str, body: str = "stub") -> Path:
@@ -663,7 +663,7 @@ def test_render_spike_briefs_section_lands_before_working_tree(tmp_path: Path) -
     assert audits_idx < refs_idx < working_idx
 
 
-# ---- CLI call-site plumbing (P30-I23-W40) ----------------------------------
+# ---- CLI call-site plumbing ----------------------------------
 #
 # The renderer surfaces spike briefs only when a caller threads ``repo_root``
 # through. These tests drive the four interactive-prompt CLI verbs end-to-end

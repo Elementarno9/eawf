@@ -1,4 +1,4 @@
-"""Pilot tests for the C06 ``WorkspaceScreen`` per-repo table + zoom (P27-I04-W06).
+"""Pilot tests for the C06 ``WorkspaceScreen`` per-repo table + zoom.
 
 Covers the table-browse mode (a per-repo :class:`WorkspaceTable` with
 >=1 row even at N=1, status-tinted completion + EU-burn bars), the
@@ -224,7 +224,7 @@ def test_phase_and_eu_cells_render_bars() -> None:
 def test_eu_cell_markup_is_rich_parseable_across_bands() -> None:
     """The EU-burn cell parses as Rich markup for every colour band.
 
-    Regression (W22): the cell formerly emitted Textual ``[$ok|$warn|$err]``
+    Regression: the cell formerly emitted Textual ``[$ok|$warn|$err]``
     palette vars, which a Rich-parsed :class:`~textual.widgets.DataTable`
     ``str`` cell rejects with ``MarkupError`` ("closing tag has nothing to
     close"). Over-budget burn (the original crash) is covered by the last case.

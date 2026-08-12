@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.surfaces.tui.modals.tour_cards` (P29-I13-W26).
+"""Unit tests for :mod:`eawf.surfaces.tui.modals.tour_cards`.
 
 Covers the typed :class:`~eawf.surfaces.tui.modals.tour_cards.TourCard`
 card-content model the first-run tour carousel renders and its pure

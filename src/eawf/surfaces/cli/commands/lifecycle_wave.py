@@ -1,6 +1,6 @@
 """Wave mutator command handlers (plan / claim / close / show / fail / update).
 
-Split out of :mod:`eawf.surfaces.cli.commands.lifecycle` (P27-W06). The ``wave_app``
+Split out of :mod:`eawf.surfaces.cli.commands.lifecycle`. The ``wave_app``
 Typer app, the shared transaction helpers, and the wave git/commit-ref
 helpers (``_resolve_commit_sha``, ``_resolve_repo_root_for_drift``,
 ``_wave_close_via_daemon``) live in the parent module; this module attaches
@@ -1004,7 +1004,7 @@ def wave_close_cmd(
     P28-I01-W11: when ``--waive`` flags are present each named gate is
     waived via :func:`eawf.workflow.lifecycle.waivers.apply_waiver`
     BEFORE the close mutation lands; this guarantees the readiness
-    compute (W06) sees the waivers when it scores the closed wave.
+    compute sees the waivers when it scores the closed wave.
     Waivers are operator-only — the active session MUST carry the
     OPERATOR role.
 

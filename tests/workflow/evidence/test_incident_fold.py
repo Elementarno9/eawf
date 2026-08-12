@@ -1,4 +1,4 @@
-"""Incident store-to-state fold parity (P30-I23-W21).
+"""Incident store-to-state fold parity.
 
 A stale-cache clobber wiped five of six ``state.incidents`` rows while the
 append-only ``incident.jsonl`` store kept the history — store and state

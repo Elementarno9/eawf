@@ -1,4 +1,4 @@
-"""Unit tests for the cross-vendor disjoint-family jury convener (P29-I04-W08).
+"""Unit tests for the cross-vendor disjoint-family jury convener.
 
 Exercises :mod:`eawf.observability.eval.cross_vendor_jury`:
 

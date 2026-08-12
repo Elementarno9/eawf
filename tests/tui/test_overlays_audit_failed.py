@@ -1,4 +1,4 @@
-"""Pilot + unit tests for the C06 ``AuditFailedModal`` overlay (P26-W20).
+"""Pilot + unit tests for the C06 ``AuditFailedModal`` overlay.
 
 This is the wave's tagged success criterion (D17 mutating menu + D27
 status line). Covers the pure D27 line formatter

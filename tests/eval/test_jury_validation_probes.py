@@ -1,4 +1,4 @@
-"""Verbosity-bias + citation-faithfulness probe tests (P30-I09-W03).
+"""Verbosity-bias + citation-faithfulness probe tests.
 
 The two probes validate the jury for *bias* rather than *agreement*:
 

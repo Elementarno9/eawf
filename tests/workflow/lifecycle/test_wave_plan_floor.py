@@ -1,4 +1,4 @@
-"""Tests for the plan-time typed-criteria floor (P30-I23-W26).
+"""Tests for the plan-time typed-criteria floor.
 
 Pins the authoring counterpart of the close-time verifier: ``plan_wave``
 and ``edit_wave_plan`` reject a legacy-string criterion set with a typed

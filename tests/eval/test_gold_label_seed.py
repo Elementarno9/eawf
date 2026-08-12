@@ -1,6 +1,6 @@
-"""The seeded jury gold-label cohort (P30-I23-W18).
+"""The seeded jury gold-label cohort.
 
-The jury-calibration substrate had a writer (W17) but an empty cohort, so
+The jury-calibration substrate had a writer but an empty cohort, so
 ``eawf metrics jury-validation`` stayed honest-empty and the jury could
 never earn (or be denied) authority on real evidence. W18 seeds the
 committed ``.ea/store/gold_label.jsonl`` from known outcomes: known-bad

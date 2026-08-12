@@ -1,4 +1,4 @@
-"""Tests: needs_user fork, fleet jury authority, non-lane kill (P30-I17-W09).
+"""Tests: needs_user fork, fleet jury authority, non-lane kill.
 
 Three idle contracts go live in W09:
 

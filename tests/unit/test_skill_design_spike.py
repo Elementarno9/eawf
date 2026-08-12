@@ -1,4 +1,4 @@
-"""Unit tests for the ``/design`` and ``/spike`` skills (P29-I06-W01).
+"""Unit tests for the ``/design`` and ``/spike`` skills.
 
 ``/design`` and ``/spike`` are registry-resident workflow skills: each
 renders a ``SKILL.md`` (so it installs as a slash command and reconciles

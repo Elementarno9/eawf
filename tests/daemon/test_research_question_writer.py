@@ -1,4 +1,4 @@
-"""Tests for the OpenQuestion + Claim daemon writers (P30-I18-W02).
+"""Tests for the OpenQuestion + Claim daemon writers.
 
 Covers the two halves of the campaign ledger the research board was never
 populating:

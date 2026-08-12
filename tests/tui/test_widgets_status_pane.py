@@ -883,7 +883,7 @@ def test_build_status_lines_effort_ascii_mode() -> None:
 
 
 # --------------------------------------------------------------------------
-# _effort_eu — live bucket-sum denominator, phase scope (P27-I04-W26)
+# _effort_eu — live bucket-sum denominator, phase scope
 # --------------------------------------------------------------------------
 
 

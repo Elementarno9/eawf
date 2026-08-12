@@ -1,6 +1,6 @@
 """``eawf plugin`` verb handlers (install / update / doctor / package / sync).
 
-Split out of :mod:`eawf.surfaces.cli.commands.plugin` (P27-I05-W09). The
+Split out of :mod:`eawf.surfaces.cli.commands.plugin`. The
 :data:`plugin_app` Typer group, the conflict gates, and the
 scope / runtime validators live in the parent module; the JSON / text
 renderers live in :mod:`eawf.surfaces.cli.commands.plugin_render`. This module

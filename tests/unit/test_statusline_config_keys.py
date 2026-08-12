@@ -1,6 +1,6 @@
 """Unit tests for the statusline glyph-mode / color-mode / rows config keys.
 
-The B018 statusline surface (P29-I13) adds three operator-tunable knobs that
+The B018 statusline surface adds three operator-tunable knobs that
 the render layer resolves: ``statusline.glyph_mode`` and
 ``statusline.color_mode`` (literal/choice keys) plus ``statusline.rows`` (a
 bounded int). These tests pin that each key is registered in both the

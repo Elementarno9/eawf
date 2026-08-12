@@ -1,4 +1,4 @@
-"""Jury advisory-to-block authority scorecard in the Trust mode (P30-I02-W13).
+"""Jury advisory-to-block authority scorecard in the Trust mode.
 
 The Trust mode (digit ``4``) gains a JURY AUTHORITY section: the
 cross-vendor jury's CURRENT authority state, rendered honestly. The jury

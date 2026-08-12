@@ -4,7 +4,7 @@ Covers ``EvidenceRef`` and the ``EvidenceKind`` Literal added in
 P28-I01-W01, the agent-report reconciliation invariant, and the
 P28-I01-W03 :class:`CriterionSpec` / :class:`GateSpec` strict models
 plus the ``CriterionEvidenceKind`` Literal (deterministic / jury /
-attested) the readiness compute (W06) and compile-gate (W08) will
+attested) the readiness compute and compile-gate will
 consume.
 """
 
@@ -611,7 +611,7 @@ def test_gate_spec_non_argv_kind_skips_argv_check() -> None:
     The validator is opt-in by ``kind`` — kinds outside
     :data:`eawf.kernel.spec.promotion.ARGV_BEARING_GATE_KINDS` are
     unaffected so a ``schema_validate`` gate can use whatever
-    ``args`` shape its per-kind validator (W08) defines.
+    ``args`` shape its per-kind validator defines.
     """
     gate = _gate(kind="regex_match", args={"pattern": r"^OK$", "input": "OK"})
     assert gate.kind == "regex_match"

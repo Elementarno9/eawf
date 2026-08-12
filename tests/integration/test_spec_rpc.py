@@ -347,7 +347,7 @@ def test_promote_rejects_skip_step(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     _run(body)
 
 
-# ---- spec.promote argv-policy seam (P28-I01-W09) -------------------------
+# ---- spec.promote argv-policy seam -------------------------
 
 
 def test_promote_to_ready_routes_through_argv_validator(

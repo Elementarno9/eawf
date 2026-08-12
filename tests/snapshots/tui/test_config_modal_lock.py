@@ -1,4 +1,4 @@
-"""Config-modal writable-layers lock snapshot + affordance parity (P29-I13-W19).
+"""Config-modal writable-layers lock snapshot + affordance parity.
 
 The config modal surfaces every operator-tunable
 :data:`~eawf.kernel.config.registry.CONFIG_REGISTRY` key, but a key is

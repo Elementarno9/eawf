@@ -1,4 +1,4 @@
-"""Pilot regression test for the live ``u``-key scope switch (P27-I04-W19).
+"""Pilot regression test for the live ``u``-key scope switch.
 
 The user-scope portfolio rendered EMPTY when reached via the live ``u``
 scope switch: :meth:`~eawf.surfaces.tui.app.EaApp.action_switch_scope` swapped to

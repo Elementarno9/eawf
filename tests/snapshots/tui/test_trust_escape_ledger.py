@@ -1,4 +1,4 @@
-"""Escape-ledger readout in the Trust mode (P29-I13-W09).
+"""Escape-ledger readout in the Trust mode.
 
 The Trust mode (digit ``4``) gains an ESCAPE LEDGER section: one row per
 escaped (operator-waived) criterion with its waiver reason

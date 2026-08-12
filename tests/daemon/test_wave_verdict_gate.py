@@ -257,7 +257,7 @@ def _patch_producer_spawn(
 ) -> _RecordingSpawn:
     """Stub the close gate's single-auditor producer spawn factory.
 
-    The unified close gate (W03) routes an ``always`` wave under a
+    The unified close gate routes an ``always`` wave under a
     jury-OFF profile to the single-auditor producer, which now SPAWNS a
     fresh auditor (via ``_jury_spawn_factory(...)('claude-code')``) before
     reading the verdict gate -- so the daemon must never reach a real
@@ -323,7 +323,7 @@ def test_close_high_risk_no_prior_verdict_is_blocked(
 ) -> None:
     """An always-wave with no prior verdict whose produced verdict is FAIL blocks.
 
-    Re-pinned to the unified close gate (W03): a jury-OFF ``always`` wave
+    Re-pinned to the unified close gate: a jury-OFF ``always`` wave
     routes to the single-auditor producer, which now SPAWNS a fresh auditor
     before the verdict gate reads it. With no PRIOR auditor verdict the
     producer spawns (stubbed to a FAIL body); the freshly-produced verdict is
@@ -373,7 +373,7 @@ def test_close_high_risk_fail_verdict_is_blocked(
 ) -> None:
     """An always-wave whose auditor verdict stays FAIL is refused.
 
-    Re-pinned to the unified close gate (W03): a FAIL verdict is seeded, so
+    Re-pinned to the unified close gate: a FAIL verdict is seeded, so
     the single-auditor producer's idempotency check sees a non-close-ready
     verdict and RE-SPAWNS (stubbed to a FAIL body again); the gate then reads
     a still-FAIL verdict and refuses close with ``verdict gate blocked``.

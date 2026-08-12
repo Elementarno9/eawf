@@ -1,4 +1,4 @@
-"""Layer-3 LLM clarity-judge contract — spawn-free (P29-I07-W08).
+"""Layer-3 LLM clarity-judge contract — spawn-free.
 
 The doc-clarity enforcement stack
 (``.ea/local/research/2026-05-29-doc-clarity.md``) layers four checks of

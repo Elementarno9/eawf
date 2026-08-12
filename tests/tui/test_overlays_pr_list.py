@@ -1,4 +1,4 @@
-"""Tests for the C06 ``PrListModal`` ``/pr`` overlay (P26-W21 + P26-W44).
+"""Tests for the C06 ``PrListModal`` ``/pr`` overlay.
 
 Three layers: the pure ``gh pr list --json`` parser (:func:`parse_pr_rows`,
 including the tolerant author-login extraction + partial-record skip)

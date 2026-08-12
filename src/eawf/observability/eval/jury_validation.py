@@ -1,4 +1,4 @@
-"""Jury-validation cohort: silver-labelled + gold-subset verdict outcomes (P30-I09-W01).
+"""Jury-validation cohort: silver-labelled + gold-subset verdict outcomes.
 
 A reliability scorer (:mod:`eawf.observability.eval.reputation`) can already turn
 a stream of :class:`~eawf.observability.eval.reputation.VerdictOutcome` rows into
@@ -317,7 +317,7 @@ def build_jury_validation_cohort(
     return ValidationCohort(silver=silver, gold=gold)
 
 
-# --- jury-validation reducer (P30-I09-W02) --------------------------------
+# --- jury-validation reducer --------------------------------
 #
 # The cohort above is a ground-truth-labelled validation set; this reducer
 # scores the JURY against it. It reads the persisted per-juror ballots for
@@ -435,7 +435,7 @@ class JuryValidationReport(BaseModel):
 
 
 #: Sibling JSONL store the convener appends one juror-ballot envelope to per
-#: convened juror (P30-I23-W17).
+#: convened juror.
 _JURY_BALLOT_STORE = "jury_ballot.jsonl"
 
 
@@ -710,7 +710,7 @@ def validate_jury(
     )
 
 
-# --- verbosity-bias + faithfulness probes (P30-I09-W03) -------------------
+# --- verbosity-bias + faithfulness probes -------------------
 #
 # Two adversarial probes that validate the jury for *bias* rather than
 # *agreement*. The W02 reducer scores how well the jury tracked the realized
@@ -1240,7 +1240,7 @@ def measure_faithfulness(
     )
 
 
-# --- staged advisory-to-block authority gate (P30-I09-W04) ----------------
+# --- staged advisory-to-block authority gate ----------------
 #
 # The keystone TRUST-4 gate: a cross-vendor jury earns the right to BLOCK a
 # close (rather than merely log an advisory veto) only once it has proven

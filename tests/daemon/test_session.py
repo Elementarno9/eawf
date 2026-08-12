@@ -1,4 +1,4 @@
-"""Unit tests for the opaque-handle registry + TTL sweep (P24-W07).
+"""Unit tests for the opaque-handle registry + TTL sweep.
 
 Covers :mod:`eawf.runtime.daemon.session` (register / resolve / prune) and
 :mod:`eawf.runtime.daemon.session_ttl` (plan_evictions + sweep_once +

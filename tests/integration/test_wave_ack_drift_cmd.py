@@ -1,4 +1,4 @@
-"""Unit tests for ``eawf wave ack-drift`` (P30-I16-W22).
+"""Unit tests for ``eawf wave ack-drift``.
 
 Exercises the verb end-to-end against an isolated ``state.json`` under a
 ``-w`` workspace whose repo root carries a ``.git`` marker (so

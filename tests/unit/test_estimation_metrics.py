@@ -526,7 +526,7 @@ def test_compute_planned_vs_reactive_i02_counts_as_reactive() -> None:
 
 
 def test_compute_planned_vs_reactive_i10_counts_as_reactive() -> None:
-    """Two-digit iter suffix (I10) is still classified as reactive (fallback path)."""
+    """Two-digit iter suffix is still classified as reactive (fallback path)."""
     state = _empty_state()
     state.waves["P01-I01-W01"] = _wave(wave_id="P01-I01-W01")
     state.waves["P01-I10-W01"] = _wave(wave_id="P01-I10-W01")
@@ -690,7 +690,7 @@ def test_metrics_summary_rejects_extra_keys() -> None:
         MetricsSummary.model_validate(payload)
 
 
-# ---- ActualSummary v0.4 fields (P28-I02-W03) --------------------------------
+# ---- ActualSummary v0.4 fields --------------------------------
 
 
 def test_actual_summary_defaults_zero_tokens_and_cost() -> None:

@@ -125,7 +125,7 @@ def test_resolve_authority_advisory_on_ballotless_labelled_cohort(
 ) -> None:
     """A non-empty cohort with no recorded ballots resolves ADVISORY, no raise.
 
-    Regression (P30-I23-W50): the moment the first auditor verdict row settled
+    Regression: the moment the first auditor verdict row settled
     into the silver cohort, the resolver scored ``validate_jury`` with an empty
     ballot map and the phantom-jury hard error crashed EVERY enforcing close
     (``labelled wave has no recorded jury ballots``). A labelled cohort whose

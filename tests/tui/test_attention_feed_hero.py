@@ -1,4 +1,4 @@
-"""Pilot tests for the two-state attention-feed hero (P30-I02-W08).
+"""Pilot tests for the two-state attention-feed hero.
 
 The Home overview band
 (:class:`~eawf.surfaces.tui.widgets.attention_feed.AttentionFeed`) reskins

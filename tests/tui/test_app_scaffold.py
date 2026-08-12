@@ -1,4 +1,4 @@
-"""Smoke tests for the C06 Textual ``EaApp`` scaffold (P26-W16).
+"""Smoke tests for the C06 Textual ``EaApp`` scaffold.
 
 Covers the scaffold contract this wave establishes: read-only state
 load, scope-name resolution, breadcrumb rendering, ``EaApp``

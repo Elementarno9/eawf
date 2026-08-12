@@ -1,4 +1,4 @@
-"""Unit tests for the M26 estimate-actual variance + bucket calibration (P27-I01-W25).
+"""Unit tests for the M26 estimate-actual variance + bucket calibration.
 
 Covers three deliverables:
 

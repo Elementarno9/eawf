@@ -17,7 +17,7 @@ Per ``docs/architecture/profiles.md`` + the P25-W15 ProfileBody v2 brief:
   ``{fresh, continue, hybrid, None}`` carries no strictest ordering; a
   downstream profile that explicitly sets the field wins. ``None`` is the
   default (skill / global fallback).
-- ``research`` (P29-I01-W27): last-non-``None``-wins. The ``research:`` block
+- ``research``: last-non-``None``-wins. The ``research:`` block
   is a whole typed :class:`~eawf.kernel.spec.research_campaign.ResearchProfileBlock`,
   not a mergeable map, so a downstream profile that declares it replaces an
   upstream block wholesale (same rule as ``dispatch_session_policy``).

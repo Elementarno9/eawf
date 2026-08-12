@@ -326,7 +326,7 @@ def test_write_pending_fsync_touches_parent_dir(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Digest chain (P30-I16-W17): per-record digest stamped at construction, the
+# Digest chain: per-record digest stamped at construction, the
 # tamper-detection gate the V1 integrity-hole fix leans on.
 # --------------------------------------------------------------------------- #
 

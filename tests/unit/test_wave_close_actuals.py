@@ -542,7 +542,7 @@ def test_compute_runtime_delta_latest_below_baseline_degrades_never_strands() ->
 
     A wave that under-reports its runtime is a bad measurement. A wave that can
     never close is a broken workflow. So the delta degrades to zero (loudly) and
-    the capture path re-origins on the reset (P30-I25-W37).
+    the capture path re-origins on the reset.
     """
     captured_at = datetime.now(UTC)
     baseline = RuntimeBaseline(api_duration_ms=5000, captured_at=captured_at)

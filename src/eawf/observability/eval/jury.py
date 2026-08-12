@@ -1,4 +1,4 @@
-"""Pure reducer over juror ballots (P29-I01-W06).
+"""Pure reducer over juror ballots.
 
 The :func:`aggregate_jury` reducer collapses N independent juror ballots
 into a single :class:`JuryAggregate`. It is the "gate machinery" that
@@ -29,7 +29,7 @@ Absent a veto, both the binary side and the graded side must independently
 resolve to pass for the aggregate to pass; any indeterminacy on either axis
 routes to ``NEEDS_USER``.
 
-**Reliability weighting (P29-I05-W04).** The graded mean optionally weights
+**Reliability weighting.** The graded mean optionally weights
 each juror by its measured reliability, fed from the reputation engine
 (:mod:`eawf.observability.eval.reputation`). When :func:`aggregate_jury`
 receives a *reliability* map, the graded outcome uses a weighted mean

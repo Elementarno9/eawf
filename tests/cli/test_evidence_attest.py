@@ -1,4 +1,4 @@
-"""Tests for ``eawf evidence attest`` (P28-I01-W04)."""
+"""Tests for ``eawf evidence attest``."""
 
 from __future__ import annotations
 

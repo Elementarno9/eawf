@@ -1,4 +1,4 @@
-"""Tests for the FA3 parallel-session lane grid (P30-I13-W03).
+"""Tests for the FA3 parallel-session lane grid.
 
 The Watch mode's FA3 lane grid generalizes the I07-W08 watch grid into a
 one-row-per-lane fleet lens: each row reads

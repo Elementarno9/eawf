@@ -1,4 +1,4 @@
-"""Tests: the FA4 live-output producer (P30-I17-W08).
+"""Tests: the FA4 live-output producer.
 
 The agent-watch tail CONSUMER existed but had no producer: ``live_output_buffer``
 was undefined and ``append_output`` had zero production callers, so the tail read

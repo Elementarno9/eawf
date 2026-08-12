@@ -1,4 +1,4 @@
-"""Validate a committed live-drive recording (P30-I23-W33).
+"""Validate a committed live-drive recording.
 
 Eight assertions over a recording directory produced by a capped
 ``fleet.drive`` run — the machine-checkable half of the phase's
@@ -8,7 +8,7 @@ Eight assertions over a recording directory produced by a capped
 2. ``elapsed_eu > 0`` — at least one actual captured runtime.
 3. model set — every cost row names the billed model.
 4. canonical runtime labels — every cost row's ``runtime`` is a canonical
-   triple label (W29), never a harness alias.
+   triple label, never a harness alias.
 5. readable tail — the watch tail carries non-envelope prose lines.
 6. campaign terminal — the recorded research campaign reached a terminal
    status (``converged`` / ``cancelled``), never left mid-flight.
@@ -29,7 +29,7 @@ import json
 import sys
 from pathlib import Path
 
-#: Canonical runtime triple labels (W29): the short vendor-family names the
+#: Canonical runtime triple labels: the short vendor-family names the
 #: dispatch-cost writer emits. Harness aliases like ``claude-code`` are
 #: telemetry-facing only and never appear on priced rows.
 CANONICAL_RUNTIME_LABELS: frozenset[str] = frozenset({"claude", "codex", "opencode"})

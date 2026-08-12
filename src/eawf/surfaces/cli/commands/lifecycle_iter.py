@@ -1,6 +1,6 @@
 """Iter + project/track lifecycle command handlers.
 
-Split out of :mod:`eawf.surfaces.cli.commands.lifecycle` (P27-W06). The
+Split out of :mod:`eawf.surfaces.cli.commands.lifecycle`. The
 ``iter_app`` / ``project_app`` / ``track_app`` Typer apps and the
 shared transaction helpers live in the parent module; this module
 attaches the iter command bodies plus the ``project init`` /

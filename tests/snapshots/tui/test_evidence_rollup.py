@@ -1,4 +1,4 @@
-"""Golden snapshot for the wave-keyed Evidence-mode report rollup (P30-I02-W15).
+"""Golden snapshot for the wave-keyed Evidence-mode report rollup.
 
 The Evidence mode (digit ``6``) renders the typed agent-report rollup as a
 table keyed by the WAVE each report advanced: a ``report`` column carrying the

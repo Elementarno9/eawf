@@ -1,6 +1,6 @@
 """``repo add`` / ``repo remove`` / ``repo prune`` registry mutators.
 
-Split out of :mod:`eawf.surfaces.cli.commands.repo` (P27-I05-W09). The
+Split out of :mod:`eawf.surfaces.cli.commands.repo`. The
 :data:`repo_app` Typer group and the shared registry-persist core
 (``_persist_registry`` + ``_resolve_registry_path`` +
 ``_read_registry_for_write`` + ``_persist_registry_or_exit``) live in

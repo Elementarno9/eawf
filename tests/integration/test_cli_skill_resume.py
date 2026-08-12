@@ -1,4 +1,4 @@
-"""Unit tests for ``eawf skill resume <pause-urn> --choice <label>`` (P26-I02-W07).
+"""Unit tests for ``eawf skill resume <pause-urn> --choice <label>``.
 
 Pins the needs_user resume verb:
 

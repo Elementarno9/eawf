@@ -1,4 +1,4 @@
-"""Unit tests for the C08 layered-config extension (P25-W14).
+"""Unit tests for the C08 layered-config extension.
 
 Covers the wave's success criteria 1, 2, and 3:
 

@@ -1,4 +1,4 @@
-"""Unit tests for the evidence->criterion join (P29-I13-W05).
+"""Unit tests for the evidence->criterion join.
 
 The pure :func:`~eawf.surfaces.tui.modes.evidence.join_evidence_to_criteria`
 maps each :class:`~eawf.kernel.store.kinds.evidence.EvidenceRecord` to the

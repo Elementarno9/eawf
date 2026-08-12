@@ -1,6 +1,6 @@
 """P26-W02: legacy on-marker-1.0 config bodies still need a cleanup pass.
 
-The C08 schema bump (P25-W14) landed ``schema_version: "1.0"`` but the
+The C08 schema bump landed ``schema_version: "1.0"`` but the
 v0.1 wizard wrote three pre-C08 keys that the new ``_ConfigSchema``
 rejects + the ``_normalise_runtime_adapters`` shim warns about on every
 CLI invocation:

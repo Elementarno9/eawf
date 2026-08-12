@@ -1,4 +1,4 @@
-"""Unit tests for the indeterminate braille spinner (P29-I13-W22).
+"""Unit tests for the indeterminate braille spinner.
 
 Pins :class:`~eawf.surfaces.render.spinner.BrailleSpinner`: the
 deterministic eight-frame sequence, the wrap after eight frames, and the

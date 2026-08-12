@@ -878,7 +878,7 @@ def test_wave_fail_happy(workspace: Path) -> None:
     assert state["waves"]["P01-I01-W01"]["status"] == "failed"  # type: ignore[index]
 
 
-# ---- wave release (P29-I02-W01) --------------------------------------------
+# ---- wave release --------------------------------------------
 
 
 def _plan_and_claim_wave(workspace: Path) -> None:

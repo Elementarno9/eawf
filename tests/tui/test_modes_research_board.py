@@ -1,4 +1,4 @@
-"""Tests for the Research mode 3-pane orchestrator over the campaign engine (W08).
+"""Tests for the Research mode 3-pane orchestrator over the campaign engine.
 
 The Research mode (digit ``3``) renders the ratified three-pane orchestrator:
 the campaign topic tree (left), the claims / evidence tabs (center), and the
@@ -801,7 +801,7 @@ def test_render_progress_surfaces_run_round_and_budget_bands() -> None:
     assert "runnable" in body
     # A round is in flight (an open question, a claim accruing) though none has
     # persisted yet, so the ROUND band shows the running round + live claim
-    # count -- consistent with the tree's "round running" node (W11), not a
+    # count -- consistent with the tree's "round running" node, not a
     # stalled-looking "0 run".
     assert "1 running" in body
     assert "1 claim(s)" in body
@@ -844,7 +844,7 @@ def test_render_checkpoint_blocking_question_names_it_and_resolve_affordance() -
 
 
 # --------------------------------------------------------------------------
-# build_brief_preview_markdown -- the brief d-tab document projection (W16)
+# build_brief_preview_markdown -- the brief d-tab document projection
 # --------------------------------------------------------------------------
 
 
@@ -891,7 +891,7 @@ def test_build_brief_preview_markdown_claim_bullet_leads_with_a_sigil() -> None:
 
 
 # --------------------------------------------------------------------------
-# BriefViewerScreen -- MarkdownViewer + table-of-contents (W16)
+# BriefViewerScreen -- MarkdownViewer + table-of-contents
 # --------------------------------------------------------------------------
 
 
@@ -968,7 +968,7 @@ def test_research_board_d_key_in_footer_hints() -> None:
 
 
 # --------------------------------------------------------------------------
-# BriefMarkdownViewer -- Markdown.LinkClicked routing (W17)
+# BriefMarkdownViewer -- Markdown.LinkClicked routing
 #
 # The deterministic gates for the references capstone: a #ref-N click scrolls
 # the target reference row near the viewport top (asserted on scroll_y +
@@ -1436,7 +1436,7 @@ def test_research_board_pane_renders_seeded_campaign(tmp_path: Path) -> None:
             # soft-wraps the long topic in the frame, so assert on the widget's
             # own renderable rather than the truncated visual frame).
             tree_body = pane.query_one("#research-tree-body")
-            # The narrow pane may hang-wrap the long topic (W26), so assert the
+            # The narrow pane may hang-wrap the long topic, so assert the
             # head + tail tokens both render rather than the unbroken string.
             tree_render = str(tree_body.render())  # type: ignore[attr-defined]
             assert "Survey the" in tree_render
@@ -1684,7 +1684,7 @@ def test_research_board_claim_selection_shows_claim_summary(tmp_path: Path) -> N
 
 
 # --------------------------------------------------------------------------
-# claim_conflicts (W04) -- refuted-sibling resolution for the reader
+# claim_conflicts -- refuted-sibling resolution for the reader
 # --------------------------------------------------------------------------
 
 
@@ -1720,7 +1720,7 @@ def test_claim_conflicts_missing_question_row_has_none() -> None:
 
 
 # --------------------------------------------------------------------------
-# Evidence reader modal (W04) -- Enter zooms a claim, Esc dismisses
+# Evidence reader modal -- Enter zooms a claim, Esc dismisses
 # --------------------------------------------------------------------------
 
 
@@ -1960,12 +1960,12 @@ def test_research_board_enter_on_open_question_still_toasts(tmp_path: Path) -> N
 
 
 # --------------------------------------------------------------------------
-# Tree-interaction spine (W01) -- arrow-select, scroll-into-view, mount-width
+# Tree-interaction spine -- arrow-select, scroll-into-view, mount-width
 # --------------------------------------------------------------------------
 
 
 def test_research_board_down_advances_selection_not_scroll(tmp_path: Path) -> None:
-    """Arrow ``down`` moves the tree selection cursor, not the pane scroll (W01).
+    """Arrow ``down`` moves the tree selection cursor, not the pane scroll.
 
     Regression for the tree-interaction spine defect: the tree pane was a
     focusable ``VerticalScroll`` that bound up/down to scroll and, auto-focused
@@ -2010,7 +2010,7 @@ def test_research_board_down_advances_selection_not_scroll(tmp_path: Path) -> No
 
 
 def test_research_board_panes_are_not_focusable(tmp_path: Path) -> None:
-    """The three research panes set ``can_focus=False`` so the arrows bubble (W01).
+    """The three research panes set ``can_focus=False`` so the arrows bubble.
 
     Pins the fix's mechanism directly: a focusable pane would re-capture the
     arrow keys and re-break the tree cursor, so the non-focusable invariant is
@@ -2039,7 +2039,7 @@ def test_research_board_panes_are_not_focusable(tmp_path: Path) -> None:
 
 
 def test_research_board_selection_scrolls_last_node_into_view(tmp_path: Path) -> None:
-    """Walking the cursor to the last node scrolls the tree pane so it is visible (W01).
+    """Walking the cursor to the last node scrolls the tree pane so it is visible.
 
     After the panes stopped capturing focus their scroll no longer follows the
     cursor, so the selection move drives its own scroll-into-view. We stage a
@@ -2078,7 +2078,7 @@ def test_research_board_selection_scrolls_last_node_into_view(tmp_path: Path) ->
 
 
 def test_research_board_first_paint_has_measured_hanging_indent(tmp_path: Path) -> None:
-    """The FIRST settled frame already wraps the long topic with a hanging indent (W01).
+    """The FIRST settled frame already wraps the long topic with a hanging indent.
 
     Regression for the mount-width defect: ``compose_body`` renders the tree at
     ``width=0`` (single-line, no hanging indent) because the pane is not laid out
@@ -2362,7 +2362,7 @@ def test_research_board_park_issues_needs_user_park_rpc(
 
 
 # --------------------------------------------------------------------------
-# Live run-query keys -- r / s call the live followup / snapshot RPCs (W08)
+# Live run-query keys -- r / s call the live followup / snapshot RPCs
 # --------------------------------------------------------------------------
 
 
@@ -2379,9 +2379,9 @@ def test_research_board_run_query_keys_surface_live_result(
     key: str,
     verb: str,
 ) -> None:
-    """follow-up / snapshot call the live RPC for the selected campaign (W08).
+    """follow-up / snapshot call the live RPC for the selected campaign.
 
-    The RPCs are live (P30-I18-W03), so with a reachable daemon stubbed to
+    The RPCs are live, so with a reachable daemon stubbed to
     answer the run query the action surfaces the honest run figure (next round /
     rounds run) -- never a faked or not-yet-wired line.
     """
@@ -2631,7 +2631,7 @@ def test_research_board_n_commit_stages_campaign_and_renders_node(
             board = app.screen
             assert isinstance(board, ResearchBoardModeScreen)
             tree_body = str(board.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
-            # The long topic hang-wraps in the narrow live pane (W26), so assert
+            # The long topic hang-wraps in the narrow live pane, so assert
             # the head + tail tokens both render rather than the unbroken string.
             assert "Survey the" in tree_body
             assert "landscape" in tree_body
@@ -3339,7 +3339,7 @@ def test_research_board_o_commit_routes_add_question_rpc_honestly(
 ) -> None:
     """Pressing ``o``, filling the question, and committing routes the live RPC.
 
-    The add-question RPC is live (P30-I18-W02), so a succeeding daemon answer
+    The add-question RPC is live, so a succeeding daemon answer
     surfaces the honest "sent" line -- never a faked question. The call must
     reach ``research.add_question`` with the question title under the ``title``
     params key.
@@ -3398,7 +3398,7 @@ def test_research_board_t_commit_routes_steer_rpc_honestly(
 ) -> None:
     """Pressing ``t``, filling the steer note, and committing routes the live RPC.
 
-    The steer RPC is live (P30-I18-W04), so a succeeding daemon answer surfaces
+    The steer RPC is live, so a succeeding daemon answer surfaces
     the honest "sent" line. The call must reach ``research.steer`` with the note
     under the ``text`` params key + the selected campaign id.
     """
@@ -3694,7 +3694,7 @@ def test_render_progress_budget_band_surfaces_pruned_and_running() -> None:
     body = render_progress(campaigns, claims, questions, checkpoints=0)
     assert "ROUND" in body
     # An open question keeps the round in flight, so the band shows the running
-    # round + live claim count (W11) rather than a stalled "0 run".
+    # round + live claim count rather than a stalled "0 run".
     assert "1 running" in body
     assert "BUDGET" in body
     assert "2 staged topic(s)" in body  # the spent-topic budget figure
@@ -3759,7 +3759,7 @@ def test_campaign_fork_operator_input(
     The four FA8 operator-input channels (steer / broadcast / add-question /
     override) each collect a free-text line through the operator-note modal and
     route the committed note off the UI thread to its live daemon method. The
-    RPCs are live (P30-I18-W02 + W04), so a succeeding daemon answer surfaces
+    RPCs are live, so a succeeding daemon answer surfaces
     the honest "sent" line, and the call reaches the daemon with the note under
     the channel's params key -- plus the selected campaign id for the steer /
     broadcast / override channels (the scope-wide add-question carries none).

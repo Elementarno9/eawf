@@ -1,1 +1,1 @@
-"""Template assets for the OpenCode plugin (P14-W07)."""
+"""Template assets for the OpenCode plugin."""

@@ -10,7 +10,7 @@ The DAG persistence layer's mutation behaviour (``plan_wave``,
 :mod:`tests.unit.test_wave_dag`.
 
 Also covers :class:`~eawf.kernel.state.models.Project.weekly_eu_target` field
-contract (P20-I01-W09): None default, valid float accepted, invalid
+contract: None default, valid float accepted, invalid
 type rejected.
 """
 
@@ -279,7 +279,7 @@ def test_blocked_by_shrinks_as_deps_close() -> None:
     assert state.waves["P01-I01-W01"].status == WaveStatus.CLOSED
     # W02 was blocked by W01 — now nothing blocks it.
     assert wave_graph.blocked_by("P01-I01-W02", state) == ()
-    # W03's only dep (W02) is still PENDING.
+    # W03's only dep is still PENDING.
     assert wave_graph.blocked_by("P01-I01-W03", state) == ("P01-I01-W02",)
 
 
@@ -451,7 +451,7 @@ def test_edges_for_iter_diamond_blocked_by_view() -> None:
     assert result["P01-I01-W04"].blocked_by == ("P01-I01-W03",)
 
 
-# ---- Project.weekly_eu_target (P20-I01-W09) ---------------------------------
+# ---- Project.weekly_eu_target ---------------------------------
 
 
 def _project_kwargs() -> dict[str, object]:
@@ -526,7 +526,7 @@ def test_project_schema_version_pin_unchanged() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Wave.claimed_at — work-start anchor (P29-I02-W29)
+# Wave.claimed_at — work-start anchor
 # ---------------------------------------------------------------------------
 
 

@@ -1,4 +1,4 @@
-"""Live-test the fleet cockpit's worker offload + poll backstop (P30-I13-W11).
+"""Live-test the fleet cockpit's worker offload + poll backstop.
 
 Snapshot + claim tests miss the failure modes that only a LIVE Pilot run
 surfaces -- the four P29 TUI-staleness lessons. This module drives the assembled
@@ -336,7 +336,7 @@ def test_cockpit_pause_offloads_to_worker(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """C1: over a live fleet run the pause key drives fleet.pause on a worker (W06).
+    """C1: over a live fleet run the pause key drives fleet.pause on a worker.
 
     With a DRAINING fleet run bound, ``space`` drives the FLEET pause
     (``fleet.pause`` -- it holds the running drive loop without aborting it)
@@ -375,8 +375,8 @@ def test_cockpit_pause_offloads_to_worker(
             assert "paused" in toasts
 
     asyncio.run(body())
-    # A live fleet run routes space -> fleet.pause (W06), not the global toggle.
-    # The cockpit also reattaches the draining run on mount (W07), so filter it.
+    # A live fleet run routes space -> fleet.pause, not the global toggle.
+    # The cockpit also reattaches the draining run on mount, so filter it.
     assert [m for m in calls if m != "fleet.reattach"] == ["fleet.pause"]
 
 
@@ -428,7 +428,7 @@ def test_cockpit_kill_offloads_to_worker_after_confirm(
             assert "not killed" in toasts
 
     asyncio.run(body())
-    # Filter the on-mount fleet.reattach (W07): the confirmed kill is agent.kill.
+    # Filter the on-mount fleet.reattach: the confirmed kill is agent.kill.
     kill_calls = [c for c in calls if c[0] != "fleet.reattach"]
     assert kill_calls and kill_calls[0][0] == "agent.kill"
     assert kill_calls[0][1]["signal"] == "kill"
@@ -621,7 +621,7 @@ def test_cockpit_halt_over_live_run_drives_fleet_halt(
             assert "draining to summary" in toasts
 
     asyncio.run(body())
-    # Filter the on-mount fleet.reattach (W07): H over a live run drives fleet.halt.
+    # Filter the on-mount fleet.reattach: H over a live run drives fleet.halt.
     assert [m for m in calls if m != "fleet.reattach"] == ["fleet.halt"]
 
 
@@ -639,7 +639,7 @@ def _drain_snapshot(
 ) -> FleetRun:
     """Build a DRAINING run snapshot at a point along a two-wave drain.
 
-    The autopilot-acceptance capstone (W10) pins that the cockpit reads its
+    The autopilot-acceptance capstone pins that the cockpit reads its
     vitals STRAIGHT off the daemon-written ``fleet_run`` mid-drain -- so a run
     that advances (the frontier shrinks, the USD spend rises toward the cap, the
     throughput appears once a lane closes) re-renders the cockpit vitals without

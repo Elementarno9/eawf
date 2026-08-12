@@ -173,7 +173,7 @@ class WizardAnswers(BaseModel):
     # P03 W05 review): exposing a flag with no behaviour is misleading.
     write_confirm: bool = True
     # ``template_extras`` carries the parsed bootstrap-template payload
-    # when ``eawf init --template <name>`` is used (P25-W16). The wizard
+    # when ``eawf init --template <name>`` is used. The wizard
     # deep-merges these keys into the canonical ``.ea/config.yaml`` after
     # the structured-answer-derived sections, so template-declared
     # ``dispatch.session_policy_default`` etc. land on disk verbatim.

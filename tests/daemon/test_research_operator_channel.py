@@ -1,4 +1,4 @@
-"""Tests for the operator-channel RPCs + channel fold (P30-I18-W04).
+"""Tests for the operator-channel RPCs + channel fold.
 
 Covers the steer / broadcast / override channels that append typed
 :class:`~eawf.kernel.spec.operator_input.OperatorInput` rows to the daemon-owned

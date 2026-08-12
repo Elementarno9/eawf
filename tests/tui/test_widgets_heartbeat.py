@@ -1,4 +1,4 @@
-"""Tests for the C06 standalone ``Heartbeat`` widget (P26-W21).
+"""Tests for the C06 standalone ``Heartbeat`` widget.
 
 The standalone :class:`~eawf.surfaces.tui.widgets.heartbeat.Heartbeat` (distinct
 from the W18 footer-embedded one) — the pulse glyph + visible/hidden

@@ -533,7 +533,7 @@ def _peek_workspace_code(state_path: Path) -> str | None:
     return code if isinstance(code, str) else None
 
 
-# ---- workspace registry-list (P20-I01-W05) ----------------------------------
+# ---- workspace registry-list ----------------------------------
 
 
 @workspace_app.command(name="registry-list")
@@ -615,7 +615,7 @@ def workspace_registry_list_cmd(
     )
 
 
-# ---- workspace registry-status (P20-I01-W05) --------------------------------
+# ---- workspace registry-status --------------------------------
 
 
 @workspace_app.command(name="registry-status")

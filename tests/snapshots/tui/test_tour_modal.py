@@ -1,4 +1,4 @@
-"""Golden snapshot + carousel behaviour for the first-run tour (P29-I13-W27).
+"""Golden snapshot + carousel behaviour for the first-run tour.
 
 The first-run
 :class:`~eawf.surfaces.tui.modals.tour.TourModal` walks the operator through

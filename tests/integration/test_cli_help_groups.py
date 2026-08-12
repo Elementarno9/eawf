@@ -1,4 +1,4 @@
-"""Integration tests for the regrouped ``eawf --help`` panel layout (P20-W12).
+"""Integration tests for the regrouped ``eawf --help`` panel layout.
 
 The brief requires top-level command help to follow the metadata registry
 alphabetical order — panels named after the

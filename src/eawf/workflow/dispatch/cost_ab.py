@@ -1,4 +1,4 @@
-"""Verdict-agreement cost A/B over the metering ledger (P29-I05-W05).
+"""Verdict-agreement cost A/B over the metering ledger.
 
 The question this projection exists to answer: can a tiered-by-role routing
 config (cheaper model per role -- config B) hold the same verdict quality as

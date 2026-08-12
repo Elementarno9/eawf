@@ -1,4 +1,4 @@
-"""Tests: the fleet clean-close path runs the wave's deterministic gates (P30-I23-W19).
+"""Tests: the fleet clean-close path runs the wave's deterministic gates.
 
 The fleet clean-close path flipped a wave to CLOSED on the agent's own
 close-ready report -- a pure status flip that never ran the wave's own gates.

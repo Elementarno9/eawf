@@ -1,4 +1,4 @@
-"""Tests for the Evidence mode pane over the agent-report rollup (W22).
+"""Tests for the Evidence mode pane over the agent-report rollup.
 
 The Evidence mode (digit ``6``) renders the typed agent-report rollup for
 the active scope: one row per report joining role / verdict / wave
@@ -1027,7 +1027,7 @@ def test_evidence_enter_empty_table_is_safe_noop() -> None:
 
 
 # --------------------------------------------------------------------------
-# Verdict-sigil legend + failed-wave / researcher drill (W05) -- Pilot-driven
+# Verdict-sigil legend + failed-wave / researcher drill -- Pilot-driven
 # --------------------------------------------------------------------------
 
 

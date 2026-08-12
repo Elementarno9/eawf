@@ -1,4 +1,4 @@
-"""Pilot tests for the C06 ``NeedsUserModal`` overlay (P26-W20).
+"""Pilot tests for the C06 ``NeedsUserModal`` overlay.
 
 Covers the needs_user AskUserQuestion contract: the first-option default,
 ``↑`` / ``↓`` selection movement (with wrap), ``Enter`` returning the

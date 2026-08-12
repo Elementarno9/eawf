@@ -1,4 +1,4 @@
-"""Tests for the C06 modal-stack depth cap (P26-W19) + singleton dedup (P29-W26).
+"""Tests for the C06 modal-stack depth cap + singleton dedup.
 
 The App enforces a single modal-stack gate (``MAX_MODAL_DEPTH == 6`` per
 C06 §5.7 / failure mode F6, raised from 3 in P29-I09-W01 so a research
@@ -146,7 +146,7 @@ def test_palette_then_fill_then_cap() -> None:
 
 
 # --------------------------------------------------------------------------
-# Singleton dedup (P29-W26) — a duplicate of the top overlay is rejected
+# Singleton dedup — a duplicate of the top overlay is rejected
 # --------------------------------------------------------------------------
 
 
@@ -230,7 +230,7 @@ def test_open_config_action_twice_keeps_one_modal() -> None:
 
 
 # --------------------------------------------------------------------------
-# Entity dedup (P29-I08-W25) — re-opening the entity already on top no-ops
+# Entity dedup — re-opening the entity already on top no-ops
 # --------------------------------------------------------------------------
 
 
@@ -336,7 +336,7 @@ def test_reopen_same_entity_after_a_different_one_restacks() -> None:
 
 
 # --------------------------------------------------------------------------
-# Entity-key dedup at the push_modal chokepoint (P29-I09-W02) — the dedup
+# Entity-key dedup at the push_modal chokepoint — the dedup
 # now lives on the gate, so EVERY push path (not just the row drill) no-ops
 # a re-choose of the entity already on top.
 # --------------------------------------------------------------------------

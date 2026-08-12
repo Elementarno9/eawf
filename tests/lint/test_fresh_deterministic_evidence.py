@@ -1,4 +1,4 @@
-"""Fresh deterministic evidence exists on committed state (P30-I23-W34).
+"""Fresh deterministic evidence exists on committed state.
 
 The phase's teeth metric: a close that executed real deterministic gates
 leaves an ``evidence_kind=deterministic`` row in the evidence store. Zero

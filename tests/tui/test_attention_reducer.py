@@ -1,4 +1,4 @@
-"""Tests for the pure attention-feed reducer (P29-I02-W19).
+"""Tests for the pure attention-feed reducer.
 
 The :func:`~eawf.surfaces.tui.attention.build_attention_feed` reducer folds
 several state-resident attention sources plus the open ``needs_user``

@@ -1,4 +1,4 @@
-"""Unit tests for the canonical runtime-label normalizer (P30-I21-W21).
+"""Unit tests for the canonical runtime-label normalizer.
 
 The event/telemetry surface keys a runtime on the short ``RuntimeTriple``
 spelling (``"claude"``) while sessions / actuals carry the adapter-manifest id

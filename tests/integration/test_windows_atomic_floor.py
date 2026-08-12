@@ -1,4 +1,4 @@
-"""WIN-P1 import + atomic-write floor (P30-I19-W01).
+"""WIN-P1 import + atomic-write floor.
 
 Windows has no ``os.O_DIRECTORY`` (parent-dir fsync), no ``os.killpg`` /
 ``os.getpgid`` (process-group cancel), and no ``signal.SIGKILL``. Before
@@ -117,7 +117,7 @@ def test_daemon_graph_imports_with_posix_only_attrs_stripped() -> None:
 def test_win32_guarded_paths_import_and_atomic_write(tmp_path: Path) -> None:
     """On Windows the guarded writers import and an atomic write lands.
 
-    Exercised only on the windows-latest CI job (W07). Asserts the
+    Exercised only on the windows-latest CI job. Asserts the
     import-guarded atomic-write helper writes through the
     ``fsync_parent_dir`` no-op branch (no ``O_DIRECTORY`` on Windows) and
     the bytes are durable on disk.

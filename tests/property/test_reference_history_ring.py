@@ -1,4 +1,4 @@
-"""Hypothesis property test for the bounded reference-history FIFO ring (P29-I08-W24).
+"""Hypothesis property test for the bounded reference-history FIFO ring.
 
 The TUI's reference back / forward navigation history
 (:attr:`~eawf.surfaces.tui.app.EaApp._reference_back_stack` /

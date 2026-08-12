@@ -1,4 +1,4 @@
-"""Tests for the verification-grounded math doc-type (P29-I07-W09).
+"""Tests for the verification-grounded math doc-type.
 
 Covers the typed :class:`~eawf.kernel.spec.math.MathClaim` four-facet
 contract (intuition + runnable example gate + regime + citation), the closed

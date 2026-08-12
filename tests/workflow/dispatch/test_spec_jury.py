@@ -1,4 +1,4 @@
-"""Unit tests for the spec-jury close-gate producer (P29-I08-W05).
+"""Unit tests for the spec-jury close-gate producer.
 
 Covers :mod:`eawf.workflow.dispatch.spec_jury`:
 

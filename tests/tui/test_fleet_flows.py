@@ -1,4 +1,4 @@
-"""S1-S12 fleet operator journeys as RS-27 ``tui_flow`` flow gates G8-G17 (P30-I13-W09).
+"""S1-S12 fleet operator journeys as RS-27 ``tui_flow`` flow gates G8-G17.
 
 The seven G1-G7 flows (:data:`~tests.snapshots.tui.test_tui_flow.FLOW_SPECS`)
 gate the *navigation* journeys -- open a pane, switch scope, open + dismiss a
@@ -141,7 +141,7 @@ def _wave(wave_id: str, *, status: WaveStatus, deps: list[str] | None = None) ->
 
 
 def _frontier_waves() -> dict[str, Wave]:
-    """Build a wave graph whose ready frontier is ``(W02, W03)`` (two ready rows).
+    """Build a wave graph whose ready frontier is ```` (two ready rows).
 
     A closed W01 unblocks two PENDING siblings, so the cockpit lists two
     claim-ready rows -- enough that a ``down`` selection move (the next-claim
@@ -442,7 +442,7 @@ FLEET_FLOW_SPECS: tuple[dict[str, object], ...] = (
     },
     {
         # G19 (W10, CR-01 live-update + pause) -- arming the cockpit over a live
-        # DRAINING run and pressing ``space`` drives the FLEET pause (W06): the
+        # DRAINING run and pressing ``space`` drives the FLEET pause: the
         # cockpit holds the running drive loop without aborting it and stays on
         # the cockpit (no modal). With no live daemon socket in the flow harness
         # the pause RPC is a silent no-op, so the journey's observable terminal is
@@ -463,7 +463,7 @@ FLEET_FLOW_SPECS: tuple[dict[str, object], ...] = (
     {
         # G20 (W10, CR-01 pause -> resume) -- the pause / resume round-trip over a
         # live run: ``space`` pauses, a second ``space`` resumes the SAME drive
-        # loop (W06), and the cockpit stays put throughout (no modal, no mode
+        # loop, and the cockpit stays put throughout (no modal, no mode
         # switch). The journey lands back on the cockpit, proving the resume
         # continues the run in place rather than aborting it or opening an overlay.
         "flow": "G20-pause-then-resume",

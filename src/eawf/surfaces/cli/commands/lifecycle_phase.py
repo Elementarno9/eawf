@@ -1,6 +1,6 @@
 """Phase lifecycle command handlers.
 
-Split out of :mod:`eawf.surfaces.cli.commands.lifecycle` (P27-W06). The ``phase_app``
+Split out of :mod:`eawf.surfaces.cli.commands.lifecycle`. The ``phase_app``
 Typer app and the shared transaction helpers live in the parent module;
 this module attaches the phase command bodies via ``@phase_app.command(...)``
 and owns the phase-activate git gates plus the phase-close checklist. The
@@ -491,7 +491,7 @@ def phase_activate_cmd(
         ),
     ] = False,
 ) -> None:
-    """Flip a PLANNED phase to ACTIVE (P19-W07, P19-W11, P19-W13).
+    """Flip a PLANNED phase to ACTIVE.
 
     Runs the V11 hard gate: the phase must already carry at least one
     planned wave, and every phase listed in ``Phase.depends_on`` must

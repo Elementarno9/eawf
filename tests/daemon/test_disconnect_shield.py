@@ -1,4 +1,4 @@
-"""Client-disconnect shielding for in-flight mutations (P30-I23-W52).
+"""Client-disconnect shielding for in-flight mutations.
 
 The W48 close loop: a wave close whose gates outlast the CLI's RPC
 ceiling saw the client disconnect mid-commit, the handler die with it,

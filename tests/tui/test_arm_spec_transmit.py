@@ -1,4 +1,4 @@
-"""Tests: the arm form transmits every field into fleet.drive (P30-I17-W02).
+"""Tests: the arm form transmits every field into fleet.drive.
 
 The FA1 arm modal derived the EU / USD / waves caps, the hard-halt toggle, and
 the ``kclean`` K threshold, then DROPPED them before the ``fleet.drive`` RPC --

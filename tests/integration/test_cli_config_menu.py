@@ -1,4 +1,4 @@
-"""Integration tests for ``eawf config menu`` (P20-W10).
+"""Integration tests for ``eawf config menu``.
 
 The menu drives :mod:`questionary` for tab → field → value selection, then
 flushes the coerced value through :func:`eawf.surfaces.cli.commands.config._save_value_to_layer`.

@@ -1,4 +1,4 @@
-"""Tests: arm-form budget caps reach the DL-4 teeth + hard-halt (P30-I17-W02).
+"""Tests: arm-form budget caps reach the DL-4 teeth + hard-halt.
 
 The W02 fix threads the arm form's derived EU / USD / waves caps + the hard-halt
 toggle into ``DriveParams`` rather than dropping them. These assertions bind the

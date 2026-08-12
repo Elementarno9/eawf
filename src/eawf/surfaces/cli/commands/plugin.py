@@ -1,6 +1,6 @@
 """``eawf plugin install/update/doctor {claude,codex,opencode}`` Typer commands.
 
-This module is the facade for the ``plugin`` command group (P27-I05-W09).
+This module is the facade for the ``plugin`` command group.
 It owns the :data:`plugin_app` Typer group, the three monkeypatchable
 runtime-conflict detector wrappers, the install-conflict gates, the
 scope / runtime validators, and the small path / banner resolvers. The

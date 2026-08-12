@@ -1,4 +1,4 @@
-"""End-to-end EU capture on the interactive Claude path (P30-I25-W29).
+"""End-to-end EU capture on the interactive Claude path.
 
 The whole chain, driven from a REAL Claude Code Stop payload and a REAL session
 transcript (both scrubbed fixtures, not hand-written statusline shapes -- the

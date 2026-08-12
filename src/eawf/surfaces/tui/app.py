@@ -418,7 +418,7 @@ class PaneErrorBoundary(Vertical):
 #: visible. Oldest envelopes drop off the tail once the cap is reached.
 LIVE_EVENT_BUFFER_MAX: int = 200
 
-#: Ring-buffer cap on the FA4 raw-output buffer (W08): the most-recent
+#: Ring-buffer cap on the FA4 raw-output buffer: the most-recent
 #: ``(wave_id, line)`` rows the dispatch runner fanned via ``agent.output``
 #: events. The agent-watch tail seeds + streams from this, so the cap bounds the
 #: live tail's memory -- a chatty spawn keeps only the freshest lines, the oldest
@@ -782,7 +782,7 @@ class EaApp(App[None]):
         # ``run_coroutine_threadsafe``), so no extra lock is needed. Bounded
         # at LIVE_EVENT_BUFFER_MAX so an idle session never grows unbounded.
         self._live_event_buffer: deque[Envelope] = deque(maxlen=LIVE_EVENT_BUFFER_MAX)
-        # FA4 (W08) raw-output ring buffer: ``(wave_id, line)`` rows the dispatch
+        # FA4 raw-output ring buffer: ``(wave_id, line)`` rows the dispatch
         # runner fans via ``agent.output`` events (the agent-watch session zoom's
         # tail seeds + streams from this). Bounded at LIVE_OUTPUT_BUFFER_MAX so a
         # chatty spawn never grows it unbounded -- the freshest lines win, the
@@ -996,7 +996,7 @@ class EaApp(App[None]):
             envelope: The live event envelope pushed by the daemon.
         """
         logger.debug(f"_on_event id={envelope.id!r} kind={envelope.kind.value!r}")
-        # FA4 (W08): an ``agent.output`` envelope carries a spawned session's raw
+        # FA4: an ``agent.output`` envelope carries a spawned session's raw
         # stdout/stderr tail rather than a typed lifecycle row, so it routes to
         # the raw-output buffer + tail fan-out, NOT the typed feed stream.
         if self._route_agent_output(envelope):

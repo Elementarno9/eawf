@@ -1,4 +1,4 @@
-"""Golden snapshot for the FA1 fleet-arm / launch-flow overlay (P30-I13-W01).
+"""Golden snapshot for the FA1 fleet-arm / launch-flow overlay.
 
 The Autopilot ``a`` key opens the
 :class:`~eawf.surfaces.tui.screens.overlays.arm.ArmModal` launch form -- a config

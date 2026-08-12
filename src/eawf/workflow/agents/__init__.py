@@ -1,4 +1,4 @@
-"""Subagent spec + role library for Eä dispatch (P27-I03-W14).
+"""Subagent spec + role library for Eä dispatch.
 
 The :mod:`eawf.workflow.agents.specs` subpackage owns the typed
 :class:`~eawf.workflow.agents.specs.models.SubagentSpec` model and the role

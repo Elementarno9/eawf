@@ -243,7 +243,7 @@ def build_seatbelt_profile(*, cwd: Path, runtime: str, home: Path | None = None)
         cred_path = (home_dir / rel).resolve(strict=False)
         lines.append(f'(deny file-read* (subpath "{cred_path}"))')
 
-    # Shared egress + TLS floor (P30-I20-W37). A spawned runtime CLI reaches
+    # Shared egress + TLS floor. A spawned runtime CLI reaches
     # its model API over direct HTTPS: eawf's UDS egress proxy speaks a custom
     # CONNECT protocol third-party CLIs (codex / claude) cannot use AND is not
     # wired into the spawn, so the jail itself must permit outbound network.

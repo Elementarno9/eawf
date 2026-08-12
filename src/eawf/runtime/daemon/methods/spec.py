@@ -310,7 +310,7 @@ def _decode_body(body: bytes | str) -> str:
     """Return *body* as text, decoding bytes as UTF-8.
 
     The promote handler feeds raw ``file_path.read_bytes()`` while tests
-    and the ``eawf spec sync`` command (W05) pass already-decoded text;
+    and the ``eawf spec sync`` command pass already-decoded text;
     this helper accepts either so the extractors have one entry shape.
 
     Args:
@@ -404,7 +404,7 @@ def _extract_criterion_specs(body: bytes | str) -> list[CriterionSpec]:
     ``eawf-wave-body`` fenced block and returns its ``criteria`` list,
     each row carrying its ``evidence_kind`` and ``gate_ids``. A body with
     no such block returns an empty list (back-compat with the legacy
-    scaffold). The ``eawf spec sync`` command (W05) materialises these
+    scaffold). The ``eawf spec sync`` command materialises these
     rows onto the wave's typed ``success_criteria`` field.
 
     Args:

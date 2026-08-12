@@ -1,4 +1,4 @@
-"""Tests for the ``/filter`` + ``/sort`` pane verbs (P26-I02-W03).
+"""Tests for the ``/filter`` + ``/sort`` pane verbs.
 
 ``/filter backlog <needle>`` drives
 :meth:`~eawf.surfaces.tui.widgets.backlog_table.BacklogTable.apply_filter` and

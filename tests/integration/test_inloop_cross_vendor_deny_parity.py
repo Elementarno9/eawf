@@ -1,4 +1,4 @@
-"""In-loop cross-vendor deny parity proof (P30-I12-W09).
+"""In-loop cross-vendor deny parity proof.
 
 The adapter-level parity proof (``test_cross_vendor_parity.py``, I10-W05)
 spawns each vendor adapter DIRECTLY and asserts each lane honours a denied

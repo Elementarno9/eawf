@@ -1,4 +1,4 @@
-"""Integration tests for the v2 profile composition loader (P25-W15).
+"""Integration tests for the v2 profile composition loader.
 
 Covers the three W15 success criteria:
 

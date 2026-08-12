@@ -1,4 +1,4 @@
-"""Unit tests for the bounded spawn-retry loop + tiered failure notice (P29-I04-W03).
+"""Unit tests for the bounded spawn-retry loop + tiered failure notice.
 
 Pins the retry / V5-reactive-switch contract over the CLI failure taxonomy for a
 live spawn: :func:`~eawf.workflow.dispatch.retry.spawn_with_retry` classifies a

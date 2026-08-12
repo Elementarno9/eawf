@@ -1,4 +1,4 @@
-"""Unit tests for the accruing EU render helpers (P29-I13-W23).
+"""Unit tests for the accruing EU render helpers.
 
 Pins :class:`~eawf.surfaces.render.eu.EUAccrual` (the shared accumulator)
 and the render functions over it: the running-total accrual (no recompute),

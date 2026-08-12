@@ -1,6 +1,6 @@
 """Hardcoded-baseline regression for the lifecycle status-tint hexes.
 
-The green-accent rotation (P30-I02-W01) moves ONLY ``accent`` / ``primary``
+The green-accent rotation moves ONLY ``accent`` / ``primary``
 in the per-theme palettes; the Wong/IBM lifecycle ``status-*`` tints and
 the ``ok`` / ``warn`` / ``err`` band hexes stay byte-identical. The
 sibling :mod:`tests.tui.test_widgets_status_tint` suite proves the maps

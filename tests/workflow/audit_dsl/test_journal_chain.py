@@ -1,4 +1,4 @@
-"""Tests for the ``journal_chain`` audit-DSL kind (P30-I16-W17).
+"""Tests for the ``journal_chain`` audit-DSL kind.
 
 The kind validates that a WAL / journal directory is an intact digest
 chain: each record's stored digest recomputes, and each links back to its

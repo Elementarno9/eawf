@@ -1,4 +1,4 @@
-"""Tests for the workspace ``RegistryPane`` read-only registry listing (P29-I02-W24).
+"""Tests for the workspace ``RegistryPane`` read-only registry listing.
 
 The registry pane lists the explicit ``~/.eawf/registry.json`` entries
 under the workspace dashboard: one ``CODE  title  path  [chips]`` line per

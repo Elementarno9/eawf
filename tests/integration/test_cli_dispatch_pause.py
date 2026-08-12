@@ -1,4 +1,4 @@
-"""CLI dispatch tests for ``eawf dispatch resume`` / ``eawf dispatch pause`` (P29-I12-W08).
+"""CLI dispatch tests for ``eawf dispatch resume`` / ``eawf dispatch pause``.
 
 Drives the Typer app via :class:`CliRunner` and checks the two headless
 pause/resume verbs that toggle ``state.dispatch_paused`` through the daemon's

@@ -133,7 +133,7 @@ def _claim_ready_state() -> State:
 
     W01 is CLOSED; W02 is PENDING with W01 (CLOSED) as its only dep, so W02 is
     claim-ready. A second iter's W05 (dep W01 closed) is also claim-ready. The
-    ready frontier is therefore ``(W02, W05)`` -- computed purely off state, so
+    ready frontier is therefore ```` -- computed purely off state, so
     it renders with no daemon reachable.
     """
     waves = {

@@ -1,6 +1,6 @@
 """Tests for the advisory prose chokepoint bound at the skill emit path.
 
-Pins SKILL-5 (P30-I03-W05): :func:`eawf.workflow.skills.engine._prose_warnings`
+Pins SKILL-5: :func:`eawf.workflow.skills.engine._prose_warnings`
 runs ``validate_prose`` over the emit body and folds findings into a
 ``prose_clarity`` footer warning. The contract is ADVISORY end-to-end:
 

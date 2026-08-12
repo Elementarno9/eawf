@@ -1,4 +1,4 @@
-"""Tests for the registered-kind population helpers (P30-I10-W02).
+"""Tests for the registered-kind population helpers.
 
 The wired-on sweep keys on :func:`registered_audit_dsl_kinds` -- the union of
 the file-set :data:`CHECK_REGISTRY` keys and the state-scoring

@@ -1,4 +1,4 @@
-"""Unit tests for the subagent role registry (P27-I03-W14).
+"""Unit tests for the subagent role registry.
 
 Exercises :mod:`eawf.workflow.agents.specs.roles`: the :data:`ROLE_REGISTRY`
 coverage of every :class:`~eawf.kernel.state.enums.AgentSessionRole`, the

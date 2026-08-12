@@ -1,4 +1,4 @@
-"""Wave success_criteria drift detector (P23-I02-W01).
+"""Wave success_criteria drift detector.
 
 A *drift* is a path-shaped token inside a wave's ``success_criteria`` that
 does not resolve to any file on disk. Two failure modes observed during the

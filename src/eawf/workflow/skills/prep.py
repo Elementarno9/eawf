@@ -169,7 +169,7 @@ def _build_dag_from_phase(phase: Phase, state: State) -> tuple[list[PrepDagTask]
     :attr:`WaveStatus.PENDING`. Tasks are keyed by their canonical wave id
     (no synthetic ``T01``); ``deps`` and ``file_scope`` mirror the wave
     record. Each task also carries ``agent_role`` / ``effort_bucket`` /
-    ``estimate_eu`` (P28-W18) so the prep body surfaces the same three
+    ``estimate_eu`` so the prep body surfaces the same three
     planning signals the canonical ``plan_view`` renderer projects into
     ``roadmap show --md`` and the TUI tree. Each iter that contributes
     at least one PENDING wave yields one :class:`PrepWave` grouping its
@@ -242,7 +242,7 @@ def _render_plan_mode_markdown(inputs: _PrepInputs) -> str | None:
     for ``/prep`` plan-mode draws from
     :func:`eawf.surfaces.render.plan_view.render_phase_markdown` so the
     skill body, ``eawf roadmap show --md``, and the TUI roadmap tree
-    all consume one projection (P28-W18). ``None`` when neither a
+    all consume one projection. ``None`` when neither a
     phase nor a state document resolved — the renderer needs both to
     walk iters under the phase.
 

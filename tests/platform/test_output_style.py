@@ -1,4 +1,4 @@
-"""Tests for the lean/explain house output-style presets (P30-I03-W04).
+"""Tests for the lean/explain house output-style presets.
 
 Pins the W04 success criteria:
 

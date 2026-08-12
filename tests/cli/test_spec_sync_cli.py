@@ -1,4 +1,4 @@
-"""CLI-side tests for ``eawf spec sync`` (P29-I12-W05).
+"""CLI-side tests for ``eawf spec sync``.
 
 ``spec sync`` is always daemon-mediated — materialising the parsed criteria
 + gates onto ``state.json`` is a canonical state mutation (AGENTS rule 4),

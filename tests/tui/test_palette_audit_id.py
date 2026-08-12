@@ -1,4 +1,4 @@
-"""Unit tests for :func:`_active_audit_id` newest-for-scope resolution (P26-W15).
+"""Unit tests for :func:`_active_audit_id` newest-for-scope resolution.
 
 The ``/audit`` verb derives the overlay's audit id from the bound state
 rather than operator free-text. Before W15 it returned the first iter's
@@ -131,7 +131,7 @@ def test_active_audit_id_matches_descendant_scope_prefix() -> None:
             "A40-P27": {"scope_id": "P27", "created_at": "2026-05-23T00:00:00Z"},
         },
     )
-    # The newer A40 is OUT of scope (P27), so the in-scope P26-I01 wins.
+    # The newer A40 is OUT of scope, so the in-scope P26-I01 wins.
     assert _active_audit_id(_FakeApp(state)) == "A32-P26-I01"
 
 

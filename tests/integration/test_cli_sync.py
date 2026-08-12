@@ -193,7 +193,7 @@ def test_sync_check_exits_4_when_drift(tmp_path: Path) -> None:
 
     res = runner.invoke(app, ["sync", "--target", str(tmp_path), "--check"])
     # NOTE: source ``sync.py`` still raises ``typer.Exit(code=4)`` via a raw
-    # literal pre-dating the C05 § 5.3 0..5 cutover (W04). Under the new
+    # literal pre-dating the C05 § 5.3 0..5 cutover. Under the new
     # scheme code 4 is DAEMON_UNREACHABLE rather than the intended
     # VALIDATION_ERROR (2); a follow-up wave migrates ``sync.py`` to use
     # the symbolic ``exit_codes.VALIDATION_ERROR`` constant.

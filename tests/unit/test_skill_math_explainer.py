@@ -1,4 +1,4 @@
-"""Unit tests for the ``/math-explainer`` authoring skill (P29-I07-W11).
+"""Unit tests for the ``/math-explainer`` authoring skill.
 
 ``/math-explainer`` is a registry-resident workflow skill: it renders a
 ``SKILL.md`` (so it installs as a slash command and reconciles against

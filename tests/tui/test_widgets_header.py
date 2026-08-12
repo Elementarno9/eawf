@@ -284,7 +284,7 @@ def test_build_breadcrumb_clickable_escapes_entity_brackets() -> None:
 
 
 # --------------------------------------------------------------------------
-# build_breadcrumb — de-link contract (W12): @click on EXACTLY {phase, iter}
+# build_breadcrumb — de-link contract: @click on EXACTLY {phase, iter}
 # --------------------------------------------------------------------------
 
 

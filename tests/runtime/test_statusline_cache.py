@@ -1,4 +1,4 @@
-"""Tests for the stale-while-revalidate statusline cache (P29-I13-W40).
+"""Tests for the stale-while-revalidate statusline cache.
 
 Pins the SWR contract: a fresh hit serves the cached line with no render, a
 stale hit serves the cached line immediately AND hands a freshly-rendered

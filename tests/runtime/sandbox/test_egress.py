@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.runtime.sandbox.egress` (P29-I03-W02).
+"""Unit tests for :mod:`eawf.runtime.sandbox.egress`.
 
 Pin the four load-bearing properties of the default-deny egress policy:
 
