@@ -28,16 +28,13 @@ two-run assertion that never persists the bytes to disk.
 Regenerating goldens
 --------------------
 
-The three scenarios honour an env-var-controlled regen mode. From the
-worktree root::
+::
 
-    EAWF_GOLDEN_SCENARIOS_REGEN=1 uv run pytest -m golden_scenarios -v
+    uv run eawf snapshot update --kind scenarios
 
-When ``EAWF_GOLDEN_SCENARIOS_REGEN`` is set to a truthy value the
-helpers in this module overwrite the on-disk golden files with the
-live projection instead of asserting equality. Always commit the
-regenerated files in the same change-set that motivated the regen
-so a reviewer can spot a drift in scope.
+Under any switch in :data:`_REGEN_ENV_VARS` the helpers here overwrite the
+goldens with the live projection instead of asserting. Commit the regenerated
+files in the change-set that motivated the regen, so a reviewer sees the drift.
 """
 
 from __future__ import annotations
@@ -69,14 +66,21 @@ def _daemonless_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EAWF_DAEMONLESS", "1")
 
 
-def regen_mode() -> bool:
-    """Return True when the regen env var is set to a truthy value.
+#: Refresh switches this suite honours. The first is suite-specific; the other
+#: two are the repo-wide switches ``eawf snapshot update`` sets, so the declared
+#: refresh path reaches this suite instead of re-running the failing assertion.
+_REGEN_ENV_VARS: tuple[str, ...] = (
+    "EAWF_GOLDEN_SCENARIOS_REGEN",
+    "EAWF_REFRESH_GOLDEN",
+    "EAWF_SNAPSHOT_REGEN",
+)
 
-    Truthy values: ``"1"``, ``"true"``, ``"yes"`` (case-insensitive).
-    Any other value (including unset) returns False.
-    """
-    value = os.environ.get("EAWF_GOLDEN_SCENARIOS_REGEN", "").strip().lower()
-    return value in {"1", "true", "yes"}
+
+def regen_mode() -> bool:
+    """Return True when any refresh switch is ``1`` / ``true`` / ``yes``."""
+    return any(
+        os.environ.get(name, "").strip().lower() in {"1", "true", "yes"} for name in _REGEN_ENV_VARS
+    )
 
 
 def project_state(state: dict[str, Any]) -> dict[str, Any]:
@@ -119,29 +123,41 @@ def dump_canonical_json(payload: dict[str, Any]) -> str:
     return json.dumps(payload, sort_keys=True, indent=2) + "\n"
 
 
+def _regen_destination(golden_path: Path) -> Path:
+    """Return where a regen write lands, honouring ``EAWF_SNAPSHOT_OUT``.
+
+    ``eawf snapshot update --out`` promises the rewritten bytes go to that
+    directory instead of the committed tree; without this the command reported
+    the redirect while writing in place. The path under the scenarios root is
+    preserved so per-scenario subdirectories do not collide on basename.
+    """
+    out_dir = os.environ.get("EAWF_SNAPSHOT_OUT")
+    if not out_dir:
+        return golden_path
+    return Path(out_dir) / golden_path.relative_to(SCENARIOS_DIR)
+
+
 def assert_or_regen_json(golden_path: Path, live_payload: dict[str, Any]) -> None:
     """Compare *live_payload* against the JSON at *golden_path*.
 
-    When the regen env var is set this writes the canonical form of
-    *live_payload* to *golden_path* (creating parent directories) and
-    returns without asserting. In normal mode it asserts byte-equality
-    after canonical serialisation so the golden file's whitespace
-    matches the live output exactly.
+    Under a refresh switch this writes the canonical form to
+    :func:`_regen_destination` and returns without asserting; otherwise it
+    asserts byte-equality so the golden's whitespace matches the live output.
     """
     canonical = dump_canonical_json(live_payload)
     if regen_mode():
-        golden_path.parent.mkdir(parents=True, exist_ok=True)
-        golden_path.write_text(canonical, encoding="utf-8")
+        destination = _regen_destination(golden_path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(canonical, encoding="utf-8")
         return
     assert golden_path.exists(), (
         f"golden file missing: {golden_path}; "
-        f"regenerate with EAWF_GOLDEN_SCENARIOS_REGEN=1 uv run pytest -m golden_scenarios"
+        f"regenerate with `uv run eawf snapshot update --kind scenarios`"
     )
     on_disk = golden_path.read_text(encoding="utf-8")
     assert on_disk == canonical, (
         f"golden projection drifted at {golden_path}. "
-        f"If intentional, regenerate with EAWF_GOLDEN_SCENARIOS_REGEN=1 "
-        f"uv run pytest -m golden_scenarios."
+        f"If intentional, regenerate with `uv run eawf snapshot update --kind scenarios`."
     )
 
 

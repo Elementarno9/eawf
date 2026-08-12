@@ -4,13 +4,14 @@ For each fixture combo, render to a temp path and assert byte-equality
 with the committed fixture under ``tests/golden/agents_md/``.
 
 A failure here means the renderer's output drifted — either the template,
-the composer, or one of the source profile bodies changed. Regenerate the
-fixture deliberately (with the snippet at the top of each fixture-creation
-PR) and commit the new bytes alongside the change.
+the composer, or one of the source profile bodies changed. Regenerate with
+``uv run eawf snapshot update --kind agents_md`` and commit the new bytes
+alongside the change; never hand-edit a golden.
 """
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -68,13 +69,18 @@ _LATE_PROFILE_REFERENCE_BLOCK_IDS = {
 }
 
 
+#: The committed fixture set. The assertion node and the refresh writer below
+#: both read it, so a new combo cannot be asserted without also being writable.
+_GOLDEN_COMBOS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("core",), "core_only.md"),
+    (("core", "python", "research"), "core_python_research.md"),
+)
+
+
 @pytest.mark.golden
 @pytest.mark.parametrize(
     ("profile_combo", "fixture_name"),
-    [
-        (("core",), "core_only.md"),
-        (("core", "python", "research"), "core_python_research.md"),
-    ],
+    _GOLDEN_COMBOS,
     ids=["core_only", "core_python_research"],
 )
 def test_render_agents_md_matches_golden(
@@ -91,8 +97,32 @@ def test_render_agents_md_matches_golden(
     expected_bytes = (_FIXTURE_DIR / fixture_name).read_bytes()
     assert actual_bytes == expected_bytes, (
         f"AGENTS.md output drifted from golden fixture {fixture_name!r}. "
-        "If this is intentional, regenerate the fixture and commit the new bytes."
+        "If intentional: uv run eawf snapshot update --kind agents_md"
     )
+
+
+def test_refresh_agents_md_goldens(tmp_path: Path) -> None:
+    """Rewrite the committed AGENTS.md fixtures under a refresh switch.
+
+    This is the node ``eawf snapshot update --kind agents_md`` drives. Without
+    a switch it skips, so a normal run never rewrites the tree; with
+    ``EAWF_SNAPSHOT_OUT`` the bytes land in a tmp dir so a caller can verify a
+    regeneration without touching the committed fixtures.
+    """
+    if not (os.environ.get("EAWF_REFRESH_GOLDEN") or os.environ.get("EAWF_SNAPSHOT_REGEN")):
+        pytest.skip("set EAWF_REFRESH_GOLDEN=1 (or EAWF_SNAPSHOT_REGEN=1) to refresh")
+    out_dir = Path(os.environ.get("EAWF_SNAPSHOT_OUT") or _FIXTURE_DIR)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for index, (profile_combo, fixture_name) in enumerate(_GOLDEN_COMBOS):
+        # Each combo renders into its own root: render_agents_md sweeps stale
+        # docs/rules/ expansions beside the target, so a shared root would let
+        # one combo's sweep delete the previous combo's output.
+        root = tmp_path / f"combo{index}"
+        root.mkdir()
+        composed = compose([load_profile(p) for p in profile_combo])
+        target = root / "AGENTS.md"
+        render_agents_md(composed, target, Manifest(version=1, generated={}))
+        (out_dir / fixture_name).write_bytes(target.read_bytes())
 
 
 @pytest.mark.golden
