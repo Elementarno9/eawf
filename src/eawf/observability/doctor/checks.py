@@ -318,30 +318,11 @@ def check_reserved_config_keys(*, workspace: Path | None) -> CheckResult:
 def check_manifest_in_sync(*, workspace: Path | None) -> CheckResult:
     """Verify on-disk managed regions match the manifest hashes.
 
-    Behaviour:
-
-    - ``workspace`` is ``None`` → resolve the anchor by walking upward from
-      pwd to the nearest ``.ea/`` ancestor; ``warn`` only when even that
-      walk finds no anchor.
-    - Manifest absent → ``ok`` (uninitialised; the renderer has not run yet —
-      :func:`check_state_present` already covers the "is this thing initialised?"
-      angle).
-    - Manifest present but parse-broken → ``fail`` with the parse error.
-    - Manifest present, every region's recomputed hash matches → ``ok``.
-    - Manifest present, any region missing or hand-edited → ``warn`` with a
-      compact summary of the offending ``target::id`` entries.
-
-    Install-mode awareness: whole-file plugin renders (``plugin.<runtime>.*``
-    region ids emitted by an ``eawf-plugin-*`` generator) are excluded from
-    the region-marker drift detector — they are satisfied by the plugin
-    cache, not by a local re-render, and carry no ``EAWF:BEGIN`` markers, so
-    the detector would otherwise report every one ``missing``. Only
-    region-marked managed blocks (the ``eawf-sync`` AGENTS.md regions) are
-    hash-checked. See :func:`_is_plugin_owned`.
-
-    The walk is per-target — for each unique ``target`` field in the manifest,
-    :func:`eawf.surfaces.render.drift.detect_drift` reads the file once and emits one
-    :class:`~eawf.surfaces.render.drift.DriftReport` per region.
+    An absent manifest is ``ok`` (the renderer has not run yet); a broken one
+    is ``fail``; a missing or hand-edited region is ``warn`` naming the
+    offending ``target::id`` entries. Whole-file plugin renders are excluded
+    via :func:`_is_plugin_owned` — they carry no region markers, so the
+    detector would report every one ``missing``.
     """
     anchor = _resolve_anchor(workspace)
     if anchor is None:
@@ -665,6 +646,27 @@ def _git_output(cwd: Path, *args: str) -> str | None:
 _FETCH_STALE_HOURS: int = 24
 
 
+def _fetch_head_path(workspace: Path) -> Path | None:
+    """Return ``FETCH_HEAD`` for *workspace*, or ``None`` when there is no repo.
+
+    A linked worktree's ``.git`` is a file holding ``gitdir: <path>``; the
+    common dir is its parent, which is where FETCH_HEAD lives.
+    """
+    dot_git = workspace / ".git"
+    if dot_git.is_dir():
+        return dot_git / "FETCH_HEAD"
+    if not dot_git.is_file():
+        return None
+    pointer = dot_git.read_text(encoding="utf-8").strip()
+    if not pointer.startswith("gitdir:"):
+        return None
+    git_dir = Path(pointer.removeprefix("gitdir:").strip())
+    if not git_dir.is_absolute():
+        git_dir = workspace / git_dir
+    # <common>/worktrees/<name> -> <common>
+    return git_dir.parent.parent / "FETCH_HEAD"
+
+
 def check_branch_currency(*, workspace: Path | None) -> CheckResult:
     """Warn when the local base branch trails its remote, or the fetch is old.
 
@@ -687,19 +689,22 @@ def check_branch_currency(*, workspace: Path | None) -> CheckResult:
 
     base = state.project.default_branch
     remote_ref = f"origin/{base}"
-    if _git_output(workspace, "rev-parse", "--verify", "--quiet", remote_ref) is None:
+    # One git call, not three. This check runs inside `run_all`, which the TUI
+    # doctor pane awaits on mount, so each subprocess here is latency the whole
+    # pane pays. rev-list answers "is the remote ahead" and "does the ref
+    # exist" together: a missing ref exits non-zero, which reads as None.
+    behind = _git_output(workspace, "rev-list", "--count", f"{base}..{remote_ref}")
+    if behind is None:
         return CheckResult(name=name, status="ok", detail=f"no {remote_ref} to compare")
 
     faults: list[str] = []
-    behind = _git_output(workspace, "rev-list", "--count", f"{base}..{remote_ref}")
-    if behind is not None and behind != "0":
+    if behind != "0":
         faults.append(f"local {base} is {behind} commit(s) behind {remote_ref}")
 
-    git_dir = _git_output(workspace, "rev-parse", "--git-common-dir")
-    fetch_head = Path(git_dir) if git_dir else None
-    if fetch_head is not None and not fetch_head.is_absolute():
-        fetch_head = workspace / fetch_head
-    fetch_head = fetch_head / "FETCH_HEAD" if fetch_head else None
+    # Resolved from the workspace rather than `rev-parse --git-common-dir`: a
+    # worktree's .git is a file naming the common dir, which is cheap to read
+    # directly and saves a second subprocess.
+    fetch_head = _fetch_head_path(workspace)
     if fetch_head is not None and fetch_head.is_file():
         age_hours = (time.time() - fetch_head.stat().st_mtime) / 3600
         if age_hours > _FETCH_STALE_HOURS:

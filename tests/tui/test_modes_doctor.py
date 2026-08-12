@@ -813,17 +813,20 @@ _GROUPED_GOLDEN = (
 )
 
 
-def test_doctor_mode_grouped_snapshot() -> None:
+def test_doctor_mode_grouped_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
     """The reskinned Doctor pane: install/state/drift groups + status sigils.
 
-    The W14 close-gate golden. The mode's live mount gathers env-dependent
-    doctor checks, so -- mirroring the shared snapshot's fixed-input stance
-    -- the screen is repainted with a deterministic :class:`DoctorHealth`
-    after mount. The fixture pins the install / state / drift section
-    grouping, the per-status sigil (ok=closed circle, warn=attention
-    triangle distinct from the pending ring, fail=failed cross), and the
-    ``N checks · M warn`` header summary, so a layout / glyph regression on
-    any of those is caught against a golden this wave owns in isolation.
+    The fixture pins the install / state / drift section grouping, the
+    per-status sigil (ok=closed circle, warn=attention triangle distinct from
+    the pending ring, fail=failed cross), and the ``N checks · M warn`` header
+    summary, so a layout / glyph regression on any of those is caught.
+
+    The gather is stubbed at its source rather than repainted over. The mode
+    kicks a background worker on mount that repaints with live, env-dependent
+    checks when it resolves; painting a fixed health afterwards only wins if
+    the worker lands first, which made this test flaky (~1 run in 10 locally,
+    and a macOS CI failure that blocked a release). Stubbing the source means
+    a late repaint carries the same rows, so no ordering can change the frame.
     """
     health = DoctorHealth(
         rows=[
@@ -845,6 +848,11 @@ def test_doctor_mode_grouped_snapshot() -> None:
         event_error_count=1,
     )
 
+    monkeypatch.setattr(
+        "eawf.surfaces.tui.modes.doctor.gather_doctor_health",
+        lambda **_kwargs: health,
+    )
+
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_REPO)
         async with app.run_test(size=(120, 40)) as pilot:
@@ -853,7 +861,6 @@ def test_doctor_mode_grouped_snapshot() -> None:
             await settle_screen(pilot)
             screen = app.screen
             assert isinstance(screen, DoctorModeScreen)
-            # Repaint with the fixed health so the golden is deterministic.
             screen._paint_health(health)  # type: ignore[attr-defined]
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GROUPED_GOLDEN)
