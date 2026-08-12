@@ -1,9 +1,9 @@
 <!-- Generated from the eawf profile render block `lean-wave-verification`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=lean-wave-verification version=1.1 hash=570fdc700b1bfae4 -->
+<!-- BEGIN EAWF:managed id=lean-wave-verification version=1.2 hash=fb0d755afd91d07f -->
 # `lean-wave-verification`
 
-Wave success criteria name targeted tests only; the full suite and one fresh-context audit run once per iter at iter close, not once per wave.
+Wave success criteria name targeted tests that finish inside 60s; the full suite and one fresh-context audit run once per iter at iter close, not once per wave.
 
 ### Rationale
 
@@ -12,7 +12,7 @@ Running the full test suite plus a fresh-context audit on every wave costs 10-30
 
 ### Mechanism
 
-Wave success criteria name targeted tests only (``uv run pytest <touched paths>``) — never the full suite. A mechanical wave (S/M effort, executor role, non-security) closes on criteria + evidence alone; do not describe the 1-in-4 sampler as a blocking spawn control. The full suite (the repo's acceptance ``tests`` command) and one fresh-context audit run once per iter, at iter close, in this order: polish -> full suite -> audit over the iter diff -> close. Strict close validates that the named audit exists, belongs to the iter, is complete and accepted, and carries real evidence; it does not validate evaluated HEAD. Nonblocking audit findings become backlog items (``eawf backlog add``). One repair wave and one re-audit is operator procedure, not a production limit: reserved ``flow.max_repair_cycles`` does not enforce it. Exceptions that keep the wave-level full-tree gauntlet: persisted-schema / migration waves and security-scoped waves.
+Wave success criteria name targeted tests only (``uv run pytest <touched paths>``) — never the full suite — and that selection must finish within **60 seconds**. A targeted run slower than that is over-scoped: narrow it to the touched paths, or the feedback loop stops being usable and the agent starts skipping it. Iter-scoped and full-suite runs carry no such bound. A mechanical wave (S/M effort, executor role, non-security) closes on criteria + evidence alone; do not describe the 1-in-4 sampler as a blocking spawn control. The full suite (the repo's acceptance ``tests`` command) and one fresh-context audit run once per iter, at iter close, in this order: polish -> full suite -> audit over the iter diff -> close. Strict close validates that the named audit exists, belongs to the iter, is complete and accepted, and carries real evidence; it does not validate evaluated HEAD. Nonblocking audit findings become backlog items (``eawf backlog add``). One repair wave and one re-audit is operator procedure, not a production limit: reserved ``flow.max_repair_cycles`` does not enforce it. Exceptions that keep the wave-level full-tree gauntlet: persisted-schema / migration waves and security-scoped waves.
 
 
 ### Verification

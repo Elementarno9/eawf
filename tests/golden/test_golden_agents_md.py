@@ -39,7 +39,13 @@ _REPO_PROFILE_IDS: tuple[str, ...] = ("core", "python", "research", "agent_drive
 # have a tooling backstop (e.g. ``planned-scope-revisability`` via the
 # PENDING-only guard, ``agent-report-contract`` via the typed report
 # boundary) are ``reference``, not tier-0.
+#
+# ``project-orientation`` is the one member that is not a rule. It states what
+# the workflow is before the rules that govern it, and a reference pointer
+# would defeat that: a reader who must follow a link to learn what repo they
+# are in has already read thirty rules without a frame for them.
 _EXPECTED_TIER0_BLOCK_IDS = {
+    "project-orientation",
     "non-negotiable-rules",
     "state-vs-specs",
     "worktree-discipline",
