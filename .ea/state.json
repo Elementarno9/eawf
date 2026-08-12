@@ -18070,6 +18070,22 @@
       "status": "active",
       "superseded_by": null,
       "title": "Downscope telemetry and bucket recalibration backlog"
+    },
+    "D33": {
+      "alternatives": [
+        "Reinstate [P<NN>-CORE] per the 2026-07-22 note, changing core.yaml, the lint, AGENTS.md and its goldens; the 30 commits already on this branch would become retroactively off-lane",
+        "Defer to the v0.7 decision pass, leaving rule 6(b) undischarged for a removal this release already ships"
+      ],
+      "consequences": [],
+      "created_at": "2026-08-12T13:06:15.675210Z",
+      "description": null,
+      "id": "D33",
+      "obsoleted_at": null,
+      "rationale": "A 2026-07-22 note blessed [P<NN>-CORE] as the wave-less hotfix lane, but it never reached the lint or the rendered rules. The shipped commit_prefix_lint.py and AGENTS.md both retire it, so two of three sources already agree and the third was never implemented. The bare conventional form (fix:, docs:, test:) is accepted whenever no phase is ACTIVE, which is exactly the wave-less hotfix case, so the lane adds a second spelling for a case already covered. Recording the verdict discharges deletion rule 6(b) for the removal v0.6.8 ships.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Retire the -CORE commit-subject alias"
     }
   },
   "dispatch_paused": false,
@@ -34838,7 +34854,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-08-07T15:58:02.924250Z",
+  "updated_at": "2026-08-12T13:06:15.675210Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {},
