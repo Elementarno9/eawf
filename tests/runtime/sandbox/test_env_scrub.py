@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.runtime.sandbox.env_scrub` (P29-I03-W01).
+"""Unit tests for :mod:`eawf.runtime.sandbox.env_scrub`.
 
 Pin the env-scrub allowlist + its wiring into the one live ``claude -p``
 spawn:

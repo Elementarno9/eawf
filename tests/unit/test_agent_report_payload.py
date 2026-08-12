@@ -285,5 +285,5 @@ def test_role_body_rejects_unknown_field() -> None:
 def test_body_class_for_role_returns_role_typed_class(
     role: AgentSessionRole, expected_cls: type
 ) -> None:
-    """Every registered role maps to its own typed body class (P28-I01-W13)."""
+    """Every registered role maps to its own typed body class."""
     assert body_class_for_role(role) is expected_cls

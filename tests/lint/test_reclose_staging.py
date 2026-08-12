@@ -1,4 +1,4 @@
-"""The v0.6.0 re-close staging invariants (P30-I23-W36).
+"""The v0.6.0 re-close staging invariants.
 
 W36 hands the phase off to P30-I21-W22 (the re-close wave): its criteria
 are retyped with real gates, the runbook artifact drafts the exact
@@ -74,7 +74,7 @@ _SUPERSEDED_RECLOSE_WAVE = "P30-I21-W22"
 def test_repo_census_has_no_stray_pending_waves() -> None:
     """CR-02 (I26 reconcile): the re-close wave carries the close; no stray PENDING wave.
 
-    The I26 reconcile closed the original re-close vehicle (P30-I21-W22) in its
+    The I26 reconcile closed the original re-close vehicle in its
     Step 1 and moved the phase-close ceremony onto P30-I26-W23. That wave now
     waits while the phase is ACTIVE and closes in the same commit that closes the
     phase. Asserting it is PENDING outright would redden the moment that commit

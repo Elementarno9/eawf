@@ -1,4 +1,4 @@
-"""Tests for the ``state.*`` JSON-RPC handlers (P24-W09).
+"""Tests for the ``state.*`` JSON-RPC handlers.
 
 Covers the W09 mutator path end-to-end:
 
@@ -2697,7 +2697,7 @@ def test_a_stale_reset_does_not_pardon_a_later_silent_zero(tmp_path: Path) -> No
     reset in a wave's first minute would pardon every zero it ever recorded,
     including those of a capture path that silently died forty turns later. That is
     exactly the failure the gate exists to catch, laundered through the mechanism
-    meant to stop an honest reset from stranding a wave (P30-I25-W45).
+    meant to stop an honest reset from stranding a wave.
     """
     from eawf.runtime.daemon.methods import DaemonValidationError
 

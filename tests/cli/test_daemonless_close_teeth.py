@@ -1,4 +1,4 @@
-"""End-to-end teeth for the daemonless / in-process wave close (P30-I23-W20).
+"""End-to-end teeth for the daemonless / in-process wave close.
 
 Before this wave the ``EAWF_DAEMONLESS`` (and daemon-down fallback) close path
 computed readiness but only LOGGED ``close_advisory`` warnings and applied the

@@ -21,7 +21,7 @@ from eawf.kernel.spec.common import (
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.models import CriteriaFloorWaiver
 
-# --- Hypothesis CI example-budget profile (P30-I26-W22) --------------------
+# --- Hypothesis CI example-budget profile --------------------
 #
 # ``register_profile("ci", ...)`` gives CI a low ``max_examples`` budget so
 # the Hypothesis-governed property tests -- the ones that do NOT pin their own
@@ -38,7 +38,7 @@ hypothesis.settings.load_profile(
     os.environ.get("HYPOTHESIS_PROFILE") or ("ci" if os.environ.get("CI") else "dev")
 )
 
-# --- suite daemon runtime-dir isolation (P30-I23-W14) ----------------------
+# --- suite daemon runtime-dir isolation ----------------------
 #
 # The suite must never bind a daemon socket in -- or mutate state through --
 # the operator's live ``~/.eawfd`` runtime dir: a shared-daemon run once
@@ -214,7 +214,7 @@ def tmp_repo(tmp_path: Path) -> Path:
 def make_floor_waiver() -> CriteriaFloorWaiver:
     """Build a typed criteria-floor waiver for legacy-criterion fixtures.
 
-    The plan-time typed-criteria floor (P30-I23-W26) rejects a wave
+    The plan-time typed-criteria floor rejects a wave
     authored with grandfathered legacy rows; fixtures that deliberately
     model migration-era legacy waves attach this waiver so the modelled
     state stays constructible while the floor stays on for real authoring.

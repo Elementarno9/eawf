@@ -1,4 +1,4 @@
-"""Pilot tests for the per-pane render-exception boundary (P30-I02-W26).
+"""Pilot tests for the per-pane render-exception boundary.
 
 Contract 5 of the cosmic-terminal reskin is the ONE I00 wave that adds
 BEHAVIOUR: an app-authored render-exception boundary. Textual has no native

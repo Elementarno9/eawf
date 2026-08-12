@@ -9,7 +9,7 @@ Pin the Phase 4 W02 acceptance contract for ``/ship``:
 - ``--pr <action>`` flag populates ``body.pr.action``.
 - Body's :class:`ShipPrGates` always sets ``state_valid``.
 
-Plus the C04a ship-pipeline gates (P26-W09):
+Plus the C04a ship-pipeline gates:
 
 - Audit-verdict gate: a recorded ``major`` / missing verdict for the
   shipped phase blocks ship; ``pass`` / ``minor`` clears it.

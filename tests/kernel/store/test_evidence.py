@@ -1,4 +1,4 @@
-"""Tests for :class:`EvidenceRecord` (P28-I01-W04)."""
+"""Tests for :class:`EvidenceRecord`."""
 
 from __future__ import annotations
 

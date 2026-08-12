@@ -1,4 +1,4 @@
-"""Tests for the ``evidence.append`` JSON-RPC handler (P28-I01-W04)."""
+"""Tests for the ``evidence.append`` JSON-RPC handler."""
 
 from __future__ import annotations
 

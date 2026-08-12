@@ -359,7 +359,7 @@ def test_pick_watch_target_falls_back_to_closed_executor() -> None:
 
 
 def test_pick_watch_target_selects_researcher_when_no_executor() -> None:
-    """A campaign researcher is a valid default watch target (W20).
+    """A campaign researcher is a valid default watch target.
 
     With no executor session and one ACTIVE researcher, the picker targets the
     researcher -- the Watch surface streams any spawned agent, not only wave
@@ -405,7 +405,7 @@ def test_pick_watch_target_ignores_non_watchable_role() -> None:
 
 
 def test_render_watch_header_shows_agent_role_and_short_label() -> None:
-    """The header names the role + a SHORT label (W20/W22), not the raw scope.
+    """The header names the role + a SHORT label, not the raw scope.
 
     A researcher's header reads its domain (parsed from the scope) rather than
     the 40-char ``campaign-{hash}-research-{domain}-{uid}`` string.
@@ -423,7 +423,7 @@ def test_render_watch_header_shows_agent_role_and_short_label() -> None:
 
 
 def test_watch_display_label_per_role() -> None:
-    """The display label shortens each role's scope to its meaningful part (W22)."""
+    """The display label shortens each role's scope to its meaningful part."""
     # Executor: the wave id, verbatim (already short).
     assert watch_display_label(AgentSessionRole.EXECUTOR, "P01-I01-W04") == "P01-I01-W04"
     # Researcher (new format): the domain, parsed out of the scope.
@@ -446,7 +446,7 @@ def test_watch_display_label_legacy_researcher_scope_is_total() -> None:
 
 
 def test_picker_column_widths_size_to_widest_cell() -> None:
-    """The roster column widths size to the widest cell so the table aligns (W22)."""
+    """The roster column widths size to the widest cell so the table aligns."""
     rows = session_picker_rows(
         _state(
             sessions={
@@ -466,7 +466,7 @@ def test_picker_column_widths_size_to_widest_cell() -> None:
 
 
 def test_render_picker_row_pads_role_column_to_align() -> None:
-    """Every rendered row pads the role column to one width so roles line up (W22)."""
+    """Every rendered row pads the role column to one width so roles line up."""
     rows = session_picker_rows(
         _state(
             sessions={
@@ -488,7 +488,7 @@ def test_render_picker_row_pads_role_column_to_align() -> None:
 
 
 def test_session_picker_seeds_selection_at_initial_session() -> None:
-    """The roster seeds its selection on the initial session (W22), not row 0."""
+    """The roster seeds its selection on the initial session, not row 0."""
     rows = session_picker_rows(
         _state(
             sessions={
@@ -1905,7 +1905,7 @@ def test_app_output_buffer_is_bounded(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------
-# Session picker + status-gated cancel / pause (P30-I22-W07)
+# Session picker + status-gated cancel / pause
 # --------------------------------------------------------------------------
 
 
@@ -2023,7 +2023,7 @@ def _active_plus_closed() -> dict[str, AgentSession]:
     """One ACTIVE executor session (``S-1`` / W01) plus a newer finished one.
 
     The ACTIVE session auto-targets the single-session zoom; the newer CLOSED
-    ``S-2`` (W02) gives the roster a DIFFERENT agent to step to.
+    ``S-2`` gives the roster a DIFFERENT agent to step to.
     """
     return {
         "S-1": _session(
@@ -2089,7 +2089,7 @@ def test_watch_roster_pick_zooms_a_different_agent(
     """Selecting a roster row watches THAT agent, escaping the trapped zoom.
 
     The ACTIVE session auto-targets W01; opening the roster (``l``) and pressing
-    Enter on the preselected newest row (W02) re-targets + zooms that DIFFERENT
+    Enter on the preselected newest row re-targets + zooms that DIFFERENT
     agent into the FA4 single-session view -- the browse-to-another-agent path
     the defect blocked. Confirms :meth:`on_session_picker_pick` wiring.
     """

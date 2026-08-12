@@ -1,4 +1,4 @@
-"""Unit tests for the telemetry metrics store (P27-I01-W12).
+"""Unit tests for the telemetry metrics store.
 
 Covers the four load-bearing guarantees of the wave:
 

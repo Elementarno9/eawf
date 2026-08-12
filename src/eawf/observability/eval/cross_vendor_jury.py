@@ -1,4 +1,4 @@
-"""Cross-vendor disjoint-family jury convener (P29-I04-W08).
+"""Cross-vendor disjoint-family jury convener.
 
 The single-auditor close gate
 (:func:`eawf.workflow.dispatch.verdict.verify_wave_verdict_gate`) blocks a
@@ -40,7 +40,7 @@ each runtime's :meth:`~eawf.runtime.runtimes.adapter.RuntimeAdapter.spawn_sessio
 (via :func:`eawf.runtime.runtimes.selector.select_adapter`) while a test binds
 recording stubs -- no real subprocess, no network, no cost.
 
-Per-rubric-item reduction (P29-I08-W04). The holistic path collects ONE
+Per-rubric-item reduction. The holistic path collects ONE
 verdict per juror and reduces it once. The per-item path
 (:func:`reduce_per_item_ballots`) lifts that to ONE vote per rubric item per
 juror: each juror returns a :class:`PerItemJurorBallot` of
@@ -846,7 +846,7 @@ async def convene_cross_vendor_jury(
 
     jurors: list[JurorOutcome] = list(await asyncio.gather(*(_one(r) for r in runtimes)))
 
-    # Persist one ballot row per juror (P30-I23-W17): the calibration
+    # Persist one ballot row per juror: the calibration
     # substrate was empty by construction because every convened jury's
     # ballots were dropped on the floor. The append rides the sibling
     # jury_ballot.jsonl portalock (distinct from the state lock) and a

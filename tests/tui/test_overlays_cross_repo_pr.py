@@ -1,4 +1,4 @@
-"""Tests for the advisory cross-repo PR overlay (P29-I02-W25).
+"""Tests for the advisory cross-repo PR overlay.
 
 Three layers, mirroring the single-repo ``/pr`` suite:
 

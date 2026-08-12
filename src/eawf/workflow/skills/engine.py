@@ -23,7 +23,7 @@ Lifecycle:
    override via ``ctx.failure_repair_commands``) and the exception text in
    the body.
 
-This wave (W01) defines the contract only. W02/W03 add the six core +
+This wave defines the contract only. W02/W03 add the six core +
 four meta skill subclasses.
 """
 

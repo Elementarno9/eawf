@@ -307,12 +307,12 @@ HALT_NO_DAEMON: str = "halt: daemon unavailable -- request not issued"
 #: ``agent.pause`` persists ``dispatch_paused = True`` (a deliberate stop that
 #: blocks the next claim); ``agent.resume`` clears it. The flag picks which.
 #: These are the DEFAULT (no-fleet-run) target; when a fleet run is in flight the
-#: ``space`` key instead drives the fleet-run pause / resume (W06).
+#: ``space`` key instead drives the fleet-run pause / resume.
 _PAUSE_RPC: str = "agent.pause"
 _RESUME_RPC: str = "agent.resume"
 
 #: Daemon JSON-RPC methods the cockpit fleet controls drive while a fleet run is
-#: DRAINING / PAUSED (W06): ``fleet.pause`` holds the running drive loop (it stops
+#: DRAINING / PAUSED: ``fleet.pause`` holds the running drive loop (it stops
 #: claiming while in-flight lanes finish), ``fleet.resume`` continues the SAME
 #: loop, and ``fleet.halt`` drains the in-flight lanes to the run-summary card.
 #: None of the three aborts the run.
@@ -321,7 +321,7 @@ _FLEET_RESUME_RPC: str = "fleet.resume"
 _FLEET_HALT_RPC: str = "fleet.halt"
 
 #: Daemon JSON-RPC method the cockpit calls on mount when it binds a persisted
-#: DRAINING run (W07): ``fleet.reattach`` re-binds the run's still-live lanes
+#: DRAINING run: ``fleet.reattach`` re-binds the run's still-live lanes
 #: against the pid registry + resumes draining, so reopening the cockpit after a
 #: TUI close picks the run back up rather than showing a stale frozen vitals row.
 _FLEET_REATTACH_RPC: str = "fleet.reattach"
@@ -1131,7 +1131,7 @@ class AutopilotModeScreen(ScopeScreen):
         self._maybe_reattach()
 
     def _maybe_reattach(self) -> None:
-        """Re-bind a persisted DRAINING run on mount via fleet.reattach (W07).
+        """Re-bind a persisted DRAINING run on mount via fleet.reattach.
 
         Reopening the cockpit while a fleet run is mid-drain must re-bind to the
         live run rather than render a frozen snapshot: the daemon-owned
@@ -1169,7 +1169,7 @@ class AutopilotModeScreen(ScopeScreen):
         logger.info(f"autopilot_reattach reattached={reattached}")
 
     def _issue_reattach(self) -> bool:
-        """Call the ``fleet.reattach`` RPC; return whether it was issued (W07).
+        """Call the ``fleet.reattach`` RPC; return whether it was issued.
 
         Calls ``fleet.reattach`` through the
         :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam; the daemon
@@ -1326,7 +1326,7 @@ class AutopilotModeScreen(ScopeScreen):
         """Halt the fleet run, or the selected wave when no run is in flight (``H``).
 
         While a fleet run is in flight (DRAINING / PAUSED) ``H`` drives the FLEET
-        halt (W06): ``fleet.halt`` blocks new claims, lets the in-flight lanes
+        halt: ``fleet.halt`` blocks new claims, lets the in-flight lanes
         finish, then drains the run to the run-summary card -- it does NOT abort
         the run or reap live work. With no live fleet run it falls back to the
         per-wave graceful halt (``agent.kill`` SIGTERM on the selected wave). The
@@ -1368,7 +1368,7 @@ class AutopilotModeScreen(ScopeScreen):
         logger.info(f"action_halt_selected fleet result={result_line!r}")
 
     def _issue_fleet_halt(self) -> str:
-        """Drive the ``fleet.halt`` RPC and return a cockpit result line (W06).
+        """Drive the ``fleet.halt`` RPC and return a cockpit result line.
 
         Calls ``fleet.halt`` through the
         :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam; the daemon
@@ -1464,7 +1464,7 @@ class AutopilotModeScreen(ScopeScreen):
         return bool(state.dispatch_paused) if state is not None else False
 
     def _active_run_state(self) -> str | None:
-        """Return the bound fleet run's state when a live run is in flight (W06).
+        """Return the bound fleet run's state when a live run is in flight.
 
         The ``space`` (pause / resume) + ``H`` (halt) keys route to the
         ``fleet.*`` control RPCs only while a fleet run is DRAINING / PAUSED; an
@@ -1485,7 +1485,7 @@ class AutopilotModeScreen(ScopeScreen):
         """Toggle pause via the real RPC and return a result line.
 
         While a fleet run is in flight (DRAINING / PAUSED) the ``space`` key drives
-        the FLEET pause / resume (W06): ``fleet.pause`` holds the running drive
+        the FLEET pause / resume: ``fleet.pause`` holds the running drive
         loop (it stops claiming while the in-flight lanes finish) and
         ``fleet.resume`` continues the SAME loop -- neither aborts the run. With no
         live fleet run it falls back to the global ``agent.pause`` / ``agent.resume``
@@ -1504,7 +1504,7 @@ class AutopilotModeScreen(ScopeScreen):
 
         run_state = self._active_run_state()
         if run_state is not None:
-            # A live fleet run: drive the fleet pause / resume (W06). A PAUSED run
+            # A live fleet run: drive the fleet pause / resume. A PAUSED run
             # resumes; a DRAINING run pauses.
             method = _FLEET_RESUME_RPC if run_state == "paused" else _FLEET_PAUSE_RPC
             verb = "resumed" if run_state == "paused" else "paused"

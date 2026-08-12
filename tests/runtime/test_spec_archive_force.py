@@ -1,4 +1,4 @@
-"""Tests for the ``spec.archive`` force flag (P30-I14-W08).
+"""Tests for the ``spec.archive`` force flag.
 
 The ``force`` param relaxes the IMPLEMENTED-status gate on
 :func:`eawf.runtime.daemon.methods.spec.archive`:

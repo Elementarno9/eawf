@@ -1,4 +1,4 @@
-"""Verdict-to-outcome projection (P29-I05-W01).
+"""Verdict-to-outcome projection.
 
 The reputation/Brier scorer (a later wave) cannot score a per-wave verdict
 until that verdict has a *realized outcome* to score against: a verdict is a
@@ -291,7 +291,7 @@ def build_verdict_outcomes(
     return outcomes
 
 
-# --- fleet verdict rollup (P30-I07-W09) -----------------------------------
+# --- fleet verdict rollup -----------------------------------
 #
 # The fleet rollup is the DISPLAY-side companion to the outcome loop above: it
 # lists each wave's LATEST auditor verdict across the whole fleet so the
@@ -379,7 +379,7 @@ def fleet_verdict_rollup(state_path: Path) -> list[FleetVerdictRow]:
     return rollup
 
 
-# --- reliability scoring layer (P29-I05-W02) ------------------------------
+# --- reliability scoring layer ------------------------------
 #
 # The scoring layer turns a stream of observed :class:`VerdictOutcome` rows
 # into one conservative reliability estimate per ``(agent_role, runtime)``.
@@ -833,7 +833,7 @@ def compute_role_reliability(
     return reliabilities
 
 
-# --- trust-tier ladder (P29-I05-W03) --------------------------------------
+# --- trust-tier ladder --------------------------------------
 #
 # The ladder maps the conservative DISPLAY score (the Wilson / Beta-posterior
 # ``posterior_lower_bound`` the scoring layer computes) onto a C -> B -> A

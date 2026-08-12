@@ -313,7 +313,7 @@ class CheckResult(BaseModel):
 
 
 class CommandExitZeroArgs(BaseModel):
-    """Strict args schema for the ``command_exit_zero`` check kind (W15).
+    """Strict args schema for the ``command_exit_zero`` check kind.
 
     Validates the typed kwargs the W15 runner-hardening pass added:
     timeout-class budget, file-set scope, and the optional wave-context

@@ -259,9 +259,9 @@ def test_close_phase_with_open_iter_raises() -> None:
 def _seed_closed_wave(state: State, phase_id: str, iter_id: str | None = None) -> None:
     """Add an iter + closed wave under *phase_id* so close_phase can succeed.
 
-    ``close_phase`` requires at least one CLOSED wave (P19-W03), every CLOSED
+    ``close_phase`` requires at least one CLOSED wave, every CLOSED
     child iter to carry its ``audit_id``, and — for a single-wave phase — an
-    ACTIVE scope-collapse decision (P27-I02-W36). This helper seeds all three
+    ACTIVE scope-collapse decision. This helper seeds all three
     so tests exercising close_phase / reopen_phase paths satisfy the gates
     without inflating each test body.
     """
@@ -1010,7 +1010,7 @@ def test_start_wave_then_close_succeeds() -> None:
     assert "P01-I01-W01" not in state.current.active_wave_ids
 
 
-# ---- Planned-scope transitions (W01) ----------------------------------------
+# ---- Planned-scope transitions ----------------------------------------
 
 
 def test_plan_phase_creates_planned_phase() -> None:
@@ -2473,7 +2473,7 @@ def test_claim_wave_under_terminal_iter_rejected_and_not_activated() -> None:
     assert state.iters["P01-I01"].status == IterStatus.CLOSED
 
 
-# ---- Description round-trip (P28-W02) ---------------------------------------
+# ---- Description round-trip ---------------------------------------
 #
 # Description is an existing model field (≤500 char bound enforced in
 # Pydantic) that lifecycle transitions historically did not surface. These

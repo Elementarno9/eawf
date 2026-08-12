@@ -1,4 +1,4 @@
-"""``jury.*`` JSON-RPC methods: the gold-label writer (P30-I23-W17).
+"""``jury.*`` JSON-RPC methods: the gold-label writer.
 
 The jury-calibration substrate needs operator ground truth, but until
 this verb NO writer surface existed for ``gold_label.jsonl`` — only the

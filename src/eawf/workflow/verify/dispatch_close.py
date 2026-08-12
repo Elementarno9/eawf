@@ -1,4 +1,4 @@
-"""Post-execution verify gate for the daemon dispatch runner (P28-I03-W57).
+"""Post-execution verify gate for the daemon dispatch runner.
 
 The dispatch runner's pre-W57 close path accepts an executor report
 unconditionally — the runner emits the typed ``agent_end`` envelope and
@@ -171,7 +171,7 @@ def verify_close_readiness(
        and the wave carries at least one typed criterion, the report's
        ``evidence_refs`` MUST be non-empty — one entry per criterion is
        the contract the executor DoD demands; an empty list on a
-       criteria-bearing wave refuses close-ready (W49).
+       criteria-bearing wave refuses close-ready.
 
     Args:
         wave_id: The wave the runner served. Compared against

@@ -287,7 +287,7 @@ def test_build_wheel_skips_when_opt_out_env_set(
     assert _build_wheel(tmp_path / "dist") is None
 
 
-# --- Windows extra (P30-I19-W05) --------------------------------------------
+# --- Windows extra --------------------------------------------
 
 
 def test_windows_extra_pins_pywin32_in_pyproject() -> None:

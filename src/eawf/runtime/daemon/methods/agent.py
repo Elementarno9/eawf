@@ -865,7 +865,7 @@ def _resolve_config_runtime_preference(state_path: Path) -> list[str]:
 #: Which measure the headless snapshots come from: the spawn's own wall-clock
 #: duration, which is a different quantity from either the transcript's per-turn
 #: figure or the statusline's cost block. Declared so a flip between sources is a
-#: known change rather than an unknown one (see P30-I25-W45).
+#: known change rather than an unknown one.
 _HEADLESS_MEASURE_VERSION: int = 201
 
 
@@ -1134,7 +1134,7 @@ def _reassert_dispatch_state(
     session_scope_id: str,
     session_started_at: datetime,
 ) -> None:
-    """Restore daemon-owned dispatch rows a jailed agent reverted mid-spawn (W10).
+    """Restore daemon-owned dispatch rows a jailed agent reverted mid-spawn.
 
     The daemon writes the claim, the role-matched session registration, and the
     phase-active pointer into the repo-tracked ``.ea/state.json`` BEFORE the
@@ -1809,7 +1809,7 @@ async def _spawn_and_dispatch(
     # deny-list. The captured pid rides the ``on_spawn`` callback.
     captured_pid: list[int] = []
 
-    # Live-output streaming (W45 + W19): the adapter awaits ``on_chunk`` once per
+    # Live-output streaming: the adapter awaits ``on_chunk`` once per
     # stdout line AS IT ARRIVES. We BATCH lines and flush on the count batch OR a
     # wall-clock budget (:func:`_chunk_should_flush`), plus a final flush at spawn
     # end, and persist each batch as an ``agent.output.chunk`` event keyed on the
@@ -1840,7 +1840,7 @@ async def _spawn_and_dispatch(
 
     async def _on_chunk(line: str) -> None:
         chunk_buffer.append(line)
-        # Flush on the line-count batch OR a wall-clock budget (W19): codex
+        # Flush on the line-count batch OR a wall-clock budget: codex
         # streams in bursts at turn boundaries, so a sub-batch burst would sit
         # unpersisted -- invisible to the Watch tail, which reads chunks off the
         # event store -- until the next burst fills the count batch. Bounding the
@@ -1984,7 +1984,7 @@ async def _spawn_and_dispatch(
         )
     attempt, annotation, session_attempt = persisted
     # Re-assert any daemon-owned dispatch row a sandboxed agent reverted while
-    # it ran (W10): a jailed `git checkout -- .ea/` can drop the uncommitted
+    # it ran: a jailed `git checkout -- .ea/` can drop the uncommitted
     # session registration, claim, and phase pointer, which would otherwise
     # corrupt the close that follows.
     _reassert_dispatch_state(
@@ -2243,7 +2243,7 @@ async def kill(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     as reaped (the kill primitive reports it rather than raising).
 
     When no live fleet lane resolves (no fleet run armed, or no lane for the
-    pair) the kill FALLS BACK to the wave's single-wave dispatched session (W09):
+    pair) the kill FALLS BACK to the wave's single-wave dispatched session:
     a wave dispatched via ``eawf dispatch wave`` (no fleet run) records its child
     pid on the matching ``SessionAttempt``, so the kill resolves that pid and
     signals its group -- a single dispatched session is killable even without a

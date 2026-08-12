@@ -1,4 +1,4 @@
-"""Tests for :func:`eawf.workflow.verify.compile.compile_gate` (P28-I01-W08).
+"""Tests for :func:`eawf.workflow.verify.compile.compile_gate`.
 
 Pins the W08 compile-gate contract:
 

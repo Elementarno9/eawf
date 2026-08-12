@@ -1,4 +1,4 @@
-"""Tests for the Layer-3 LLM clarity-judge contract (P29-I07-W08).
+"""Tests for the Layer-3 LLM clarity-judge contract.
 
 The contract ships spawn-free: a criterion set (reused from the shared
 clarity dimensions), a judge prompt, a minority-veto rollup, and golden

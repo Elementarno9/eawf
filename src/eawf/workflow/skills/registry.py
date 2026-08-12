@@ -18,7 +18,7 @@ Contract:
   decorator does not silently shadow an earlier registration.
 
 This module is intentionally small. It is not meant to evolve into a
-plugin loader; the runtime adapter (W05) handles loading by importing
+plugin loader; the runtime adapter handles loading by importing
 the concrete-skill modules explicitly.
 """
 

@@ -1,4 +1,4 @@
-"""Integration coverage for repo bootstrap/link aliases (P28-I02-W12)."""
+"""Integration coverage for repo bootstrap/link aliases."""
 
 from __future__ import annotations
 

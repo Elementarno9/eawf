@@ -1,4 +1,4 @@
-"""Golden snapshots for the agent-watch cosmic-terminal reskin (P30-I02-W17).
+"""Golden snapshots for the agent-watch cosmic-terminal reskin.
 
 Pins the reskin behaviours the wave delivers, each captured from the
 :class:`~eawf.surfaces.tui.modes.agent_watch.AgentWatchModeScreen` mounted IN

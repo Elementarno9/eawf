@@ -1,4 +1,4 @@
-"""Unit tests for the C07a capability matrix (W13).
+"""Unit tests for the C07a capability matrix.
 
 Pins:
 

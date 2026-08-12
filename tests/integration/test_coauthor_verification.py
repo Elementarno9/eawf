@@ -9,7 +9,7 @@ runtime identity. A failure here means the resolver itself is broken,
 so any missing-trailer symptom in a real commit is a hook-wiring issue
 rather than a policy-layer one.
 
-KISS-001 contract (P25-W12)
+KISS-001 contract
 ---------------------------
 
 Pre-W12 the runtime resolver sniffed environment-variable name prefixes

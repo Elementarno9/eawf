@@ -1,4 +1,4 @@
-"""Pilot tests for the C06 W20 overlay palette-verb wiring (P26-W20).
+"""Pilot tests for the C06 W20 overlay palette-verb wiring.
 
 Proves the two W20 palette verbs open their overlays through the App's
 modal-cap-aware ``push_modal``: ``/audit`` opens the live

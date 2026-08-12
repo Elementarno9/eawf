@@ -62,7 +62,7 @@ from eawf.kernel.spec.common import CriterionSpec, GateSpec, _StrictModel
 
 logger = logging.getLogger(__name__)
 
-#: The fenced-code-block info string the markdown extractor (W04) keys
+#: The fenced-code-block info string the markdown extractor keys
 #: on to locate the structured wave-body block. Lives here so the schema
 #: and the (later) extractor agree on one canonical fence label.
 WAVE_BODY_FENCE = "eawf-wave-body"
@@ -130,8 +130,8 @@ class WaveSpecBody(_StrictModel):
     def from_mapping(cls, data: dict[str, Any]) -> WaveSpecBody:
         """Build a :class:`WaveSpecBody` from the structured-block mapping.
 
-        The thin convenience loader the markdown extractor (W04) and the
-        ``eawf spec sync`` command (W05) call once they have the parsed
+        The thin convenience loader the markdown extractor and the
+        ``eawf spec sync`` command call once they have the parsed
         YAML mapping in hand. It is a direct ``model_validate`` pass — the
         method exists so callers depend on a named, documented entry
         point rather than reaching for ``model_validate`` directly, and so

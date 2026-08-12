@@ -8,7 +8,7 @@ and the cost ledger reports ``$0`` regardless of real token consumption.
 
 This module closes that gap. :func:`price_spawn_result` is the metering
 writer: it takes the transient
-:class:`~eawf.runtime.runtimes.adapter.SpawnResult` a live spawn (W21)
+:class:`~eawf.runtime.runtimes.adapter.SpawnResult` a live spawn
 returns, prices its token classes through the embedded Decimal pricing
 snapshot (W20, :func:`~eawf.observability.telemetry.pricing.lookup_pricing`),
 and returns a typed :class:`MeteredCost` carrying the priced ``cost_usd``,
@@ -260,7 +260,7 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
     ``$0`` is billed.
 
     Args:
-        result: The transient outcome of one live runtime spawn (W21).
+        result: The transient outcome of one live runtime spawn.
 
     Returns:
         The priced :class:`MeteredCost` for the spawn.

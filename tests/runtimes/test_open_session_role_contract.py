@@ -1,4 +1,4 @@
-"""Open-session seam threading the typed :class:`RoleContract` (P28-I01-W13).
+"""Open-session seam threading the typed :class:`RoleContract`.
 
 W13 wires the rendered role-driven prompt through the open-session seam
 so a freshly-spawned runtime receives the role registry's body rather

@@ -6,7 +6,7 @@ projector upserts into the metrics store. The package is additive — sibling
 waves land per-runtime adapters (``codex_session``, ``opencode_session``)
 that import :class:`SessionSource` from :mod:`eawf.observability.telemetry.sources.base`.
 
-This wave (P27-I01-W13) lands:
+This wave lands:
 
 - :class:`~eawf.observability.telemetry.sources.base.SessionSource` — the shared protocol.
 - :class:`~eawf.observability.telemetry.sources.event_jsonl.EventJsonlSource` — reader for

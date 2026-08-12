@@ -1,4 +1,4 @@
-"""Calibration-readiness tile in the Trust mode (P29-I13-W31).
+"""Calibration-readiness tile in the Trust mode.
 
 The Trust mode (digit ``4``) gains a CALIBRATION READINESS tile: the count
 of closed waves whose actual records a captured ``elapsed_eu`` against the

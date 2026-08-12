@@ -1,4 +1,4 @@
-"""Standing visual + tui_flow gate census (P30-I23-W31).
+"""Standing visual + tui_flow gate census.
 
 The rendered-reskin false-pass (INC-P30-03) and the too-blunt image
 oracle (INC-P30-08) both survived because no BLOCKING visual gate stood

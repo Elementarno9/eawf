@@ -1,4 +1,4 @@
-"""Tests: dynamic per-round frontier recompute (P30-I17-W04).
+"""Tests: dynamic per-round frontier recompute.
 
 The fleet frontier was frozen at arm time, so a dep-unblocked wave could never
 join a run armed before its dep closed -- a dep-chain iter drained one layer and

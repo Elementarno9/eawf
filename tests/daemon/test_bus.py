@@ -299,7 +299,7 @@ def test_matches_subscriber_filter_combinations() -> None:
 
 
 def test_register_captures_the_running_loop() -> None:
-    """A subscriber registered inside a running loop records that loop (W15)."""
+    """A subscriber registered inside a running loop records that loop."""
 
     async def body() -> None:
         bus = EventBus()
@@ -310,7 +310,7 @@ def test_register_captures_the_running_loop() -> None:
 
 
 def test_cross_thread_publish_wakes_main_loop_receiver() -> None:
-    """A publish from a WORKER-THREAD loop wakes the main-loop receiver (W15).
+    """A publish from a WORKER-THREAD loop wakes the main-loop receiver.
 
     Reproduces the fleet-dispatch push path: the spawn runs on a worker-thread
     event loop, so ``publish`` -- and the subscriber wake -- fires from a

@@ -534,7 +534,7 @@ def test_regressed_stuck_claim_trips_orphan_claim_failed() -> None:
 
 
 def test_regressed_no_cost_trips_per_attempt_cost_present() -> None:
-    """A wave whose attempt carries no per-attempt cost trips the check (W05)."""
+    """A wave whose attempt carries no per-attempt cost trips the check."""
     regressed = _wave(
         wave_id="P01-I01-W01",
         status=WaveStatus.CLOSED,

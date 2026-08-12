@@ -138,7 +138,7 @@ def test_parse_runtime_counters_drops_type_mismatched_fields() -> None:
         model=None,
         # The statusline declares its own measure: its cost block is a different
         # quantity from the transcript's per-turn duration, and a flip between the
-        # two must read as a change of measure, not as work (P30-I25-W45).
+        # two must read as a change of measure, not as work.
         measure_version=STATUSLINE_MEASURE_VERSION,
     )
 

@@ -1,4 +1,4 @@
-"""Tests for the Trust mode pane over ``compute_trust_scorecard`` (W20).
+"""Tests for the Trust mode pane over ``compute_trust_scorecard``.
 
 The Trust mode (digit ``4``) fills the W16 chassis seam with an honest
 provenance pane. These tests pin the two halves:
@@ -513,7 +513,7 @@ def test_trust_pane_starved_then_keeps_chassis_brand(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------
-# Calibration binding -- the drill surfaces a REAL Brier + ECE (W07)
+# Calibration binding -- the drill surfaces a REAL Brier + ECE
 # --------------------------------------------------------------------------
 
 

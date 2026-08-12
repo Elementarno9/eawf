@@ -1,4 +1,4 @@
-"""Tests for the footer needs_user attention badge (P29-I02-W18).
+"""Tests for the footer needs_user attention badge.
 
 Three layers: the pure badge formatter
 (:func:`format_needs_user_badge`) without Textual, a Pilot-driven paint

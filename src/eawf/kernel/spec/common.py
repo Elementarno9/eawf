@@ -195,8 +195,8 @@ class EvidenceRef(_StrictModel):
 #
 # Distinct from :data:`EvidenceKind` (which classifies *what* a
 # reference points at). This Literal classifies *how* a criterion's
-# evidence is gathered when the readiness compute (W06) and the
-# compile-gate (W08) score it:
+# evidence is gathered when the readiness compute and the
+# compile-gate score it:
 #
 #   "deterministic" -> an automated check (test exit code, regex match,
 #                      schema validation) that produces a bit answer.

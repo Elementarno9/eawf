@@ -35,7 +35,7 @@ exits non-zero:
   If a later refactor drops the direct call, the source no longer matches and
   this gate reds -- un-idling the routing contract.
 - :func:`check_spec_jury_ballot_fn_wired` -- a source-scan probe asserting the
-  daemon close path binds the LIVE per-item spec-jury ballot fn (I09-W05):
+  daemon close path binds the LIVE per-item spec-jury ballot fn:
   ``_spec_jury_ballot_fn`` returns ``live_per_item_ballot_fn(...)`` and the gate
   consults it. A regression that reverts the builder to a bare ``return None``
   re-idles the producer and reds this row.
@@ -46,10 +46,10 @@ exits non-zero:
   reputation-weighting seam and reds this row.
 - :func:`check_jury_block_authority_wired` -- a source-scan probe asserting the
   ordered-oracle jury branch tests ``block_authority is BlockAuthority.BLOCKING``
-  BEFORE it raises ``LifecycleError`` (I09-W04), so a veto blocks only an EARNED
+  BEFORE it raises ``LifecycleError``, so a veto blocks only an EARNED
   jury. Bypassing the authority gate reds this row.
 - :func:`check_validate_jury_cli_wired` -- a source-scan probe asserting
-  ``validate_jury`` has a live CLI caller (I09-W07): the ``eawf metrics
+  ``validate_jury`` has a live CLI caller: the ``eawf metrics
   jury-validation`` command binds it directly. Orphaning the reducer reds this
   row.
 - :func:`check_phase_track_tag_wired` -- a source-scan probe asserting
@@ -58,13 +58,13 @@ exits non-zero:
   silent phase-tag binding and reds this row.
 - :func:`check_drive_ladders_wired` -- a source-scan probe asserting the live
   drive (``start_background_drive``) arms ``arm_drive`` with both
-  ``classify=_live_lane_error_classifier`` and ``repair=repair_hook`` (I17-W11),
+  ``classify=_live_lane_error_classifier`` and ``repair=repair_hook``,
   so the bounded spawn ladder (DL-11) and the grounded repair ladder (DL-7) fire
   on a real autopilot run instead of staying dormant until a test injects them.
   Dropping either kwarg reds this row.
 - :func:`check_live_output_text_wired` -- a source-scan probe asserting the live
   wave spawn (``_spawn_and_dispatch``) threads ``output_text=spawn_result.text``
-  into ``run_dispatch`` (I17-W11), so the W08 stdout producer fires on a real
+  into ``run_dispatch``, so the W08 stdout producer fires on a real
   spawn and the agent-watch live tail is not empty. Dropping the thread reds this
   row.
 - :func:`check_campaign_claim_fold_wired` -- a source-scan probe asserting the
@@ -799,19 +799,19 @@ def check_resolve_routing_wired(
 # I09 jury-validation bindings: each of the four must stay wired, not idle.
 # =========================================================================== #
 
-#: The daemon close path that binds the per-item spec-jury ballot fn (I09-W05)
-#: and consults the earned block authority (I09-W04). Read off the working tree.
+#: The daemon close path that binds the per-item spec-jury ballot fn
+#: and consults the earned block authority. Read off the working tree.
 _SPEC_JURY_GATE_MODULE = "src/eawf/runtime/daemon/methods/state.py"
 
 #: The live convener that threads the reputation reliability map into the jury
-#: reducer (I09-W06). Read off the working tree.
+#: reducer. Read off the working tree.
 _CROSS_VENDOR_JURY_MODULE = "src/eawf/observability/eval/cross_vendor_jury.py"
 
 #: The ordered-oracle module whose jury branch consults *block_authority* before
-#: raising (I09-W04). Read off the working tree.
+#: raising. Read off the working tree.
 _ORACLE_MODULE = "src/eawf/workflow/verify/oracle.py"
 
-#: The CLI command that gives ``validate_jury`` a live caller (I09-W07). Read off
+#: The CLI command that gives ``validate_jury`` a live caller. Read off
 #: the working tree.
 _METRICS_CLI_MODULE = "src/eawf/surfaces/cli/commands/metrics.py"
 
@@ -850,7 +850,7 @@ def check_spec_jury_ballot_fn_wired(
     module_text: str | None = None,
     module_path: str = _SPEC_JURY_GATE_MODULE,
 ) -> GateResult:
-    """Assert the spec-jury close gate binds a live per-item ballot fn (I09-W05).
+    """Assert the spec-jury close gate binds a live per-item ballot fn.
 
     The TRUST-5 binding: :func:`_spec_jury_ballot_fn` returns a non-``None`` live
     ballot fn by binding
@@ -905,7 +905,7 @@ def check_jury_reliability_map_wired(
     module_text: str | None = None,
     module_path: str = _CROSS_VENDOR_JURY_MODULE,
 ) -> GateResult:
-    """Assert the live convener threads a reliability map into the reducer (I09-W06).
+    """Assert the live convener threads a reliability map into the reducer.
 
     The TRUST-6 binding: the live convener
     (:func:`eawf.observability.eval.cross_vendor_jury.convene_cross_vendor_jury`)
@@ -962,7 +962,7 @@ def check_jury_block_authority_wired(
     module_text: str | None = None,
     module_path: str = _ORACLE_MODULE,
 ) -> GateResult:
-    """Assert the oracle jury branch consults block authority before raising (I09-W04).
+    """Assert the oracle jury branch consults block authority before raising.
 
     The TRUST-4 binding: the ordered-oracle jury tier
     (:func:`eawf.workflow.verify.oracle.run_oracle`) tests
@@ -1018,7 +1018,7 @@ def check_validate_jury_cli_wired(
     module_text: str | None = None,
     module_path: str = _METRICS_CLI_MODULE,
 ) -> GateResult:
-    """Assert ``validate_jury`` has a live CLI caller (I09-W07).
+    """Assert ``validate_jury`` has a live CLI caller.
 
     The TRUST-7 binding: the ``eawf metrics jury-validation`` command
     (in :data:`_METRICS_CLI_MODULE`) binds
@@ -1070,7 +1070,7 @@ def check_validate_jury_cli_wired(
 # =========================================================================== #
 
 #: The lifecycle module whose ``open_phase`` silently stamps every phase with the
-#: current Track id (I11-W03). Read off the working tree; if the stamp stops
+#: current Track id. Read off the working tree; if the stamp stops
 #: firing, phases stop tagging their owning Track and the binding is idle.
 _PHASE_TRACK_TAG_MODULE = "src/eawf/workflow/lifecycle/phase.py"
 
@@ -1086,7 +1086,7 @@ def check_phase_track_tag_wired(
     module_text: str | None = None,
     module_path: str = _PHASE_TRACK_TAG_MODULE,
 ) -> GateResult:
-    """Assert ``open_phase`` silently stamps each phase with the Track id (I11-W03).
+    """Assert ``open_phase`` silently stamps each phase with the Track id.
 
     The TRACK-3 binding: :func:`eawf.workflow.lifecycle.phase.open_phase`
     constructs every :class:`~eawf.kernel.state.models.Phase` with
@@ -1145,7 +1145,7 @@ def check_phase_track_tag_wired(
 _LIVE_DRIVE_MODULE = "src/eawf/runtime/daemon/methods/fleet.py"
 
 #: The live wave-spawn dispatch module whose ``_spawn_and_dispatch`` threads the
-#: captured agent answer into the W08 stdout producer (I17-W11). Read off the
+#: captured agent answer into the W08 stdout producer. Read off the
 #: working tree; without ``output_text=spawn_result.text`` the producer is wired
 #: into ``run_dispatch`` but no live caller supplies it, so the agent-watch live
 #: tail stays empty on a real spawn.
@@ -1167,8 +1167,8 @@ _LIVE_OUTPUT_TEXT_RE = re.compile(r"\boutput_text\s*=\s*spawn_result\.text\b")
 # =========================================================================== #
 
 #: The daemon research-methods module whose ``run_campaign`` folds each round's
-#: reconciled claims into the canonical ``state.claims`` (W05/W06) and runs the
-#: L1 carryover prune between rounds (W06). Read off the working tree; if either
+#: reconciled claims into the canonical ``state.claims`` and runs the
+#: L1 carryover prune between rounds. Read off the working tree; if either
 #: binding regresses to the throwaway-shadow / no-prune path the source no longer
 #: matches and the corresponding row reds.
 _CAMPAIGN_RUN_MODULE = "src/eawf/runtime/daemon/methods/research.py"
@@ -1409,7 +1409,7 @@ def check_campaign_claim_fold_wired(
     module_text: str | None = None,
     module_path: str = _CAMPAIGN_RUN_MODULE,
 ) -> GateResult:
-    """Assert ``run_campaign`` folds reconciled claims into canonical state (W05/W06).
+    """Assert ``run_campaign`` folds reconciled claims into canonical state.
 
     The P30-I18 binding: :func:`eawf.runtime.daemon.methods.research.run_campaign`
     folds each round's reconciled claims into the REAL ``state.claims`` through
@@ -1470,7 +1470,7 @@ def check_campaign_carryover_prune_wired(
     module_text: str | None = None,
     module_path: str = _CAMPAIGN_RUN_MODULE,
 ) -> GateResult:
-    """Assert ``run_campaign`` calls the L1 carryover prune between rounds (W06).
+    """Assert ``run_campaign`` calls the L1 carryover prune between rounds.
 
     The P30-I18 binding: :func:`eawf.runtime.daemon.methods.research.run_campaign`
     calls :func:`eawf.kernel.spec.pruning.prune_round_carryover` over the
@@ -1522,7 +1522,7 @@ def check_drive_ladders_wired(
     module_text: str | None = None,
     module_path: str = _LIVE_DRIVE_MODULE,
 ) -> GateResult:
-    """Assert the LIVE drive enables the spawn + repair ladders (I17-W11).
+    """Assert the LIVE drive enables the spawn + repair ladders.
 
     The W11 binding: :func:`eawf.runtime.daemon.methods.fleet.start_background_drive`
     arms ``arm_drive`` with the production
@@ -1583,7 +1583,7 @@ def check_live_output_text_wired(
     module_text: str | None = None,
     module_path: str = _LIVE_OUTPUT_MODULE,
 ) -> GateResult:
-    """Assert the live wave spawn supplies ``output_text`` to the stdout producer (I17-W11).
+    """Assert the live wave spawn supplies ``output_text`` to the stdout producer.
 
     The W11 binding: the live wave-spawn dispatch
     (:func:`eawf.runtime.daemon.methods.agent._spawn_and_dispatch`) threads the
@@ -2611,20 +2611,20 @@ def main(argv: list[str]) -> int:
 
     # The four I09 jury-validation bindings each read their live call-site off
     # the working tree (immune to the meta-gate's reader stub, like the routing
-    # probe above): the spec-jury ballot fn (W05), the reputation reliability map
-    # (W06), the earned block authority (W04), and the validate_jury CLI caller
+    # probe above): the spec-jury ballot fn, the reputation reliability map
+    # (W06), the earned block authority, and the validate_jury CLI caller
     # (W07). Any re-idle of one fails its row and reds the gate.
     #
     # The I11 Track binding reads its live source off the working tree the same
-    # way: the silent open_phase track-tag stamp (W03). A re-idle fails its row.
+    # way: the silent open_phase track-tag stamp. A re-idle fails its row.
     #
     # The two I17 live-autopilot bindings read their live source off the working
-    # tree the same way: the drive-arming classify + repair kwargs (W11) and the
-    # live-spawn output_text fan (W11). Either re-dormant fails its row.
+    # tree the same way: the drive-arming classify + repair kwargs and the
+    # live-spawn output_text fan. Either re-dormant fails its row.
     #
     # The two P30-I18 campaign-run bindings read their live source off the working
     # tree the same way: run_campaign's state.claims fold via the canonical writer
-    # (W05/W06) and its L1 carryover prune call between rounds (W06). Either
+    # (W05/W06) and its L1 carryover prune call between rounds. Either
     # re-idle fails its row.
     #
     # The P30-I20 campaign producer class seam is checked opportunistically: W06

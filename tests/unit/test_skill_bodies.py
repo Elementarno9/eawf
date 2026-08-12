@@ -100,7 +100,7 @@ def test_blitz_body_rejects_extra_field() -> None:
 
 def test_prep_body_minimal_construction_and_round_trip() -> None:
     # A minimal body carries no DAG, so it must mark the no_op exemption to
-    # satisfy the planning-DAG invariant (P30-I03-W03).
+    # satisfy the planning-DAG invariant.
     body = PrepBody(iter_id="P00-I01", objective="ship something", no_op=True)
     _round_trip(body)
 
@@ -417,7 +417,7 @@ def test_user_question_round_trip_2_options() -> None:
     assert q.model_dump(exclude_none=True) == {**payload, "urgency": "normal"}
 
 
-# --- UserQuestionOption.preview (P29-I02-W13) ------------------------------
+# --- UserQuestionOption.preview ------------------------------
 
 
 def test_user_question_option_preview_round_trips() -> None:
@@ -468,7 +468,7 @@ def test_user_question_threads_preview_into_options() -> None:
     ]
 
 
-# --- MockupBody (P29-I02-W13) ----------------------------------------------
+# --- MockupBody ----------------------------------------------
 
 
 def test_mockup_body_minimal_construction_and_round_trip() -> None:
@@ -511,7 +511,7 @@ def test_mockup_variant_requires_non_empty_layout() -> None:
         MockupVariant(name="x", layout="")
 
 
-# --- C04b bodies (P26-W26) -------------------------------------------------
+# --- C04b bodies -------------------------------------------------
 
 
 def test_coauthor_body_round_trip_and_mode_literal() -> None:

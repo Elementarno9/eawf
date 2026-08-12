@@ -1,4 +1,4 @@
-"""Unit: the claude adapter spawn argv carries the headless permission mode (W13).
+"""Unit: the claude adapter spawn argv carries the headless permission mode.
 
 A headless ``claude -p`` spawn has no TTY to answer a permission prompt, so a
 default-mode spawn denies Edit / Write / Bash and the jailed executor reports

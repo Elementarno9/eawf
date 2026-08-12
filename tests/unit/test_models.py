@@ -859,7 +859,7 @@ def test_offset_datetime_normalised_to_utc() -> None:
     assert state.updated_at == expected
 
 
-# ---- Bounded title + description (P27-I02-W23) ------------------------------
+# ---- Bounded title + description ------------------------------
 
 
 def _wave_kwargs(**overrides: object) -> dict[str, object]:

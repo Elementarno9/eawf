@@ -433,7 +433,7 @@ def test_band_wave_unanimous_pass_writes_reports_and_closes(
 ) -> None:
     """A banded close with a unanimous PASS jury writes per-juror reports and closes.
 
-    Re-pinned to the unified oracle (W03): a banded ``always`` wave routes
+    Re-pinned to the unified oracle: a banded ``always`` wave routes
     through run_oracle's jury tier (not the removed spec-jury producer). The
     three disjoint-family jurors each spawn once and vote PASS; the reduction
     is PASS so the wave closes, and each juror's fresh-auditor verdict lands as
@@ -462,7 +462,7 @@ def test_band_wave_unanimous_pass_writes_reports_and_closes(
 
 
 # --------------------------------------------------------------------------- #
-# (b) band wave + a refuted item -> FAIL -> held ADVISORY (W10), close proceeds.
+# (b) band wave + a refuted item -> FAIL -> held ADVISORY, close proceeds.
 # --------------------------------------------------------------------------- #
 
 
@@ -532,7 +532,7 @@ def test_non_band_wave_does_not_convene_jury(
 ) -> None:
     """A non-band wave under a band-scoped enforcing profile closes advisory-only.
 
-    Enforcement is band-conditional (P29-I08-W06): the band-scoped profile
+    Enforcement is band-conditional: the band-scoped profile
     declares ``enforce: true`` at the fleet level, but
     :func:`~eawf.workflow.verify.readiness.resolve_wave_verify_block` narrows
     it to OFF for a non-band wave (no UI file_scopes, no matching token). So
@@ -640,7 +640,7 @@ def test_empty_band_list_routes_to_single_auditor_not_jury(
 
     A profile that declares no ``uiux_bands`` is a whole-fleet enforce profile
     (not band-scoped) and does not opt into ``cross_vendor_jury``, so the
-    unified close gate (W03) takes the single-auditor branch for the
+    unified close gate takes the single-auditor branch for the
     ``always`` wave: it spawns one ``claude-code`` auditor (stubbed to FAIL),
     the verdict gate reads a non-close-ready verdict, and the close is refused
     with ``verdict gate blocked``. The other two jury lanes are never spawned.

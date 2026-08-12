@@ -1,4 +1,4 @@
-"""The P30-I20/I21 legacy-criteria drain corpus (P30-I23-W25).
+"""The P30-I20/I21 legacy-criteria drain corpus.
 
 I20/I21 predate the typed-criteria floor, so their 130 criterion rows were
 grandfathered as ``kind == legacy`` at migration. W25 drains that corpus

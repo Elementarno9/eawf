@@ -1,4 +1,4 @@
-"""Tests for the autopilot ready-wave frontier + dispatch pane (P29-I04-W12).
+"""Tests for the autopilot ready-wave frontier + dispatch pane.
 
 The Autopilot mode (digit ``2``) renders the **dependency frontier** of the
 active scope's wave graph -- the PENDING waves that are claim-ready right now
@@ -269,7 +269,7 @@ def _frontier_state() -> State:
     frontier while W02 (its lower-numbered sibling) is ready. W04 depends on the
     still-PENDING W02, so it is not dep-ready. The ready frontier is therefore
     exactly ``(W02,)`` until W02 closes; a second iter's W05 (deps closed) joins
-    it, so the ready frontier is ``(W02, W05)`` in claim order.
+    it, so the ready frontier is ```` in claim order.
     """
     waves = {
         "P01-I01-W01": _wave("P01-I01-W01", status=WaveStatus.CLOSED),
@@ -396,7 +396,7 @@ def test_render_ready_row_surfaces_wave_id_iter_and_title() -> None:
 
 
 # --------------------------------------------------------------------------
-# render_cockpit_vitals -- the FA2 N-lane fleet cockpit vitals header (W02)
+# render_cockpit_vitals -- the FA2 N-lane fleet cockpit vitals header
 # --------------------------------------------------------------------------
 
 
@@ -485,7 +485,7 @@ def test_render_cockpit_vitals_ascii_mode_uses_ascii_sigil() -> None:
 
 
 # --------------------------------------------------------------------------
-# lane_cells + render_lane_cell -- the FA6 lane cell + repair counter (W06)
+# lane_cells + render_lane_cell -- the FA6 lane cell + repair counter
 # --------------------------------------------------------------------------
 
 
@@ -646,9 +646,9 @@ def test_autopilot_pane_renders_honest_empty(tmp_path: Path) -> None:
 def test_autopilot_pane_lists_ready_frontier_in_claim_order(tmp_path: Path) -> None:
     """The mounted pane lists the ready waves in claim order, matching the compute.
 
-    Seeds a wave graph whose ready frontier is ``(W02, W05)`` and asserts the
+    Seeds a wave graph whose ready frontier is ```` and asserts the
     pane mounts exactly those ready rows (CSS class :data:`FRONTIER_ROW_CLASS`),
-    in claim order. The held / blocked waves (W03 / W04) are NOT ready rows --
+    in claim order. The held / blocked waves are NOT ready rows --
     the reskin surfaces them in the separate blocked band (see
     :func:`test_autopilot_pane_renders_ready_blocked_split`), so they never
     appear as a dispatch-target row.
@@ -908,7 +908,7 @@ def test_autopilot_pane_keeps_chassis_brand(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------
-# Mounted cockpit vitals -- DRAINING header, idle hero, live push refresh (W02)
+# Mounted cockpit vitals -- DRAINING header, idle hero, live push refresh
 # --------------------------------------------------------------------------
 
 
@@ -996,7 +996,7 @@ def test_autopilot_cockpit_refreshes_on_state_push(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------
-# Run-summary terminal card -- auto-open on the DONE transition (W07)
+# Run-summary terminal card -- auto-open on the DONE transition
 # --------------------------------------------------------------------------
 
 
@@ -1089,7 +1089,7 @@ def test_autopilot_run_summary_card_reads_terminal_record(tmp_path: Path) -> Non
 
 
 def test_autopilot_mount_stale_done_run_no_card_and_idle_hero(tmp_path: Path) -> None:
-    """A run already DONE at mount opens no card and renders the idle hero (W06).
+    """A run already DONE at mount opens no card and renders the idle hero.
 
     The mount-stale guard: a terminal ``done`` fleet run persisted before a TUI
     restart is a pre-existing stop, not a live ``None -> done`` transition. On a
@@ -1119,7 +1119,7 @@ def test_autopilot_mount_stale_done_run_no_card_and_idle_hero(tmp_path: Path) ->
 
 
 # --------------------------------------------------------------------------
-# Fork inbox -- f key + auto-raise on a new fork (W05)
+# Fork inbox -- f key + auto-raise on a new fork
 # --------------------------------------------------------------------------
 
 
@@ -1279,7 +1279,7 @@ def test_autopilot_fork_inbox_resolution_routes_resolve_fork(
             await settle_screen(pilot)
 
     asyncio.run(body())
-    # Cockpit mount reattaches a persisted DRAINING run FIRST (W07), so the
+    # Cockpit mount reattaches a persisted DRAINING run FIRST, so the
     # approve-close resolve_fork is the call AFTER the mount-time reattach -- find
     # it by method rather than pinning index 0 so the reattach prefix is tolerated.
     methods = [method for method, _params in calls]
@@ -1632,7 +1632,7 @@ def test_autopilot_skip_advances_selection_to_next_ready_wave(tmp_path: Path) ->
     """``S`` (skip) advances the selection past the current ready wave (local).
 
     Skip is a real, cheap local frontier operation -- no daemon round-trip. From
-    the first ready wave (W02) it steps the selection to the next one (W05) in
+    the first ready wave it steps the selection to the next one in
     claim order and surfaces where it landed, never implying a faked skip.
     """
     state_path = _write_state(tmp_path, _frontier_state())
@@ -1745,7 +1745,7 @@ def test_autopilot_arm_opens_overlay_without_immediate_rpc(
 
 
 # --------------------------------------------------------------------------
-# space (pause / resume) -- the real agent.pause / agent.resume wiring (W05)
+# space (pause / resume) -- the real agent.pause / agent.resume wiring
 # --------------------------------------------------------------------------
 
 
@@ -1896,7 +1896,7 @@ def _three_ready_state() -> State:
     CLOSED as their only dep, so no lower-numbered-sibling gate holds any of
     them -- all three are ready at once. W05 depends on the missing W99 (an
     unresolved dep), so it is NOT dep-ready and stays off the frontier. The
-    ready frontier is therefore ``(W02, W03, W04)`` in claim order, and the
+    ready frontier is therefore ```` in claim order, and the
     blocked band carries W05.
     """
     waves = {
@@ -2121,9 +2121,9 @@ def test_autopilot_multi_select_cancel_tears_down_without_staging(tmp_path: Path
 async def _commit_two_wave_batch(app: EaApp, pilot: Pilot[None]) -> AutopilotModeScreen:
     """Open the shell, check W02 + W04, commit the batch, and return the pane.
 
-    Drives the ``m`` -> Space (W02) -> down,down -> Space (W04) -> Enter path
+    Drives the ``m`` -> Space -> down,down -> Space -> Enter path
     over a :func:`_three_ready_state` frontier so the staged claim batch is
-    ``(P01-I01-W02, P01-I03-W04)`` -- the shared setup the W07 dispatch tests
+    ```` -- the shared setup the W07 dispatch tests
     reuse before draining the worker and asserting the RPC calls.
     """
     settle = cast("Pilot[object]", pilot)

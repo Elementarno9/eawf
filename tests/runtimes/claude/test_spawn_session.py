@@ -1,4 +1,4 @@
-"""Unit tests for the live ``claude -p`` spawn + result parse (P29-I01-W21).
+"""Unit tests for the live ``claude -p`` spawn + result parse.
 
 Pins the live-spawn engine: :meth:`ClaudeAdapter.spawn_session` forks
 ``claude -p`` (headless) and :func:`_parse_claude_result` parses the
@@ -611,7 +611,7 @@ def test_spawn_session_timeout_kills_child_and_raises(monkeypatch: pytest.Monkey
 
 
 # ---------------------------------------------------------------------------
-# spawn_session — incremental on_chunk streaming (P30-I20-W44)
+# spawn_session — incremental on_chunk streaming
 # ---------------------------------------------------------------------------
 
 

@@ -1,4 +1,4 @@
-"""Coverage-lift tests for :mod:`eawf.workflow.skills._common` (P27-I01-W01).
+"""Coverage-lift tests for :mod:`eawf.workflow.skills._common`.
 
 Covers the helper surface: ``_project_status`` mapping, the probe
 fallback/raised paths in ``probe_skill_instruments``, ``emit_event``

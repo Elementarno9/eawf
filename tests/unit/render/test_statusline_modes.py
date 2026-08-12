@@ -1,4 +1,4 @@
-"""Tests for statusline glyph-mode / color-mode resolution (P29-I13-W37).
+"""Tests for statusline glyph-mode / color-mode resolution.
 
 The render layer resolves the configured ``statusline.glyph_mode`` and
 ``statusline.color_mode`` policies against a terminal capability probe,

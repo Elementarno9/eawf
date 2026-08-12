@@ -1,4 +1,4 @@
-"""Tests for the AGENTS.md byte-cap doctor diagnostic (P30-I26-W06).
+"""Tests for the AGENTS.md byte-cap doctor diagnostic.
 
 Two layers are exercised:
 

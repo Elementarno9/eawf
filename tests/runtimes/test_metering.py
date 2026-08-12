@@ -1,8 +1,8 @@
-"""Unit tests for the metering writer (P29-I01-W22).
+"""Unit tests for the metering writer.
 
 Pins the metering writer: :func:`price_spawn_result` prices a transient
-:class:`~eawf.runtime.runtimes.adapter.SpawnResult` (W21) through the embedded
-Decimal pricing snapshot (W20) into a typed
+:class:`~eawf.runtime.runtimes.adapter.SpawnResult` through the embedded
+Decimal pricing snapshot into a typed
 :class:`~eawf.runtime.runtimes.metering.MeteredCost`, and
 :func:`meter_and_emit` drives the ``dispatch_cost`` emit step with the real,
 token-derived cost so the ledger is no longer ``$0``.
@@ -228,7 +228,7 @@ def test_price_spawn_result_surfaces_session_id_for_correlation() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Cross-vendor pricing (P29-I04-W15): a real codex / opencode spawn must price
+# Cross-vendor pricing: a real codex / opencode spawn must price
 # honestly (priced=True) rather than silently fall back to priced=False / $0.
 # --------------------------------------------------------------------------- #
 

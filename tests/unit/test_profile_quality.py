@@ -1,4 +1,4 @@
-"""Tests for the opt-in ``quality`` code-craft profile (P27-I03-W02).
+"""Tests for the opt-in ``quality`` code-craft profile.
 
 The ``quality`` profile ships the code-craft rules as structured RenderBlock
 triads (the P27-I03-W01 schema). The contracts under test:

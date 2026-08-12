@@ -1,4 +1,4 @@
-"""Golden snapshot for the research_board Options + Conflicts tabs (P29-I13-W17).
+"""Golden snapshot for the research_board Options + Conflicts tabs.
 
 The Research mode (digit ``3``) center pane carries an ``Options`` tab and a
 ``Conflicts`` tab projecting the scope's claim ledger grouped by evidence

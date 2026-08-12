@@ -1,4 +1,4 @@
-"""Tests for the opportunistic fallback-WAL GC (P30-I14-W02).
+"""Tests for the opportunistic fallback-WAL GC.
 
 The daemonless fallback writer (the V1 carve-out: CI / one-shot / recovery
 shell) has no background sweep loop, so the repo-local WAL under

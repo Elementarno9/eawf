@@ -1,4 +1,4 @@
-"""Tests for ``/theme auto`` OSC 11 terminal-background detection (P26-I02-W16).
+"""Tests for ``/theme auto`` OSC 11 terminal-background detection.
 
 Covers the three detection units added to :mod:`eawf.surfaces.tui.theme` and the
 ``apply_theme("auto")`` wiring in :mod:`eawf.surfaces.tui.app`:

@@ -1,4 +1,4 @@
-"""Cross-session runtime rebasing (P30-I25-W27).
+"""Cross-session runtime rebasing.
 
 Runtime counters are cumulative *within a session*: a wave claimed in session A
 and closed in session B would otherwise difference B's counters (which start at
@@ -647,7 +647,7 @@ def test_a_flip_between_counter_sources_is_a_known_change() -> None:
     back to the statusline -- and if that snapshot declared NO measure, the flip
     looked like an unknown source: it re-originated the wave, recorded a reset, and
     the reset then excused a zero-EU close. Two repairs composing into a way to
-    launder a silent capture failure into a clean one (P30-I25-W45).
+    launder a silent capture failure into a clean one.
     """
     from eawf.runtime.runtimes.claude.runtime_counters import STATUSLINE_MEASURE_VERSION
     from eawf.runtime.runtimes.claude.transcript_counters import MEASURE_VERSION

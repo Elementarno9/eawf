@@ -1,4 +1,4 @@
-"""Unit tests for ``active_phase_completion`` + active-phase ``_phase_cell`` (P27-I04-W24).
+"""Unit tests for ``active_phase_completion`` + active-phase ``_phase_cell``.
 
 The workspace table's ``phase`` column scopes to a repo's *active* phase:
 its phase id plus that phase's ``closed/total`` wave progress (e.g.
@@ -255,7 +255,7 @@ def test_build_repo_rows_none_state_is_empty() -> None:
 
 
 # --------------------------------------------------------------------------
-# Reskin helpers (P30-I08-W02): leading sigil + green bar + warn chip
+# Reskin helpers: leading sigil + green bar + warn chip
 # --------------------------------------------------------------------------
 
 

@@ -506,7 +506,7 @@ _TERMINAL_NOT_CLOSED_WAVE_STATUSES: frozenset[WaveStatus] = frozenset(
 )
 
 
-#: The agent roles the Watch surface streams (W20). The default zoom picker,
+#: The agent roles the Watch surface streams. The default zoom picker,
 #: the roster, and the parity grid resolve any session in one of these roles,
 #: not only wave executors -- so a campaign researcher or a close-gate auditor
 #: is watchable the same way a wave executor is. Every role here scopes its
@@ -519,7 +519,7 @@ _WATCHABLE_ROLES: frozenset[AgentSessionRole] = frozenset(
 )
 
 #: Marker separating the campaign prefix from the domain in a researcher session
-#: scope_id (W22). The scope is ``{campaign_id}-research-{domain}-{uid}``; the
+#: scope_id. The scope is ``{campaign_id}-research-{domain}-{uid}``; the
 #: display label extracts ``{domain}`` so sibling researchers on one campaign
 #: read apart by WHAT they investigate rather than by an opaque 40-char scope.
 _RESEARCH_SCOPE_MARKER: str = "-research-"
@@ -530,7 +530,7 @@ _AUDIT_SCOPE_SUFFIX: str = "::audit"
 
 
 def watch_display_label(role: AgentSessionRole, scope_id: str) -> str:
-    """Return a short human label for a watched session (W22).
+    """Return a short human label for a watched session.
 
     The raw session ``scope_id`` is machine-shaped -- for a researcher a
     40-plus-char ``{campaign}-research-{domain}-{uid}`` string that reads as
@@ -608,7 +608,7 @@ class WatchTarget:
     #: The watched wave's effort bucket, from which the heartbeat derives the
     #: expected wall-clock (G6). ``None`` when the wave carries no bucket.
     effort_bucket: EffortBucket | None = None
-    #: The watched session's agent role (W20) -- surfaced in the header + roster
+    #: The watched session's agent role -- surfaced in the header + roster
     #: so the operator reads WHAT kind of agent is streaming (executor /
     #: researcher / auditor), not only its scope. Defaults to EXECUTOR so the
     #: pre-W20 executor-only callers construct unchanged.
@@ -693,7 +693,7 @@ def _watchable_sessions(state: State) -> list[AgentSession]:
 
     Watchable roles (:data:`_WATCHABLE_ROLES`) are the spawned, output-streaming
     agents -- executor, researcher, auditor -- so the default picker + roster
-    resolve any of them, not only wave executors (W20).
+    resolve any of them, not only wave executors.
     """
     return [sess for sess in state.agent_sessions.values() if sess.role in _WATCHABLE_ROLES]
 
@@ -1075,7 +1075,7 @@ def is_watched_event(envelope: Envelope, target: WatchTarget | None) -> bool:
 _OUTPUT_BACKFILL_LIMIT: int = 2000
 
 #: Cadence of the always-on event-store poll that keeps the raw-output tail live
-#: during a spawn (W19). The tail's live-push path is gated off once the store
+#: during a spawn. The tail's live-push path is gated off once the store
 #: takes authority (``_output_store_cursor`` > 0), and its only other re-sync
 #: trigger (:meth:`AgentWatchModeScreen._on_app_state`) fires on a ``state.json``
 #: mtime change -- but a spawn's ``agent.output.chunk`` events land in
@@ -2094,7 +2094,7 @@ class LaneGrid(Widget):
 
         Attributes:
             wave_id: The newly-selected lane's wave id -- the wave whose live
-                output the host screen streams into the lane-grid preview (W14).
+                output the host screen streams into the lane-grid preview.
         """
 
         def __init__(self, wave_id: str) -> None:
@@ -2178,7 +2178,7 @@ class LaneGrid(Widget):
         """Repaint the lane rows so the selection accent + tint move.
 
         Also posts :class:`Selected` so the host screen re-syncs the lane-grid
-        output preview to the newly-highlighted lane's wave (W14).
+        output preview to the newly-highlighted lane's wave.
         """
         if not self.is_mounted:
             return
@@ -2211,9 +2211,9 @@ class SessionPickerRow:
         status: The session lifecycle status (drives the row sigil).
         started_label: The session start time as a compact ``HH:MM`` label.
         agent_role: The session's agent role, surfaced in the row so the
-            roster reads which KIND of agent each entry is (W20).
+            roster reads which KIND of agent each entry is.
         label: The short human display label (:func:`watch_display_label`) --
-            the wave id for an executor, the domain for a researcher (W22) --
+            the wave id for an executor, the domain for a researcher --
             shown in place of the raw 40-char scope.
     """
 
@@ -2241,7 +2241,7 @@ def session_picker_rows(state: State | None) -> tuple[SessionPickerRow, ...]:
 
     Every watchable session (:data:`_WATCHABLE_ROLES` -- executor, researcher,
     auditor) is browsable regardless of lifecycle status, so the roster lists
-    any agent eawf ran, not only wave executors (W20); the picker exists
+    any agent eawf ran, not only wave executors; the picker exists
     precisely so finished sessions stay reachable once their fleet lanes are
     deleted. Order is most-recent ``started_at`` first so the default selection
     lands on the newest run.
@@ -2271,13 +2271,13 @@ def session_picker_rows(state: State | None) -> tuple[SessionPickerRow, ...]:
 
 
 #: Max width the roster label column pads / truncates to, so a pathologically
-#: long scope can never blow out the table alignment (W22).
+#: long scope can never blow out the table alignment.
 _ROSTER_LABEL_CAP: int = 40
 
 
 @dataclass(frozen=True)
 class PickerColumnWidths:
-    """The fixed per-column widths for an aligned roster table (W22).
+    """The fixed per-column widths for an aligned roster table.
 
     Attributes:
         role: Width of the agent-role column (padded so ``researcher`` and
@@ -2295,7 +2295,7 @@ class PickerColumnWidths:
 
 
 def picker_column_widths(rows: tuple[SessionPickerRow, ...]) -> PickerColumnWidths:
-    """Return the fixed column widths that align *rows* into a table (W22).
+    """Return the fixed column widths that align *rows* into a table.
 
     Each column is sized to its widest cell (the label column capped at
     :data:`_ROSTER_LABEL_CAP` so one runaway scope can't stretch the table). An
@@ -2342,7 +2342,7 @@ def render_picker_row(
     mode: RenderMode,
     widths: PickerColumnWidths | None = None,
 ) -> str:
-    """Render one session-picker row as an aligned table row (W22).
+    """Render one session-picker row as an aligned table row.
 
     Columns -- ``<sigil> <role> <label> <runtime> <status> <start>`` -- are each
     padded to *widths* so role sits under role and runtime under runtime for a
@@ -2463,7 +2463,7 @@ class SessionPicker(Widget):
             rows: The picker rows (:func:`session_picker_rows`), newest first.
             mode: The App's resolved render-mode label, threaded into each
                 row's lifecycle sigil.
-            initial_session_id: The session to seed the selection on (W22) so a
+            initial_session_id: The session to seed the selection on so a
                 roster re-opened after a zoom lands on the same row rather than
                 the top; ``None`` selects the newest (first) row.
         """
@@ -2474,7 +2474,7 @@ class SessionPicker(Widget):
         self._initial_session_id = initial_session_id
 
     def compose(self) -> ComposeResult:
-        """Yield the selectable session rows, aligned into a table (W22)."""
+        """Yield the selectable session rows, aligned into a table."""
         with VerticalScroll(id=SESSION_PICKER_ID):
             for index, row in enumerate(self._rows):
                 selected = index == self.selected
@@ -2489,7 +2489,7 @@ class SessionPicker(Widget):
                 )
 
     def on_mount(self) -> None:
-        """Seed the selection at the initial session (W22) and scroll it into view.
+        """Seed the selection at the initial session and scroll it into view.
 
         Prefers the ``initial_session_id`` row so a roster re-opened after a zoom
         keeps the operator's place; falls back to the newest (first) row.
@@ -2499,7 +2499,7 @@ class SessionPicker(Widget):
         self.focus()
 
     def _initial_index(self) -> int:
-        """Return the row index to seed the selection on (W22).
+        """Return the row index to seed the selection on.
 
         The ``initial_session_id`` row when it is still present, else the newest
         (first) row, or ``-1`` for an empty roster.
@@ -2525,7 +2525,7 @@ class SessionPicker(Widget):
             self._scroll_to_selected()
 
     def _scroll_to_selected(self) -> None:
-        """Scroll the selected row into view (W22).
+        """Scroll the selected row into view.
 
         Keeps a restored (or arrow-moved) selection visible rather than off the
         top of the scroll; a no-op before mount or with no selection.
@@ -2799,16 +2799,16 @@ class AgentWatchModeScreen(ScopeScreen):
     #: The wave id the raw-output tail last synced from the store. When it
     #: changes -- a lane-grid selection moving to a different lane -- the store
     #: sync resets its cursor and REPLACES the tail with the new wave's lines so
-    #: the preview never appends one wave's output onto another's (W14).
+    #: the preview never appends one wave's output onto another's.
     _output_synced_wave: str | None = None
 
-    #: Whether the parity grid is the opt-in multi-agent surface (W22). ``False``
+    #: Whether the parity grid is the opt-in multi-agent surface. ``False``
     #: (the default) shows the readable roster at 2+ active agents; the ``g`` key
     #: toggles the side-by-side grid on, so the grid is a deliberate choice
     #: rather than a surprise auto-mount.
     _show_grid: bool = False
 
-    #: The last session the operator zoomed from the roster (W22). Seeds the
+    #: The last session the operator zoomed from the roster. Seeds the
     #: roster selection on a zoom-return so the list re-opens on the same row
     #: rather than resetting to the top; ``None`` before any zoom.
     _last_watched_session_id: str | None = None
@@ -2846,8 +2846,8 @@ class AgentWatchModeScreen(ScopeScreen):
         self._picker = None
         # Count of tail lines the persisted-store sync owns. Reset per recompose
         # (the tail is rebuilt) so the next sync re-seeds; gates the live push so
-        # store + push never double-render a line (W58). The synced-wave marker
-        # resets too so the first post-recompose sync REPLACES the tail (W14).
+        # store + push never double-render a line. The synced-wave marker
+        # resets too so the first post-recompose sync REPLACES the tail.
         self._output_store_cursor = 0
         self._output_synced_wave = None
         self._legacy_output_notice_shown = False
@@ -2884,7 +2884,7 @@ class AgentWatchModeScreen(ScopeScreen):
             yield self._lane_grid
             # A live output preview of the SELECTED lane's wave, streamed from
             # the persisted store so the autopilot grid shows what the
-            # highlighted agent is doing without drilling into its FA4 zoom (W14).
+            # highlighted agent is doing without drilling into its FA4 zoom.
             yield OutputTail(id=WATCH_OUTPUT_ID)
             return
         if len(sessions) >= 2:
@@ -2986,7 +2986,7 @@ class AgentWatchModeScreen(ScopeScreen):
         self.call_after_refresh(self._zoom_to_target)
 
     def on_lane_grid_selected(self, message: LaneGrid.Selected) -> None:
-        """Re-sync the lane-grid output preview to the newly-selected lane (W14).
+        """Re-sync the lane-grid output preview to the newly-selected lane.
 
         Arrow-key selection posts :class:`LaneGrid.Selected`; syncing here (not
         only on the poll tick) keeps the preview responsive to the cursor, and
@@ -3021,7 +3021,7 @@ class AgentWatchModeScreen(ScopeScreen):
         self._picker = None
         self._zoom_pending = True
         # Remember the zoomed session so a later Esc back to the roster re-opens
-        # on this row rather than the top (W22).
+        # on this row rather than the top.
         self._last_watched_session_id = message.session_id
         logger.info(f"on_session_picker_pick session={message.session_id!r}")
         self.call_after_refresh(self._zoom_to_target)
@@ -3090,7 +3090,7 @@ class AgentWatchModeScreen(ScopeScreen):
         # the store yields nothing, so the tail never double-renders a line.
         if not self._sync_output_from_store():
             self._seed_output_from_buffer()
-        # Always-on event-store poll backstop (W19): the tail's push path is
+        # Always-on event-store poll backstop: the tail's push path is
         # gated off once the store takes authority and its only other re-sync
         # trigger (_on_app_state) fires on a state.json mtime change -- but a
         # spawn's agent.output.chunk events land in event.jsonl, which never
@@ -3106,7 +3106,7 @@ class AgentWatchModeScreen(ScopeScreen):
     def _poll_output_tail(self) -> None:
         """Bring the raw-output tail up to the persisted event store each tick.
 
-        The always-on event-store poll backstop (W19). The single-session zoom's
+        The always-on event-store poll backstop. The single-session zoom's
         live-push path is gated off once the store takes authority
         (:attr:`_output_store_cursor` > 0), and its only other re-sync trigger
         (:meth:`_on_app_state`) fires on a ``state.json`` mtime change -- but a
@@ -3257,7 +3257,7 @@ class AgentWatchModeScreen(ScopeScreen):
 
         The single-session zoom shows its pinned :attr:`target`; the FA3 lane
         grid shows the SELECTED lane's wave so the operator sees the highlighted
-        agent's live output inline without drilling into its FA4 zoom (W14).
+        agent's live output inline without drilling into its FA4 zoom.
         Returns ``None`` when neither surface names a wave (the parity grid /
         honest-empty paths).
         """
@@ -3363,7 +3363,7 @@ class AgentWatchModeScreen(ScopeScreen):
             return
         # Re-derive the watched target from current state each tick so the
         # header status word tracks a wave that went terminal (closed / failed)
-        # since the last compose (W11). render_watch_header reads the target's
+        # since the last compose. render_watch_header reads the target's
         # wave_status verbatim, and the body recompose that would otherwise
         # rebuild the target is gated on a parity-set change -- so a
         # single-session zoom whose wave closes without changing the parity set
@@ -3482,7 +3482,7 @@ class AgentWatchModeScreen(ScopeScreen):
         if not tail:
             return
         # Once the persisted store has seeded the tail it is the authoritative
-        # source (W58): the poll-tick sync owns every line, so a live push would
+        # source: the poll-tick sync owns every line, so a live push would
         # double-render. Defer to the store while its cursor is advanced.
         if self._output_store_cursor > 0:
             return
@@ -3709,7 +3709,7 @@ class AgentWatchModeScreen(ScopeScreen):
         # Step back to the in-mode surface from ANY agent-viewing body (zoom /
         # lanes / grid) whenever there is something to land on -- a session to
         # browse, or (from a drilled-in zoom) an active fleet lane -- so a wiped
-        # ``agent_sessions`` never dumps the operator to the Feed (W12). A lone
+        # ``agent_sessions`` never dumps the operator to the Feed. A lone
         # live stream returns to a one-row picker; a zoom over a fleet whose
         # roster was momentarily emptied falls through to the lane grid rather
         # than the Feed. ``_force_picker`` mounts the picker past the

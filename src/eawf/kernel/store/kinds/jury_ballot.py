@@ -1,6 +1,6 @@
 """JuryBallotPayload — payload model for StoreKind.JURY_BALLOT records.
 
-One row per juror per convened cross-vendor jury (P30-I23-W17). The
+One row per juror per convened cross-vendor jury. The
 calibration reader
 (:func:`eawf.observability.eval.jury_validation.read_recorded_ballots`)
 rebuilds the per-wave :class:`JurorBallot` map from these rows; an

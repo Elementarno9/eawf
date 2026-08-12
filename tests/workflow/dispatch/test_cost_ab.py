@@ -1,4 +1,4 @@
-"""Verdict-agreement cost A/B tests (P29-I05-W05).
+"""Verdict-agreement cost A/B tests.
 
 The cost A/B is an *honest-negative* projection: with an empty
 ``dispatch_cost`` ledger and empty verdict stores it refuses to compute
@@ -709,7 +709,7 @@ def test_compute_cost_ab_populated_groups_spend_per_role_and_runtime(
         r for r in report.rows if r.agent_role == "executor" and r.runtime == "claude"
     )
     codex_row = next(r for r in report.rows if r.agent_role == "executor" and r.runtime == "codex")
-    # claude top-tier: $0.40 (W01) + $0.20 (W02) over 2 waves = $0.30.
+    # claude top-tier: $0.40 + $0.20 over 2 waves = $0.30.
     assert claude_row.cost_per_closed_wave_top == Decimal("0.30")
     # codex top-tier: $0.10 over 1 wave.
     assert codex_row.cost_per_closed_wave_top == Decimal("0.10")

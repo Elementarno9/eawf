@@ -1,4 +1,4 @@
-"""Unit tests for the C06 palette verb registry (P26-W19).
+"""Unit tests for the C06 palette verb registry.
 
 Covers the pure registry surface — scope/profile/runtime visibility
 filtering, the fuzzy ranker + scorer, and the longest-match verb/arg

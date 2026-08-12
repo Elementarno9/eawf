@@ -1,4 +1,4 @@
-"""Tests for :mod:`eawf.kernel.spec.round_loop` (P29-I01-W16).
+"""Tests for :mod:`eawf.kernel.spec.round_loop`.
 
 Pins the bounded round loop + checkpoint-policy tiers:
 

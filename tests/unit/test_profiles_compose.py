@@ -54,7 +54,7 @@ def test_compose_empty_returns_empty() -> None:
     assert composed.hooks_referenced == []
     # Provenance for every populated-or-default top-level field is present
     # even when empty so callers don't get KeyErrors when introspecting.
-    # v2 (P25-W15) adds ``dispatch_session_policy``; P29-I01-W27 adds
+    # v2 adds ``dispatch_session_policy``; P29-I01-W27 adds
     # ``research`` (last-non-None-wins) to the provenance map.
     assert set(composed.provenance.keys()) == {
         "state_extensions",
@@ -279,7 +279,7 @@ def test_compose_strictest_keys_constant_documented() -> None:
     assert "instrument_requirements[].kind" in STRICTEST_KEYS
 
 
-# --- research block composition (P29-I01-W27) ------------------------------
+# --- research block composition ------------------------------
 
 
 def test_compose_research_block_last_non_none_wins() -> None:

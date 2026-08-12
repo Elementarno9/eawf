@@ -1,4 +1,4 @@
-"""Narrow-terminal + resize acceptance for the HOME surfaces (P30-I02-W30).
+"""Narrow-terminal + resize acceptance for the HOME surfaces.
 
 The three HOME panes -- the roadmap tree
 (:class:`~eawf.surfaces.tui.widgets.roadmap_tree.RoadmapTree`), the status pane

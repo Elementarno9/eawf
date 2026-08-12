@@ -1,4 +1,4 @@
-"""The committed I23 live-drive recording stays valid (P30-I23-W33).
+"""The committed I23 live-drive recording stays valid.
 
 The recording is the phase's machine-checkable proof that the hardened
 autopilot ran LIVE — priced, EU-captured, gate-executing, jailed, and

@@ -1,4 +1,4 @@
-"""VIS-1 (P30-I16-W14): image-diff gate over mockup vs TUI renders.
+"""VIS-1: image-diff gate over mockup vs TUI renders.
 
 The ``mockup_golden_diff`` ASCII-text mode normalises round-vs-square box
 glyphs and column gutters into the same diffable text, so it passed the

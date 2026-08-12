@@ -289,7 +289,7 @@ class StateBinding:
         else:
             self._daemon_probe_interval = DEFAULT_DAEMON_PROBE_INTERVAL_S
         self._last_mtime = 0.0
-        # Subscription cursor + reconnect throttle (W04): the id of the last
+        # Subscription cursor + reconnect throttle: the id of the last
         # event the push stream delivered, resumed via ``since_event_id=`` on
         # every (re)subscribe so a reconnect never re-requests the backlog; and the
         # monotonic timestamp of the last connect attempt so a repeatedly-

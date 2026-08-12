@@ -1,6 +1,6 @@
 """Unit tests for the live per-wave fresh-context auditor verdict producer.
 
-Covers the three layers of :mod:`eawf.workflow.dispatch.verdict` (P29-I04-W07):
+Covers the three layers of :mod:`eawf.workflow.dispatch.verdict`:
 
 - the pure risk-weighted policy :func:`verdict_requirement` (boundary cases
   per effort bucket, judgment role, security keyword, sampler);
@@ -760,7 +760,7 @@ def test_build_auditor_prompt_no_criteria_renders_placeholder() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# K2 (P29-I08-W02): rubric + provenance-pinned evidence, refute-first stance.
+# K2: rubric + provenance-pinned evidence, refute-first stance.
 # --------------------------------------------------------------------------- #
 
 

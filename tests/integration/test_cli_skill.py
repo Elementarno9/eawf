@@ -124,7 +124,7 @@ def stub_needs_user_skill() -> Iterator[type[Skill]]:
         def action(self, ctx: SkillContext) -> SkillResult:
             # Conform to ``PrepBody`` so the engine's bound body-validation
             # gate passes; the ``needs_user`` path carries a user_question.
-            # The planning-DAG invariant (P30-I03-W03) requires a non-empty,
+            # The planning-DAG invariant requires a non-empty,
             # reconciled DAG on a non-no_op body, so the stub carries one task
             # and a wave that references it.
             return SkillResult(
@@ -237,7 +237,7 @@ def test_skill_list_json_payload_carries_status_and_schema(
     assert research["body_schema"] == "eawf.workflow.skills.bodies.research.ResearchBody"
     # /audit is registered by W02 import-side effects.
     assert by_name["/audit"]["status"] == "installed"
-    # Meta skills (W03) are also registered post-W03.
+    # Meta skills are also registered post-W03.
     assert by_name["/flow"]["status"] == "installed"
     assert by_name["/flow"]["body_schema"] == "eawf.workflow.skills.bodies.flow.FlowBody"
     assert by_name["/blitz"]["status"] == "installed"

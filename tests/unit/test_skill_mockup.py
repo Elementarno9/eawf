@@ -1,4 +1,4 @@
-"""Unit tests for the ``/mockup`` advisory skill (P29-I02-W13).
+"""Unit tests for the ``/mockup`` advisory skill.
 
 ``/mockup`` is a registry-only advisory skill: it renders a ``SKILL.md``
 (so it installs as a slash command and reconciles against the disk tree)

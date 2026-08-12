@@ -1,4 +1,4 @@
-"""Tests for the bound SCOPE x MODE navigation state machine (P29-I02-W17).
+"""Tests for the bound SCOPE x MODE navigation state machine.
 
 The TUI runs two orthogonal axes -- a **scope** (``repo`` / ``workspace`` /
 ``user``, switched with ``w`` / ``r`` / ``u``) and a **mode** (``home`` /

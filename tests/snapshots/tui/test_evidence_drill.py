@@ -1,4 +1,4 @@
-"""Golden snapshot + drill-key resolution for the why-peek modal (P29-I13-W06).
+"""Golden snapshot + drill-key resolution for the why-peek modal.
 
 The why-peek :class:`~eawf.surfaces.tui.modals.evidence_drill.EvidenceDrillModal`
 renders one close-readiness criterion's evidence chain -- the criterion id +

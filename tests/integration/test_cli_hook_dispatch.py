@@ -1,4 +1,4 @@
-"""Unit tests for ``eawf hook dispatch --event-type agent_end`` (P29-I01-W26).
+"""Unit tests for ``eawf hook dispatch --event-type agent_end``.
 
 The wave deliverable: ``eawf hook dispatch --event-type agent_end`` seeds a
 first verdict cohort manually — an ``agent_end`` hook event is translated into

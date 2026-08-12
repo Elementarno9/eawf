@@ -1,4 +1,4 @@
-"""Pilot tests for the needs_user auto-open + pick path (P26-I02-W07).
+"""Pilot tests for the needs_user auto-open + pick path.
 
 Covers the TUI side of wiring ``NeedsUserModal`` to the pause store:
 

@@ -38,7 +38,7 @@ def test_unknown_command_exits_with_code_2() -> None:
 
 
 def test_bare_invocation_prints_banner() -> None:
-    """``eawf`` with no subcommand routes to the TUI surface (P14-W10).
+    """``eawf`` with no subcommand routes to the TUI surface.
 
     Off-TTY (CliRunner has no real terminal) the TUI falls back to the
     deterministic status text. Per D-BRAND-MARK the brand mark leads the

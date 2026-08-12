@@ -47,7 +47,7 @@ class AuditSpec(_StrictModel):
     * ``every-wave`` — fires on every wave close.
     * ``every-iter`` — fires on iter close.
     * ``every-phase`` — fires on phase close.
-    * ``ship`` — fires on the ship-CI / pre-merge gauntlet (P28-I01-W10).
+    * ``ship`` — fires on the ship-CI / pre-merge gauntlet.
     * ``manual`` — only operator-driven invocation fires the audit.
 
     The audit-DSL runner reads ``cadence`` at the close event firing

@@ -1,4 +1,4 @@
-"""Tests for the ``sync_track_outcomes`` reducer + wave-close hook (P30-I11-W07).
+"""Tests for the ``sync_track_outcomes`` reducer + wave-close hook.
 
 Covers the lifecycle reducer that recomputes a Track's measured outcome
 statuses from their samples (via the I11-W06 ``compute_outcome_status``

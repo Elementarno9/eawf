@@ -437,7 +437,7 @@ class PipeReader:
     """Drain full messages from a connected pipe handle, reassembly-safe.
 
     A thin object wrapper over :func:`_read_full_message` so the streaming
-    subscription path (W03) and any caller that holds a long-lived
+    subscription path and any caller that holds a long-lived
     connected pipe can pull one complete message at a time without each
     re-implementing the ``ERROR_MORE_DATA`` loop. The reader does NOT own
     the handle lifecycle -- the caller opens and closes the pipe.

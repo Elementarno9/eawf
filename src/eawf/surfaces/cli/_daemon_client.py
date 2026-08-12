@@ -347,7 +347,7 @@ class DaemonClient:
         idempotency_key: str | None = None,
         repo_root: str | None = None,
     ) -> dict[str, Any]:
-        """Proxy a layered-config write through ``config.set_layer_value`` (W10).
+        """Proxy a layered-config write through ``config.set_layer_value``.
 
         Args:
             layer: Canonical writable-layer label.
@@ -409,7 +409,7 @@ class DaemonClient:
         fields: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
-        """Proxy a registry mutation through ``registry.update`` (W10).
+        """Proxy a registry mutation through ``registry.update``.
 
         Args:
             operation: One of ``add`` / ``remove`` / ``rename``.
@@ -462,7 +462,7 @@ class DaemonClient:
         repo_root: str | None = None,
         cache_dir: str | None = None,
     ) -> dict[str, Any]:
-        """Proxy a ``spec.validate`` call through the daemon (P25-W03)."""
+        """Proxy a ``spec.validate`` call through the daemon."""
         params: dict[str, Any] = {
             "scope_id": scope_id,
             "repo_code": repo_code,
@@ -483,7 +483,7 @@ class DaemonClient:
         idempotency_key: str | None = None,
         cache_dir: str | None = None,
     ) -> dict[str, Any]:
-        """Proxy a ``spec.promote`` call through the daemon (P25-W03)."""
+        """Proxy a ``spec.promote`` call through the daemon."""
         params: dict[str, Any] = {
             "scope_id": scope_id,
             "repo_code": repo_code,
@@ -506,7 +506,7 @@ class DaemonClient:
         idempotency_key: str | None = None,
         cache_dir: str | None = None,
     ) -> dict[str, Any]:
-        """Proxy a ``spec.archive`` call through the daemon (P25-W03)."""
+        """Proxy a ``spec.archive`` call through the daemon."""
         params: dict[str, Any] = {
             "scope_id": scope_id,
             "repo_code": repo_code,

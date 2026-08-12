@@ -1,4 +1,4 @@
-"""Claim-time runtime baseline capture (P30-I25-W26).
+"""Claim-time runtime baseline capture.
 
 ``claim_wave`` stamps ``Wave.runtime_baseline`` so the close-time delta has a
 "before" snapshot to subtract against. That baseline used to come only from the
@@ -44,7 +44,7 @@ def _write_transcript(tmp_path: Path, *, cwd: Path) -> None:
     project.mkdir(parents=True, exist_ok=True)
     # Timestamped, and spanning the turn it reports: the duration is bounded by the
     # lifetime the rows demonstrate, so a turn of 61s needs a transcript that lived
-    # at least that long (P30-I25-W50).
+    # at least that long.
     rows = [
         {
             "type": "assistant",

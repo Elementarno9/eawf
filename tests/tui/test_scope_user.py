@@ -1,4 +1,4 @@
-"""Pilot tests for the C06 ``UserScreen`` portfolio table (P27-I04-W07).
+"""Pilot tests for the C06 ``UserScreen`` portfolio table.
 
 Covers the full-screen per-repo :class:`PortfolioTable` (the reused W06
 workspace-table family) — >=1 row even at N=1, the large-N scroll without
@@ -484,7 +484,7 @@ def test_user_c_keypress_opens_config_modal() -> None:
 
 
 # --------------------------------------------------------------------------
-# synthesize_user_state — pure helper over the global registry (P27-I04-W15)
+# synthesize_user_state — pure helper over the global registry
 # --------------------------------------------------------------------------
 
 

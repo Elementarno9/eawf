@@ -1,4 +1,4 @@
-"""Unit tests for the per-profile TrackKindSpec defaults (P30-I11-W04).
+"""Unit tests for the per-profile TrackKindSpec defaults.
 
 Each of the six per-domain profiles declares exactly one
 :class:`~eawf.platform.profiles.models.TrackKind` under ``track.kinds`` — its

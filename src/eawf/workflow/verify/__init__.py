@@ -8,13 +8,13 @@ The v0.4 verify spine has four concerns:
   :class:`~eawf.kernel.spec.common.GateSpec` definitions, the legacy
   :attr:`~eawf.kernel.state.models.Wave.success_criteria` list, and the
   SHA-bound :class:`~eawf.kernel.store.kinds.evidence.EvidenceRecord` rows.
-* :func:`~eawf.workflow.verify.compile.compile_gate` (W08) — translates a
+* :func:`~eawf.workflow.verify.compile.compile_gate` — translates a
   typed :class:`~eawf.kernel.spec.common.GateSpec` into the
   :class:`~eawf.workflow.audit_dsl.models.CheckSpec` shape the W15-hardened
   gate runner executes. v0.4.0 compiles only
   ``evidence_kind="deterministic"`` gates; ``"jury"`` + ``"attested"``
   return ``None`` and defer to v0.4.1+.
-* Waivers (W11) — operator-attested gate overrides honoured by the
+* Waivers — operator-attested gate overrides honoured by the
   readiness compute via SHA-bound freshness on
   :class:`~eawf.kernel.store.kinds.evidence.EvidenceRecord` rows.
 * :func:`~eawf.workflow.verify.dispatch_close.verify_close_readiness`

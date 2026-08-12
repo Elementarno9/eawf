@@ -1,4 +1,4 @@
-"""Golden snapshot for the research_board Unresolved tab (P29-I13-W16).
+"""Golden snapshot for the research_board Unresolved tab.
 
 The Research mode (digit ``3``) center pane carries an ``Unresolved`` tab
 projecting the scope's open questions: one row per

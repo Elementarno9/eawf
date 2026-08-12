@@ -1,4 +1,4 @@
-"""Tests for the w/u scope-switch mode strip + per-scope snapshot goldens (P30-I08-W06).
+"""Tests for the w/u scope-switch mode strip + per-scope snapshot goldens.
 
 The workspace and user portfolio scope screens each mount a
 :class:`~eawf.surfaces.tui.scopes.user.ScopeSwitchStrip` below their body --

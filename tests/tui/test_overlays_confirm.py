@@ -1,4 +1,4 @@
-"""Pilot tests for the C06 ``ConfirmModal`` overlay (P26-W19).
+"""Pilot tests for the C06 ``ConfirmModal`` overlay.
 
 Covers the arrow-toggle yes/no contract: the safe ``No`` default, ``←`` /
 ``→`` selection movement, ``Enter`` confirming the highlighted choice

@@ -1,4 +1,4 @@
-"""Unit tests for the C08 init bootstrap templates (P25-W16).
+"""Unit tests for the C08 init bootstrap templates.
 
 Per C08 D7 (revised 2026-05-18 per Q24): v0.3 ships exactly three init
 templates — ``research``, ``engineering``, ``reverse-engineering``.

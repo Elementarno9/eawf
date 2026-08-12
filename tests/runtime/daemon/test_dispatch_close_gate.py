@@ -224,7 +224,7 @@ def test_run_dispatch_passes_gate_end_to_end(tmp_path: Path) -> None:
     assert result.report_id is not None
 
 
-# ---- Missing-session reconstruction (W09) ----------------------------------
+# ---- Missing-session reconstruction ----------------------------------
 
 
 def _write_state_without_session(tmp_path: Path) -> Path:
@@ -246,7 +246,7 @@ def _write_state_without_session(tmp_path: Path) -> Path:
 
 
 def test_emit_agent_end_report_reconstructs_missing_session(tmp_path: Path) -> None:
-    """A PASS close succeeds when the session row was reverted out of state (W09).
+    """A PASS close succeeds when the session row was reverted out of state.
 
     Before the fix ``emit_agent_end_report`` raised ``KeyError`` and the fleet
     marked the successful wave failed. The reconstruction rebuilds the session

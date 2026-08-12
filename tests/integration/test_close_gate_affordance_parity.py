@@ -1,4 +1,4 @@
-"""Tests: required UI affordance gates fire at wave close (P30-I04-W06)."""
+"""Tests: required UI affordance gates fire at wave close."""
 
 from __future__ import annotations
 

@@ -824,7 +824,7 @@ def _normalize_claim_text(text: str) -> str:
     """Return a whitespace / case-normalized key for near-duplicate claim dedup.
 
     Casefolds + collapses runs of whitespace so trivially-different phrasings of
-    the same finding (extra spaces, capitalization) compact to one claim (W20).
+    the same finding (extra spaces, capitalization) compact to one claim.
 
     Args:
         text: The finding line / claim text to normalize.
@@ -1421,17 +1421,17 @@ async def _spawn_researcher_agent_end(
     state_path = Path(ctx.state_path)
     serving_runtime = _canonical_runtime(runtime)
     runtime_triple = _runtime_triple(serving_runtime)
-    # A campaign is project-scoped, not wave-scoped (W14): anchor the researcher
+    # A campaign is project-scoped, not wave-scoped: anchor the researcher
     # session + output + cost to the CAMPAIGN. When an execution wave happens to
     # be active the dispatch scope rides it (back-compat); otherwise it rides the
     # campaign id, so research.run no longer REQUIRES an active wave and never
     # pollutes an unrelated wave's ledger.
-    # A campaign is its own cost centre (W15): the researcher dispatch scope IS
+    # A campaign is its own cost centre: the researcher dispatch scope IS
     # the campaign, even when an execution wave happens to be active, so the
     # spend accrues to the campaign and never inflates an unrelated (often
     # already-closed) wave's counters -- those stay executor-only.
     dispatch_scope = campaign_id
-    # Embed the domain in the researcher session scope (W22) so the Watch surface
+    # Embed the domain in the researcher session scope so the Watch surface
     # distinguishes sibling researchers by WHAT they investigate rather than an
     # opaque hash; the display label parses the domain back out. The domain is a
     # profile-key slug (no spaces), and a short uuid keeps the scope unique.
@@ -1458,7 +1458,7 @@ async def _spawn_researcher_agent_end(
 
     # Stream the researcher's stdout live to the Watch tail (mirroring the
     # wave-spawn chunk wiring): batch lines + persist each batch as an
-    # agent.output.chunk keyed on the researcher SESSION scope_id (W20) -- the
+    # agent.output.chunk keyed on the researcher SESSION scope_id -- the
     # same scope the Watch target filters on -- so the researcher's zoom renders
     # its own output live rather than only a terminal agent.output at
     # completion. The dispatch_scope (the campaign) stays the COST centre; the
@@ -1549,7 +1549,7 @@ async def _spawn_researcher_agent_end(
             pgid=pid,
             enforce=_resolve_budget_enforce(state_path),
             output_text=spawn_result.text,
-            # Researcher spend is a campaign cost, not a wave cost (W15): never fold
+            # Researcher spend is a campaign cost, not a wave cost: never fold
             # it into a wave budget. The dispatch_cost event books it to the
             # campaign scope, which is where a campaign-cost query reads it.
             accrue_wave_budget=False,
@@ -1565,7 +1565,7 @@ async def _spawn_researcher_agent_end(
             f"_spawn_researcher_agent_end scope_id={dispatch_scope} "
             f"verdict={body.verdict.value} not close-ready; recorded, continuing"
         )
-    # Close the researcher session (W17): mirror the executor close so a
+    # Close the researcher session: mirror the executor close so a
     # completed researcher never leaks as a phantom ACTIVE session stuck in
     # current.active_session_ids.
     _close_researcher_session(
@@ -1614,7 +1614,7 @@ def _active_research_wave_id_or_none(state_path: Path) -> str | None:
     """Return the active wave a live campaign could attach to, or ``None``.
 
     A research campaign is project-scoped, not wave-scoped, so a live run must
-    NOT require an active execution wave (W14): when none is in scope this
+    NOT require an active execution wave: when none is in scope this
     returns ``None`` and the caller anchors the researcher session + output +
     cost to the campaign instead of raising.
     """
@@ -1647,7 +1647,7 @@ def _researcher_prompt(dispatch: StagedDispatch) -> str:
 
 
 def _close_researcher_session(ctx: MethodContext, *, session_id: str, summary: str) -> None:
-    """Close a researcher session through the canonical state writer (W17).
+    """Close a researcher session through the canonical state writer.
 
     Mirrors the executor close: moves the session to CLOSED, stamps ``ended_at``,
     and drops it from ``current.active_session_ids`` so a completed researcher
@@ -2151,7 +2151,7 @@ def run_campaign(
             saturated=stamped.saturated,
             checkpoint=stamped.checkpoint,
         )
-    # Flip the campaign to its terminal CONVERGED state (W16): the run halted on
+    # Flip the campaign to its terminal CONVERGED state: the run halted on
     # saturation or the hard round cap, so the campaign is done and must NOT
     # linger ACTIVE forever (the stuck-active record the operator saw). Re-read
     # so an operator cancel mid-run wins; only an ACTIVE campaign converges.

@@ -1,6 +1,6 @@
 """Tests for the ``effort_bucket`` claim-time gate on :func:`claim_wave`.
 
-The wave-lifecycle gate (P28-I02-W16) rejects a claim when a legacy wave
+The wave-lifecycle gate rejects a claim when a legacy wave
 record has no ``effort_bucket``: estimates, variance, and the EU-projection
 table all key off that field, so a bucketless wave silently degrades the
 dispatch + reporting story. The error message points the operator at the

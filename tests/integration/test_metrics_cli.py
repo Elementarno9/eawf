@@ -1,4 +1,4 @@
-"""CLI dispatch tests for the ``eawf metrics`` telemetry sub-verbs (P27-I01-W16).
+"""CLI dispatch tests for the ``eawf metrics`` telemetry sub-verbs.
 
 Drives the Typer app via :class:`CliRunner` against a temp workspace and
 checks the sub-verb dispatch:

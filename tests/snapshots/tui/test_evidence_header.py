@@ -1,4 +1,4 @@
-"""Golden snapshot for the Evidence-mode close-readiness header (P29-I13-W03).
+"""Golden snapshot for the Evidence-mode close-readiness header.
 
 The Evidence mode (digit ``6``) leads its body with a close-readiness
 header row that tallies the passed-over-total typed-criterion count -- e.g.

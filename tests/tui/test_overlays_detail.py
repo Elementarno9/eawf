@@ -1,4 +1,4 @@
-"""Tests for the C06 ``DetailModal`` + the drill-in seam (P26-W19).
+"""Tests for the C06 ``DetailModal`` + the drill-in seam.
 
 Two layers: pure :func:`resolve_detail` resolution (wave / backlog /
 fallback) without Textual, and Pilot-driven routing of the W17 widget
@@ -290,7 +290,7 @@ def test_resolve_detail_wave_includes_success_criteria_rows() -> None:
 
 
 # --------------------------------------------------------------------------
-# resolve_detail — incident card + chronological timeline (P30-I07-W16)
+# resolve_detail — incident card + chronological timeline
 # --------------------------------------------------------------------------
 
 _INC_NOW = datetime(2026, 5, 8, 12, 0, tzinfo=UTC)
@@ -505,7 +505,7 @@ def test_detail_modal_incident_history_tab_renders_events() -> None:
 
 
 # --------------------------------------------------------------------------
-# Criteria tab — full typed CriterionSpec projection (P30-I07-W01)
+# Criteria tab — full typed CriterionSpec projection
 # --------------------------------------------------------------------------
 
 
@@ -656,7 +656,7 @@ def test_detail_modal_grandfathered_criterion_paints_marker_no_tier() -> None:
 
 
 # --------------------------------------------------------------------------
-# Gates tab — typed GateSpec rows grouped under their criterion_id (P30-I07-W02)
+# Gates tab — typed GateSpec rows grouped under their criterion_id
 # --------------------------------------------------------------------------
 
 
@@ -808,7 +808,7 @@ def test_detail_modal_no_gates_renders_empty_gates_tab() -> None:
 
 
 # --------------------------------------------------------------------------
-# Evidence tab — auditor verdict + reason / honest no-verdict (P30-I07-W03)
+# Evidence tab — auditor verdict + reason / honest no-verdict
 # --------------------------------------------------------------------------
 
 
@@ -1231,7 +1231,7 @@ def test_wave_metrics_render_evidence_backed_measured_zero() -> None:
 
 
 # --------------------------------------------------------------------------
-# Evidence tab — humanized token counts + cost-tab table treatment (W08)
+# Evidence tab — humanized token counts + cost-tab table treatment
 # --------------------------------------------------------------------------
 
 #: The detail modal card is ``width: 80%; max-width: 120`` with a round border
@@ -1341,7 +1341,7 @@ def test_detail_modal_evidence_tab_paints_unwrapped_humanized_attempt_row() -> N
 
 
 # --------------------------------------------------------------------------
-# Evidence tab — wave provenance + dispatch history (P30-I07-W04)
+# Evidence tab — wave provenance + dispatch history
 # --------------------------------------------------------------------------
 
 
@@ -2058,7 +2058,7 @@ def test_detail_modal_iter_opens_with_tabs() -> None:
 
 
 # --------------------------------------------------------------------------
-# DetailModal tab hotkeys + markdown detail + label escape + bucket text (W13)
+# DetailModal tab hotkeys + markdown detail + label escape + bucket text
 # --------------------------------------------------------------------------
 
 
@@ -2208,7 +2208,7 @@ def test_detail_modal_row_value_with_bracket_renders() -> None:
 
 
 # --------------------------------------------------------------------------
-# Backlog description block (W13)
+# Backlog description block
 # --------------------------------------------------------------------------
 
 
@@ -2266,7 +2266,7 @@ def test_detail_modal_backlog_shows_description_block() -> None:
 
 
 # --------------------------------------------------------------------------
-# Wave card divergence (W55) — two waves under one phase render distinct d-tabs
+# Wave card divergence — two waves under one phase render distinct d-tabs
 # --------------------------------------------------------------------------
 
 
@@ -2405,7 +2405,7 @@ def _assert_golden(golden_path: Path, actual: str) -> None:
 
 
 # --------------------------------------------------------------------------
-# Five-tab chassis acceptance (P30-I02-W24)
+# Five-tab chassis acceptance
 # --------------------------------------------------------------------------
 
 

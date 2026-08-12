@@ -1,4 +1,4 @@
-"""Pilot bar-swap test for StatusPane / RoadmapTree / WorkspaceTable (P29-I13-W24).
+"""Pilot bar-swap test for StatusPane / RoadmapTree / WorkspaceTable.
 
 Asserts the W24 swap: in the unicode render mode each of the three bar-
 carrying widgets paints the W20 block-eighths bar

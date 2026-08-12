@@ -1,4 +1,4 @@
-"""Tests for :mod:`eawf.kernel.spec.promotion` (P28-I01-W09).
+"""Tests for :mod:`eawf.kernel.spec.promotion`.
 
 Pins the persistence-layer argv-policy check the daemon ``spec.promote``
 handler runs before flipping a spec to READY:

@@ -1,4 +1,4 @@
-"""Tests for the explicit-growth guard + staleness boundaries (P25-W08).
+"""Tests for the explicit-growth guard + staleness boundaries.
 
 The user-scope registry at ``~/.eawf/registry.json`` grows ONLY via
 explicit operator commands (``eawf init`` / ``eawf repo add`` /

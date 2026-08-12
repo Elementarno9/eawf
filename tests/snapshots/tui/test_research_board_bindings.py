@@ -1,4 +1,4 @@
-"""Golden snapshot + binding parity for the research_board n / x keys (P29-I13-W15).
+"""Golden snapshot + binding parity for the research_board n / x keys.
 
 The Research mode (digit ``3``) advertises two campaign-lifecycle action
 keys in its footer: ``n`` (new-campaign) and ``x`` (cancel-campaign). Two

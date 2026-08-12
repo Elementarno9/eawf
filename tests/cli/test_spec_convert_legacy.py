@@ -1,4 +1,4 @@
-"""CLI-side tests for ``eawf spec convert-legacy`` (P30-I23-W24).
+"""CLI-side tests for ``eawf spec convert-legacy``.
 
 The command is always daemon-mediated — converting legacy criterion rows
 mutates ``state.json`` (AGENTS rule 4), so there is no in-process

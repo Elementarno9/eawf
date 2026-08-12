@@ -1,4 +1,4 @@
-"""Doctor-mode probe-reply leak guard (P30-I16-W29, P30-I18-W11).
+"""Doctor-mode probe-reply leak guard.
 
 Operator report 2026-06-11 (Ghostty graphics terminal): switching to Doctor
 mode (digit ``5``) popped a config / help modal with NO such keypress.

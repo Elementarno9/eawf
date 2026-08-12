@@ -565,7 +565,7 @@ def test_refresh_header_tracks_terminal_wave_without_recompose(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A wave going terminal mid-zoom flips the header status on the poll tick (W11).
+    """A wave going terminal mid-zoom flips the header status on the poll tick.
 
     The single-session zoom pins its target at compose time, and the body
     recompose that would rebuild it is gated on a parity-set change. When the
@@ -616,7 +616,7 @@ def test_leave_zoom_over_live_lane_stays_in_mode_without_sessions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Esc from a zoom stays in-mode when a fleet lane is live but sessions are empty (W12).
+    """Esc from a zoom stays in-mode when a fleet lane is live but sessions are empty.
 
     A sandboxed dispatch can leave ``agent_sessions`` empty (no session roster)
     while a fleet lane is still in flight. Esc out of the drilled-in zoom must
@@ -671,7 +671,7 @@ def test_lane_grid_preview_streams_selected_lane_output(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The autopilot lane grid streams the SELECTED lane's persisted output (W14).
+    """The autopilot lane grid streams the SELECTED lane's persisted output.
 
     A fleet.drive body is the lane grid, which showed no agent output -- the
     store-sync was gated off in the lane body, so the operator had to drill into

@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.runtime.sandbox.egress_proxy` (P29-I03-W02).
+"""Unit tests for :mod:`eawf.runtime.sandbox.egress_proxy`.
 
 Pin the UDS egress-proxy enforcement seam:
 

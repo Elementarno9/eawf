@@ -1,4 +1,4 @@
-"""Tests for the codex_session + opencode_session telemetry source adapters (P27-W14)."""
+"""Tests for the codex_session + opencode_session telemetry source adapters."""
 
 from __future__ import annotations
 

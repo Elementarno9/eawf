@@ -1,4 +1,4 @@
-"""Tests: fleet.drive backgrounded off the daemon event loop (P30-I17-W01).
+"""Tests: fleet.drive backgrounded off the daemon event loop.
 
 The fleet drain is SYNCHRONOUS (claim -> dispatch -> blocking watch -> advance),
 so it would block the awaited ``fleet.drive`` RPC handler -- and every other RPC

@@ -1,4 +1,4 @@
-"""Tests for the fleet parity lens of the Watch mode (P30-I07-W17).
+"""Tests for the fleet parity lens of the Watch mode.
 
 The Watch mode's parity lens generalises the watch grid into a side-by-side
 surface over every dispatched session: with two or more ACTIVE executor

@@ -1,4 +1,4 @@
-"""Unit + Pilot tests for the C06 ``ToastEmitter`` (P27-I04-W08).
+"""Unit + Pilot tests for the C06 ``ToastEmitter``.
 
 Covers the pure state-snapshot diff engine (:meth:`ToastEmitter.diff`) —
 wave close / audit verdict / needs-user toasts, the first-load and

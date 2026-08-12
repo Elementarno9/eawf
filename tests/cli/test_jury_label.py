@@ -1,4 +1,4 @@
-"""``eawf jury label`` — the gold-label writer surface (P30-I23-W17).
+"""``eawf jury label`` — the gold-label writer surface.
 
 The calibration cohort had readers but NO writer. The CLI proxies the
 daemon's ``jury.label`` RPC; the daemon validates the wave, appends a

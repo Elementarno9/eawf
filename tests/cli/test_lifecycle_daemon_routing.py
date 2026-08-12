@@ -616,7 +616,7 @@ def test_injected_crash_leaves_no_phantom_event(
     record APPLIED, then appends the event. Injecting an ``OSError`` at
     the event append leaves the state mutated but NO event row for the
     mutation — there is never an event whose state change did not commit.
-    Because ``mark_applied`` ran before the append (W32), an ``.applied``
+    Because ``mark_applied`` ran before the append, an ``.applied``
     record survives for roll-forward (not a ``.pending`` one, which replay
     would poison and silently drop the row).
     """

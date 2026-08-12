@@ -1,4 +1,4 @@
-"""``criterion_in_diff`` audit-DSL kind (P27-I02-W14).
+"""``criterion_in_diff`` audit-DSL kind.
 
 Verifies a single wave success-criterion against the actual source by
 greping the criterion's verification ``pattern`` across the post-change

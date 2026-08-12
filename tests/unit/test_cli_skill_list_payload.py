@@ -1,4 +1,4 @@
-"""Golden assertion against :func:`_list_payload` (P10-W01).
+"""Golden assertion against :func:`_list_payload`.
 
 The ``skill list --json`` payload shape is consumed by
 ``skill render --format=json``, by external dashboards that surface

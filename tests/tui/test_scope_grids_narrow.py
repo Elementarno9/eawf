@@ -1,4 +1,4 @@
-"""Narrow-terminal degrade acceptance for both scope grids (P30-I08-W07).
+"""Narrow-terminal degrade acceptance for both scope grids.
 
 The P30-I02 reskin widened both per-repo grids -- the workspace
 :class:`~eawf.surfaces.tui.widgets.workspace_table.WorkspaceTable` and the

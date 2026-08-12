@@ -66,7 +66,7 @@ class StatusResult(BaseModel):
     active_subscriptions: int
     in_flight_mutations: int
     last_event_id: str
-    #: Per-mutation in-flight telemetry (P30-I23-W10): one row per live
+    #: Per-mutation in-flight telemetry: one row per live
     #: mutation with its kind, wall-clock start, and running duration, so
     #: a wedged close is visible in ``eawf daemon status`` instead of
     #: only through client timeouts.

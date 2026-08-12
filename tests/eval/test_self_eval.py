@@ -1,4 +1,4 @@
-"""Min-N-gated self-eval surface tests (P29-I01-W05).
+"""Min-N-gated self-eval surface tests.
 
 The self-eval surface is an *honest-negative* dashboard: below a hard
 minimum cohort size it refuses to score rather than emit a Goodhartable

@@ -1,6 +1,6 @@
 """End-to-end tests for the ``eawf backfill titles`` CLI command.
 
-Drives the generalized entity-title backfill (P29-I07-W07) through
+Drives the generalized entity-title backfill through
 :class:`typer.testing.CliRunner` against a temporary ``.ea/state.json``
 derived from the empty-repo fixture. The library-level sweep behaviour across
 all five kinds is covered in ``tests/unit/test_title_backfill.py``; these tests

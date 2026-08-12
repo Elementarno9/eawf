@@ -1,4 +1,4 @@
-"""Integration tests for the ``eawf workspace`` registry subcommands (P20-I01-W05).
+"""Integration tests for the ``eawf workspace`` registry subcommands.
 
 Covers the CLI surface that exposes the read-only registry path:
 

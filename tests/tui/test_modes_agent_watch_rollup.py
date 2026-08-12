@@ -1,4 +1,4 @@
-"""Tests for the fleet verdict-rollup pane in the Watch mode (P30-I07-W09).
+"""Tests for the fleet verdict-rollup pane in the Watch mode.
 
 The Watch mode leads its body with a fleet verdict-rollup pane: one row per
 wave that has an auditor verdict, each tinted by its outcome (the
@@ -275,7 +275,7 @@ def test_render_verdict_rollup_row_names_wave_verdict_runtime() -> None:
 
 
 # --------------------------------------------------------------------------
-# Synthesized-report marker -- the T8 degrade badge (P30-I26-W07)
+# Synthesized-report marker -- the T8 degrade badge
 # --------------------------------------------------------------------------
 
 

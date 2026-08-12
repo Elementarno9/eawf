@@ -198,7 +198,7 @@ class DispatchEnvelope:
       is a list of per-server invocation dicts projected from
       :attr:`State.mcp_servers`; ``allowed_tools`` is a list of
       ``mcp__<server_id>__*`` glob strings projected from
-      :attr:`State.mcp_grants` (W02), with any tool the wave's
+      :attr:`State.mcp_grants`, with any tool the wave's
       :class:`~eawf.runtime.sandbox.policy.SandboxPolicy` deny-list names
       intersected out — empty when ``mcp_grants`` is absent, has no
       grant for the dispatched wave, or every projected tool is denied.

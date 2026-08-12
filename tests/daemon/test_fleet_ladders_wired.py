@@ -1,4 +1,4 @@
-"""Tests: the bounded spawn + repair ladders wired into the loop (P30-I17-W03).
+"""Tests: the bounded spawn + repair ladders wired into the loop.
 
 ``spawn_lane_or_fork`` (DL-11) and ``repair_lane_or_fork`` (DL-7) were built and
 tested with ZERO production callers; the bare spawner path let one
@@ -541,7 +541,7 @@ def test_executor_fixable_close_gate_enters_repair_ladder(
     assert run.counters.forked >= 1
 
 
-# ---- C4: the LIVE drive enables the spawn + repair ladders (W11) -------------
+# ---- C4: the LIVE drive enables the spawn + repair ladders -------------
 
 
 def _write_paused_state(tmp_path: Path) -> Path:

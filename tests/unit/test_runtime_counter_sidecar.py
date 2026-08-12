@@ -88,7 +88,7 @@ def test_statusline_render_writes_runtime_counter_sidecar(
         cost_usd=Decimal("0.42"),
         input_tokens=100,
         output_tokens=50,
-        # The statusline declares its own measure (P30-I25-W45), so a flip between
+        # The statusline declares its own measure, so a flip between
         # it and the transcript aggregator reads as a change of measure, not work.
         measure_version=STATUSLINE_MEASURE_VERSION,
         # W19 stamps the parser harness attribution onto every parsed counter

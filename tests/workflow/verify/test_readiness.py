@@ -1,4 +1,4 @@
-"""Tests for :func:`eawf.workflow.verify.readiness.compute` (P28-I01-W06).
+"""Tests for :func:`eawf.workflow.verify.readiness.compute`.
 
 The wave's success criteria pinned by these tests:
 
@@ -500,7 +500,7 @@ def test_non_required_criterion_failure_does_not_block_ready(
 def test_spec_wave_waived_gate_passes_and_counts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A waived gate flips the criterion to ``waived`` + records the waived id (W11).
+    """A waived gate flips the criterion to ``waived`` + records the waived id.
 
     W11 contract: when every gate on a criterion is waived, the
     rolled-up criterion status is ``waived`` (not ``pass``) so
@@ -700,7 +700,7 @@ def test_sha_stale_waiver_is_filtered_out(tmp_path: Path, monkeypatch: pytest.Mo
 
 
 def test_sha_matching_waiver_is_honoured(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A waiver whose stamped ``wave_sha`` matches counts as fresh (W11)."""
+    """A waiver whose stamped ``wave_sha`` matches counts as fresh."""
     state = _empty_state()
     _seed_wave(state)
     state_path = tmp_path / "state.json"
@@ -1122,7 +1122,7 @@ def test_deterministic_floor_waiver_preempts_live_run(
     )
     monkeypatch.setattr(readiness_mod, "_load_gate_specs", lambda scope_id, state_arg: [gate])
     # Pin the wave sha so the waiver passes the SHA-bound freshness
-    # filter (W11) without touching the git tree.
+    # filter without touching the git tree.
     monkeypatch.setattr(
         readiness_mod,
         "derive_wave_sha",
@@ -1191,7 +1191,7 @@ def test_waived_floor_check_skips_run_and_surfaces_waived(
         lambda scope_id, state_arg, **kwargs: block,
     )
     # Pin the wave sha so the waiver passes the SHA-bound freshness
-    # filter (W11) without touching the git tree.
+    # filter without touching the git tree.
     monkeypatch.setattr(
         readiness_mod,
         "derive_wave_sha",
@@ -1407,7 +1407,7 @@ def test_seams_dont_block_on_failing_deterministic_gate(
     assert result.exit_code == 0, result.stdout
 
 
-# ---- resolve_wave_verify_block: verdict-always band narrowing (W12) ----------
+# ---- resolve_wave_verify_block: verdict-always band narrowing ----------
 
 
 def _band_scoped_block() -> VerifyBlock:

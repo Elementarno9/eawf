@@ -1,4 +1,4 @@
-"""Unit tests for the process-group cancel primitive (P29-I01-W25).
+"""Unit tests for the process-group cancel primitive.
 
 Pins the pgid-kill primitive the safety-floor HALT (FLOOR-6) wires to:
 

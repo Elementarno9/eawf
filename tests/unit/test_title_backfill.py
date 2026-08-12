@@ -1,7 +1,7 @@
 """Unit tests for :mod:`eawf.platform.lint.tools.title_backfill`.
 
-The generalized entity-title backfill (P29-I07-W07) extends the backlog-only
-sweep (P29-I02-W09) to all five lifecycle / decision kinds. These tests pin
+The generalized entity-title backfill extends the backlog-only
+sweep to all five lifecycle / decision kinds. These tests pin
 the contract acceptance criteria:
 
 - all five kinds (phase / iter / wave / backlog / decision) normalize;

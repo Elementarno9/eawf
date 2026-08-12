@@ -1,4 +1,4 @@
-"""Tests for the profile-fed verify spine schema (P28-I01-W10).
+"""Tests for the profile-fed verify spine schema.
 
 Pins the W10 success criteria:
 

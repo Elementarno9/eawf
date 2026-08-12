@@ -1,6 +1,6 @@
 """Artifact command handlers.
 
-Split out of :mod:`eawf.surfaces.cli.commands.evidence` (P27-W07). The
+Split out of :mod:`eawf.surfaces.cli.commands.evidence`. The
 ``artifact_app`` Typer app and the shared helpers live in the parent
 module; this module attaches the command bodies (add / update / show /
 validate / verify) via ``@<app>.command(...)``.

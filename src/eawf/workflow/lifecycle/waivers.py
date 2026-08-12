@@ -1,11 +1,11 @@
-"""Operator-only per-gate waiver semantics (P28-I01-W11).
+"""Operator-only per-gate waiver semantics.
 
 A *waiver* lets an operator (NOT an agent) declare that a specific
 failing :class:`~eawf.kernel.spec.common.GateSpec` is cleared via an
 attestation. The waiver is recorded as a typed
 :class:`~eawf.kernel.store.kinds.evidence.EvidenceRecord` whose
 ``produced_by="human"`` + ``status="waived"`` shape is the only
-evidence the close-readiness compute (W06) consults when deciding
+evidence the close-readiness compute consults when deciding
 whether a gate counts as satisfied.
 
 The :func:`apply_waiver` helper composes the record, enforces the
@@ -253,7 +253,7 @@ def _build_waiver_record(
     * ``summary`` — the operator's reason (or
       :data:`WAIVER_NO_REASON_SUMMARY` in mode A).
     * ``metrics={"wave_sha": <sha>, "operator_session": <id>}`` —
-      ``wave_sha`` powers SHA-bound freshness (W11) so a stale waiver
+      ``wave_sha`` powers SHA-bound freshness so a stale waiver
       against an old SHA is filtered out of the readiness view;
       ``operator_session`` records the authoring session id so
       downstream review can re-trace who waived.

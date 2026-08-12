@@ -1,4 +1,4 @@
-"""Unit tests for ``eawf skill render`` CLI surface (P10-W01).
+"""Unit tests for ``eawf skill render`` CLI surface.
 
 Pins:
 

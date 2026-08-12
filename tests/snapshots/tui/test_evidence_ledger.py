@@ -1,4 +1,4 @@
-"""Golden snapshot for the Evidence-mode close-readiness ledger (P29-I13-W04).
+"""Golden snapshot for the Evidence-mode close-readiness ledger.
 
 The Evidence mode renders a close-readiness ledger over the active scope's
 typed criteria: one row per :class:`~eawf.workflow.verify.models.CloseReadiness`

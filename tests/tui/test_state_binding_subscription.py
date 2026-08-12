@@ -1,4 +1,4 @@
-"""Tests for the W04 subscription cursor + reconnect throttle (P30-I21-W04).
+"""Tests for the W04 subscription cursor + reconnect throttle.
 
 The TUI state binding used to re-subscribe on every daemon-probe tick with
 ``since_event_id=None`` (a full re-subscribe), so a stream the daemon repeatedly
@@ -63,7 +63,7 @@ def _event_push_frame(event_id: str) -> bytes:
 def test_subscribe_params_omit_since_before_first_event() -> None:
     """Before any event, the subscribe carries no cursor and no scope narrowing.
 
-    The EVENT subscription is deliberately un-narrowed (W25): fleet lifecycle
+    The EVENT subscription is deliberately un-narrowed: fleet lifecycle
     events are wave-/iter-scoped, so a daemon-side ``scope_id`` filter keyed on
     the state URN would drop every one of them. The subscribe therefore omits
     ``scope_id`` and lets the panes filter client-side.

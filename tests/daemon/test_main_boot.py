@@ -514,7 +514,7 @@ def test_resolve_session_ttl_seconds_non_positive_falls_back(
 
 
 # ---------------------------------------------------------------------------
-# Logging wiring — SensitiveScrubber attached to every sink (P27-I02-W02)
+# Logging wiring — SensitiveScrubber attached to every sink
 # ---------------------------------------------------------------------------
 
 

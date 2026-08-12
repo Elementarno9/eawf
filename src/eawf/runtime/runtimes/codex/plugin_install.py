@@ -1,6 +1,6 @@
 """Render an Eä-owned Codex CLI plugin under ``.codex/plugins/eawf/``.
 
-Native Codex layout (P14-I02-W01) replaces the prior flat ``.codex/{skills,
+Native Codex layout replaces the prior flat ``.codex/{skills,
 agents,hooks}/`` dump. Output under *plugin_root*:
 
 ::

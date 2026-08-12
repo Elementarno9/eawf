@@ -1,4 +1,4 @@
-"""Coverage-lift tests for :mod:`eawf.runtime.worktree.git` (P27-I01-W01).
+"""Coverage-lift tests for :mod:`eawf.runtime.worktree.git`.
 
 Two complementary strategies:
 

@@ -406,7 +406,7 @@ Phase lifecycle (open, close, reopen).
 
 | Verb | Summary |
 |---|---|
-| `activate` | Flip a PLANNED phase to ACTIVE (P19-W07, P19-W11, P19-W13). |
+| `activate` | Flip a PLANNED phase to ACTIVE. |
 | `close` | Close an active phase. Rejects when child iters are still open. |
 | `open` | Open a new phase. Provide an explicit ID or use ``--auto``. |
 | `prepare-close` | Compute a pre-close checklist for *phase_id* without closing it. |

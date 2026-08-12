@@ -1,4 +1,4 @@
-"""Tests for the incident-timeline projection (P30-I07-W16).
+"""Tests for the incident-timeline projection.
 
 Two layers: the pure store-load + row-projection helpers in
 :mod:`eawf.surfaces.tui.screens.overlays.detail_incident`, and the

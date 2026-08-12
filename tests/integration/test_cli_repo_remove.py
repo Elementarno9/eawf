@@ -1,4 +1,4 @@
-"""Integration tests for ``eawf repo remove`` (P20-I01-W06).
+"""Integration tests for ``eawf repo remove``.
 
 Covers the explicit removal surface:
 

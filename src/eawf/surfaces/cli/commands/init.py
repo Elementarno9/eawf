@@ -119,8 +119,8 @@ def _resolve_profiles_and_template(
 
     Args:
         profile: Repeatable ``--profile`` values (legacy v0.1 surface).
-        profiles_csv: ``--profiles a,b,c`` comma list (P25-W16).
-        template: ``--template <name>`` bundled template name (P25-W16).
+        profiles_csv: ``--profiles a,b,c`` comma list.
+        template: ``--template <name>`` bundled template name.
 
     Returns:
         Pair ``(profiles_list, template_extras)``. ``profiles_list`` is
@@ -204,7 +204,7 @@ def _build_answers(
     :class:`WizardAnswers` field doc) and has no effect on the
     ``--no-input`` pipeline. The model default (``True``) carries through.
 
-    ``template_extras`` is the parsed bootstrap-template payload (P25-W16);
+    ``template_extras`` is the parsed bootstrap-template payload;
     forwarded into the wizard so ``_build_config_yaml`` can deep-merge it
     into the canonical ``.ea/config.yaml``.
     """

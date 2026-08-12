@@ -1,4 +1,4 @@
-"""Tests for the production round-runner binding (P30-I18-W01).
+"""Tests for the production round-runner binding.
 
 Covers the seam that converts each staged researcher dispatch into a spawned
 researcher session and parses each ``agent_end`` body into typed findings rows:

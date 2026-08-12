@@ -1,4 +1,4 @@
-"""Unit tests for the typed subagent-spec model (P27-I03-W14).
+"""Unit tests for the typed subagent-spec model.
 
 Exercises :class:`eawf.workflow.agents.specs.models.SubagentSpec` and its nested
 section models directly — the model layer is pure data + formatting, so

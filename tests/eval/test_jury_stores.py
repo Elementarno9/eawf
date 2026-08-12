@@ -1,4 +1,4 @@
-"""Juror-ballot persistence + the calibration store readers (P30-I23-W17).
+"""Juror-ballot persistence + the calibration store readers.
 
 The calibration substrate was empty by construction: every convened
 jury's ballots were dropped. Now the convener appends one

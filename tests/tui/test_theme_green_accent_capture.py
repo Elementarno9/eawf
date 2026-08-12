@@ -1,4 +1,4 @@
-"""Per-theme colour capture of the green accent + closed-wave tint (P30-I02-W01).
+"""Per-theme colour capture of the green accent + closed-wave tint.
 
 The wave's keystone is the teal -> green ``accent`` / ``primary`` rotation
 that every downstream surface dogfoods. The existing

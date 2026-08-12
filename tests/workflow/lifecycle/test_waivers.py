@@ -1,4 +1,4 @@
-"""Tests for :mod:`eawf.workflow.lifecycle.waivers` (P28-I01-W11).
+"""Tests for :mod:`eawf.workflow.lifecycle.waivers`.
 
 The wave's success criteria pinned by these tests:
 

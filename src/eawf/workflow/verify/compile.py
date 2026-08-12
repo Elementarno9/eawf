@@ -1,8 +1,8 @@
-"""Gate compilation seam for the v0.4 verify spine (W08 + W10).
+"""Gate compilation seam for the v0.4 verify spine.
 
 Two public entry points:
 
-* :func:`compile_gate` (W08) — translates a typed
+* :func:`compile_gate` — translates a typed
   :class:`~eawf.kernel.spec.common.GateSpec` plus the parent
   :class:`~eawf.kernel.spec.common.CriterionSpec` into the
   :class:`~eawf.workflow.audit_dsl.models.CheckSpec` shape that the
@@ -12,7 +12,7 @@ Two public entry points:
   layer (authored by planners + agents) and the audit-DSL runner
   (the live subprocess + diff-base + scope-resolution machinery
   already in tree).
-* :func:`compile_floor_pack` (W10) — translates the profile-fed
+* :func:`compile_floor_pack` — translates the profile-fed
   floor pack (a list of :class:`~eawf.platform.profiles.models.FloorCheck`
   rows) into the same :class:`CheckSpec` shape. Each floor check's
   ``cmd`` argv passes through

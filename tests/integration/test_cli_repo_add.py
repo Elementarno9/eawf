@@ -1,4 +1,4 @@
-"""Integration tests for ``eawf repo add`` (P20-I01-W06).
+"""Integration tests for ``eawf repo add``.
 
 Covers the explicit registry-growth surface:
 

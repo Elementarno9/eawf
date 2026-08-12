@@ -1,4 +1,4 @@
-"""Rendered-prompt lint: no eawf commands in worktree sections (P30-I23-W39).
+"""Rendered-prompt lint: no eawf commands in worktree sections.
 
 Two-scope lint pinning the P30-I23-W38 rewrite so the self-close
 anti-pattern cannot silently return:

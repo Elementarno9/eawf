@@ -1,4 +1,4 @@
-"""Tests for the C06 ``HelpScreen`` overlay (P26-W19).
+"""Tests for the C06 ``HelpScreen`` overlay.
 
 Pure keymap-row helpers (global / pane-nav / scope) plus Pilot-driven
 behaviour: ``?`` opens the overlay, the D31 single-instance guard makes a

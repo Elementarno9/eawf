@@ -1,10 +1,10 @@
-"""Acceptance: a full armed autopilot run drains a two-wave frontier (P30-I17-W10).
+"""Acceptance: a full armed autopilot run drains a two-wave frontier.
 
 The autopilot-wiring capstone (CR-01). The W01-W09 waves each proved ONE leg of
-the loop in isolation -- the backgrounded handle (W01), the arm-spec -> DriveParams
-mapping, the spawn / repair ladders (W03), the frontier recompute (W04), the
+the loop in isolation -- the backgrounded handle, the arm-spec -> DriveParams
+mapping, the spawn / repair ladders, the frontier recompute, the
 budget cap (W04 / DL-4), the watcher liveness, the pause / halt / resume control
-RPCs (W06), the cockpit reattach (W07), and the jury / kill (W09). None of them
+RPCs, the cockpit reattach, and the jury / kill. None of them
 proved the WHOLE chain end to end: an armed run claims -> dispatches -> watches
 -> close-gates -> drains a real two-wave frontier under a budget cap, with the
 ``fleet_run`` evidence record + summary produced and assertable.
@@ -238,7 +238,7 @@ def test_armed_run_returns_handle_fast_while_drain_continues(tmp_path: Path) -> 
         release.wait(timeout=5.0)
         return "closed"
 
-    # Two-wave ready frontier (W01 + W02), concurrency 2 so both lanes fill.
+    # Two-wave ready frontier, concurrency 2 so both lanes fill.
     params = DriveParams(frontier=_WAVE_IDS[:2], concurrency=2)
 
     original_watch = fleet_mod._default_watcher

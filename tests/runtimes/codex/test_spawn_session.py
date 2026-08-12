@@ -1,4 +1,4 @@
-"""Unit tests for the live ``codex exec`` spawn + result parse (P29-I04-W05).
+"""Unit tests for the live ``codex exec`` spawn + result parse.
 
 Pins the codex juror lane (G1): :meth:`CodexAdapter.spawn_session` forks
 ``codex exec --json`` (headless, newline-delimited JSON events) and
@@ -844,7 +844,7 @@ def test_spawn_session_timeout_kills_child_and_raises(monkeypatch: pytest.Monkey
 
 
 # ---------------------------------------------------------------------------
-# spawn_session -- incremental on_chunk streaming (P30-I20-W44)
+# spawn_session -- incremental on_chunk streaming
 # ---------------------------------------------------------------------------
 
 

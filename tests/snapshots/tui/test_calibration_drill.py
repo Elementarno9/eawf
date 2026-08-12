@@ -1,4 +1,4 @@
-"""Golden snapshot + drill-key resolution for the calibration drill (P29-I13-W11).
+"""Golden snapshot + drill-key resolution for the calibration drill.
 
 The jury-calibration
 :class:`~eawf.surfaces.tui.modals.calibration_drill.CalibrationDrillModal`

@@ -126,7 +126,7 @@ _CORE_FLOW_ORDER: tuple[tuple[SkillName, type[Skill]], ...] = (
 _GIT_TIMEOUT_SECONDS: float = 5.0
 
 
-# ---- Runtime-option resolution (P30-I23-W45) --------------------------------
+# ---- Runtime-option resolution --------------------------------
 
 #: Recognised ``--caps`` axes. A cap ceiling on any other axis records an
 #: advisory warning and is dropped (an idle knob is worse than an honest gap).

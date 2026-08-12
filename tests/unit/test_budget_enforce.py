@@ -1,4 +1,4 @@
-"""Unit tests for budget enforcement (P27-I01-W24).
+"""Unit tests for budget enforcement.
 
 Covers two surfaces:
 

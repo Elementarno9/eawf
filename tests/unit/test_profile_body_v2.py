@@ -1,4 +1,4 @@
-"""Unit tests for the ProfileBody v2 closed schema (P25-W15).
+"""Unit tests for the ProfileBody v2 closed schema.
 
 The v2 schema adds three composability fields and a ``schema_version``
 literal:
@@ -133,7 +133,7 @@ def test_profile_body_v2_keeps_v1_field_defaults() -> None:
     assert body.dispatch_session_policy is None
 
 
-# --- RenderBlock body-shape XOR (P27-I03-W01) ------------------------------
+# --- RenderBlock body-shape XOR ------------------------------
 
 
 def test_render_block_prose_shape_validates() -> None:

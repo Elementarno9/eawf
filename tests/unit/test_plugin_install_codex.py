@@ -1,4 +1,4 @@
-"""Unit tests for the Codex runtime plugin installer (P14-I02-W01).
+"""Unit tests for the Codex runtime plugin installer.
 
 Covers the native plugin layout (``<plugin_root>/.codex-plugin/plugin.json``
 plus skills/agents/hooks under the plugin root) and the scope-aware

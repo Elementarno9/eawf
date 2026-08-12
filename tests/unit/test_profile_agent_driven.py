@@ -1,4 +1,4 @@
-"""Tests for the opt-in ``agent_driven`` profile (P27-I03-W03).
+"""Tests for the opt-in ``agent_driven`` profile.
 
 The ``agent_driven`` profile encodes two deliberate *divergences* from the
 small-CL / trunk-based defaults that the bundled ``core`` profile renders,

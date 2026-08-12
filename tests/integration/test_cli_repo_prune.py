@@ -1,4 +1,4 @@
-"""Integration tests for ``eawf repo prune`` (P20-I01-W06).
+"""Integration tests for ``eawf repo prune``.
 
 Covers the explicit-pruner surface:
 

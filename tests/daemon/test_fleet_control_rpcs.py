@@ -1,4 +1,4 @@
-"""Tests: fleet pause / halt / resume RPCs + loop cooperation (P30-I17-W06).
+"""Tests: fleet pause / halt / resume RPCs + loop cooperation.
 
 ``pause_all`` / ``halt_all`` / ``resume`` existed UNREGISTERED with zero callers,
 and the drive loop never re-read the run state, so a cockpit pause aborted the

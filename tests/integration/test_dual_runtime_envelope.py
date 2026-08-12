@@ -1,4 +1,4 @@
-"""Ship-gate (P10-I01-W04): dual-runtime dispatch envelope equivalence.
+"""Ship-gate: dual-runtime dispatch envelope equivalence.
 
 Verifies that ``eawf wave dispatch <wave_id> --runtime=claude-code`` and
 ``eawf wave dispatch <wave_id> --runtime=claude-agent-sdk`` agree on the

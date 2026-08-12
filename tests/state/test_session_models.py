@@ -1,4 +1,4 @@
-"""Unit tests for the session-handle Pydantic models (P24-W07).
+"""Unit tests for the session-handle Pydantic models.
 
 Covers :class:`~eawf.kernel.state.models.SessionAttempt`,
 :class:`~eawf.kernel.state.models.DispatchAnnotation`, and the additive

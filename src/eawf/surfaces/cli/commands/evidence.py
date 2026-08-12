@@ -8,7 +8,7 @@ This module owns nine evidence Typer apps:
   at the root via :mod:`eawf.surfaces.cli.registry` and own legacy
   state-evidence verbs (define / add / verdict / list / promote).
 
-* one new top-level ``evidence_app`` (P28-I01-W04) that mounts the
+* one new top-level ``evidence_app`` that mounts the
   v0.4 verify-spine attestation surface — ``eawf evidence attest``
   proxies a typed :class:`~eawf.kernel.store.kinds.evidence.EvidenceRecord`
   through the daemon ``evidence.append`` RPC and (under the
@@ -17,7 +17,7 @@ This module owns nine evidence Typer apps:
   back to a direct ``evidence.jsonl`` append when the daemon is
   unavailable. The verb is the operator-facing
   attestation entry point; deterministic + jury appends will land
-  through library entry points in later waves (W06 / W08 / W11).
+  through library entry points in later waves.
 
 The concrete command bodies for the eight legacy apps live in four
 sibling modules:

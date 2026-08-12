@@ -1,4 +1,4 @@
-"""``svg_pixel_diff`` golden for the EA_CB status-tint legend (P30-I02-W01).
+"""``svg_pixel_diff`` golden for the EA_CB status-tint legend.
 
 Pins the five-swatch lifecycle band legend (pending / claimed /
 in_progress / closed / failed, EA_CB / IBM colourblind-safe hexes) as a

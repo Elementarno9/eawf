@@ -1,4 +1,4 @@
-"""Derived close-readiness view for v0.4 verify spine (W06 + W08).
+"""Derived close-readiness view for v0.4 verify spine.
 
 # noqa: EAWF010 close-readiness projection accreted the W13 floor-scoping seam
 # (per-tool argv narrowing + policy-to-required mapping); the cohesive
@@ -30,7 +30,7 @@ W08 layers the **deterministic floor** on top of W06: criteria whose
 :func:`eawf.workflow.verify.compile.compile_gate` and executed live via
 :func:`eawf.workflow.audit_dsl.runner.run_checks`. Jury / attested
 criteria stay on the W06 evidence-row path until v0.4.1 lands the
-jury + attestation subsystems. Waivers (W11) pre-empt the live run
+jury + attestation subsystems. Waivers pre-empt the live run
 across both flavours so operator overrides survive the floor.
 
 ``compute`` is read-only at the state-mutation boundary: it does not
@@ -92,8 +92,8 @@ def _load_criterion_specs(scope_id: str, state: State) -> list[CriterionSpec]:
 
     The helper stays a separate function (rather than inlined into
     :func:`compute`) so tests can still monkeypatch it to feed synthetic
-    specs into the deterministic-floor integration (W08) and the
-    waiver-aware rollup (W11) without constructing a full wave row.
+    specs into the deterministic-floor integration and the
+    waiver-aware rollup without constructing a full wave row.
 
     Args:
         scope_id: Wave / iter / phase URN. Only wave scopes carry
@@ -124,7 +124,7 @@ def _load_gate_specs(scope_id: str, state: State) -> list[GateSpec]:
     The helper stays a separate function (rather than inlined into
     :func:`compute` and the daemon close gate) so tests can still
     monkeypatch it to feed synthetic specs into the deterministic-floor
-    integration (W08) and the criterion-gate-ref validation without
+    integration and the criterion-gate-ref validation without
     constructing a full wave row.
 
     Args:
@@ -204,7 +204,7 @@ def _filter_evidence_for_scope(
 def _is_stale_waiver(row: EvidenceRecord, *, current_sha: str | None) -> bool:
     """Return ``True`` when *row* is a waiver against an outdated wave SHA.
 
-    Waivers (W11) are SHA-bound: each waiver row carries
+    Waivers are SHA-bound: each waiver row carries
     ``metrics["wave_sha"]`` at attest-time. Once the wave SHA advances
     (e.g. an executor adds a new commit), prior waivers are stale and
     MUST NOT count toward the readiness rollup — the gate needs a
@@ -1512,7 +1512,7 @@ def compute(
       original path); jury votes + operator attestations land in
       v0.4.1+.
 
-    Floor-pack fallback (W10): when the wave has no typed
+    Floor-pack fallback: when the wave has no typed
     CriterionSpec rows AND the active profile carries a non-empty
     :attr:`~eawf.platform.profiles.models.VerifyBlock.floor_checks`,
     each floor check compiles via
@@ -1589,7 +1589,7 @@ def compute(
     # ``metrics["wave_sha"]`` no longer matches the current wave SHA
     # is considered stale and dropped before per-gate roll-up so the
     # readiness view reflects only fresh operator attestations. The
-    # compile-gate (W08) flips the same SHA into a full hard filter
+    # compile-gate flips the same SHA into a full hard filter
     # for non-waiver evidence.
     sha = derive_wave_sha(scope_id, repo_root=repo_root)
     logger.debug(f"compute wave={scope_id!r} sha={sha!r}")
@@ -1614,7 +1614,7 @@ def compute(
         prevalidated_gate_ids=prevalidated_gate_ids,
     )
     legacy_views, legacy_warnings = _build_legacy_views(wave)
-    # Profile-fed floor pack (P28-I01-W10). Floor checks render only
+    # Profile-fed floor pack. Floor checks render only
     # when the wave has no typed CriterionSpec rows — the typed-spec
     # layer is authoritative when present; the floor pack is the
     # per-domain baseline that applies when no wave-level criteria

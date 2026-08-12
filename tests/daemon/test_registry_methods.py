@@ -1,4 +1,4 @@
-"""Tests for the ``registry.*`` JSON-RPC handlers (P24-W10).
+"""Tests for the ``registry.*`` JSON-RPC handlers.
 
 Covers:
 

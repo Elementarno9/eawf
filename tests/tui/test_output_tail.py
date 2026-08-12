@@ -81,7 +81,7 @@ def test_format_agent_output_lines_passes_through_unmodelled_runtime_json() -> N
 
     A FOREIGN-runtime event (a dotted type outside the codex/claude namespaces)
     is still surfaced verbatim so nothing an unmodelled runtime emits is silently
-    swallowed -- the codex-namespace drop (W19) is scoped to codex's own frames.
+    swallowed -- the codex-namespace drop is scoped to codex's own frames.
     """
     chunk = '{"type":"gemini.turn","payload":"hi"}'
     assert format_agent_output_lines(chunk) == [chunk]
@@ -208,7 +208,7 @@ def test_output_tail_append_preserves_append_order() -> None:
 def test_output_tail_replace_clears_prior_rows_and_reseeds() -> None:
     """replace() drops any prior rows and re-seeds the tail with the new lines.
 
-    The store-sync authority path (W58): a live push may render a few rows
+    The store-sync authority path: a live push may render a few rows
     before the persisted store takes over; replace() clears them so the store's
     ordered sequence is the only content, never a double-render.
     """

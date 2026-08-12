@@ -1,4 +1,4 @@
-"""Schema-forced ``LLMAssistResult`` + the bounded re-ask loop (P29-I01-W24).
+"""Schema-forced ``LLMAssistResult`` + the bounded re-ask loop.
 
 A spawned agent (:meth:`~eawf.runtime.runtimes.claude.adapter.ClaudeAdapter.spawn_session`)
 hands back a transient :class:`~eawf.runtime.runtimes.adapter.SpawnResult` whose

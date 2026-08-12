@@ -1,4 +1,4 @@
-"""Tests for :mod:`eawf.kernel.spec.operator_input` (P29-I01-W15).
+"""Tests for :mod:`eawf.kernel.spec.operator_input`.
 
 Pins the hub-and-spoke operator-input channel + the campaign progress
 projection:

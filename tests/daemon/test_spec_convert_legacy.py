@@ -1,6 +1,6 @@
 """Daemon-side tests for the ``spec.convert_legacy`` JSON-RPC handler.
 
-The live legacy-to-typed criteria converter (P30-I23-W24): every
+The live legacy-to-typed criteria converter: every
 ``kind == legacy`` criterion row under the scope is pushed through
 :func:`eawf.kernel.spec.common.convert_legacy_criterion` inside the
 daemon's canonical state-write transaction, with the EAWF021

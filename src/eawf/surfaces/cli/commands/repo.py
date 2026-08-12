@@ -1,6 +1,6 @@
 """``eawf repo`` — repo-scoped init + workspace linkage + registry mutators.
 
-This module is the facade for the ``repo`` command group (P27-I05-W09).
+This module is the facade for the ``repo`` command group.
 It owns the :data:`repo_app` Typer group, the shared registry-persist
 core (``_persist_registry`` + its diff / read / daemon-proxy helpers),
 the recognised-parent allowlist, and the thin ``repo init`` alias. The
@@ -20,7 +20,7 @@ verb set. Existing import sites (``registry.py`` mounting
 ``_daemon_proxy_enabled_for_registry``) keep resolving from this module
 unchanged.
 
-Daemon-internal note (P24-W10): :func:`_persist_registry` is the sole
+Daemon-internal note: :func:`_persist_registry` is the sole
 CLI-side mutator for ``~/.eawf/registry.json``; since W10 it
 dispatches through the daemon's ``registry.update`` RPC when
 ``daemon.proxy_enabled=True`` (the new default). The in-process arm
@@ -42,17 +42,17 @@ Subcommands:
   ``--target``) repo to a workspace state document, optionally recording
   the workspace code on the repo's ``state.indexes.workspace_code`` so a
   future ``workspace validate`` can cross-check.
-- ``repo add <path>`` (P20-I01-W06) — explicitly add a repo to the
+- ``repo add <path>`` — explicitly add a repo to the
   user-scope registry (``~/.eawf/registry.json``). Idempotent on the
   ``(code, path)`` pair; TOFU prompt when the operator passes a path
   whose parent dir is not a recognised "Workspace" / "Repos" parent
   (mockup-style ``~/Repos``, ``~/Workspaces``, ``/repos``, ...). The
   TOFU gate confirms intent so the user does not register an unrelated
   directory by typo. Honours ``--no-input`` + ``--yes``.
-- ``repo remove <code>`` (P20-I01-W06) — drop the entry whose
+- ``repo remove <code>`` — drop the entry whose
   ``code == <code>`` from the registry. Explicit-only: never auto-prunes;
   exits 2 (UserError, ``kind="NotFound"``) when the code is absent.
-- ``repo prune`` (P20-I01-W06) — drop registry entries whose on-disk
+- ``repo prune`` — drop registry entries whose on-disk
   paths no longer exist. Requires ``--yes`` (or ``--no-input``) so the
   pruner never deletes silently. Reports each dropped entry in the
   envelope so a wrapping audit picks up the trail.

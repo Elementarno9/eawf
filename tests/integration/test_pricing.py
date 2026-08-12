@@ -139,7 +139,7 @@ def test_lookup_pricing_empty_string_returns_none() -> None:
 
 
 # --------------------------------------------------------------------------
-# claude-opus-4-8 row + bare-alias resolution + codex row (P29-I01-W20).
+# claude-opus-4-8 row + bare-alias resolution + codex row.
 # --------------------------------------------------------------------------
 
 
@@ -237,7 +237,7 @@ def test_lookup_pricing_opencode_still_unpriced() -> None:
 
 
 # --------------------------------------------------------------------------
-# Cross-vendor per-tier model rows (P29-I04-W15): codex bare ids + opencode
+# Cross-vendor per-tier model rows: codex bare ids + opencode
 # provider/model ids the dispatch routing table emits must all price.
 # --------------------------------------------------------------------------
 

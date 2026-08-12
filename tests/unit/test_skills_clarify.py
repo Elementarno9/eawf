@@ -1,4 +1,4 @@
-"""Unit tests for the clarify->needs_user bridge (P29-I01-W17).
+"""Unit tests for the clarify->needs_user bridge.
 
 Covers the bridge that lands a research-campaign clarify proposal in the
 durable ``needs_user`` pause store carrying its urgency, plus the additive

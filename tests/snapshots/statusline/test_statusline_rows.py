@@ -1,4 +1,4 @@
-"""Snapshot test for the rows-aware multi-line statusline renderer (W38).
+"""Snapshot test for the rows-aware multi-line statusline renderer.
 
 The renderer emits exactly the configured row count; the rendered multi-line
 file is pinned against a committed golden. Regenerate the golden with

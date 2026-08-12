@@ -1,4 +1,4 @@
-"""EU capture is real: committed state carries a non-zero actual (P30-I23-W28).
+"""EU capture is real: committed state carries a non-zero actual.
 
 Every close before this wave rode the ``--no-runtime`` waiver because the
 capture chain (statusline sidecar -> claim baseline -> SessionEnd hook ->

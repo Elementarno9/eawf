@@ -1,4 +1,4 @@
-"""Tests for the pure statusline installer library (P29-I13-W41).
+"""Tests for the pure statusline installer library.
 
 Pins the namespace-narrow settings patch (only the statusLine key changes),
 the empty/absent-file boundaries, idempotence detection, deterministic JSON

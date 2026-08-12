@@ -1,4 +1,4 @@
-"""Unit + Pilot tests for the C06 ``GitPane`` widget (P26-W17).
+"""Unit + Pilot tests for the C06 ``GitPane`` widget.
 
 Covers the pure line formatter (:func:`format_git_lines`), the live git
 probe (:func:`gather_git_fields`) against a throwaway repo and against a
@@ -223,7 +223,7 @@ def test_git_pane_refresh_force_reprobes(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------
-# classify_porcelain — added / removed / changed tally (P30-I02-W09)
+# classify_porcelain — added / removed / changed tally
 # --------------------------------------------------------------------------
 
 

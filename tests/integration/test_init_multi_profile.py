@@ -1,4 +1,4 @@
-"""Integration tests for ``eawf init --profiles`` and ``--template`` (P25-W16).
+"""Integration tests for ``eawf init --profiles`` and ``--template``.
 
 Covers the C08 D7 surface contract:
 

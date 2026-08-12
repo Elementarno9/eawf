@@ -1,4 +1,4 @@
-"""Cold-launch cast golden + no-churn gate for the Home attention band (P29-I08-W20).
+"""Cold-launch cast golden + no-churn gate for the Home attention band.
 
 Records a *cold-launch* asciinema cast -- the app starting against a
 POPULATED on-disk fixture -- and runs the deterministic no-churn gate the
@@ -31,7 +31,7 @@ Jury residual (ARMED-but-IDLE): the *perceived* flash-of-empty across the
 opening frames of this provenance-pinned cold-launch cast is the one thing
 a deterministic frame assertion structurally cannot judge -- it is the T2
 jury residual (ISO interaction-capability + reliability). The cross-vendor
-band jury that would score it is built (W04/W05) and proven to discriminate
+band jury that would score it is built and proven to discriminate
 (W08/W11) but DORMANT: the ``quality`` profile that enables the band is
 opt-in and not in the default enabled set, and the live ballot fn is idle.
 So this module ships the deterministic no-churn gate -- the load-bearing

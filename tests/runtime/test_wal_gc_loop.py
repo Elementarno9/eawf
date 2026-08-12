@@ -1,4 +1,4 @@
-"""Tests for the daemon WAL garbage-collection sweep loop (P30-I14-W01).
+"""Tests for the daemon WAL garbage-collection sweep loop.
 
 Three concerns, mirroring the wave success criteria:
 

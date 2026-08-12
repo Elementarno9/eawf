@@ -1,8 +1,8 @@
 """Operator-tunable config-key metadata registry for the ``eawf config`` menu.
 
 This module hosts :data:`CONFIG_REGISTRY` — the operator-tunable subset
-surfaced by the interactive ``eawf config`` menu (P20-W10) and the TUI
-config hotkey (P20-W11). One :class:`ConfigKey` row per menu entry,
+surfaced by the interactive ``eawf config`` menu and the TUI
+config hotkey. One :class:`ConfigKey` row per menu entry,
 ordered alphabetical-by-key for diff hygiene.
 
 Public API (menu surface — pre-P25):

@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`eawf.runtime.sandbox.jail` (P29-I03-W04).
+"""Unit tests for :mod:`eawf.runtime.sandbox.jail`.
 
 Pin the per-OS filesystem jail + its wiring into the one live ``claude -p``
 spawn:

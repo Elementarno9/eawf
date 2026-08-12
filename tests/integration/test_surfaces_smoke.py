@@ -71,7 +71,7 @@ def repo_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]
     yield repo
 
 
-# --- assertion 1: CLI help surface (W06) -----------------------------------
+# --- assertion 1: CLI help surface -----------------------------------
 
 
 def test_cli_help_exits_zero() -> None:
@@ -79,7 +79,7 @@ def test_cli_help_exits_zero() -> None:
     assert result.exit_code == 0, result.output
 
 
-# --- assertion 2: daemonless config validate is deprecation-clean (W02) ----
+# --- assertion 2: daemonless config validate is deprecation-clean ----
 
 
 def test_daemonless_config_validate_clean_no_deprecation(
@@ -97,7 +97,7 @@ def test_daemonless_config_validate_clean_no_deprecation(
     assert "deprecated_runtime_kind" not in result.output
 
 
-# --- assertion 3: 0..5 exit-code surface (W04) -----------------------------
+# --- assertion 3: 0..5 exit-code surface -----------------------------
 
 
 def test_exit_codes_expose_zero_through_five() -> None:
@@ -118,7 +118,7 @@ def test_exit_codes_name_for_out_of_range_raises_key_error() -> None:
         exit_codes.name_for(6)
 
 
-# --- assertion 4: ErrorEnvelope strict shape (W04) -------------------------
+# --- assertion 4: ErrorEnvelope strict shape -------------------------
 
 
 def test_error_envelope_rejects_unknown_key() -> None:
@@ -151,7 +151,7 @@ def test_error_envelope_accepts_real_fields() -> None:
     assert env.data["kind"] == "LockConflict"
 
 
-# --- assertion 5: 17-skill registry after bootstrap (W11) ------------------
+# --- assertion 5: 17-skill registry after bootstrap ------------------
 
 
 def test_skill_registry_holds_seventeen_after_bootstrap() -> None:
@@ -159,13 +159,13 @@ def test_skill_registry_holds_seventeen_after_bootstrap() -> None:
     assert len(registered) == 17
 
 
-# --- assertion 5b: user-facing catalog == runtime registry (W26) -----------
+# --- assertion 5b: user-facing catalog == runtime registry -----------
 
 
 def test_user_facing_catalog_matches_runtime_registry() -> None:
     """Catalog/registry parity: ``CANONICAL_SKILL_NAMES`` == ``list_registered``.
 
-    The six C04b skills (W11) were registered in the runtime registry but
+    The six C04b skills were registered in the runtime registry but
     absent from the user-facing catalog (``eawf skill list`` read
     ``CANONICAL_SKILL_NAMES``, frozen at 11). W26 extended the catalog to
     17 so both surfaces agree. The names — not just the counts — must
@@ -183,7 +183,7 @@ def test_user_facing_catalog_matches_runtime_registry() -> None:
     )
 
 
-# --- assertion 6: SkillManifest invariants / BOT-06 (W10) ------------------
+# --- assertion 6: SkillManifest invariants / BOT-06 ------------------
 
 
 def test_skill_manifest_empty_runtime_raises_value_error() -> None:
@@ -209,7 +209,7 @@ def test_skill_manifest_target_dir_rejected_use_output_dir() -> None:
         )
 
 
-# --- assertion 7: per-runtime cache-control injection gate (W14) -----------
+# --- assertion 7: per-runtime cache-control injection gate -----------
 
 
 def test_inject_cache_control_claude_appends_marker() -> None:
@@ -225,7 +225,7 @@ def test_inject_cache_control_no_op_runtimes_unchanged(runtime_id: str) -> None:
     assert inject_cache_control(runtime_id=runtime_id, cache_prefix="HEAD") == "HEAD"
 
 
-# --- assertion 8: skill -> adapter handshake reject (W13) ------------------
+# --- assertion 8: skill -> adapter handshake reject ------------------
 
 
 def test_resolve_adapter_override_off_manifest_rejected() -> None:
@@ -239,7 +239,7 @@ def test_resolve_adapter_override_off_manifest_rejected() -> None:
         resolve_adapter(manifest=manifest, preference=None, override="codex")
 
 
-# --- assertion 9: daemonless rejection breadth (W25) -----------------------
+# --- assertion 9: daemonless rejection breadth -----------------------
 
 
 def _seed_minimal_state(repo: Path) -> Path:

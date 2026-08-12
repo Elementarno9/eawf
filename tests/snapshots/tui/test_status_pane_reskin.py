@@ -1,4 +1,4 @@
-"""Golden snapshots for the StatusPane cosmic-terminal reskin (P30-I02-W07).
+"""Golden snapshots for the StatusPane cosmic-terminal reskin.
 
 Pins the three reskin behaviours the wave delivers, each captured from the
 StatusPane mounted IN ISOLATION under a bare themed host (mirroring the

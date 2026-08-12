@@ -1,11 +1,11 @@
-"""Golden snapshot for the reskinned ``/metrics`` dashboard (P30-I02-W23).
+"""Golden snapshot for the reskinned ``/metrics`` dashboard.
 
 The :class:`~eawf.surfaces.tui.screens.overlays.metrics.MetricsModal`
 dashboard migrates to the cosmic-terminal reskin language: the title leads
 with the shared overview sigil tinted ``$accent`` green, and the footer pins
 the frozen honest-negative literal
 ``honest-negative · lights up after EU capture`` (a real middle dot,
-U+00B7). The literal is honest until EU capture lands (I04) -- the outer eawf
+U+00B7). The literal is honest until EU capture lands -- the outer eawf
 harness does not yet instrument EU, so every telemetry-backed tile stays
 honestly dark; the dashboard never fabricates a metric value.
 

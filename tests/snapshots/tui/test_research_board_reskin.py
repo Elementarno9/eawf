@@ -1,4 +1,4 @@
-"""Golden snapshots for the research-board cosmic-terminal reskin (P30-I02-W12).
+"""Golden snapshots for the research-board cosmic-terminal reskin.
 
 Pins the two reskin behaviours the wave delivers, each captured from the
 :class:`~eawf.surfaces.tui.modes.research_board.ResearchBoardModeScreen` mounted
@@ -394,7 +394,7 @@ def test_research_board_reskin_populated_snapshot(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------
-# Snapshot: the FA8 auto-run round tree (W08) -- running / saturated / pruned
+# Snapshot: the FA8 auto-run round tree -- running / saturated / pruned
 # --------------------------------------------------------------------------
 
 

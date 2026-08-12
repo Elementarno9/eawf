@@ -1,4 +1,4 @@
-"""Live per-wave fresh-context auditor verdict producer (P29-I04-W07).
+"""Live per-wave fresh-context auditor verdict producer.
 
 Until this wave the self-eval surface
 (:func:`eawf.observability.eval.self_eval.compute_self_eval`), the jury
@@ -811,7 +811,7 @@ def _normalize_bound_gate_receipt_refs(
 #: three words, so a bare float is the single most common way an otherwise
 #: correct auditor report fails the schema -- and because the re-ask loop is
 #: bounded, three of them in a row kill the close outright with no verdict
-#: written (P30-I25-W29). The cutoffs are the obvious thirds; the point is to
+#: written. The cutoffs are the obvious thirds; the point is to
 #: accept an answer that is already unambiguous, not to invent precision.
 _CONFIDENCE_HIGH: float = 0.75
 _CONFIDENCE_MEDIUM: float = 0.4

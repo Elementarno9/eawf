@@ -1,4 +1,4 @@
-"""Pilot tests for the C06 ``CommandPalette`` overlay (P26-W19).
+"""Pilot tests for the C06 ``CommandPalette`` overlay.
 
 Drives the palette through the real :class:`~eawf.surfaces.tui.app.EaApp` via
 Textual's Pilot harness: ``/`` opens it pre-filled, typing fuzzy-filters

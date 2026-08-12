@@ -1,4 +1,4 @@
-"""Integration: dispatch runner routes the agent_end report by role (P28-I01-W13).
+"""Integration: dispatch runner routes the agent_end report by role.
 
 W13 generalises :func:`eawf.runtime.daemon.dispatch_runner.emit_agent_end_report`
 so the report body type AND the destination store kind are driven by

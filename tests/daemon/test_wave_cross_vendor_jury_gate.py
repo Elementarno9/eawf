@@ -1,4 +1,4 @@
-"""Tests: the daemon close path convenes the cross-vendor jury (P29-I04-W15).
+"""Tests: the daemon close path convenes the cross-vendor jury.
 
 Exercises the opt-in jury upgrade of the enforcing wave-close verdict gate
 wired into :func:`eawf.runtime.daemon.methods.state._enforce_wave_close_gate`:
@@ -534,7 +534,7 @@ def test_flag_off_routes_always_wave_to_single_auditor(
 ) -> None:
     """With the flag OFF an always-wave routes to the single-auditor producer.
 
-    Under the unified close gate (W03), an ``always`` wave whose profile has
+    Under the unified close gate, an ``always`` wave whose profile has
     ``cross_vendor_jury: false`` takes the single-auditor branch BEFORE the
     run_oracle loop: it spawns one ``claude-code`` auditor (via the same
     spawn factory the jury uses) and reads its verdict. The cross-vendor jury
@@ -571,7 +571,7 @@ def test_flag_on_lanes_unavailable_held_advisory_via_jury_abstention(
 ) -> None:
     """Flag-on, all lanes raising -> jury abstains, sub-quorum NEEDS_USER -> advisory.
 
-    The unified close gate (W03) dropped the separate ``_cross_vendor_lanes_
+    The unified close gate dropped the separate ``_cross_vendor_lanes_
     ready`` pre-check: an ``always`` wave under ``cross_vendor_jury: true``
     always falls through to run_oracle's jury tier. When every juror lane
     raises (the host lacks the vendor CLIs), each juror abstains and the vote

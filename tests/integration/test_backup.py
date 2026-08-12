@@ -1,4 +1,4 @@
-"""Unit tests for ``eawf backup`` create/list/restore/prune (P27-I01-W23).
+"""Unit tests for ``eawf backup`` create/list/restore/prune.
 
 Covers the four load-bearing guarantees of the manual snapshot surface:
 

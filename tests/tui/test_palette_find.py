@@ -1,4 +1,4 @@
-"""Tests for the ``/find`` fuzzy ID + title search verb (P26-I02-W03).
+"""Tests for the ``/find`` fuzzy ID + title search verb.
 
 Two layers: the pure :func:`rank_find_hits` ranker (waves + backlog pooled,
 scored by id + title, best first) without mounting Textual, and a

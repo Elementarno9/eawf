@@ -1,4 +1,4 @@
-"""Integration: cross-vendor spawn parity gates (P30-I10-W05).
+"""Integration: cross-vendor spawn parity gates.
 
 Pins the binary wave criterion: the three runtime adapters (claude / codex /
 opencode) emit an IDENTICAL metered / priced / sandboxed
@@ -26,7 +26,7 @@ Every test drives async coroutines via ``asyncio.run`` inside plain sync
 touches the real network / subprocess -- the subprocess factory + the outbound
 connector are always fakes.
 
-The claude adapter (W04) is read-only here -- this wave imports it to assert
+The claude adapter is read-only here -- this wave imports it to assert
 parity but mutates only the codex + opencode lanes.
 """
 
@@ -617,14 +617,14 @@ def test_egress_block_recorded_per_lane(short_socket_dir: Path, lane: str) -> No
 
 
 # ---------------------------------------------------------------------------
-# Sanity: the claude lane (W04) is at parity with the two lanes this wave wires
+# Sanity: the claude lane is at parity with the two lanes this wave wires
 # ---------------------------------------------------------------------------
 
 
 def test_claude_records_same_enforcement_seam_for_parity_proof(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Claude (W04) records env-scrub + argv-deny -- the parity baseline.
+    """Claude records env-scrub + argv-deny -- the parity baseline.
 
     Read-only over the claude lane: proves the seam this wave brings codex +
     opencode to is the SAME seam claude already ships, so the cross-vendor

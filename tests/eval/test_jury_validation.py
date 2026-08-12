@@ -1,4 +1,4 @@
-"""Jury-validation cohort tests (P30-I09-W01).
+"""Jury-validation cohort tests.
 
 The cohort closes the gap from a per-wave verdict outcome (the held-rate signal
 the reputation scorer reads) to a *ground-truth-labelled* validation set the

@@ -1,4 +1,4 @@
-"""End-to-end PoC: the spec-jury discriminates on a REAL build (P29-I08-W11).
+"""End-to-end PoC: the spec-jury discriminates on a REAL build.
 
 This is the culminating proof-of-concept assertion for the spec-jury chain.
 The deterministic canned-ballot gate (``tools/jury_discrimination_gate.py``,

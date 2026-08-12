@@ -1,4 +1,4 @@
-"""Engine body-validation gate (P30-I03-W02).
+"""Engine body-validation gate.
 
 Pin the bind: :func:`eawf.workflow.skills.engine.run_skill` validates a
 registered ``dict`` body against its body model on the success/emit path,

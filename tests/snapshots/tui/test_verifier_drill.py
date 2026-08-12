@@ -1,4 +1,4 @@
-"""Golden snapshot + drill-key resolution for the verifier drill (P29-I13-W10).
+"""Golden snapshot + drill-key resolution for the verifier drill.
 
 The verifier-role
 :class:`~eawf.surfaces.tui.modals.verifier_drill.VerifierDrillModal` renders,

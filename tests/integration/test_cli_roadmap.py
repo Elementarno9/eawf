@@ -1,4 +1,4 @@
-"""CLI integration tests for ``eawf roadmap`` (P19-W06)."""
+"""CLI integration tests for ``eawf roadmap``."""
 
 from __future__ import annotations
 
@@ -1627,7 +1627,7 @@ def test_iter_activate_planned_iter(workspace: Path) -> None:
     assert state["iters"]["P21-I01"]["status"] == "active"
 
 
-# ---- --description round-trip (P28-W02) ------------------------------------
+# ---- --description round-trip ------------------------------------
 
 
 def test_roadmap_propose_persists_description(workspace: Path) -> None:

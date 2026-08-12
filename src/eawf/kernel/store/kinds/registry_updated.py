@@ -1,7 +1,7 @@
 """RegistryUpdatedPayload — typed body for ``StoreKind.REGISTRY_UPDATED`` envelopes.
 
 Emitted by the daemon's ``registry.update`` RPC after a registry
-mutation lands (P24-W10). Subscribers (TUI workspace dashboard,
+mutation lands. Subscribers (TUI workspace dashboard,
 registry-status watchers) filter on
 ``Envelope.kind == registry_updated`` and re-read the file.
 """

@@ -686,7 +686,7 @@ def edit_wave_plan(
     on edit; an over-cap value raises :class:`pydantic.ValidationError`.
 
     The PENDING gate is also the load-bearing invariant for the
-    ACTIVE-phase revise path (P19-W12): the CLI gate accepts an ACTIVE
+    ACTIVE-phase revise path: the CLI gate accepts an ACTIVE
     parent phase, and this guard ensures only PENDING waves under it
     actually mutate while CLOSED/CLAIMED/IN_PROGRESS waves stay frozen.
 
@@ -776,7 +776,7 @@ def remove_wave_plan(state: State, *, wave_id: str) -> None:
 
     Like :func:`edit_wave_plan`, the PENDING guard here is what makes
     ``eawf roadmap revise --remove-wave`` safe under an ACTIVE parent
-    phase (P19-W12): CLOSED/CLAIMED/IN_PROGRESS waves never get
+    phase: CLOSED/CLAIMED/IN_PROGRESS waves never get
     removed regardless of the parent phase's status.
 
     Raises:
@@ -819,7 +819,7 @@ def set_wave_deps(state: State, *, wave_id: str, deps: list[str]) -> Wave:
     """Replace a PENDING wave's deps. Maintains the reverse ``blocks`` index.
 
     Like the other ``*_wave_plan`` helpers, the PENDING guard is what
-    keeps the ACTIVE-phase revise path (P19-W12) safe — only PENDING
+    keeps the ACTIVE-phase revise path safe — only PENDING
     waves under an ACTIVE parent can have their dep set rewritten.
 
     Raises:

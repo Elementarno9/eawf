@@ -1,4 +1,4 @@
-"""Tests for :mod:`eawf.kernel.spec.pruning` (P29-I01-W18).
+"""Tests for :mod:`eawf.kernel.spec.pruning`.
 
 Pins the L1-L5 escalating context-pruning reducers over the Claim ledger:
 

@@ -1,4 +1,4 @@
-"""Unit tests for the :mod:`eawf.workflow.skills.needs_user` pause store (P26-I02-W07).
+"""Unit tests for the :mod:`eawf.workflow.skills.needs_user` pause store.
 
 Covers record/list/resolve over the event-store-backed pause records:
 the round trip, scope filtering, the open-vs-resolved pairing, label

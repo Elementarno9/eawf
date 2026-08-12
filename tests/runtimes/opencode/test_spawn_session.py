@@ -1,4 +1,4 @@
-"""Unit tests for the live ``opencode run`` spawn + result parse (P29-I04-W06).
+"""Unit tests for the live ``opencode run`` spawn + result parse.
 
 Pins the live-spawn engine: :meth:`OpenCodeAdapter.spawn_session` forks
 ``opencode run --format json`` (headless) and
@@ -629,7 +629,7 @@ def test_spawn_session_timeout_kills_child_and_raises(monkeypatch: pytest.Monkey
 
 
 # ---------------------------------------------------------------------------
-# spawn_session -- on_chunk streaming contract (P30-I20-W46)
+# spawn_session -- on_chunk streaming contract
 #
 # opencode buffers via communicate (unlike codex/claude's incremental readline),
 # so it replays the captured stdout to on_chunk line by line after the child

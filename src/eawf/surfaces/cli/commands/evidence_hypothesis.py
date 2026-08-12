@@ -1,6 +1,6 @@
 """Goal / outcome / hypothesis command handlers.
 
-Split out of :mod:`eawf.surfaces.cli.commands.evidence` (P27-W07). The
+Split out of :mod:`eawf.surfaces.cli.commands.evidence`. The
 ``goal_app`` / ``outcome_app`` / ``hypothesis_app`` Typer apps and the
 shared helpers live in the parent module; this module attaches the
 command bodies via ``@<app>.command(...)``.

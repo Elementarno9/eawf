@@ -1,4 +1,4 @@
-"""C04b (P26-W11) acceptance: the 6 missing skills + 17-skill catalog.
+"""C04b acceptance: the 6 missing skills + 17-skill catalog.
 
 Pins the C04b §5 contract for the six skills landed inline per D-b4
 (``/coauthor``, ``/memory``, ``/agent-dispatch``, ``/compress``,

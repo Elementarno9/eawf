@@ -1,4 +1,4 @@
-"""Per-cell colour capture of the rotated footer + heartbeat tokens (P30-I02-W04).
+"""Per-cell colour capture of the rotated footer + heartbeat tokens.
 
 The teal -> green ``accent`` / ``primary`` rotation (the W01 keystone) must
 reach the two chassis-footer surfaces this wave pins: the footer's

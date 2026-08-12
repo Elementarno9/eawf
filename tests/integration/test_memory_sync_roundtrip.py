@@ -143,7 +143,7 @@ def test_sync_check_exits_4_when_views_drift(tmp_workspace: Path) -> None:
     qr_view.write_text("hand-edited\n", encoding="utf-8")
     res = runner.invoke(app, ["--json", "sync", "--target", str(tmp_workspace), "--check"])
     # NOTE: ``sync.py`` still uses a raw ``typer.Exit(code=4)`` literal that
-    # pre-dates the C05 § 5.3 0..5 cutover (W04). A follow-up wave migrates
+    # pre-dates the C05 § 5.3 0..5 cutover. A follow-up wave migrates
     # the literal to the symbolic ``exit_codes.VALIDATION_ERROR`` constant.
     assert res.exit_code == 4, res.output
 

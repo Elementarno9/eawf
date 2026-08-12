@@ -1,4 +1,4 @@
-"""Path-traversal guard on ``BackupStore.get_snapshot`` (P27-I02-W09).
+"""Path-traversal guard on ``BackupStore.get_snapshot``.
 
 ``get_snapshot`` joins ``self.root / ts`` with an operator-supplied ``--ts``
 value. Without a guard, ``--ts ../../..`` or an absolute path escapes the

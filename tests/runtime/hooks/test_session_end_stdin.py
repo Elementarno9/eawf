@@ -57,7 +57,7 @@ _needs_bash = pytest.mark.skipif(_BASH is None, reason="bash is required to run 
 #: repeated across content-block rows, plus one ``turn_duration`` row). The
 #: duration is Claude's own figure for that turn -- not the span across the rows,
 #: which is the wall clock and would include any wait for the operator to approve
-#: a tool (P30-I25-W43).
+#: a tool.
 _FIXTURE_DURATION_MS = 502968
 _FIXTURE_INPUT_TOKENS = 4
 _FIXTURE_OUTPUT_TOKENS = 1013

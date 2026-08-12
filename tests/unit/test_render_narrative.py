@@ -199,7 +199,7 @@ def test_build_narrative_intent_without_priority_rationale() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Per-scope-kind dispatch (W55)
+# Per-scope-kind dispatch
 # ---------------------------------------------------------------------------
 
 

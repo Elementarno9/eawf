@@ -1,4 +1,4 @@
-"""Jury-validation reducer tests (P30-I09-W02).
+"""Jury-validation reducer tests.
 
 The reducer scores the JURY against the ground-truth cohort
 (:class:`~eawf.observability.eval.jury_validation.ValidationCohort` from W01).

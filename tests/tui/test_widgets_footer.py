@@ -1,4 +1,4 @@
-"""Unit + Pilot tests for the C06 shared ``Footer`` + ``Heartbeat`` (P26-W18).
+"""Unit + Pilot tests for the C06 shared ``Footer`` + ``Heartbeat``.
 
 Covers the pure hint formatter (:func:`format_hints`), the Footer's
 default + overridden hint strip, the weekly-burn line builder + its
@@ -188,7 +188,7 @@ def test_format_hints_many_joined_with_bullet() -> None:
 
 
 # --------------------------------------------------------------------------
-# render_hint_label — canonical-vocabulary regression guard (W21)
+# render_hint_label — canonical-vocabulary regression guard
 # --------------------------------------------------------------------------
 
 
@@ -444,7 +444,7 @@ def test_research_board_scope_hint_uses_all_three_letters() -> None:
 
 
 # --------------------------------------------------------------------------
-# HINT_KEY_PRIORITY + order_hints — central footer ordering canon (W04)
+# HINT_KEY_PRIORITY + order_hints — central footer ordering canon
 # --------------------------------------------------------------------------
 
 #: The canonical fragments ``order_hints`` guarantees on every footer surface.

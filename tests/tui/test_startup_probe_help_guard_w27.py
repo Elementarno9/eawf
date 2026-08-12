@@ -1,4 +1,4 @@
-"""Startup probe-reply help guard (P30-I16-W27).
+"""Startup probe-reply help guard.
 
 Operator report 2026-06-11 (Ghostty graphics terminal): on launch, after the
 seal Kitty-image transmission, the HELP pane opened with ZERO key presses.

@@ -1,4 +1,4 @@
-"""Coverage-lift tests for :mod:`eawf.runtime.vcs.coauthor` (P27-I01-W01).
+"""Coverage-lift tests for :mod:`eawf.runtime.vcs.coauthor`.
 
 Targets the validator + resolver branches not exercised by
 ``test_vcs_coauthor.py``: empty/normalised runtime keys, the

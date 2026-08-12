@@ -717,7 +717,7 @@ def score_layout_diff(
     column-count mismatch each add :data:`_LAYOUT_WEIGHT` to the score, so a
     single layout-shape divergence crosses :data:`_FAIL_THRESHOLD` on its
     own. The broadened secondary falsifiers -- a right-edge alignment mismatch
-    (W10) and a selected-row contrast regression (W33) -- each add the smaller
+    (W10) and a selected-row contrast regression -- each add the smaller
     :data:`_SECONDARY_WEIGHT`, which still crosses the threshold alone yet
     stays below the dominant layout-shape pair. The residual per-cell ink
     delta -- the token-fidelity term -- is averaged and added at the much

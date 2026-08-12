@@ -1,4 +1,4 @@
-"""Reliability-weighting tests for the jury reducer (P29-I05-W04).
+"""Reliability-weighting tests for the jury reducer.
 
 The graded mean of :func:`~eawf.observability.eval.jury.aggregate_jury`
 optionally weights each juror by its measured reliability, fed from the

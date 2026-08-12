@@ -1,6 +1,6 @@
 """Wave read / dispatch / budget command handlers.
 
-Split out of :mod:`eawf.surfaces.cli.commands.lifecycle` (P27-W06). The ``wave_app``
+Split out of :mod:`eawf.surfaces.cli.commands.lifecycle`. The ``wave_app``
 and ``wave_budget_app`` Typer apps and the shared transaction helpers live
 in the parent module; this module attaches the read-only DAG verbs
 (graph / next-ready / blocks-rebuild), the dispatch verbs
@@ -679,7 +679,7 @@ def wave_dispatch_batch_cmd(
     emit_json_or_text(payload, text, flags=flags)
 
 
-# ---- Wave commit-pin verify / repair (P29-I02-W06) -------------------------
+# ---- Wave commit-pin verify / repair -------------------------
 
 
 def _commit_pin_issue_payload(issue: Any) -> dict[str, Any]:
@@ -865,7 +865,7 @@ def _verify_commits_repair_text(repaired: list[Any], skipped: list[Any]) -> str:
     return "\n".join(lines)
 
 
-# ---- Wave drift acknowledgement (P30-I16-W22) -----------------------------
+# ---- Wave drift acknowledgement -----------------------------
 
 
 @wave_app.command("ack-drift")

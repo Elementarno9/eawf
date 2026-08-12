@@ -1,4 +1,4 @@
-"""Unit tests for the telemetry aggregator (P27-I01-W15).
+"""Unit tests for the telemetry aggregator.
 
 Covers the two load-bearing guarantees of the aggregator:
 

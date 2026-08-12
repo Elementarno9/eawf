@@ -1,4 +1,4 @@
-"""Tests: the daemon close gate mints a deterministic-pass evidence row (P29-I12-W06).
+"""Tests: the daemon close gate mints a deterministic-pass evidence row.
 
 Exercises the W06 wiring of
 :func:`eawf.runtime.daemon.methods.state._enforce_wave_close_gate` ->

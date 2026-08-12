@@ -1,4 +1,4 @@
-"""Coverage-gap accounting for the config-modal curated surface (P29-I08-W26).
+"""Coverage-gap accounting for the config-modal curated surface.
 
 The TUI config modal surfaces the curated :data:`CONFIG_REGISTRY`, a small
 subset of the full :data:`LEAF_KEY_REGISTRY` leaf catalog. The difference

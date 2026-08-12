@@ -8,7 +8,7 @@ Enforces:
      ``^\\[P\\d{2,}(-I\\d{2,})?-W\\d{2,}\\]\\s+<type>:\\s+\\S.*$``
      where ``<type>`` is one of ``feat|fix|chore|docs|refactor|test|
      build|perf|ci|revert|state``. The ``-W##`` suffix declares the
-     wave the commit advances (P19-W05).
+     wave the commit advances.
 
    - **Bare phase/iter form** (post-P26-W23): a bare
      ``[P##(-I##)?]`` prefix with ``type`` ∈ {``state``, ``docs``}:
@@ -35,7 +35,7 @@ Enforces:
    iter indices are 1-based by convention, and reactive waves get the
    next available ``W##`` per the feedback-commit-prefix-taxonomy
    memory. Phase / iter / wave id width widened to ``\\d{2,}`` so
-   3-digit ids (P100, I100, W100) are accepted once the queue grows
+   3-digit ids are accepted once the queue grows
    that far.
 
 2. State-bookkeeping path whitelist applies to any commit with

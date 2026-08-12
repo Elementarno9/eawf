@@ -1,4 +1,4 @@
-"""The two CI-only phase-PR gates pass locally (P30-I23-W34).
+"""The two CI-only phase-PR gates pass locally.
 
 The coverage-gate parse and the snapshot-pairing gate fire first on the
 phase PR (see the ship-process rule); running them here keeps them from

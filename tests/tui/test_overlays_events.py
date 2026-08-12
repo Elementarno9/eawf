@@ -1,4 +1,4 @@
-"""Tests for the C06 ``EventsModal`` ``/events`` overlay (P26-W21).
+"""Tests for the C06 ``EventsModal`` ``/events`` overlay.
 
 Two layers: the pure event-store reader + filter cycle
 (:func:`load_recent_events` / :func:`filter_rows` / :func:`next_filter`,

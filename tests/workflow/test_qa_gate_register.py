@@ -1,4 +1,4 @@
-"""Tests for the phase-wide QA-gate register lint (P30-I10-W07).
+"""Tests for the phase-wide QA-gate register lint.
 
 The register at ``docs/reference/qa-gate-register.md`` maps each
 subsystem scenario to its firing gate kind. The lint

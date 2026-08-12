@@ -1,4 +1,4 @@
-"""Unit: the post-spawn dispatch-state re-assertion (W10).
+"""Unit: the post-spawn dispatch-state re-assertion.
 
 Exercises :func:`eawf.runtime.daemon.methods.agent._reassert_dispatch_state`
 against healthy, terminal, and partially reverted dispatch state. Recovery may

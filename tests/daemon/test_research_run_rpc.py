@@ -1,4 +1,4 @@
-"""Tests for research.run + research.followup + research.snapshot (P30-I18-W03).
+"""Tests for research.run + research.followup + research.snapshot.
 
 Covers the campaign-run RPC surface that drives the W01 round runner over a
 persisted staged campaign:
@@ -208,7 +208,7 @@ class _ResearchSpawnAdapter:
         if callable(on_spawn):
             on_spawn(43210 + self.spawn_calls)
         domain = "market-structure" if "market-structure" in prompt else "pricing-models"
-        # Feed a live stdout line so the researcher chunk-stream wiring (W13)
+        # Feed a live stdout line so the researcher chunk-stream wiring
         # persists an agent.output.chunk, mirroring the wave-spawn path.
         on_chunk = kwargs.get("on_chunk")
         if callable(on_chunk):
@@ -418,7 +418,7 @@ def test_run_campaign_flips_to_terminal_converged(tmp_path: Path) -> None:
 
 
 def test_run_campaign_compacts_duplicate_findings_across_rounds(tmp_path: Path) -> None:
-    """Identical findings re-surfaced across rounds collapse to one claim (W20).
+    """Identical findings re-surfaced across rounds collapse to one claim.
 
     _produce_findings returns the SAME finding line per domain every round, so a
     2-round run must NOT grow the ledger: round 2's duplicates dedup against the

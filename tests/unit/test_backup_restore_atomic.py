@@ -1,4 +1,4 @@
-"""Atomicity + locking guarantees for ``BackupStore.restore_snapshot`` (P27-I02-W07).
+"""Atomicity + locking guarantees for ``BackupStore.restore_snapshot``.
 
 The restore overwrites ``state.json`` — the daemon's sole canonical mutable
 surface — so the swap MUST be all-or-nothing and MUST respect the sibling

@@ -1,4 +1,4 @@
-"""Pilot tests for the Home attention-feed band (P29-I02-W19).
+"""Pilot tests for the Home attention-feed band.
 
 The Home overview band (:class:`~eawf.surfaces.tui.widgets.attention_feed.AttentionFeed`)
 leads every scope screen's body, rendering the ranked attention feed above

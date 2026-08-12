@@ -1,4 +1,4 @@
-"""CLI dispatch tests for ``eawf dispatch wave <wave-id>`` (P30-I06-W02).
+"""CLI dispatch tests for ``eawf dispatch wave <wave-id>``.
 
 Drives the Typer app via :class:`CliRunner` and checks the headless live-spawn
 verb that asks the daemon to SPAWN + dispatch a wave through the

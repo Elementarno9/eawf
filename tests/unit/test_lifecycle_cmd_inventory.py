@@ -1,4 +1,4 @@
-"""Verb-inventory regression guard for the lifecycle command split (P27-W06).
+"""Verb-inventory regression guard for the lifecycle command split.
 
 The lifecycle handler module was split out of a single 2809-LOC
 ``cli/commands/lifecycle.py`` into a thin re-export shim plus four sibling

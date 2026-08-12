@@ -1,4 +1,4 @@
-"""Pilot tests for the needs_user inbox + modal cosmic-terminal reskin (P30-I02-W19).
+"""Pilot tests for the needs_user inbox + modal cosmic-terminal reskin.
 
 The reskin lands the shared ``attention`` chrome sigil on the inbox cards
 and the single-pause prompt modal, the green-accent option chips, and the

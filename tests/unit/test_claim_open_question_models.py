@@ -1,4 +1,4 @@
-"""Unit tests for the Claim + OpenQuestion research-campaign entities (P29-I01-W12).
+"""Unit tests for the Claim + OpenQuestion research-campaign entities.
 
 The Claim ledger is the prerequisite of the pruning pass + SaturationReport,
 and per Decision D-1 :class:`OpenQuestion` is its OWN first-class entity — not

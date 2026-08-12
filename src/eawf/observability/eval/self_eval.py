@@ -1,4 +1,4 @@
-"""Min-N-gated self-eval surface (P29-I01-W05).
+"""Min-N-gated self-eval surface.
 
 The verdict store starts empty, so the FIRST honest deliverable is a
 dashboard that *refuses to score* until a real cohort accrues. The point

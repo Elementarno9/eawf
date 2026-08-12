@@ -1,4 +1,4 @@
-"""DispatchCost-always-recorded invariant test (P27-I01-W16).
+"""DispatchCost-always-recorded invariant test.
 
 The operator decision (D24-adjacent, C09 §5.9) is that a
 :class:`~eawf.kernel.store.kinds.events.dispatch_cost.DispatchCostPayload` lands

@@ -1,4 +1,4 @@
-"""Spec-jury close-gate flavour for UI/UX-banded waves (P29-I08-W05).
+"""Spec-jury close-gate flavour for UI/UX-banded waves.
 
 The default wave-close verdict gate
 (:func:`eawf.workflow.dispatch.verdict.verify_wave_verdict_gate`) and its

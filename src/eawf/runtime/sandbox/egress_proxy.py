@@ -1,7 +1,7 @@
 """UDS egress proxy: the enforcement seam for the default-deny policy.
 
 A spawned agent reaches the network ONLY through this proxy. It binds a
-Unix-domain-socket OUTSIDE the sandbox; the FS jail (W04) wires the child
+Unix-domain-socket OUTSIDE the sandbox; the FS jail wires the child
 to that socket so the child has no direct outbound path. Per connection,
 the proxy reads the requested target ``host:port``, runs the pure
 :func:`eawf.runtime.sandbox.egress.classify_egress` policy, and:

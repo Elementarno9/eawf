@@ -1,4 +1,4 @@
-"""Render-mode flip test for the block-eighths bar (P29-I13-W25).
+"""Render-mode flip test for the block-eighths bar.
 
 Covers the W25 flip: a unicode->ascii render-mode flip swaps every
 block-eighths bar to an ASCII fallback glyph. Two surfaces:

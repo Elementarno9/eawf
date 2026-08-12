@@ -1,6 +1,6 @@
 """Tests for C04d per-runtime cache-control injection + /compress wiring.
 
-Covers the three wave success criteria (P26-I01-W14):
+Covers the three wave success criteria:
 
 * **(a) marker injection at adapter boundary** —
   :func:`~eawf.runtime.runtimes.cache_control.inject_cache_control` appends the

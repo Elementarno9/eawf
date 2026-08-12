@@ -1,4 +1,4 @@
-"""Tests for the dispatch_cost telemetry source adapter (P29-I01-W02).
+"""Tests for the dispatch_cost telemetry source adapter.
 
 Covers :class:`DispatchCostSessionSource` (protocol conformance, discover,
 ``iter_rows`` parse / filter / skip / boundary paths), the

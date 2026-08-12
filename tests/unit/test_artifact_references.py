@@ -181,7 +181,7 @@ def test_validate_markdown_artifact_rejects_unportable_markdown_reference_row() 
     assert any("repo-relative" in error for error in report.errors)
 
 
-# ---- numbered + anchored references render (W13) ----------------------------
+# ---- numbered + anchored references render ----------------------------
 
 
 def test_render_references_empty_renders_none() -> None:
@@ -254,7 +254,7 @@ def test_validate_markdown_artifact_accepts_new_anchored_reference_rows() -> Non
     assert report.ok, report.errors
 
 
-# ---- chassis inline-citation linkify (W14) ----------------------------------
+# ---- chassis inline-citation linkify ----------------------------------
 
 
 def test_link_inline_citations_links_prose_and_preserves_reference_self_links() -> None:

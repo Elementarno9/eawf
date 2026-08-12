@@ -1,4 +1,4 @@
-"""Tests for the W06 EviBound feed + pruning wire (P30-I18-W06).
+"""Tests for the W06 EviBound feed + pruning wire.
 
 Covers the two halves of the binding:
 

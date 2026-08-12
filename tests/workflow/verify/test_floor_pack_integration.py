@@ -1,4 +1,4 @@
-"""Floor-pack ↔ readiness integration tests (P28-I01-W10).
+"""Floor-pack ↔ readiness integration tests.
 
 Pins the W10 sc:
 

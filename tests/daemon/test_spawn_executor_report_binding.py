@@ -1,6 +1,6 @@
 """Tests: a live spawn binds the agent's REAL output to the executor report.
 
-Exercises FLEET-1 (P30-I06-W01): the live-spawn path of
+Exercises FLEET-1: the live-spawn path of
 :func:`eawf.runtime.daemon.methods.agent.dispatch` (``spawn=True``) now drives
 :func:`eawf.workflow.dispatch.llm_assist.assist_with_schema` over the spawned
 executor's OWN ``text`` to populate a validated

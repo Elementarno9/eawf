@@ -1,4 +1,4 @@
-"""Cross-field validator tests for :class:`PrepBody` (P30-I03-W03).
+"""Cross-field validator tests for :class:`PrepBody`.
 
 Mechanizes the ``/prep`` DAG-render rule on the planning path. A body that
 claims to plan an iter (``no_op`` and ``blocked`` both ``False``) MUST carry:

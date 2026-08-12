@@ -1,4 +1,4 @@
-"""Tests for the five ``MEMORY_*`` mutations + replay round-trip (P28-I02-W04).
+"""Tests for the five ``MEMORY_*`` mutations + replay round-trip.
 
 Covers the apply functions added in :mod:`eawf.kernel.state.mutations`:
 

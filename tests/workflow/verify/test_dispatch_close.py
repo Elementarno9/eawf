@@ -1,4 +1,4 @@
-"""Unit tests for the post-execution dispatch verify gate (P28-I03-W57).
+"""Unit tests for the post-execution dispatch verify gate.
 
 Exercises :func:`eawf.workflow.verify.dispatch_close.verify_close_readiness`
 against hand-built typed report bodies. The gate is pure — no I/O, no

@@ -1,4 +1,4 @@
-"""Close-gate auditor-vs-jury routing under earned authority (P30-I23-W07).
+"""Close-gate auditor-vs-jury routing under earned authority.
 
 The A4 OR-fold bypass: the config merge ORs ``cross_vendor_jury`` across
 enabled profiles, so a bare ``not verify_block.cross_vendor_jury`` check
@@ -239,7 +239,7 @@ def test_close_gate_advisory_jury_routes_to_blocking_auditor(
     # The auditor spawn takes the CONFIGURED wall clock, not the factory's 600s
     # default: a killed auditor writes no verdict, and the gate reads "no
     # verdict" as a refusal -- so a too-short ceiling makes the wave unclosable
-    # no matter how often the operator retries (P30-I25-W32).
+    # no matter how often the operator retries.
     assert recorder.verdict_wall_clock == _WALL_CLOCK
     assert recorder.reuse_existing is True
     assert VerifyBlock().juror_wall_clock_seconds != _WALL_CLOCK

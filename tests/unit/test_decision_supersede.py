@@ -1,4 +1,4 @@
-"""Unit tests for ``add_decision(..., supersedes=...)`` (P22-W03)."""
+"""Unit tests for ``add_decision(..., supersedes=...)``."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Tests for the ``/theme`` swap verb + per-theme var migration (P26-I02-W02).
+"""Tests for the ``/theme`` swap verb + per-theme var migration.
 
 Covers the three deliverables of the runtime theme switch:
 
@@ -79,7 +79,7 @@ def test_resolve_theme_name_unknown_returns_none() -> None:
 def test_dark_theme_ports_the_wong_palette_with_green_accent() -> None:
     """The dark theme keeps the Wong lifecycle tints; only accent/primary rotate.
 
-    The cosmic-terminal reskin (P30-I02-W01) rotates ``accent`` / ``primary``
+    The cosmic-terminal reskin rotates ``accent`` / ``primary``
     teal -> green; every lifecycle ``status-*`` tint and the ok/warn/err
     bands stay at their exact pre-migration hex. ``status-claimed`` keeps the
     cool teal ``#56b6c2`` so it reads distinct from the green accent and the

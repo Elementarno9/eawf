@@ -1,4 +1,4 @@
-"""Drift inspector for the Eä-owned Codex CLI plugin (P14-I02-W01).
+"""Drift inspector for the Eä-owned Codex CLI plugin.
 
 Mirrors :mod:`eawf.runtime.runtimes.claude.plugin_doctor`. Returns a structured
 :class:`DoctorReport` enumerating ok / drifted / missing entries. Scope

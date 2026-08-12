@@ -1,4 +1,4 @@
-"""CLI dispatch tests for ``eawf research question`` + ``research status`` (W07).
+"""CLI dispatch tests for ``eawf research question`` + ``research status``.
 
 Drives the Typer app via :class:`CliRunner` against a seeded temp workspace:
 

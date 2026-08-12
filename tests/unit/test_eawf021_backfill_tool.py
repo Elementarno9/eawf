@@ -1,4 +1,4 @@
-"""Unit tests for the legacy-to-typed backfill CLI shim (P30-I10-W01).
+"""Unit tests for the legacy-to-typed backfill CLI shim.
 
 Covers the standalone ``tools/eawf021_measurable_criterion.py`` shim that drives
 :func:`eawf.kernel.spec.common.backfill_legacy_criteria` over a SAMPLE fixture

@@ -19,7 +19,7 @@ scope screens use; only :meth:`compose_body` differs, yielding the
 coming-soon notice. That keeps the brand ``Eae`` + breadcrumb + the
 mode-switch digit keys live on a placeholder mode with zero extra wiring.
 
-Cosmic-terminal reskin (P30-I02-W33)
+Cosmic-terminal reskin
 ------------------------------------
 The notice speaks the calm honest-empty voice the rest of the reskin
 uses, so an unbuilt surface reads as INTENTIONALLY empty rather than

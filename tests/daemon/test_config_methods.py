@@ -1,4 +1,4 @@
-"""Tests for the ``config.*`` JSON-RPC handlers (P24-W10).
+"""Tests for the ``config.*`` JSON-RPC handlers.
 
 Covers:
 
@@ -238,7 +238,7 @@ def test_set_layer_value_rejects_unknown_layer(tmp_path: Path) -> None:
     ctx, _ = _build_ctx(tmp_path=tmp_path)
 
     async def body() -> None:
-        # Use a known leaf key so the leaf-catalog gate (P25-W14) does
+        # Use a known leaf key so the leaf-catalog gate does
         # not pre-empt the layer-name check.
         with pytest.raises(ValueError, match="unknown writable layer"):
             await set_layer_value(
@@ -341,7 +341,7 @@ def test_list_layers_rejects_extra_params(tmp_path: Path) -> None:
     _run(body)
 
 
-# ---- C08 leaf-catalog gate (P25-W14) ---------------------------------------
+# ---- C08 leaf-catalog gate ---------------------------------------
 
 
 def test_set_layer_value_rejects_unknown_leaf_key(tmp_path: Path) -> None:
@@ -629,14 +629,14 @@ def test_unset_layer_value_idempotency_replays_result(tmp_path: Path) -> None:
     _run(body)
 
 
-# ---- Branch layer round-trip (P25-W14) -------------------------------------
+# ---- Branch layer round-trip -------------------------------------
 
 
 def test_set_layer_value_branch_writes_subdir_file(tmp_path: Path) -> None:
     """Branch layer writes ``.ea/branches/<branch>.yaml`` (subdir form).
 
     Uses ``project.goals`` because it is one of the few branch-writable leaves;
-    the writable-layers gate (P29-I08-W28) rejects a key whose allowlist
+    the writable-layers gate rejects a key whose allowlist
     excludes ``branch``.
     """
     ctx, repo = _build_ctx(tmp_path=tmp_path)
@@ -679,7 +679,7 @@ def test_set_layer_value_branch_rejects_missing_branch_name(tmp_path: Path) -> N
     _run(body)
 
 
-# ---- Wave overlay RPCs (P25-W14) -------------------------------------------
+# ---- Wave overlay RPCs -------------------------------------------
 
 
 def test_set_wave_value_round_trip(tmp_path: Path) -> None:
