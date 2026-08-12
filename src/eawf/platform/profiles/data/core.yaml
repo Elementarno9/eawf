@@ -18,10 +18,21 @@ instrument_requirements:
     version_regex: "^uv\\s+\\d"
 
 render_blocks:
+  - id: project-orientation
+    target: AGENTS.md
+    tier: tier0
+    version: "1.0"
+    body_template: |
+      ## What this repo runs on
+
+      This repo is managed by eawf, an agent-driven workflow. Work nests as **phase** (one delivery, one pull request, one release) > **iter** (a review-and-close cycle) > **wave** (one agent's unit of work, one commit), with ids ``P<NN>`` / ``I<NN>`` / ``W<NN>``.
+
+      Reality lives in ``.ea/state.json``, not here: this file carries the rules, ``eawf status`` carries the current position.
+
   - id: non-negotiable-rules
     target: AGENTS.md
     tier: tier0
-    version: "1.10"
+    version: "1.11"
     body_template: |
       ## Non-negotiable rules (core)
 
@@ -30,7 +41,7 @@ render_blocks:
       1. **CLI is dispatch; library implements.** See ``architecture-cli-dispatch``.
       2. **Strict config validation.** Every YAML/JSON ingestion path uses Pydantic v2 ``BaseModel`` with ``ConfigDict(extra="forbid")``. Validation lives in the loader; downstream functions accept already-validated typed objects only.
       3. **`.ea/` is committed.** See ``ea-directory-commit-policy``.
-      4. **Daemon is the sole canonical mutator** for ``state.json``, layered config YAML, registry JSON, event/audit stores, and telemetry DB (per Decision D-SUP-01 + the per-file authority map at ``.ea/artifacts/research/long-term/2026-05-18-authority-map.md``). Read access stays free. During v0.3-v0.5 the state CLI (``uv run eawf state ...``) remains the operator-facing surface; it proxies mutations to the daemon via JSON-RPC and falls back to direct ``portalocker`` writes only when the daemon is unavailable (CI / one-shot / recovery shell per V1). The three legacy writers (state-CLI direct, layered-config writer, registry writer) migrate into daemon internals during the v0.4 hygiene wave.
+      4. **Daemon is the sole canonical mutator** for ``state.json``, layered config YAML, registry JSON, event/audit stores, and telemetry DB (Decision D-SUP-01; per-file authority map at ``.ea/artifacts/research/long-term/2026-05-18-authority-map.md``). Reads are free. ``uv run eawf state ...`` is the operator-facing surface: it proxies mutations to the daemon over JSON-RPC and falls back to direct ``portalocker`` writes only when the daemon is unavailable (CI, one-shot, recovery shell).
       5. **Symbol conventions.** See ``symbol-conventions``.
       6. **Deletion rule.** See ``deletion-rule``.
       7. **State is in `state.json`, not in specs.** See ``state-vs-specs``.
@@ -57,6 +68,10 @@ render_blocks:
       28. **Rendered markdown is not manually line-wrapped.** See ``markdown-no-manual-wrap``.
       29. **Release process.** See ``release-process``.
       30. **Ship process.** See ``ship-process``.
+      31. **Comment economy.** See ``comment-economy``.
+      32. **Decisions are surfaced, not assumed.** See ``orchestrator-decision-surface``.
+      33. **A new gate proves itself and sunsets.** See ``gate-fire-proof-sunset``.
+      34. **One commit per deliverable.** See ``commit-granularity``.
 
   - id: architecture-cli-dispatch
     target: AGENTS.md
@@ -496,6 +511,56 @@ render_blocks:
       The rule: a fact is worth remembering only when it stays true across sessions. Status is **derivable** from state, so it is queried on demand, never memorized. Run ``eawf status`` for the current pointers, recent decisions, and open backlog, and ``eawf memory digest`` for a glance-clear standup of what is in flight, what just closed, and what was recently decided. Both read straight from state, so the answer is always current and costs nothing to keep so.
 
       Before writing a memory entry, ask whether a query already answers it. If ``eawf status`` or ``eawf memory digest`` surfaces the fact, do not duplicate it into memory — link to the query instead.
+
+  - id: comment-economy
+    target: AGENTS.md
+    version: "1.0"
+    placement: reference
+    summary: "Comments carry why, not what: no restated signature, no change-log narration, no lifecycle ids."
+    rationale: |
+      A comment that restates the code is not neutral: it is a second copy that drifts, and every reader pays to reconcile the two. Narration of how the code came to be ("after W12 the default flipped", "the pre-fix value was...") ages into a change log nobody trusts, while the one thing a reader cannot recover from the source — why this shape was chosen over the obvious alternative — is what usually goes unwritten.
+    mechanism: |
+      Write the why, not the what. A docstring states the contract and the non-obvious constraint behind it; if deleting a sentence loses nothing a reader could not get from the signature, delete it. Do not narrate history: no wave, iter, or phase ids, no "previously this did X", no audit or decision references (rule 25 already bars provenance from source; this extends it to bare lifecycle ids). Keep a Google-style ``Raises:`` block, keep an ``Args:`` entry that carries a constraint the type does not, and drop the rest. Prefer one dense sentence to a five-line paragraph, and a named constant to a comment explaining a literal.
+    verification: |
+      Read the docstring against the signature: any sentence recoverable from the name, the types, or the arguments alone is cut before merge. Grep the diff for lifecycle ids (``P<NN>`` / ``I<NN>`` / ``W<NN>``) inside comments and docstrings; a hit is reworked into a plain statement of the constraint, or dropped.
+
+  - id: orchestrator-decision-surface
+    target: AGENTS.md
+    version: "1.0"
+    placement: reference
+    summary: "Surface every consequential choice as an explicit question with visual option previews, never a silent default."
+    rationale: |
+      An orchestrating agent that picks silently spends the operator's budget on a decision the operator never saw, and a choice offered as prose alone is answered on vibes. The cost of a wrong pick is a wave of rework; the cost of asking is one round trip. Options compared side by side, with the trade-off drawn rather than described, are the difference between an informed answer and an agreeable one.
+    mechanism: |
+      When two paths would produce materially different work, stop and ask. In Claude Code use ``AskUserQuestion`` with an option preview per choice: an ASCII sketch of the before / after, the measured cost, and what is given up. In Codex use the equivalent numbered text prompt carrying the same previews. Expand every abbreviation, mark the option that is best for the long term as recommended, and state the cost of each option rather than only its benefit. Do not ask a question whose answer changes nothing — make the call, state the assumption, and continue. Free-text approval is not a decision record: the choice must be one of the offered options.
+    verification: |
+      A dispatched decision shows an option set with previews, not a paragraph of prose. Every abbreviation in the question is expanded on first use, one option is marked recommended, and each option names what it costs. A choice made silently that later needed rework is a rule violation, not bad luck.
+
+  - id: gate-fire-proof-sunset
+    target: AGENTS.md
+    version: "1.0"
+    placement: reference
+    summary: "A new gate ships with a test proving it reds on a real defect, and sunsets at phase close if it never fired."
+    rationale: |
+      Gates accumulate: each is justified on its own and none is ever removed, so the surface grows while the failures it was built for keep landing. The pathological case is a gate that has never once fired — it reads as protection, costs time on every run, and proves nothing. Bounding growth by evidence rather than by quota keeps the ones that earn their place.
+    mechanism: |
+      A new lint, doctor check, or CI gate ships with a test that reds on a **real** defect from this repo, not a synthetic fixture written to satisfy the test. Record what it caught. At phase close, review the gates added during the phase: one that never fired on real work is retired, not kept "just in case". Where the defect population is too large to fix at once, pin it as a ratchet — an exact set or a ceiling that can only shrink — rather than an allowlist that can quietly absorb new entries.
+    verification: |
+      Each gate added in a phase names the real defect it reds on. The phase-close review lists gates added, whether each fired, and the disposition of those that did not. A ratchet is exact-set or ceiling based, so repairing an entry forces its removal and a new offender fails even while the list is non-empty.
+
+  - id: commit-granularity
+    target: AGENTS.md
+    version: "1.0"
+    placement: reference
+    summary: "One commit per deliverable, with its tests; a golden refresh rides the change that caused it."
+    rationale: |
+      Commit count is not progress. A deliverable split across a dozen commits — code here, its test there, the golden it invalidated three commits later — cannot be reviewed as a unit or reverted as one, and ``git bisect`` lands mid-change on a tree that never worked. The opposite failure, one commit for an entire phase, is equally unreadable. The unit that works is the deliverable.
+    mechanism: |
+      Group a change and everything that follows from it into one commit: the code and its tests. Do not split one wave across several commits to show motion; each commit builds and passes its targeted tests on its own.
+
+      The one exception is a **managed golden surface** (anything under the ``eawf snapshot list`` inventory). The snapshot-pairing gate requires those bytes to land under a ``test:`` subject, so a golden refresh rides its own paired ``test:`` commit immediately after the change that caused it — named for that cause, never as a bare "refresh goldens". Unmanaged fixtures follow the general rule and ride their cause.
+    verification: |
+      Read the commit list for a delivery: each commit names one deliverable and contains its tests. A ``test:`` golden refresh names the change it follows rather than saying only "refresh goldens". Every commit in the range builds, so ``git bisect`` never lands on a broken intermediate.
 
   - id: anti-patterns
     target: AGENTS.md

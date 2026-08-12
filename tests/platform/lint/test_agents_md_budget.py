@@ -17,6 +17,7 @@ _EXPECTED_TIER0_BLOCK_IDS = {
     "non-negotiable-rules",
     "state-vs-specs",
     "worktree-discipline",
+    "project-orientation",
     "prep-plan-mode",
     "iter-phase-close-timing",
 }

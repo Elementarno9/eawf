@@ -78,6 +78,8 @@ nav:
       - Artifact chassis and citations: rules/artifact-chassis.md
       - Doc-clarity contract: rules/clarity-contract.md
       - Commit prefix: rules/commit-prefix.md
+      - Commit granularity: rules/commit-granularity.md
+      - Comment economy: rules/comment-economy.md
       - Entity-title naming: rules/entity-title-naming.md
       - Naming conventions: rules/naming-conventions.md
       - Memory hygiene: rules/memory-hygiene.md
@@ -86,6 +88,8 @@ nav:
       - Ship process: rules/ship-process.md
       - Spike workflow: rules/spike-workflow.md
       - Workflow lifecycle: rules/workflow-lifecycle.md
+      - Decisions are surfaced: rules/orchestrator-decision-surface.md
+      - Gates prove themselves and sunset: rules/gate-fire-proof-sunset.md
       - Engineering principles: rules/engineering-principles.md
       - Other engineering practice: rules/engineering-practice.md
       - Code craft - don't repeat yourself: rules/code-craft-dry.md
