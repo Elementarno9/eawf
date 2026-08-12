@@ -1,7 +1,15 @@
 <!-- BEGIN EAWF:managed id=zone-tier0 version=1.0 hash=e0ad14f457862be5 -->
 <!-- Zone 1: always-on (tier0) -->
 <!-- END EAWF:managed id=zone-tier0 -->
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.10 hash=047a6bb707dc471c -->
+<!-- BEGIN EAWF:managed id=project-orientation version=1.0 hash=34265d38d520885e -->
+## What this repo runs on
+
+This repo is managed by eawf, an agent-driven workflow. Work nests as **phase** (one delivery, one pull request, one release) > **iter** (a review-and-close cycle) > **wave** (one agent's unit of work, one commit), with ids ``P<NN>`` / ``I<NN>`` / ``W<NN>``.
+
+Reality lives in ``.ea/state.json``, not here: this file carries the rules, ``eawf status`` carries the current position.
+
+<!-- END EAWF:managed id=project-orientation -->
+<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.11 hash=9a6aafd491fad492 -->
 ## Non-negotiable rules (core)
 
 The rules below apply to every eawf-managed project. Each rule with a non-trivial body has an expansion block immediately following.
@@ -9,7 +17,7 @@ The rules below apply to every eawf-managed project. Each rule with a non-trivia
 1. **CLI is dispatch; library implements.** See ``architecture-cli-dispatch``.
 2. **Strict config validation.** Every YAML/JSON ingestion path uses Pydantic v2 ``BaseModel`` with ``ConfigDict(extra="forbid")``. Validation lives in the loader; downstream functions accept already-validated typed objects only.
 3. **`.ea/` is committed.** See ``ea-directory-commit-policy``.
-4. **Daemon is the sole canonical mutator** for ``state.json``, layered config YAML, registry JSON, event/audit stores, and telemetry DB (per Decision D-SUP-01 + the per-file authority map at ``.ea/artifacts/research/long-term/2026-05-18-authority-map.md``). Read access stays free. During v0.3-v0.5 the state CLI (``uv run eawf state ...``) remains the operator-facing surface; it proxies mutations to the daemon via JSON-RPC and falls back to direct ``portalocker`` writes only when the daemon is unavailable (CI / one-shot / recovery shell per V1). The three legacy writers (state-CLI direct, layered-config writer, registry writer) migrate into daemon internals during the v0.4 hygiene wave.
+4. **Daemon is the sole canonical mutator** for ``state.json``, layered config YAML, registry JSON, event/audit stores, and telemetry DB (Decision D-SUP-01; per-file authority map at ``.ea/artifacts/research/long-term/2026-05-18-authority-map.md``). Reads are free. ``uv run eawf state ...`` is the operator-facing surface: it proxies mutations to the daemon over JSON-RPC and falls back to direct ``portalocker`` writes only when the daemon is unavailable (CI, one-shot, recovery shell).
 5. **Symbol conventions.** See ``symbol-conventions``.
 6. **Deletion rule.** See ``deletion-rule``.
 7. **State is in `state.json`, not in specs.** See ``state-vs-specs``.
@@ -36,6 +44,10 @@ The rules below apply to every eawf-managed project. Each rule with a non-trivia
 28. **Rendered markdown is not manually line-wrapped.** See ``markdown-no-manual-wrap``.
 29. **Release process.** See ``release-process``.
 30. **Ship process.** See ``ship-process``.
+31. **Comment economy.** See ``comment-economy``.
+32. **Decisions are surfaced, not assumed.** See ``orchestrator-decision-surface``.
+33. **A new gate proves itself and sunsets.** See ``gate-fire-proof-sunset``.
+34. **One commit per deliverable.** See ``commit-granularity``.
 
 <!-- END EAWF:managed id=non-negotiable-rules -->
 <!-- BEGIN EAWF:managed id=state-vs-specs version=1.2 hash=b31103e9ebf5191f -->
@@ -247,6 +259,18 @@ Verdicts MUST use ``AgentReportVerdict`` exactly: ``pass``, ``pass-with-followup
 <!-- BEGIN EAWF:managed id=memory-hygiene version=1.1 hash=0228d6e82ab5bd61 -->
 `memory-hygiene` — Remember only facts that stay true across sessions; status is derivable, so query it with ``eawf status`` or ``eawf memory digest`` instead of memorizing it. Full text: [docs/rules/memory-hygiene.md](docs/rules/memory-hygiene.md)
 <!-- END EAWF:managed id=memory-hygiene -->
+<!-- BEGIN EAWF:managed id=comment-economy version=1.0 hash=a8b068e4c253349b -->
+`comment-economy` — Comments carry why, not what: no restated signature, no change-log narration, no lifecycle ids. Full text: [docs/rules/comment-economy.md](docs/rules/comment-economy.md)
+<!-- END EAWF:managed id=comment-economy -->
+<!-- BEGIN EAWF:managed id=orchestrator-decision-surface version=1.0 hash=7a31e6bd6d6c497f -->
+`orchestrator-decision-surface` — Surface every consequential choice as an explicit question with visual option previews, never a silent default. Full text: [docs/rules/orchestrator-decision-surface.md](docs/rules/orchestrator-decision-surface.md)
+<!-- END EAWF:managed id=orchestrator-decision-surface -->
+<!-- BEGIN EAWF:managed id=gate-fire-proof-sunset version=1.0 hash=4a0a7685adec45f5 -->
+`gate-fire-proof-sunset` — A new gate ships with a test proving it reds on a real defect, and sunsets at phase close if it never fired. Full text: [docs/rules/gate-fire-proof-sunset.md](docs/rules/gate-fire-proof-sunset.md)
+<!-- END EAWF:managed id=gate-fire-proof-sunset -->
+<!-- BEGIN EAWF:managed id=commit-granularity version=1.0 hash=ab9ee64e45965ae3 -->
+`commit-granularity` — One commit per deliverable, with its tests; a golden refresh rides the change that caused it. Full text: [docs/rules/commit-granularity.md](docs/rules/commit-granularity.md)
+<!-- END EAWF:managed id=commit-granularity -->
 <!-- BEGIN EAWF:managed id=anti-patterns version=1.2 hash=d92fc4c83b8d1338 -->
 ## Anti-patterns
 
