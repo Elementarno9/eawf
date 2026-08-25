@@ -33684,6 +33684,48 @@
         "P30-I26-W23",
         "P30-I26-W24"
       ]
+    },
+    "P31-I01": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": "One iter: every dev1-bound packet row lands as its own wave, the test tree collapses last so every new test moves with it, and the final wave bakes the 0.7.0.dev1 Release record through the dev1 preflight.",
+      "estimate_id": null,
+      "id": "P31-I01",
+      "intent": null,
+      "opened_at": "2026-08-25T22:16:17.391969Z",
+      "phase_id": "P31",
+      "status": "planned",
+      "title": "Land the dev1 stabilization gates and cut the checkpoint",
+      "trigger": "none",
+      "wave_ids": [
+        "P31-I01-W01",
+        "P31-I01-W02",
+        "P31-I01-W03",
+        "P31-I01-W04",
+        "P31-I01-W05",
+        "P31-I01-W06",
+        "P31-I01-W07",
+        "P31-I01-W08",
+        "P31-I01-W09",
+        "P31-I01-W10",
+        "P31-I01-W12",
+        "P31-I01-W13",
+        "P31-I01-W14",
+        "P31-I01-W15",
+        "P31-I01-W16",
+        "P31-I01-W17",
+        "P31-I01-W19",
+        "P31-I01-W21",
+        "P31-I01-W22",
+        "P31-I01-W24",
+        "P31-I01-W11",
+        "P31-I01-W18",
+        "P31-I01-W20",
+        "P31-I01-W23",
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ]
     }
   },
   "mcp_grants": null,
@@ -34818,6 +34860,25 @@
       "status": "closed",
       "title": "The binding pass — turn on what P29 built, prove it fires",
       "track_id": null
+    },
+    "P31": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [],
+      "description": "First v0.7.0 phase: cuts the 0.7.0.dev1 checkpoint, the epoch-1 stabilization floor of the release train in 10-release-train-and-gates (criteria truth, close/retry truth, release-pipeline safety, telemetry producers, front-door repair). Discharges REL-001..010, REL-025..027, REL-033, REL-034, REL-037, LINT-025..028, LINT-039, LINT-040 and RUN-054..057. Deferred to their own checkpoint: RUN-053 (dev3, REL-035), RUN-058 and ECON-054/060 (epoch-2 Run contract), PLAN-028..039 grounding (dev4).",
+      "id": "P31",
+      "intent": null,
+      "iter_ids": [
+        "P31-I01"
+      ],
+      "opened_at": "2026-08-25T22:16:17.391697Z",
+      "outcome_ids": [],
+      "release": null,
+      "scope_id": "EAWF",
+      "source_brief_ids": [],
+      "status": "planned",
+      "title": "Ship the 0.7.0.dev1 stabilization floor",
+      "track_id": null
     }
   },
   "plugins": {},
@@ -34854,7 +34915,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-08-12T13:06:15.675210Z",
+  "updated_at": "2026-08-25T22:16:17.413298Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {},
@@ -146675,6 +146736,2887 @@
         }
       ],
       "title": "Stop the degraded banner covering the header row in live sessions",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.392132Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-001. In src/eawf/kernel/spec/common.py assign_oracle_tier returns the gate tier before the forall/locus check, so a gate_ref bypasses the rule that a forall response must use the hypothesis locus. Reorder the check so gate_ref cannot bypass a forall locus check, and reject a gated universal criterion authored as single in validate_criterion_gate_refs.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/kernel/spec/common.py",
+        "tests/unit/spec"
+      ],
+      "gates": [],
+      "id": "P31-I01-W01",
+      "intent": {
+        "desired_outcome": "gate_ref cannot bypass a forall locus check and gated universal criteria authored as single are rejected at author time",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add the red test for a forall response with gate_ref and a non-hypothesis locus",
+          "Move the forall/locus guard ahead of the gate_ref shortcut in assign_oracle_tier",
+          "Reject a holds_for_all criterion authored quantifier=single with a gate_ref in validate_criterion_gate_refs"
+        ],
+        "priority_rationale": "Criteria truth is the first item of the dev1 floor; every later gate trusts this classifier.",
+        "problem": "gate_ref short-circuits assign_oracle_tier ahead of the forall locus check, so a gated universal criterion is never rejected",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.394444Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/spec/test_assign_oracle_tier.py exits 0 with the new forall-plus-gate_ref case red before the fix and green after",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "REL-001: gate_ref cannot bypass a forall locus check; assign_oracle_tier raises ValueError for a forall response whose locus is not hypothesis even when gate_ref is set; pytest tests/unit/spec/test_assign_oracle_tier.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/spec/test_validate_criterion_gate_refs_oracle_tier.py exits 0 including the gated-universal-authored-single rejection case",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "REL-001 acceptance: targeted tests prove gated universal criteria are rejected when authored as single; validate_criterion_gate_refs raises on a holds_for_all criterion carrying a gate_ref and quantifier single; pytest tests/unit/spec/test_validate_criterion_gate_refs_oracle_tier.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fix gated-criterion quantifier classification",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.394556Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-002. The typed-criteria floor only enforces a minimum (20-char measurable_signal, gate on deterministic). Add a scope-agreement ceiling so a broad prose claim paired with a narrow gate fails validation, and a bounded-complexity ceiling on observation clauses per criterion, in CriterionSpec (src/eawf/kernel/spec/common.py) and the propose path so roadmap propose --from-plan rejects invalid pairs naming the criterion id.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec/common.py",
+        "src/eawf/workflow/propose",
+        "src/eawf/workflow/lifecycle/_errors.py",
+        "tests/unit/spec",
+        "tests/kernel/spec",
+        "tests/integration/test_cli_roadmap.py"
+      ],
+      "gates": [],
+      "id": "P31-I01-W02",
+      "intent": {
+        "desired_outcome": "Invalid broad prose / narrow gate pairs and over-complex criteria fail proposal validation in addition to the existing floor",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Define the scope-agreement rule between text, response.object and gate_ref and add it as a CriterionSpec validator",
+          "Add a bounded-complexity ceiling on observation clauses per criterion with the ceiling declared once",
+          "Wire both ceilings into the plan-time criteria check so propose --from-plan rejects with the criterion id"
+        ],
+        "priority_rationale": "Criteria truth item two of the dev1 floor; the floor alone admits gates that cannot falsify the claim they sit under.",
+        "problem": "A criterion whose prose claims a broad scope can carry a gate that falsifies only a narrow slice, and nothing bounds clause complexity",
+        "risks": [
+          "Existing on-disk criteria that trip the new ceilings must be grandfathered by kind, not silently rewritten"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.395248Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/spec/test_criterion_schema.py exits 0 with a broad-prose-narrow-gate rejection case and a matching-scope acceptance case",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "REL-002: CriterionSpec validates a scope-agreement ceiling so an invalid broad prose / narrow gate pair raises ValidationError at model_validate; pytest tests/unit/spec/test_criterion_schema.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_cli_roadmap.py -k scope_agreement exits 0 asserting non-zero propose exit and the criterion id in the error",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "REL-002 acceptance: invalid broad prose/narrow gate pairs fail proposal validation; eawf roadmap propose --from-plan with such a pair exits non-zero naming the criterion id; cli exit asserted in tests/integration/test_cli_roadmap.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/kernel/spec/test_common.py exits 0 with an over-ceiling rejection case and a floor-still-enforced case",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "Bounded complexity: a criterion whose text exceeds the declared ceiling of observation clauses raises ValidationError while the existing 20-char measurable_signal floor still holds; pytest tests/kernel/spec/test_common.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add criterion scope-agreement and complexity ceilings",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.395338Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-003. CloseAttempt.failure_kind is a free string and runtime/daemon/methods/close.py _failure_status classifies by substring (\"stale\", \"refused\"). Persist one closed CloseFailureKind enum including timed_out, harness_fault, work_rejected, operator_cancelled and policy_blocked, classify from typed exception classes only, and surface the kind on the CLI timeout path.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/state/enums.py",
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/runtime/daemon/methods/close.py",
+        "src/eawf/surfaces/cli/commands/lifecycle.py",
+        "tests/daemon",
+        "tests/cli"
+      ],
+      "gates": [],
+      "id": "P31-I01-W03",
+      "intent": {
+        "desired_outcome": "One typed close failure vocabulary including timed_out, classified from typed exceptions, routes every failure deterministically",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add CloseFailureKind StrEnum and type CloseAttempt.failure_kind against it",
+          "Replace _failure_status substring branches with an exception-class map",
+          "Cover timeout, harness fault, work rejection, operator cancellation and policy block in the close fault matrix test"
+        ],
+        "priority_rationale": "Close/retry truth is a named dev1 outcome; the retry ladder cannot branch on a kind it cannot trust.",
+        "problem": "Close failures are classified by message substrings into an open string field, so a timeout and a harness fault can land on the same kind",
+        "risks": [
+          "Persisted attempts with legacy free-string kinds need a migration or a tolerant reader"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.396004Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/daemon/test_close_fault_matrix.py exits 0 and a free-string failure_kind fails CloseAttempt validation",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "REL-003: one typed close failure vocabulary is persisted; CloseFailureKind is a closed StrEnum including timed_out, harness_fault, work_rejected, operator_cancelled and policy_blocked and CloseAttempt.failure_kind validates against it; schema asserted in tests/daemon/test_close_fault_matrix.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/daemon/test_close_fault_matrix.py exits 0 with one parametrized case per kind and rg finds no lowered-substring branch in _failure_status",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "REL-003 acceptance: timeout, harness fault, work rejection, operator cancellation and policy block route deterministically; each typed exception transitions to its exact failure_kind in state json and no message-substring branch remains in close.py; pytest tests/daemon/test_close_fault_matrix.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/cli/test_close_timeout_terminal.py exits 0 asserting the timed_out kind in the rendered close status",
+          "oracle_tier": null,
+          "quality_dimension": "operability",
+          "required": true,
+          "response": null,
+          "text": "A close-RPC timeout returns failure_kind timed_out on the CLI surface instead of infrastructure_failure; cli exit and rendered kind asserted in tests/cli/test_close_timeout_terminal.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Type the close failure vocabulary from exceptions",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.396088Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-004. CloseAttempt carries repair_budget_remaining and infrastructure_retry_budget_remaining seeded as literals in runtime/daemon/methods/close.py while the TUI autopilot pane hard-codes REPAIR_BUDGET = 3, so the displayed budget is not the enforced budget. Add one budget resolver and one receipt consumed by state, daemon, CLI and TUI.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/runtime/daemon/methods/close.py",
+        "src/eawf/workflow/dispatch/retry.py",
+        "src/eawf/surfaces/tui/modes/autopilot.py",
+        "src/eawf/surfaces/cli/commands/lifecycle_wave.py",
+        "tests/daemon",
+        "tests/tui"
+      ],
+      "gates": [],
+      "id": "P31-I01-W04",
+      "intent": {
+        "desired_outcome": "State, daemon, CLI and TUI resolve the close budget through one resolver and record one receipt, so displayed budget equals enforced budget",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add a single close-budget resolver reading the layered config and returning repair and infrastructure allowances",
+          "Replace the literal seeds in close.py and REPAIR_BUDGET in autopilot.py with resolver calls",
+          "Emit one budget receipt event on exhaustion and render its value in CLI and TUI"
+        ],
+        "priority_rationale": "Close/retry truth for the dev1 floor; an operator reading a budget of three while the daemon enforces one cannot reason about a blocked close.",
+        "problem": "Repair and infrastructure retry budgets are seeded as separate literals in the daemon and re-declared in the TUI, so displayed and enforced budgets diverge",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.396763Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/daemon/test_fleet_repair_exhaustion.py exits 0 with a case that changes the configured budget and observes the seeded attempt follow it",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "REL-004: one resolver returns the effective repair and infrastructure budgets for a close attempt and the daemon seeds CloseAttempt from it instead of literals; pytest tests/daemon/test_fleet_repair_exhaustion.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/tui -k repair_budget exits 0 asserting the rendered count equals the resolver value for the same attempt",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "REL-004 acceptance: displayed budget equals enforced budget; the TUI autopilot pane renders token of the same remaining count the daemon enforces for the attempt, asserted by tui pilot in tests/tui",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/daemon/test_durable_close.py -k budget_receipt exits 0 with exactly one receipt event per exhaustion",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "One receipt: a budget-exhausted close emits exactly one budget receipt event naming the resolver value and the exhausted axis; log capture and state json asserted in tests/daemon/test_durable_close.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Unify the repair and infrastructure budgets",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.396849Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-006. .github/workflows/plugin-release.yaml runs npm publish with no --tag, so a prerelease becomes latest, and force-pushes the rendered Codex tree to plugins-dist, erasing prior versions. Add a version-to-dist-tag helper under src/eawf/platform/install (PEP 440 dev/rc map to next, stable to latest), pass it to npm publish, and publish the Codex tree under a per-version path without force-push.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".github/workflows/plugin-release.yaml",
+        "src/eawf/platform/install",
+        "tests/lint",
+        "tests/integration/test_packaging.py"
+      ],
+      "gates": [],
+      "id": "P31-I01-W05",
+      "intent": {
+        "desired_outcome": "The npm dist-tag is derived from the version and versioned Codex plugin publication history is preserved without force-push erasure",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add dist_tag_for_version() returning next for dev/rc and latest for stable, with unit tests",
+          "Pass --tag from the helper in the npm publish step and assert it in the workflow lint test",
+          "Publish the rendered Codex tree under a per-version directory or tag with a plain push"
+        ],
+        "priority_rationale": "Release-pipeline safety is a named dev1 outcome and 0.7.0.dev1 is the first prerelease this pipeline will ever publish.",
+        "problem": "npm publish carries no dist-tag so a prerelease becomes the default install, and the Codex plugin branch is force-pushed so no prior version stays addressable",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.397505Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_packaging.py -k dist_tag exits 0 covering 0.7.0.dev1, 0.7.0rc1, 0.7.0 and an invalid string",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "REL-006: the npm dist-tag is derived from the version; dist_tag_for_version returns next for a PEP 440 dev or rc version and latest for a stable version and raises on an unparsable version; pytest tests/integration/test_packaging.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_phase_ci_gates.py -k npm_dist_tag exits 0 asserting the publish step passes --tag from the helper",
+          "oracle_tier": null,
+          "quality_dimension": "security",
+          "required": true,
+          "response": null,
+          "text": "REL-006 acceptance: prerelease install never becomes default; the npm publish step in .github/workflows/plugin-release.yaml matches pattern --tag with the derived value; file matches asserted by pytest tests/lint",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_phase_ci_gates.py -k codex_history exits 0 asserting no --force in the plugins-dist push",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Rollback target remains addressable: the plugins-dist publish step matches pattern a non-force push of a per-version path so the previous Codex plugin version stays resolvable; source asserted in tests/lint",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Derive the npm dist-tag and keep Codex plugin history",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.397573Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-007. workflow/lifecycle/wave.py claim_wave seeds state.estimates[wave_id] from the effort bucket on every claim, growing the legacy cache with derived rows. Stop the seeding, keep the State.estimates field until the epoch-2 migration, and make the variance metric and eawf estimation reads tolerate an empty or None map.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/workflow/estimation",
+        "src/eawf/surfaces/cli/commands/estimation.py",
+        "tests/workflow/lifecycle",
+        "tests/workflow/estimation",
+        "tests/integration/test_cli_estimation.py"
+      ],
+      "gates": [],
+      "id": "P31-I01-W06",
+      "intent": {
+        "desired_outcome": "New claims do not grow the legacy cache, reads tolerate empty data, and the field survives until its natural epoch-2 migration",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Remove the default_estimate_summary seed from claim_wave",
+          "Make the variance metric and estimation CLI return their empty shape for None or {}",
+          "Keep State.estimates optional and assert the field still validates"
+        ],
+        "priority_rationale": "The 2026-08-13 state-at-scale spike found 1,845 estimate and actual rows whose map key and id disagree; not growing that population before the importer is the cheapest migration fix available.",
+        "problem": "Every wave claim writes a derived estimate row into the legacy estimates cache, so the cache grows with data no producer measured",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.398243Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/workflow/lifecycle/test_wave_claim.py exits 0 asserting estimates is unchanged across a claim",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "REL-007 acceptance: new claims do not grow the legacy cache; after eawf wave claim the state.estimates map transitions to no new row; state json asserted in tests/workflow/lifecycle/test_wave_claim.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/workflow/estimation tests/integration/test_cli_estimation.py exits 0 with None and {} cases for estimates",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Reads tolerate empty data: the estimate-vs-actual variance metric and eawf estimation show each returns its empty-data shape when state.estimates is None or empty; pytest tests/workflow/estimation and cli exit asserted in tests/integration/test_cli_estimation.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/kernel/state exits 0 and the state schema version in src/eawf/kernel/state is unchanged by the wave diff",
+          "oracle_tier": null,
+          "quality_dimension": "compatibility",
+          "required": true,
+          "response": null,
+          "text": "The legacy field is retained until natural epoch-2 migration: State validates an optional estimates map with existing rows unchanged and no schema version bump; schema asserted in tests/kernel/state",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Stop seeding derived estimate-cache rows",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W07": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.398328Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-008. VcsConfig.checkpoint_requires_commit (runtime/vcs/coauthor.py) is declared and defaulted but consumed nowhere, and tools/commit_prefix_lint.py already skips per-wave proof on state: commits. Consume the flag at iter and phase close so the checkpoint commit follows config, without claiming a per-wave proof that batched closes cannot carry.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/vcs",
+        "src/eawf/workflow/lifecycle/iter_.py",
+        "src/eawf/workflow/lifecycle/phase.py",
+        "src/eawf/kernel/config",
+        "tools/commit_prefix_lint.py",
+        "tests/workflow/lifecycle",
+        "tests/cli"
+      ],
+      "gates": [],
+      "id": "P31-I01-W07",
+      "intent": {
+        "desired_outcome": "Commit behaviour matches config at coherent scope close and state remains continuously daemon-written, with no per-wave proof claimed",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Read checkpoint_requires_commit in the iter and phase close ceremonies and refuse or proceed accordingly",
+          "Keep the commit-prefix lint skip for state commits and document that batched closes carry no per-wave proof",
+          "Assert the close still routes through the daemon mutation path"
+        ],
+        "priority_rationale": "Close truth for the dev1 floor; a config dial that nothing consumes is the built-but-idle defect this release names.",
+        "problem": "The checkpoint_requires_commit setting exists in config but no close path reads it, so commit behaviour cannot match config",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.398987Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/workflow/lifecycle/test_ceremony.py -k checkpoint_requires_commit exits 0 with both flag values",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "REL-008: vcs.checkpoint_requires_commit is consumed at iter and phase close; with the flag true a close returns a refusal until the checkpoint commit exists and with it false the close proceeds; pytest tests/workflow/lifecycle/test_ceremony.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/workflow/lifecycle/test_commit_pin_scan.py exits 0 and tools/commit_prefix_lint.py keeps the skip for state commits",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "REL-008 acceptance: commit behavior matches config without claiming nonexistent per-wave proof; the commit-prefix lint validates a state: checkpoint commit without a wave proof and the wave-proof branch is unchanged; pytest tests/workflow/lifecycle/test_commit_pin_scan.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/cli/test_lifecycle_daemon_routing.py exits 0 with the cadence close routed through the daemon RPC",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "State remains continuously daemon-written: an iter close under the cadence transitions to CLOSED through the daemon mutation and no direct state.json write occurs outside the portalocker fallback; state json asserted in tests/cli/test_lifecycle_daemon_routing.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Wire checkpoint cadence at coherent scope close",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W08": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W18",
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.399065Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-009. kernel/config/defaults.py ships telemetry.enabled False, so the projector under observability/telemetry never ingests in CI or dogfood, and the session row's ended_at is set by later reconciliation rather than at process exit. Enable ingestion by default, stamp ended_at from the session_end and agent_end hook paths at exit, and run a telemetry sync in CI so duration distributions carry non-zero rows.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/observability/telemetry",
+        "src/eawf/runtime/hooks",
+        "src/eawf/runtime/session",
+        "src/eawf/kernel/config/defaults.py",
+        ".github/workflows/ci.yaml",
+        "tests/observability/telemetry",
+        "tests/runtime",
+        "tests/integration/test_metrics_cli.py"
+      ],
+      "gates": [],
+      "id": "P31-I01-W08",
+      "intent": {
+        "desired_outcome": "Real telemetry ingestion is enabled, session end is stamped at exit, and CI and dogfood produce non-zero rows",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Flip telemetry.enabled default to true and keep export strictly local",
+          "Stamp session ended_at in the session_end and agent_end hook handlers at process exit",
+          "Add a CI step that runs eawf telemetry sync after the suite and asserts a non-zero session count"
+        ],
+        "priority_rationale": "Telemetry producers are a named dev1 outcome and REL-033 cannot measure verification cost without rows.",
+        "problem": "Telemetry is opt-in and session end is stamped by reconciliation, so no environment produces rows and duration distributions are empty",
+        "risks": [
+          "Enabling by default must not contact any external endpoint; the projector stays local-only"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.399730Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/observability/telemetry/test_metrics_projection.py exits 0 with a default-config ingestion case yielding rows greater than zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "REL-009: real telemetry ingestion is enabled by default; eawf telemetry sync over a seeded session fixture returns non-zero session rows from the metrics projection; pytest tests/observability/telemetry/test_metrics_projection.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/runtime tests/state/test_session_models.py -k ended_at exits 0 asserting ended_at is set by the exit hook",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Session end is stamped at exit: on the session_end and agent_end hook paths the session row transitions to ended_at set at process exit, never at later reconciliation; state json asserted in tests/runtime and tests/state/test_session_models.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_metrics_cli.py -k duration exits 0 and the ci.yaml telemetry step asserts session_count greater than zero",
+          "oracle_tier": null,
+          "quality_dimension": "operability",
+          "required": true,
+          "response": null,
+          "text": "REL-009 acceptance: CI and dogfood produce non-zero rows and duration distributions become usable; the CI telemetry step exits 0 with a non-zero session count and eawf metrics show returns a duration p50; cli exit asserted in tests/integration/test_metrics_cli.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Enable telemetry ingestion and stamp session end at exit",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.399817Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-010. README.md quick-start documents an interactive eawf init while the non-interactive flag is --quick, docs/ has no single install-to-first-workflow path, and pyproject.toml carries no platform classification. Rewrite the install, quick-start and first-workflow pages, classify the supported Python range and CI-gated platforms (Linux real host, macOS), and prove the documented commands from a clean environment.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "README.md",
+        "docs",
+        "mkdocs.yml",
+        "pyproject.toml",
+        "tests/integration/test_cli_init_no_input.py",
+        "tests/integration/test_packaging.py",
+        "tests/integration/test_docs_autogen.py"
+      ],
+      "gates": [],
+      "id": "P31-I01-W09",
+      "intent": {
+        "desired_outcome": "A clean environment reaches the first verified wave through documented commands, and actual Python and platform support is classified",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Rewrite README install and quick-start around eawf init --quick, plugin install and phase open",
+          "Add pyproject classifiers and a README support table for Python 3.14 and the CI-gated platforms",
+          "Add a test that runs the documented quick-start commands in a fresh temp repository"
+        ],
+        "priority_rationale": "Front-door repair is a named dev1 outcome and the checkpoint's front_door_journey gate reads these pages.",
+        "problem": "The README, install and quick-start pages do not carry a newcomer from a clean environment to a first verified workflow, and platform support is unclassified",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.400474Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_cli_init_no_input.py -k quickstart exits 0 running the exact README commands from a fresh directory",
+          "oracle_tier": null,
+          "quality_dimension": "operability",
+          "required": true,
+          "response": null,
+          "text": "REL-010 acceptance: clean environment reaches first verified Task-equivalent current workflow through documented commands; a test runs the README quick-start commands in a fresh temp repository and each exits 0; cli exit asserted in tests/integration/test_cli_init_no_input.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_packaging.py -k support_classification exits 0 comparing README and classifiers to ci.yaml",
+          "oracle_tier": null,
+          "quality_dimension": "compatibility",
+          "required": true,
+          "response": null,
+          "text": "Actual Python and platform support is classified: the README support table matches pattern the CI matrix (ubuntu-24.04 real host, macos) and requires-python, and pyproject.toml classifiers agree; file matches asserted by pytest tests/integration/test_packaging.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_docs_autogen.py -k front_door exits 0 with mkdocs build --strict passing",
+          "oracle_tier": null,
+          "quality_dimension": "operability",
+          "required": true,
+          "response": null,
+          "text": "The docs front door renders: mkdocs build exits 0 in strict mode and the install, quick-start and first-workflow pages resolve every internal link; cli exit asserted in tests/integration/test_docs_autogen.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Repair the front door and classify platform support",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W10": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W11",
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.400557Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-026 crash-isolation half. The close gate runner (runtime/daemon/gate_execution.py, methods/close.py) executes gates via asyncio.to_thread inside the daemon process, so a crashing gate takes the daemon with it. Execute heavy gates and provider work outside the canonical state lock and out of process, with the durable claim leaving the operation resumable after a child crash.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/gate_execution.py",
+        "src/eawf/runtime/daemon/methods/close.py",
+        "src/eawf/workflow/verify",
+        "tests/daemon",
+        "tests/runtime/daemon"
+      ],
+      "gates": [],
+      "id": "P31-I01-W10",
+      "intent": {
+        "desired_outcome": "Heavy gates and provider work execute out of process and outside the canonical state lock, and a crashing gate leaves the daemon serving and the operation resumable",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Spawn one child process per gate from the existing freshness-key claim and stream its receipt back",
+          "Release the state lock before the child starts and re-acquire only to persist the receipt",
+          "Add a deliberately crashing gate fixture and assert daemon.ping still answers and the attempt is resumable"
+        ],
+        "priority_rationale": "REL-026 makes out-of-process execution required rather than preferred because only a separate process survives the crash the acceptance measures; REL-025 and REL-028 both build on it.",
+        "problem": "Close gates run inside the daemon process while it can hold the state lock, so a crashing gate can stop the daemon serving and lose the attempt",
+        "risks": [
+          "Windows named-pipe daemon needs the same child-process path; keep the spawn seam platform-neutral"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.401226Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/daemon/test_close_lock_split.py exits 0 asserting a distinct child pid per gate and lock release during execution",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "REL-026: heavy gates and provider work execute outside the canonical state lock and out of process; the close gate runner spawns a child process per gate, holds no state lock while the child runs, and returns the receipt the child wrote; pytest tests/daemon/test_close_lock_split.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/daemon/test_gate_execution_claim.py -k crashing_gate exits 0 with ping answered during and after the crash",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "REL-026 acceptance: a deliberately crashing gate leaves the daemon serving and the operation resumable; a gate that calls os._exit mid-run returns a FAILED receipt while daemon.ping still answers and the close attempt transitions to QUEUED for resume; pytest tests/daemon/test_gate_execution_claim.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/daemon/test_recovery.py -k orphan_claim exits 0 asserting indeterminate status and zero automatic reruns",
+          "oracle_tier": null,
+          "quality_dimension": "safety",
+          "required": true,
+          "response": null,
+          "text": "An orphaned pre-execution claim after a child crash transitions to indeterminate and is never rerun without an operator resume; state json asserted in tests/daemon/test_recovery.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Run heavy close gates out of process with crash isolation",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W11": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.408693Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P31-I01-W10"
+      ],
+      "description": "REL-025. The EAWF_DAEMONLESS close in surfaces/cli/commands/lifecycle_wave.py rejects a gate-bearing close without --no-runtime and stamps a waiver event, but runs its own in-process readiness rather than the daemon's gate runner. Route the daemonless lane through the out-of-process runner from W10 or refuse outright, keep the recorded and counted waiver, and expose the waiver count for checkpoint close.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/lifecycle_wave.py",
+        "src/eawf/surfaces/cli/commands/lifecycle.py",
+        "src/eawf/workflow/verify",
+        "tests/cli"
+      ],
+      "gates": [],
+      "id": "P31-I01-W11",
+      "intent": {
+        "desired_outcome": "The daemonless close invokes the same gate runner the daemon invokes or refuses a gate-bearing close, with a recorded and counted operator waiver as the only bridge",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Call the shared out-of-process gate runner from the in-process close path",
+          "Refuse a gate-bearing daemonless close when the runner is unavailable unless --no-runtime records a waiver event naming scope and reason",
+          "Add a waiver counter over the event store exposed as eawf wave waivers --since for the checkpoint cut"
+        ],
+        "priority_rationale": "REL-025 as written admits exactly three outcomes and the waiver count must be zero-or-explained at checkpoint close.",
+        "problem": "The daemonless close lane computes readiness in-process instead of running the gate runner the daemon runs, so a gate-bearing close can bypass the falsifiers",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.409354Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/cli/test_daemonless_close_teeth.py exits 0 asserting receipt id parity between daemon and daemonless closes",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "REL-025: the daemonless close path invokes the same gate runner the daemon invokes; a gate-bearing close under EAWF_DAEMONLESS=1 runs the shared out-of-process runner and returns the same GateReceipt ids as the daemon path; pytest tests/cli/test_daemonless_close_teeth.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/cli/test_daemonless_close_waiver_e2e.py exits 0 with non-zero exit without waiver and exactly one waiver event with it",
+          "oracle_tier": null,
+          "quality_dimension": "security",
+          "required": true,
+          "response": null,
+          "text": "REL-025 acceptance: gate-bearing close through the bypass lane without a waiver is rejected; with a waiver it emits one waiver event naming scope and reason; cli exit and event count asserted in tests/cli/test_daemonless_close_waiver_e2e.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/cli -k wave_waivers exits 0 asserting the count and rows for a seeded event store",
+          "oracle_tier": null,
+          "quality_dimension": "operability",
+          "required": true,
+          "response": null,
+          "text": "Waiver count is countable at checkpoint close: eawf wave waivers --since returns the number of daemonless-waiver events after a given commit with each scope and reason; cli exit asserted in tests/cli",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Close the gate-bypass lane behind the shared gate runner",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W12": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.401293Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-026 test-infrastructure half. The full suite carries known shared-.ea daemon contention and portalock heartbeat flakes under -n auto. Root-cause them, isolate every test under its own EAWF_RUNTIME_DIR and state root, and add a CI job that runs just test-all twice on a fresh checkout.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tests/conftest.py",
+        "tests/integration/conftest.py",
+        "tests/property",
+        "tests/kernel",
+        ".github/workflows/ci.yaml",
+        "justfile",
+        "tests/lint/test_phase_ci_gates.py"
+      ],
+      "gates": [],
+      "id": "P31-I01-W12",
+      "intent": {
+        "desired_outcome": "The full suite runs green from a clean environment twice in succession, in CI, with every test isolated to its own runtime and state root",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Root-cause the heartbeat JSONDecodeError and shared-.ea contention flakes and fix the isolation seam",
+          "Add a conftest guard that raises when a test resolves the repository .ea path",
+          "Add a CI job running just test-all twice on ubuntu-24.04 from a fresh checkout"
+        ],
+        "priority_rationale": "REL-026 lands the test-infrastructure hardening before cutover; the collapse wave and every later checkpoint gate rerun this suite.",
+        "problem": "The full suite is not reliably green twice in a row because tests share daemon and lock state, so a red run cannot be attributed",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.401959Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_phase_ci_gates.py -k twice_green exits 0 and the CI run for the wave commit shows both invocations passing",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "REL-026 acceptance: the full suite runs green from a clean environment twice in succession; the CI workflow runs just test-all twice on a fresh ubuntu-24.04 checkout and each run exits 0; cli exit asserted by pytest tests/lint/test_phase_ci_gates.py reading ci.yaml",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "five consecutive uv run pytest tests/property tests/kernel -n auto invocations exit 0 with the run ids listed in the wave report",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "The known flakes are root-caused: the heartbeat ticker test and tests/property/test_evidence_concurrent_property.py pass under -n auto and each of five consecutive invocations exits 0, recorded in the wave report; pytest tests/property tests/kernel",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_test_tier_contract.py exits 0 with a guard case that trips on a repository .ea resolution",
+          "oracle_tier": null,
+          "quality_dimension": "safety",
+          "required": true,
+          "response": null,
+          "text": "No test touches the repository .ea: a conftest guard raises when a test resolves the real .ea path and every test runs under its own EAWF_RUNTIME_DIR; pytest tests/lint/test_test_tier_contract.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Prove the full suite green twice from a clean environment",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W13": {
+      "agent_role": "researcher",
+      "blocks": [
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.402028Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-027. Decide and record the epoch-2 state-tree target shape before the dev2 importer is written. Write a decision brief under .ea/artifacts/research comparing at least the compact native tree with a separate legacy store against a single merged tree, grounded in the epoch1-state-at-scale spike (1,845 actuals/estimates key-vs-id rows, ten null slots), and surface the choice for the operator to ratify as a typed Decision naming the legacy-store boundary.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        ".ea/artifacts/research",
+        "docs/architecture"
+      ],
+      "gates": [],
+      "id": "P31-I01-W13",
+      "intent": {
+        "desired_outcome": "A ratified Decision names the target tree and the legacy-store boundary before the importer is written",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Read the epoch1-state-at-scale spike observations and the V07-DOM entity chassis",
+          "Draft the brief with two or more candidate shapes, the recommended one marked, and the dev2 validation target stated",
+          "Surface the choice as an AskUserQuestion and record the ratified Decision through eawf decision add"
+        ],
+        "priority_rationale": "REL-027 orders the decision before the importer so dev2 validates against a decided shape rather than inferring one.",
+        "problem": "No ratified Decision names the epoch-2 state-tree target shape, so the dev2 importer would establish one as a side effect",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.402685Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run eawf decision list --json exits 0 and one ACTIVE row names both the target tree shape and the legacy-store boundary",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "REL-027 acceptance: a ratified Decision names the target tree and the legacy-store boundary; eawf decision list --json returns an ACTIVE Decision whose summary names the epoch-2 state-tree shape and the legacy-store boundary; state json asserted at wave audit",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run eawf artifact verify on the brief exits 0 with the chassis sections present and no absolute path",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "The decision brief file matches the artifact chassis (Summary, References, Provenance, Scrub) under .ea/artifacts/research and cites the epoch1-state-at-scale spike findings; eawf artifact verify validates it against the golden chassis",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "attested",
+          "measurable_signal": "the operator's wave-close review confirms two named candidate shapes, one marked recommended, and a stated dev2 validation target",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The brief enumerates at least two candidate shapes with the recommended one marked and the dev2 importer validation target stated; judged by human review at wave close",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Ratify the epoch-2 state-tree target shape",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W14": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.402731Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "RUN-054 and RUN-055, landed under REL-026's daemon-reliability clause. The 2026-08-13 spike measured state.read at ~85 ms and state.digest at ~42 ms of loop occupancy while the readiness probe (runtime/daemon/spawn.py, 0.2 s) maps a timeout to absent, producing 1,724 undeliverable responses. Offload blocking IO, deserialisation and validation from the dispatch path in server.py and make the probe distinguish busy from absent under one budget.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/server.py",
+        "src/eawf/runtime/daemon/spawn.py",
+        "src/eawf/runtime/daemon/main.py",
+        "src/eawf/runtime/daemon/limits.py",
+        "tests/daemon",
+        "tests/runtime/daemon"
+      ],
+      "gates": [],
+      "id": "P31-I01-W14",
+      "intent": {
+        "desired_outcome": "A daemon handler never blocks the event loop, handler occupancy and the readiness timeout are one budget stated once, and a busy daemon is still reported present",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Offload blocking handlers at the server dispatch seam with asyncio.to_thread and keep the ordering guarantees",
+          "Declare the occupancy budget once in limits.py and read it from the readiness probe",
+          "Make the probe report busy distinctly from absent and stop writing responses into closed sockets"
+        ],
+        "priority_rationale": "RUN-055 binds before parallel dispatch is enabled and P31 itself runs parallel worktrees against this daemon.",
+        "problem": "Daemon handlers block the event loop on file IO and model validation, and the readiness probe maps any busy daemon to absent, so clients spawn or degrade on false negatives",
+        "risks": [
+          "Offloading state.read must preserve read-after-write ordering against the mutation queue"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.403395Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/runtime/daemon/test_loop_occupancy.py exits 0 with ping p50 under 5 ms during a concurrent state.read",
+          "oracle_tier": null,
+          "quality_dimension": "performance_efficiency",
+          "required": true,
+          "response": null,
+          "text": "RUN-054: a daemon handler never blocks the event loop; with state.read offloaded a two-second synchronous hold in one handler no longer stalls unrelated pings, and daemon.ping on another connection returns within its budget during the hold; pytest tests/runtime/daemon/test_loop_occupancy.py with a blocking-handler case asserting head-of-line stalling and an offloaded-handler case asserting none",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/runtime/daemon/test_readiness_under_load.py exits 0 with eight concurrent readers and the probe reporting present",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "RUN-055: handler occupancy and the daemon readiness timeout are one budget, stated once; the readiness probe returns present for a daemon under concurrent state-read load instead of mapping a timeout to absent; pytest tests/runtime/daemon/test_readiness_under_load.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/daemon/test_disconnect_shield.py -k abandoned_probe exits 0 with zero undeliverable warnings captured",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "A client that abandons a readiness probe leaves no undeliverable-response warning: the daemon emits nothing into a closed socket; log capture asserted in tests/daemon/test_disconnect_shield.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Take daemon reads off the loop and unify the readiness budget",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W15": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.403463Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "RUN-056 and RUN-057, landed under the dev1 close/retry-truth outcome and REL-003's never-message-substrings rule. The adapter taxonomy in runtime/runtimes matches stderr while stream-json routes vendor errors to stdout (55 of 55 failures had empty stderr), and the concurrency-cap error is raised by all three adapters and caught nowhere. Classify from the stream the runtime writes, give every declared error class a reachable handler, and state the effective cap once.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/adapter.py",
+        "src/eawf/runtime/runtimes/fallback.py",
+        "src/eawf/runtime/runtimes/dispatch.py",
+        "src/eawf/runtime/runtimes/stream_json.py",
+        "src/eawf/workflow/dispatch/retry.py",
+        "tests/runtime/runtimes",
+        "tests/runtimes",
+        "tests/workflow/dispatch"
+      ],
+      "gates": [],
+      "id": "P31-I01-W15",
+      "intent": {
+        "desired_outcome": "Error classification reads the stream the vendor writes to, every declared error class has a reachable handler, and the effective cap is stated once",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Feed the classifier the stdout stream-json error envelope and add one fixture per class on the stream the runtime uses",
+          "Catch the concurrency-cap and session-resume errors in the retry ladder and add an architecture test for uncaught exception types",
+          "Collapse the three per-module counters into one declared cap"
+        ],
+        "priority_rationale": "RUN-057 names cap saturation as the failure parallel dispatch manufactures and P31 dispatches in parallel.",
+        "problem": "The five-class runtime error taxonomy reads stderr that vendors leave empty, and the concurrency-cap error escapes every handler, so the retry and switch ladder has never switched",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.404131Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/runtime/runtimes/test_error_classification.py exits 0 with five class fixtures each resolving to its own class",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "RUN-056: runtime error classification reads the stream the vendor actually writes to; under stream-json each class fixture carries its payload on stdout and the classifier returns that class, never the default; pytest tests/runtime/runtimes/test_error_classification.py with one fixture per class",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/runtime/runtimes/test_error_reachability.py exits 0 with zero uncaught exception types reported",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "RUN-057: every declared error class has a reachable handler; an architecture test raises on any exception type in the runtime package with no catch site and the concurrency-cap error is caught by the retry ladder; pytest tests/runtime/runtimes/test_error_reachability.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/workflow/dispatch/test_retry.py -k cap_saturation exits 0 asserting a retried dispatch after the cap error",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The effective concurrency cap is stated once: the per-module counters collapse into one ceiling and a saturated cap returns a typed retry-after through the ladder rather than escaping it; pytest tests/workflow/dispatch/test_retry.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Classify runtime errors from the stream vendors write",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W16": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.404226Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-034. runtime/sandbox/env_scrub.py pins TMPDIR to /private/tmp (a non-Linux location) and jail.py _build_linux_argv applies tmpfs masks that stop bwrap launching on Linux. Fix both so the jail launches on a Linux host, add a CI job on ubuntu-24.04 that launches the jail against real bubblewrap, and add nothing that extends the jail past the cutover retirement in V07-RUN.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/sandbox/env_scrub.py",
+        "src/eawf/runtime/sandbox/jail.py",
+        "tests/runtime/sandbox",
+        ".github/workflows/ci.yaml",
+        "tests/lint/test_phase_ci_gates.py"
+      ],
+      "gates": [],
+      "id": "P31-I01-W16",
+      "intent": {
+        "desired_outcome": "Both Linux isolation defects are fixed, the Linux real-host gate passes at dev1, and the jail gains nothing that extends its life past cutover",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Resolve the pinned TMPDIR per platform and allow writes there in the jail policy",
+          "Apply tmpfs masks only to cred dirs that exist and verify a trivial bwrap launch exits 0",
+          "Add the ubuntu-24.04 CI job running the real-bwrap launch test"
+        ],
+        "priority_rationale": "V07-UI claims Linux as a real-host gated platform and a gate cannot pass against a backend that does not start.",
+        "problem": "The pinned non-Linux TMPDIR and the tmpfs masks stop the self-built jail launching on Linux, so no Linux real-host gate can pass",
+        "risks": [
+          "CI runners may lack bubblewrap; install it in the job rather than skipping the test"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.404892Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/runtime/sandbox/test_env_scrub.py exits 0 with a Linux case resolving /tmp and a Darwin case resolving /private/tmp",
+          "oracle_tier": null,
+          "quality_dimension": "compatibility",
+          "required": true,
+          "response": null,
+          "text": "REL-034: the temporary-directory path pinned to a non-Linux location is fixed; env_scrub returns a TMPDIR that exists on the host (/tmp on Linux) and the jail policy allows writes there; pytest tests/runtime/sandbox/test_env_scrub.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/runtime/sandbox/test_jail.py -k linux_launch exits 0 on ubuntu-24.04 with real bwrap",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "REL-034: the tmpfs masks in the Linux backend no longer stop the jail launching; _build_linux_argv returns masks only for cred dirs that exist and a trivial jailed command exits 0 on a Linux host; pytest tests/runtime/sandbox/test_jail.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_phase_ci_gates.py -k linux_real_host exits 0 and the CI job for the wave commit passes",
+          "oracle_tier": null,
+          "quality_dimension": "security",
+          "required": true,
+          "response": null,
+          "text": "REL-034 acceptance: the Linux real-host gate passes at dev1; a CI job on ubuntu-24.04 runs the real-bwrap launch test and exits 0, and the wave diff adds no new jail feature; cli exit asserted via ci.yaml in tests/lint/test_phase_ci_gates.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fix the Linux jail defects and gate Linux as a real host",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W17": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W18",
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.404962Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-033 producer per V07-MEAS (MEAS-031..034, MEAS-044). No turn-cost code exists. Add a producer under observability/bench that computes median and ninetieth-percentile wall clock and cost per completed unit of work from the telemetry store, declares fixture, harness revision and runtime/model tuple, reports verification cost separately from execution cost, and exposes eawf bench turn-cost --check that blocks on an injected regression beyond a recorded threshold.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/observability/bench",
+        "src/eawf/observability/telemetry",
+        "src/eawf/surfaces/cli/commands/bench.py",
+        "tests/perf",
+        "tests/observability/telemetry",
+        "tests/integration/test_bench_harness.py"
+      ],
+      "gates": [],
+      "id": "P31-I01-W17",
+      "intent": {
+        "desired_outcome": "A producer measures turn cost per completed unit of work with a declared fixture and harness revision, separates verification from execution cost, and blocks on an injected regression",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add a TurnCostRecord strict model with fixture, harness revision, runtime/model tuple, p50, p90, verification and execution cost",
+          "Compute the record over closed waves from the telemetry store and render it via eawf bench turn-cost",
+          "Add --check against a recorded threshold and prove a synthetic regression exits non-zero"
+        ],
+        "priority_rationale": "REL-033 blocks rc1 on a regression against the dev1 baseline, so the producer and the first measurement must both land in this checkpoint.",
+        "problem": "REL-033 requires a dev1 verification-cost measurement using the producer in V07-MEAS, and no turn-cost producer exists in the tree",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.405636Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/perf -k turn_cost exits 0 including the split-into-more-runs invariance case",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "MEAS-031: turn cost is measured as median and ninetieth-percentile wall clock and cost per completed unit of work, not per run and not per command; the producer returns p50 and p90 over closed waves and a fixture that splits one wave into more runs reports no improvement; pytest tests/perf",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/observability/telemetry -k turn_cost_record exits 0 and a record missing the harness revision fails validation",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "MEAS-032 and MEAS-033: the measurement record declares its fixture, measurement-harness revision and runtime/model tuple and reports verification cost separately from execution cost; the record validates with those fields required; schema asserted in tests/observability/telemetry",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_bench_harness.py -k turn_cost_check exits 0 with both the blocking and passing cases",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "REL-033 and MEAS-044 acceptance: an injected regression blocks; a synthetic p90 above the recorded threshold exits non-zero from eawf bench turn-cost --check while a value within threshold exits 0; cli exit asserted in tests/integration/test_bench_harness.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Build the turn-cost measurement producer",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W18": {
+      "agent_role": "researcher",
+      "blocks": [
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.409440Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P31-I01-W17",
+        "P31-I01-W08"
+      ],
+      "description": "REL-033 first measurement. Run the W17 producer against the telemetry rows W08 enables, record the dev1 baseline as an artifact under .ea/artifacts/research with fixture, harness revision, runtime/model tuple, p50, p90 and the regression threshold recorded before any second measurement (MEAS-034), and list the proposal numeric defaults dev1 remeasures (00 runtime capacities and timeouts, 70 tier budgets and the 0.5 s unit ceiling) with measured value beside proposal default.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        ".ea/artifacts/research",
+        "tests/perf"
+      ],
+      "gates": [],
+      "id": "P31-I01-W18",
+      "intent": {
+        "desired_outcome": "A committed dev1 baseline artifact carries the turn-cost measurement, its threshold, and the remeasured numeric defaults beside their proposal values",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Run eawf bench turn-cost against the dev1 telemetry rows and capture the record",
+          "Record the regression threshold in the same artifact before any second measurement exists",
+          "Measure the T0/T1/T2 tier wall clocks, the unit-test ceiling and the daemon runtime defaults and tabulate them beside the proposal values"
+        ],
+        "priority_rationale": "MEAS-034 forbids choosing the threshold after seeing the second result, so the baseline and threshold must be committed at dev1.",
+        "problem": "REL-033 needs the dev1 verification-cost measurement with its threshold recorded first, and 00, 67, 70 and 75 hold numeric defaults awaiting dev1 remeasurement",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.410106Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run eawf artifact verify on the baseline exits 0 and the embedded record validates as a TurnCostRecord",
+          "oracle_tier": null,
+          "quality_dimension": "performance_efficiency",
+          "required": true,
+          "response": null,
+          "text": "REL-033: net verification cost is measured at dev1 using the producer in V07-MEAS; the baseline artifact under .ea/artifacts/research file matches the turn-cost record schema with fixture, harness revision, runtime/model tuple, p50 and p90; eawf artifact verify validates it against the golden chassis",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run eawf bench turn-cost --check --baseline <artifact> exits 0 and the artifact commit predates any rc1 measurement",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "MEAS-034: the regression threshold is recorded before the second measurement is taken; the baseline artifact carries a threshold field and eawf bench turn-cost --check returns pass against it; cli exit asserted in the wave report",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "attested",
+          "measurable_signal": "the operator's wave-close review confirms the table covers the 00 runtime block, the 70 tier budgets and the unit ceiling with a command per row",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "Proposal numeric defaults that dev1 remeasures are tabulated with measured value beside proposal default, each with a re-runnable command; judged by human review at wave close",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Record the dev1 verification-cost baseline and threshold",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W19": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W20",
+        "P31-I01-W23",
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.405712Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Release-train substrate from 10 (typed release records, release configuration, lifecycle, preflight signals; REL-011, REL-013, REL-015). No Release or ReleaseTrain exists in the tree. Add strict Release, ReleaseTrain and ReleaseReadiness records persisted through the store, the dev1 checkpoint configuration loader with its listed rejections, the DRAFT..BAKED transition table with error codes, and release.compute_readiness returning every signal never fail-fast.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/store",
+        "src/eawf/kernel/spec",
+        "src/eawf/workflow/verify",
+        "src/eawf/runtime/daemon/methods",
+        "src/eawf/surfaces/cli/commands/release.py",
+        "tests/kernel",
+        "tests/unit/lifecycle",
+        "tests/workflow/verify",
+        "tests/integration/test_cli_release_tag.py"
+      ],
+      "gates": [],
+      "id": "P31-I01-W19",
+      "intent": {
+        "desired_outcome": "Typed Release and ReleaseTrain records, the dev1 checkpoint loader and a typed ReleaseReadiness exist behind daemon RPCs so the checkpoint can be pinned, preflighted, approved and baked",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add Release, ReleaseTrain, ReleaseManifest and ReleaseReadiness strict models with the field tables in 10",
+          "Add the checkpoint configuration loader with every rejection listed under Release configuration",
+          "Implement the transition table with error codes and release.create/pin/compute_readiness/approve/show RPCs",
+          "Compute the dev1 signal set (version consistency, changelog, ancestry, tree cleanliness, artifacts, dependencies, credentials) with the remaining rows reported unavailable"
+        ],
+        "priority_rationale": "The final wave bakes the checkpoint through this lifecycle and REL-005 moves preflight to the tag chokepoint on top of it.",
+        "problem": "The release train, its checkpoint Release records and the typed preflight readiness the packet gates on have no implementation, so 0.7.0.dev1 cannot be baked as a record",
+        "risks": [
+          "V07-DOM leaf objects land at dev2; keep the dev1 models minimal and import-compatible rather than redeclaring adapters"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.406386Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/kernel -k release_models exits 0 with channel/version disagreement and non-empty dev1 membership both rejected",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Release and ReleaseTrain are strict records with the field tables in 10; Release validates key REL-<version>, channel agreeing with the normalized version, authority_epoch equal to the train declaration and empty membership_refs for dev1; schema asserted in tests/kernel",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/kernel -k release_config_loader exits 0 with one rejection case per listed condition and the packet dev1 YAML loading clean",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "The dev1 release configuration in 10 loads; the loader raises on duplicate targets, channel/version disagreement, an undeclared epoch or gate profile, latest on a prerelease, invalid checkpoint membership cardinality, missing observation adapter and nonpositive timeouts; pytest tests/kernel",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/workflow/verify -k release_readiness exits 0 asserting all twelve signal rows present with a red version signal not short-circuiting the rest",
+          "oracle_tier": null,
+          "quality_dimension": "operability",
+          "required": true,
+          "response": null,
+          "text": "release.compute_readiness returns a typed ReleaseReadiness containing every signal, never fail-fast, each row with status, observed_revision, evidence_refs, computed_at, expires_at and remediation; pytest tests/workflow/verify",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
+          "id": "CR-04",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/lifecycle/test_transition_tables.py -k release exits 0 covering every legal edge and each named denial",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "The Release lifecycle transitions to CANDIDATE, PREFLIGHT_FAILED, APPROVED and BAKED under the guards in the transition table and a denied transition raises its named error (release_manifest_incomplete, release_not_ready, approval_stale, publication_not_observed); pytest tests/unit/lifecycle/test_transition_tables.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add typed Release records with the dev1 loader and preflight",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W20": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.410152Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P31-I01-W19"
+      ],
+      "description": "REL-005. eawf release tag (surfaces/cli/commands/release.py) checks only tree cleanliness, admits a dirty tree with --force, and .github/workflows/release.yaml publishes on any v* tag push after a CI check. Make release tag --push run release.compute_readiness from W19 for the CHANGELOG, version, migration, ancestry and CI facts, and make the tag-push workflow run the same preflight before the publish job so the direct tag path cannot bypass checks.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/release.py",
+        "src/eawf/workflow/verify",
+        ".github/workflows/release.yaml",
+        "tests/integration/test_cli_release_tag.py",
+        "tests/lint/test_phase_ci_gates.py"
+      ],
+      "gates": [],
+      "id": "P31-I01-W20",
+      "intent": {
+        "desired_outcome": "Release preflight runs at the tag-push chokepoint in both the CLI and the workflow so the direct tag path cannot bypass checks",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Call release.compute_readiness from release tag --push and exit non-zero on any red signal",
+          "Add a preflight job to release.yaml that gates the publish job on the same signals",
+          "Replace --force dirty-tree admission with an explicit recorded waiver flag"
+        ],
+        "priority_rationale": "Release-pipeline safety is a named dev1 outcome and 0.7.0.dev1 is the first tag pushed through this chokepoint.",
+        "problem": "A tag can be created and pushed without the CHANGELOG, version, migration, ancestry and CI facts being checked, and --force admits a dirty tree",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.410827Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_cli_release_tag.py -k preflight exits 0 with a missing-changelog case exiting non-zero before any tag is created",
+          "oracle_tier": null,
+          "quality_dimension": "security",
+          "required": true,
+          "response": null,
+          "text": "REL-005: release preflight runs at the tag-push chokepoint; eawf release tag --push computes the CHANGELOG, version, migration, ancestry and CI facts through release.compute_readiness and exits non-zero on any red signal; cli exit asserted in tests/integration/test_cli_release_tag.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_phase_ci_gates.py -k tag_chokepoint exits 0 asserting the publish job needs the preflight job",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "REL-005 acceptance: direct tag path cannot bypass checks; the tag-push workflow in .github/workflows/release.yaml runs the same preflight before the publish job and a red preflight exits the job non-zero; file matches asserted by pytest tests/lint/test_phase_ci_gates.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_cli_release_tag.py -k dirty_tree exits 0 with --force rejected and the waiver flag recording one event",
+          "oracle_tier": null,
+          "quality_dimension": "safety",
+          "required": true,
+          "response": null,
+          "text": "--force no longer admits a dirty tree at tag time: release tag raises dirty_release_tree unless an explicit --waive-dirty-tree flag records a waiver event with a reason; pytest tests/integration/test_cli_release_tag.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Move release preflight to the tag-push chokepoint",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W21": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.406470Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-037 with the minimal PLAN-024/PLAN-025 carrier. No MeasuredContract exists and the 2026-08-13 preflight spikes hold observations only under .ea/local/spikes. Add strict MeasuredContract, MeasurementEnvironment and ObservedLimit records, extract the importer (epoch1-state-at-scale), cross-provider-conformance and daemon-rpc-parallel contracts from those observations, and promote each through the existing evidence path so it resolves by ArtifactUrn with a non-empty boundary.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/spec",
+        "src/eawf/workflow/evidence",
+        "src/eawf/surfaces/cli/commands/evidence_artifact.py",
+        ".ea/artifacts/research",
+        "tests/kernel/spec",
+        "tests/workflow/evidence"
+      ],
+      "gates": [],
+      "id": "P31-I01-W21",
+      "intent": {
+        "desired_outcome": "Each of the three contracts resolves by ArtifactUrn as a promoted MeasuredContract with a non-empty boundary and a scale_band the implementing checkpoint can cite",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add MeasuredContract, MeasurementEnvironment and ObservedLimit as strict frozen models per the 30 field table",
+          "Extract one contract per probed surface from the three preflight spikes with probe_command, observed, boundary and environment",
+          "Promote through the evidence artifact path minting an ArtifactUrn and an EVD row per contract"
+        ],
+        "priority_rationale": "dev2 opens when dev1 bakes and REL-037 refuses a checkpoint opening without the importer contract; promoting now is bookkeeping, promoting later is a blocked train.",
+        "problem": "REL-037 requires a promoted MeasuredContract for each of the three most expensive contracts before their checkpoint, and the spike measurements exist only as local observations",
+        "risks": [
+          "The importer contract must record scale_band from the real state population probed, not the fixture band"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.407164Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/kernel/spec -k measured_contract exits 0 with blank-boundary, bad-id and repository-scope-without-ref rejections",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "PLAN-024: MeasuredContract is a strict frozen record with contract_id matching MCT-########, surface, probe_command, observed, limits, boundary, observed_at, observed_at_ref and a required MeasurementEnvironment; a blank boundary raises ValidationError; pytest tests/kernel/spec",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run eawf artifact show on each of the three URNs exits 0 and tests/workflow/evidence asserts scale_band hundreds or wider on the importer contract",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "REL-037 acceptance: each of the three contracts carries a promoted contract resolvable by ArtifactUrn with a non-empty boundary and a MeasurementEnvironment whose scale_band is at least the band the implementing checkpoint asserts over, the importer one measured against a production-scale state population; eawf artifact show returns each; state json asserted in tests/workflow/evidence",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/workflow/evidence/test_measured_contract_promotion.py exits 0 with the local-only citation rejected",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "PLAN-025: promotion goes through the existing evidence path and mints an EVD row per contract; a citation of a contract that exists only under .ea/local/spikes raises plan_reference_missing naming the promotion command; pytest tests/workflow/evidence/test_measured_contract_promotion.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Promote the measured-before-build contracts",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W22": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W23",
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.407232Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "LINT-040. src/eawf/runtime/daemon/methods/state.py stands at 5,286 lines against the 1,400-line EAWF010 cap with 119 top-level symbols and sits on the pyproject exclusion list. Split it by mutation family (wave, iter, phase, roadmap, spec, session, readiness) into sibling modules that each validate under the cap, preserve the JSON-RPC method registry, and drop the exclusion entry.",
+      "dispatch_history": [],
+      "effort_bucket": "XL",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods",
+        "pyproject.toml",
+        "tests/daemon",
+        "tests/contract"
+      ],
+      "gates": [],
+      "id": "P31-I01-W22",
+      "intent": {
+        "desired_outcome": "The module is split into single-family modules under the cap with the RPC contract unchanged, so the expiry mechanism's first application is a removal, not a renewal",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Map the 119 symbols to mutation families and pick extraction seams with no private sibling imports",
+          "Extract one family per commit-sized step, re-running tests/daemon and tests/contract after each",
+          "Remove methods/state.py from the pyproject exclusion list"
+        ],
+        "priority_rationale": "LINT-040 schedules the split at the stabilization checkpoint so LINT-039's expiry mechanism reds into a removal rather than a waiver.",
+        "problem": "The daemon state-method module is 3.8 times the module-length cap and its exclusion would expire immediately under LINT-039",
+        "risks": [
+          "Every RPC routes through this module; parallel waves W03 and W04 touch close.py, not state.py, and W14 stays in server.py to avoid conflicts"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.407891Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pre-commit run --all-files exits 0 and wc -l over src/eawf/runtime/daemon/methods reports no module above 1400 lines",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "LINT-040: the daemon state-method module is split; every module under src/eawf/runtime/daemon/methods validates under the 1,400-line EAWF010 cap with no exclusion entry and methods/state.py is absent from the pyproject exclude list; source asserted by uv run pre-commit run --all-files exits 0",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/contract/test_jsonrpc_contract.py tests/daemon/test_state_methods.py exits 0 with zero test-body edits in the wave diff",
+          "oracle_tier": null,
+          "quality_dimension": "compatibility",
+          "required": true,
+          "response": null,
+          "text": "Behaviour is preserved: the JSON-RPC method registry returns the same method names and parameter schemas before and after the split; pytest tests/contract/test_jsonrpc_contract.py and tests/daemon/test_state_methods.py pass unchanged",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/daemon -k methods_import_graph exits 0 with zero underscore-prefixed cross-module imports",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "Each extracted module has one reason to change: mutation families live in separate modules and the import-graph test returns zero private sibling imports between extracted modules; source asserted in tests/daemon",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Split the daemon state-method module under the cap",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W23": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.410904Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P31-I01-W22",
+        "P31-I01-W19"
+      ],
+      "description": "LINT-039. The pyproject [tool.eawf.lint.eawf010] exclude list is a bare path list with prose justifications in comments. Make every entry carry an expiry date and reason, reject an entry with no expiry at configuration load, make an expired entry a red release preflight signal through W19's compute_readiness, and require renewal to cite a typed Decision with a named owner.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "pyproject.toml",
+        "src/eawf/platform/lint",
+        "src/eawf/workflow/verify",
+        "tests/platform/lint",
+        "tests/lint"
+      ],
+      "gates": [],
+      "id": "P31-I01-W23",
+      "intent": {
+        "desired_outcome": "Every exclusion carries an expiry date and reason, an expired exclusion fails the release preflight, and renewal is an explicit typed decision with a named owner",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Type the exclusion entry as path, expires_on, reason and optional renewal decision id and reject a bare path",
+          "Add the expiry check as a release preflight signal naming the module",
+          "Migrate the current entries with dates and reasons taken from their comments"
+        ],
+        "priority_rationale": "A gate that reds only into a waiver is the shape LINT-003 removes; with W22 landed the first application of expiry is a removal.",
+        "problem": "Module-length exclusions are unbounded and advisory, so an excluded module stays excluded by default rather than by decision",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.411564Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/platform/lint/test_exclusion_expiry.py exits 0 with the on-date, day-past and no-expiry cases",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "LINT-039: every module-length exclusion entry carries an expiry date and the reason it was granted; the lint raises on an entry with no expiry so the configuration, not the commit, is rejected; pytest tests/platform/lint/test_exclusion_expiry.py with boundary fixtures at exactly the expiry date and one day past it",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/workflow/verify -k exclusion_expiry exits 0 asserting the signal names the expired module path",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "A module still excluded past its expiry fails the release preflight; release.compute_readiness returns a red module_length_exclusion signal naming the module; pytest tests/workflow/verify",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/platform/lint -k exclusion_renewal exits 0 with a dangling decision id rejected",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Renewal is an explicit typed decision with a named owner: an exclusion entry's renewal field validates against a Decision id present in state json and a bare renewal raises; pytest tests/platform/lint",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Bound the module-length exclusions with expiry dates",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W24": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W25",
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.407939Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "LINT-011..014, LINT-027, LINT-029 and QUAL-038..040. Declare the V07-QUAL kind enum once (unit, contract, integration, property, metamorphic, golden, tui, conformance, with e2e and perf folded or kept per QUAL-039), auto-apply each kind's marker from its directory in tests/conftest.py under --strict-markers, add the diff-scoped placement lint to the pre-commit lane, and check markers, directories, gate membership and the proof-locus mapping against the enum as one unit.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "tests/conftest.py",
+        "pyproject.toml",
+        ".pre-commit-config.yaml",
+        "src/eawf/platform/lint",
+        "src/eawf/surfaces/cli/commands/hook.py",
+        "tests/platform/lint",
+        "tests/lint"
+      ],
+      "gates": [],
+      "id": "P31-I01-W24",
+      "intent": {
+        "desired_outcome": "One declared kind enum drives directory, marker, gate membership and proof-locus mapping, and a misplaced test fails collection or pre-commit",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Declare the kind enum in one module and derive the marker list, tier membership and locus mapping from it",
+          "Auto-apply markers per kind directory in tests/conftest.py and turn on --strict-markers",
+          "Add the diff-scoped placement lint hook rejecting paths outside tests/<kind>/<source-package-path>/ and duplicate subjects"
+        ],
+        "priority_rationale": "LINT-027 requires the marker schema to land together with the moves, and W25 cannot move files into a taxonomy that does not exist.",
+        "problem": "Test kinds are implied by 25 overlapping top-level directories with no enum, no auto-applied markers and no placement lint, so the same subject is filed in two or three homes",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.408621Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/platform/lint -k kind_enum_unit exits 0 with an injected extra marker failing the unit check",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "LINT-011 and LINT-029: the kind enum is declared once and each of the marker declaration, the kind directories on disk, the gate membership in the quality configuration and the proof-locus mapping validates against it as one unit, with a kind present in any one and absent from the enum failing; pytest tests/platform/lint",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_test_tier_contract.py -k auto_marker exits 0 and a manual conflicting marker fails collection in a subprocess pytest",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "LINT-012 and LINT-027: each kind directory auto-applies its marker and --strict-markers is on; a file whose auto-applied marker disagrees with its directory exits collection non-zero; cli exit asserted in tests/lint/test_test_tier_contract.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/platform/lint -k placement_lint exits 0 with an out-of-taxonomy path and a two-kind subject both rejected",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "LINT-013: the diff-scoped placement lint runs in the pre-commit lane and exits non-zero for a path outside tests/<kind>/<source-package-path>/ or a subject filed under two kinds; cli exit asserted in tests/platform/lint",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Land the test kind taxonomy and placement lint",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W25": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W26"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.411625Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P31-I01-W24",
+        "P31-I01-W01",
+        "P31-I01-W02",
+        "P31-I01-W03",
+        "P31-I01-W04",
+        "P31-I01-W05",
+        "P31-I01-W06",
+        "P31-I01-W07",
+        "P31-I01-W08",
+        "P31-I01-W09",
+        "P31-I01-W10",
+        "P31-I01-W11",
+        "P31-I01-W12",
+        "P31-I01-W14",
+        "P31-I01-W15",
+        "P31-I01-W16",
+        "P31-I01-W17",
+        "P31-I01-W19",
+        "P31-I01-W20",
+        "P31-I01-W21",
+        "P31-I01-W22",
+        "P31-I01-W23"
+      ],
+      "description": "LINT-025, LINT-026, LINT-028 and QUAL-040. Move the 910 test files in 25 top-level directories to tests/<kind>/<source-package-path>/test_<subject>.py under the W24 taxonomy, one directory per commit, running the entire tree after each move; fold acceptance, regression, the ambiguous runtime/runtimes and shadow trees; update every path rule in pyproject.toml, ci.yaml, justfile and pre-commit. Depends on every test-producing wave so their tests move too.",
+      "dispatch_history": [],
+      "effort_bucket": "XL",
+      "file_scopes": [
+        "tests",
+        "pyproject.toml",
+        ".github/workflows/ci.yaml",
+        "justfile",
+        ".pre-commit-config.yaml"
+      ],
+      "gates": [],
+      "id": "P31-I01-W25",
+      "intent": {
+        "desired_outcome": "Every test sits in the one directory its kind implies, the retired directories are gone, and the tree collapse is complete before the cutover with each move bisectable",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Produce the move map from directory to kind and source-package path and review it against QUAL-039 minimum-member folding",
+          "Move one directory per commit with git mv, updating the path rules, and run just test-all after each",
+          "Delete the retired top-level directories and assert the placement lint over the whole tree"
+        ],
+        "priority_rationale": "LINT-025 lands the collapse before the cutover on the lifecycle the tests were written against; doing it after means a cutover failure with three candidate causes.",
+        "problem": "The same subject is filed across two or three test directories and two top-level directories differ only by a trailing letter, so placement is ambiguous",
+        "risks": [
+          "Hundreds of moves conflict with any concurrent test edit; the wave runs alone after every other code wave has landed"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.412323Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/platform/lint -k placement_whole_tree exits 0 over the collapsed tree with zero findings",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "LINT-025 acceptance: the tree collapse completes before the cutover; every test file sits at tests/<kind>/<source-package-path>/test_<subject>.py and the placement lint over the whole tree exits 0; cli exit asserted via pytest tests/platform/lint",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "just test-all exits 0 on the final wave commit and the wave report names one full run id per move commit",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "LINT-026: the entire test tree runs after each move, never a scoped subset; just test-all exits 0 after the final move and the wave report lists one full-suite run per moved directory; cli exit",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/platform/lint -k one_home_per_subject exits 0 and ls tests shows only enum kind directories plus conftest and fixtures",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "QUAL-040: one subject has one test home; the placement lint returns zero subjects filed under two kinds and the directories 70 names as not kinds (acceptance, regression, the ambiguous runtime/runtimes, shadow trees) are absent; source asserted in tests/platform/lint",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
+          "id": "CR-04",
+          "kind": "deterministic",
+          "measurable_signal": "git log --stat over the wave commit range shows one top-level test directory renamed per commit with CI green on each",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "LINT-028: each move is individually bisectable; every commit in the wave moves one directory and the suite is green at each; git log over the wave range validates one moved directory per commit; source",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Collapse the test tree into one home per subject",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W26": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-08-25T22:16:17.412447Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P31-I01-W01",
+        "P31-I01-W02",
+        "P31-I01-W03",
+        "P31-I01-W04",
+        "P31-I01-W05",
+        "P31-I01-W06",
+        "P31-I01-W07",
+        "P31-I01-W08",
+        "P31-I01-W09",
+        "P31-I01-W10",
+        "P31-I01-W11",
+        "P31-I01-W12",
+        "P31-I01-W13",
+        "P31-I01-W14",
+        "P31-I01-W15",
+        "P31-I01-W16",
+        "P31-I01-W17",
+        "P31-I01-W18",
+        "P31-I01-W19",
+        "P31-I01-W20",
+        "P31-I01-W21",
+        "P31-I01-W22",
+        "P31-I01-W23",
+        "P31-I01-W24",
+        "P31-I01-W25"
+      ],
+      "description": "Bake the checkpoint per 10's release lifecycle: bump _version.py to 0.7.0.dev1 with a CHANGELOG section naming migrations and limitations, create REL-0.7.0.dev1 (channel dev, authority_epoch 1), pin it, run the eight-gate dev1 profile from 10 plus the REL-025 waiver count and the REL-037 admission check, approve it, and hand the tag push to the operator.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/_version.py",
+        "CHANGELOG.md",
+        "pyproject.toml",
+        "src/eawf/workflow/verify",
+        "tests/integration",
+        ".ea/artifacts"
+      ],
+      "gates": [],
+      "id": "P31-I01-W26",
+      "intent": {
+        "desired_outcome": "REL-0.7.0.dev1 is pinned, preflighted green with a zero-or-explained waiver count, approved, and ready for the operator to push the tag that publishes it under next",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Bump the version and write the 0.7.0.dev1 CHANGELOG section",
+          "Create and pin the Release, wire the epoch1_stabilization, telemetry_producer, front_door_journey and waiver_count signals to their W-level proofs",
+          "Add the REL-037 admission negative fixture for the dev2 opening and run the full dev1 preflight to APPROVED"
+        ],
+        "priority_rationale": "BAKED is terminal for a development Release and the train opens dev2 only from it; nothing in v0.7 proceeds without this cut.",
+        "problem": "Every dev1 gate has landed as code but no Release record binds them into the checkpoint the train advances on",
+        "risks": [
+          "Publication observation (BAKED) completes only after the operator pushes the tag and the pipeline runs; the wave ends at APPROVED"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-08-25T22:16:17.413151Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run eawf release show REL-0.7.0.dev1 --json exits 0 with status approved and all eight dev1 required gates pass",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The 0.7.0.dev1 Release record exists with channel dev, authority_epoch 1 and empty membership_refs, and transitions to APPROVED after release.pin and a green dev1 gate profile; state json asserted by eawf release show REL-0.7.0.dev1 --json",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration -k waiver_count_signal exits 0 and the dev1 readiness JSON shows waiver_count with explanation or zero",
+          "oracle_tier": null,
+          "quality_dimension": "security",
+          "required": true,
+          "response": null,
+          "text": "REL-025 acceptance: waiver count is reported at checkpoint close and is zero-or-explained; the readiness returns a waiver_count row and a non-zero count with no explanation is red; cli exit asserted in tests/integration",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_measured_before_build.py exits 0 with three single-absence refusals each naming the missing contract",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "REL-037 acceptance: a negative fixture asserts that checkpoint admission is refused when any one of the three promoted contracts is absent, and names which; admission raises a refusal naming the missing contract; pytest tests/integration/workflow/release/test_measured_before_build.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
+          "id": "CR-04",
+          "kind": "deterministic",
+          "measurable_signal": "uv run eawf release tag 0.7.0.dev1 --dry-run exits 0 and tests/integration/runtime/release/test_tag_chokepoint.py passes on the cut commit",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Version and changelog agree: src/eawf/_version.py and pyproject validate as 0.7.0.dev1 with a non-empty CHANGELOG section naming migrations and limitations, and eawf release tag --dry-run exits 0; cli exit asserted in tests/integration/runtime/release/test_tag_chokepoint.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Cut the 0.7.0.dev1 checkpoint",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
