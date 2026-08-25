@@ -37,12 +37,13 @@ import hashlib
 import json
 import logging
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import eawf
+from eawf.kernel.config.layered import resolve_agent_extra_tools
 from eawf.runtime.hooks.event import HookEventType
 from eawf.runtime.runtimes.claude.hook_map import PLUGIN_HOOK_REGISTRY
 from eawf.surfaces.render._atomic import atomic_write_text
@@ -50,6 +51,7 @@ from eawf.surfaces.render.agents import (
     AGENT_REGISTRY,
     AgentSpec,
     AgentTemplateContext,
+    effective_agent_tools,
     render_agent_md,
 )
 from eawf.surfaces.render.hooks import HOOK_REGISTRY, HookSpec, render_hook_sh
@@ -200,13 +202,13 @@ def _render_skill(spec: SkillSpec) -> str:
     )
 
 
-def _render_agent(spec: AgentSpec) -> str:
-    """Render one agent's markdown from *spec*."""
+def _render_agent(spec: AgentSpec, extra_tools: Mapping[str, Sequence[str]]) -> str:
+    """Render one agent's markdown from *spec*, widened by the configured extras."""
     return render_agent_md(
         AgentTemplateContext(
             role=spec.role,
             description=spec.description,
-            tools=spec.tools,
+            tools=effective_agent_tools(spec, extra_tools),
             model=spec.model,
             color=spec.color,
             memory=spec.memory,
@@ -363,6 +365,7 @@ def _build_manifest(
     *,
     timestamp: str,
     base_manifest: Manifest,
+    extra_tools: Mapping[str, Sequence[str]],
 ) -> Manifest:
     """Build a manifest covering every file the installer writes.
 
@@ -402,7 +405,7 @@ def _build_manifest(
         )
     for agent_spec in AGENT_REGISTRY:
         path = _agent_target(target_dir, agent_spec)
-        body = _render_agent(agent_spec)
+        body = _render_agent(agent_spec, extra_tools)
         new_generated[f"{path.as_posix()}::plugin.claude.agent.{agent_spec.role}"] = ManifestEntry(
             target=path.as_posix(),
             region_id=f"plugin.claude.agent.{agent_spec.role}",
@@ -503,6 +506,7 @@ def install_plugin(
     dry_run: bool = False,
     timestamp: str | None = None,
     persist_manifest: bool = True,
+    extra_tools: Mapping[str, Sequence[str]] | None = None,
 ) -> InstallResult:
     """Render the Claude Code plugin tree into *target_dir*.
 
@@ -526,6 +530,11 @@ def install_plugin(
         persist_manifest: When ``True`` (default), the updated manifest
             is written to ``<target_dir>/.ea/indexes/generated.json``.
             Tests pass ``False`` to keep the temp tree clean.
+        extra_tools: Validated ``role -> extra tools`` grant map merged into
+            each agent's declared allowlist. ``None`` (default) resolves
+            ``agents.extra_tools`` from the layered config anchored at
+            *target_dir*; callers that already hold a resolved map (and
+            tests) pass it explicitly.
 
     Returns:
         :class:`InstallResult` summarising every file the installer
@@ -540,6 +549,7 @@ def install_plugin(
     """
     target_dir = Path(target_dir).resolve()
     ts = timestamp or _DEFAULT_TIMESTAMP
+    tools_grant = resolve_agent_extra_tools(target_dir) if extra_tools is None else extra_tools
 
     base_manifest = _load_existing_manifest(target_dir)
     _check_for_drift(target_dir, base_manifest, force=force)
@@ -561,7 +571,7 @@ def install_plugin(
     # Render agents.
     for agent_spec in AGENT_REGISTRY:
         path = _agent_target(target_dir, agent_spec)
-        payload = _render_agent(agent_spec).encode("utf-8")
+        payload = _render_agent(agent_spec, tools_grant).encode("utf-8")
         action = _classify(path, payload)
         if not dry_run:
             _ensure_dir(path.parent)
@@ -602,7 +612,12 @@ def install_plugin(
 
     # Persist updated manifest.
     if not dry_run and persist_manifest:
-        new_manifest = _build_manifest(target_dir, timestamp=ts, base_manifest=base_manifest)
+        new_manifest = _build_manifest(
+            target_dir,
+            timestamp=ts,
+            base_manifest=base_manifest,
+            extra_tools=tools_grant,
+        )
         manifest_path = target_dir / ".ea" / "indexes" / "generated.json"
         _ensure_dir(manifest_path.parent)
         save_atomic(manifest_path, new_manifest)
@@ -643,8 +658,17 @@ def expected_paths(target_dir: Path) -> tuple[Mapping[str, Path], Path]:
     return paths, _settings_target(target_dir)
 
 
-def _expected_bytes_for(region_id: str) -> bytes:
-    """Return the rendered bytes the installer would emit for *region_id*."""
+def _expected_bytes_for(
+    region_id: str,
+    *,
+    extra_tools: Mapping[str, Sequence[str]] | None = None,
+) -> bytes:
+    """Return the rendered bytes the installer would emit for *region_id*.
+
+    *extra_tools* must match what the install resolved, or an agent file that
+    is byte-correct on disk reads as drifted. ``None`` resolves the
+    anchor-independent layers, which is enough for a machine-wide grant.
+    """
     if region_id.startswith("plugin.claude.skill."):
         skill_name = region_id.removeprefix("plugin.claude.skill.")
         spec = next(s for s in SKILL_REGISTRY if s.skill_name == skill_name)
@@ -652,7 +676,8 @@ def _expected_bytes_for(region_id: str) -> bytes:
     if region_id.startswith("plugin.claude.agent."):
         role = region_id.removeprefix("plugin.claude.agent.")
         agent_spec = next(s for s in AGENT_REGISTRY if s.role == role)
-        return _render_agent(agent_spec).encode("utf-8")
+        grant = resolve_agent_extra_tools() if extra_tools is None else extra_tools
+        return _render_agent(agent_spec, grant).encode("utf-8")
     if region_id.startswith("plugin.claude.hook."):
         event_value = region_id.removeprefix("plugin.claude.hook.")
         return render_hook_sh(_event_type_for(event_value)).encode("utf-8")

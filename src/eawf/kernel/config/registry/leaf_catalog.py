@@ -485,6 +485,20 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
             "empty map uses the built-in DEFAULT_ROUTING_TABLE."
         ),
     ),
+    # --- agents ------------------------------------------------------------
+    LeafKey(
+        key="agents.extra_tools",
+        domain="agents",
+        type="mapping",
+        default={},
+        writable_layers=_WRITABLE_GWR,
+        description=(
+            "Per-role extra tool names appended to each rendered subagent's "
+            "allowlist; the '*' key grants to every role. Empty map renders "
+            "the built-in allowlists unchanged."
+        ),
+        consumer="eawf.kernel.config.layered.resolve_agent_extra_tools",
+    ),
     # --- language ----------------------------------------------------------
     LeafKey(
         key="language.runtime",

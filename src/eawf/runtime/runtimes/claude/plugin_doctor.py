@@ -38,11 +38,12 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from eawf.kernel.config.layered import resolve_agent_extra_tools
 from eawf.runtime.lock import portalock
 from eawf.runtime.runtimes.claude.plugin_install import (
     _event_type_for,
@@ -194,13 +195,16 @@ def doctor_plugin(target_dir: Path) -> DoctorReport:
     target_dir = Path(target_dir).resolve()
     manifest = _load_manifest(target_dir)
     paths, settings_path = expected_paths(target_dir)
+    # Drift is byte-equality, so the comparison must render with the same
+    # tool grant the install resolved — anchored at the same target_dir.
+    extra_tools = resolve_agent_extra_tools(target_dir)
 
     ok: list[DoctorEntry] = []
     drifted: list[DoctorEntry] = []
     missing: list[DoctorEntry] = []
 
     for region_id, path in paths.items():
-        expected = _expected_bytes_for_region(region_id)
+        expected = _expected_bytes_for_region(region_id, extra_tools=extra_tools)
         expected_hash = _hash_bytes(expected)
         if not path.exists():
             missing.append(
@@ -312,13 +316,17 @@ def doctor_plugin_strict(target_dir: Path, *, timeout: float = 5.0) -> DoctorRep
     return report
 
 
-def _expected_bytes_for_region(region_id: str) -> bytes:
+def _expected_bytes_for_region(
+    region_id: str,
+    *,
+    extra_tools: Mapping[str, Sequence[str]] | None = None,
+) -> bytes:
     """Wrapper around :func:`plugin_install._expected_bytes_for` (re-exported)."""
     # Indirection so tests can monkeypatch a single resolution point.
     if region_id.startswith("plugin.claude.hook."):
         # Resolve via the shared helper which knows the HookEventType lookup.
         _event_type_for(region_id.removeprefix("plugin.claude.hook."))
-    return _expected_bytes_for(region_id)
+    return _expected_bytes_for(region_id, extra_tools=extra_tools)
 
 
 __all__ = [

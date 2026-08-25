@@ -5,14 +5,17 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from eawf.kernel.state.enums import EffortBucket
+from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 
 CommitSubjectStyle = Literal["bracket", "trailer"]
 ReleaseCadence = Literal["manual", "per-phase"]
 AgentDrivenReleasePolicy = Literal["manual", "per-phase"]
 VerifyWaiverMode = Literal["A", "B", "C", "disabled"]
+
+#: Wildcard key under ``agents.extra_tools`` whose grant applies to every role.
+ALL_ROLES: str = "*"
 
 
 class SolutionBias(StrEnum):
@@ -304,6 +307,51 @@ def assert_prose_not_weaker_than(baseline: ProseConfig, candidate: ProseConfig) 
     return candidate
 
 
+class AgentsConfig(BaseModel):
+    """Strict typed model for the ``agents`` config section.
+
+    Mounts :attr:`extra_tools`, the per-role grant of runtime tool names the
+    renderer appends to each subagent's built-in allowlist. The mechanism is
+    deliberately tool-agnostic — eawf names no specific tool or MCP server, so
+    a workstation grants whatever its own tool installation provides without a
+    source edit, and the grant travels in whichever config layer suits its
+    blast radius (machine-wide grants belong in the global layer, not a repo's
+    committed ``.ea/``).
+
+    Attributes:
+        extra_tools: Role key to extra tool names. Each key is an
+            :class:`~eawf.kernel.state.enums.AgentSessionRole` value, or
+            :data:`ALL_ROLES` for tools granted to every role. Defaults to
+            empty so an unconfigured repo renders exactly the built-in
+            allowlists.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    extra_tools: dict[str, list[str]] = Field(default_factory=dict)
+
+    @field_validator("extra_tools")
+    @classmethod
+    def _validate_extra_tools(cls, value: dict[str, list[str]]) -> dict[str, list[str]]:
+        """Reject an unknown role key or a blank tool name.
+
+        A misspelled role would silently grant nothing, and a blank name
+        would render an empty slot into the frontmatter tool list; both fail
+        here rather than at agent-spawn time.
+        """
+        allowed = {ALL_ROLES} | {role.value for role in AgentSessionRole}
+        unknown = sorted(key for key in value if key not in allowed)
+        if unknown:
+            raise ValueError(
+                f"unknown agents.extra_tools role key(s): {unknown!r}; "
+                f"expected one of {sorted(allowed)!r}"
+            )
+        for role, tools in value.items():
+            if any(not tool.strip() for tool in tools):
+                raise ValueError(f"agents.extra_tools[{role!r}] holds a blank tool name")
+        return value
+
+
 class RuntimeModelsConfig(BaseModel):
     """Strict typed model for the ``runtime.models`` config block.
 
@@ -353,7 +401,9 @@ class RuntimeModelsConfig(BaseModel):
 
 
 __all__ = [
+    "ALL_ROLES",
     "AgentDrivenReleasePolicy",
+    "AgentsConfig",
     "AutoChoose",
     "BucketEstimateOverride",
     "BucketFitConfig",

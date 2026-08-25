@@ -420,6 +420,7 @@ _EXPECTED_CONFIG_CONSUMERS: dict[str, str] = {
 }
 
 _EXPECTED_CATALOG_ONLY_CONSUMERS: dict[str, str] = {
+    "agents.extra_tools": "eawf.kernel.config.layered.resolve_agent_extra_tools",
     "runtime.models.claude": "eawf.kernel.config.layered.resolve_runtime_tier_models",
     "runtime.models.codex": "eawf.kernel.config.layered.resolve_runtime_tier_models",
     "runtime.models.opencode": "eawf.kernel.config.layered.resolve_runtime_tier_models",

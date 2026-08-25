@@ -43,6 +43,7 @@ import json
 import logging
 import os
 import tomllib
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
@@ -51,6 +52,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 import eawf
+from eawf.kernel.config.layered import resolve_agent_extra_tools
 from eawf.runtime.runtimes.claude.hook_map import PLUGIN_HOOK_REGISTRY, render_plugin_hooks_json
 from eawf.runtime.runtimes.claude.plugin_install import IntegrityViolation
 from eawf.surfaces.render._atomic import atomic_write_text
@@ -58,6 +60,7 @@ from eawf.surfaces.render.agents import (
     AGENT_REGISTRY,
     AgentSpec,
     AgentTemplateContext,
+    effective_agent_tools,
     render_agent_md,
 )
 from eawf.surfaces.render.hooks import render_hook_sh
@@ -346,13 +349,13 @@ def _render_skill(spec: SkillSpec) -> str:
     )
 
 
-def _render_agent(spec: AgentSpec) -> str:
+def _render_agent(spec: AgentSpec, extra_tools: Mapping[str, Sequence[str]]) -> str:
     """Render one agent's markdown. Mirrors plugin_install._render_agent."""
     return render_agent_md(
         AgentTemplateContext(
             role=spec.role,
             description=spec.description,
-            tools=spec.tools,
+            tools=effective_agent_tools(spec, extra_tools),
             model=spec.model,
             color=spec.color,
             memory=spec.memory,
@@ -432,6 +435,7 @@ def package_plugin(
     force: bool = False,
     dry_run: bool = False,
     publish_source: PublishSource = PublishSource.LOCAL,
+    extra_tools: Mapping[str, Sequence[str]] | None = None,
 ) -> PackageResult:
     """Emit an installable Claude Code plugin tree under *target_dir*.
 
@@ -454,6 +458,10 @@ def package_plugin(
         force: Bypass the non-empty-target check.
         dry_run: Resolve everything (registry walk, manifest render)
             but write no bytes.
+        extra_tools: Validated ``role -> extra tools`` grant map merged into
+            each agent's declared allowlist. ``None`` (default) resolves
+            ``agents.extra_tools`` from the layered config; callers that
+            already hold a resolved map (and tests) pass it explicitly.
 
     Returns:
         :class:`PackageResult` summarising the emit. ``skills`` /
@@ -465,6 +473,7 @@ def package_plugin(
             :func:`_check_target`).
     """
     target_dir = Path(target_dir).resolve()
+    tools_grant = resolve_agent_extra_tools() if extra_tools is None else extra_tools
 
     _check_target(target_dir, force=force)
 
@@ -499,7 +508,7 @@ def package_plugin(
     agent_outputs: list[tuple[Path, str]] = []
     for agent_spec in AGENT_REGISTRY:
         path = target_dir / "agents" / f"{agent_spec.role}.md"
-        agent_outputs.append((path, _render_agent(agent_spec)))
+        agent_outputs.append((path, _render_agent(agent_spec, tools_grant)))
 
     # Pre-render hooks.json + per-event wrappers (B015). Only the six
     # session-level events in PLUGIN_HOOK_REGISTRY are emitted; the

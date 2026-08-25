@@ -585,6 +585,41 @@ def resolve_runtime_tier_models(repo_root: Path) -> dict[str, tuple[str, str, st
     return override or None
 
 
+def resolve_agent_extra_tools(repo_root: Path | None = None) -> dict[str, tuple[str, ...]]:
+    """Return the merged ``agents.extra_tools`` grant map (role to extra tools).
+
+    Reads the merged ``agents`` block and validates it through
+    :class:`~eawf.kernel.config.schema.AgentsConfig` (strict,
+    ``extra="forbid"``), so a misspelled role or a non-list value fails here
+    rather than silently rendering the wrong subagent frontmatter. The plugin
+    renderers merge the result into each agent's declared allowlist.
+
+    Args:
+        repo_root: Repo root the layered config is composed against (used as
+            both the workspace and repo anchor, mirroring
+            :func:`resolve_runtime_tier_models`'s call shape). ``None``
+            composes the anchor-independent layers only — enough to pick up a
+            machine-wide grant from the global layer.
+
+    Returns:
+        A ``role -> extra tools`` map holding only the roles with a non-empty
+        grant; empty when nothing is configured. The ``"*"`` wildcard key is
+        returned as-is for the caller to fold in.
+
+    Raises:
+        pydantic.ValidationError: When the ``agents`` block is present but
+            malformed (unknown role key, non-list value, blank tool name).
+    """
+    from eawf.kernel.config.schema import AgentsConfig
+
+    merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
+    agents = merged.get("agents")
+    if not isinstance(agents, dict):
+        return {}
+    config = AgentsConfig.model_validate(agents)
+    return {role: tuple(tools) for role, tools in config.extra_tools.items() if tools}
+
+
 def get_dotted(
     merged: Mapping[str, Any],
     dotted: str,

@@ -162,6 +162,13 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         # fallback is DEFAULT_ROLE_TIER_TOKEN_CAP when the leaf is unset.
         "role_tier_token_cap": 2400,
     },
+    # Per-role runtime tool grants appended to each rendered subagent's
+    # built-in allowlist. Empty by default so an unconfigured repo renders
+    # exactly the tools AGENT_REGISTRY declares; see
+    # :class:`eawf.kernel.config.schema.AgentsConfig` for the accepted shape.
+    "agents": {
+        "extra_tools": {},
+    },
     # Language-fit knobs. ``runtime`` is locked at ``python`` for
     # v0.3-v0.5 (D6); ``fast_extras`` opts in to PyO3 hot paths.
     "language": {

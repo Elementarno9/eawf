@@ -51,7 +51,7 @@ import typer
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError as PydValidationError
 
-from eawf.kernel.config.schema import EstimationConfig, VerifyConfig
+from eawf.kernel.config.schema import AgentsConfig, EstimationConfig, VerifyConfig
 from eawf.kernel.fsync import fsync_parent_dir
 from eawf.runtime.lock import portalock
 from eawf.runtime.vcs.coauthor import VcsConfig
@@ -142,6 +142,10 @@ class _ConfigSchema(BaseModel):
     # surface + telemetry projector).
     telemetry: dict[str, Any] = Field(default_factory=dict)
     dispatch: dict[str, Any] = Field(default_factory=dict)
+    # ``agents`` carries the per-role extra-tool grants the plugin renderers
+    # merge into each subagent's declared allowlist. Validated by the strict
+    # section model so a misspelled role fails here rather than at render.
+    agents: AgentsConfig = Field(default_factory=AgentsConfig)
     language: dict[str, Any] = Field(default_factory=dict)
     verify: VerifyConfig = Field(default_factory=VerifyConfig)
     # ``preferences`` carries the operator-preference knobs (solution_bias,

@@ -12,6 +12,8 @@ Covers:
 - ``tools`` list emits inline (``[Read, Grep]``) — matches the existing
   hand-written shape.
 - Boolean ``memory`` field emits lowercase ``true``/``false``.
+- ``effective_agent_tools`` widens a spec's allowlist from the configured
+  ``agents.extra_tools`` grant without disturbing the unconfigured render.
 """
 
 from __future__ import annotations
@@ -21,7 +23,9 @@ import pytest
 from eawf.surfaces.render.agents import (
     AGENT_REGISTRY,
     ROLES,
+    AgentSpec,
     AgentTemplateContext,
+    effective_agent_tools,
     render_agent_md,
 )
 
@@ -218,3 +222,79 @@ def test_contract_blocks_reach_the_rendered_role_contract() -> None:
     assert "## DoR — refuse the dispatch unless ALL hold" in executor.system_prompt
     auditor = get_role_spec(AgentSessionRole.AUDITOR)
     assert "## Refuse-broken-artifact self-test" in auditor.system_prompt
+
+
+# --------------------------------------------------------------------------- #
+# agents.extra_tools grant merge                                              #
+# --------------------------------------------------------------------------- #
+
+
+def _render_with(spec: AgentSpec, tools: tuple[str, ...]) -> str:
+    """Render *spec* forcing an explicit tool tuple, bypassing the grant merge."""
+    return render_agent_md(
+        AgentTemplateContext(
+            role=spec.role,
+            description=spec.description,
+            tools=tools,
+            model=spec.model,
+            color=spec.color,
+            memory=spec.memory,
+            body=spec.body,
+        )
+    )
+
+
+@pytest.mark.parametrize("spec", AGENT_REGISTRY, ids=lambda s: s.role)
+def test_effective_agent_tools_empty_grant_is_the_declared_allowlist(spec: AgentSpec) -> None:
+    """An unconfigured repo renders exactly what AGENT_REGISTRY declares."""
+    assert effective_agent_tools(spec, {}) == spec.tools
+
+
+@pytest.mark.parametrize("spec", AGENT_REGISTRY, ids=lambda s: s.role)
+def test_empty_grant_renders_byte_for_byte_identical_frontmatter(spec: AgentSpec) -> None:
+    """The grant mechanism is inert until configured — no rendered-byte change."""
+    baseline = _render_with(spec, spec.tools)
+    merged = _render_with(spec, effective_agent_tools(spec, {}))
+    assert merged == baseline
+
+
+@pytest.mark.parametrize("spec", AGENT_REGISTRY, ids=lambda s: s.role)
+def test_wildcard_grant_reaches_every_role(spec: AgentSpec) -> None:
+    """A ``"*"`` entry widens every role's allowlist."""
+    tools = effective_agent_tools(spec, {"*": ["ToolForAll"]})
+    assert tools[: len(spec.tools)] == spec.tools
+    assert tools[-1] == "ToolForAll"
+
+
+def test_role_grant_reaches_only_that_role() -> None:
+    """A role-keyed entry leaves the other roles untouched."""
+    grant = {"researcher": ["ResearcherOnly"]}
+    by_role = {spec.role: effective_agent_tools(spec, grant) for spec in AGENT_REGISTRY}
+    assert "ResearcherOnly" in by_role["researcher"]
+    for role, tools in by_role.items():
+        if role != "researcher":
+            assert "ResearcherOnly" not in tools
+
+
+def test_grant_duplicates_collapse_and_order_is_stable() -> None:
+    """Base tools win their position; a repeat anywhere later is dropped."""
+    spec = next(s for s in AGENT_REGISTRY if s.role == "researcher")
+    tools = effective_agent_tools(
+        spec,
+        {"*": ["Read", "Shared"], "researcher": ["Shared", "Grep", "Own"]},
+    )
+    assert tools == (*spec.tools, "Shared", "Own")
+    assert len(tools) == len(set(tools))
+
+
+def test_wildcard_precedes_role_grant_in_render_order() -> None:
+    """Wildcard extras land before the role's own extras."""
+    spec = next(s for s in AGENT_REGISTRY if s.role == "executor")
+    tools = effective_agent_tools(spec, {"*": ["Wide"], "executor": ["Narrow"]})
+    assert tools.index("Wide") < tools.index("Narrow")
+
+
+def test_grant_for_an_unrelated_role_is_ignored() -> None:
+    """A grant keyed to another role contributes nothing to this render."""
+    spec = next(s for s in AGENT_REGISTRY if s.role == "reviewer")
+    assert effective_agent_tools(spec, {"polisher": ["PolisherOnly"]}) == spec.tools

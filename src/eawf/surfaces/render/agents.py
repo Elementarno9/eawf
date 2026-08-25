@@ -16,18 +16,21 @@ Public API::
     AgentTemplateContext         # typed dataclass for one render call
     render_agent_md(ctx) -> str  # pure: returns the rendered markdown
     AGENT_REGISTRY               # frozen tuple of every Eä agent spec
+    effective_agent_tools(...)   # pure: base allowlist + configured extras
 """
 
 from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from importlib.resources import files
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from eawf.kernel.config.schema import ALL_ROLES
 from eawf.surfaces.render.frontmatter import yaml_scalar
 
 logger = logging.getLogger(__name__)
@@ -98,6 +101,36 @@ class AgentSpec:
     body: str
     output_contract: str | None = None
     version: str = "1.0"
+
+
+def effective_agent_tools(
+    spec: AgentSpec,
+    extra_tools: Mapping[str, Sequence[str]],
+) -> tuple[str, ...]:
+    """Return *spec*'s tool allowlist widened by the configured extras.
+
+    Pure: the caller resolves ``agents.extra_tools`` (see
+    :func:`eawf.kernel.config.layered.resolve_agent_extra_tools`) and passes
+    the validated map in. Order is base tools, then the ``"*"`` grant, then
+    the role's own grant, with duplicates collapsed to the first occurrence —
+    stable ordering keeps the rendered frontmatter byte-identical across runs
+    so the installer's drift detection stays meaningful.
+
+    Args:
+        spec: The agent whose declared allowlist is the base.
+        extra_tools: Validated ``role -> extra tools`` grant map. Roles absent
+            from the map contribute nothing.
+
+    Returns:
+        The effective tool tuple to render into the agent's frontmatter.
+        Equals ``spec.tools`` when no grant applies to *spec*.
+    """
+    widened = (
+        *spec.tools,
+        *extra_tools.get(ALL_ROLES, ()),
+        *extra_tools.get(spec.role, ()),
+    )
+    return tuple(dict.fromkeys(widened))
 
 
 _BASE_REPORT_BODY: dict[str, Any] = {
@@ -766,5 +799,6 @@ __all__ = [
     "ROLES",
     "AgentSpec",
     "AgentTemplateContext",
+    "effective_agent_tools",
     "render_agent_md",
 ]
