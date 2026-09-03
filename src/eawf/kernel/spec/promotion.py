@@ -26,8 +26,8 @@ caller may pass an explicit ``allowlist`` to override the
 module-level default :data:`DEFAULT_GATE_ARGV_ALLOWLIST`. A later wave
 (P28-I01-W10) lands the profile-fed allowlist on
 ``ProfileBody.verify.argv_allowlist``; until then the default tuple is
-the source of truth, intentionally narrow (only the dev-loop wrappers
-+ tools the gauntlet already runs).
+the source of truth, held to the dev-loop wrappers, the tools the
+gauntlet already runs, and the project's own CLI + task runner.
 """
 
 from __future__ import annotations
@@ -59,9 +59,14 @@ ARGV_BEARING_GATE_KINDS: Final[frozenset[str]] = frozenset({"command_exit_zero"}
 #: TODO: once the profile schema lands the
 #: ``ProfileBody.verify.argv_allowlist`` field, the promote handler reads
 #: the allowlist from the resolved profile and passes it through to
-#: :func:`validate_argv_gates`. Until then this tuple is the conservative
-#: floor — only the dev-loop wrappers + gate tools the local gauntlet
-#: already invokes.
+#: :func:`validate_argv_gates`.
+#:
+#: Beyond the dev-loop wrappers + gate tools the local gauntlet already
+#: invokes, the floor admits the project's own CLI (``eawf``) and task
+#: runner (``just``) so a wave gate can assert a CLI exit code directly
+#: instead of laundering every check through ``pytest``. Admitting bare
+#: argv heads is interim: the epoch-2 gate contract replaces raw heads
+#: with a registered command family, and this widening retires with it.
 DEFAULT_GATE_ARGV_ALLOWLIST: Final[tuple[str, ...]] = (
     "uv",
     "uvx",
@@ -71,6 +76,8 @@ DEFAULT_GATE_ARGV_ALLOWLIST: Final[tuple[str, ...]] = (
     "mypy",
     "pre-commit",
     "git",
+    "eawf",
+    "just",
 )
 
 
@@ -121,7 +128,11 @@ def validate_argv_gates(
             and the underlying reason so callers can re-emit it
             verbatim.
     """
-    resolved_allowlist = (
+    # The annotation is load-bearing: a ``Final`` tuple of string literals
+    # narrows to its literal element types, so an unannotated ``list(...)``
+    # of it builds a ``list[Literal[...]]`` that invariance refuses to pass
+    # as the ``list[str]`` the validator declares.
+    resolved_allowlist: list[str] = (
         list(allowlist) if allowlist is not None else list(DEFAULT_GATE_ARGV_ALLOWLIST)
     )
     for gate in gates:

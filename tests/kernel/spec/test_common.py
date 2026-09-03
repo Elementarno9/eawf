@@ -634,3 +634,52 @@ def test_gate_spec_rejects_shell_metachars_in_argv() -> None:
     message = str(exc_info.value)
     assert "G2" in message
     assert "rejected by L0 policy" in message
+
+
+# Widened argv floor: project CLI + task runner --------------------------
+
+
+def test_gate_spec_command_exit_zero_accepts_eawf_under_uv_run() -> None:
+    """``uv run eawf ...`` constructs: ``eawf`` is on the default argv floor.
+
+    The wrapper recursion validates ``eawf`` as the effective head, so
+    a wave gate can assert the project CLI's exit code directly.
+    """
+    argv = ["uv", "run", "eawf", "release", "tag", "0.7.0.dev1", "--dry-run"]
+    gate = _gate(args={"argv": argv})
+    assert gate.args["argv"] == argv
+
+
+def test_gate_spec_command_exit_zero_accepts_just_task_runner() -> None:
+    """``just test-all`` constructs: ``just`` is on the default argv floor."""
+    gate = _gate(args={"argv": ["just", "test-all"]})
+    assert gate.args["argv"] == ["just", "test-all"]
+
+
+def test_gate_spec_command_exit_zero_accepts_bare_eawf_head() -> None:
+    """A bare ``eawf`` head constructs without a wrapper in front of it.
+
+    The floor admits whole argv heads, not wrapper-qualified forms, so
+    the unwrapped invocation is accepted on the same footing.
+    """
+    gate = _gate(args={"argv": ["eawf"]})
+    assert gate.args["argv"] == ["eawf"]
+
+
+def test_gate_spec_command_exit_zero_rejects_unlisted_head_under_uv_run() -> None:
+    """Widening the floor does not open the wrapper: ``uv run rg x`` still rejects."""
+    with pytest.raises(ValidationError) as exc_info:
+        GateSpec.model_validate(
+            {
+                "id": "G3",
+                "criterion_id": "C1",
+                "kind": "command_exit_zero",
+                "args": {"argv": ["uv", "run", "rg", "x"]},
+                "policy": "block",
+                "cadence": "every-wave",
+            }
+        )
+    message = str(exc_info.value)
+    assert "G3" in message
+    assert "rejected by L0 policy" in message
+    assert "not in the caller-supplied allowlist" in message

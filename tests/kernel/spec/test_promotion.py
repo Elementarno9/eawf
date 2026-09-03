@@ -128,6 +128,19 @@ def test_default_allowlist_used_when_caller_omits_allowlist() -> None:
     assert validate_argv_gates([gate]) is None
 
 
+def test_default_allowlist_admits_project_cli_and_task_runner() -> None:
+    """``eawf`` and ``just`` sit on the default floor, wrapped and bare.
+
+    Pins the floor a wave gate relies on when its criterion is "this
+    CLI invocation exits zero" rather than "this test passes".
+    """
+    assert "eawf" in DEFAULT_GATE_ARGV_ALLOWLIST
+    assert "just" in DEFAULT_GATE_ARGV_ALLOWLIST
+    wrapped = _build_gate(id="G1", args={"argv": ["uv", "run", "eawf", "status"]})
+    bare = _build_gate(id="G2", args={"argv": ["just", "test-all"]})
+    assert validate_argv_gates([wrapped, bare]) is None
+
+
 def test_custom_allowlist_overrides_default() -> None:
     """An explicit ``allowlist`` argument overrides the module-level default.
 
