@@ -12734,6 +12734,21 @@
       "scope_id": "P30-I26-W24",
       "status": "done",
       "updated_at": "2026-07-15T02:22:15.614008Z"
+    },
+    "P31-I01-W36": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W36",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W36",
+      "model": null,
+      "scope_id": "P31-I01-W36",
+      "status": "done",
+      "updated_at": "2026-09-03T17:57:38.796270Z"
     }
   },
   "agent_sessions": {
@@ -13418,13 +13433,45 @@
       "claimed_wave_ids": [
         "P31-I01-W36"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-03T17:49:03.980663Z",
       "id": "SES-20260903T174630.389711Z-executor-claude-9a7da493-e6e0-4416-aabe-bef9b08ab43e",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W36",
       "started_at": "2026-09-03T17:46:30.389711Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260903T175508.712461Z-executor-claude-a319a91b-464c-4e66-bd11-9cfa006ba95f": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-03T17:56:20.462093Z",
+      "id": "SES-20260903T175508.712461Z-executor-claude-a319a91b-464c-4e66-bd11-9cfa006ba95f",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W36",
+      "started_at": "2026-09-03T17:55:08.712461Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260903T175639.130305Z-executor-claude-ba981e46-d198-48fb-b629-a7b7ea469400": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W36"
+      ],
+      "ended_at": null,
+      "id": "SES-20260903T175639.130305Z-executor-claude-ba981e46-d198-48fb-b629-a7b7ea469400",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W36",
+      "started_at": "2026-09-03T17:56:39.130305Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -17183,14 +17230,105 @@
     }
   },
   "claims": null,
-  "close_attempts": {},
+  "close_attempts": {
+    "close-186e9ff2312cdc56ff656918": {
+      "apply_event_id": null,
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "231656bf8781bd70c7b6dd0fbd37bccc797e8cde",
+      "commit_identity_digest": "sha256:cd231123dfba1c366d3fbd1009eabfdc0b92627b27894a388029b59faf16f842",
+      "criteria_digest": "79ca906cb0ecdaf6b4d8f22c19d3394aa071700652be7fb9ee32ee18b383f8b7",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": ".ea/local/close-logs/close-186e9ff2312cdc56ff656918.log",
+      "failure_kind": "verification_blocked",
+      "gate_manifest_digest": "8c24648e281ab9c60d0e00dc294007292425eefba9e83993f50932d9b367aabf",
+      "gate_receipt_ids": [],
+      "generation": 1,
+      "id": "close-186e9ff2312cdc56ff656918",
+      "idempotency_key": "ff714af433c4c677fcf8fdcc2bbe766e3498b542a246e26322a025f8810db6fe",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "231656bf8781bd70c7b6dd0fbd37bccc797e8cde",
+      "integration_id": "integration-06eac8b1f660cdaa31bf828e",
+      "invalidation_causes": [],
+      "no_runtime_waiver": false,
+      "outcome": "eawf and just admitted as gate argv heads with five pinning tests; widening recorded as interim pending the epoch-2 command-family contract",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-03T17:57:07.122551Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "14e84b94c9a0fd775e5a63869688f60c982c4ccf5d5e5a0d40e5b440eb9d98c2",
+      "spec_digest": "f825f3f0650cda13698d9f36361c36cd43b15e32edc15525779843b07eb32447",
+      "started_at": "2026-09-03T17:57:07.363475Z",
+      "status": "blocked",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-03T17:57:08.835947Z",
+      "tokens_consumed": null,
+      "tree_sha": "054987ce99495929d9bcc6f6e003cc1cb5f24ab7",
+      "updated_at": "2026-09-03T17:57:08.875409Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P31-I01-W36",
+      "wave_revision_digest": "28166d383a29b5b00865f50c9ec4ac902b47ca48a1c43f74c48632bdd13375aa"
+    },
+    "close-89e3f72a4ec53fd99fa3672b": {
+      "apply_event_id": "EV-a2be1cf11868",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "231656bf8781bd70c7b6dd0fbd37bccc797e8cde",
+      "commit_identity_digest": "sha256:cd231123dfba1c366d3fbd1009eabfdc0b92627b27894a388029b59faf16f842",
+      "criteria_digest": "79ca906cb0ecdaf6b4d8f22c19d3394aa071700652be7fb9ee32ee18b383f8b7",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "8c24648e281ab9c60d0e00dc294007292425eefba9e83993f50932d9b367aabf",
+      "gate_receipt_ids": [],
+      "generation": 2,
+      "id": "close-89e3f72a4ec53fd99fa3672b",
+      "idempotency_key": "2a57a10ab5c9f27988e786bb1cae37c8505eda1fce3eca35ede3a451242c5c49",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "231656bf8781bd70c7b6dd0fbd37bccc797e8cde",
+      "integration_id": "integration-06eac8b1f660cdaa31bf828e",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "eawf and just admitted as gate argv heads with five pinning tests; widening recorded as interim pending the epoch-2 command-family contract",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-03T17:57:37.142740Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "14e84b94c9a0fd775e5a63869688f60c982c4ccf5d5e5a0d40e5b440eb9d98c2",
+      "spec_digest": "f825f3f0650cda13698d9f36361c36cd43b15e32edc15525779843b07eb32447",
+      "started_at": "2026-09-03T17:57:37.385193Z",
+      "status": "closed",
+      "supersedes_id": "close-186e9ff2312cdc56ff656918",
+      "terminal_at": "2026-09-03T17:57:44.948488Z",
+      "tokens_consumed": null,
+      "tree_sha": "054987ce99495929d9bcc6f6e003cc1cb5f24ab7",
+      "updated_at": "2026-09-03T17:57:44.948483Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P31-I01-W36",
+      "wave_revision_digest": "28166d383a29b5b00865f50c9ec4ac902b47ca48a1c43f74c48632bdd13375aa"
+    }
+  },
   "current": {
     "active_session_ids": [
-      "SES-20260903T174630.389711Z-executor-claude-9a7da493-e6e0-4416-aabe-bef9b08ab43e"
+      "SES-20260903T175639.130305Z-executor-claude-ba981e46-d198-48fb-b629-a7b7ea469400"
     ],
-    "active_wave_ids": [
-      "P31-I01-W36"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -31285,7 +31423,7 @@
     },
     "P31-I01-W36": {
       "confidence": "low",
-      "current_store_record_id": "EST-P31-I01-W36-bucket-20260903T174642Z",
+      "current_store_record_id": "EST-P31-I01-W36-bucket-20260903T175639Z",
       "display": "0.25 EU · exp ~8m · pess ~27m",
       "expected_eu": 0.25,
       "expected_minutes": 7.5,
@@ -31294,7 +31432,7 @@
       "pessimistic_minutes": 27.0,
       "reference_class": "bucket:XS",
       "scope_id": "P31-I01-W36",
-      "updated_at": "2026-09-03T17:46:42.016599Z"
+      "updated_at": "2026-09-03T17:56:39.762783Z"
     }
   },
   "fleet_run": null,
@@ -35185,11 +35323,28 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-03T17:46:42.017954Z",
+  "updated_at": "2026-09-03T17:57:44.948576Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {},
-  "wave_integrations": {},
+  "wave_integrations": {
+    "integration-06eac8b1f660cdaa31bf828e": {
+      "base_sha": "684566f5c07d5a2680b7e57a6fdca545e3d74390",
+      "candidate_sha": "231656bf8781bd70c7b6dd0fbd37bccc797e8cde",
+      "created_at": "2026-09-03T17:57:06.296414Z",
+      "diff_digest": "d077c49c5a2261626c12c8868e8d6688ed8a2405e13cf5cade31fcf41903017a",
+      "generation": 1,
+      "id": "integration-06eac8b1f660cdaa31bf828e",
+      "integrated_sha": "231656bf8781bd70c7b6dd0fbd37bccc797e8cde",
+      "kind": "adopt",
+      "reason": "repair commit landed inline on the parent branch by the claiming executor; no worktree to cherry-pick",
+      "spec_digest": "f825f3f0650cda13698d9f36361c36cd43b15e32edc15525779843b07eb32447",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "054987ce99495929d9bcc6f6e003cc1cb5f24ab7",
+      "wave_id": "P31-I01-W36"
+    }
+  },
   "waves": {
     "P08-I01-W01": {
       "agent_role": null,
@@ -147034,7 +147189,46 @@
         "src/eawf/kernel/spec/common.py",
         "tests/unit/spec"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/spec/test_assign_oracle_tier.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/spec/test_validate_criterion_gate_refs_oracle_tier.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W01",
       "intent": {
         "desired_outcome": "gate_ref cannot bypass a forall locus check and gated universal criteria authored as single are rejected at author time",
@@ -147125,7 +147319,67 @@
         "tests/kernel/spec",
         "tests/integration/test_cli_roadmap.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/spec/test_criterion_schema.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_cli_roadmap.py",
+              "-k",
+              "scope_agreement"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/kernel/spec/test_common.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W02",
       "intent": {
         "desired_outcome": "Invalid broad prose / narrow gate pairs and over-complex criteria fail proposal validation in addition to the existing floor",
@@ -147234,7 +147488,65 @@
         "tests/daemon",
         "tests/cli"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon/test_close_fault_matrix.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon/test_close_fault_matrix.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/cli/test_close_timeout_terminal.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W03",
       "intent": {
         "desired_outcome": "One typed close failure vocabulary including timed_out, classified from typed exceptions, routes every failure deterministically",
@@ -147290,7 +147602,7 @@
           "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "REL-003 acceptance: timeout, harness fault, work rejection, operator cancellation and policy block route deterministically; each typed exception transitions to its exact failure_kind in state json and no message-substring branch remains in close.py; pytest tests/daemon/test_close_fault_matrix.py",
+          "text": "REL-003 acceptance: timeout, harness fault, work rejection, operator cancellation and policy block route deterministically; each typed exception transitions to its exact failure_kind in state json and no message-substring branch remains in close.py; pytest tests/daemon/test_close_fault_matrix.py. The rg no-lowered-substring-branch in _failure_status assertion lives inside the named test.",
           "waiver_reason": null
         },
         {
@@ -147344,7 +147656,86 @@
         "tests/daemon",
         "tests/tui"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon/test_fleet_repair_exhaustion.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui",
+              "-k",
+              "repair_budget"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon/test_durable_close.py",
+              "-k",
+              "budget_receipt"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "autopilot",
+            "size": [
+              120,
+              40
+            ],
+            "state_path": ".ea/state.json"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-04",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W04",
       "intent": {
         "desired_outcome": "State, daemon, CLI and TUI resolve the close budget through one resolver and record one receipt, so displayed budget equals enforced budget",
@@ -147450,7 +147841,71 @@
         "tests/lint",
         "tests/integration/test_packaging.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_packaging.py",
+              "-k",
+              "dist_tag"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_phase_ci_gates.py",
+              "-k",
+              "npm_dist_tag"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_phase_ci_gates.py",
+              "-k",
+              "codex_history"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W05",
       "intent": {
         "desired_outcome": "The npm dist-tag is derived from the version and versioned Codex plugin publication history is preserved without force-push erasure",
@@ -147557,7 +148012,66 @@
         "tests/workflow/estimation",
         "tests/integration/test_cli_estimation.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/lifecycle/test_wave_claim.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/estimation",
+              "tests/integration/test_cli_estimation.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/kernel/state"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W06",
       "intent": {
         "desired_outcome": "New claims do not grow the legacy cache, reads tolerate empty data, and the field survives until its natural epoch-2 migration",
@@ -147627,7 +148141,7 @@
           "quality_dimension": "compatibility",
           "required": true,
           "response": null,
-          "text": "The legacy field is retained until natural epoch-2 migration: State validates an optional estimates map with existing rows unchanged and no schema version bump; schema asserted in tests/kernel/state",
+          "text": "The legacy field is retained until natural epoch-2 migration: State validates an optional estimates map with existing rows unchanged and no schema version bump; schema asserted in tests/kernel/state. The state-schema-version-unchanged assertion lives inside the named test.",
           "waiver_reason": null
         }
       ],
@@ -147665,7 +148179,67 @@
         "tests/workflow/lifecycle",
         "tests/cli"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/lifecycle/test_ceremony.py",
+              "-k",
+              "checkpoint_requires_commit"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/lifecycle/test_commit_pin_scan.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/cli/test_lifecycle_daemon_routing.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W07",
       "intent": {
         "desired_outcome": "Commit behaviour matches config at coherent scope close and state remains continuously daemon-written, with no per-wave proof claimed",
@@ -147719,7 +148293,7 @@
           "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "REL-008 acceptance: commit behavior matches config without claiming nonexistent per-wave proof; the commit-prefix lint validates a state: checkpoint commit without a wave proof and the wave-proof branch is unchanged; pytest tests/workflow/lifecycle/test_commit_pin_scan.py",
+          "text": "REL-008 acceptance: commit behavior matches config without claiming nonexistent per-wave proof; the commit-prefix lint validates a state: checkpoint commit without a wave proof and the wave-proof branch is unchanged; pytest tests/workflow/lifecycle/test_commit_pin_scan.py. The tools/commit_prefix_lint.py state-commit-skip assertion lives inside the named test.",
           "waiver_reason": null
         },
         {
@@ -147775,7 +148349,70 @@
         "tests/runtime",
         "tests/integration/test_metrics_cli.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/observability/telemetry/test_metrics_projection.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/runtime",
+              "tests/state/test_session_models.py",
+              "-k",
+              "ended_at"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_metrics_cli.py",
+              "-k",
+              "duration"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W08",
       "intent": {
         "desired_outcome": "Real telemetry ingestion is enabled, session end is stamped at exit, and CI and dogfood produce non-zero rows",
@@ -147847,7 +148484,7 @@
           "quality_dimension": "operability",
           "required": true,
           "response": null,
-          "text": "REL-009 acceptance: CI and dogfood produce non-zero rows and duration distributions become usable; the CI telemetry step exits 0 with a non-zero session count and eawf metrics show returns a duration p50; cli exit asserted in tests/integration/test_metrics_cli.py",
+          "text": "REL-009 acceptance: CI and dogfood produce non-zero rows and duration distributions become usable; the CI telemetry step exits 0 with a non-zero session count and eawf metrics show returns a duration p50; cli exit asserted in tests/integration/test_metrics_cli.py. The ci.yaml telemetry-step session_count assertion lives inside the named test.",
           "waiver_reason": null
         }
       ],
@@ -147885,7 +148522,71 @@
         "tests/integration/test_packaging.py",
         "tests/integration/test_docs_autogen.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_cli_init_no_input.py",
+              "-k",
+              "quickstart"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_packaging.py",
+              "-k",
+              "support_classification"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_docs_autogen.py",
+              "-k",
+              "front_door"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W09",
       "intent": {
         "desired_outcome": "A clean environment reaches the first verified wave through documented commands, and actual Python and platform support is classified",
@@ -147955,7 +148656,7 @@
           "quality_dimension": "operability",
           "required": true,
           "response": null,
-          "text": "The docs front door renders: mkdocs build exits 0 in strict mode and the install, quick-start and first-workflow pages resolve every internal link; cli exit asserted in tests/integration/test_docs_autogen.py",
+          "text": "The docs front door renders: mkdocs build exits 0 in strict mode and the install, quick-start and first-workflow pages resolve every internal link; cli exit asserted in tests/integration/test_docs_autogen.py. The mkdocs build --strict assertion lives inside the named test.",
           "waiver_reason": null
         }
       ],
@@ -147992,7 +148693,69 @@
         "tests/daemon",
         "tests/runtime/daemon"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon/test_close_lock_split.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon/test_gate_execution_claim.py",
+              "-k",
+              "crashing_gate"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon/test_recovery.py",
+              "-k",
+              "orphan_claim"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W10",
       "intent": {
         "desired_outcome": "Heavy gates and provider work execute out of process and outside the canonical state lock, and a crashing gate leaves the daemon serving and the operation resumable",
@@ -148101,7 +148864,67 @@
         "src/eawf/workflow/verify",
         "tests/cli"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/cli/test_daemonless_close_teeth.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/cli/test_daemonless_close_waiver_e2e.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/cli",
+              "-k",
+              "wave_waivers"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W11",
       "intent": {
         "desired_outcome": "The daemonless close invokes the same gate runner the daemon invokes or refuses a gate-bearing close, with a recorded and counted operator waiver as the only bridge",
@@ -148209,7 +149032,89 @@
         "justfile",
         "tests/lint/test_phase_ci_gates.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_phase_ci_gates.py",
+              "-k",
+              "twice_green"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/property/test_five_consecutive_runs.py",
+              "-q"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_test_tier_contract.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_phase_ci_gates.py",
+              "-k",
+              "twice_green"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "ship",
+          "criterion_id": "CR-01",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W12",
       "intent": {
         "desired_outcome": "The full suite runs green from a clean environment twice in succession, in CI, with every test isolated to its own runtime and state root",
@@ -148238,7 +149143,8 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-01"
+            "G-01",
+            "G-04"
           ],
           "id": "CR-01",
           "kind": "deterministic",
@@ -148258,12 +149164,12 @@
           ],
           "id": "CR-02",
           "kind": "deterministic",
-          "measurable_signal": "five consecutive uv run pytest tests/property tests/kernel -n auto invocations exit 0 with the run ids listed in the wave report",
+          "measurable_signal": "uv run pytest tests/property/test_five_consecutive_runs.py -q exits 0 running tests/property and tests/kernel five times and asserting every exit status is zero",
           "oracle_tier": null,
           "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "The known flakes are root-caused: the heartbeat ticker test and tests/property/test_evidence_concurrent_property.py pass under -n auto and each of five consecutive invocations exits 0, recorded in the wave report; pytest tests/property tests/kernel",
+          "text": "The known flakes are root-caused: the heartbeat ticker test and tests/property/test_evidence_concurrent_property.py pass under -n auto and each of five consecutive invocations exits 0, recorded in the wave report; pytest tests/property tests/kernel. The five-consecutive-run loop lives inside tests/property/test_five_consecutive_runs.py.",
           "waiver_reason": null
         },
         {
@@ -148311,7 +149217,46 @@
         ".ea/artifacts/research",
         "docs/architecture"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_state_tree_decision.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_state_tree_brief_verified.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W13",
       "intent": {
         "desired_outcome": "A ratified Decision names the target tree and the legacy-store boundary before the importer is written",
@@ -148344,12 +149289,12 @@
           ],
           "id": "CR-01",
           "kind": "deterministic",
-          "measurable_signal": "uv run eawf decision list --json exits 0 and one ACTIVE row names both the target tree shape and the legacy-store boundary",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_state_tree_decision.py exits 0 asserting an ACTIVE Decision row names the target tree shape and the legacy-store boundary",
           "oracle_tier": null,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": null,
-          "text": "REL-027 acceptance: a ratified Decision names the target tree and the legacy-store boundary; eawf decision list --json returns an ACTIVE Decision whose summary names the epoch-2 state-tree shape and the legacy-store boundary; state json asserted at wave audit",
+          "text": "REL-027 acceptance: a ratified Decision names the target tree and the legacy-store boundary; eawf decision list --json returns an ACTIVE Decision whose summary names the epoch-2 state-tree shape and the legacy-store boundary; state json asserted at wave audit. The eawf decision list assertion lives inside tests/integration/workflow/release/test_state_tree_decision.py.",
           "waiver_reason": null
         },
         {
@@ -148360,12 +149305,12 @@
           ],
           "id": "CR-02",
           "kind": "deterministic",
-          "measurable_signal": "uv run eawf artifact verify on the brief exits 0 with the chassis sections present and no absolute path",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_state_tree_brief_verified.py exits 0 globbing .ea/artifacts/research for the state-tree brief and shelling eawf artifact verify on it",
           "oracle_tier": null,
           "quality_dimension": "maintainability",
           "required": true,
           "response": null,
-          "text": "The decision brief file matches the artifact chassis (Summary, References, Provenance, Scrub) under .ea/artifacts/research and cites the epoch1-state-at-scale spike findings; eawf artifact verify validates it against the golden chassis",
+          "text": "The decision brief file matches the artifact chassis (Summary, References, Provenance, Scrub) under .ea/artifacts/research and cites the epoch1-state-at-scale spike findings; eawf artifact verify validates it against the golden chassis. The eawf artifact verify assertion lives inside tests/integration/workflow/release/test_state_tree_brief_verified.py, which globs the brief rather than hard-coding its path.",
           "waiver_reason": null
         },
         {
@@ -148416,7 +149361,67 @@
         "tests/daemon",
         "tests/runtime/daemon"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/runtime/daemon/test_loop_occupancy.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/runtime/daemon/test_readiness_under_load.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon/test_disconnect_shield.py",
+              "-k",
+              "abandoned_probe"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W14",
       "intent": {
         "desired_outcome": "A daemon handler never blocks the event loop, handler occupancy and the readiness timeout are one budget stated once, and a busy daemon is still reported present",
@@ -148527,7 +149532,67 @@
         "tests/runtimes",
         "tests/workflow/dispatch"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/runtime/runtimes/test_error_classification.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/runtime/runtimes/test_error_reachability.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/dispatch/test_retry.py",
+              "-k",
+              "cap_saturation"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W15",
       "intent": {
         "desired_outcome": "Error classification reads the stream the vendor writes to, every declared error class has a reachable handler, and the effective cap is stated once",
@@ -148633,7 +149698,90 @@
         ".github/workflows/ci.yaml",
         "tests/lint/test_phase_ci_gates.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/runtime/sandbox/test_env_scrub.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/runtime/sandbox/test_jail.py",
+              "-k",
+              "linux_launch"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_phase_ci_gates.py",
+              "-k",
+              "linux_real_host"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_phase_ci_gates.py",
+              "-k",
+              "linux_real_host"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "ship",
+          "criterion_id": "CR-03",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W16",
       "intent": {
         "desired_outcome": "Both Linux isolation defects are fixed, the Linux real-host gate passes at dev1, and the jail gains nothing that extends its life past cutover",
@@ -148689,14 +149837,15 @@
           "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "REL-034: the tmpfs masks in the Linux backend no longer stop the jail launching; _build_linux_argv returns masks only for cred dirs that exist and a trivial jailed command exits 0 on a Linux host; pytest tests/runtime/sandbox/test_jail.py",
+          "text": "REL-034: the tmpfs masks in the Linux backend no longer stop the jail launching; _build_linux_argv returns masks only for cred dirs that exist and a trivial jailed command exits 0 on a Linux host; pytest tests/runtime/sandbox/test_jail.py. The named test skips cleanly off Linux, so the gate is green on a non-Linux host.",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-03"
+            "G-03",
+            "G-04"
           ],
           "id": "CR-03",
           "kind": "deterministic",
@@ -148744,7 +149893,86 @@
         "tests/observability/telemetry",
         "tests/integration/test_bench_harness.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/perf/test_turn_cost_producer.py",
+              "-k",
+              "split_invariance"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/observability/telemetry/test_turn_cost_record.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/observability/telemetry/test_cost_class.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/observability/telemetry/test_turn_cost_pricing.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W17",
       "intent": {
         "desired_outcome": "A producer computes p50 and p90 wall clock and cost per completed unit of work with verification and execution cost apart over rows whose price provenance is known",
@@ -148785,12 +150013,12 @@
           ],
           "id": "CR-01",
           "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/perf -k turn_cost exits 0 including the split-into-more-runs invariance case",
+          "measurable_signal": "uv run pytest tests/perf/test_turn_cost_producer.py -k split_invariance exits 0 with the three-run split fixture returning a byte-identical record",
           "oracle_tier": null,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": null,
-          "text": "MEAS-031: turn cost is measured as median and ninetieth-percentile wall clock and cost per completed unit of work, not per run and not per command; the producer returns p50 and p90 over closed waves and a fixture that splits one wave into more runs reports no improvement; pytest tests/perf",
+          "text": "MEAS-031: the producer returns p50 and p90 wall clock and cost per completed unit of work; the unit is a closed wave joined to every run attributed to it and never a run or a command; a fixture that splits one wave into three runs returns a byte-identical record; pytest tests/perf/test_turn_cost_producer.py",
           "waiver_reason": null
         },
         {
@@ -148801,12 +150029,12 @@
           ],
           "id": "CR-02",
           "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/observability/telemetry -k turn_cost_record exits 0 and a record missing the harness revision fails validation",
+          "measurable_signal": "uv run pytest tests/observability/telemetry/test_turn_cost_record.py exits 0 with the missing-harness_revision and combined-cost rows rejected",
           "oracle_tier": null,
           "quality_dimension": "maintainability",
           "required": true,
           "response": null,
-          "text": "MEAS-032 and MEAS-033: the measurement record declares its fixture, measurement-harness revision and runtime/model tuple and reports verification cost separately from execution cost; the record validates with those fields required; schema asserted in tests/observability/telemetry",
+          "text": "MEAS-032 and MEAS-033: TurnCostRecord validates as strict with fixture_id, harness_revision, the runtime and model tuple, p50 and p90 wall clock and cost, and verification_cost and execution_cost as separate required fields; a record missing harness_revision or carrying a combined cost field raises ValidationError; pytest tests/observability/telemetry/test_turn_cost_record.py",
           "waiver_reason": null
         },
         {
@@ -148817,12 +150045,28 @@
           ],
           "id": "CR-03",
           "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/integration/test_bench_harness.py -k turn_cost_check exits 0 with both the blocking and passing cases",
+          "measurable_signal": "uv run pytest tests/observability/telemetry/test_cost_class.py exits 0 with unattributed runs excluded and counted and a roleless run rejected",
           "oracle_tier": null,
           "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "REL-033 and MEAS-044 acceptance: an injected regression blocks; a synthetic p90 above the recorded threshold exits non-zero from eawf bench turn-cost --check while a value within threshold exits 0; cli exit asserted in tests/integration/test_bench_harness.py",
+          "text": "Every run in the join carries a typed cost_class over verification, execution or unattributed derived from its role; unattributed runs are excluded from both sums and counted in the record, and a run with no role raises instead of being summed as execution; pytest tests/observability/telemetry/test_cost_class.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
+          "id": "CR-04",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/observability/telemetry/test_turn_cost_pricing.py exits 0 with unpriced rows counted not zeroed and codex rows flagged reasoning_summand_unsettled",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Cost sums include only rows carrying price_source (MEAS-058) and rows without it are counted as unpriced, never summed as zero (MEAS-007); the producer returns the four-class sum as the token total with reasoning_tokens never a summand (MEAS-055) and flags codex rows reasoning_summand_unsettled and excludes them until MEAS-055 is settled from a vendor rollout; pytest tests/observability/telemetry/test_turn_cost_pricing.py",
           "waiver_reason": null
         }
       ],
@@ -148858,7 +150102,50 @@
         ".ea/artifacts/research",
         "tests/perf"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/perf/test_dev1_baseline_artifact.py",
+              "-k",
+              "record_and_sample_sizes"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/perf/test_dev1_baseline_artifact.py",
+              "-k",
+              "threshold_frozen"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W18",
       "intent": {
         "desired_outcome": "A committed baseline artifact carries the turn-cost record and its sample sizes and the frozen threshold 0.20 and the remeasured numeric defaults beside their proposal values",
@@ -148897,12 +150184,12 @@
           ],
           "id": "CR-01",
           "kind": "deterministic",
-          "measurable_signal": "uv run eawf artifact verify on the baseline exits 0 and the embedded record validates as a TurnCostRecord",
+          "measurable_signal": "uv run pytest tests/perf/test_dev1_baseline_artifact.py -k record_and_sample_sizes exits 0 with the embedded record validating and the four sample counts stated",
           "oracle_tier": null,
           "quality_dimension": "performance_efficiency",
           "required": true,
           "response": null,
-          "text": "REL-033: net verification cost is measured at dev1 using the producer in V07-MEAS; the baseline artifact under .ea/artifacts/research file matches the turn-cost record schema with fixture, harness revision, runtime/model tuple, p50 and p90; eawf artifact verify validates it against the golden chassis",
+          "text": "REL-033: the baseline artifact under .ea/artifacts/research embeds a record that validates as a TurnCostRecord with fixture, harness revision, runtime/model tuple, p50 and p90, and states the completed-unit count, the priced-row count (28 at the spike census), the unpriced count and the excluded reasoning_summand_unsettled codex count it was computed over; pytest tests/perf/test_dev1_baseline_artifact.py",
           "waiver_reason": null
         },
         {
@@ -148913,12 +150200,12 @@
           ],
           "id": "CR-02",
           "kind": "deterministic",
-          "measurable_signal": "uv run eawf bench turn-cost --check --baseline <artifact> exits 0 and the artifact commit predates any rc1 measurement",
+          "measurable_signal": "uv run pytest tests/perf/test_dev1_baseline_artifact.py -k threshold_frozen exits 0 with regression_threshold 0.20 present and the check passing",
           "oracle_tier": null,
           "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "MEAS-034: the regression threshold is recorded before the second measurement is taken; the baseline artifact carries a threshold field and eawf bench turn-cost --check returns pass against it; cli exit asserted in the wave report",
+          "text": "MEAS-034: the artifact carries regression_threshold 0.20 committed with the first measurement, and eawf bench turn-cost --check --baseline against it exits 0 on the same rows; the pytest asserts the threshold field and the passing check; tests/perf/test_dev1_baseline_artifact.py",
           "waiver_reason": null
         },
         {
@@ -148927,7 +150214,7 @@
           "gate_ids": [],
           "id": "CR-03",
           "kind": "attested",
-          "measurable_signal": "the operator's wave-close review confirms the table covers the 00 runtime block, the 70 tier budgets and the unit ceiling with a command per row",
+          "measurable_signal": "the operator wave-close review confirms the table covers the 00 runtime block and the 70 tier budgets and the unit ceiling with a command per row",
           "oracle_tier": null,
           "quality_dimension": "maintainability",
           "required": true,
@@ -148977,7 +150264,92 @@
         "tests/integration/test_cli_release_tag.py",
         "src/eawf/workflow/release"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/kernel",
+              "-k",
+              "release_models"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/kernel",
+              "-k",
+              "release_config_loader"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/verify",
+              "-k",
+              "release_readiness"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/lifecycle/test_transition_tables.py",
+              "-k",
+              "release"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W19",
       "intent": {
         "desired_outcome": "Typed Release and ReleaseTrain records, the dev1 checkpoint loader and a typed ReleaseReadiness exist behind daemon RPCs so the checkpoint can be pinned, preflighted, approved and baked",
@@ -149106,7 +150478,71 @@
         "tests/integration/test_cli_release_tag.py",
         "tests/lint/test_phase_ci_gates.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_cli_release_tag.py",
+              "-k",
+              "preflight"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_phase_ci_gates.py",
+              "-k",
+              "tag_chokepoint"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_cli_release_tag.py",
+              "-k",
+              "dirty_tree"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W20",
       "intent": {
         "desired_outcome": "Release preflight runs at the tag-push chokepoint in both the CLI and the workflow so the direct tag path cannot bypass checks",
@@ -149214,7 +150650,69 @@
         "tests/kernel/spec",
         "tests/workflow/evidence"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/kernel/spec",
+              "-k",
+              "measured_contract"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/evidence",
+              "-k",
+              "measured_contract"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/evidence/test_measured_contract_promotion.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W21",
       "intent": {
         "desired_outcome": "Each of the three contracts resolves by ArtifactUrn as a promoted MeasuredContract with a non-empty boundary and a scale_band the implementing checkpoint can cite",
@@ -149265,12 +150763,12 @@
           ],
           "id": "CR-02",
           "kind": "deterministic",
-          "measurable_signal": "uv run eawf artifact show on each of the three URNs exits 0 and tests/workflow/evidence asserts scale_band hundreds or wider on the importer contract",
+          "measurable_signal": "uv run pytest tests/workflow/evidence -k measured_contract exits 0 asserting each of the three artifact URNs resolves and scale_band is hundreds or wider on the importer contract",
           "oracle_tier": null,
           "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "REL-037 acceptance: each of the three contracts carries a promoted contract resolvable by ArtifactUrn with a non-empty boundary and a MeasurementEnvironment whose scale_band is at least the band the implementing checkpoint asserts over, the importer one measured against a production-scale state population; eawf artifact show returns each; state json asserted in tests/workflow/evidence",
+          "text": "REL-037 acceptance: each of the three contracts carries a promoted contract resolvable by ArtifactUrn with a non-empty boundary and a MeasurementEnvironment whose scale_band is at least the band the implementing checkpoint asserts over, the importer one measured against a production-scale state population; eawf artifact show returns each; state json asserted in tests/workflow/evidence. The eawf artifact show assertion over the three URNs lives inside the named test.",
           "waiver_reason": null
         },
         {
@@ -149322,7 +150820,69 @@
         "tests/daemon",
         "tests/contract"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pre-commit",
+              "run",
+              "--all-files"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/contract/test_jsonrpc_contract.py",
+              "tests/daemon/test_state_methods.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon",
+              "-k",
+              "methods_import_graph"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W22",
       "intent": {
         "desired_outcome": "The module is split into single-family modules under the cap with the RPC contract unchanged, so the expiry mechanism's first application is a removal, not a renewal",
@@ -149362,7 +150922,7 @@
           "quality_dimension": "maintainability",
           "required": true,
           "response": null,
-          "text": "LINT-040: the daemon state-method module is split; every module under src/eawf/runtime/daemon/methods validates under the 1,400-line EAWF010 cap with no exclusion entry and methods/state.py is absent from the pyproject exclude list; source asserted by uv run pre-commit run --all-files exits 0",
+          "text": "LINT-040: the daemon state-method module is split; every module under src/eawf/runtime/daemon/methods validates under the 1,400-line EAWF010 cap with no exclusion entry and methods/state.py is absent from the pyproject exclude list; source asserted by uv run pre-commit run --all-files exits 0. The wc -l no-module-above-1400-lines assertion lives inside the named test.",
           "waiver_reason": null
         },
         {
@@ -149433,7 +150993,69 @@
         "tests/platform/lint",
         "tests/lint"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/platform/lint/test_exclusion_expiry.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/verify",
+              "-k",
+              "exclusion_expiry"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/platform/lint",
+              "-k",
+              "exclusion_renewal"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W23",
       "intent": {
         "desired_outcome": "Every exclusion carries an expiry date and reason, an expired exclusion fails the release preflight, and renewal is an explicit typed decision with a named owner",
@@ -149541,7 +151163,71 @@
         "tests/platform/lint",
         "tests/lint"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/platform/lint",
+              "-k",
+              "kind_enum_unit"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_test_tier_contract.py",
+              "-k",
+              "auto_marker"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/platform/lint",
+              "-k",
+              "placement_lint"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W24",
       "intent": {
         "desired_outcome": "One declared kind enum drives directory, marker, gate membership and proof-locus mapping, and a misplaced test fails collection or pre-commit",
@@ -149677,7 +151363,106 @@
         "justfile",
         ".pre-commit-config.yaml"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/platform/lint",
+              "-k",
+              "placement_whole_tree"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "just",
+              "test-all"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/platform/lint",
+              "-k",
+              "one_home_per_subject"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "git",
+              "log",
+              "--stat"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_phase_ci_gates.py",
+              "-k",
+              "move_commit_ci"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "ship",
+          "criterion_id": "CR-04",
+          "id": "G-05",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W25",
       "intent": {
         "desired_outcome": "Every test sits in the one directory its kind implies, the retired directories are gone, and the tree collapse is complete before the cutover with each move bisectable",
@@ -149749,14 +151534,15 @@
           "quality_dimension": "maintainability",
           "required": true,
           "response": null,
-          "text": "QUAL-040: one subject has one test home; the placement lint returns zero subjects filed under two kinds and the directories 70 names as not kinds (acceptance, regression, the ambiguous runtime/runtimes, shadow trees) are absent; source asserted in tests/platform/lint",
+          "text": "QUAL-040: one subject has one test home; the placement lint returns zero subjects filed under two kinds and the directories 70 names as not kinds (acceptance, regression, the ambiguous runtime/runtimes, shadow trees) are absent; source asserted in tests/platform/lint. The ls tests directory-inventory assertion lives inside the named test.",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "G-04"
+            "G-04",
+            "G-05"
           ],
           "id": "CR-04",
           "kind": "deterministic",
@@ -149827,7 +151613,91 @@
         "tests/integration",
         ".ea/artifacts"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_checkpoint_cut.py",
+              "-k",
+              "approved_eight_gates"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_waiver_count.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "eawf",
+              "release",
+              "tag",
+              "0.7.0.dev1",
+              "--dry-run"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_checkpoint_cut.py",
+              "-k",
+              "approved_no_effect"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W26",
       "intent": {
         "desired_outcome": "REL-0.7.0.dev1 is pinned and preflighted green through the declared binding with every waiver acknowledged and approved and left with no external effect for the post-merge bake",
@@ -149865,12 +151735,12 @@
           ],
           "id": "CR-01",
           "kind": "deterministic",
-          "measurable_signal": "uv run eawf release show REL-0.7.0.dev1 --json exits 0 with status approved and all eight dev1 required gates pass",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_checkpoint_cut.py -k approved_eight_gates exits 0 with status approved and eight gate receipts bound to the pinned SHA",
           "oracle_tier": null,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": null,
-          "text": "The 0.7.0.dev1 Release record exists with channel dev, authority_epoch 1 and empty membership_refs, and transitions to APPROVED after release.pin and a green dev1 gate profile; state json asserted by eawf release show REL-0.7.0.dev1 --json",
+          "text": "The 0.7.0.dev1 Release exists with channel dev, authority_epoch 1 and empty membership_refs, and transitions to APPROVED after release.pin and a preflight in which all eight dev1 gates of the W29 binding pass with fresh receipts bound to the pinned source SHA; state json asserted by a pytest that shells eawf release show REL-0.7.0.dev1 --json; tests/integration/workflow/release/test_checkpoint_cut.py",
           "waiver_reason": null
         },
         {
@@ -149881,12 +151751,12 @@
           ],
           "id": "CR-02",
           "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/integration -k waiver_count_signal exits 0 and the dev1 readiness JSON shows waiver_count with explanation or zero",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_waiver_count.py exits 0 with the four waiver cases asserted",
           "oracle_tier": null,
           "quality_dimension": "security",
           "required": true,
           "response": null,
-          "text": "REL-025 acceptance: waiver count is reported at checkpoint close and is zero-or-explained; the readiness returns a waiver_count row and a non-zero count with no explanation is red; cli exit asserted in tests/integration",
+          "text": "REL-025 acceptance: waiver_count is reported at checkpoint close; each counted waiver is the durable event itself with scope, reason and protected principal; a count above zero whose events are all explained blocks APPROVED until each waiver is acknowledged in the readiness receipt, and a count above zero with any unexplained event returns red; the pytest asserts zero, explained-unacknowledged, acknowledged and unexplained; tests/integration/workflow/release/test_waiver_count.py",
           "waiver_reason": null
         },
         {
@@ -149897,12 +151767,12 @@
           ],
           "id": "CR-03",
           "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_measured_before_build.py exits 0 with three single-absence refusals each naming the missing contract",
+          "measurable_signal": "uv run eawf release tag 0.7.0.dev1 --dry-run exits 0 and creates no tag",
           "oracle_tier": null,
           "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "REL-037 acceptance: a negative fixture asserts that checkpoint admission is refused when any one of the three promoted contracts is absent, and names which; admission raises a refusal naming the missing contract; pytest tests/integration/workflow/release/test_measured_before_build.py",
+          "text": "Version and changelog agree: eawf release tag 0.7.0.dev1 --dry-run exits 0 through the W20 chokepoint, whose preflight computes the version and changelog signals, and creates no tag; cli exit is the whole claim",
           "waiver_reason": null
         },
         {
@@ -149913,12 +151783,12 @@
           ],
           "id": "CR-04",
           "kind": "deterministic",
-          "measurable_signal": "uv run eawf release tag 0.7.0.dev1 --dry-run exits 0 and tests/integration/runtime/release/test_tag_chokepoint.py passes on the cut commit",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_checkpoint_cut.py -k approved_no_effect exits 0 with every target not_started and no tag present",
           "oracle_tier": null,
-          "quality_dimension": "reliability",
+          "quality_dimension": "safety",
           "required": true,
           "response": null,
-          "text": "Version and changelog agree: src/eawf/_version.py and pyproject validate as 0.7.0.dev1 with a non-empty CHANGELOG section naming migrations and limitations, and eawf release tag --dry-run exits 0; cli exit asserted in tests/integration/runtime/release/test_tag_chokepoint.py",
+          "text": "The wave ends with no external effect: every target_statuses row validates as not_started, publication_operation_ref is null, and the approval receipt proof_digest equals manifest_digest so the post-merge bake publishes without a repin; the absence of a v0.7.0.dev1 tag locally and on the remote is asserted inside the pytest; tests/integration/workflow/release/test_checkpoint_cut.py",
           "waiver_reason": null
         }
       ],
@@ -149962,7 +151832,84 @@
         "tests/integration/runtime/release",
         "tests/fixtures/release"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_publication_records.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_target_status_machine.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_publish_edges.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/release/test_publish_rpc.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W27",
       "intent": {
         "desired_outcome": "A durable per-target attempt ledger drives publication and bounds retry of an unfinished leg with an idempotency proof and records the burned-version terminus honestly",
@@ -149997,58 +151944,66 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "CR-01 uv run pytest tests/unit/kernel/release/test_publication_records.py exits 0 with the complete publication-operation fixture loading and a duplicate attempt rejected",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_publication_records.py exits 0 with the complete publication-operation fixture loading and a duplicate attempt rejected",
           "oracle_tier": null,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": null,
-          "text": "CR-01 uv run pytest tests/unit/kernel/release/test_publication_records.py exits 0 with the complete publication-operation fixture loading and a duplicate attempt rejected",
+          "text": "REL-017: PublicationOperation and OperationAttempt validate as strict records with operation_id, release_ref, kind, proof_digest, idempotency_key, status and per-target attempt, request_digest, effect_receipt_ref and observation_receipt_ref; publication_receipts is append-only and unique by target and attempt; the fixture tests/fixtures/release/v07/publication-operation-complete.yaml validates with every configured target; pytest tests/unit/kernel/release/test_publication_records.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
-          "measurable_signal": "CR-02 uv run pytest tests/unit/kernel/release/test_target_status_machine.py exits 0 with every legal edge accepted and each illegal edge or over-limit retry rejected",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_target_status_machine.py exits 0 with every legal edge accepted and each illegal edge or over-limit retry rejected",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "CR-02 uv run pytest tests/unit/kernel/release/test_target_status_machine.py exits 0 with every legal edge accepted and each illegal edge or over-limit retry rejected",
+          "text": "The per-target status machine admits only the edges in 10: not_started, queued, in_flight, then reported_success, reported_failure or unknown; unknown after timeout_seconds; queued retries bounded by retry_limit; attempt_count equals the highest persisted attempt; an illegal edge or a retry past the limit raises a typed error; pytest tests/unit/kernel/release/test_target_status_machine.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
           "id": "CR-03",
-          "kind": "legacy",
-          "measurable_signal": "CR-03 uv run pytest tests/unit/kernel/release/test_publish_edges.py exits 0 with each named denial raised and PARTIALLY_RELEASED terminal",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_publish_edges.py exits 0 with each named denial raised and PARTIALLY_RELEASED terminal",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "safety",
           "required": true,
           "response": null,
-          "text": "CR-03 uv run pytest tests/unit/kernel/release/test_publish_edges.py exits 0 with each named denial raised and PARTIALLY_RELEASED terminal",
+          "text": "REL-019: APPROVED to PUBLISHING raises approval_stale when denied; PUBLISHING to VERIFYING raises target_results_incomplete; RECOVERING to PUBLISHING raises unsafe_release_retry without an idempotency proof and budget; RECOVERING to PARTIALLY_RELEASED burns the version, freezes source_sha, tag and artifact digests and never returns to DRAFT or CANCELLED; pytest tests/unit/kernel/release/test_publish_edges.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
           "id": "CR-04",
-          "kind": "legacy",
-          "measurable_signal": "CR-04 uv run pytest tests/integration/runtime/release/test_publish_rpc.py exits 0 with stale_release_revision and idempotency_conflict raised and the original receipt replayed",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/runtime/release/test_publish_rpc.py exits 0 with stale_release_revision and idempotency_conflict raised and the original receipt replayed",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "CR-04 uv run pytest tests/integration/runtime/release/test_publish_rpc.py exits 0 with stale_release_revision and idempotency_conflict raised and the original receipt replayed",
+          "text": "release.publish, release.retry_target and release.reconcile require expected_revision and idempotency_key; a stale revision returns stale_release_revision, a repeated identical call returns the original receipt, the same key with a different payload returns idempotency_conflict, and publish returns an operation reference at once after the W20 chokepoint preflight recomputes green; pytest tests/integration/runtime/release/test_publish_rpc.py",
           "waiver_reason": null
         }
       ],
@@ -150088,7 +152043,84 @@
         "tests/integration/runtime/release",
         "tests/fixtures/release"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_observe_adapters.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_observer_only.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_prerelease_channel.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/release/test_observe_cli.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W28",
       "intent": {
         "desired_outcome": "BAKED is reachable only when all three required targets are independently observed exposing the exact prerelease off the default channel and only the observer writes an observed state",
@@ -150123,58 +152155,66 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "CR-01 uv run pytest tests/unit/kernel/release/test_observe_adapters.py exits 0 with matches and missing and mismatch and unknown covered per adapter",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_observe_adapters.py exits 0 with matches and missing and mismatch and unknown covered per adapter",
           "oracle_tier": null,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": null,
-          "text": "CR-01 uv run pytest tests/unit/kernel/release/test_observe_adapters.py exits 0 with matches and missing and mismatch and unknown covered per adapter",
+          "text": "REL-018: each adapter queries its registry and returns a PublicationObservation with result, externally queried identity, observed digests, adapter digest and evidence ref against the frozen manifest; recorded-response fixtures cover matches, missing, mismatch and unknown for every adapter; pytest tests/unit/kernel/release/test_observe_adapters.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
-          "measurable_signal": "CR-02 uv run pytest tests/unit/kernel/release/test_observer_only.py exits 0 with three reported_success rows still denied BAKED",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_observer_only.py exits 0 with three reported_success rows still denied BAKED",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "safety",
           "required": true,
           "response": null,
-          "text": "CR-02 uv run pytest tests/unit/kernel/release/test_observer_only.py exits 0 with three reported_success rows still denied BAKED",
+          "text": "Only release.observe_target writes observed_success or observed_mismatch and only from an observation receipt; the publish and reconcile paths write at most reported_success, reported_failure or unknown; three reported_success rows never derive BAKED and VERIFYING to BAKED raises publication_not_observed until every required target is observed_success; pytest tests/unit/kernel/release/test_observer_only.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
           "id": "CR-03",
-          "kind": "legacy",
-          "measurable_signal": "CR-03 uv run pytest tests/unit/kernel/release/test_prerelease_channel.py exits 0 with the latest-tag leak and the digest drift both observed_mismatch",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_prerelease_channel.py exits 0 with the latest-tag leak and the digest drift both observed_mismatch",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "security",
           "required": true,
           "response": null,
-          "text": "CR-03 uv run pytest tests/unit/kernel/release/test_prerelease_channel.py exits 0 with the latest-tag leak and the digest drift both observed_mismatch",
+          "text": "REL-016: a prerelease exposed on the stable default channel (npm latest resolving it, a source-host release not flagged prerelease) or an already-published version whose digests differ from the frozen manifest is observed_mismatch with a stable code and the Release transitions to RECOVERING; an identical already-existing artifact is observed_success; pytest tests/unit/kernel/release/test_prerelease_channel.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
           "id": "CR-04",
-          "kind": "legacy",
-          "measurable_signal": "CR-04 uv run pytest tests/integration/runtime/release/test_observe_cli.py exits 0 with the observation emitted and the undeclared adapter rejected at load",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/runtime/release/test_observe_cli.py exits 0 with the observation emitted and the undeclared adapter rejected at load",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "operability",
           "required": true,
           "response": null,
-          "text": "CR-04 uv run pytest tests/integration/runtime/release/test_observe_cli.py exits 0 with the observation emitted and the undeclared adapter rejected at load",
+          "text": "eawf release observe REL-<version> --target <id> emits the observation and VERIFYING to RECOVERING fires on a missing or contradictory one; the adapter is chosen from ReleaseTargetStatus.observe_adapter and an undeclared adapter raises at load, never a runtime fallback; pytest tests/integration/runtime/release/test_observe_cli.py",
           "waiver_reason": null
         }
       ],
@@ -150213,7 +152253,84 @@
         "tests/kernel",
         "tests/fixtures/release"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_gate_binding.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_required_signals.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_readiness_gate_block.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_platform_signal.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W29",
       "intent": {
         "desired_outcome": "Every gate name resolves to one evidence source and the required-signal set derives from that declaration and a red row or proof named by the profile denies approval with release_not_ready",
@@ -150247,58 +152364,66 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "CR-01 uv run pytest tests/unit/kernel/release/test_gate_binding.py exits 0 with eight bindings resolved and each invalid binding rejected by the loader",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_gate_binding.py exits 0 with eight bindings resolved and each invalid binding rejected by the loader",
           "oracle_tier": null,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": null,
-          "text": "CR-01 uv run pytest tests/unit/kernel/release/test_gate_binding.py exits 0 with eight bindings resolved and each invalid binding rejected by the loader",
+          "text": "A declared GateBinding table maps each of the eight dev1 gate names to exactly one evidence source: a signal row, a component of a signal row, or a proof command run through the gate runner against the pinned source SHA; the loader raises on a profile gate without a binding, a binding naming an unknown signal or component, and a proof command failing the L0 argv policy; pytest tests/unit/kernel/release/test_gate_binding.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
-          "measurable_signal": "CR-02 uv run pytest tests/unit/kernel/release/test_required_signals.py exits 0 with the derived set matching the profile plus the three flag-driven rows",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_required_signals.py exits 0 with the derived set matching the profile plus the three flag-driven rows",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "CR-02 uv run pytest tests/unit/kernel/release/test_required_signals.py exits 0 with the derived set matching the profile plus the three flag-driven rows",
+          "text": "The required-signal set is derived, never declared twice: rows bound by required gates, plus tree cleanliness under require_clean_tree, ancestry under require_ancestor_of_remote and credentials when any target is required; CANDIDATE transitions to PREFLIGHT_FAILED on any derived row non-pass and CANDIDATE to APPROVED raises release_not_ready naming the first red gate; pytest tests/unit/kernel/release/test_required_signals.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
           "id": "CR-03",
-          "kind": "legacy",
-          "measurable_signal": "CR-03 uv run pytest tests/unit/kernel/release/test_readiness_gate_block.py exits 0 with eight gate rows and waiver_count emitted beside twelve signal rows",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_readiness_gate_block.py exits 0 with eight gate rows and waiver_count emitted beside twelve signal rows",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "operability",
           "required": true,
           "response": null,
-          "text": "CR-03 uv run pytest tests/unit/kernel/release/test_readiness_gate_block.py exits 0 with eight gate rows and waiver_count emitted beside twelve signal rows",
+          "text": "ReleaseReadiness carries a gates block of eight rows and a waiver_count field beside the unchanged twelve signal rows; each counted waiver is the REL-025 event with scope, reason and protected principal; a count above zero with any waiver lacking one of the three returns red and an all-explained count is reported for acknowledgement; eawf release preflight --json emits both blocks; pytest tests/unit/kernel/release/test_readiness_gate_block.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
           "id": "CR-04",
-          "kind": "legacy",
-          "measurable_signal": "CR-04 uv run pytest tests/unit/kernel/release/test_platform_signal.py exits 0 with platform computed from the Linux receipt and unavailable when claims are empty",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_platform_signal.py exits 0 with platform computed from the Linux receipt and unavailable when claims are empty",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "compatibility",
           "required": true,
           "response": null,
-          "text": "CR-04 uv run pytest tests/unit/kernel/release/test_platform_signal.py exits 0 with platform computed from the Linux receipt and unavailable when claims are empty",
+          "text": "The platform signal computes at dev1 from the Linux real-host CI receipt when platform_claims is non-empty and returns unavailable with remediation when it is empty; front_door_journey binds to the REL-010 journey proof and never to the platform row; pytest tests/unit/kernel/release/test_platform_signal.py",
           "waiver_reason": null
         }
       ],
@@ -150340,7 +152465,107 @@
         "tests/lint/test_phase_ci_gates.py",
         "tests/fixtures/release"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_dependency_inventory.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_vulnerability_report.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/release/test_reproducible_build.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_phase_ci_gates.py",
+              "-k",
+              "inventory_job"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/release/test_pipeline_live.py",
+              "-k",
+              "inventory_artifacts"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "ship",
+          "criterion_id": "CR-04",
+          "id": "G-05",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W30",
       "intent": {
         "desired_outcome": "The dependencies and artifacts signals compute from a real lock-derived inventory and a real vulnerability report and a real double-build receipt and a seeded defect reds each gate",
@@ -150375,58 +152600,67 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "CR-01 uv run pytest tests/unit/kernel/release/test_dependency_inventory.py exits 0 with the forbidden-license and unlocked-import cases returning dependency_gate_failed",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_dependency_inventory.py exits 0 with the forbidden-license and unlocked-import cases returning dependency_gate_failed",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "security",
           "required": true,
           "response": null,
-          "text": "CR-01 uv run pytest tests/unit/kernel/release/test_dependency_inventory.py exits 0 with the forbidden-license and unlocked-import cases returning dependency_gate_failed",
+          "text": "ReleaseDependencyManifest is built from uv.lock with lock_digest and one row per locked package carrying version and a license classified against a declared allowlist; the dependencies inventory component passes on it and returns dependency_gate_failed on a forbidden license, an unlocked import or a lock digest that differs from the built wheel metadata; pytest tests/unit/kernel/release/test_dependency_inventory.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
-          "measurable_signal": "CR-02 uv run pytest tests/unit/kernel/release/test_vulnerability_report.py exits 0 with the seeded blocking advisory reddening security_review",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_vulnerability_report.py exits 0 with the seeded blocking advisory reddening security_review",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "security",
           "required": true,
           "response": null,
-          "text": "CR-02 uv run pytest tests/unit/kernel/release/test_vulnerability_report.py exits 0 with the seeded blocking advisory reddening security_review",
+          "text": "The vulnerability report runs pip-audit over the exported lock into a typed record with advisory ids, affected package, fixed versions and a blocking flag; a seeded blocking advisory in a fixture database returns a red security_review gate through the dependencies vulnerability component while a non-blocking advisory is reported and passes; pytest tests/unit/kernel/release/test_vulnerability_report.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
           "id": "CR-03",
-          "kind": "legacy",
-          "measurable_signal": "CR-03 uv run pytest tests/integration/runtime/release/test_reproducible_build.py exits 0 with equal digests passing and the mutated build returning artifact_nonreproducible",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/runtime/release/test_reproducible_build.py exits 0 with equal digests passing and the mutated build returning artifact_nonreproducible",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "CR-03 uv run pytest tests/integration/runtime/release/test_reproducible_build.py exits 0 with equal digests passing and the mutated build returning artifact_nonreproducible",
+          "text": "The artifacts signal passes only on a receipt from two clean builds with SOURCE_DATE_EPOCH pinned to the source commit whose wheel and sdist digests agree and match the inventory recomputed before upload; a second build with one mutated file returns artifact_nonreproducible naming the artifact; pytest tests/integration/runtime/release/test_reproducible_build.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04",
+            "G-05"
+          ],
           "id": "CR-04",
-          "kind": "legacy",
-          "measurable_signal": "CR-04 uv run pytest tests/lint/test_phase_ci_gates.py -k inventory_job exits 0 with the needs edge and the three artifact names matched in release.yaml",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_phase_ci_gates.py -k inventory_job exits 0 with the needs edge and the three artifact names matched in release.yaml",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "CR-04 uv run pytest tests/lint/test_phase_ci_gates.py -k inventory_job exits 0 with the needs edge and the three artifact names matched in release.yaml",
+          "text": "release.yaml gains an inventory-and-reproducibility job that publish-pypi needs and that uploads the dependency manifest, the vulnerability report and the double-build receipt as workflow artifacts; the every-wave half validates the needs edge and the three artifact names by file matches in pytest tests/lint/test_phase_ci_gates.py; the ship-cadence half exits 0 when the dry-run workflow run for the ship commit exposes the three artifacts, asserted inside test_pipeline_live.py",
           "waiver_reason": null
         }
       ],
@@ -150464,7 +152698,84 @@
         "tests/unit/kernel/release",
         "tests/integration/workflow/release"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_train_advance.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_prerequisite_receipts.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_measured_before_build.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_distinct_checkpoint.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W31",
       "intent": {
         "desired_outcome": "Opening dev2 is machine-refused unless 0.7.0.dev1 is terminal BAKED with fresh exact receipts and all three measured contracts are promoted and the refusal names what is missing",
@@ -150497,58 +152808,66 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "CR-01 uv run pytest tests/unit/kernel/release/test_train_advance.py exits 0 with checkpoint_not_terminal raised from every non-terminal status",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_train_advance.py exits 0 with checkpoint_not_terminal raised from every non-terminal status",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "safety",
           "required": true,
           "response": null,
-          "text": "CR-01 uv run pytest tests/unit/kernel/release/test_train_advance.py exits 0 with checkpoint_not_terminal raised from every non-terminal status",
+          "text": "REL-011: current_checkpoint_index advances only when the Release at the current index is terminal BAKED or RELEASED; an advance attempted from APPROVED, PUBLISHING, VERIFYING, RECOVERING or PARTIALLY_RELEASED raises checkpoint_not_terminal and the index is unchanged; pytest tests/unit/kernel/release/test_train_advance.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
-          "measurable_signal": "CR-02 uv run pytest tests/unit/kernel/release/test_prerequisite_receipts.py exits 0 with prerequisite_receipt_stale raised for the foreign-SHA and expired receipts",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_prerequisite_receipts.py exits 0 with prerequisite_receipt_stale raised for the foreign-SHA and expired receipts",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "CR-02 uv run pytest tests/unit/kernel/release/test_prerequisite_receipts.py exits 0 with prerequisite_receipt_stale raised for the foreign-SHA and expired receipts",
+          "text": "Prerequisite receipts are machine-validated: opening checkpoint n+1 requires every gate receipt of checkpoint n to be fresh and bound to that Release source_sha and manifest_digest; a receipt bound to another SHA or past its expires_at raises prerequisite_receipt_stale naming the gate; pytest tests/unit/kernel/release/test_prerequisite_receipts.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
           "id": "CR-03",
-          "kind": "legacy",
-          "measurable_signal": "CR-03 uv run pytest tests/integration/workflow/release/test_measured_before_build.py exits 0 with three single-absence refusals each naming the missing contract",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_measured_before_build.py exits 0 with three single-absence refusals each naming the missing contract",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "CR-03 uv run pytest tests/integration/workflow/release/test_measured_before_build.py exits 0 with three single-absence refusals each naming the missing contract",
+          "text": "REL-037 acceptance: release.create for 0.7.0.dev2 raises a refusal naming which contract is missing when any one of the three promoted MeasuredContracts (importer at scale, cross-provider conformance, daemon RPC under concurrent dispatch) is absent; a negative fixture asserts each single absence; pytest tests/integration/workflow/release/test_measured_before_build.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
           "id": "CR-04",
-          "kind": "legacy",
-          "measurable_signal": "CR-04 uv run pytest tests/unit/kernel/release/test_distinct_checkpoint.py exits 0 with REL-0.7.0.dev2 opened as DRAFT and the dev1 record unchanged",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_distinct_checkpoint.py exits 0 with REL-0.7.0.dev2 opened as DRAFT and the dev1 record unchanged",
           "oracle_tier": null,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": null,
-          "text": "CR-04 uv run pytest tests/unit/kernel/release/test_distinct_checkpoint.py exits 0 with REL-0.7.0.dev2 opened as DRAFT and the dev1 record unchanged",
+          "text": "The next checkpoint opens as a distinct DRAFT Release keyed REL-0.7.0.dev2 with its own revision; the dev1 record status, manifest_digest and receipts are identical before and after; eawf release train show --json emits the ladder, the index and each checkpoint status; pytest tests/unit/kernel/release/test_distinct_checkpoint.py",
           "waiver_reason": null
         }
       ],
@@ -150584,7 +152903,84 @@
         "tests/integration/runtime/release",
         "tests/fixtures/release"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/release/test_crash_boundaries.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/release/test_ambiguous_outcome.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/release/test_boundary_totality.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/release/test_existing_artifact.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W33",
       "intent": {
         "desired_outcome": "Every durable write in the publication path has a registered boundary with a crash-before and crash-after and ambiguous-outcome test and an unregistered write site fails a totality check",
@@ -150617,58 +153013,66 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "CR-01 uv run pytest tests/integration/runtime/release/test_crash_boundaries.py exits 0 with zero duplicate external calls across every registered boundary",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/runtime/release/test_crash_boundaries.py exits 0 with zero duplicate external calls across every registered boundary",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "CR-01 uv run pytest tests/integration/runtime/release/test_crash_boundaries.py exits 0 with zero duplicate external calls across every registered boundary",
+          "text": "REL-024: for every registered boundary a crash injected before the durable write leaves no effect and a crash injected after it leaves exactly one; resume from the ledger completes the leg with no duplicate external call, proven by a counting fake adapter that returns the call count; pytest tests/integration/runtime/release/test_crash_boundaries.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
-          "measurable_signal": "CR-02 uv run pytest tests/integration/runtime/release/test_ambiguous_outcome.py exits 0 with the elapsed deadline resolving only by observation",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/runtime/release/test_ambiguous_outcome.py exits 0 with the elapsed deadline resolving only by observation",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "CR-02 uv run pytest tests/integration/runtime/release/test_ambiguous_outcome.py exits 0 with the elapsed deadline resolving only by observation",
+          "text": "An adapter deadline elapsing with no final result transitions to unknown, never to reported_failure; an observation after the timeout resolves it to observed_success or observed_mismatch, a tick at deadline equality is still in_flight, and a retry from unknown is bounded by retry_limit; pytest tests/integration/runtime/release/test_ambiguous_outcome.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
           "id": "CR-03",
-          "kind": "legacy",
-          "measurable_signal": "CR-03 uv run pytest tests/integration/runtime/release/test_boundary_totality.py exits 0 with the seeded undecorated write site detected",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/runtime/release/test_boundary_totality.py exits 0 with the seeded undecorated write site detected",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "maintainability",
           "required": true,
           "response": null,
-          "text": "CR-03 uv run pytest tests/integration/runtime/release/test_boundary_totality.py exits 0 with the seeded undecorated write site detected",
+          "text": "The boundary set is total: every durable write site in the release reducer and publisher carries a boundary id from the registry, and a scan of the package raises on a seeded undecorated write site; pytest tests/integration/runtime/release/test_boundary_totality.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
           "id": "CR-04",
-          "kind": "legacy",
-          "measurable_signal": "CR-04 uv run pytest tests/integration/runtime/release/test_existing_artifact.py exits 0 with identical artifacts observed_success and mismatched ones in RECOVERING",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/runtime/release/test_existing_artifact.py exits 0 with identical artifacts observed_success and mismatched ones in RECOVERING",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "safety",
           "required": true,
           "response": null,
-          "text": "CR-04 uv run pytest tests/integration/runtime/release/test_existing_artifact.py exits 0 with identical artifacts observed_success and mismatched ones in RECOVERING",
+          "text": "The already-existing-artifact cases in 10 pass: an identical artifact already on the target is observed_success without a second upload, a mismatched one is observed_mismatch and transitions to RECOVERING, and the first and last retry hit the limit exactly; pytest tests/integration/runtime/release/test_existing_artifact.py",
           "waiver_reason": null
         }
       ],
@@ -150705,7 +153109,90 @@
         "tests/integration/test_bench_harness.py",
         "tests/perf"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_bench_harness.py",
+              "-k",
+              "turn_cost_render"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_bench_harness.py",
+              "-k",
+              "turn_cost_check"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_bench_harness.py",
+              "-k",
+              "comparison_invalid"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/perf/test_turn_cost_harness.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W34",
       "intent": {
         "desired_outcome": "eawf bench turn-cost renders the record and --check blocks on a regression beyond the recorded threshold while refusing to compare across a changed fixture or harness",
@@ -150738,58 +153225,66 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "CR-01 uv run pytest tests/integration/test_bench_harness.py -k turn_cost_render exits 0 with the emitted JSON carrying every TurnCostRecord field",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_bench_harness.py -k turn_cost_render exits 0 with the emitted JSON carrying every TurnCostRecord field",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "operability",
           "required": true,
           "response": null,
-          "text": "CR-01 uv run pytest tests/integration/test_bench_harness.py -k turn_cost_render exits 0 with the emitted JSON carrying every TurnCostRecord field",
+          "text": "eawf bench turn-cost --json emits the TurnCostRecord computed by the W17 producer with fixture_id, harness_revision, the runtime and model tuple, p50, p90, verification_cost, execution_cost and the unpriced and unattributed counts; cli exit asserted in pytest tests/integration/test_bench_harness.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
-          "measurable_signal": "CR-02 uv run pytest tests/integration/test_bench_harness.py -k turn_cost_check exits 0 with the blocking case non-zero and the within-threshold case zero",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_bench_harness.py -k turn_cost_check exits 0 with the blocking case non-zero and the within-threshold case zero",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "CR-02 uv run pytest tests/integration/test_bench_harness.py -k turn_cost_check exits 0 with the blocking case non-zero and the within-threshold case zero",
+          "text": "REL-033 and MEAS-044 acceptance: eawf bench turn-cost --check --baseline exits non-zero when p90 exceeds the baseline by more than the threshold the artifact recorded and exits 0 within it; both the blocking and the passing case are asserted; pytest tests/integration/test_bench_harness.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
           "id": "CR-03",
-          "kind": "legacy",
-          "measurable_signal": "CR-03 uv run pytest tests/integration/test_bench_harness.py -k comparison_invalid exits 0 with comparison_invalid naming the differing field",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_bench_harness.py -k comparison_invalid exits 0 with comparison_invalid naming the differing field",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "safety",
           "required": true,
           "response": null,
-          "text": "CR-03 uv run pytest tests/integration/test_bench_harness.py -k comparison_invalid exits 0 with comparison_invalid naming the differing field",
+          "text": "MEAS-032: a baseline whose fixture_id or harness_revision differs from the current record makes --check exits non-zero with comparison_invalid naming the differing field instead of comparing or rebaselining; pytest tests/integration/test_bench_harness.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
           "id": "CR-04",
-          "kind": "legacy",
-          "measurable_signal": "CR-04 uv run pytest tests/perf/test_turn_cost_harness.py exits 0 with the injected second-pass regression detected",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/perf/test_turn_cost_harness.py exits 0 with the injected second-pass regression detected",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "CR-04 uv run pytest tests/perf/test_turn_cost_harness.py exits 0 with the injected second-pass regression detected",
+          "text": "MEAS-044 harness: tests/perf/test_turn_cost_harness.py replays one fixed fixture through the producer twice with the same fixture and harness revision declared on both passes, injects a synthetic p90 regression beyond threshold on the second pass, and exits 0 with the regression detected; pytest",
           "waiver_reason": null
         }
       ],
@@ -150831,7 +153326,90 @@
         "tests/integration/test_packaging.py",
         "tests/integration/runtime/release"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_packaging.py",
+              "-k",
+              "npm_version"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_phase_ci_gates.py",
+              "-k",
+              "source_host_assets"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/release/test_reconcile_receipts.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_phase_ci_gates.py",
+              "-k",
+              "release_annotation_dev"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W35",
       "intent": {
         "desired_outcome": "Each of the three configured targets is produced by a pipeline leg whose outcome the ledger can ingest and the dev1 tag is created by the merge and observed by the W28 adapters",
@@ -150865,58 +153443,66 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "CR-01 uv run pytest tests/integration/test_packaging.py -k npm_version exits 0 with the three mappings returned and the unparsable input rejected",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_packaging.py -k npm_version exits 0 with the three mappings returned and the unparsable input rejected",
           "oracle_tier": null,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": null,
-          "text": "CR-01 uv run pytest tests/integration/test_packaging.py -k npm_version exits 0 with the three mappings returned and the unparsable input rejected",
+          "text": "npm_version_for returns 0.7.0-dev.1 for 0.7.0.dev1, 0.7.0-rc.1 for 0.7.0rc1 and 0.7.0 for 0.7.0, raises on an unparsable input, and is used both by the npm publish step and by the version consistency signal channel mapping; pytest tests/integration/test_packaging.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
-          "measurable_signal": "CR-02 uv run pytest tests/lint/test_phase_ci_gates.py -k source_host_assets exits 0 with the three asset uploads and the prerelease flag matched",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_phase_ci_gates.py -k source_host_assets exits 0 with the three asset uploads and the prerelease flag matched",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "CR-02 uv run pytest tests/lint/test_phase_ci_gates.py -k source_host_assets exits 0 with the three asset uploads and the prerelease flag matched",
+          "text": "The source-host leg creates or edits the tag release with release_notes, a SHA256SUMS file over every dist and plugin artifact and the plugin_bundle tarball attached, and sets prerelease for dev and rc channels; file matches asserted by pytest tests/lint/test_phase_ci_gates.py for the three asset uploads and the prerelease flag; the live-run half is observed by P32-I01-W01",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
           "id": "CR-03",
-          "kind": "legacy",
-          "measurable_signal": "CR-03 uv run pytest tests/integration/runtime/release/test_reconcile_receipts.py exits 0 with recorded receipts reconciled to reported states only",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/runtime/release/test_reconcile_receipts.py exits 0 with recorded receipts reconciled to reported states only",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "CR-03 uv run pytest tests/integration/runtime/release/test_reconcile_receipts.py exits 0 with recorded receipts reconciled to reported states only",
+          "text": "Every publish job uploads publication-receipt-<target>.json with target_id, version, artifact digests, job conclusion and run id; release.reconcile downloads the receipts for the tag runs and returns reported_success, reported_failure or unknown per target, never an observed state; pytest tests/integration/runtime/release/test_reconcile_receipts.py over recorded receipts",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
           "id": "CR-04",
-          "kind": "legacy",
-          "measurable_signal": "CR-04 uv run pytest tests/lint/test_phase_ci_gates.py -k release_annotation_dev exits 0 with v0.7.0.dev1 and v0.7.0rc1 and v0.7.0 all matching the annotation regex",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_phase_ci_gates.py -k release_annotation_dev exits 0 with v0.7.0.dev1 and v0.7.0rc1 and v0.7.0 all matching the annotation regex",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "CR-04 uv run pytest tests/lint/test_phase_ci_gates.py -k release_annotation_dev exits 0 with v0.7.0.dev1 and v0.7.0rc1 and v0.7.0 all matching the annotation regex",
+          "text": "The phase-release.yaml release annotation regex accepts PEP 440 dev segments so (release=v0.7.0.dev1) tags the merge commit, and the version-source check compares the normalised form; file matches asserted by pytest tests/lint/test_phase_ci_gates.py for v0.7.0.dev1, v0.7.0rc1 and v0.7.0",
           "waiver_reason": null
         }
       ],
@@ -150930,11 +153516,11 @@
       "blocks": [
         "P31-I01-W37"
       ],
-      "claim_session_id": "SES-20260903T174630.389711Z-executor-claude-9a7da493-e6e0-4416-aabe-bef9b08ab43e",
+      "claim_session_id": "SES-20260903T175639.130305Z-executor-claude-ba981e46-d198-48fb-b629-a7b7ea469400",
       "claimed_at": "2026-09-03T17:46:42.016497Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-03T17:57:38.796270Z",
+      "commit": "231656bf8781bd70c7b6dd0fbd37bccc797e8cde",
+      "commit_identity_digest": "sha256:cd231123dfba1c366d3fbd1009eabfdc0b92627b27894a388029b59faf16f842",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap revise; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:42:44.496178Z",
@@ -150948,7 +153534,50 @@
         "src/eawf/kernel/spec/promotion.py",
         "tests/kernel/spec"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/kernel/spec/test_common.py",
+              "-k",
+              "command_exit_zero"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/kernel/spec/test_promotion.py",
+              "-k",
+              "allowlist"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W36",
       "intent": {
         "desired_outcome": "eawf and just are allowlisted argv heads with a why-comment recording the widening as interim and every allowlist test is green",
@@ -150956,7 +153585,7 @@
         "planned_steps": [
           "Land the staged promotion.py edit adding eawf and just with the interim why-comment",
           "Land the four staged GateSpec cases in tests/kernel/spec/test_common.py and the allowlist case in tests/kernel/spec/test_promotion.py",
-          "Run the two gated selections and commit the change as one deliverable"
+          "Run the two gated pytest selections and land the promotion.py change as one commit"
         ],
         "priority_rationale": "The gate mint assumes both heads are present; without them the P31 sync order stalls on its first hand-authored gate.",
         "problem": "Eight P31 criteria gate on an eawf or just argv head that the L0 allowlist rejects so their gates cannot be minted and the waves cannot close",
@@ -150967,40 +153596,44 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-09-03T17:42:44.605891Z",
-      "outcome": null,
+      "outcome": "eawf and just admitted as gate argv heads with five pinning tests; widening recorded as interim pending the epoch-2 command-family contract",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "GateSpec command_exit_zero validates eawf and just heads and raises on an unlisted head; pytest tests/kernel/spec/test_common.py -k command_exit_zero",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/kernel/spec/test_common.py -k command_exit_zero",
           "oracle_tier": null,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": null,
-          "text": "GateSpec command_exit_zero validates eawf and just heads and raises on an unlisted head; pytest tests/kernel/spec/test_common.py -k command_exit_zero",
+          "text": "GateSpec with kind command_exit_zero validates an argv headed uv run eawf, a bare eawf head and a just task runner, and raises ValidationError for an unlisted head under uv run; pytest tests/kernel/spec/test_common.py -k command_exit_zero",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
-          "measurable_signal": "DEFAULT_GATE_ARGV_ALLOWLIST returns eawf and just and validate_argv_gates raises on a non-allowlisted head; pytest tests/kernel/spec/test_promotion.py -k allowlist",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/kernel/spec/test_promotion.py -k allowlist",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "security",
           "required": true,
           "response": null,
-          "text": "DEFAULT_GATE_ARGV_ALLOWLIST returns eawf and just and validate_argv_gates raises on a non-allowlisted head; pytest tests/kernel/spec/test_promotion.py -k allowlist",
+          "text": "DEFAULT_GATE_ARGV_ALLOWLIST returns a tuple containing eawf and just, and validate_argv_gates raises SpecPromoteValidationError for a non-allowlisted head; pytest tests/kernel/spec/test_promotion.py -k allowlist",
           "waiver_reason": null
         }
       ],
@@ -151035,7 +153668,69 @@
         "tests/workflow/lifecycle",
         "tests/daemon"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/lifecycle/test_wave_plan_floor.py",
+              "-k",
+              "resolve"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon/test_spec_sync_floor.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/lifecycle/test_wave_plan_floor.py",
+              "-k",
+              "synced_p31"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W37",
       "intent": {
         "desired_outcome": "A dangling gate_ids entry fails the floor at plan time with the criterion and gate id named while a valid wave body still syncs because the floor sees the incoming gates",
@@ -151065,44 +153760,50 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "check_criteria_floor raises LifecycleError on a dangling gate_ids entry and returns when every entry resolves; pytest tests/workflow/lifecycle/test_wave_plan_floor.py -k resolve",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/workflow/lifecycle/test_wave_plan_floor.py -k resolve",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "check_criteria_floor raises LifecycleError on a dangling gate_ids entry and returns when every entry resolves; pytest tests/workflow/lifecycle/test_wave_plan_floor.py -k resolve",
+          "text": "check_criteria_floor raises LifecycleError naming the criterion and the unknown gate id when a gate_ids entry does not resolve against the supplied gates, and returns without raising when every entry resolves; pytest tests/workflow/lifecycle/test_wave_plan_floor.py -k resolve",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
-          "measurable_signal": "spec.sync on a valid wave body exits 0 and the wave row carries the synced gates; pytest tests/daemon/test_spec_sync_floor.py",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/daemon/test_spec_sync_floor.py",
           "oracle_tier": null,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": null,
-          "text": "spec.sync on a valid wave body exits 0 and the wave row carries the synced gates; pytest tests/daemon/test_spec_sync_floor.py",
+          "text": "spec.sync on a valid wave body exits 0 and the wave row carries the synced gates, because edit_wave_plan receives the incoming gates before the floor runs; pytest tests/daemon/test_spec_sync_floor.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
           "id": "CR-03",
-          "kind": "legacy",
-          "measurable_signal": "The tightened floor returns without raising for every synced P31 wave with the waiver forced absent; pytest tests/workflow/lifecycle/test_wave_plan_floor.py -k synced_p31",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/workflow/lifecycle/test_wave_plan_floor.py -k synced_p31",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "The tightened floor returns without raising for every synced P31 wave with the waiver forced absent; pytest tests/workflow/lifecycle/test_wave_plan_floor.py -k synced_p31",
+          "text": "The tightened floor returns without raising for every synced P31 wave read from state json with the waiver forced absent; pytest tests/workflow/lifecycle/test_wave_plan_floor.py -k synced_p31",
           "waiver_reason": null
         }
       ],
@@ -151138,7 +153839,104 @@
         "tests/unit",
         "tests/lint"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_pyright_config.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_render_claude_agents.py",
+              "-k",
+              "serena"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/golden/test_golden_agents_md.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_skill_bodies_name_rules.py",
+              "tests/unit/test_html_probe.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "home",
+            "size": [
+              120,
+              40
+            ],
+            "state_path": ".ea/state.json"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-05",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W38",
       "intent": {
         "desired_outcome": "Symbol questions route to Serena by instruction and grant, pyright resolves eawf modules, the review, audit and polish bodies name their rule files, and the HTML probe is tracked",
@@ -151146,7 +153944,7 @@
         "planned_steps": [
           "Add the [tool.pyright] block with venvPath . and venv .venv and extraPaths src and a lint test asserting the three keys and module resolution",
           "Grant mcp__serena__find_symbol and mcp__serena__find_referencing_symbols and mcp__serena__get_symbols_overview to operator and domain-specialist in AGENT_REGISTRY and assert no role grants LSP",
-          "Rewrite the ladder in core.yaml verify-before-claim and in _RESEARCHER_BODY as five rungs (symbol questions to Serena; read the resolved symbol body; grep for text and literals and config and unknown names then resolve via the first rung; goldens and snapshots; quote)",
+          "Rewrite the ladder in core.yaml verify-before-claim and in _RESEARCHER_BODY as five rungs that send symbol questions to Serena before grep and end with golden and snapshot inspection before quoting behaviour",
           "Name the docs/rules files relevant to each of _REVIEW_BODY and _AUDIT_BODY and _POLISH_BODY marked interim",
           "Promote the reflection devtools probe to tools/html_probe.py with a unit test over a fixture page and regenerate the subagent_spec and agents_md goldens"
         ],
@@ -151170,58 +153968,66 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "pyproject.toml validates a [tool.pyright] table with venvPath venv and extraPaths and importing eawf.kernel.state.models from the configured extraPaths returns the module; pytest tests/lint/test_pyright_config.py",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_pyright_config.py",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "maintainability",
           "required": true,
           "response": null,
-          "text": "pyproject.toml validates a [tool.pyright] table with venvPath venv and extraPaths and importing eawf.kernel.state.models from the configured extraPaths returns the module; pytest tests/lint/test_pyright_config.py",
+          "text": "pyproject.toml validates a [tool.pyright] table with venvPath ., venv .venv and extraPaths [src], and importing eawf.kernel.state.models from the configured extraPaths returns the module; pytest tests/lint/test_pyright_config.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
-          "measurable_signal": "The rendered frontmatter for operator and domain-specialist emits the three mcp__serena read tools and no role frontmatter emits LSP; pytest tests/unit/test_render_claude_agents.py -k serena",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/test_render_claude_agents.py -k serena",
           "oracle_tier": null,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": null,
-          "text": "The rendered frontmatter for operator and domain-specialist emits the three mcp__serena read tools and no role frontmatter emits LSP; pytest tests/unit/test_render_claude_agents.py -k serena",
+          "text": "The rendered frontmatter for operator and domain-specialist emits the three mcp__serena read tools and no role frontmatter emits LSP, with the tests/golden/subagent_spec/roles fixtures regenerated to match; pytest tests/unit/test_render_claude_agents.py -k serena",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
           "id": "CR-03",
-          "kind": "legacy",
-          "measurable_signal": "The rendered AGENTS.md verify-before-claim ladder emits a first rung naming the symbol tools and every agents_md golden matches byte for byte; pytest tests/golden/test_golden_agents_md.py",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/golden/test_golden_agents_md.py",
           "oracle_tier": null,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": null,
-          "text": "The rendered AGENTS.md verify-before-claim ladder emits a first rung naming the symbol tools and every agents_md golden matches byte for byte; pytest tests/golden/test_golden_agents_md.py",
+          "text": "The rendered AGENTS.md verify-before-claim ladder emits a first rung naming the symbol tools and every agents_md golden fixture matches byte for byte; pytest tests/golden/test_golden_agents_md.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
           "id": "CR-04",
-          "kind": "legacy",
-          "measurable_signal": "Each of the review audit and polish skill bodies matches pattern docs/rules/ at least once and tools/html_probe.py returns a geometry report over a fixture page; pytest tests/lint/test_skill_bodies_name_rules.py tests/unit/test_html_probe.py",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_skill_bodies_name_rules.py tests/unit/test_html_probe.py",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "maintainability",
           "required": true,
           "response": null,
-          "text": "Each of the review audit and polish skill bodies matches pattern docs/rules/ at least once and tools/html_probe.py returns a geometry report over a fixture page; pytest tests/lint/test_skill_bodies_name_rules.py tests/unit/test_html_probe.py",
+          "text": "Each of the review, audit and polish skill bodies matches pattern docs/rules/ at least once, and tools/html_probe.py returns a geometry report over a fixture page; pytest tests/lint/test_skill_bodies_name_rules.py tests/unit/test_html_probe.py",
           "waiver_reason": null
         }
       ],
@@ -151252,7 +154058,83 @@
         "src/eawf/surfaces/tui/theme.tcss",
         "tests/tui"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_theme_focus_ring_capture.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_theme_muted_contrast.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_theme_green_accent_capture.py",
+              "tests/tui/test_footer_heartbeat_green_accent_capture.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "home",
+            "size": [
+              120,
+              40
+            ],
+            "state_path": ".ea/state.json"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-04",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W39",
       "intent": {
         "desired_outcome": "The focused pane border is visibly distinct on all three themes, muted clears 4.5 to 1 on the panel, and a styled-capture test reds if a palette rotation collapses either again",
@@ -151282,44 +154164,50 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "On every registered theme primary differs from accent and a styled capture of a focused pane renders token border colour equal to primary while an unfocused pane renders accent; pytest tests/tui/test_theme_focus_ring_capture.py",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/tui/test_theme_focus_ring_capture.py",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "interaction_capability",
           "required": true,
           "response": null,
-          "text": "On every registered theme primary differs from accent and a styled capture of a focused pane renders token border colour equal to primary while an unfocused pane renders accent; pytest tests/tui/test_theme_focus_ring_capture.py",
+          "text": "On every registered theme primary differs from accent, and a styled capture of a focused pane renders token border colour equal to primary while an unfocused pane renders token border colour equal to accent; pytest tests/tui/test_theme_focus_ring_capture.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
           "id": "CR-02",
-          "kind": "legacy",
-          "measurable_signal": "The muted variable returns #828a94 on ea-dark and the contrast of muted against panel and surface holds for all three themes at 4.5 to 1 or better; pytest tests/tui/test_theme_muted_contrast.py",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/tui/test_theme_muted_contrast.py",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "interaction_capability",
           "required": true,
           "response": null,
-          "text": "The muted variable returns #828a94 on ea-dark and the contrast of muted against panel and surface holds for all three themes at 4.5 to 1 or better; pytest tests/tui/test_theme_muted_contrast.py",
+          "text": "The muted variable returns #828a94 on ea-dark, and the computed contrast of muted against panel and against surface holds for all three registered themes at 4.5 to 1 or better; pytest tests/tui/test_theme_muted_contrast.py",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
           "id": "CR-03",
-          "kind": "legacy",
-          "measurable_signal": "The existing accent capture suite exits 0 unchanged after the palette change so the heartbeat and header wordmark pins still hold; pytest tests/tui/test_theme_green_accent_capture.py tests/tui/test_footer_heartbeat_green_accent_capture.py",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/tui/test_theme_green_accent_capture.py tests/tui/test_footer_heartbeat_green_accent_capture.py",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "The existing accent capture suite exits 0 unchanged after the palette change so the heartbeat and header wordmark pins still hold; pytest tests/tui/test_theme_green_accent_capture.py tests/tui/test_footer_heartbeat_green_accent_capture.py",
+          "text": "The existing accent capture suite exits 0 unchanged after the palette change, so the heartbeat and header wordmark pins still hold; pytest tests/tui/test_theme_green_accent_capture.py tests/tui/test_footer_heartbeat_green_accent_capture.py",
           "waiver_reason": null
         }
       ],
