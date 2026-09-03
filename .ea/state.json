@@ -18422,6 +18422,22 @@
       "superseded_by": null,
       "title": "Ship the workspace registry before importer apply mode"
     },
+    "D45": {
+      "alternatives": [
+        "Propose P32 after P31-W13 lands",
+        "Propose P32 only after P31 closes"
+      ],
+      "consequences": [],
+      "created_at": "2026-09-03T18:02:55.846174Z",
+      "description": null,
+      "id": "D45",
+      "obsoleted_at": null,
+      "rationale": "P32-W01 is the post-merge wave that bakes dev1, so P32 cannot wait for a checkpoint it produces, and with the state-tree shape ratified nothing is learned by waiting for W13. A checkpoint that drops a gate it passed last time cannot claim monotonic stabilization, and the three new names are what the migration gates and REL-028 say dev2 must prove. dev3 is the first checkpoint that dispatches natively in parallel and the first with a projection seam over RPC, so the daemon-RPC contract precedes it. The chassis replay joins P32 as a living fixture per the 2026-09-02 ruling.",
+      "scope_id": "P32",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Propose P32 now with the dev2 gate profile and REL-037 legs"
+    },
     "D46": {
       "alternatives": [
         "Amend the packet and defer every repair to dev4",
@@ -34134,6 +34150,119 @@
         "P31-I01-W38",
         "P31-I01-W39"
       ]
+    },
+    "P32-I01": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": "One iter: the dev1 bake first, then identity and strict models, storage tiers beside them, the importer as census, mapping, validation, manifest, apply and rollback, the ten golden fixtures, the daemon-hosted gate runner, the dev2 profile binding, the wave that cuts, publishes and observes 0.7.0.dev2 to BAKED, and the console chassis replay as a living fixture.",
+      "estimate_id": null,
+      "id": "P32-I01",
+      "intent": null,
+      "opened_at": "2026-09-03T17:58:45.106514Z",
+      "phase_id": "P32",
+      "status": "planned",
+      "title": "Land the epoch-2 schemas and the importer and cut dev2",
+      "trigger": "none",
+      "wave_ids": [
+        "P32-I01-W01",
+        "P32-I01-W02",
+        "P32-I01-W03",
+        "P32-I01-W04",
+        "P32-I01-W05",
+        "P32-I01-W06",
+        "P32-I01-W07",
+        "P32-I01-W08",
+        "P32-I01-W09",
+        "P32-I01-W10",
+        "P32-I01-W11",
+        "P32-I01-W12",
+        "P32-I01-W13",
+        "P32-I01-W14",
+        "P32-I01-W15",
+        "P32-I01-W16",
+        "P32-I01-W17",
+        "P32-I01-W18",
+        "P32-I01-W19",
+        "P32-I01-W20",
+        "P32-I01-W21",
+        "P32-I01-W22"
+      ]
+    },
+    "P33-I01": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": null,
+      "estimate_id": null,
+      "id": "P33-I01",
+      "intent": null,
+      "opened_at": "2026-09-03T18:02:56.475532Z",
+      "phase_id": "P33",
+      "status": "planned",
+      "title": "Land the native epoch-2 path and the console in disposable canaries",
+      "trigger": "none",
+      "wave_ids": []
+    },
+    "P34-I01": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": null,
+      "estimate_id": null,
+      "id": "P34-I01",
+      "intent": null,
+      "opened_at": "2026-09-03T18:03:29.399855Z",
+      "phase_id": "P34",
+      "status": "planned",
+      "title": "Land planning, identity, the rule graph and the first rehearsal",
+      "trigger": "none",
+      "wave_ids": []
+    },
+    "P35-I01": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": null,
+      "estimate_id": null,
+      "id": "P35-I01",
+      "intent": null,
+      "opened_at": "2026-09-03T18:03:29.996412Z",
+      "phase_id": "P35",
+      "status": "planned",
+      "title": "Refuse epoch-1 state, rehearse migration, switch the commit grammar",
+      "trigger": "none",
+      "wave_ids": []
+    },
+    "P36-I01": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": null,
+      "estimate_id": null,
+      "id": "P36-I01",
+      "intent": null,
+      "opened_at": "2026-09-03T18:03:30.594271Z",
+      "phase_id": "P36",
+      "status": "planned",
+      "title": "Cut 0.7.0rc2 on total capability evidence and rehearsed recovery",
+      "trigger": "none",
+      "wave_ids": []
+    },
+    "P37-I01": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": null,
+      "estimate_id": null,
+      "id": "P37-I01",
+      "intent": null,
+      "opened_at": "2026-09-03T18:03:31.187599Z",
+      "phase_id": "P37",
+      "status": "planned",
+      "title": "Run the perfect-realization matrix without waiver and publish stable",
+      "trigger": "none",
+      "wave_ids": []
     }
   },
   "mcp_grants": null,
@@ -35287,6 +35416,132 @@
       "status": "active",
       "title": "Ship the 0.7.0.dev1 stabilization floor",
       "track_id": null
+    },
+    "P32": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [
+        "P31"
+      ],
+      "description": "Second v0.7.0 phase: bakes 0.7.0.dev1 after the P31 merge, then cuts 0.7.0.dev2, the epoch-1-authority checkpoint proving the epoch-2 schemas, validators, offline importer, MigrationManifest and dry-run/export/rollback tooling with no operational epoch-2 write (10 Train, Migration gates). Consumes the REL-027 Decision and the eleven importer rules ratified 2026-09-03. Discharges DOM-001..004, 006..012, 017..032, 041..045, REL-020, REL-028, the REL-037 admission edges and the dev2 gate profile.",
+      "id": "P32",
+      "intent": null,
+      "iter_ids": [
+        "P32-I01"
+      ],
+      "opened_at": "2026-09-03T17:58:45.106264Z",
+      "outcome_ids": [],
+      "release": null,
+      "scope_id": "EAWF",
+      "source_brief_ids": [],
+      "status": "planned",
+      "title": "Ship the 0.7.0.dev2 offline-migration checkpoint",
+      "track_id": null
+    },
+    "P33": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [
+        "P32"
+      ],
+      "description": "Third v0.7.0 phase: cuts 0.7.0.dev3, the first checkpoint with epoch-2 authority, in disposable canary repositories only. Lands the native Track/Milestone/Batch/Task/Run/Release path behind the daemon transaction contract, the provider contract with the daemon-owned conformance runner (REL-035), the semantic-tool gateway, WorkLease, candidate sealing, serialized integration, and the console chassis as product with its projection seam and colour oracle. Production repositories stay epoch 1.",
+      "id": "P33",
+      "intent": null,
+      "iter_ids": [
+        "P33-I01"
+      ],
+      "opened_at": "2026-09-03T18:02:56.475365Z",
+      "outcome_ids": [],
+      "release": null,
+      "scope_id": "EAWF",
+      "source_brief_ids": [],
+      "status": "planned",
+      "title": "Ship the 0.7.0.dev3 native canary checkpoint",
+      "track_id": null
+    },
+    "P34": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [
+        "P33"
+      ],
+      "description": "Fourth v0.7.0 phase: cuts 0.7.0.dev4 with the planning surfaces (PlanRevision, uncertainty triage, MeasuredContract grounding, Campaign, questions, pauses, actions), multi-repository identity, the steering surface (rule graph, generated policy projection, role carriers, staleness hook, workspace layer), the 20-skill catalog and prompt chassis, the measurement producers and budget notices. Closes with the first perfect-realization rehearsal on this repository as canary (REL-031, REL-032).",
+      "id": "P34",
+      "intent": null,
+      "iter_ids": [
+        "P34-I01"
+      ],
+      "opened_at": "2026-09-03T18:03:29.399668Z",
+      "outcome_ids": [],
+      "release": null,
+      "scope_id": "EAWF",
+      "source_brief_ids": [],
+      "status": "planned",
+      "title": "Ship the 0.7.0.dev4 planning and steering surfaces",
+      "track_id": null
+    },
+    "P35": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [
+        "P34"
+      ],
+      "description": "Fifth v0.7.0 phase: the flag day. Epoch-1 state is refused with typed migration guidance, every epoch-1 mutator is removed or refuses, the full migration rehearsal runs over each required fixture with backup restore proven, the daemonless bypass is removed on a proven hosted gate runner, the commit grammar switches to the task trailer, the coverage grid reconciles against the route registry, and turn cost is re-measured against the dev1 baseline. Closes through the six-item flag-day gate.",
+      "id": "P35",
+      "intent": null,
+      "iter_ids": [
+        "P35-I01"
+      ],
+      "opened_at": "2026-09-03T18:03:29.996249Z",
+      "outcome_ids": [],
+      "release": null,
+      "scope_id": "EAWF",
+      "source_brief_ids": [],
+      "status": "planned",
+      "title": "Cut the 0.7.0rc1 flag day on epoch-2 authority",
+      "track_id": null
+    },
+    "P36": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [
+        "P35"
+      ],
+      "description": "Sixth v0.7.0 phase: cuts 0.7.0rc2. Makes capability evidence total over the declared set so no cell certifies itself, proves cross-provider conformance on the two certified runtimes, certifies supported platforms on real hosts, rehearses upgrade from the latest 0.6.x and rollback at release scale, recovers a partial publication end to end, and walks the first-user journey from a clean environment. Discharges the rc2 rows REL-040..REL-044 so the checkpoint has receipts.",
+      "id": "P36",
+      "intent": null,
+      "iter_ids": [
+        "P36-I01"
+      ],
+      "opened_at": "2026-09-03T18:03:30.594095Z",
+      "outcome_ids": [],
+      "release": null,
+      "scope_id": "EAWF",
+      "source_brief_ids": [],
+      "status": "planned",
+      "title": "Prove cross-provider, platform, and recovery evidence",
+      "track_id": null
+    },
+    "P37": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [
+        "P36"
+      ],
+      "description": "Seventh v0.7.0 phase: runs the perfect-realization gate to completion (four full runs across two runtime profiles and two repository origins) with no assertion skipped, waived, unavailable or covered only by a limitation; closes every idle contract with a producer and a consumer; freezes the artifact and platform manifests; clears the severe findings; renders limitations honestly; sunsets gates that never fired; publishes 0.7.0 only after every target is observed (REL-023, stable gates).",
+      "id": "P37",
+      "intent": null,
+      "iter_ids": [
+        "P37-I01"
+      ],
+      "opened_at": "2026-09-03T18:03:31.187434Z",
+      "outcome_ids": [],
+      "release": null,
+      "scope_id": "EAWF",
+      "source_brief_ids": [],
+      "status": "planned",
+      "title": "Publish 0.7.0 against the complete acceptance gate",
+      "track_id": null
     }
   },
   "plugins": {},
@@ -35323,7 +35578,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-03T17:57:44.948576Z",
+  "updated_at": "2026-09-03T18:03:31.846791Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {},
@@ -154212,6 +154467,3943 @@
         }
       ],
       "title": "Make the pane focus ring visible and fix the muted contrast",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W01": {
+      "agent_role": "operator",
+      "blocks": [
+        "P32-I01-W21"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.106700Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Post-merge operator wave and the opening wave of the dev2 phase; no code lands here. On the merged main source release.publish moves REL-0.7.0.dev1 from APPROVED to PUBLISHING and pushes the tag through the P31-W20 chokepoint; the P31-W35 pipeline legs run; release.reconcile records each leg; release.observe reads pypi, npm under next and the source-host release back through the P31-W28 adapters; VERIFYING reaches BAKED; the P31-W31 train advance admits dev2.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        ".ea/artifacts"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_dev1_bake.py",
+              "-k",
+              "publishing"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_dev1_bake.py",
+              "-k",
+              "verifying"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_dev1_bake.py",
+              "-k",
+              "baked"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_dev1_bake.py",
+              "-k",
+              "train_advanced"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W01",
+      "intent": {
+        "desired_outcome": "REL-0.7.0.dev1 is BAKED with three observed_success targets and the train index has advanced and the bake evidence is a committed artifact",
+        "evidence_refs": [],
+        "planned_steps": [
+          "After the P31 phase PR merges run eawf release publish REL-0.7.0.dev1 on main and confirm one tag push and one open PublicationOperation with three queued targets",
+          "Run eawf release reconcile once the tag workflows finish and retry any unknown or failed leg through retry-target within retry_limit",
+          "Run eawf release observe for pypi and npm and github and confirm each observation matches the frozen digests off the default channel",
+          "Confirm BAKED and run the train advance and commit the bake evidence artifact with the three observation receipts"
+        ],
+        "priority_rationale": "Nothing in v0.7 proceeds until dev1 is terminal BAKED; this is the single act that turns the P31 code into a checkpoint the train can advance from.",
+        "problem": "P31-W26 ends at APPROVED by design and the merge creates the tag and the release train opens dev2 only from a terminal BAKED record observed across three targets",
+        "risks": [
+          "Any leg that ends PARTIALLY_RELEASED burns 0.7.0.dev1 and the correction is 0.7.0.dev2 with supersedes_release_ref and never a republish",
+          "This wave runs against live registries; every check is read-only against them and the only writes are the ledger and the evidence artifact"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.109357Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_dev1_bake.py -k publishing",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "release.publish on the merged main source transitions to PUBLISHING with the approval proof_digest equal to the manifest_digest and the chokepoint preflight green, opens one PublicationOperation with three queued targets and pushes exactly one v0.7.0.dev1 tag; state json asserted by pytest tests/integration/workflow/release/test_dev1_bake.py reading the live record",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_dev1_bake.py -k verifying",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "release.reconcile ingests the three pipeline receipts for the tag workflow runs and every leg is reported_success so the Release transitions to VERIFYING; a leg reported unknown or failed is retried through retry_target within retry_limit and every attempt is in the ledger; state json asserted by pytest tests/integration/workflow/release/test_dev1_bake.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_dev1_bake.py -k baked",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "release.observe per target returns matches: PyPI file digests equal the frozen inventory, npm next resolves 0.7.0-dev.1 while latest does not, and the source-host release is prerelease with the three assets; every required target is observed_success and the Release transitions to BAKED; state json asserted by pytest tests/integration/workflow/release/test_dev1_bake.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
+          "id": "CR-04",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_dev1_bake.py -k train_advanced",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The train advanced: current_checkpoint_index validates as 1, release.create for 0.7.0.dev2 is admitted with the three MeasuredContracts resolved, and the bake evidence artifact under .ea/artifacts carries the three observation receipts and validates against the chassis; state json asserted by pytest tests/integration/workflow/release/test_dev1_bake.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Publish and observe the 0.7.0.dev1 checkpoint to BAKED",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W16"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.109473Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "DOM-009 as amended by rules-closure F7. The registry at ae04a5c1 has four keys and no WorkspaceRecord, so no persisted URN can carry a workspace key. Add the strict WorkspaceRecord, the six-step resolution algorithm (workspace_not_registered, workspace_ambiguous), the registry.workspace.* RPCs and the packet verbs add, show, list, member add, member remove, select. Removed under the deletion rule: workspace init, add-repo, remove-repo, validate, status, registry-list, registry-status.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/platform/registry",
+        "src/eawf/runtime/daemon/methods",
+        "src/eawf/surfaces/cli/commands/workspace.py",
+        "tests/unit/platform/registry",
+        "tests/integration/test_cli_workspace_registry.py",
+        "tests/fixtures/registry"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/platform/registry/test_workspace_resolution.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/platform/registry/test_workspace_record.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_cli_workspace_registry.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W02",
+      "intent": {
+        "desired_outcome": "A registered WorkspaceRecord resolves explicitly and ambiguity-safely, so the importer mints qualified URNs from an operator-declared workspace key",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add WorkspaceRecord to the registry model with extra=forbid and a CAS revision",
+          "Implement the resolution algorithm (explicit flags, cwd-member match, no parent-directory scan) with the two stable error codes",
+          "Add registry.workspace.create|get|list|update_membership RPCs and the CLI verbs behind them",
+          "Remove the shipped repo-pointer verbs (init, add-repo, remove-repo, validate, status, registry-list, registry-status) under the deletion rule, with their callers re-pointed at the packet verbs"
+        ],
+        "priority_rationale": "F7 is the one importer finding that changes the roadmap rather than the packet; the workspace registry is a prerequisite of apply mode, so it lands first.",
+        "problem": "The registry has no workspace record, so the DOM-009 cutover precondition is unsatisfiable and every URN would carry a placeholder",
+        "risks": [
+          "The TUI workspace dashboard and the scope dispatch ladder read the repo-pointer registry (platform/registry/staleness.py); they must keep working over WorkspaceRecord membership before the old verbs go",
+          "root_locator is a local registry value and must never reach a committed artifact or event"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.110222Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/platform/registry/test_workspace_resolution.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "DOM-009: one exact registered repository root resolves its workspace; overlapping memberships without a selection refuse with workspace_ambiguous listing candidates; an unregistered root returns workspace_not_registered and no parent directory is scanned; pytest tests/unit/platform/registry/test_workspace_resolution.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/platform/registry/test_workspace_record.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "WorkspaceRecord is strict: an unknown key, an empty member_project_codes set and a home_project_code outside the member set fail validation, and the loader still accepts a version-1 registry file with no workspace records; pytest exits 0 over tests/unit/platform/registry/test_workspace_record.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_cli_workspace_registry.py",
+          "oracle_tier": null,
+          "quality_dimension": "operability",
+          "required": true,
+          "response": null,
+          "text": "The CLI verbs and registry.workspace.* RPCs share the strict model; select changes session-local context only and writes no registry or state row; pytest exits 0 over tests/integration/test_cli_workspace_registry.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add the workspace registry record and resolution algorithm",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W04",
+        "P32-I01-W13"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.110323Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "DOM-032, DOM-033, DOM-036..040 and the URN rules of 20. Add the URN grammar with the reserved _ repository slot, the public key set (TRK-, CAM-, MLS-, BAT-, PROJECT-, RUN-, REL-, EVD-, CFN-, CLM-, QST-, RCP-, ACT-, PERM-), monotonic per-workspace allocators inside a transaction, the workspace-global canonical_sequence disjoint from revision, and the legacy_alias_index keyed by source schema, kind, id and project code with alias-to-alias chains forbidden.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/identity",
+        "src/eawf/kernel/state",
+        "tests/unit/kernel/identity",
+        "tests/property/kernel/state"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/identity/test_entity_key_grammar.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/property/kernel/state/test_canonical_sequence_monotonic.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/identity/test_urn_grammar.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/identity/test_legacy_alias_index.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W03",
+      "intent": {
+        "desired_outcome": "Every epoch-2 record has a UUID, a stable public key and a qualified URN, and cross-entity order comes from canonical_sequence rather than revision",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add the URN parser and formatter with kind/discriminator agreement and the reserved _ repository slot",
+          "Add the key grammar and allocators, with the design spellings CMP/TSK/EVT/TOOL rejected as negative cases",
+          "Add canonical_sequence allocation and the high-water-mark rejection",
+          "Add the legacy_alias_index model with injectivity and the read-only legacy_identity_read_only response"
+        ],
+        "priority_rationale": "Identity is the first thing the models, the importer and the manifest all cite; nothing downstream validates without it.",
+        "problem": "No epoch-2 identity exists in the tree, so no entity, event or alias can be addressed and the importer has nothing to mint into",
+        "risks": [
+          "Allocators must be transactional even though dev2 has no operational epoch-2 write; the importer is their first caller"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.111067Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/identity/test_entity_key_grammar.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "DOM-036/037/038/040: every canonical key shape allocates and validates, and one negative case per design spelling (CMP-0001, TSK-0042, RUN-0001, EVT-####, TOOL-0401) is rejected before it can be snapshotted; pytest tests/unit/kernel/identity/test_entity_key_grammar.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/property/kernel/state/test_canonical_sequence_monotonic.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-032: canonical_sequence is strictly increasing and workspace-global across interleaved multi-entity commits, crash recovery, rollback and an imported corpus, and an event at or below the high-water mark is rejected before append; pytest exits 0 over tests/property/kernel/state/test_canonical_sequence_monotonic.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/identity/test_urn_grammar.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "URN grammar: a URN whose entity kind disagrees with its EntityRef discriminator fails identity_kind_mismatch, _ is accepted only for workspace/project-level entities, and the #rung-N fragment (DOM-039) parses for 1..4 and rejects 0 and 5; pytest exits 0 over tests/unit/kernel/identity/test_urn_grammar.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
+          "id": "CR-04",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/identity/test_legacy_alias_index.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-012 model half: the alias index rejects a duplicate key, a value that is neither one native URN nor one legacy-record URN, and an alias-to-alias chain; pytest exits 0 over tests/unit/kernel/identity/test_legacy_alias_index.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add the epoch-2 identity grammar, key allocators and alias index",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W05",
+        "P32-I01-W11",
+        "P32-I01-W06",
+        "P32-I01-W07"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.114304Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W03"
+      ],
+      "description": "The entity field contracts of 20: shared value objects (EntityOrigin, EntityRef, TransitionReason, ExactRevisionBinding, OwnerPrincipal, Hold), Track with TrackPolicy and its strict nested shapes, the Track and Milestone leaf objects, TrackCreateSpec and MilestoneCreateSpec, DeliveryBatch, and Task with its DRAFT/DEFERRED/DROPPED draft head. Every model is Pydantic v2 with extra=forbid; Track.status is exactly ACTIVE|RETIRED (DOM-007) beside the untouched epoch-1 TrackStatus.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/state/epoch2",
+        "tests/unit/kernel/state",
+        "tests/contract/kernel/state",
+        "tests/fixtures/epoch2"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/state/test_track_policy.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/state/test_task_model.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/state/test_milestone_model.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/contract/kernel/state/test_epoch2_models_strict.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W04",
+      "intent": {
+        "desired_outcome": "Strict epoch-2 entity models load the packet's canonical examples and reject every listed invalid input at the loader",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add the shared value objects and the EntityOrigin discriminator with its legacy-required fields",
+          "Add Track, TrackPolicy and the leaf objects with the exclusions marker and AcceptanceStep rules",
+          "Add Milestone, DeliveryBatch and Task with the draft-head fields and the batch_ref null rule",
+          "Add TrackCreateSpec and MilestoneCreateSpec parsed from YAML through the same models the RPC params use"
+        ],
+        "priority_rationale": "Every later wave in this phase imports into these models; the schemas are the checkpoint's first named outcome.",
+        "problem": "The epoch-2 entities exist only as tables in the packet; the importer and the manifest have no typed target to validate against",
+        "risks": [
+          "The epoch-1 TrackStatus (four values) stays live for the epoch-1 authority; the two enums coexist until rc1 and are never aliased",
+          "20 gives no disposition for PLANNED/DEFERRED Tracks; they have zero live rows and import under a zero_rows proof, which W09 records"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.115034Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/state/test_track_policy.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "DOM-007: Track.status accepts exactly ACTIVE and RETIRED, a profile-supplied state is rejected, TrackPolicy enforces the hard wip.active_batches_per_repo and advisory wip.active_milestones invariants, and the strict nested YAML in 20 loads; pytest exits 0 over tests/unit/kernel/state/test_track_policy.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/state/test_task_model.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Task draft head: a DRAFT Task with batch_ref None, priority and intent validates; a PLANNED Task without batch_ref, a DRAFT Task carrying criteria, and a priority outside P0..P3 fail; due_scope None is legal only in DRAFT or DEFERRED; pytest tests/unit/kernel/state/test_task_model.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/state/test_milestone_model.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Milestone leaf objects: exclusions rejects an empty tuple, a duplicate and the none marker beside a real exclusion; AcceptanceStep requires unique ordered step ids and non-empty evidence_kinds; MilestoneCreateSpec forbids status, uid, urn and revision; pytest exits 0 over tests/unit/kernel/state/test_milestone_model.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
+          "id": "CR-04",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/contract/kernel/state/test_epoch2_models_strict.py",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "Strictness census: every model under the epoch-2 package declares extra=forbid, asserted by an architecture test that imports the package and inspects model_config; pytest exits 0 over tests/contract/kernel/state/test_epoch2_models_strict.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add the strict Track, Milestone, DeliveryBatch and Task models",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W06",
+        "P32-I01-W07",
+        "P32-I01-W12"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.115104Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W04"
+      ],
+      "description": "DOM-008, DOM-031 and the Release leaf objects of 20 that P31-W19 kept minimal. Add Run with the ten-variant RunScope union on scope_kind, the shared scope fields, the closed six-member SuspensionReason, and adopt ReleaseManifest, ReleaseArtifactInventory, PlatformClaimSet, ReleaseNotes, ReleaseTargetStatus, PublicationReceipt, ReleaseInvalidation (REL-038) and ReleaseApprovalReceipt (REL-039) into the domain package so release-train code imports them.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/state/epoch2",
+        "src/eawf/kernel/release",
+        "tests/unit/kernel/state",
+        "tests/unit/kernel/release",
+        "tests/fixtures/epoch2"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/state/test_run_scope.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/state/test_run_suspension_reason.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_models.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W05",
+      "intent": {
+        "desired_outcome": "Run always carries exactly one RunScope variant, SUSPENDED always names its clearing fact, and every Release leaf is a strict model with cross-object validation",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add RunScope with the ten variants and the write_set rule (non-empty only on TaskScope)",
+          "Add Run and SuspensionReason with the SUSPENDED-only carriage rule",
+          "Adopt the Release leaf objects with field parity against 10 and 20 and the cross-object validators",
+          "Re-point the P31 Release and ReleaseManifest records at the adopted leaves without changing their wire shape"
+        ],
+        "priority_rationale": "The Run derivation rule DOM-041 and the dev2 ReleaseManifest both need these leaves before the importer or the checkpoint cut can be written.",
+        "problem": "Run has no typed scope and the P31 release records carry dict-shaped leaves, so neither the Run importer nor a dev2 ReleaseManifest can validate strictly",
+        "risks": [
+          "P31-W19 models are live for the dev1 record; adoption must keep REL-0.7.0.dev1 loadable byte-for-byte"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.115853Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/state/test_run_scope.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "DOM-008: each RunScope variant parses from the run_scopes fixture; a nullable task_id, mixed scope fields, an untyped scope_id and a mutating purpose outside TaskScope fail; pytest exits 0 over tests/unit/kernel/state/test_run_scope.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/state/test_run_suspension_reason.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-031: one case per SuspensionReason member, the missing-reason denial, the non-SUSPENDED-carrier denial and a partition case asserting each member lands in exactly one Activity sub-bucket key; pytest exits 0 over tests/unit/kernel/state/test_run_suspension_reason.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_models.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Release leaves: cross-object validation rejects an unresolved artifact id, a manifest/leaf digest mismatch, nonempty membership_refs on dev1/dev2, missing checkpoint gate receipts and a second approval receipt on one proof_digest, and the P31 REL-0.7.0.dev1 record still loads; pytest exits 0 over tests/unit/kernel/release/test_models.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add the Run, RunScope, SuspensionReason and Release leaf models",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W21"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.116776Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W04",
+        "P32-I01-W05"
+      ],
+      "description": "DOM-001, DOM-002, DOM-003 and the transition execution contract of 20. One guarded-transition registry for Track, Milestone, DeliveryBatch, Task, Run and Release as pure reducers: unlisted edges return illegal_transition, failed guards return a stable guard code with remediation, terminal and legacy-origin rows refuse mutation, and the closed domain.entity.verb event registry rejects aliases. No daemon RPC binds these reducers to canonical state at dev2; fixtures drive them.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/state/epoch2",
+        "src/eawf/workflow/lifecycle",
+        "tests/unit/kernel/state",
+        "tests/unit/workflow/lifecycle",
+        "tests/property/kernel/state",
+        "tests/fixtures/epoch2/transitions"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/state/test_epoch2_transition_parity.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/workflow/lifecycle/test_epoch2_guards.py",
+              "tests/property/kernel/state/test_epoch2_illegal_transitions.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/property/kernel/state/test_epoch2_lifecycle_recovery.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/state/test_domain_event_names.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W06",
+      "intent": {
+        "desired_outcome": "Every lifecycle edge is a registered guarded transition with positive and denied tests, and the rendered diagrams have exact parity with the registry",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Encode each transition table as registry rows with guard predicates and denial codes",
+          "Add the parity check that enumerates the mermaid edges of 20 against the registry",
+          "Add the property walk proving every nonterminal state reaches terminal or recovery",
+          "Add the domain.entity.verb enum with the alias rejections"
+        ],
+        "priority_rationale": "Lifecycle reachability is one of the seven validation items of apply mode; the importer validates against this registry.",
+        "problem": "The six lifecycle tables exist only as prose and diagrams, so nothing can prove an edge is legal, a guard is total, or a diagram has drifted from its table",
+        "risks": [
+          "Guards that need external observations (host merge, publication) take caller hints only; at dev2 the observed-fact reader is a fixture adapter"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.117515Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/state/test_epoch2_transition_parity.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "DOM-001: every rendered edge in the six diagrams equals a registry edge and every registry edge is rendered, including empty and terminal rows; pytest exits 0 over tests/unit/kernel/state/test_epoch2_transition_parity.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/workflow/lifecycle/test_epoch2_guards.py tests/property/kernel/state/test_epoch2_illegal_transitions.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-003: each legal edge passes with its guard, each failed predicate and each unlisted edge returns its stable code with zero mutation, and a legacy-origin row is refused; pytest tests/unit/workflow/lifecycle/test_epoch2_guards.py tests/property/kernel/state/test_epoch2_illegal_transitions.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/property/kernel/state/test_epoch2_lifecycle_recovery.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-002: a property walk from every nonterminal state reaches a terminal or recovery state, with MERGING and LOST ambiguity kept observable rather than fabricated terminal; pytest exits 0 over tests/property/kernel/state/test_epoch2_lifecycle_recovery.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
+          "id": "CR-04",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/state/test_domain_event_names.py",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "Event registry: domain.task.completed validates while task.completed, batch.ready and domain.delivery_batch.completed fail before append; pytest tests/unit/kernel/state/test_domain_event_names.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add the guarded transition registry with edge parity and events",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W07": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W08",
+        "P32-I01-W15"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.117611Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W04",
+        "P32-I01-W05"
+      ],
+      "description": "DOM-020..025 and DOM-030. Every epoch-2 collection declares one tier (document, ledger, local store, firehose, derived) per the tier table of 20 plus the two rows F10 adds (Artifact, MemoryIndex as ledger). Add the compaction transaction (append to the ledger, remove from the document, update the derived offset index, all-or-none) over append_envelope, the append-only ledger guard, and the regenerable index under .ea/indexes. Exercised by staging trees and property tests; no live epoch-2 write.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/store",
+        "src/eawf/kernel/state/epoch2",
+        "tests/unit/kernel/store",
+        "tests/property/kernel/store"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/store/test_tier_assignment.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/property/kernel/store/test_compaction_atomic.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/store/test_ledger_append_only.py",
+              "tests/unit/kernel/store/test_derived_index_reproducible.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W07",
+      "intent": {
+        "desired_outcome": "Every collection has one declared tier, a terminal record compacts atomically into its ledger, and the derived index regenerates byte-identically from the ledgers alone",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add the tier declaration to every epoch-2 collection with schema validation on an undeclared or doubly declared tier",
+          "Add the compaction transaction with one fsync boundary and deterministic recovery from a crash between its three writes",
+          "Add the append-only guard rejecting a rewrite, reorder or removal of a ledger line",
+          "Add the derived offset index generator under .ea/indexes and its byte-identical regeneration check"
+        ],
+        "priority_rationale": "DOM-029 requires the importer to write straight into tiers; the tiers must exist before the importer's first staging write.",
+        "problem": "The rename to Milestone/Batch/Task reproduces the 5.9 MB monolith unless each collection declares where its bytes land and terminal rows leave the document",
+        "risks": [
+          "The shipped compact_store rewrites a ledger in place to deduplicate by id, which DOM-022 forbids; it stays for epoch-1 kinds and is fenced off from the new ledgers"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.118403Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/store/test_tier_assignment.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "DOM-020: every epoch-2 collection resolves to exactly one tier; a collection with no tier fails schema validation and a collection in two tiers fails compilation; the table is asserted total against the tier fixture; pytest exits 0 over tests/unit/kernel/store/test_tier_assignment.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/property/kernel/store/test_compaction_atomic.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-021/DOM-023: a Task reaching COMPLETED, CANCELLED or FAILED lands in task.jsonl and leaves the document in one transaction; a crash injected before, between and after each of the three writes leaves the record in exactly one canonical location after recovery; pytest exits 0 over tests/property/kernel/store/test_compaction_atomic.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/store/test_ledger_append_only.py tests/unit/kernel/store/test_derived_index_reproducible.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-022/DOM-025: a write that rewrites, reorders or removes an existing ledger line fails, a correction appends a supersedes line, and deleting .ea/indexes and regenerating yields a byte-identical index; pytest exits 0 over tests/unit/kernel/store/test_ledger_append_only.py tests/unit/kernel/store/test_derived_index_reproducible.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Declare the five storage tiers and the terminal compaction transaction",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W08": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W21"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.119327Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W07"
+      ],
+      "description": "DOM-026, DOM-027, DOM-028. Declare per path under .ea/ whether it is committed (state.json, store/*.jsonl, config.yaml, rules.yaml, artifacts/**, the root projection) or not (store/event.jsonl, telemetry.db, indexes/**, rules/views/**, locks/**, worktrees/**, local/**), make the classification total and machine-checkable, add the census that fails on an undeclared tracked path or a declared path that is absent or ignored, and fence generated output out of hand-authored directories.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/store",
+        "tools",
+        "tests/lint",
+        "tests/unit/kernel/store",
+        ".gitignore"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_ea_commit_census.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/store/test_generated_output_root.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W08",
+      "intent": {
+        "desired_outcome": "The committed surface under .ea/ is a declared, total classification asserted by a census that runs in pre-commit and CI",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add the per-path classification table with committed and not-committed tiers and the undeclared-path failure",
+          "Add the census over git ls-files against the classification",
+          "Add the generated-output root check for DOM-027",
+          "Align .gitignore with the declaration and enumerate any removed tracked path in the wave commit body"
+        ],
+        "priority_rationale": "DOM-028 is what stops the cutover from committing a firehose; it is cheap now and expensive after the importer writes real ledgers.",
+        "problem": "What under .ea/ is committed is convention, so a firehose or an index can land in version control and a declared ledger can be silently ignored",
+        "risks": [
+          "Changing the tier of a path that is tracked today changes the committed surface and needs the deletion rule's enumerated Removed list"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.120054Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_ea_commit_census.py",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "DOM-026/DOM-028: the census passes on the tree at the wave commit, fails when a fixture stages an undeclared path under .ea/, and fails when a declared-committed path is gitignored; pytest exits 0 over tests/lint/test_ea_commit_census.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/store/test_generated_output_root.py",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "DOM-027: a generator writing into a hand-authored directory fails and the declared generated-output root accepts the write with bounded retention declared; pytest exits 0 over tests/unit/kernel/store/test_generated_output_root.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add the .ea commit-policy census and path classification",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W11",
+        "P32-I01-W12"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.111132Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The disposition model of 20 as versioned code: the five dispositions, the per-collection defaults with the two F10 tier rows, the closed status map with archived and abandoned to CANCELLED, the annotated defaults priority_default_p2 and intent_from_title surviving compaction, DOM-041, DOM-043, DOM-044, DOM-045, the null_not_empty proof form, the F13 scrub exemption, the DOM-015 allowlist fixture with the DOM-018 deletions bound to it, and the CriterionSpec/GateSpec disposition row.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/migration/epoch2",
+        "tests/unit/kernel/migration",
+        "tests/fixtures/migration/allowed_legacy_symbols.txt",
+        "tests/fixtures/migration/epoch1-full"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/migration/test_backlog_resolution_classifier.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/migration/test_status_map_and_defaults.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/migration/test_backlog_obsolescence_sweep.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/migration/test_criteria_disposition.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W09",
+      "intent": {
+        "desired_outcome": "Every disposition, status map, default and rule is a versioned MappingRuleVersion with a digest, and the obsolescence sweep reads the DOM-015 allowlist",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Encode the disposition table and the closed status map with archived and abandoned to CANCELLED, never COMPLETED",
+          "Encode DOM-041, DOM-043, DOM-044 and DOM-045 as pure rule functions with rule ids and versions",
+          "Author tests/fixtures/migration/allowed_legacy_symbols.txt and bind the DOM-018 enumeration to it",
+          "Add the CriterionSpec/GateSpec disposition row (id, text, gate_ids, waiver_reason convert natively; kind, acceptance_style, evidence_kind, measurable_signal and the epoch-1 GateSpec criterion_id/args/cadence carry as legacy_refs; imported criteria take policy_ref legacy-import in place of source_atom_refs)"
+        ],
+        "priority_rationale": "Every mapping wave calls these rules; landing them as versioned code first is what makes the manifest's mapping_rules digest meaningful.",
+        "problem": "The eleven rules that make the disposition table total exist only in a spike findings file, and DOM-018 has no allowlist to bind to, so 23 live backlog rows have no decided fate",
+        "risks": [
+          "The DOM-018 ruling of 2026-09-03 binds; renames (wave, iter, phase, backlog, session) are not deletions and an id mention never obsoletes a row, so 23 live backlog rows survive",
+          "The ambiguous shorthand case B054 falls to arm four with all four candidates recorded, never disambiguated by picking the lowest iter"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.111863Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/migration/test_backlog_resolution_classifier.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "DOM-044: one case per classifier arm, the ambiguous P14-W02 shorthand recording four candidates, and a totality case over the 71 closed backlog rows of the epoch1-full fixture with zero prose survivors; pytest exits 0 over tests/unit/kernel/migration/test_backlog_resolution_classifier.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/migration/test_status_map_and_defaults.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Status map and defaults: archived and abandoned map to CANCELLED and never COMPLETED, a source status outside the map raises migration_count_mismatch, priority defaults P2 annotated priority_default_p2, intent defaults from title annotated intent_from_title, and both annotations survive compaction; pytest tests/unit/kernel/migration/test_status_map_and_defaults.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/migration/test_backlog_obsolescence_sweep.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-018 bound to DOM-015: the obsolescence sweep reads allowed_legacy_symbols.txt, an id mention alone never obsoletes a row, and the sweep re-runs byte-identically over the epoch1-full fixture; pytest exits 0 over tests/unit/kernel/migration/test_backlog_obsolescence_sweep.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
+          "id": "CR-04",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/migration/test_criteria_disposition.py",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "Criteria disposition row: an epoch-1 CriterionSpec with dangling gate_ids and an epoch-1 GateSpec with criterion_id map to one epoch-2 criterion carrying policy_ref legacy-import and legacy_refs, with no field silently dropped; pytest exits 0 over tests/unit/kernel/migration/test_criteria_disposition.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Encode the migration disposition table and the eleven importer rules",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W10": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W11",
+        "P32-I01-W12"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.111936Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "DOM-004 as amended by F9 and DOM-045. Read the epoch-1 document, every .ea/store ledger, the registry, config layers and telemetry metadata under a read barrier; census all 38 top-level collections, the ten that serialize as null (null_not_empty) and the six zero-row lists (zero_rows); union the audits collection with audit.jsonl; validate every row with its own strict schema so a malformed row is a plan failure, never a skip; and emit the SourceSnapshotIdentity digests.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/migration/epoch2",
+        "tests/integration/kernel/migration",
+        "tests/fixtures/migration/epoch1-full",
+        "tests/fixtures/migration/epoch1-empty-collections",
+        "tests/fixtures/migration/epoch1-malformed"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_epoch1_epoch2_inventory.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_epoch1_epoch2_inventory.py",
+              "-k",
+              "audit_union"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_epoch1_epoch2_inventory.py",
+              "-k",
+              "malformed"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W10",
+      "intent": {
+        "desired_outcome": "A deterministic source census covers every declared collection with the right proof form and reconciles the audit union, and a malformed source row fails the plan loudly",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add the read barrier and the per-surface digest set",
+          "Census every collection with the proof form recorded per collection",
+          "Union document audits with the audit ledger and record document_rows, ledger_rows, union_rows and store_only_imported",
+          "Validate rows with the strict epoch-1 schema and surface malformed rows as plan failures"
+        ],
+        "priority_rationale": "The census is step 1 of plan mode and the source of every count the manifest reconciles.",
+        "problem": "The importer needs a total, strict inventory of the epoch-1 corpus, and today ten collections are null rather than empty and 24 audits exist only in the store",
+        "risks": [
+          "The 1.19 to 1.20 additive migration ships in the tree; the reader must census the then-current chain, not a hardcoded 1.19"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.112657Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_epoch1_epoch2_inventory.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "DOM-004: the census, taken under the read barrier with per-surface digests, reconciles all 38 top-level keys of the epoch1-full fixture with zero undeclared, fails on an omitted, duplicated or unknown collection, and the epoch1-empty-collections fixture records null_not_empty for null slots and zero_rows for empty lists; pytest exits 0 over tests/integration/kernel/migration/test_epoch1_epoch2_inventory.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_epoch1_epoch2_inventory.py -k audit_union",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-045: a fixture whose store holds 24 rows the document does not imports the union once per id, resolves iter audit refs against the union, and a union smaller than either input fails the plan; pytest exits 0 over tests/integration/kernel/migration/test_epoch1_epoch2_inventory.py -k audit_union",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_epoch1_epoch2_inventory.py -k malformed",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Malformed rows: every row of epoch1-malformed becomes an explicit plan failure naming its locator and none is skipped; pytest exits 0 over tests/integration/kernel/migration/test_epoch1_epoch2_inventory.py -k malformed",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add the strict epoch-1 census reader with typed proof forms",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W11": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W13",
+        "P32-I01-W14"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.115949Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W04",
+        "P32-I01-W09",
+        "P32-I01-W10"
+      ],
+      "description": "The native-conversion rows of 20 for Phase to Milestone, Iter to DeliveryBatch with legacy_slice, Wave to Task, Backlog to DRAFT/DROPPED Task, plus tracks/goals/outcomes, using the W09 rules: closed status map, annotated defaults, DOM-043 legacy_refs for claim_session_id, DOM-044 classifier, the DOM-018 sweep and the criteria disposition row for Wave.success_criteria. Every target carries origin.kind=legacy with source_id, source_digest, mapping_basis and confidence.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/migration/epoch2",
+        "tests/unit/kernel/migration",
+        "tests/property/kernel/migration",
+        "tests/fixtures/migration/sparse-history"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/property/kernel/migration/test_epoch2_no_fabrication.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/migration/test_lifecycle_mapping.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/property/kernel/migration/test_epoch2_alias_index.py",
+              "-k",
+              "claim_session"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W11",
+      "intent": {
+        "desired_outcome": "Every lifecycle row maps deterministically to one legacy-origin epoch-2 record with its preserved facts and annotated defaults, and no native acceptance or completion is fabricated",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Implement the four lifecycle mappers over the W09 rules with EntityOrigin populated per row",
+          "Carry claim_session_id as legacy_refs and link legacy_session_ref only when it resolves",
+          "Apply the classifier and the sweep to backlog rows",
+          "Map Wave.success_criteria through the criteria disposition row"
+        ],
+        "priority_rationale": "The lifecycle collections are 60 percent of the corpus and every other mapping re-points at the Tasks this wave mints.",
+        "problem": "No mapping function exists from Phase/Iter/Wave/Backlog rows to Milestone/Batch/Task records, and 1,267 claim ids and 71 prose resolutions dangle without one",
+        "risks": [
+          "G01 maps to a Track outcome metric with no Track in source and must surface as a required operator assignment, never an inferred Track"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.116690Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/property/kernel/migration/test_epoch2_no_fabrication.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-010: on the sparse-history fixture missing sessions create no Runs, merge and tag evidence creates facts but no approval or acceptance, and an ambiguous Track stays unassigned; pytest exits 0 over tests/property/kernel/migration/test_epoch2_no_fabrication.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/migration/test_lifecycle_mapping.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Lifecycle mapping: every phase, iter, wave and backlog row of the epoch1-full fixture yields one target with origin.kind legacy, the status map applied, priority and intent annotated where defaulted, and the archived phase mapped to CANCELLED; pytest exits 0 over tests/unit/kernel/migration/test_lifecycle_mapping.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/property/kernel/migration/test_epoch2_alias_index.py -k claim_session",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-043: a claim id that resolves yields legacy_session_ref and one that does not stands as a string with no session minted; an empty string imports as an absent field; pytest exits 0 over tests/property/kernel/migration/test_epoch2_alias_index.py -k claim_session",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Map the lifecycle collections and the criteria corpus into epoch-2",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W12": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W13",
+        "P32-I01-W14"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.118473Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W05",
+        "P32-I01-W09",
+        "P32-I01-W10"
+      ],
+      "description": "The remaining disposition rows of 20 as amended: DOM-041 mints one Run per wave.sessions attempt entry, TERMINAL_UNCLASSIFIED unless a role report binds the provider session id; every agent_sessions and worktree row imports as an immutable legacy envelope (F12); estimates and actuals re-point at the imported Task preserving measurement quality and the exclusion flag (DOM-017, DOM-019); audits use the W10 union; artifacts and memory_index land in ledgers byte-identical with reindexed aliases.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/migration/epoch2",
+        "tests/unit/kernel/migration",
+        "tests/property/kernel/migration",
+        "tests/fixtures/migration/attempt-map"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/property/kernel/migration/test_epoch2_no_fabrication.py",
+              "-k",
+              "attempt_map"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/migration/test_measurement_repoint.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/migration/test_legacy_envelopes.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W12",
+      "intent": {
+        "desired_outcome": "Runs derive only from attempt entries, every other session and worktree row is an immutable legacy envelope, and the measurement collections re-point with zero orphans and no measured zero",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Implement DOM-041 with the report-store binding and the shared-provider-session-id rule",
+          "Implement the immutable legacy envelope writer for sessions and worktrees",
+          "Re-point estimates and actuals keyed on the map key rather than the EST-/ACT- id",
+          "Import audits from the union, artifacts byte-identically and memory_index as ledger lines"
+        ],
+        "priority_rationale": "These rows are the difference between a faithful import and a fabricated one; DOM-010's no-fabrication property depends on them.",
+        "problem": "The AgentSession to Run row mints zero Runs on this corpus and the measurement, audit, artifact and worktree collections have no mapping code",
+        "risks": [
+          "The SUCCEEDED arm of DOM-041 cannot fire on the live corpus (no report binds any of the four provider session ids) and is proven only by the attempt-map fixture"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.119248Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/property/kernel/migration/test_epoch2_no_fabrication.py -k attempt_map",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-041: the attempt-map fixture yields exactly one Run per attempt entry, a wave with no entry yields no Run, a zero exit status alone never yields SUCCEEDED, and a bound role report maps exit 0 to SUCCEEDED and non-zero to FAILED; pytest exits 0 over tests/property/kernel/migration/test_epoch2_no_fabrication.py -k attempt_map",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/migration/test_measurement_repoint.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "DOM-017/DOM-019: every estimate and actual row re-points at an imported Task keyed on the map key with zero orphans, the measurement-quality marker and exclusion flag survive verbatim, and a row whose subject has no imported Task stays an immutable legacy record; pytest exits 0 over tests/unit/kernel/migration/test_measurement_repoint.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/migration/test_legacy_envelopes.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Legacy envelopes: the 45 session rows and 336 worktree rows of the epoch1-full fixture import as immutable legacy records with no WorkLease, an active worktree carries its annotation, and artifacts round-trip byte-identical under their reindexed aliases; pytest exits 0 over tests/unit/kernel/migration/test_legacy_envelopes.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Map sessions, Runs, measurements, audits, artifacts and envelopes",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W13": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W14"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.120118Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W03",
+        "P32-I01-W11",
+        "P32-I01-W12"
+      ],
+      "description": "DOM-012, DOM-024 as amended by DOM-043/DOM-045, and the fabrication assertions of the migration gates. Over a staged import every source id resolves through the alias index once and injectively; a collision, a dangling canonical reference and an alias chain fail; a legacy-reference string is never counted as dangling; and no Task, Run, approval, acceptance or Release observation appears unless source evidence entails it. An alias given to a native mutator returns legacy_identity_read_only.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/migration/epoch2",
+        "tests/property/kernel/migration",
+        "tests/fixtures/migration/alias-collision",
+        "tests/fixtures/migration/ambiguous-history"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/property/kernel/migration/test_epoch2_alias_index.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/property/kernel/migration/test_epoch2_reference_validation.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/property/kernel/migration/test_epoch2_no_fabrication.py",
+              "-k",
+              "census"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W13",
+      "intent": {
+        "desired_outcome": "A staged import is validated for alias totality, reference resolution over canonical references only, and zero fabricated native semantics before any manifest is sealed",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add the alias-index totality and injectivity check over the staged tree",
+          "Add the reference validator distinguishing canonical references from legacy_refs strings",
+          "Add the fabrication census asserting zero unexplained Task, Run, approval, acceptance or observation rows",
+          "Add the read-only alias response for native mutators"
+        ],
+        "priority_rationale": "These are the checks apply mode refuses on; without them the manifest's validation_results would be prose.",
+        "problem": "The importer's outputs are unchecked; an injective alias index, a zero-dangling reference set and the no-fabrication invariant are asserted nowhere",
+        "risks": [
+          "The validator runs twice (plan mode step 6) and its digest must be byte-identical on the second run"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.120850Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/property/kernel/migration/test_epoch2_alias_index.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-012: on the epoch1-full fixture every source id resolves once with 0 collisions; the alias-collision fixture fails, an alias chain fails, and a mutator given an alias returns legacy_identity_read_only; pytest tests/property/kernel/migration/test_epoch2_alias_index.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/property/kernel/migration/test_epoch2_reference_validation.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-024: canonical dangling references over the staged epoch1-full tree are 0 while 1,267 claim ids and 10 audit ids are carried as legacy strings, and a fixture with a fabricated dangling canonical URN fails the write; pytest exits 0 over tests/property/kernel/migration/test_epoch2_reference_validation.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/property/kernel/migration/test_epoch2_no_fabrication.py -k census",
+          "oracle_tier": null,
+          "quality_dimension": "security",
+          "required": true,
+          "response": null,
+          "text": "Fabrication census: the ambiguous-history fixture produces zero rows without a source locator and the census names any record whose disposition cannot cite one; pytest exits 0 over tests/property/kernel/migration/test_epoch2_no_fabrication.py -k census",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Validate references, alias totality and no-fabrication over the corpus",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W14": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W15",
+        "P32-I01-W16"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.120935Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W11",
+        "P32-I01-W12",
+        "P32-I01-W13"
+      ],
+      "description": "The MigrationManifest contract of 20 (schema_version \"2\": source, both censuses, mapping_rules, row_mappings, store_mappings, git_evidence, track_assignments, unresolved_rows, three digests, backup, rollback_boundary, validation_results, seal fields), the MigrationPlan with its approval digest, and eawf migrate epoch2 --plan behind migration.epoch2.plan: seven read-only steps ending in double validation with a byte-identical digest, plus the loader-valid complete-manifest fixture.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/migration/epoch2",
+        "src/eawf/runtime/daemon/methods",
+        "src/eawf/surfaces/cli/commands/migrate.py",
+        "tests/unit/kernel/migration",
+        "tests/integration/kernel/migration",
+        "tests/property/kernel/migration",
+        "tests/fixtures/migration/epoch2"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/migration/test_migration_manifest.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_epoch2_plan_mode.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/property/kernel/migration/test_epoch2_idempotence.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W14",
+      "intent": {
+        "desired_outcome": "eawf migrate epoch2 --plan emits a strict MigrationPlan whose manifest is total over the source, separates required operator assignments from unresolved rows, and writes no canonical state",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add the strict manifest models with the mutually consistent digest rule and the proof form per collection",
+          "Implement plan mode steps 1 to 7 over W10..W13 with the isolated staging tree",
+          "Add the CLI verb and the RPC with the read-only contract",
+          "Author the complete-manifest fixture with full digests and every zero-row collection"
+        ],
+        "priority_rationale": "The manifest is the object the migration signal, the rollback boundary and the dev2 gate all read.",
+        "problem": "The import has no durable, sealable record of what it plans to do, and no read-only command shows every mapping, omission and ambiguity before anything is written",
+        "risks": [
+          "The existing eawf migrate sub-app owns the state-schema chain; epoch2 must nest under it without changing the chain verbs"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.121718Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/migration/test_migration_manifest.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Manifest strictness: the complete-manifest fixture loads; a manifest with a missing zero-row collection, an unknown disposition, an unresolved alias, an inferred acceptance annotation or a target-count mismatch fails before cutover; pytest exits 0 over tests/unit/kernel/migration/test_migration_manifest.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_epoch2_plan_mode.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Plan mode is read-only and idempotent: two runs over the epoch1-full fixture emit byte-identical manifest digests, write no canonical repository or registry state, and report G01 under required operator assignments rather than unresolved rows; pytest exits 0 over tests/integration/kernel/migration/test_epoch2_plan_mode.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/property/kernel/migration/test_epoch2_idempotence.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-011 refusal: a source changed after the plan digest was taken refuses with migration_source_changed and an ambiguous or invalid row without explicit disposition keeps apply refused; pytest exits 0 over tests/property/kernel/migration/test_epoch2_idempotence.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add the MigrationManifest, MigrationPlan and read-only plan mode",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W15": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W16"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.121841Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W07",
+        "P32-I01-W14"
+      ],
+      "description": "DOM-029 with DOM-011 as amended by F13. The staging tree writes every imported record into its declared tier (terminal Tasks, Batches, Milestones, Runs, audits, decisions, artifacts and legacy envelopes into ledgers; only work in flight into the document; worktrees derived); the manifest records per-tier counts and residual document size and fails when the document retains a terminal record; the derived index regenerates byte-identically; the scrub gate reuses the placeholder exemption.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/migration/epoch2",
+        "src/eawf/kernel/store",
+        "tests/integration/kernel/migration",
+        "tests/unit/kernel/migration"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_epoch2_tier_placement.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_epoch2_tier_placement.py",
+              "-k",
+              "index_regen"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/migration/test_cutover_scrub_gate.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W15",
+      "intent": {
+        "desired_outcome": "The staged import lands each record in its tier, the document holds only work in flight, and the scrub gate passes over the real corpus without editing a source string",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Route each disposition target to its tier through the W07 writers",
+          "Record per-tier counts and document bytes in the manifest with the terminal-in-document failure",
+          "Regenerate the derived index from the staged ledgers and compare",
+          "Add the scrub gate with the exemption shared with the repository's path-leak scan"
+        ],
+        "priority_rationale": "DOM-029 is the purpose of the storage tiers; the checkpoint's sizing claim is unverifiable without this wave.",
+        "problem": "Without tier placement the importer reconstructs the 5.9 MB monolith it replaces, and a naive path-leak scan reds on the corpus's own scrub-rule criteria text",
+        "risks": [
+          "Committed ledger bytes do not shrink (5.9 MB of history); the manifest must say the document stops being rewritten per mutation rather than promise a smaller repository"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.122576Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_epoch2_tier_placement.py",
+          "oracle_tier": null,
+          "quality_dimension": "performance_efficiency",
+          "required": true,
+          "response": null,
+          "text": "DOM-029: over the epoch1-full fixture zero terminal Tasks remain in the staged document, the manifest reports per-tier counts and document bytes under 1.6 MB, and a staged document seeded with one terminal row fails the cutover; pytest exits 0 over tests/integration/kernel/migration/test_epoch2_tier_placement.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_epoch2_tier_placement.py -k index_regen",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-025 over staging: deleting the staged index and regenerating from the staged ledgers is byte-identical; pytest exits 0 over tests/integration/kernel/migration/test_epoch2_tier_placement.py -k index_regen",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/migration/test_cutover_scrub_gate.py",
+          "oracle_tier": null,
+          "quality_dimension": "security",
+          "required": true,
+          "response": null,
+          "text": "DOM-011 scrub exemption: the gate reports 0 hits over a fixture carrying the three placeholder forms and 1 hit over a fixture carrying a real home-directory path, and the importer rewrites no source string; pytest exits 0 over tests/unit/kernel/migration/test_cutover_scrub_gate.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Write the staged import into its tiers with the scrub gate",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W16": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W17"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.122654Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W02",
+        "P32-I01-W14",
+        "P32-I01-W15"
+      ],
+      "description": "REL-020 and the apply-mode algorithm of 20. eawf migrate epoch2 --apply --plan-digest behind migration.epoch2.apply: maintenance mode, exclusive authority locks with fallback writers disabled, itemized migration_not_quiescent, a hashed snapshot of every authority surface, re-census under lock against the plan digest, a double staging import, read smoke, atomic generation select with the marker written last, and the append-only CutoverJournal. Adds the read-only epoch-1 export verb (AUTH-008).",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/migration/epoch2",
+        "src/eawf/runtime/daemon/methods",
+        "src/eawf/surfaces/cli/commands/migrate.py",
+        "tests/integration/kernel/migration",
+        "tests/fixtures/migration/cutover-faults"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_v07_rehearsal.py",
+              "-k",
+              "apply"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_epoch2_apply_guards.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_epoch2_apply_guards.py",
+              "-k",
+              "canary_fence"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W16",
+      "intent": {
+        "desired_outcome": "Apply builds a new generation and selects it atomically behind a journaled, quiescent, idempotent transaction that never mutates epoch 1 in place, and export reads epoch 1 without writing",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add maintenance mode, the authority locks and the quiescence check with itemized reasons",
+          "Add the snapshot set, the under-lock re-census and the double staging import",
+          "Add the atomic swap with the marker last and the CutoverJournal rows for every stage",
+          "Add migrate epoch2 --export as a read-only epoch-1 export"
+        ],
+        "priority_rationale": "The migration signal requires apply and idempotent rerun to pass; plan mode alone cannot satisfy migration_unproven.",
+        "problem": "The importer can plan but not apply, and no journal, quiescence check or atomic generation select exists to make an apply safe or resumable",
+        "risks": [
+          "dev2 forbids operational epoch-2 writes; apply must refuse on any repository not declared a disposable canary or test fixture, and the restart-in-epoch-2-only step runs only against a throwaway runtime dir"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.123381Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_v07_rehearsal.py -k apply",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "REL-020/DOM-011: apply over the epoch1-full fixture takes the snapshot set and the under-lock re-census, builds a new generation, selects it atomically with the marker written last, and a second apply proves no additional writes with the same manifest digest; pytest exits 0 over tests/integration/kernel/migration/test_v07_rehearsal.py -k apply",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_epoch2_apply_guards.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Quiescence and precondition: an active session, lease, WAL row or managed worktree returns itemized migration_not_quiescent, an unregistered workspace returns workspace_not_registered before the first URN is minted, and a stale plan digest refuses; pytest tests/integration/kernel/migration/test_epoch2_apply_guards.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_epoch2_apply_guards.py -k canary_fence",
+          "oracle_tier": null,
+          "quality_dimension": "security",
+          "required": true,
+          "response": null,
+          "text": "Canary fence: apply on a repository not declared a disposable canary or fixture refuses at dev2, and the export verb writes nothing while emitting every collection; pytest exits 0 over tests/integration/kernel/migration/test_epoch2_apply_guards.py -k canary_fence",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add apply mode with the cutover journal, generation select and export",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W17": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W18"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.123469Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W16"
+      ],
+      "description": "The rollback and recovery table of 20 and the crash-point item of the migration gates. eawf migrate epoch2 --recover --manifest and --rollback behind migration.epoch2.recover: before the swap discard staging and journal the failure; after the swap but before the marker restore the full snapshot set with digest checks; after the marker but before the first native mutation complete or restore; after it refuse with rollback_boundary_crossed. A crash is injected at every durable write boundary.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/migration/epoch2",
+        "src/eawf/runtime/daemon/methods",
+        "tests/integration/kernel/migration",
+        "tests/fixtures/migration/cutover-faults"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_epoch2_rollback.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_epoch2_rollback.py",
+              "-k",
+              "crash_point"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_epoch2_recovery_mode.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W17",
+      "intent": {
+        "desired_outcome": "Every failure point in the rollback table has a rehearsed action, the boundary is journal-proven, and a crash at any durable write boundary recovers deterministically without operator input",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add the recover and rollback verbs over the journal with the four failure-point actions",
+          "Add the full-set restore with per-file digest verification and the forbidden partial restore",
+          "Add the crash injector over every durable write boundary of apply and recovery",
+          "Rehearse restore to backup and reapply from the same manifest"
+        ],
+        "priority_rationale": "The migration signal names rollback rehearsal; this is the migration-boundary counterpart of REL-024.",
+        "problem": "Apply has no explicit rollback boundary and no proof that a crash at any durable write leaves a recoverable, single-authority tree",
+        "risks": [
+          "A rollback after the first native mutation is Incident plus Decision territory by design and must be refused, not automated"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.124232Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_epoch2_rollback.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "DOM-011 rollback: a staged failure restores all files with matching digests, a post-mutation rollback returns rollback_boundary_crossed, and restore-then-reapply from the same manifest yields the same idempotence digest; pytest tests/integration/kernel/migration/test_epoch2_rollback.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_epoch2_rollback.py -k crash_point",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Crash points: the cutover-faults fixture injects a crash at every durable write boundary of apply and each recovery leaves exactly one authoritative generation with a journal row naming the stage; pytest exits 0 over tests/integration/kernel/migration/test_epoch2_rollback.py -k crash_point",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_epoch2_recovery_mode.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Recovery mode: recover between marker and first native mutation completes activation or restores the full set, and an interrupted post-select journal reconciles the selected generation without dual-write; pytest exits 0 over tests/integration/kernel/migration/test_epoch2_recovery_mode.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add rollback, recovery and crash injection at every durable boundary",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W18": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W20"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.124319Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W17"
+      ],
+      "description": "The required fixture set of 10 Migration gates: empty repository, minimal active repository, all-terminal repository, interrupted close, open attention, multi-root workspace, corrupt reference, unknown extension field, the P30/I26 historical corpus, and the largest supported state, ruled as the live corpus frozen at cutover at band thousands with the recorded multiplier ceiling. Each runs dry-run, apply, idempotent rerun and rollback rehearsal so the migration signal computes from goldens.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "tests/fixtures/migration",
+        "tests/integration/kernel/migration",
+        "tests/golden/kernel/migration"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_v07_rehearsal.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_v07_rehearsal.py",
+              "-k",
+              "negative"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_v07_rehearsal.py",
+              "-k",
+              "largest"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W18",
+      "intent": {
+        "desired_outcome": "All ten fixtures exist as loader-valid corpora and every one passes the four rehearsal legs with recorded manifests",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Generate the nine structural fixtures from typed builders rather than hand-edited JSON",
+          "Freeze the P30/I26 corpus from the scrubbed historical state",
+          "Freeze the live corpus at cutover as the largest-supported-state fixture at band thousands and assert the recorded multiplier ceiling",
+          "Run and record the four legs per fixture as goldens"
+        ],
+        "priority_rationale": "The dev2 gate profile's migration row is unfalsifiable without these fixtures.",
+        "problem": "The migration signal passes only over the named fixture set, none of the ten exists, and the largest supported state is undefined",
+        "risks": [
+          "The P30/I26 corpus must pass the W15 scrub gate before it is committed"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.125082Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_v07_rehearsal.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "All ten fixtures pass dry-run, apply, idempotent rerun and rollback rehearsal with manifests recorded as goldens, and the rehearsal is parametrised per fixture so a failure names its fixture; pytest exits 0 over tests/integration/kernel/migration/test_v07_rehearsal.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_v07_rehearsal.py -k negative",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Negative fixtures: corrupt-reference fails with migration_reference_unresolved, unknown-extension-field fails strict validation naming the field, and interrupted-close imports the close attempt as an immutable legacy record; pytest exits 0 over tests/integration/kernel/migration/test_v07_rehearsal.py -k negative",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_v07_rehearsal.py -k largest",
+          "oracle_tier": null,
+          "quality_dimension": "performance_efficiency",
+          "required": true,
+          "response": null,
+          "text": "Largest supported state: the fixture is the live corpus frozen at cutover at band thousands, the recorded multiplier ceiling is asserted, and apply completes inside the declared timeout budget with the residual document under 1.6 MB; pytest exits 0 over tests/integration/kernel/migration/test_v07_rehearsal.py -k largest",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Author the ten migration golden fixtures and rehearse all four legs",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W19": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W20"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.112741Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-028, delivered at dev2 per 10. On top of P31-W10's out-of-process crash-isolated runner and P31-W11's shared runner behind the bypass lane, the daemon serves a gate-bearing close for a caller with no interactive session: same gate runner, receipts and close failure vocabulary whether the close is interactive or headless, resumable across a deliberately crashing gate. Names headless close a supported mode (REL-030); the bypass lane stays until rc1 (REL-029).",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods",
+        "src/eawf/workflow/verify",
+        "src/eawf/surfaces/cli/commands/close.py",
+        "tests/integration/runtime/daemon"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/daemon/test_headless_close.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/daemon/test_headless_close.py",
+              "-k",
+              "crash"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/daemon/test_headless_close.py",
+              "-k",
+              "waiver"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W19",
+      "intent": {
+        "desired_outcome": "A headless gate-bearing close through the daemon produces identical gates, receipts and failure kinds to an interactive one, and the bypass has a replacement before rc1 removes it",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add the daemon-hosted close entry that accepts a close with no attached session and runs the shared gate runner out of process",
+          "Bind the receipts and CloseFailureKind vocabulary so both paths produce identical records",
+          "Make a crashing hosted gate leave the daemon serving and the close resumable",
+          "Record the mode as supported in the close CLI and the readiness signal"
+        ],
+        "priority_rationale": "REL-029 removes the bypass at rc1 only once REL-028 is delivered and proven; dev2 is where the packet places it.",
+        "problem": "A close with no interactive session either bypasses the gates under a waiver or cannot run them, so headless operation is a degraded mode rather than the same mode",
+        "risks": [
+          "Rides on P31-W10 and P31-W11 having landed; the headless close is the first consumer of the out-of-process runner outside the interactive path"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.113453Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/runtime/daemon/test_headless_close.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "REL-028: a close issued with no interactive session produces the same gate set, the same receipt ids and the same failure_kind as the same close issued interactively, asserted by a paired run over one fixture wave; pytest exits 0 over tests/integration/runtime/daemon/test_headless_close.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/runtime/daemon/test_headless_close.py -k crash",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Crash isolation under hosting: a deliberately crashing hosted gate leaves daemon.ping answering and the close operation resumable to a verdict; pytest exits 0 over tests/integration/runtime/daemon/test_headless_close.py -k crash",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/runtime/daemon/test_headless_close.py -k waiver",
+          "oracle_tier": null,
+          "quality_dimension": "security",
+          "required": true,
+          "response": null,
+          "text": "REL-025 interaction: with the daemon available the bypass lane is not taken for a headless close and the waiver count stays zero; with the daemon unavailable the waiver path still records and counts; pytest exits 0 over tests/integration/runtime/daemon/test_headless_close.py -k waiver",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Host gate execution in the daemon for headless closes",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W20": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W21"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.125149Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W18",
+        "P32-I01-W19"
+      ],
+      "description": "The dev2 gate profile ruled 2026-09-03 (the dev1 eight plus migration, hosted_gate_runner, schema_strictness, waiver_count) bound to readiness rows as P31-W29 binds dev1: migration from the W14 manifest and W18 goldens (else migration_unproven), hosted_gate_runner from W19, schema_strictness from W04; security_review is the vulnerability component of the dependencies row P31-W30 produces. REL-037 legs: importer at dev2, cross-provider and daemon-RPC under concurrent dispatch at dev3.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/release",
+        "src/eawf/workflow/verify",
+        "src/eawf/workflow/evidence",
+        ".ea/artifacts/research",
+        "tests/workflow/verify",
+        "tests/integration/workflow/release"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/verify",
+              "-k",
+              "dev2_profile"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/verify",
+              "-k",
+              "migration_signal"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_measured_before_build.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W20",
+      "intent": {
+        "desired_outcome": "Every dev2 gate name resolves to one readiness row computed from evidence, the importer contract is promoted at production scale, and the dev3 opening is machine-refused without the assigned contracts",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Declare the twelve dev2 gate names and generate the dev2 checkpoint config from the train template rather than by overlay",
+          "Compute the migration row from the manifest and the golden rehearsals",
+          "Promote the rules-closure probe as the importer MeasuredContract revision at scale band thousands through the evidence path",
+          "Extend the REL-037 admission table with importer at dev2 and cross-provider plus daemon-RPC-under-concurrent-dispatch at dev3"
+        ],
+        "priority_rationale": "W21 cannot preflight without a bound profile, and dev3 cannot open without the admission table this wave extends.",
+        "problem": "10 names the dev2 profile only as migration, no signal computes from the importer, and the importer MeasuredContract still cites the 2026-08-13 fixture-scale probe",
+        "risks": [
+          "security_review reads P31-W30's vulnerability report; a stubbed or absent report reds the gate rather than passing it"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.125886Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/workflow/verify -k dev2_profile",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "dev2 profile: the loader accepts the generated dev2 checkpoint configuration, rejects an overlay of version and channel onto the dev1 instance, and each of the twelve names (the dev1 eight plus migration, hosted_gate_runner, schema_strictness, waiver_count) resolves to exactly one readiness row; pytest exits 0 over tests/workflow/verify -k dev2_profile",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/workflow/verify -k migration_signal",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Migration signal: readiness reports migration pass only when all four legs pass over the ten fixtures and reports migration_unproven when any leg or fixture is absent; pytest exits 0 over tests/workflow/verify -k migration_signal",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_measured_before_build.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "REL-037: the importer contract resolves by ArtifactUrn with scale_band thousands and a non-empty boundary citing the production corpus, and the dev3 admission refusal names each missing dev3 contract (cross-provider, daemon-RPC under concurrent dispatch); pytest exits 0 over tests/integration/workflow/release/test_measured_before_build.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Bind the dev2 gate profile, migration signal and checkpoint admission",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W21": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.125964Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W01",
+        "P32-I01-W06",
+        "P32-I01-W08",
+        "P32-I01-W20"
+      ],
+      "description": "Mirrors P31-W26 and the seam wave P31-W32 together because the publication machinery now exists: bump _version.py to 0.7.0.dev2 with a CHANGELOG section naming migrations and limitations, open REL-0.7.0.dev2 as a distinct DRAFT from the BAKED dev1 record (REL-011), pin it, run the dev2 profile with the waiver count and the REL-037 admission check, approve, hand the tag push to the operator, publish to pypi, npm under next and github, observe each target and reach BAKED with the train advanced.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/_version.py",
+        "CHANGELOG.md",
+        "pyproject.toml",
+        "src/eawf/workflow/verify",
+        "tests/integration/workflow/release",
+        ".ea/artifacts"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_dev2_checkpoint.py",
+              "-k",
+              "approve"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_dev2_checkpoint.py",
+              "-k",
+              "waiver"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/release/test_tag_chokepoint.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W21",
+      "intent": {
+        "desired_outcome": "REL-0.7.0.dev2 is BAKED with three observed_success targets, membership_refs empty, authority_epoch 1 and the train index advanced",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Bump the version and write the 0.7.0.dev2 CHANGELOG section",
+          "Open the dev2 Release from the terminal dev1 record and pin it",
+          "Run the dev2 preflight to APPROVED with the waiver and admission rows",
+          "Publish, observe and record BAKED after the operator's tag push"
+        ],
+        "priority_rationale": "BAKED is terminal for a development Release and the train opens dev3 only from it.",
+        "problem": "Every dev2 gate has landed as code but no Release record binds them into the checkpoint the train advances on, and dev3 opens only from a BAKED dev2",
+        "risks": [
+          "BAKED completes only after the operator pushes the tag and the observers see all three targets; the wave closes on the observed record, not on the approve"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.126700Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_dev2_checkpoint.py -k approve",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The 0.7.0.dev2 Release opens as a distinct DRAFT only from the terminal dev1 record, carries channel dev, authority_epoch 1 and empty membership_refs, and reaches APPROVED after a green dev2 profile; pytest exits 0 over tests/integration/workflow/release/test_dev2_checkpoint.py -k approve",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_dev2_checkpoint.py -k waiver",
+          "oracle_tier": null,
+          "quality_dimension": "security",
+          "required": true,
+          "response": null,
+          "text": "REL-025: the dev2 readiness reports waiver_count zero-or-explained and a non-zero count with no explanation is red; pytest exits 0 over tests/integration/workflow/release/test_dev2_checkpoint.py -k waiver",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/runtime/release/test_tag_chokepoint.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Version and changelog agree at 0.7.0.dev2 with a section naming the migration limitations, and the tag chokepoint passes on the cut commit; pytest exits 0 over tests/integration/runtime/release/test_tag_chokepoint.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "attested",
+          "measurable_signal": "the operator's wave-close review confirms REL-0.7.0.dev2 BAKED with three observed_success targets and the train index advanced",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "BAKED: after publication the record shows observed_success on pypi, npm (dist-tag next) and github, status BAKED, and ReleaseTrain.current_checkpoint_index advanced by one; judged at wave close against eawf release show REL-0.7.0.dev2 --json; human review at wave close",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Cut, publish and observe the 0.7.0.dev2 checkpoint to BAKED",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W22": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap propose; typed criteria land via spec sync",
+        "waived_at": "2026-09-03T17:58:45.113513Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The 2026-09-02 ruling keeps the chassis replay running in CI across dev1 and dev2 so the 261/261 evidence does not decay. Move the extracted fixture JSON, 261 frames and 25 journeys into tests/fixtures/console/golden/ through the CON-147 normalisation map with the two classification defects corrected (timeline to roadmap; notifications out of the entity sub-surfaces), and land the spike chassis and harness as a tracked test-only package replayed in CI on every push.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/fixtures/console/golden",
+        "tests/tui/console_chassis",
+        "tests/snapshots/tui/console",
+        "tests/lint",
+        ".github/workflows"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/console/test_golden_frames.py",
+              "tests/snapshots/tui/console/test_golden_journeys.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/console/test_golden_frames.py",
+              "-k",
+              "settle"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/console/test_normalisation_map.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_console_replay_ci_job.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W22",
+      "intent": {
+        "desired_outcome": "The golden contract and the chassis that replays it are tracked, corrected at the two known classification defects, and replayed in CI on every push",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Copy the extracted fixture JSON, frames and journeys under tests/fixtures/console/golden/ with the normalisation map loaded strict",
+          "Correct timeline to roadmap and move notifications out of the entity sub-surfaces in the tracked registry and map",
+          "Land chassis and harness as a test-only package under tests/tui/console_chassis with the packet path pointing at the tracked fixtures",
+          "Add the CI job and a lint asserting it runs the replay on push"
+        ],
+        "priority_rationale": "A fixture nobody runs is evidence that decays; the ruling keeps the proof live until the product chassis exists.",
+        "problem": "The 2026-08-25 chassis replay and its 261-frame contract live only under gitignored .ea/local, so the evidence decays silently across two checkpoints before the dev3 port inherits it",
+        "risks": [
+          "The package is test-only provenance; the dev3 port replaces it in place and inherits the goldens, so no product import may point at it"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-03T17:58:45.114245Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/snapshots/tui/console/test_golden_frames.py tests/snapshots/tui/console/test_golden_journeys.py",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Full replay from the tracked fixtures under the normalisation map matches 261 of 261 frames and 25 of 25 journeys, journeys first, in one app instance; pytest exits 0 over tests/snapshots/tui/console/test_golden_frames.py tests/snapshots/tui/console/test_golden_journeys.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/snapshots/tui/console/test_golden_frames.py -k settle",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "Settle cycles are exactly one on every frame id and every journey step under the held clock, and the capture probe asserts H strips of cell width W with no escape sequence; pytest exits 0 over tests/snapshots/tui/console/test_golden_frames.py -k settle",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/snapshots/tui/console/test_normalisation_map.py",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "CON-147: every normalisation-map entry is applied at least once, the residual diff is empty, and the corrected classifications (roadmap as the planning route key, notifications as a global diagnostics route) are asserted against the tracked registry; pytest exits 0 over tests/snapshots/tui/console/test_normalisation_map.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
+          "id": "CR-04",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_console_replay_ci_job.py",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "The CI workflow declares the console replay job on push and the lint fails when the job is absent or does not invoke the replay tests; pytest exits 0 over tests/lint/test_console_replay_ci_job.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Keep the console chassis replay running as a living fixture",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
