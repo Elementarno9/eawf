@@ -14125,7 +14125,7 @@
       "metadata": {},
       "sha256": "6e60e3d97f67dd8e564101fb39f556e859b3d4968f11dd16fa8d8862c77fb8c8",
       "size_bytes": 14343,
-      "uri": "repo:.ea/artifacts/research/research-2026-09-03-v07-finalization-brief.md",
+      "uri": "repo:.ea/artifacts/research/2026-09-03-v07-finalization-brief.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-research-2026-09-03-v07-finalization-brief"
     },
     "ART-research-long-term-2026-05-16-c00-spec-index": {
@@ -35588,7 +35588,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-03T18:15:39.410076Z",
+  "updated_at": "2026-09-03T18:16:17.844269Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {},
