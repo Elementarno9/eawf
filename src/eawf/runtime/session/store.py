@@ -520,3 +520,119 @@ def reconcile_orphaned_sessions(state_path: Path, event_path: Path) -> int:
     count = len(orphan_ids)
     logger.info(f"reconcile_orphaned_sessions flipped={count}")
     return count
+
+
+def _exit_target(
+    state: State,
+    *,
+    runtime_session_id: str | None,
+    scope_id: str | None,
+) -> str | None:
+    """Resolve the one live session a process exit belongs to.
+
+    Resolution is deliberately conservative and ordered most-specific first:
+    a vendor session id binds exactly one row, a scope narrows to the sessions
+    opened under it, and a bare exit with neither only resolves when exactly
+    one session is live. Ambiguity returns ``None`` rather than guessing --
+    stamping the wrong row's ``ended_at`` corrupts every duration derived from
+    it, and the daemon-boot reconcile still catches whatever this declines.
+    """
+    live = [
+        (sid, session)
+        for sid, session in state.agent_sessions.items()
+        if session.status is AgentSessionStatus.ACTIVE
+    ]
+    if runtime_session_id:
+        bound = [sid for sid, session in live if session.runtime_session_id == runtime_session_id]
+        return bound[0] if len(bound) == 1 else None
+    if scope_id:
+        scoped = [sid for sid, session in live if session.scope_id == scope_id]
+        if len(scoped) == 1:
+            return scoped[0]
+    return live[0][0] if len(live) == 1 else None
+
+
+def stamp_session_end_at_exit(
+    state_path: Path,
+    events_path: Path,
+    *,
+    runtime_session_id: str | None = None,
+    scope_id: str | None = None,
+    status: AgentSessionStatus = AgentSessionStatus.CLOSED,
+    summary: str | None = None,
+    now: datetime | None = None,
+) -> str | None:
+    """Stamp the exiting process's session row terminal at the exit instant.
+
+    Without this, ``ended_at`` is only ever written by
+    :func:`reconcile_orphaned_sessions` at the *next* daemon boot, so every
+    session duration is really "time until someone restarted the daemon" --
+    minutes or days wide of the truth, which makes the duration distribution
+    unusable. The exit path owns the honest instant, so it writes it.
+
+    Runs under the canonical ``portalock(state.json)`` + one locked atomic
+    write, mirroring the daemon canonical-writer path (AGENTS rule 4's
+    direct-write fallback, as :func:`reconcile_orphaned_sessions` already
+    does). Idempotent: a session already terminal resolves to no target and
+    the write is skipped, so a runtime that fires both ``session_end`` and
+    ``agent_end`` stamps once.
+
+    Args:
+        state_path: Path to ``state.json``.
+        events_path: Path to the ``event.jsonl`` close-event sink.
+        runtime_session_id: Vendor session id carried on the exit payload,
+            when the runtime supplies one.
+        scope_id: Scope the exiting process ran under, used when no vendor
+            session id resolves a row.
+        status: Terminal status to stamp (default ``CLOSED`` -- a clean exit).
+        summary: Optional close summary recorded on the row and event.
+        now: Clock injection; defaults to the current UTC instant.
+
+    Returns:
+        The stamped session id, or ``None`` when the state is absent /
+        unloadable or no single live session resolves.
+
+    Raises:
+        ValueError: When *status* is not a terminal ``AgentSessionStatus``.
+    """
+    from eawf.surfaces.cli.errors import UserError, ValidationError
+    from eawf.workflow.evidence._io import load_state
+
+    if status not in {
+        AgentSessionStatus.CLOSED,
+        AgentSessionStatus.STALE,
+        AgentSessionStatus.FAILED,
+    }:
+        raise ValueError(f"stamp_session_end_at_exit requires terminal status; got {status!r}")
+    if not state_path.exists():
+        return None
+    moment = now if now is not None else datetime.now(UTC)
+    with portalock.acquire(state_path, timeout=5.0):
+        try:
+            state = load_state(state_path)
+        except (UserError, ValidationError) as exc:
+            logger.debug(f"stamp_session_end_at_exit skip reason=state-unloadable cause={exc!r}")
+            return None
+        target = _exit_target(state, runtime_session_id=runtime_session_id, scope_id=scope_id)
+        if target is None:
+            logger.debug(
+                f"stamp_session_end_at_exit skip reason=no-target "
+                f"runtime_session_id={runtime_session_id!r} scope_id={scope_id!r}"
+            )
+            return None
+        staged = _stage_session_close(
+            state=state,
+            session_id=target,
+            status=status,
+            summary=summary or "stamped at process exit",
+            now=moment,
+        )
+        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+    try:
+        commit_event(events_path, staged.event)
+    except Exception as exc:
+        logger.warning(f"stamp_session_end_at_exit id={target} event_status=failed error={exc!r}")
+    logger.info(
+        f"stamp_session_end_at_exit id={target} status={status.value} ended_at={moment.isoformat()}"
+    )
+    return target

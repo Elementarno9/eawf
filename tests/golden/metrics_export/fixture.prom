@@ -19,6 +19,11 @@ eawf_cost_usd_total{runtime="codex",scope="repo/eawf"} 0.42
 eawf_cache_hit_ratio{runtime="claude",scope="repo/eawf"} 0.946
 eawf_cache_hit_ratio{runtime="codex",scope="repo/eawf"} 0
 
+# HELP eawf_session_duration_ms Session wall-clock duration in milliseconds, by quantile.
+# TYPE eawf_session_duration_ms gauge
+eawf_session_duration_ms{quantile="0.5",scope="repo/eawf"} 60000
+eawf_session_duration_ms{quantile="0.95",scope="repo/eawf"} 120000
+
 # HELP eawf_subagent_dispatch_total Cumulative subagent dispatches across all sessions.
 # TYPE eawf_subagent_dispatch_total counter
 eawf_subagent_dispatch_total 7

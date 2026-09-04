@@ -29,6 +29,8 @@ constructed wrong.
 from __future__ import annotations
 
 import logging
+import math
+from collections.abc import Iterable, Sequence
 from datetime import datetime
 from decimal import Decimal
 
@@ -356,10 +358,68 @@ def _ts_or(raw: object, fallback: datetime) -> datetime:
     return fallback
 
 
+def session_durations_ms(sessions: Iterable[TelemetrySession]) -> list[int]:
+    """Return the ascending, non-negative durations of *sessions* in milliseconds.
+
+    A row's own ``duration_ms`` wins when present; otherwise the span between
+    ``started_at`` and ``ended_at`` is derived, which is what makes stamping
+    ``ended_at`` at process exit worth doing. Rows with neither -- a session
+    still running, or one whose end was never recorded -- are dropped rather
+    than counted as zero, so an unfinished session cannot drag a percentile
+    down and fake a fast cohort.
+
+    Args:
+        sessions: Projected session rows in any order.
+
+    Returns:
+        Ascending durations in milliseconds; empty when no row resolves one.
+    """
+    out: list[int] = []
+    for session in sessions:
+        if session.duration_ms is not None and session.duration_ms >= 0:
+            out.append(session.duration_ms)
+            continue
+        if session.started_at is None or session.ended_at is None:
+            continue
+        span = (session.ended_at - session.started_at).total_seconds() * 1000.0
+        if span >= 0:
+            out.append(int(span))
+    out.sort()
+    return out
+
+
+def percentile_ms(sorted_values: Sequence[int], quantile: float) -> int | None:
+    """Return the *quantile* of an ascending ``sorted_values``, or ``None`` when empty.
+
+    Nearest-rank, not interpolated: the reported p50 is then an observed
+    session duration rather than a synthetic value between two of them, which
+    is what an operator comparing the number against a real session expects.
+
+    Args:
+        sorted_values: Ascending durations in milliseconds.
+        quantile: Target quantile in ``[0.0, 1.0]``.
+
+    Returns:
+        The selected duration, or ``None`` for an empty cohort.
+
+    Raises:
+        ValueError: When *quantile* falls outside ``[0.0, 1.0]``.
+    """
+    if not 0.0 <= quantile <= 1.0:
+        raise ValueError(f"quantile must be within [0.0, 1.0]; got {quantile!r}")
+    if not sorted_values:
+        return None
+    rank = math.ceil(quantile * len(sorted_values))
+    index = min(max(rank - 1, 0), len(sorted_values) - 1)
+    return sorted_values[index]
+
+
 __all__ = [
     "classify_event_cause",
     "default_severity_for",
     "incident_from_envelope",
+    "percentile_ms",
     "price_session",
     "roll_session",
+    "session_durations_ms",
 ]

@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket, WaveStatus
 from eawf.kernel.state.models import ActualSummary, EstimateSummary, State, Wave
+from eawf.observability.telemetry.aggregator import percentile_ms, session_durations_ms
 from eawf.observability.telemetry.models import (
     RuntimeErrorClass,
     TelemetryRuntimeSwitch,
@@ -115,6 +116,22 @@ class VarianceBucketProjection(BaseModel):
     waves: tuple[VarianceWaveProjection, ...] = Field(default_factory=tuple)
 
 
+class SessionDurationProjection(BaseModel):
+    """Session wall-clock duration distribution over the projected rows.
+
+    Percentiles, not a mean: session durations are long-tailed (one wedged
+    agent drags an average by minutes), so p50 is the number an operator can
+    plan against and p95 is the number that hurts.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    sample_count: int = Field(ge=0)
+    p50_ms: int | None = None
+    p95_ms: int | None = None
+    max_ms: int | None = None
+
+
 class RoleCalibrationProjection(BaseModel):
     """Per-agent-role bucket calibration extension row."""
 
@@ -141,6 +158,10 @@ class MetricsProjection(BaseModel):
     switchover_frequency: tuple[SwitchoverFrequencyProjection, ...] = Field(default_factory=tuple)
     per_runtime_tokens: tuple[RuntimeTokensProjection, ...] = Field(default_factory=tuple)
     per_role_calibration: tuple[RoleCalibrationProjection, ...] = Field(default_factory=tuple)
+    session_count: int = Field(default=0, ge=0)
+    session_duration: SessionDurationProjection = Field(
+        default_factory=lambda: SessionDurationProjection(sample_count=0)
+    )
 
 
 def compute_metrics_projection(
@@ -187,6 +208,8 @@ def compute_metrics_projection(
         switchover_frequency=_switchover_frequency(switches),
         per_runtime_tokens=_per_runtime_tokens(sessions),
         per_role_calibration=_per_role_calibration(scoped_state, scope=None, now=anchor),
+        session_count=len(sessions),
+        session_duration=_session_duration(sessions),
     )
     logger.info(
         f"compute_metrics_projection scope={effective_scope!r} window={window!r} "
@@ -230,6 +253,17 @@ def _fetch_telemetry_rows(
                 and _in_window(row.ts, window, now)
             )
         ],
+    )
+
+
+def _session_duration(sessions: list[TelemetrySession]) -> SessionDurationProjection:
+    """Return the duration distribution over the in-window session rows."""
+    durations = session_durations_ms(sessions)
+    return SessionDurationProjection(
+        sample_count=len(durations),
+        p50_ms=percentile_ms(durations, 0.5),
+        p95_ms=percentile_ms(durations, 0.95),
+        max_ms=durations[-1] if durations else None,
     )
 
 

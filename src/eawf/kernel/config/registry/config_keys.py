@@ -488,8 +488,8 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         key="telemetry.enabled",
         label="Enable telemetry collection",
         type="bool",
-        default=False,
-        description="Telemetry is opt-in and strict-local; no data leaves the machine.",
+        default=True,
+        description="Telemetry is on by default and strict-local; no data leaves the machine.",
     ),
     ConfigKey(
         tab="telemetry",

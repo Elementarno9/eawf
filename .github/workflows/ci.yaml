@@ -77,6 +77,15 @@ jobs:
         # machine changes the number being measured.
         run: uv run pytest -n0 tests/perf/tui ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report=xml --cov-fail-under=0' || '' }}
 
+      - name: Telemetry sync (REL-009)
+        # Telemetry ingestion is on by default, so CI must prove the sync
+        # actually lands rows: an off-by-default projector produced empty
+        # cohorts and made every duration distribution unusable. The
+        # session_count and duration-p50 assertions live inside the named
+        # test rather than as inline shell here, so a local run reproduces
+        # the CI signal exactly.
+        run: uv run pytest -n0 tests/integration/test_metrics_cli.py
+
       - name: Coverage gate (per-package C09 §5.2 + TUI behavioural floor)
         # Ubuntu-only: coverage.xml is produced on the ubuntu leg alone. The
         # per-package line/branch ratchet + the TUI behavioural-count floor

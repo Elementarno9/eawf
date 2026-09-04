@@ -39,6 +39,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.observability.telemetry.aggregator import percentile_ms, session_durations_ms
 from eawf.observability.telemetry.models import TelemetryIncident, TelemetrySession
 from eawf.observability.telemetry.store.base import AbstractMetricsStore
 
@@ -167,6 +168,7 @@ def build_snapshot(store: AbstractMetricsStore, *, scope: str) -> MetricsSnapsho
         _tokens_family(sessions, scope=scope),
         _cost_family(sessions, scope=scope),
         _cache_hit_ratio_family(sessions, scope=scope),
+        _session_duration_family(sessions, scope=scope),
         _subagent_dispatch_family(sessions),
         _compaction_family(sessions),
         _incidents_family(incidents),
@@ -249,6 +251,37 @@ def _cache_hit_ratio_family(sessions: list[TelemetrySession], *, scope: str) -> 
         help_text="Cache-read / (cache-read + cache-create).",
         metric_type=MetricType.GAUGE,
         samples=tuple(samples),
+    )
+
+
+#: Quantiles the session-duration family publishes, in render order. p50 is the
+#: planning number, p95 the tail that hurts; both ride one family so a scrape
+#: reads the shape of the distribution rather than a mean that hides it.
+_DURATION_QUANTILES: tuple[tuple[str, float], ...] = (("0.5", 0.5), ("0.95", 0.95))
+
+
+def _session_duration_family(sessions: list[TelemetrySession], *, scope: str) -> MetricFamily:
+    """Build the ``eawf_session_duration_ms`` gauge, one sample per quantile.
+
+    Emitted only for sessions whose duration actually resolved (own
+    ``duration_ms``, or an ``ended_at`` stamped at process exit). An empty
+    cohort yields an empty family rather than a zero sample, so "no data" and
+    "instant sessions" stay distinguishable on the scrape.
+    """
+    durations = session_durations_ms(sessions)
+    samples = tuple(
+        MetricSample(
+            labels=(("quantile", label), ("scope", scope)),
+            value=Decimal(value),
+        )
+        for label, quantile in _DURATION_QUANTILES
+        if (value := percentile_ms(durations, quantile)) is not None
+    )
+    return MetricFamily(
+        name="eawf_session_duration_ms",
+        help_text="Session wall-clock duration in milliseconds, by quantile.",
+        metric_type=MetricType.GAUGE,
+        samples=samples,
     )
 
 

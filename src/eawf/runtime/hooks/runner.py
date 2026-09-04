@@ -499,6 +499,65 @@ def capture_runtime_on_session_end(
     )
 
 
+def stamp_session_end_on_exit(
+    event: HookEvent,
+    *,
+    repo_root: Path | None = None,
+) -> HookResult:
+    """Stamp the exiting session's ``ended_at`` from a SESSION_END / AGENT_END event.
+
+    The exit hook is the only place that knows the true end instant. Before
+    this seam ``ended_at`` was written by the daemon-boot orphan reconcile, so a
+    session that ended at 14:02 was recorded as ending whenever the daemon next
+    restarted and every derived duration was fiction. Stamping here also means
+    the reconcile finds nothing left to flip on a clean exit.
+
+    Never blocks the source runtime: an unresolvable repo root, an absent
+    ``state.json``, or an ambiguous session all degrade to a non-blocking
+    no-op result, matching how the sibling ``runtime.capture`` hook fails.
+
+    Args:
+        event: The SESSION_END or AGENT_END hook event.
+        repo_root: Repo root whose ``.ea/state.json`` owns the session rows;
+            defaults to the process working directory.
+
+    Returns:
+        A non-blocking :class:`HookResult` naming the stamped session id, or
+        the reason no row was stamped.
+    """
+    from eawf.kernel.state.enums import StoreKind
+    from eawf.kernel.store.paths import store_path
+    from eawf.runtime.session.store import stamp_session_end_at_exit
+
+    root = repo_root if repo_root is not None else Path.cwd()
+    state_path = root / ".ea" / "state.json"
+    payload = _session_end_payload(event)
+    raw_session_id = payload.get("session_id")
+    runtime_session_id = raw_session_id if isinstance(raw_session_id, str) else None
+    try:
+        stamped = stamp_session_end_at_exit(
+            state_path,
+            store_path(state_path, StoreKind.EVENT),
+            runtime_session_id=runtime_session_id or None,
+            scope_id=event.scope_id or None,
+            summary=f"stamped at process exit ({event.event_type.value})",
+            now=event.occurred_at,
+        )
+    except Exception as exc:
+        return HookResult(name="session.end_stamp", block=False, output=repr(exc))
+    if stamped is None:
+        return HookResult(
+            name="session.end_stamp",
+            block=False,
+            output="session.end_stamp skipped: no live session resolved",
+        )
+    return HookResult(
+        name="session.end_stamp",
+        block=False,
+        output=f"session.end_stamp ok id={stamped}",
+    )
+
+
 def register_runtime_capture_hooks(
     runner: HookRunner,
     *,
@@ -533,6 +592,12 @@ def register_runtime_capture_hooks(
             name="runtime.codex_lifecycle",
         )
     runner.register(HookEventType.SESSION_END, _hook, name="runtime.capture")
+
+    def _end_stamp_hook(event: HookEvent) -> HookResult:
+        return stamp_session_end_on_exit(event, repo_root=repo_root)
+
+    for exit_event_type in (HookEventType.SESSION_END, HookEventType.AGENT_END):
+        runner.register(exit_event_type, _end_stamp_hook, name="session.end_stamp")
 
 
 def _coerce_result(name: str, raw: Any, duration_ms: float) -> HookResult:
@@ -673,4 +738,5 @@ __all__ = [
     "capture_codex_lifecycle",
     "capture_runtime_on_session_end",
     "register_runtime_capture_hooks",
+    "stamp_session_end_on_exit",
 ]

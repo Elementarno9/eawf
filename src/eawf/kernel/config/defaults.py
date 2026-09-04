@@ -138,13 +138,16 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
             "config",
         ],
     },
-    # C09 (telemetry) projector reads these keys. Telemetry is opt-in
-    # (``enabled`` defaults False) and strict-local: there is no export
-    # endpoint key, so a projection / export never contacts an external
-    # service. ``db_kind`` defaults to the always-available stdlib sqlite
-    # backend; ``duckdb`` is the opt-in analytics upgrade.
+    # C09 (telemetry) projector reads these keys. Ingestion is ON by
+    # default because an off-by-default projector never runs in CI or
+    # dogfood, so every duration / cost distribution reads as an empty
+    # cohort and the metrics surface is decorative. Collection is
+    # strict-local: there is no export endpoint key, so a projection /
+    # export never contacts an external service, which is what makes
+    # on-by-default safe. ``db_kind`` defaults to the always-available
+    # stdlib sqlite backend; ``duckdb`` is the opt-in analytics upgrade.
     "telemetry": {
-        "enabled": False,
+        "enabled": True,
         "export": {
             "format": "prom",
         },

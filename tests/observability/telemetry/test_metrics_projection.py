@@ -11,6 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.state.models import State
+from eawf.observability.telemetry.aggregator import percentile_ms, session_durations_ms
 from eawf.observability.telemetry.metrics_projection import (
     METRICS_PROJECTION_SCHEMA_VERSION,
     MetricsProjection,
@@ -438,3 +439,98 @@ def test_metrics_projection_rejects_extra_keys() -> None:
 
     with pytest.raises(ValidationError):
         MetricsProjection.model_validate(payload)
+
+
+def test_compute_metrics_projection_reports_non_zero_session_rows(tmp_path: Path) -> None:
+    """REL-009: a seeded session fixture projects a non-zero session cohort.
+
+    The whole point of enabling ingestion by default is that the projection
+    stops reading an empty cohort; a zero here means the sync ran and landed
+    nothing, which is the failure REL-009 exists to close.
+    """
+    store = _seed_store(tmp_path)
+    try:
+        projection = compute_metrics_projection(_state(), store=store, window="7d", now=_NOW)
+    finally:
+        store.close()
+
+    assert projection.session_count == 1
+    assert projection.session_duration.sample_count == 1
+
+
+def test_compute_metrics_projection_session_duration_reports_p50(tmp_path: Path) -> None:
+    """The duration tile carries a usable p50 / p95 / max, not just a count."""
+    store = _seed_store(tmp_path)
+    try:
+        store.upsert(
+            "telemetry_sessions",
+            _session(
+                "s4", runtime="claude", started_at=_NOW - timedelta(hours=2), project_id=_SCOPE
+            ).model_copy(update={"duration_ms": 60_000}),
+        )
+        store.commit()
+        projection = compute_metrics_projection(_state(), store=store, window="7d", now=_NOW)
+    finally:
+        store.close()
+
+    assert projection.session_duration.sample_count == 2
+    assert projection.session_duration.p50_ms == 60_000
+    assert projection.session_duration.p95_ms == 600_000
+    assert projection.session_duration.max_ms == 600_000
+
+
+def test_compute_metrics_projection_session_duration_empty_without_store() -> None:
+    """Boundary: no store means an empty cohort, not a zero-valued p50."""
+    projection = compute_metrics_projection(_state(), store=None, window="7d", now=_NOW)
+
+    assert projection.session_count == 0
+    assert projection.session_duration.sample_count == 0
+    assert projection.session_duration.p50_ms is None
+    assert projection.session_duration.max_ms is None
+
+
+def test_session_durations_ms_derives_span_from_stamped_ended_at() -> None:
+    """A row without ``duration_ms`` still counts once ``ended_at`` is stamped."""
+    stamped = _session(
+        "s5", runtime="claude", started_at=_NOW - timedelta(minutes=30), project_id=_SCOPE
+    ).model_copy(update={"duration_ms": None})
+
+    assert session_durations_ms([stamped]) == [600_000]
+
+
+def test_session_durations_ms_drops_a_session_with_no_end() -> None:
+    """Boundary: a still-running row is dropped, never counted as a zero duration."""
+    running = _session(
+        "s6", runtime="claude", started_at=_NOW - timedelta(minutes=30), project_id=_SCOPE
+    ).model_copy(update={"duration_ms": None, "ended_at": None})
+
+    assert session_durations_ms([running]) == []
+
+
+def test_percentile_ms_on_empty_and_single_sample() -> None:
+    """Boundary: empty yields None; a single sample is its own p50 and p95."""
+    assert percentile_ms([], 0.5) is None
+    assert percentile_ms([42], 0.5) == 42
+    assert percentile_ms([42], 0.95) == 42
+
+
+def test_percentile_ms_selects_nearest_rank_off_by_one() -> None:
+    """Off-by-one: nearest-rank p50 of four samples is the 2nd, not the 3rd."""
+    assert percentile_ms([1, 2, 3, 4], 0.5) == 2
+    assert percentile_ms([1, 2, 3, 4], 0.0) == 1
+    assert percentile_ms([1, 2, 3, 4], 1.0) == 4
+
+
+@pytest.mark.parametrize("quantile", [-0.1, 1.1])
+def test_percentile_ms_rejects_out_of_range_quantile(quantile: float) -> None:
+    """Error path: a quantile outside [0.0, 1.0] fails fast at the boundary."""
+    with pytest.raises(ValueError, match=r"within \[0.0, 1.0\]"):
+        percentile_ms([1, 2, 3], quantile)
+
+
+def test_session_duration_projection_rejects_negative_sample_count() -> None:
+    """Error path: the projection tile refuses a negative cohort size."""
+    from eawf.observability.telemetry.metrics_projection import SessionDurationProjection
+
+    with pytest.raises(ValidationError):
+        SessionDurationProjection(sample_count=-1)

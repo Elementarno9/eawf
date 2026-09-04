@@ -19,8 +19,18 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from eawf.kernel.state.enums import DispatchNote, WaveStatus
-from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, Wave
+from eawf.kernel.state.enums import (
+    AgentSessionRole,
+    AgentSessionStatus,
+    DispatchNote,
+    WaveStatus,
+)
+from eawf.kernel.state.models import (
+    AgentSession,
+    DispatchAnnotation,
+    SessionAttempt,
+    Wave,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -226,3 +236,60 @@ def test_wave_rejects_extra_session_fields_via_json() -> None:
     }
     with pytest.raises(ValidationError, match=r"extra_forbidden|extra"):
         Wave.model_validate(payload)
+
+
+# --- REL-009: ``ended_at`` is the exit stamp, and the schema pins its shape ----
+
+
+def _make_agent_session(**overrides: object) -> AgentSession:
+    defaults: dict[str, object] = {
+        "id": "SES-1",
+        "role": AgentSessionRole.EXECUTOR,
+        "runtime": "claude",
+        "scope_id": "P31-I01-W08",
+        "status": AgentSessionStatus.ACTIVE,
+        "started_at": _now(),
+    }
+    defaults.update(overrides)
+    return AgentSession.model_validate(defaults)
+
+
+def test_agent_session_ended_at_defaults_to_none_while_running() -> None:
+    """A live session has no end instant yet -- the exit path supplies it."""
+    session = _make_agent_session()
+    assert session.ended_at is None
+    assert session.status is AgentSessionStatus.ACTIVE
+
+
+def test_agent_session_ended_at_round_trips_through_json() -> None:
+    """The exit-stamped instant survives the state.json write/read cycle."""
+    ended = datetime(2026, 5, 19, 12, 17, 0, tzinfo=UTC)
+    session = _make_agent_session(status=AgentSessionStatus.CLOSED, ended_at=ended)
+    revived = AgentSession.model_validate(session.model_dump(mode="json"))
+    assert revived.ended_at == ended
+
+
+def test_agent_session_rejects_a_naive_ended_at() -> None:
+    """Error path: a tz-naive end instant is refused at the schema boundary.
+
+    A duration computed against a naive end is silently off by the writer's
+    local offset, so the ambiguity is rejected here rather than propagated to
+    every reader of the duration distribution.
+    """
+    with pytest.raises(ValidationError, match="timezone-aware"):
+        _make_agent_session(
+            status=AgentSessionStatus.CLOSED,
+            ended_at=datetime(2026, 5, 19, 12, 17, 0),
+        )
+
+
+def test_agent_session_ended_at_accepts_the_started_at_instant() -> None:
+    """Off-by-one boundary: a zero-length session is legal, not a validation error."""
+    session = _make_agent_session(status=AgentSessionStatus.CLOSED, ended_at=_now())
+    assert session.ended_at == session.started_at
+
+
+def test_agent_session_rejects_a_non_datetime_ended_at() -> None:
+    """Error path: a free-string end instant is refused at the boundary."""
+    with pytest.raises(ValidationError):
+        _make_agent_session(ended_at="whenever")

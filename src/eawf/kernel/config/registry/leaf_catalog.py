@@ -414,7 +414,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         key="telemetry.enabled",
         domain="telemetry",
         type="bool",
-        default=False,
+        default=True,
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(

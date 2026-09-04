@@ -114,6 +114,27 @@
       "type": "gauge"
     },
     {
+      "help": "Session wall-clock duration in milliseconds, by quantile.",
+      "name": "eawf_session_duration_ms",
+      "samples": [
+        {
+          "labels": {
+            "quantile": "0.5",
+            "scope": "repo/eawf"
+          },
+          "value": "60000"
+        },
+        {
+          "labels": {
+            "quantile": "0.95",
+            "scope": "repo/eawf"
+          },
+          "value": "120000"
+        }
+      ],
+      "type": "gauge"
+    },
+    {
       "help": "Cumulative subagent dispatches across all sessions.",
       "name": "eawf_subagent_dispatch_total",
       "samples": [

@@ -66,16 +66,19 @@ def test_dispatch_cost_recorded_when_telemetry_disabled(
 ) -> None:
     """``dispatch_cost`` lands in event.jsonl even with telemetry disabled.
 
-    The merged config defaults ``telemetry.enabled`` to ``False`` (strict-
-    local opt-in). The runner emits the cost event unconditionally, so the
-    on-disk ledger carries a ``dispatch_cost`` row regardless.
+    The runner emits the cost event unconditionally, so the on-disk ledger
+    carries a ``dispatch_cost`` row whatever ``telemetry.enabled`` says. The
+    disabled case is forced through a CLI override rather than inherited from
+    the built-in default, which is now ``True``: the claim under test is that
+    the gate is absent, so the OFF state has to be constructed.
     """
-    # Confirm the precondition against the built-in default: isolate the
-    # global overlay (~/.config/eawf/config.yaml) and the env layer so a
-    # developer who opted telemetry on locally cannot flip this assertion
-    # (the test must be hermetic across machines and CI alike).
+    # Isolate the global overlay (~/.config/eawf/config.yaml) and the env
+    # layer so a developer's local config cannot influence the merge (the
+    # test must be hermetic across machines and CI alike).
     monkeypatch.setattr(layered, "global_config_path", lambda: tmp_path / "absent-global.yaml")
-    merged, _sources = merge_config(repo=tmp_path, env={})
+    merged, _sources = merge_config(
+        repo=tmp_path, env={}, cli_overrides={"telemetry.enabled": False}
+    )
     assert get_dotted(merged, "telemetry.enabled") is False
 
     event_path = tmp_path / "store" / "event.jsonl"
@@ -112,10 +115,13 @@ def test_dispatch_cost_recorded_on_runtime_fallback_when_disabled(
     ``runtime_switched`` event AND the post-dispatch ``dispatch_cost`` —
     neither gated by ``telemetry.enabled``.
     """
-    # Isolate the global overlay + env layer so the precondition reflects the
-    # built-in strict-local default rather than a developer's local opt-in.
+    # Isolate the global overlay + env layer, then force the flag OFF: the
+    # built-in default is now ``True``, and the claim under test is that the
+    # gate is absent, so the OFF state has to be constructed.
     monkeypatch.setattr(layered, "global_config_path", lambda: tmp_path / "absent-global.yaml")
-    merged, _sources = merge_config(repo=tmp_path, env={})
+    merged, _sources = merge_config(
+        repo=tmp_path, env={}, cli_overrides={"telemetry.enabled": False}
+    )
     assert get_dotted(merged, "telemetry.enabled") is False
 
     event_path = tmp_path / "store" / "event.jsonl"
