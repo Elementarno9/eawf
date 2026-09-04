@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from eawf.kernel.spec.publication import PublicationOperation
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.kinds.actual import ActualPayload
 from eawf.kernel.store.kinds.agent_report import AgentReportPayload
@@ -58,4 +59,7 @@ PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     StoreKind.GATE_RECEIPT: GateReceipt,
     StoreKind.LEGACY_AUDIT_DISPOSITION: LegacyAuditDisposition,
     StoreKind.COMMIT_REPIN: CommitRepinProvenance,
+    # The publication ledger reuses the kernel record rather than
+    # restating its shape here: a second copy could only drift.
+    StoreKind.RELEASE: PublicationOperation,
 }

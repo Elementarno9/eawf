@@ -1,0 +1,56 @@
+# A complete v0.7.0.dev1 publication operation: every target the
+# authored checkpoint configures has been attempted, and each leg
+# carries the receipt its status claims.
+#
+# The three legs sit at three different points of the per-target
+# machine, because a fixture where every row looks the same proves only
+# one row shape:
+#
+#   pypi   -- retried once after a reported failure, then independently
+#             observed. Attempts run 1..2 contiguously, which is what
+#             makes attempt_count == 2.
+#   npm    -- reported success, observation still pending.
+#   github -- the deadline elapsed with no final word, so the leg is
+#             unknown and carries no effect receipt.
+operation:
+  operation_id: 3f1c9d2e-6b48-4a71-9c05-0d2a7e814b63
+  release_ref: REL-0.7.0.dev1
+  kind: publish
+  proof_digest: sha256:1111111111111111111111111111111111111111111111111111111111111111
+  idempotency_key: publish-0.7.0.dev1-01
+  status: settled
+  opened_at: 2026-09-04T12:00:00Z
+  revision: 7
+  publication_receipts:
+    - target_id: pypi
+      attempt: 1
+      status: reported_failure
+      request_digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
+      effect_receipt_ref: receipt://pypi/upload/attempt-1
+      started_at: 2026-09-04T12:00:05Z
+      deadline_at: 2026-09-04T12:30:05Z
+      settled_at: 2026-09-04T12:04:11Z
+    - target_id: pypi
+      attempt: 2
+      status: observed_success
+      request_digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
+      effect_receipt_ref: receipt://pypi/upload/attempt-2
+      observation_receipt_ref: receipt://pypi/read-back/attempt-2
+      started_at: 2026-09-04T12:05:00Z
+      deadline_at: 2026-09-04T12:35:00Z
+      settled_at: 2026-09-04T12:09:48Z
+    - target_id: npm
+      attempt: 1
+      status: reported_success
+      request_digest: sha256:3333333333333333333333333333333333333333333333333333333333333333
+      effect_receipt_ref: receipt://npm/publish/attempt-1
+      started_at: 2026-09-04T12:00:05Z
+      deadline_at: 2026-09-04T12:30:05Z
+      settled_at: 2026-09-04T12:02:37Z
+    - target_id: github
+      attempt: 1
+      status: unknown
+      request_digest: sha256:4444444444444444444444444444444444444444444444444444444444444444
+      started_at: 2026-09-04T12:00:05Z
+      deadline_at: 2026-09-04T12:30:05Z
+      settled_at: 2026-09-04T12:30:05Z

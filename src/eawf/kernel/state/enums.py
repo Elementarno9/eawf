@@ -725,6 +725,7 @@ class StoreKind(StrEnum):
     GATE_RECEIPT = "gate_receipt"
     LEGACY_AUDIT_DISPOSITION = "legacy_audit_disposition"
     COMMIT_REPIN = "commit_repin"
+    RELEASE = "release"
 
 
 class ArtifactKind(StrEnum):

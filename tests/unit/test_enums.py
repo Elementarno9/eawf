@@ -518,6 +518,8 @@ def test_store_kind_values() -> None:
         "gate_receipt",
         "legacy_audit_disposition",
         "commit_repin",
+        # P31-I01-W27 -- publication operations + per-target attempt ledger.
+        "release",
     }
     actual = {m.value for m in enums.StoreKind}
     assert actual == expected
