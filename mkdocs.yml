@@ -28,7 +28,9 @@ markdown_extensions:
 nav:
   - Home: README.md
   - Tutorial:
+      - Install: tutorial/install.md
       - Quickstart: tutorial/quickstart.md
+      - First workflow: tutorial/first-workflow.md
       - Profile picker: tutorial/profile-picker.md
       - Research campaigns: tutorial/research-campaigns.md
       - TUI tour: tutorial/tui-tour.md

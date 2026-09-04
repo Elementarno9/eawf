@@ -14,14 +14,23 @@ Covers the load-bearing guarantees of P27-W26:
 - **Drift gate** — :func:`eawf.platform.docs.autogen.diff_against_disk` reports a
   ``missing`` row for an absent page and a ``changed`` row for a tampered
   one, then no rows once regenerated.
+- **Docs front door** — ``mkdocs build --strict`` exits 0, the install /
+  quickstart / first-workflow pages are reachable in the nav, and every
+  internal link they carry resolves to a real file and heading.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
+import re
+import subprocess
+import sys
 from enum import Enum
 from pathlib import Path
 
+import pytest
+import yaml
 from typer.testing import CliRunner
 
 from eawf.kernel.state import enums as state_enums
@@ -188,3 +197,169 @@ def test_diff_reports_missing_then_changed_then_clean(tmp_path: Path) -> None:
     assert [(d.relpath, d.reason) for d in changed] == [
         (f"{autogen.AUTOGEN_RELDIR}/exit-codes.md", "changed")
     ]
+
+
+# --- Docs front door ---------------------------------------------------------
+#
+# The front door is the install -> quickstart -> first-workflow path a
+# newcomer walks before they know any eawf vocabulary. Its two failure modes
+# are silent: a page that ships but is unreachable in the explicit nav, and a
+# cross-page link that rots when a target is renamed. Both are cheap to pin
+# and expensive to notice by hand, so they are gated here alongside the
+# strict site build.
+
+_DOCS_DIR = _REPO_ROOT / "docs"
+_MKDOCS_YML = _REPO_ROOT / "mkdocs.yml"
+_FRONT_DOOR_PAGES = (
+    "tutorial/install.md",
+    "tutorial/quickstart.md",
+    "tutorial/first-workflow.md",
+)
+# Inline markdown links only; the leading lookbehind drops image embeds.
+_MD_LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s]+)\)")
+_EXTERNAL_SCHEMES = ("http://", "https://", "mailto:", "tel:")
+_HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*$")
+
+
+def _heading_slugs(page: Path) -> set[str]:
+    """Return the anchor slugs mkdocs derives from *page*'s headings."""
+    slugs: set[str] = set()
+    for line in page.read_text(encoding="utf-8").splitlines():
+        match = _HEADING.match(line)
+        if match is None:
+            continue
+        text = re.sub(r"[`*_]", "", match.group(1)).strip().lower()
+        slugs.add(re.sub(r"-{2,}", "-", re.sub(r"[^a-z0-9]+", "-", text)).strip("-"))
+    return slugs
+
+
+def _unresolved_links(page: Path) -> list[str]:
+    """Return every internal link in *page* whose file or anchor is missing.
+
+    External schemes and pure fragments pointing at the page's own headings
+    are resolved in place; anything else is resolved relative to the page's
+    directory and checked against the filesystem.
+
+    Args:
+        page: Absolute path to the markdown file to scan.
+
+    Returns:
+        The offending link targets, in source order. Empty when the page's
+        every internal link resolves.
+    """
+    broken: list[str] = []
+    for target in _MD_LINK.findall(page.read_text(encoding="utf-8")):
+        if target.startswith(_EXTERNAL_SCHEMES):
+            continue
+        path_part, _, anchor = target.partition("#")
+        resolved = page if not path_part else (page.parent / path_part).resolve()
+        if not resolved.is_file():
+            broken.append(target)
+            continue
+        if anchor and resolved.suffix == ".md" and anchor not in _heading_slugs(resolved):
+            broken.append(target)
+    return broken
+
+
+def _nav_page_paths() -> list[str]:
+    """Return every docs-relative page path declared in the mkdocs nav."""
+
+    def walk(node: object) -> list[str]:
+        if isinstance(node, str):
+            return [node]
+        if isinstance(node, list):
+            return [p for item in node for p in walk(item)]
+        if isinstance(node, dict):
+            return [p for value in node.values() for p in walk(value)]
+        return []
+
+    return walk(yaml.safe_load(_MKDOCS_YML.read_text(encoding="utf-8"))["nav"])
+
+
+def test_front_door_pages_resolve_every_internal_link() -> None:
+    """No install / quickstart / first-workflow link points at a missing target."""
+    broken = {
+        relpath: _unresolved_links(_DOCS_DIR / relpath)
+        for relpath in _FRONT_DOOR_PAGES
+        if _unresolved_links(_DOCS_DIR / relpath)
+    }
+    assert broken == {}, f"front-door pages carry unresolved links: {broken}"
+
+
+def test_front_door_readme_links_resolve() -> None:
+    """The repo README is the outermost front door; its links resolve too."""
+    assert _unresolved_links(_REPO_ROOT / "README.md") == []
+
+
+def test_front_door_pages_are_reachable_in_the_nav() -> None:
+    """A front-door page absent from the explicit nav is unreachable in the site."""
+    navigated = set(_nav_page_paths())
+    assert set(_FRONT_DOOR_PAGES) <= navigated, (
+        f"mkdocs.yml nav omits {sorted(set(_FRONT_DOOR_PAGES) - navigated)}"
+    )
+
+
+def test_front_door_link_checker_flags_a_dangling_link(tmp_path: Path) -> None:
+    """The checker reds on a real defect: a link to a file that is not there."""
+    page = tmp_path / "page.md"
+    page.write_text("# Title\n\nSee [gone](absent.md) and [ok](page.md).\n", encoding="utf-8")
+    assert _unresolved_links(page) == ["absent.md"]
+
+
+def test_front_door_link_checker_flags_a_dangling_anchor(tmp_path: Path) -> None:
+    """A link to a real file but an absent heading is unresolved too."""
+    page = tmp_path / "page.md"
+    page.write_text("# Title\n\n[bad](page.md#nope) [good](page.md#title)\n", encoding="utf-8")
+    assert _unresolved_links(page) == ["page.md#nope"]
+
+
+def test_front_door_link_checker_passes_a_linkless_page(tmp_path: Path) -> None:
+    """The empty boundary: a page with no links reports nothing."""
+    page = tmp_path / "page.md"
+    page.write_text("# Title\n\nprose only\n", encoding="utf-8")
+    assert _unresolved_links(page) == []
+
+
+def test_front_door_link_checker_ignores_external_urls(tmp_path: Path) -> None:
+    """An external scheme is out of scope for an internal-link gate."""
+    page = tmp_path / "page.md"
+    page.write_text("# Title\n\n[x](https://example.invalid/a.md)\n", encoding="utf-8")
+    assert _unresolved_links(page) == []
+
+
+def test_front_door_mkdocs_strict_build_exits_zero(tmp_path: Path) -> None:
+    """``mkdocs build --strict`` exits 0 over the committed docs tree.
+
+    Skipped only when mkdocs is genuinely absent (the optional ``eawf[docs]``
+    extra is not installed). Whenever the build runs, a non-zero exit REDS
+    rather than green-skipping a real docs regression, and the build output
+    is surfaced so the failing page is named.
+    """
+    if importlib.util.find_spec("mkdocs") is None:
+        pytest.skip("mkdocs unavailable; install the eawf[docs] extra")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "mkdocs",
+            "build",
+            "--strict",
+            "--quiet",
+            "-f",
+            str(_MKDOCS_YML),
+            "-d",
+            str(tmp_path / "site"),
+        ],
+        cwd=str(_REPO_ROOT),
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+    assert completed.returncode == 0, (
+        f"mkdocs build --strict exited {completed.returncode}\n"
+        f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
+    )
+    for relpath in _FRONT_DOOR_PAGES:
+        built = tmp_path / "site" / relpath.removesuffix(".md") / "index.html"
+        assert built.is_file(), f"strict build produced no page for {relpath}"

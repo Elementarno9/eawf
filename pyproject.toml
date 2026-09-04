@@ -8,6 +8,25 @@ license = { text = "MIT" }
 authors = [
     { name = "Elementarno9", email = "edwardpro9@gmail.com" },
 ]
+# Platform + interpreter support, kept in lockstep with the CI matrix in
+# .github/workflows/ci.yaml and the README support table. Linux and macOS
+# run the full suite on real hosts; Windows runs the named-pipe transport,
+# packaging, and CLI smoke set. tests/integration/test_packaging.py asserts
+# the three sources agree, so a matrix change that skips this list reds.
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Build Tools",
+    "Typing :: Typed",
+]
 dependencies = [
     # Cap below 8.4: click 8.4 changed the shell-completion env-var protocol,
     # which breaks the typer ``complete_zsh`` completion-script swap in

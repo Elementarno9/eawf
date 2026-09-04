@@ -17,12 +17,18 @@ Covers the three load-bearing guarantees of P27-W27:
   prerelease to ``next`` and only a final release to ``latest``, so the
   plugin-release publish cannot hand a prerelease to the default
   ``npm install``.
+- **Support classification** — the README support table, the
+  ``pyproject.toml`` trove classifiers, ``requires-python``, and the CI
+  matrix in ``.github/workflows/ci.yaml`` name the same platforms and the
+  same interpreter, so the documented support promise cannot drift from
+  what is actually gated.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import subprocess
 import sys
 import tomllib
@@ -31,6 +37,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 import eawf
 from eawf.platform.install.dist_tag import (
@@ -43,6 +50,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _VERSION_FILE = _REPO_ROOT / "src" / "eawf" / "_version.py"
 _BUMP_PATH = _REPO_ROOT / "tools" / "version_bump.py"
 _PYPROJECT = _REPO_ROOT / "pyproject.toml"
+_README = _REPO_ROOT / "README.md"
+_CI_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "ci.yaml"
 
 
 def _load_bump() -> Any:
@@ -392,3 +401,205 @@ def test_dist_tag_for_version_rejects_non_string() -> None:
 def test_dist_tag_for_version_classifies_the_shipped_version() -> None:
     """The version this repo ships resolves to exactly one of the two tags."""
     assert dist_tag_for_version(eawf.__version__) in {DIST_TAG_LATEST, DIST_TAG_NEXT}
+
+
+# --- Support classification -------------------------------------------------
+#
+# Four artifacts each claim which platforms and which interpreter eawf
+# supports: the README table an installer actually reads, the trove
+# classifiers PyPI renders, ``requires-python`` the resolver enforces, and
+# the CI matrix that is the only one of the four backed by a real run. The
+# tests below pin all four to the CI matrix, so widening or narrowing
+# support means editing every artifact or reddening this file.
+
+# Runner-label prefix -> the trove classifier that promises that platform.
+_RUNNER_OS_CLASSIFIER = {
+    "ubuntu": "Operating System :: POSIX :: Linux",
+    "macos": "Operating System :: MacOS :: MacOS X",
+    "windows": "Operating System :: Microsoft :: Windows",
+}
+_PY_CLASSIFIER = re.compile(r"^Programming Language :: Python :: (\d+)\.(\d+)$")
+_TABLE_SEPARATOR_CELL = re.compile(r"^:?-{3,}:?$")
+
+
+def _markdown_table_rows(markdown: str, *, heading: str) -> list[list[str]]:
+    """Return the data rows of the first markdown table under ``## heading``.
+
+    Args:
+        markdown: Full markdown source to scan.
+        heading: Level-two heading text, without the leading ``##``.
+
+    Returns:
+        One list of stripped cell strings per data row, header and
+        separator rows dropped. An empty list when the table under the
+        heading is header-only.
+
+    Raises:
+        KeyError: when *heading* is absent from *markdown*.
+        ValueError: when no table follows the heading before the next
+            level-two heading.
+    """
+    lines = markdown.splitlines()
+    try:
+        start = lines.index(f"## {heading}")
+    except ValueError as exc:
+        raise KeyError(f"no '## {heading}' section in the markdown source") from exc
+
+    table: list[str] = []
+    for line in lines[start + 1 :]:
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            break
+        if stripped.startswith("|"):
+            table.append(stripped)
+        elif table:
+            break
+    if not table:
+        raise ValueError(f"no markdown table under '## {heading}'")
+
+    rows = [[cell.strip() for cell in row.strip("|").split("|")] for row in table]
+    return [row for row in rows[1:] if not all(_TABLE_SEPARATOR_CELL.match(c) for c in row)]
+
+
+def _inline_code(cell: str) -> str:
+    """Return the text inside a single backtick-quoted markdown cell.
+
+    Raises:
+        ValueError: when *cell* is not exactly one inline-code span.
+    """
+    match = re.fullmatch(r"`([^`]+)`", cell.strip())
+    if match is None:
+        raise ValueError(f"cell is not a single inline-code span: {cell!r}")
+    return match.group(1)
+
+
+def _ci_runner_labels() -> set[str]:
+    """Return every concrete GitHub runner label the CI workflow uses.
+
+    The ``test`` job templates ``runs-on`` from its matrix, so the matrix
+    ``os`` list is read directly; every other job names its runner
+    literally.
+    """
+    workflow = yaml.safe_load(_CI_WORKFLOW.read_text(encoding="utf-8"))
+    jobs = workflow["jobs"]
+    labels = set(jobs["test"]["strategy"]["matrix"]["os"])
+    for job in jobs.values():
+        runs_on = job.get("runs-on", "")
+        if isinstance(runs_on, str) and runs_on and "${{" not in runs_on:
+            labels.add(runs_on)
+    return labels
+
+
+def _ci_python_versions() -> list[str]:
+    """Return the interpreter versions the CI test matrix pins."""
+    workflow = yaml.safe_load(_CI_WORKFLOW.read_text(encoding="utf-8"))
+    return [str(v) for v in workflow["jobs"]["test"]["strategy"]["matrix"]["python"]]
+
+
+def _requires_python_floor(spec: str) -> tuple[int, int]:
+    """Return the ``(major, minor)`` floor of a ``>=X.Y`` requires-python spec.
+
+    Raises:
+        ValueError: when *spec* is not a bare ``>=`` lower bound — any other
+            shape (a range, an exclusion, an empty string) means the support
+            promise is no longer a single floor, and the callers' one-line
+            comparison against it would silently mislead.
+    """
+    match = re.fullmatch(r">=\s*(\d+)\.(\d+)", spec.strip())
+    if match is None:
+        raise ValueError(f"unsupported requires-python spec: {spec!r}")
+    return int(match.group(1)), int(match.group(2))
+
+
+def _project_table() -> dict[str, Any]:
+    """Return the ``[project]`` table of the repo's pyproject.toml."""
+    with open(_PYPROJECT, "rb") as handle:
+        return tomllib.load(handle)["project"]
+
+
+def test_support_classification_readme_table_matches_ci_matrix() -> None:
+    """Every README support row names a runner CI actually schedules."""
+    rows = _markdown_table_rows(_README.read_text(encoding="utf-8"), heading="Support")
+    assert rows, "the README '## Support' table must carry at least one platform row"
+    documented = {_inline_code(row[1]) for row in rows}
+    assert documented == _ci_runner_labels(), (
+        "README support table and the CI runner set disagree; update README.md "
+        "and .github/workflows/ci.yaml together"
+    )
+
+
+def test_support_classification_classifiers_match_ci_platforms() -> None:
+    """The trove OS classifiers cover exactly the CI-gated platforms."""
+    expected = set()
+    for label in _ci_runner_labels():
+        family = label.split("-", 1)[0]
+        assert family in _RUNNER_OS_CLASSIFIER, f"unmapped CI runner family: {label!r}"
+        expected.add(_RUNNER_OS_CLASSIFIER[family])
+    declared = {c for c in _project_table()["classifiers"] if c.startswith("Operating System ::")}
+    assert declared == expected
+
+
+def test_support_classification_python_floor_agrees_across_sources() -> None:
+    """requires-python, the classifiers, CI, and the README name one interpreter."""
+    project = _project_table()
+    requires_python = project["requires-python"]
+    floor = _requires_python_floor(requires_python)
+
+    classified = {
+        (int(m.group(1)), int(m.group(2)))
+        for m in (_PY_CLASSIFIER.match(c) for c in project["classifiers"])
+        if m is not None
+    }
+    assert classified, "pyproject must classify at least one concrete Python minor"
+    assert min(classified) == floor, "lowest Python classifier must be the requires-python floor"
+
+    ci_versions = _ci_python_versions()
+    assert {tuple(int(part) for part in v.split(".")) for v in ci_versions} == classified
+
+    support = _README.read_text(encoding="utf-8").split("## Support", 1)[1]
+    python_line = next(line for line in support.splitlines() if line.startswith("Python:"))
+    assert f"`{requires_python}`" in python_line
+    for version in ci_versions:
+        assert f"`{version}`" in python_line
+
+
+def test_support_classification_table_parser_rejects_absent_heading() -> None:
+    """A missing section is a KeyError, not a silently empty row list."""
+    with pytest.raises(KeyError, match="no '## Support' section"):
+        _markdown_table_rows("# Title\n\nprose only\n", heading="Support")
+
+
+def test_support_classification_table_parser_rejects_tableless_section() -> None:
+    """A heading carrying prose but no table is a ValueError."""
+    with pytest.raises(ValueError, match="no markdown table"):
+        _markdown_table_rows("## Support\n\njust prose\n\n## Next\n", heading="Support")
+
+
+def test_support_classification_table_parser_returns_empty_for_header_only_table() -> None:
+    """A header-plus-separator table with no data rows yields no rows."""
+    source = "## Support\n\n| Platform | Runner |\n| --- | --- |\n"
+    assert _markdown_table_rows(source, heading="Support") == []
+
+
+def test_support_classification_table_parser_reads_a_single_row() -> None:
+    """The one-row boundary parses to exactly one stripped cell list."""
+    source = "## Support\n\n| Platform | Runner |\n| --- | --- |\n| Linux | `ubuntu-24.04` |\n"
+    assert _markdown_table_rows(source, heading="Support") == [["Linux", "`ubuntu-24.04`"]]
+
+
+def test_support_classification_inline_code_rejects_plain_cell() -> None:
+    """A runner cell that lost its backticks is a ValueError, not a silent pass."""
+    with pytest.raises(ValueError, match="single inline-code span"):
+        _inline_code("ubuntu-24.04")
+
+
+@pytest.mark.parametrize("spec", ["", ">3.14", ">=3", "==3.14", ">=3.14,<4"])
+def test_support_classification_requires_python_rejects_non_floor_specs(spec: str) -> None:
+    """Only a bare ``>=X.Y`` lower bound is a floor this gate can compare."""
+    with pytest.raises(ValueError, match="unsupported requires-python spec"):
+        _requires_python_floor(spec)
+
+
+def test_support_classification_requires_python_parses_the_shipped_floor() -> None:
+    """The floor this repo ships parses to a concrete (major, minor) pair."""
+    assert _requires_python_floor(_project_table()["requires-python"]) == (3, 14)

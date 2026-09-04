@@ -8,11 +8,17 @@ Covers the v0.1 acceptance set:
   emitted by :mod:`eawf.surfaces.render.agents_md`;
 - rejects bad ``--profile`` / ``--project-code`` inputs with exit-code 3;
 - refuses to clobber an existing ``.ea/`` without ``--force``.
+
+It also owns the README quick-start replay: the documented block is
+extracted from ``README.md`` and every command in it is run through the real
+Typer app in a fresh temporary repository, so the front door cannot document
+a flag the CLI does not have.
 """
 
 from __future__ import annotations
 
 import json
+import shlex
 from pathlib import Path
 
 import pytest
@@ -27,6 +33,11 @@ from eawf.surfaces.cli.app import app
 from eawf.workflow.estimation.buckets import BUCKET_EU
 
 runner = CliRunner()
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_README = _REPO_ROOT / "README.md"
+_QUICKSTART_PAGE = _REPO_ROOT / "docs" / "tutorial" / "quickstart.md"
+_QUICKSTART_MARKER = "<!-- eawf:quickstart -->"
 
 
 def _invoke_init(target: Path, *extra: str) -> Result:
@@ -299,3 +310,129 @@ def test_cli_init_refresh_gitignore_rejects_line_injection(tmp_path: Path) -> No
     assert result.exit_code == 1
     assert "cannot contain CR or LF" in result.stdout
     assert not (tmp_path / ".gitignore").exists()
+
+
+# --- README quick-start replay ----------------------------------------------
+#
+# The front door's characteristic failure is a quick-start that documents a
+# flag the CLI never had (``eawf init`` as a scripted command, when the
+# non-interactive flag is ``--quick``). Prose review does not catch that;
+# executing the documented block does. The block is fenced behind a marker
+# comment so extraction is exact rather than heuristic, and the same block is
+# pinned in the docs quickstart page so the two front doors cannot diverge.
+
+
+def _quickstart_commands(markdown: str) -> list[list[str]]:
+    """Return the argv of every command in the marked quick-start block.
+
+    Args:
+        markdown: Markdown source carrying one ``<!-- eawf:quickstart -->``
+            marker followed by a fenced ``bash`` block.
+
+    Returns:
+        One argv list per command line, each with the leading ``eawf``
+        program name stripped, in document order.
+
+    Raises:
+        KeyError: when the marker comment is absent.
+        ValueError: when no fenced ``bash`` block follows the marker, or a
+            line inside it is not an ``eawf`` invocation.
+    """
+    head, sep, tail = markdown.partition(_QUICKSTART_MARKER)
+    if not sep:
+        raise KeyError(f"no {_QUICKSTART_MARKER} marker in the markdown source")
+    del head
+
+    lines = tail.splitlines()
+    try:
+        opened = lines.index("```bash")
+    except ValueError as exc:
+        raise ValueError("no fenced bash block follows the quick-start marker") from exc
+
+    commands: list[list[str]] = []
+    for line in lines[opened + 1 :]:
+        if line.startswith("```"):
+            return commands
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        argv = shlex.split(stripped.split("#", 1)[0])
+        if argv[:1] != ["eawf"]:
+            raise ValueError(f"quick-start line is not an eawf command: {stripped!r}")
+        commands.append(argv[1:])
+    raise ValueError("quick-start bash block is not closed")
+
+
+def test_readme_quickstart_block_matches_the_docs_quickstart_page() -> None:
+    """The two front doors document byte-identical commands."""
+    assert _quickstart_commands(_README.read_text(encoding="utf-8")) == _quickstart_commands(
+        _QUICKSTART_PAGE.read_text(encoding="utf-8")
+    )
+
+
+def test_readme_quickstart_commands_each_exit_zero_in_a_fresh_repo(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A clean directory reaches a tracked first workflow via the documented block.
+
+    Runs the README quick-start commands in order, from a fresh empty
+    directory, with no arguments injected — exactly what an operator pastes.
+    Each must exit 0, and the end state must carry the ledger plus the phase
+    the block opens.
+    """
+    commands = _quickstart_commands(_README.read_text(encoding="utf-8"))
+    assert commands, "the README quick-start block must carry at least one command"
+
+    repo = tmp_path / "demo-repo"
+    repo.mkdir()
+    monkeypatch.chdir(repo)
+
+    for argv in commands:
+        result = runner.invoke(app, argv)
+        assert result.exit_code == 0, (
+            f"`eawf {' '.join(argv)}` exited {result.exit_code}\n{result.output}"
+        )
+
+    state_path = repo / ".ea" / "state.json"
+    assert state_path.is_file(), "the quick-start block must leave a committed ledger"
+    state = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
+    assert state.project is not None and state.project.code == "DEMO-REPO"
+    assert state.current.phase_id is not None, "the block must leave a current phase open"
+    assert state.phases[state.current.phase_id].status == "active"
+
+
+def test_quickstart_extractor_rejects_markdown_without_the_marker() -> None:
+    """A README that loses the marker is a KeyError, not a silent zero-command pass."""
+    with pytest.raises(KeyError, match="marker"):
+        _quickstart_commands("# Title\n\n```bash\neawf status\n```\n")
+
+
+def test_quickstart_extractor_rejects_a_markerless_fence() -> None:
+    """A marker with no fenced bash block after it is a ValueError."""
+    with pytest.raises(ValueError, match="no fenced bash block"):
+        _quickstart_commands(f"{_QUICKSTART_MARKER}\n\njust prose\n")
+
+
+def test_quickstart_extractor_rejects_an_unclosed_fence() -> None:
+    """An unterminated block is a ValueError rather than a truncated command list."""
+    with pytest.raises(ValueError, match="not closed"):
+        _quickstart_commands(f"{_QUICKSTART_MARKER}\n\n```bash\neawf status\n")
+
+
+def test_quickstart_extractor_rejects_a_non_eawf_line() -> None:
+    """A stray shell line in the executable block is a ValueError."""
+    with pytest.raises(ValueError, match="not an eawf command"):
+        _quickstart_commands(f"{_QUICKSTART_MARKER}\n\n```bash\ncd /tmp\n```\n")
+
+
+def test_quickstart_extractor_returns_empty_for_an_empty_block() -> None:
+    """The empty boundary: a marked but commentary-only block yields no commands."""
+    source = f"{_QUICKSTART_MARKER}\n\n```bash\n# nothing to run yet\n```\n"
+    assert _quickstart_commands(source) == []
+
+
+def test_quickstart_extractor_reads_a_single_command() -> None:
+    """The one-command boundary strips the program name and keeps the argv."""
+    source = f'{_QUICKSTART_MARKER}\n\n```bash\neawf phase open --auto --title "A B"\n```\n'
+    assert _quickstart_commands(source) == [["phase", "open", "--auto", "--title", "A B"]]

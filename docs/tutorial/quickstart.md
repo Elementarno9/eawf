@@ -1,104 +1,56 @@
 # Quickstart
 
-*Bootstrap a repository, inspect health, and start the first Eä workflow.*
+*Turn an ordinary Git repository into an Eä-managed project in three commands.*
 
-This page is the shortest path from an ordinary Git repository to an Eä-managed project. It uses the canonical `eawf` command name and keeps examples non-interactive so they are safe to paste into CI or a local shell.
+This page assumes `eawf --version` already exits 0. If it does not, start at [Install](install.md). When the three commands below have run, continue with [First workflow](first-workflow.md).
 
-For the full command inventory, see the [CLI surface](../architecture/cli-surface.md) and the generated [CLI reference](../reference/autogen/cli.md).
+## The three commands
 
-## 1. Install or run the CLI
+Run these from the root of the repository you want to manage. Each one exits `0` on a clean bootstrap, and a test replays this exact block in a fresh temporary repository so the page cannot drift away from the CLI:
 
-For a one-off bootstrap, run the package without installing a persistent command:
-
-```bash
-uvx eawf init --target . --project-code DEMO --project-title "Demo Project"
-```
-
-For regular use, install the tool and then run `eawf` directly:
+<!-- eawf:quickstart -->
 
 ```bash
-uv tool install eawf
-eawf --version
+eawf init --quick
+eawf phase open --auto --title "Bootstrap the first tracked delivery"
+eawf status
 ```
 
-`eawf` is the stable binary name. The shorter `ea` alias is optional and is only installed when the local environment has no command collision.
+## What each command does
 
-## 2. Initialize a repository
-
-Run initialization from the repository root:
+`eawf init --quick` is the non-interactive bootstrap. It detects profiles from the files already in the repository, infers a project code from the directory name, writes the managed block into `.gitignore`, and renders the runtime plugin tree. Drop `--quick` for the interactive wizard, or use the scripted form when you want to pin every answer yourself:
 
 ```bash
-eawf init --target . --project-code DEMO --project-title "Demo Project" --profiles core,python
+eawf --no-input init --project-code DEMO --project-title "Demo Project" --profiles core,python
 ```
 
-Initialization writes project state and generated runtime files. The important outputs are:
+The scripted form is the one to paste into CI: `--no-input` fails closed instead of prompting, and it requires an explicit `--project-code`.
 
-- `.ea/state.json` — committed project ledger.
-- `.ea/config.yaml` — selected profiles, runtime adapters, acceptance gates, and layered project configuration.
-- `AGENTS.md` — generated agent contract for the repository.
-- `CLAUDE.md` — shim that points Claude Code at `AGENTS.md` when that adapter is enabled.
+`eawf phase open --auto` allocates the next free `P<NN>` and makes it the current phase. Titles pass a clarity gate, so an imperative noun-phrase like the one above is accepted while a bare word like `Bootstrap` is not.
 
-Local caches, secrets, and scratch files stay under ignored `.ea/local/`, `.ea/cache/`, `.ea/tmp/`, and `.ea/secrets/` paths.
+`eawf status` reads the ledger back and prints the current position. A zero exit here is the proof that the bootstrap landed.
 
-## 3. Check project health
+## What initialization writes
 
-After initialization, run validation and the doctor:
+- `.ea/state.json` — the committed project ledger, and the only source of truth for project state.
+- `.ea/config.yaml` — enabled profiles, runtime adapters, acceptance gates, and layered project configuration.
+- `AGENTS.md` — the generated agent contract for the repository.
+- `CLAUDE.md` — a shim pointing Claude Code at `AGENTS.md`, written when that adapter is enabled.
+
+Caches, scratch files, and secrets stay under the ignored `.ea/local/`, `.ea/cache/`, `.ea/tmp/`, and `.ea/secrets/` paths. Commit `.ea/state.json` and `.ea/config.yaml`; leave the rest ignored.
+
+## Check the bootstrap
 
 ```bash
 eawf validate --strict .ea/state.json
 eawf doctor
 ```
 
-`validate` checks the state document and invariants. `doctor` checks tool availability, config health, and install readiness. If either command reports a blocker, fix that before planning work.
+`validate` checks the state document against the schema and the lifecycle invariants. `doctor` checks the environment around it. Fix anything either one reports as a blocker before planning work.
 
-## 4. Plan a phase
+## Next
 
-Eä tracks work as a state-backed lifecycle:
-
-```text
-phase -> iter -> wave -> audit -> ship
-```
-
-Plan the next phase with the roadmap surface:
-
-```bash
-eawf roadmap propose --phase P01 --title "Add first tracked workflow"
-eawf roadmap show --phase P01 --md
-eawf roadmap apply P01
-```
-
-The proposed phase starts in `PLANNED` state. Use `roadmap revise` to add, remove, or retitle pending waves before applying the plan.
-
-## 5. Execute the next wave
-
-Wave execution is usually driven by `/prep` and the runtime adapter. The state CLI still exposes the underlying lifecycle operations:
-
-```bash
-eawf wave next-ready
-eawf wave claim P01-I01-W01 --session operator-demo
-```
-
-Worktree-capable runs create per-wave branches and merge them back by cherry-pick, preserving the long-running phase branch as the integration point.
-Each wave should close only after its scoped files, checks, and evidence are complete.
-
-## 6. Audit and ship
-
-Before committing phase closeout, run the configured checks:
-
-```bash
-eawf validate --strict .ea/state.json
-eawf doctor
-```
-
-The normal endgame is:
-
-1. Run `/audit` for the active iter.
-2. Run `/polish` for consistency follow-ups.
-3. Run `/ship` to prepare commit groups, PR text, and final state updates.
-4. Close the iter and phase in the final state-bookkeeping commit once checks and PR review are green.
-
-## Next reads
-
-- [Concepts](../concepts.md) for the nouns used by the workflow.
-- [Workflow](../architecture/workflow.md) for the full lifecycle.
-- [Installation](../architecture/installation.md) for project, workspace, and global setup details.
+- [First workflow](first-workflow.md) — plan, execute, and close one unit of tracked work.
+- [Concepts](../concepts.md) — the nouns the workflow uses.
+- [Profile picker](profile-picker.md) — choosing the profile set for a repository.
+- [Troubleshooting](troubleshooting.md) — recovering from a non-zero exit.
