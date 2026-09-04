@@ -306,3 +306,108 @@ def test_linux_real_host_gate_reds_on_a_missing_job() -> None:
     assert linux_real_host_violations(yaml.safe_load("jobs: {}\n")) == [
         "ci.yaml declares no 'linux-jail' job"
     ]
+
+
+# --- twice-green full-suite gate --------------------------------------------
+
+
+def _just_test_all_steps(job: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return the steps of *job* that invoke ``just test-all``."""
+    steps: list[dict[str, Any]] = job.get("steps", [])
+    return [step for step in steps if "just test-all" in str(step.get("run", ""))]
+
+
+def twice_green_violations(workflow: dict[str, Any]) -> list[str]:
+    """Report every way *workflow* could stop proving the suite is twice-green.
+
+    A suite that passes once but not twice in a row is not green, it is
+    lucky: the second run inherits whatever the first left on disk, which
+    is where the shared-runtime-dir and stale-lock flakes lived. The
+    ``test`` matrix runs the suite once and cannot see that class at all.
+
+    Args:
+        workflow: The parsed CI workflow.
+
+    Returns:
+        One human-readable problem per violation; empty when a fresh,
+        unconditional ubuntu-24.04 job checks the tree out and runs
+        ``just test-all`` exactly twice, with neither run's exit code
+        swallowed.
+    """
+    problems: list[str] = []
+    job = workflow.get("jobs", {}).get("twice-green")
+    if job is None:
+        return ["ci.yaml declares no 'twice-green' job"]
+
+    if job.get("runs-on") != "ubuntu-24.04":
+        problems.append("the twice-green job does not run on ubuntu-24.04")
+    if job.get("if") is not None:
+        problems.append("the twice-green job is conditional, so the rerun can go unproven")
+
+    steps: list[dict[str, Any]] = job.get("steps", [])
+    if not any(str(step.get("uses", "")).startswith("actions/checkout") for step in steps):
+        problems.append("the twice-green job checks out no fresh tree")
+
+    runs = _just_test_all_steps(job)
+    if len(runs) != 2:
+        problems.append(f"the twice-green job runs 'just test-all' {len(runs)} time(s), not twice")
+    if any(step.get("continue-on-error") for step in runs):
+        problems.append("a 'just test-all' step is continue-on-error, so a red run reads as green")
+    return problems
+
+
+def test_ci_runs_the_full_suite_twice_green() -> None:
+    """The live CI workflow runs ``just test-all`` twice on a fresh checkout."""
+    assert twice_green_violations(_load_ci()) == []
+
+
+def test_twice_green_gate_reds_on_a_single_run() -> None:
+    """The gate fires on the real defect: one run, so a rerun-only flake hides.
+
+    The synthetic job also swallows the exit code and pins the wrong
+    runner, which are the other two ways a job can look like this gate's
+    subject while proving nothing.
+    """
+    defective = yaml.safe_load(
+        """
+        jobs:
+          twice-green:
+            runs-on: macos-26
+            if: github.event_name == 'pull_request'
+            steps:
+              - name: Checkout
+                uses: actions/checkout@v4
+              - name: Pytest
+                continue-on-error: true
+                run: just test-all
+        """
+    )
+    problems = twice_green_violations(defective)
+    assert any("1 time(s), not twice" in problem for problem in problems), problems
+    assert any("continue-on-error" in problem for problem in problems), problems
+    assert any("ubuntu-24.04" in problem for problem in problems), problems
+    assert any("conditional" in problem for problem in problems), problems
+
+
+def test_twice_green_gate_reds_on_a_checkoutless_job() -> None:
+    """Two runs over a tree nobody checked out are not two FRESH runs."""
+    defective = yaml.safe_load(
+        """
+        jobs:
+          twice-green:
+            runs-on: ubuntu-24.04
+            steps:
+              - name: Pytest (run 1)
+                run: just test-all
+              - name: Pytest (run 2)
+                run: just test-all
+        """
+    )
+    assert twice_green_violations(defective) == ["the twice-green job checks out no fresh tree"]
+
+
+def test_twice_green_gate_reds_on_a_missing_job() -> None:
+    """A workflow with no twice-green job at all is itself the violation."""
+    assert twice_green_violations(yaml.safe_load("jobs: {}\n")) == [
+        "ci.yaml declares no 'twice-green' job"
+    ]

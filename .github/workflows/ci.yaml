@@ -211,6 +211,44 @@ jobs:
           tests/runtime/sandbox/test_jail_expiry.py
           tests/runtime/sandbox/test_env_scrub.py
 
+  twice-green:
+    name: Full suite green twice from a fresh checkout
+    # The `test` matrix runs the suite ONCE, so a test that only fails when
+    # it inherits state from an earlier run -- a leaked runtime dir, a
+    # cached daemon socket, a lockfile another run left behind -- is
+    # invisible there. This job runs `just test-all` twice back to back on
+    # one fresh checkout and requires both to exit 0, which is what REL-026
+    # means by reproducibly green. The two runs are separate steps on
+    # purpose: GitHub fails the job on the first non-zero step, so each
+    # run's exit code is asserted independently.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Install just
+        # `rust-just` is the just binary republished on PyPI, so the runner
+        # needs no cargo toolchain and no apt universe pin to get it.
+        run: uv tool install rust-just
+
+      - name: Pytest via just test-all (run 1 of 2)
+        run: just test-all
+
+      - name: Pytest via just test-all (run 2 of 2)
+        run: just test-all
+
   prose-gate:
     name: Layer-2 prose gate (strict)
     # The fail-closed half of the validate_prose chokepoint (doc-clarity

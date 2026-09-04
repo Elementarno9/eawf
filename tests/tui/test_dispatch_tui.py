@@ -37,9 +37,17 @@ def _stub_dispatch(
     monkeypatch: pytest.MonkeyPatch,
     *,
     isatty: bool,
+    state_root: Path,
 ) -> dict[str, int]:
-    """Stub the interactive launch + status emitter; return a call counter."""
+    """Stub the interactive launch + status emitter; return a call counter.
+
+    ``_dispatch_tui(workspace=None)`` resolves the active state by
+    pwd-upward walk, which from the repo root lands on the project's own
+    ``.ea/state.json``. ``state_root`` points the resolver at an empty tmp
+    tree so the dispatch contract is exercised against no state at all.
+    """
     calls = {"tui": 0, "status": 0}
+    monkeypatch.setenv("EA_STATE", str(state_root / ".ea" / "state.json"))
 
     def fake_run_app(scope: str, state_path: object) -> int:
         calls["tui"] += 1
@@ -66,18 +74,20 @@ def _stub_dispatch(
 # --------------------------------------------------------------------------
 
 
-def test_interactive_launches_tui(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls = _stub_dispatch(monkeypatch, isatty=True)
+def test_interactive_launches_tui(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls = _stub_dispatch(monkeypatch, isatty=True, state_root=tmp_path)
     rc = cli_app._dispatch_tui(workspace=None, no_input=False, plain=False)
     assert rc == 0
     assert calls["tui"] == 1
     assert calls["status"] == 0
 
 
-def test_legacy_env_no_longer_routes_anywhere(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_legacy_env_no_longer_routes_anywhere(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """``EAWF_TUI_LEGACY=1`` is dead — the TTY path still launches tui."""
     monkeypatch.setenv("EAWF_TUI_LEGACY", "1")
-    calls = _stub_dispatch(monkeypatch, isatty=True)
+    calls = _stub_dispatch(monkeypatch, isatty=True, state_root=tmp_path)
     rc = cli_app._dispatch_tui(workspace=None, no_input=False, plain=False)
     assert rc == 0
     assert calls["tui"] == 1
@@ -89,22 +99,28 @@ def test_legacy_env_no_longer_routes_anywhere(monkeypatch: pytest.MonkeyPatch) -
 # --------------------------------------------------------------------------
 
 
-def test_non_tty_falls_back_to_status_emitter(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls = _stub_dispatch(monkeypatch, isatty=False)
+def test_non_tty_falls_back_to_status_emitter(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls = _stub_dispatch(monkeypatch, isatty=False, state_root=tmp_path)
     cli_app._dispatch_tui(workspace=None, no_input=False, plain=False)
     assert calls["status"] == 1
     assert calls["tui"] == 0
 
 
-def test_plain_flag_falls_back_to_status_emitter(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls = _stub_dispatch(monkeypatch, isatty=True)
+def test_plain_flag_falls_back_to_status_emitter(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls = _stub_dispatch(monkeypatch, isatty=True, state_root=tmp_path)
     cli_app._dispatch_tui(workspace=None, no_input=False, plain=True)
     assert calls["status"] == 1
     assert calls["tui"] == 0
 
 
-def test_no_input_flag_falls_back_to_status_emitter(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls = _stub_dispatch(monkeypatch, isatty=True)
+def test_no_input_flag_falls_back_to_status_emitter(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls = _stub_dispatch(monkeypatch, isatty=True, state_root=tmp_path)
     cli_app._dispatch_tui(workspace=None, no_input=True, plain=False)
     assert calls["status"] == 1
     assert calls["tui"] == 0

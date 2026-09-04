@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import functools
 import os
 import shutil
+import sys
 import tempfile
 import uuid
 from collections.abc import Iterator
@@ -132,6 +134,159 @@ def runtime_dir_isolation() -> Iterator[RuntimeDirIsolation]:
         else:
             os.environ["EAWF_RUNTIME_DIR"] = previous
         shutil.rmtree(isolated, ignore_errors=True)
+
+
+# --- repository .ea resolution guard -------------------------
+#
+# Both state resolvers fall back to a pwd-upward walk, and pytest runs with
+# cwd at the repo root -- so a test that reaches a resolver without an
+# ``EA_STATE`` override or a ``-w`` workspace gets the REPOSITORY's own
+# ``.ea/state.json`` on the first hop and operates on the project's live
+# state under the operator's feet. The guard below turns that silent hit
+# into a raise at the resolution site.
+#
+# Only the pwd-upward branch is guarded. An explicit ``EA_STATE`` or an
+# explicit workspace argument is a test SAYING it wants that tree, which is
+# how the repo-census family (``eawf decision list`` over the committed
+# state) legitimately reads real state; the accident this guard exists to
+# catch is the fall-through, where nobody chose the path at all.
+#
+# Rebinding is done by identity sweep over ``sys.modules`` rather than by
+# patching the two defining modules: ~50 call sites do
+# ``from ... import resolve_state_path`` at module scope, so a
+# defining-module patch reaches none of them. The sweep is session-scoped,
+# so the per-test cost is zero.
+#
+# The guard deliberately does NOT witness writes to ``.ea`` on disk: a live
+# daemon rewrites ``state.json`` from its own process while the suite runs,
+# so a before/after mutation check would red the suite for work no test did.
+
+REPO_ROOT: Path = Path(__file__).resolve().parents[1]
+REPO_EA_DIR: Path = REPO_ROOT / ".ea"
+
+
+class RepoStateAccessError(RuntimeError):
+    """Raised when a test resolves a path inside the repository's ``.ea``."""
+
+
+def guard_repo_ea_path(path: Path, *, origin: str) -> Path:
+    """Return *path* unless it resolves inside the repository ``.ea`` tree.
+
+    Containment is tested against fully resolved paths and by exact path
+    component equality, so a sibling whose name merely starts with ``.ea``
+    -- ``<repo>/.eawf/`` is a real one -- is never flagged.
+
+    Args:
+        path: The candidate path a state resolver produced.
+        origin: Name of the resolver (or env var) being guarded; quoted in
+            the failure message so the offending call site is obvious.
+
+    Returns:
+        *path* unchanged when it lies outside the repository ``.ea`` tree.
+
+    Raises:
+        TypeError: *path* is not path-like.
+        RepoStateAccessError: *path* is the repository ``.ea`` or below it.
+    """
+    candidate = Path(path)
+    resolved = candidate.expanduser().resolve()
+    if resolved == REPO_EA_DIR or REPO_EA_DIR in resolved.parents:
+        raise RepoStateAccessError(
+            f"{origin} resolved to the repository's own state tree "
+            f"({resolved}); tests must run against a tmp_path repo. Set "
+            f"EA_STATE or pass an explicit workspace."
+        )
+    return candidate
+
+
+def _rebind_everywhere(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    name: str,
+    original: object,
+    replacement: object,
+) -> None:
+    """Rebind every module-level alias of *original* named *name*.
+
+    Walks the imported module table and replaces the attribute wherever it
+    is still the identical original object, which covers both the defining
+    module and every ``from ... import <name>`` alias.
+    """
+    for module in list(sys.modules.values()):
+        if module is not None and getattr(module, name, None) is original:
+            monkeypatch.setattr(module, name, replacement, raising=False)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def repo_ea_guard() -> Iterator[None]:
+    """Make either state resolver raise when it lands on the repo's ``.ea``.
+
+    Session-scoped: the guard is stateless, so one rebinding sweep covers
+    every test in the worker at no per-test cost.
+    """
+    from eawf.kernel.state import resolve as state_resolve
+    from eawf.surfaces.cli import scope as cli_scope
+
+    inner_with_reason = state_resolve.resolve_with_reason
+    inner_state_path = cli_scope.resolve_state_path
+
+    @functools.wraps(inner_with_reason)
+    def guarded_with_reason(
+        workspace: Path | None,
+        env: os._Environ[str] | None = None,
+    ) -> tuple[Path, str]:
+        path, reason = inner_with_reason(workspace, env)
+        if reason == state_resolve.REASON_PWD_UPWARD:
+            guard_repo_ea_path(path, origin="resolve_with_reason")
+        return path, reason
+
+    @functools.wraps(inner_state_path)
+    def guarded_state_path(workspace: Path | None) -> Path:
+        path = inner_state_path(workspace)
+        # Mirrors the resolver's own precedence: an env override or an
+        # explicit workspace means the caller chose this tree on purpose.
+        if workspace is None and not os.environ.get("EA_STATE"):
+            guard_repo_ea_path(path, origin="resolve_state_path")
+        return path
+
+    monkeypatch = pytest.MonkeyPatch()
+    _rebind_everywhere(
+        monkeypatch,
+        name="resolve_with_reason",
+        original=inner_with_reason,
+        replacement=guarded_with_reason,
+    )
+    _rebind_everywhere(
+        monkeypatch,
+        name="resolve_state_path",
+        original=inner_state_path,
+        replacement=guarded_state_path,
+    )
+    try:
+        yield
+    finally:
+        monkeypatch.undo()
+
+
+@pytest.fixture(autouse=True)
+def own_runtime_dir(runtime_dir_isolation: RuntimeDirIsolation) -> None:
+    """Assert this test still runs under its own isolated ``EAWF_RUNTIME_DIR``.
+
+    Runs at setup, so a predecessor that cleared or repointed the variable
+    outside ``monkeypatch`` is caught before the next test can bind a
+    daemon socket in the operator's live runtime dir.
+
+    Raises:
+        RepoStateAccessError: ``EAWF_RUNTIME_DIR`` is unset, empty, or points
+            inside the repository ``.ea`` tree.
+    """
+    configured = os.environ.get("EAWF_RUNTIME_DIR")
+    if not configured:
+        raise RepoStateAccessError(
+            "EAWF_RUNTIME_DIR is unset: the runtime-dir isolation fixture was "
+            "overridden, so this test would bind a daemon in the live ~/.eawfd"
+        )
+    guard_repo_ea_path(Path(configured), origin="EAWF_RUNTIME_DIR")
 
 
 @pytest.fixture(scope="session", autouse=True)

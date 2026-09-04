@@ -104,7 +104,9 @@ def test_statusline_env_theme_is_honored_when_no_flag(
     _stub_no_git(monkeypatch)
 
     payload = {"session_id": "ses-env-theme", "model": "haiku", "cwd": str(tmp_path)}
-    result = runner.invoke(app, ["cc", "statusline"], input=json.dumps(payload))
+    result = runner.invoke(
+        app, ["--workspace", str(tmp_path), "cc", "statusline"], input=json.dumps(payload)
+    )
     assert result.exit_code == 0, result.output
     line = result.stdout.rstrip("\n")
     # ascii-fallback theme: no ANSI escape codes in the rendered line.
@@ -125,7 +127,7 @@ def test_statusline_flag_wins_over_env_theme(
     payload = {"session_id": "ses-flag-wins", "model": "haiku", "cwd": str(tmp_path)}
     result = runner.invoke(
         app,
-        ["cc", "statusline", "--theme", "ascii-fallback"],
+        ["--workspace", str(tmp_path), "cc", "statusline", "--theme", "ascii-fallback"],
         input=json.dumps(payload),
     )
     assert result.exit_code == 0, result.output
@@ -148,7 +150,7 @@ def test_statusline_prewarm_writes_cache_and_subsequent_run_hits_cache(
     # 1. Prewarm: same render path, but writes the line to cache.
     result = runner.invoke(
         app,
-        ["cc", "statusline", "prewarm", "--theme", "ascii-fallback"],
+        ["--workspace", str(tmp_path), "cc", "statusline", "prewarm", "--theme", "ascii-fallback"],
         input=json.dumps(payload),
     )
     assert result.exit_code == 0, result.output
@@ -166,7 +168,7 @@ def test_statusline_prewarm_writes_cache_and_subsequent_run_hits_cache(
 
     result = runner.invoke(
         app,
-        ["cc", "statusline", "--theme", "ascii-fallback"],
+        ["--workspace", str(tmp_path), "cc", "statusline", "--theme", "ascii-fallback"],
         input=json.dumps(payload),
     )
     assert result.exit_code == 0, result.output
