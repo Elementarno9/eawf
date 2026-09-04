@@ -24,12 +24,23 @@ Enforces:
      in anything new, because the conventional-commit ``type`` is
      the semantic signal and a second carrier for it is drift.
 
-   - **Bare conventional-commits form** (out-of-phase): a bare
-     ``<type>: <subject>`` with no bracket prefix:
-     ``^<type>:\\s+\\S.*$``. Accepted ONLY when ``state.current.phase_id``
-     is ``None`` (no ACTIVE phase). Rejected when an ACTIVE phase
-     exists — those commits MUST carry the bracketed wave/iter/phase
-     prefix so the lifecycle bookkeeping stays attributable.
+   - **Trailer form** (the default written form): a bare
+     ``<type>: <subject>`` with no bracket prefix, plus an
+     ``Eawf-Wave: P##-I##-W##`` trailer in the body naming the wave the
+     commit advances. Selected by ``vcs.conventions.subject_style``,
+     which defaults to ``trailer``.
+
+     Under ``subject_style: trailer`` the wave form above still passes,
+     but with a deprecation warning on stderr (exit code stays ``0``);
+     the bare ``[P##(-I##)?] state|docs:`` form is exempt because it
+     advances no single wave and so has no trailer to carry.
+
+     A bare ``<type>: <subject>`` with NO ``Eawf-Wave`` trailer is
+     accepted only when ``state.current.phase_id`` is ``None`` (no
+     ACTIVE phase) — an out-of-phase commit advances no wave, so
+     neither carrier has anything to name. With an ACTIVE phase it is
+     rejected: under ``trailer`` for the missing trailer, under
+     ``bracket`` for the missing bracket prefix.
 
    ``W00`` and ``I00`` are rejected in the bracketed forms: wave /
    iter indices are 1-based by convention, and reactive waves get the
@@ -63,7 +74,8 @@ argument is the commit-message file path (pre-commit passes it). The
 linter consults ``git diff --cached --name-only`` for staged paths.
 
 Exit codes:
-- ``0`` — accepted.
+- ``0`` — accepted (an advisory deprecation warning may still print to
+  stderr).
 - ``1`` — rejected (message printed to stderr).
 """
 
@@ -98,10 +110,11 @@ _TYPES = "feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state"
 #    post-P26-W23 grammar; valid only when the conventional-commit
 #    type is ``state`` (any path on the state whitelist) or ``docs``
 #    (restricted to ``.ea/artifacts/**``).
-# 3. Bare conventional-commits form: ``<type>: <subject>`` with no
-#    bracket prefix — accepted ONLY when ``state.current.phase_id`` is
-#    ``None`` (no ACTIVE phase). Rejected when a phase is ACTIVE so
-#    lifecycle bookkeeping stays attributable.
+# 3. Trailer form: ``<type>: <subject>`` with no bracket prefix — the
+#    default written form, carrying the wave in an ``Eawf-Wave`` body
+#    trailer. Without that trailer it is accepted ONLY when
+#    ``state.current.phase_id`` is ``None`` (no ACTIVE phase), because
+#    an out-of-phase commit advances no wave to name.
 #
 # The negative lookaheads ``(?!00)`` on both the iter and wave digit
 # pairs reject ``I00`` / ``W00``: wave and iter indices are 1-based
@@ -147,6 +160,18 @@ _RELEASE_ANNOTATION_SIGNAL_RE = re.compile(r"release=")
 _WORKFLOW_RELEASE_EXTRACTION_RE = r"\(release=(v\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?)\)"
 _SUBJECT_STYLE_BRACKET = "bracket"
 _SUBJECT_STYLE_TRAILER = "trailer"
+# Mirrors ``vcs.conventions.subject_style`` in src/eawf/kernel/config/defaults.py.
+# The hook runs under system Python and cannot import the package, so the two
+# defaults are kept in lockstep by hand and pinned by
+# tests/unit/kernel/config/test_subject_style_default.py.
+_SUBJECT_STYLE_DEFAULT = _SUBJECT_STYLE_TRAILER
+_BRACKET_FORM_DEPRECATION = (
+    "deprecated bracket-prefix wave subject: {subject!r}\n"
+    "vcs.conventions.subject_style is 'trailer': write '<type>: <summary>' "
+    f"with an '{_WAVE_TRAILER_NAME}: P##-I##-W##' trailer instead. The bracket "
+    "form still passes, but it is deprecated and its acceptance will be "
+    "withdrawn once the trailer form is universal."
+)
 _STATE_ONLY_ALLOWED = (
     ".ea/state.json",
     # ``.secrets.baseline`` auto-tracks state.json line numbers; the
@@ -202,10 +227,10 @@ def _configured_subject_style(repo_root: Path | None = None) -> str:
     The hook runs under system Python, so this intentionally avoids importing
     package YAML dependencies. It reads the two file-backed repo layers the
     hook can see directly; missing or malformed values fall back to
-    ``bracket``.
+    :data:`_SUBJECT_STYLE_DEFAULT`.
     """
     root = _find_repo_root(repo_root)
-    style = _SUBJECT_STYLE_BRACKET
+    style = _SUBJECT_STYLE_DEFAULT
     for config_path in (root / ".ea" / "config.yaml", root / ".ea" / "local" / "config.yaml"):
         candidate = _subject_style_from_config(config_path)
         if candidate is not None:
@@ -606,9 +631,14 @@ def _match_subject(
         return bracketed, bare_match is not None, ""
     bare_conventional = _SUBJECT_BARE_CONVENTIONAL_RE.match(subject)
     if bare_conventional is not None:
+        if subject_style == _SUBJECT_STYLE_TRAILER and has_wave_trailer:
+            return bare_conventional, False, ""
+        if not _current_phase_active(state_path):
+            # An out-of-phase commit advances no wave, so neither carrier has
+            # anything to name: the bracket prefix and the Eawf-Wave trailer
+            # are both vacuous and the bare subject is the only honest form.
+            return bare_conventional, False, ""
         if subject_style == _SUBJECT_STYLE_TRAILER:
-            if has_wave_trailer:
-                return bare_conventional, False, ""
             return (
                 None,
                 False,
@@ -618,20 +648,18 @@ def _match_subject(
                     "or switch vcs.conventions.subject_style back to 'bracket'"
                 ),
             )
-        if _current_phase_active(state_path):
-            return (
-                None,
-                False,
-                (
-                    f"bare conventional-commits subject rejected: {subject!r}\n"
-                    "an ACTIVE phase exists (state.current.phase_id is set); "
-                    "commits MUST carry a bracketed [P##-W##] / [P##-I##-W##] / "
-                    "[P##] / [P##-I##] prefix so lifecycle bookkeeping stays "
-                    "attributable. Bare '<type>: <subject>' is reserved for "
-                    "out-of-phase commits (state.current.phase_id is None)."
-                ),
-            )
-        return bare_conventional, False, ""
+        return (
+            None,
+            False,
+            (
+                f"bare conventional-commits subject rejected: {subject!r}\n"
+                "an ACTIVE phase exists (state.current.phase_id is set); "
+                "commits MUST carry a bracketed [P##-W##] / [P##-I##-W##] / "
+                "[P##] / [P##-I##] prefix so lifecycle bookkeeping stays "
+                "attributable. Bare '<type>: <subject>' is reserved for "
+                "out-of-phase commits (state.current.phase_id is None)."
+            ),
+        )
     return (
         None,
         False,
@@ -697,6 +725,67 @@ def _check_release_annotation(subject: str) -> tuple[int, str] | None:
     )
 
 
+def _accept_or_reject(
+    text: str,
+    env: Mapping[str, str],
+    *,
+    warning: str,
+) -> tuple[int, str]:
+    """Return the terminal verdict: the co-author reject, else *warning* at 0.
+
+    A rejection's diagnostic always wins the single message slot; an advisory
+    warning is only worth printing on a commit that is actually being accepted.
+    """
+    code, diag = _check_coauthor(text, env)
+    if code != 0:
+        return code, diag
+    return 0, warning
+
+
+def _carrier_mismatch(
+    subject_ref: _ScopeRef | None,
+    trailer_ref: _ScopeRef | None,
+) -> tuple[int, str] | None:
+    """Reject a commit whose two scope carriers name different waves.
+
+    A commit may carry both the bracket prefix and the ``Eawf-Wave`` trailer
+    during the migration to the trailer form; when it does, the two MUST agree
+    or the wave a commit advances is ambiguous. ``None`` when they agree or
+    only one carrier is present.
+    """
+    if subject_ref is None or subject_ref.wave_id is None or trailer_ref is None:
+        return None
+    if subject_ref == trailer_ref:
+        return None
+    return (
+        1,
+        (
+            "subject/trailer hierarchy mismatch: "
+            f"subject={subject_ref.wave_id!r} trailer={trailer_ref.wave_id!r}"
+        ),
+    )
+
+
+def _bracket_form_deprecation(
+    subject: str,
+    *,
+    subject_style: str,
+    is_bare_bracketed: bool,
+) -> str:
+    """Return the deprecation warning for a bracket-prefix wave subject.
+
+    Empty string when nothing is deprecated. The bare ``[P##] state:`` /
+    ``[P##] docs:`` form is exempt: it advances no single wave, so the
+    ``Eawf-Wave`` trailer has nothing to carry and the bracket stays the only
+    scope carrier for phase/iter bookkeeping.
+    """
+    if subject_style != _SUBJECT_STYLE_TRAILER:
+        return ""
+    if is_bare_bracketed or not subject.startswith("["):
+        return ""
+    return _BRACKET_FORM_DEPRECATION.format(subject=subject)
+
+
 def lint(
     message_path: Path,
     staged: list[str],
@@ -708,9 +797,12 @@ def lint(
 ) -> tuple[int, str]:
     """Run both checks against *message_path* + *staged* paths.
 
-    Returns ``(exit_code, diagnostic)``. *state_path* lets tests
-    inject a fixture ``state.json``; production callers leave it
-    unset and the helper walks upward from cwd to find ``.ea/state.json``.
+    Returns ``(exit_code, diagnostic)``. A non-zero code means rejection and
+    the diagnostic carries the reason; a zero code with a non-empty diagnostic
+    is an accepted commit plus an advisory warning (the caller prints both to
+    stderr). *state_path* lets tests inject a fixture ``state.json``;
+    production callers leave it unset and the helper walks upward from cwd to
+    find ``.ea/state.json``.
     """
     managed_state: dict[str, Any] | None = None
     if state_path is not None:
@@ -731,24 +823,19 @@ def lint(
     )
     if match is None:
         return 1, err
+    deprecation = _bracket_form_deprecation(
+        subject,
+        subject_style=configured_style,
+        is_bare_bracketed=is_bare_bracketed,
+    )
     release_annotation = _check_release_annotation(subject)
     if release_annotation is not None:
         return release_annotation
     subject_ref = _subject_scope_ref(subject)
     trailer_ref = _trailer_scope_ref(text)
-    if (
-        subject_ref is not None
-        and subject_ref.wave_id is not None
-        and trailer_ref is not None
-        and subject_ref != trailer_ref
-    ):
-        return (
-            1,
-            (
-                "subject/trailer hierarchy mismatch: "
-                f"subject={subject_ref.wave_id!r} trailer={trailer_ref.wave_id!r}"
-            ),
-        )
+    mismatch = _carrier_mismatch(subject_ref, trailer_ref)
+    if mismatch is not None:
+        return mismatch
     refs = [
         (origin, ref)
         for origin, ref in (("subject", subject_ref), ("Eawf-Wave trailer", trailer_ref))
@@ -777,7 +864,7 @@ def lint(
         )
         if scoped is not None:
             return scoped
-    return _check_coauthor(text, {} if env is None else env)
+    return _accept_or_reject(text, {} if env is None else env, warning=deprecation)
 
 
 def main(argv: list[str]) -> int:
@@ -797,7 +884,7 @@ def main(argv: list[str]) -> int:
         state_path=managed_state_path,
         repo_root=repo_root,
     )
-    if exit_code != 0:
+    if diag:
         print(diag, file=sys.stderr)
     return exit_code
 

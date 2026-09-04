@@ -72,7 +72,7 @@ class VcsConventionsConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    subject_style: CommitSubjectStyle = "bracket"
+    subject_style: CommitSubjectStyle = "trailer"
     wave_trailer: str = Field(default="Eawf-Wave", min_length=1)
     release: VcsReleaseConventionsConfig = Field(default_factory=VcsReleaseConventionsConfig)
 

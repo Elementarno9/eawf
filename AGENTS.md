@@ -153,8 +153,8 @@ Before opening or resuming a phase, iter, or wave, verify the current branch is 
 If the working tree is dirty, preserve the dirty/untracked work before rebasing. If the branch intentionally remains behind or forked, record the reason in the plan or handoff before dispatching worktrees or starting new commits.
 
 <!-- END EAWF:managed id=branch-currency -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.6 hash=16813eba871f03ef -->
-`commit-prefix` — Subjects are ``[P<NN>(-I<NN>)?(-W<NN>)?] <type>: <summary>`` over the conventional-commit type set, with a 3-6 bullet body, and a bracket-free bare subject only while no phase is ACTIVE. Full text: [docs/rules/commit-prefix.md](docs/rules/commit-prefix.md)
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.7 hash=b43803334553edb8 -->
+`commit-prefix` — Wave commits are written ``<type>: <summary>`` plus an ``Eawf-Wave: P<NN>-I<NN>-W<NN>`` trailer; the bracket prefix form still passes but warns, and ``[P<NN>] state:`` keeps its bracket. Full text: [docs/rules/commit-prefix.md](docs/rules/commit-prefix.md)
 <!-- END EAWF:managed id=commit-prefix -->
 <!-- BEGIN EAWF:managed id=branch-naming version=1.0 hash=8251a99a4f2ce095 -->
 ### Branch naming
@@ -259,8 +259,8 @@ Verdicts MUST use ``AgentReportVerdict`` exactly: ``pass``, ``pass-with-followup
 <!-- BEGIN EAWF:managed id=memory-hygiene version=1.1 hash=0228d6e82ab5bd61 -->
 `memory-hygiene` — Remember only facts that stay true across sessions; status is derivable, so query it with ``eawf status`` or ``eawf memory digest`` instead of memorizing it. Full text: [docs/rules/memory-hygiene.md](docs/rules/memory-hygiene.md)
 <!-- END EAWF:managed id=memory-hygiene -->
-<!-- BEGIN EAWF:managed id=comment-economy version=1.0 hash=a8b068e4c253349b -->
-`comment-economy` — Comments carry why, not what: no restated signature, no change-log narration, no lifecycle ids. Full text: [docs/rules/comment-economy.md](docs/rules/comment-economy.md)
+<!-- BEGIN EAWF:managed id=comment-economy version=1.1 hash=d094cbd2800f756a -->
+`comment-economy` — Comments carry why, not what: document every parameter, return and raise, but no restated signatures, change-log narration, or lifecycle ids. Full text: [docs/rules/comment-economy.md](docs/rules/comment-economy.md)
 <!-- END EAWF:managed id=comment-economy -->
 <!-- BEGIN EAWF:managed id=orchestrator-decision-surface version=1.0 hash=7a31e6bd6d6c497f -->
 `orchestrator-decision-surface` — Surface every consequential choice as an explicit question with visual option previews, never a silent default. Full text: [docs/rules/orchestrator-decision-surface.md](docs/rules/orchestrator-decision-surface.md)

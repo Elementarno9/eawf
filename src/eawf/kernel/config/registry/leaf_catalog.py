@@ -1197,6 +1197,19 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
+        key="vcs.conventions.subject_style",
+        domain="vcs",
+        type="literal",
+        default="trailer",
+        writable_layers=_WRITABLE_GWR,
+        choices=("bracket", "trailer"),
+        description=(
+            "Written commit-subject form. 'trailer' writes '<type>: <summary>' plus an "
+            "'Eawf-Wave: P##-I##-W##' trailer; 'bracket' writes the deprecated "
+            "'[P##-I##-W##] <type>:' prefix."
+        ),
+    ),
+    LeafKey(
         key="vcs.conventions.release.agent_driven",
         domain="vcs",
         type="literal",

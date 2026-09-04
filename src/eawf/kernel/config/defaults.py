@@ -318,7 +318,7 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
     },
     "vcs": {
         "conventions": {
-            "subject_style": "bracket",
+            "subject_style": "trailer",
             "wave_trailer": "Eawf-Wave",
             "release": {
                 "cadence": "manual",

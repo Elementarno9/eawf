@@ -183,14 +183,15 @@ def test_accepts_wave_docs_touching_artifact_and_src(tmp_path: Path, mod) -> Non
 
 
 def test_rejects_missing_prefix(tmp_path: Path, mod) -> None:
-    """Bare conventional-commits subject IS legal when no ACTIVE phase
-    (per the W66 lint extension landed in the pre-flight v0.4 chore
-    commit); inject an ACTIVE-phase state.json so this case stays
-    rejected.
+    """A bare conventional-commits subject IS legal when no ACTIVE phase;
+    inject an ACTIVE-phase state.json so this case stays rejected.
+
+    Pinned to ``subject_style="bracket"`` so it exercises the bracket-mode
+    diagnostic; the trailer-mode default has its own rejection text.
     """
     msg = _write_msg(tmp_path, "feat: drive-by change\n")
     state = _write_state(tmp_path, phase_id="P28")
-    code, diag = mod.lint(msg, [], state_path=state)
+    code, diag = mod.lint(msg, [], state_path=state, subject_style="bracket")
     assert code == 1
     assert "bare conventional-commits subject rejected" in diag
 
@@ -440,13 +441,13 @@ def test_trailer_style_rejects_missing_wave_trailer(tmp_path: Path, mod) -> None
     assert "missing Eawf-Wave trailer" in diag
 
 
-def test_bracket_default_still_rejects_active_bare_conventional(tmp_path: Path, mod) -> None:
+def test_bracket_style_still_rejects_active_bare_conventional(tmp_path: Path, mod) -> None:
     msg = _write_msg(
         tmp_path,
         "feat: bracket mode ignores trailer escape\n\nEawf-Wave: P28-I03-W02\n",
     )
     state = _write_state(tmp_path, phase_id="P28")
-    code, diag = mod.lint(msg, ["src/eawf/x.py"], state_path=state)
+    code, diag = mod.lint(msg, ["src/eawf/x.py"], state_path=state, subject_style="bracket")
     assert code == 1
     assert "bare conventional-commits subject rejected" in diag
 
@@ -454,7 +455,12 @@ def test_bracket_default_still_rejects_active_bare_conventional(tmp_path: Path, 
 def test_rejects_bare_conventional_when_active_phase(tmp_path: Path, mod) -> None:
     msg = _write_msg(tmp_path, "chore: pre-flight scrub for v0.4 design\n\nbody\n")
     state = _write_state(tmp_path, phase_id="P28")
-    code, diag = mod.lint(msg, ["AGENTS.md", "tools/commit_prefix_lint.py"], state_path=state)
+    code, diag = mod.lint(
+        msg,
+        ["AGENTS.md", "tools/commit_prefix_lint.py"],
+        state_path=state,
+        subject_style="bracket",
+    )
     assert code == 1
     assert "bare conventional-commits subject rejected" in diag
     assert "ACTIVE phase exists" in diag
@@ -974,3 +980,245 @@ def test_phase_release_workflow_version_source_regex_reads_060() -> None:
     captured = version_re.search('__version__ = "0.6.0"\n')
     assert captured is not None
     assert captured.group(1) == "0.6.0"
+
+
+# ---------------------------------------------------------------------------
+# Trailer-as-default subject style.
+#
+# ``vcs.conventions.subject_style`` defaults to ``trailer``, so a repository
+# with no ``vcs`` override writes ``<type>: <summary>`` plus an ``Eawf-Wave``
+# body trailer. The bracket wave prefix still passes but warns; the bracketed
+# ``state`` / ``docs`` bookkeeping form stays exempt because it advances no
+# single wave and so has no trailer to carry.
+# ---------------------------------------------------------------------------
+
+
+def _repo_without_vcs_override(tmp_path: Path) -> Path:
+    """Return a repo root whose ``.ea/`` carries no ``vcs`` config block."""
+    repo = tmp_path / "no-override-repo"
+    (repo / ".ea").mkdir(parents=True)
+    return repo
+
+
+def test_trailer_default_resolves_without_a_repo_override(tmp_path: Path, mod) -> None:
+    """No ``vcs.conventions.subject_style`` anywhere resolves to ``trailer``."""
+    assert mod._configured_subject_style(_repo_without_vcs_override(tmp_path)) == "trailer"
+
+
+def test_trailer_default_yields_to_a_repo_bracket_override(tmp_path: Path, mod) -> None:
+    """An explicit repo-layer ``bracket`` still wins over the built-in default."""
+    repo = _repo_without_vcs_override(tmp_path)
+    (repo / ".ea" / "config.yaml").write_text(
+        "vcs:\n  conventions:\n    subject_style: bracket\n",
+        encoding="utf-8",
+    )
+    assert mod._configured_subject_style(repo) == "bracket"
+
+
+def test_trailer_default_warns_on_prefix_form_wave_subject(tmp_path: Path, mod) -> None:
+    """The deprecated bracket wave prefix is accepted with a stderr warning."""
+    state = _write_hierarchy_state(tmp_path, wave_status="claimed")
+    msg = _write_msg(tmp_path, "[P28-W02] feat: prefix-form deliverable\n\nbody\n")
+
+    code, diag = mod.lint(
+        msg,
+        ["src/eawf/x.py"],
+        state_path=state,
+        repo_root=_repo_without_vcs_override(tmp_path),
+        canonical_state_path=state,
+    )
+
+    assert code == 0
+    assert "deprecated bracket-prefix wave subject" in diag
+    assert "Eawf-Wave: P##-I##-W##" in diag
+
+
+def test_trailer_default_rejects_conventional_subject_without_wave_trailer(
+    tmp_path: Path, mod
+) -> None:
+    """A trailer-style subject with no ``Eawf-Wave`` trailer is a hard reject."""
+    state = _write_state(tmp_path, phase_id="P28")
+    msg = _write_msg(tmp_path, "feat: no wave named anywhere\n\nbody\n")
+
+    code, diag = mod.lint(
+        msg,
+        ["src/eawf/x.py"],
+        state_path=state,
+        repo_root=_repo_without_vcs_override(tmp_path),
+    )
+
+    assert code == 1
+    assert "missing Eawf-Wave trailer" in diag
+
+
+def test_trailer_default_accepts_conventional_subject_with_wave_trailer(
+    tmp_path: Path, mod
+) -> None:
+    """The written form — bare subject plus trailer — passes with no warning."""
+    state = _write_hierarchy_state(tmp_path, wave_status="claimed")
+    msg = _write_msg(
+        tmp_path,
+        "feat: trailer-form deliverable\n\nbody\n\nEawf-Wave: P28-I01-W02\n",
+    )
+
+    code, diag = mod.lint(
+        msg,
+        ["src/eawf/x.py"],
+        state_path=state,
+        repo_root=_repo_without_vcs_override(tmp_path),
+        canonical_state_path=state,
+    )
+
+    assert code == 0, diag
+    assert diag == ""
+
+
+def test_trailer_default_accepts_bracketed_state_subject(tmp_path: Path, mod) -> None:
+    """The ``[P##-I##] state:`` bookkeeping form stays exempt from the warning."""
+    state = _write_hierarchy_state(tmp_path, wave_status="pending")
+    msg = _write_msg(tmp_path, "[P28-I01] state: close iter + phase (audit=AUD-1)\n")
+
+    code, diag = mod.lint(
+        msg,
+        [".ea/state.json", ".secrets.baseline"],
+        state_path=state,
+        repo_root=_repo_without_vcs_override(tmp_path),
+        canonical_state_path=state,
+    )
+
+    assert code == 0, diag
+    assert diag == ""
+
+
+def test_trailer_default_accepts_bracketed_docs_subject(tmp_path: Path, mod) -> None:
+    """The sibling bare ``docs:`` artifact form is exempt for the same reason."""
+    state = _write_hierarchy_state(tmp_path, wave_status="pending")
+    msg = _write_msg(tmp_path, "[P28-I01] docs: promote the closure audit\n")
+
+    code, diag = mod.lint(
+        msg,
+        [".ea/artifacts/audits/2026-09-04-closure.md"],
+        state_path=state,
+        repo_root=_repo_without_vcs_override(tmp_path),
+        canonical_state_path=state,
+    )
+
+    assert code == 0, diag
+    assert diag == ""
+
+
+def test_trailer_default_accepts_out_of_phase_subject_without_trailer(tmp_path: Path, mod) -> None:
+    """Boundary: no ACTIVE phase means no wave to name, so a bare subject passes."""
+    state = _write_state(tmp_path, phase_id=None)
+    msg = _write_msg(tmp_path, "chore: pre-flight scrub before the next propose\n")
+
+    code, diag = mod.lint(
+        msg,
+        ["AGENTS.md"],
+        state_path=state,
+        repo_root=_repo_without_vcs_override(tmp_path),
+    )
+
+    assert code == 0, diag
+    assert diag == ""
+
+
+def test_trailer_default_warning_yields_to_a_hard_rejection(tmp_path: Path, mod) -> None:
+    """Error path: a rejected prefix-form commit reports the reject, not the warning."""
+    state = _write_hierarchy_state(tmp_path, wave_status="pending")
+    msg = _write_msg(tmp_path, "[P28-W02] feat: unproven claim\n")
+
+    code, diag = mod.lint(
+        msg,
+        ["src/eawf/x.py"],
+        state_path=state,
+        repo_root=_repo_without_vcs_override(tmp_path),
+        canonical_state_path=state,
+    )
+
+    assert code == 1
+    assert "canonical status 'pending'" in diag
+    assert "deprecated bracket-prefix" not in diag
+
+
+def test_trailer_default_warning_yields_to_a_missing_coauthor_trailer(tmp_path: Path, mod) -> None:
+    """Error path: the co-author backstop outranks the advisory warning."""
+    state = _write_hierarchy_state(tmp_path, wave_status="claimed")
+    msg = _write_msg(tmp_path, "[P28-W02] feat: no co-author\n", with_trailer=False)
+
+    code, diag = mod.lint(
+        msg,
+        ["src/eawf/x.py"],
+        state_path=state,
+        repo_root=_repo_without_vcs_override(tmp_path),
+        canonical_state_path=state,
+    )
+
+    assert code == 1
+    assert "missing recognized co-author trailer" in diag
+
+
+def test_trailer_default_bracket_override_silences_the_warning(tmp_path: Path, mod) -> None:
+    """An explicit ``bracket`` repo override accepts the prefix form silently."""
+    repo = _repo_without_vcs_override(tmp_path)
+    (repo / ".ea" / "config.yaml").write_text(
+        "vcs:\n  conventions:\n    subject_style: bracket\n",
+        encoding="utf-8",
+    )
+    state = _write_hierarchy_state(tmp_path, wave_status="claimed")
+    msg = _write_msg(tmp_path, "[P28-W02] feat: prefix-form deliverable\n")
+
+    code, diag = mod.lint(
+        msg,
+        ["src/eawf/x.py"],
+        state_path=state,
+        repo_root=repo,
+        canonical_state_path=state,
+    )
+
+    assert code == 0, diag
+    assert diag == ""
+
+
+@pytest.mark.parametrize(
+    ("subject", "is_bare_bracketed", "expected"),
+    [
+        ("[P28-W02] feat: wave form", False, True),
+        ("[P28-I01] state: bookkeeping", True, False),
+        ("feat: trailer form", False, False),
+        ("", False, False),
+    ],
+    ids=["wave-form", "bare-bracketed", "conventional", "empty"],
+)
+def test_trailer_default_deprecation_helper_boundaries(
+    mod, subject: str, is_bare_bracketed: bool, expected: bool
+) -> None:
+    """Boundary sweep of the deprecation predicate, empty subject included."""
+    warning = mod._bracket_form_deprecation(
+        subject,
+        subject_style="trailer",
+        is_bare_bracketed=is_bare_bracketed,
+    )
+    assert bool(warning) is expected
+
+
+def test_trailer_default_main_prints_the_warning_and_exits_zero(
+    tmp_path: Path,
+    mod,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The CLI entry point routes the advisory warning to stderr at exit 0."""
+    repo = _repo_without_vcs_override(tmp_path)
+    state = _write_hierarchy_state(tmp_path, wave_status="claimed", filename="state.json")
+    (repo / ".ea" / "state.json").write_bytes(state.read_bytes())
+    msg = _write_msg(tmp_path, "[P28-W02] feat: prefix-form deliverable\n")
+
+    monkeypatch.setattr(mod, "_find_repo_root", lambda *_args, **_kwargs: repo)
+    monkeypatch.setattr(mod, "_staged_paths", lambda: ["src/eawf/x.py"])
+    monkeypatch.setattr(mod, "_canonical_state_path", lambda _root: repo / ".ea" / "state.json")
+
+    exit_code = mod.main(["commit_prefix_lint.py", str(msg)])
+
+    assert exit_code == 0
+    assert "deprecated bracket-prefix wave subject" in capsys.readouterr().err

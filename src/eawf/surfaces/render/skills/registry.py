@@ -228,7 +228,13 @@ PLANNED-queue state:
    subagent. {_GOTCHA_NO_EAWF_IN_WORKTREE}
 5. **Land, reconcile, then record each finished wave.** For each
    sequential wave, run inline; cherry-pick parallel-wave commits in
-   between as they finish. {_GOTCHA_RECONCILE_FILE_SCOPES} Then:
+   between as they finish. Every wave commit is written in the trailer
+   form — a bare `<type>: <summary>` subject plus an
+   `Eawf-Wave: P<NN>-I<NN>-W<NN>` body trailer naming the wave it
+   advances — because `vcs.conventions.subject_style` defaults to
+   `trailer`. The `[P<NN>-W<NN>]` prefix form still lands, with a
+   deprecation warning; the `[P<NN>] state:` bookkeeping commit keeps
+   its bracket. {_GOTCHA_RECONCILE_FILE_SCOPES} Then:
    {_GOTCHA_STATE_BOOKKEEPING}
 6. Validate the rendered plan with `eawf plan show --md`; wave tags
    and bucket roll-ups must match state.

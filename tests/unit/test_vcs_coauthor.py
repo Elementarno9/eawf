@@ -41,7 +41,7 @@ def test_disabled_mode_rejects_existing_trailer() -> None:
         )
 
 
-def test_vcs_config_defaults_subject_style_to_bracket() -> None:
+def test_vcs_config_defaults_subject_style_to_trailer() -> None:
     config = VcsConfig.model_validate(
         {
             "commit_template": "state_scoped",
@@ -58,7 +58,7 @@ def test_vcs_config_defaults_subject_style_to_bracket() -> None:
             "force_push": "forbidden_protected",
         }
     )
-    assert config.conventions.subject_style == "bracket"
+    assert config.conventions.subject_style == "trailer"
     assert config.conventions.release.cadence == "manual"
     assert config.conventions.release.agent_driven == "per-phase"
 

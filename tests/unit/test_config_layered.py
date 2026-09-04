@@ -111,7 +111,7 @@ def test_only_builtin_layer_contributes_for_empty_stack() -> None:
     assert merged["project"]["default_track"] is None
     assert "default_subproject" not in merged["project"]
     assert merged["memory"]["stores"] == ["project", "track", "agent", "user"]
-    assert merged["vcs"]["conventions"]["subject_style"] == "bracket"
+    assert merged["vcs"]["conventions"]["subject_style"] == "trailer"
     assert merged["vcs"]["conventions"]["release"] == {
         "cadence": "manual",
         "agent_driven": "per-phase",
