@@ -475,7 +475,7 @@ def test_band_wave_advisory_authority_routes_to_auditor_not_jury(
     the mutate path — the blocking single-auditor fires instead and the
     juror lanes stay cold. (The advisory-veto-logs-and-close-proceeds
     contract still holds at the run_oracle surface, covered by
-    tests/unit/verify/test_run_oracle.py, which other callers such as the
+    tests/unit/workflow/verify/test_run_oracle.py, which other callers such as the
     fleet clean-close path drive directly.) The verdict producer + gate
     are stubbed so no real auditor spawns.
     """

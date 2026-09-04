@@ -19,7 +19,7 @@ falsifiers (the strategy-campaign 38/40 bypass). This drives the REAL
   message says to close via the daemon or waive.
 
 The companion unit coverage of the bypass-door function + close-mechanism stamp
-lives in :mod:`tests.unit.cli.test_daemonless_close_waiver`.
+lives in :mod:`tests.unit.surfaces.cli.test_daemonless_close_waiver`.
 """
 
 from __future__ import annotations

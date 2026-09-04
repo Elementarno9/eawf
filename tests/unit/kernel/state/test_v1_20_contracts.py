@@ -35,7 +35,7 @@ from eawf.kernel.state.models import (
     wave_dependency_stages,
 )
 
-_ROOT = Path(__file__).resolve().parents[3]
+_ROOT = Path(__file__).resolve().parents[4]
 _TS = "2026-07-28T12:00:00Z"
 _SHA_A = "a" * 40
 _SHA_B = "b" * 40

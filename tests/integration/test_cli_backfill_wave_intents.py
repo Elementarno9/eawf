@@ -8,7 +8,7 @@ from typer.testing import CliRunner
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.cli.app import app
-from tests.unit.state.test_wave_intent_backfill import _state
+from tests.unit.kernel.state.test_wave_intent_backfill import _state
 
 runner = CliRunner()
 
