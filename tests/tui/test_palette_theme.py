@@ -77,21 +77,23 @@ def test_resolve_theme_name_unknown_returns_none() -> None:
 
 
 def test_dark_theme_ports_the_wong_palette_with_green_accent() -> None:
-    """The dark theme keeps the Wong lifecycle tints; only accent/primary rotate.
+    """The dark theme keeps the Wong lifecycle tints; accent/primary/muted move.
 
-    The cosmic-terminal reskin rotates ``accent`` / ``primary``
-    teal -> green; every lifecycle ``status-*`` tint and the ok/warn/err
-    bands stay at their exact pre-migration hex. ``status-claimed`` keeps the
-    cool teal ``#56b6c2`` so it reads distinct from the green accent and the
-    green ``status-closed``.
+    The cosmic-terminal reskin rotates ``accent`` teal -> green and lifts
+    ``primary`` to its brighter sibling so the focused-pane border reads as
+    a ring; ``muted`` moves to the blue-grey that clears 4.5:1 on the panel.
+    Every lifecycle ``status-*`` tint and the ok/warn/err bands stay at their
+    exact pre-migration hex. ``status-claimed`` keeps the cool teal
+    ``#56b6c2`` so it reads distinct from the green accent and the green
+    ``status-closed``.
     """
     variables = EA_DARK.variables
     assert variables["accent"] == "#16b384"
-    assert variables["primary"] == "#16b384"
+    assert variables["primary"] == "#5ce8bb"
     assert variables["ok"] == "#009e73"
     assert variables["warn"] == "#e69f00"
     assert variables["err"] == "#d55e00"
-    assert variables["muted"] == "#6c6c6c"
+    assert variables["muted"] == "#828a94"
     assert variables["status-pending"] == "#6c6c6c"
     assert variables["status-claimed"] == "#56b6c2"
     assert variables["status-in-progress"] == "#e69f00"

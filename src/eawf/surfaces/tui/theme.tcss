@@ -105,6 +105,10 @@ Heartbeat.-degraded {
     padding: 0 1;
 }
 
+/* The focus ring is the DIFFERENCE between these two borders, not the
+   presence of the second rule -- $primary equal to $accent renders an
+   identical border and the ring disappears however the class is toggled.
+   theme.py holds the two apart on every registered theme. */
 .pane.-focused {
     border: round $primary;
 }

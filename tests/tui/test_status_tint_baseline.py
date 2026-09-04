@@ -71,11 +71,13 @@ def test_status_claimed_stays_cool_teal() -> None:
 def test_accent_primary_rotated_to_green_but_tints_untouched() -> None:
     """The rotation moved accent/primary to green without touching tints.
 
-    Guards the wave's core invariant in one place: ``accent`` == ``primary``
-    == the reskin green, while the lifecycle tints + bands are unchanged.
+    Guards the wave's core invariant in one place: ``accent`` is the reskin
+    green and ``primary`` is its lit sibling (they must NOT collapse onto one
+    value, or the focused-pane border stops reading as a ring), while the
+    lifecycle tints + bands are unchanged.
     """
     assert WONG_VARIABLES["accent"] == "#16b384"
-    assert WONG_VARIABLES["primary"] == "#16b384"
+    assert WONG_VARIABLES["primary"] == "#5ce8bb"
     # The named tints did not ride the rotation.
     assert WONG_VARIABLES["status-pending"] == "#6c6c6c"
     assert WONG_VARIABLES["status-in-progress"] == "#e69f00"

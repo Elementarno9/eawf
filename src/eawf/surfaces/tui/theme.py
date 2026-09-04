@@ -20,6 +20,21 @@ registered Textual theme names through :data:`LOGICAL_THEMES`:
   Its lifecycle ``status-*`` tints carry the exact hex values that shipped
   at global scope in ``theme.tcss``; only ``accent`` / ``primary`` rotate
   teal -> green for the cosmic-terminal reskin.
+
+Two palette invariants hold on EVERY registered theme, because the
+structural CSS reads them as a pair rather than in isolation:
+
+* ``primary`` MUST differ from ``accent``. ``theme.tcss`` paints the
+  unfocused ``.pane`` border ``$accent`` and the focused ``.pane.-focused``
+  border ``$primary``; an equal pair renders the same border either way, so
+  the focus ring is invisible by construction no matter how the class is
+  toggled. ``primary`` is therefore the *lit* sibling of ``accent`` —
+  brighter on the dark themes, deeper on the light one, so the ring always
+  moves away from the surface it sits on.
+* ``muted`` MUST clear a 4.5:1 WCAG contrast ratio against BOTH ``$panel``
+  and ``$surface``. ``muted`` is the header / footer hint colour and those
+  chassis rows are painted on ``$panel``, so a ``muted`` tuned only against
+  the darker ``$surface`` reads as unlabelled grey mush on the band.
 * ``cb`` → :data:`EA_CB` — the IBM colour-blind-safe palette, visually
   distinct from Wong so a second swap is observable.
 * ``light`` → :data:`EA_LIGHT` — a light-background variant that carries
@@ -66,8 +81,12 @@ _LIGHT_LUMINANCE_THRESHOLD: Final[float] = 127.5
 #: Wong 2011 deuteranopia-safe semantic vars. The lifecycle ``status-*``
 #: tints and the ``ok`` / ``warn`` / ``err`` band hexes keep the exact
 #: values that shipped at global scope in ``theme.tcss`` before the
-#: per-theme migration; only ``accent`` / ``primary`` rotate teal -> green
-#: for the cosmic-terminal reskin. ``status-claimed`` deliberately keeps
+#: per-theme migration. ``accent`` rotated teal -> green for the
+#: cosmic-terminal reskin; ``primary`` is its lit sibling so the focused
+#: pane border reads as a lift rather than as the same green, and ``muted``
+#: is a blue-grey chosen to clear 4.5:1 on both the panel and the surface
+#: (the flat ``#6c6c6c`` it replaces scored 2.5:1 on the panel).
+#: ``status-claimed`` deliberately keeps
 #: the cool teal so it reads distinct from the green accent and the green
 #: ``status-closed``. Public because the shared
 #: :mod:`eawf.surfaces.tui.widgets.status_tint` helper derives the Rich-context
@@ -75,11 +94,11 @@ _LIGHT_LUMINANCE_THRESHOLD: Final[float] = 127.5
 #: palette rather than re-typing the hexes.
 WONG_VARIABLES: Final[dict[str, str]] = {
     "accent": "#16b384",
-    "primary": "#16b384",
+    "primary": "#5ce8bb",
     "ok": "#009e73",
     "warn": "#e69f00",
     "err": "#d55e00",
-    "muted": "#6c6c6c",
+    "muted": "#828a94",
     "status-pending": "#6c6c6c",
     "status-claimed": "#56b6c2",
     "status-in-progress": "#e69f00",
@@ -92,7 +111,7 @@ WONG_VARIABLES: Final[dict[str, str]] = {
 #: from ``dark`` is observable while staying colour-blind-safe.
 _IBM_VARIABLES: Final[dict[str, str]] = {
     "accent": "#1a9988",
-    "primary": "#1a9988",
+    "primary": "#3fd6c0",
     "ok": "#1a9988",
     "warn": "#ffb000",
     "err": "#dc267f",
@@ -106,9 +125,12 @@ _IBM_VARIABLES: Final[dict[str, str]] = {
 
 #: Light-surface semantic vars — the same var *names* the structural CSS
 #: references, retuned so the tints stay legible on a light background.
+#: ``primary`` is DARKER than ``accent`` here, inverting the dark themes'
+#: lift: a focus ring only reads as focused when it moves away from the
+#: background, and this background is the bright one.
 _LIGHT_VARIABLES: Final[dict[str, str]] = {
     "accent": "#007a52",
-    "primary": "#007a52",
+    "primary": "#00503a",
     "ok": "#007a52",
     "warn": "#a35b00",
     "err": "#a8331a",
@@ -121,16 +143,31 @@ _LIGHT_VARIABLES: Final[dict[str, str]] = {
 }
 
 
+#: Every theme pins ``panel`` explicitly instead of letting Textual derive
+#: it. Textual's default is ``surface.blend(primary, 0.1)`` plus a white
+#: boost on dark themes, which chains the chassis-band background to the
+#: focus-ring colour: brightening ``primary`` to make the ring visible also
+#: lifts every header / footer band and silently eats the ``muted``
+#: contrast budget measured against it. Pinning breaks that chain, so the
+#: ring and the band are tuned independently.
+#:
+#: The two dark panels sit just above ``$surface`` in luminance and carry
+#: their palette's hue, so the band still reads as a distinct plane while
+#: leaving ``muted`` its 4.5:1 headroom. The light panel keeps the exact
+#: value Textual derived before the pin, so the light chassis is unchanged.
+
 #: The Wong deuteranopia-safe dark theme — the default + the ``dark``
 #: logical name. Its ``variables`` carry the pre-migration lifecycle hex
-#: with the green-rotated accent/primary mirrored onto the Textual ctor.
+#: with the green-rotated accent + lit primary mirrored onto the Textual
+#: ctor.
 EA_DARK: Final[Theme] = Theme(
     name="ea-dark",
-    primary="#16b384",
+    primary="#5ce8bb",
     accent="#16b384",
     success="#009e73",
     warning="#e69f00",
     error="#d55e00",
+    panel="#1a2422",
     dark=True,
     variables=dict(WONG_VARIABLES),
 )
@@ -138,11 +175,12 @@ EA_DARK: Final[Theme] = Theme(
 #: The IBM colour-blind-safe dark theme — the ``cb`` logical name.
 EA_CB: Final[Theme] = Theme(
     name="ea-cb",
-    primary="#1a9988",
+    primary="#3fd6c0",
     accent="#1a9988",
     success="#1a9988",
     warning="#ffb000",
     error="#dc267f",
+    panel="#16252a",
     dark=True,
     variables=dict(_IBM_VARIABLES),
 )
@@ -152,11 +190,12 @@ EA_CB: Final[Theme] = Theme(
 #: keeps resolving every ``$var`` it references.
 EA_LIGHT: Final[Theme] = Theme(
     name="ea-light",
-    primary="#007a52",
+    primary="#00503a",
     accent="#007a52",
     success="#007a52",
     warning="#a35b00",
     error="#a8331a",
+    panel="#dce8e4",
     dark=False,
     variables=dict(_LIGHT_VARIABLES),
 )
