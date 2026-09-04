@@ -32,6 +32,7 @@ pytestmark = pytest.mark.unit
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _PLUGIN_RELEASE = _REPO_ROOT / ".github" / "workflows" / "plugin-release.yaml"
 _CI = _REPO_ROOT / ".github" / "workflows" / "ci.yaml"
+_RELEASE = _REPO_ROOT / ".github" / "workflows" / "release.yaml"
 
 
 def test_coverage_gate_config_parses_and_classifies() -> None:
@@ -204,6 +205,122 @@ def test_codex_history_gate_reds_on_a_missing_publish_step() -> None:
     defective = yaml.safe_load("jobs:\n  publish-codex-branch:\n    steps: []\n")
     assert codex_history_violations(defective) == [
         "publish-codex-branch has no plugins-dist publish step"
+    ]
+
+
+# --- release tag-push chokepoint --------------------------------------------
+
+
+def _load_release() -> dict[str, Any]:
+    """Parse ``.github/workflows/release.yaml``."""
+    workflow: dict[str, Any] = yaml.safe_load(_RELEASE.read_text(encoding="utf-8"))
+    return workflow
+
+
+def tag_chokepoint_violations(workflow: dict[str, Any]) -> list[str]:
+    """Report every way *workflow* could publish a tag no preflight swept.
+
+    ``eawf release tag --push`` runs the readiness sweep before it
+    pushes, but the tag is only a git ref: a hand-pushed one reaches the
+    publish job by the same route with nothing checked. The publish job
+    must therefore need a job that runs the same sweep, and that job must
+    actually run on a tag push and be allowed to fail the workflow.
+
+    Args:
+        workflow: The parsed release workflow.
+
+    Returns:
+        One human-readable problem per violation; empty when the preflight
+        job is present, tag-push-reaching, on ubuntu-24.04, running
+        ``eawf release preflight`` with no swallowed exit code, and needed
+        by the publish job alongside the green-CI gate.
+    """
+    problems: list[str] = []
+    jobs = workflow.get("jobs", {})
+    job = jobs.get("release-preflight")
+    if job is None:
+        return ["release.yaml declares no 'release-preflight' job"]
+
+    if job.get("runs-on") != "ubuntu-24.04":
+        problems.append("the release-preflight job does not run on ubuntu-24.04")
+    condition = str(job.get("if", ""))
+    if condition and "refs/tags/v" not in condition:
+        problems.append("the release-preflight job's condition can skip it on a tag push")
+
+    steps: list[dict[str, Any]] = job.get("steps", [])
+    if not any("eawf release preflight" in str(step.get("run", "")) for step in steps):
+        problems.append("no release-preflight step runs 'eawf release preflight'")
+    if any(step.get("continue-on-error") for step in steps):
+        problems.append("a release-preflight step is continue-on-error, so a red sweep passes")
+
+    publish_needs = jobs.get("publish-pypi", {}).get("needs", [])
+    for required in ("release-preflight", "require-green-ci"):
+        if required not in publish_needs:
+            problems.append(f"publish-pypi does not need the {required} job")
+    return problems
+
+
+def test_tag_chokepoint_gates_the_publish_job() -> None:
+    """The live release workflow sweeps the tag before it can publish it."""
+    assert tag_chokepoint_violations(_load_release()) == []
+
+
+def test_tag_chokepoint_gate_reds_on_a_bypassing_publish() -> None:
+    """The gate fires on the real defect: a publish that needs no preflight.
+
+    The synthetic workflow also swallows the sweep's exit code, pins the
+    wrong runner, and scopes the job to pull requests -- the three other
+    ways a job can look like this gate's subject while proving nothing.
+    """
+    defective = yaml.safe_load(
+        """
+        jobs:
+          release-preflight:
+            runs-on: macos-26
+            if: github.event_name == 'pull_request'
+            steps:
+              - name: Preflight
+                continue-on-error: true
+                run: uv run eawf release preflight 0.7.0.dev1
+          publish-pypi:
+            needs: [build-wheel]
+            steps:
+              - name: Publish
+                uses: pypa/gh-action-pypi-publish@release/v1
+        """
+    )
+    problems = tag_chokepoint_violations(defective)
+    assert any("publish-pypi does not need the release-preflight" in p for p in problems), problems
+    assert any("publish-pypi does not need the require-green-ci" in p for p in problems), problems
+    assert any("continue-on-error" in p for p in problems), problems
+    assert any("ubuntu-24.04" in p for p in problems), problems
+    assert any("skip it on a tag push" in p for p in problems), problems
+
+
+def test_tag_chokepoint_gate_reds_on_a_sweepless_preflight_job() -> None:
+    """A preflight job that runs no sweep is the emptiest bypass of all."""
+    defective = yaml.safe_load(
+        """
+        jobs:
+          release-preflight:
+            runs-on: ubuntu-24.04
+            if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+            steps:
+              - name: Checkout
+                uses: actions/checkout@v4
+          publish-pypi:
+            needs: [release-preflight, require-green-ci]
+        """
+    )
+    assert tag_chokepoint_violations(defective) == [
+        "no release-preflight step runs 'eawf release preflight'"
+    ]
+
+
+def test_tag_chokepoint_gate_reds_on_a_missing_job() -> None:
+    """A release workflow with no preflight job at all is the violation."""
+    assert tag_chokepoint_violations(yaml.safe_load("jobs: {}\n")) == [
+        "release.yaml declares no 'release-preflight' job"
     ]
 
 

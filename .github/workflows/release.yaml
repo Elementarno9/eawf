@@ -124,6 +124,47 @@ jobs:
             sleep 30
           done
 
+  release-preflight:
+    name: Release preflight (tag chokepoint)
+    # Closes the bypass the tag itself opens: `eawf release tag --push`
+    # runs the readiness sweep before it pushes, but a tag pushed by hand
+    # reaches the publish job below by the same route with nothing
+    # checked. This job runs the SAME sweep — version consistency, the
+    # changelog section, the migration outcome, ancestry against the
+    # remote branch, tree cleanliness — against the tagged commit, and
+    # `publish-pypi` needs it, so a red sweep exits non-zero and nothing
+    # is published. Scoped to the tag push because the tag is what it
+    # sweeps; a `workflow_dispatch` dry-run skips it and cannot publish
+    # either.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history + all remote-tracking branches: the ancestry
+          # signal proves the tagged commit is reachable from
+          # `origin/<source_branch>`, which a shallow checkout cannot show.
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: eawf release preflight for the pushed tag
+        env:
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          uv run eawf release preflight "${TAG#v}" --source "${SHA}"
+
   install-smoke:
     name: Install-smoke (uv tool install from wheel)
     needs: build-wheel
@@ -179,7 +220,7 @@ jobs:
 
   publish-pypi:
     name: Publish to PyPI
-    needs: [build-wheel, require-green-ci, install-smoke]
+    needs: [build-wheel, require-green-ci, release-preflight, install-smoke]
     # Live publish, gated behind an explicit condition: only a real
     # ``v0.*`` tag push publishes. ``workflow_dispatch`` dry-runs build +
     # validate but never reach this job. Requires the ``pypi-publish``

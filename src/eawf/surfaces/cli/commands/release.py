@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -10,11 +11,16 @@ import typer
 
 from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.surfaces.cli import errors as cli_errors
+from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 
 if TYPE_CHECKING:
+    from eawf.kernel.spec.release_config import ReleaseConfig
     from eawf.kernel.state.models import State
+    from eawf.workflow.verify.release_readiness import ReleaseReadiness
+
+logger = logging.getLogger(__name__)
 
 release_app = typer.Typer(
     name="release",
@@ -38,6 +44,247 @@ def _load_state(state_path: Path) -> State:
     return report.state
 
 
+def _checkpoint_config(version: str) -> ReleaseConfig:
+    """Return the authored checkpoint configuration for *version*.
+
+    Args:
+        version: Normalized checkpoint version, e.g. ``0.7.0.dev1``.
+
+    Returns:
+        The loaded, train-validated configuration.
+
+    Raises:
+        cli_errors.UserError: When no configuration is authored for
+            *version* -- an unauthored version has no gates to pass, so
+            it cannot be published rather than being published unchecked.
+        cli_errors.ValidationError: When the authored configuration is
+            rejected by the loader.
+    """
+    from eawf.kernel.spec.release_config import ReleaseConfigError, load_release_config
+    from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
+
+    try:
+        return load_release_config(checkpoint_config_yaml(version), train=V07_TRAIN)
+    except KeyError as exc:
+        raise cli_errors.UserError(
+            f"no release configuration authored for {version!r}; author its checkpoint "
+            f"before tagging or publishing it",
+            kind="NotFound",
+        ) from exc
+    except ReleaseConfigError as exc:
+        raise cli_errors.ValidationError(f"{exc.code.value}: {exc}") from exc
+
+
+def _sweep_release(
+    *,
+    version: str,
+    remote: str,
+    repo_root: Path,
+    source: str | None,
+    waiver_count: int,
+) -> ReleaseReadiness:
+    """Compute the full readiness sweep for *version* over *repo_root*.
+
+    The tag chokepoint and the ``preflight`` verb both come through
+    here, so the sweep an operator inspects is the one the push is
+    gated on rather than a second opinion computed elsewhere.
+
+    Args:
+        version: Checkpoint version being swept.
+        remote: Remote whose branch ancestry is proven against.
+        repo_root: Working copy the probes read.
+        source: Revision the sweep is stamped with.
+        waiver_count: Waivers recorded against the checkpoint.
+
+    Returns:
+        The total readiness object.
+
+    Raises:
+        cli_errors.CliError: When the configuration is missing or
+            invalid, or the sweep's arguments are rejected.
+    """
+    from datetime import UTC, datetime
+
+    from eawf import __version__
+    from eawf.workflow.verify.release_probes import TagPreflightInputs, build_tag_probes
+    from eawf.workflow.verify.release_readiness import compute_readiness
+
+    config = _checkpoint_config(version)
+    try:
+        probes = build_tag_probes(
+            TagPreflightInputs(
+                repo_root=repo_root,
+                version=version,
+                tag=f"v{version}",
+                package_version=__version__,
+                remote=remote,
+            )
+        )
+        return compute_readiness(
+            config,
+            probes=probes,
+            observed_revision=source,
+            computed_at=datetime.now(UTC),
+            waiver_count=waiver_count,
+        )
+    except ValueError as exc:
+        raise cli_errors.ValidationError(str(exc)) from exc
+
+
+def _refuse_unready(readiness: ReleaseReadiness, *, tag: str) -> None:
+    """Raise the named refusal when *readiness* does not clear the push.
+
+    Args:
+        readiness: The sweep computed for the tag.
+        tag: The tag the push would create.
+
+    Raises:
+        cli_errors.StateConflict: With ``data.kind="ReleaseNotReady"``
+            when a required signal is not passing or a waiver is
+            outstanding.
+    """
+    if readiness.ready:
+        logger.info(f"release_preflight_green release_key={readiness.release_key!r} tag={tag!r}")
+        return
+    red = readiness.first_red
+    if red is None:
+        detail = f"{readiness.waiver_count} outstanding waiver(s)"
+    else:
+        row = readiness.row(red)
+        code = row.failure_code.value if row.failure_code is not None else row.status.value
+        detail = f"first red signal {red.value} ({code}): {row.remediation}"
+    version = readiness.version
+    raise cli_errors.StateConflict(
+        f"release preflight refuses {tag}: {detail} -- run "
+        f"`eawf release preflight {version}` for the full sweep",
+        kind="ReleaseNotReady",
+    )
+
+
+def _dirty_paths(repo_root: Path) -> tuple[str, ...]:
+    """Return the porcelain status lines of *repo_root*.
+
+    Args:
+        repo_root: Working copy to inspect.
+
+    Returns:
+        One line per uncommitted path; empty when the tree is clean.
+
+    Raises:
+        subprocess.CalledProcessError: When git refuses to report.
+    """
+    import subprocess
+
+    status = subprocess.run(
+        ["git", "-C", str(repo_root), "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return tuple(line for line in status.stdout.splitlines() if line.strip())
+
+
+def _head_revision(repo_root: Path) -> str | None:
+    """Return the HEAD sha of *repo_root*, or ``None`` when it has none."""
+    import subprocess
+
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout.strip() or None
+
+
+def _waiver_for_dirty_tree(
+    *, dirty: tuple[str, ...], reason: str | None
+) -> dict[str, str | int] | None:
+    """Return the waiver record admitting *dirty*, or ``None`` when clean.
+
+    A dirty release tree is refused outright. ``--force`` used to admit
+    it silently, which made the tag a claim about a tree nobody has:
+    the only way past it now is an explicit waiver that states why, and
+    the waiver is carried into the sweep so it can never read as green.
+
+    Args:
+        dirty: Porcelain status lines of the release tree.
+        reason: The operator's waiver reason, or ``None`` when no
+            waiver was requested.
+
+    Returns:
+        The waiver record when a reason admits a dirty tree, otherwise
+        ``None``.
+
+    Raises:
+        cli_errors.UserError: With ``data.kind="DirtyReleaseTree"`` when
+            the tree is dirty and unwaived, or with
+            ``data.kind="InvalidInput"`` when the waiver states no
+            reason.
+    """
+    from eawf.workflow.verify.release_readiness import (
+        ReleaseSignalFailureCode,
+        ReleaseSignalName,
+    )
+
+    if not dirty:
+        return None
+    if reason is None:
+        raise cli_errors.UserError(
+            f"dirty_release_tree: {len(dirty)} uncommitted path(s) in the release tree; "
+            f"commit or stash them, or record a waiver with --waive-dirty-tree '<reason>'",
+            kind="DirtyReleaseTree",
+        )
+    if not reason.strip():
+        raise cli_errors.UserError(
+            "--waive-dirty-tree requires a non-empty reason; a waiver that states nothing "
+            "records nothing",
+            kind="InvalidInput",
+        )
+    waiver: dict[str, str | int] = {
+        "signal": ReleaseSignalName.TREE_CLEANLINESS.value,
+        "failure_code": ReleaseSignalFailureCode.DIRTY_RELEASE_TREE.value,
+        "reason": reason.strip(),
+        "dirty_path_count": len(dirty),
+    }
+    logger.warning(
+        f"release_tag_waiver signal={ReleaseSignalName.TREE_CLEANLINESS.value} "
+        f"dirty_paths={len(dirty)} reason={reason.strip()!r}"
+    )
+    return waiver
+
+
+def _create_and_push_tag(*, tag: str, remote: str, push: bool, force: bool) -> bool:
+    """Create the annotated *tag* and optionally push it to *remote*.
+
+    Args:
+        tag: Tag to create.
+        remote: Remote to push to.
+        push: Whether to push after tagging.
+        force: Whether to overwrite an existing tag / force the push.
+
+    Returns:
+        Whether the tag was pushed.
+
+    Raises:
+        subprocess.CalledProcessError: When git refuses the tag or push.
+    """
+    import subprocess
+
+    tag_cmd = ["git", "tag", "-a", tag, "-m", f"Release {tag}"]
+    if force:
+        tag_cmd.insert(2, "-f")
+    subprocess.run(tag_cmd, check=True)
+    if not push:
+        return False
+    push_cmd = ["git", "push"]
+    if force:
+        push_cmd.append("--force")
+    push_cmd.extend([remote, tag])
+    subprocess.run(push_cmd, check=True)
+    return True
+
+
 @release_app.command("tag")
 def release_tag(
     ctx: typer.Context,
@@ -55,8 +302,15 @@ def release_tag(
     ] = "origin",
     force: Annotated[
         bool,
-        typer.Option("--force", help="Allow a dirty tree and overwrite an existing tag."),
+        typer.Option("--force", help="Overwrite an existing tag (never admits a dirty tree)."),
     ] = False,
+    waive_dirty_tree: Annotated[
+        str | None,
+        typer.Option(
+            "--waive-dirty-tree",
+            help="Reason admitting a dirty release tree; recorded as a waiver.",
+        ),
+    ] = None,
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", help="Print the tag/push plan without running git."),
@@ -65,11 +319,19 @@ def release_tag(
     """Create the ``v<version>`` release tag and (with ``--push``) trigger the pipeline.
 
     The release workflow (``.github/workflows/release.yaml``) fires on a
-    ``v0.*`` tag push: it builds the wheel + sdist, runs the wheel-size
-    gate and ``twine check``, then publishes to PyPI behind the tag-push
-    condition. ``eawf release tag --push`` is the operator entry point
-    that starts that chain. Without ``--push`` the tag is created locally
-    and the push command is echoed so the operator triggers it manually.
+    ``v0.*`` tag push and publishes to PyPI behind the tag-push
+    condition, so the push *is* the publication decision. ``--push``
+    therefore runs the full readiness sweep first -- version
+    consistency, the changelog section, the migration outcome, ancestry
+    against the remote and tree cleanliness -- and refuses to create or
+    push the tag while any required signal is red. The same sweep runs
+    again in the workflow before the publish job, so a hand-pushed tag
+    cannot walk past it either.
+
+    A dirty release tree is refused outright: ``--force`` overwrites an
+    existing tag and nothing else. The only way to tag over uncommitted
+    work is ``--waive-dirty-tree '<reason>'``, which records the reason
+    as a waiver and keeps the sweep from ever reading green.
     """
     import subprocess
 
@@ -78,20 +340,19 @@ def release_tag(
     flags: GlobalFlags = ctx.obj
     resolved = version or __version__
     tag = f"v{resolved}"
+    repo_root = Path.cwd()
     try:
-        if not force and not dry_run:
-            status = subprocess.run(
-                ["git", "status", "--porcelain"],
-                capture_output=True,
-                text=True,
-                check=True,
+        waiver = _waiver_for_dirty_tree(dirty=_dirty_paths(repo_root), reason=waive_dirty_tree)
+        readiness = None
+        if push:
+            readiness = _sweep_release(
+                version=resolved,
+                remote=remote,
+                repo_root=repo_root,
+                source=_head_revision(repo_root),
+                waiver_count=1 if waiver is not None else 0,
             )
-            if status.stdout.strip():
-                raise cli_errors.UserError(
-                    "working tree is dirty; commit or stash before tagging a release "
-                    "(or pass --force)",
-                    kind="InvalidInput",
-                )
+            _refuse_unready(readiness, tag=tag)
         listing = subprocess.run(
             ["git", "tag", "--list", tag],
             capture_output=True,
@@ -99,13 +360,15 @@ def release_tag(
             check=True,
         )
         tag_exists = bool(listing.stdout.strip())
-        plan = {
+        plan: dict[str, object] = {
             "tag": tag,
             "version": resolved,
             "push": push,
             "remote": remote,
             "tag_exists": tag_exists,
             "dry_run": dry_run,
+            "waiver": waiver,
+            "preflight_ready": None if readiness is None else readiness.ready,
         }
         if dry_run:
             suffix = f" and push to {remote} (triggers pipeline)" if push else ""
@@ -115,23 +378,13 @@ def release_tag(
             raise cli_errors.UserError(
                 f"tag {tag!r} already exists; pass --force to overwrite", kind="InvalidInput"
             )
-        tag_cmd = ["git", "tag", "-a", tag, "-m", f"Release {tag}"]
-        if force:
-            tag_cmd.insert(2, "-f")
-        subprocess.run(tag_cmd, check=True)
-        pushed = False
-        if push:
-            push_cmd = ["git", "push"]
-            if force:
-                push_cmd.append("--force")
-            push_cmd.extend([remote, tag])
-            subprocess.run(push_cmd, check=True)
-            pushed = True
+        pushed = _create_and_push_tag(tag=tag, remote=remote, push=push, force=force)
         plan["pushed"] = pushed
+        waived = "" if waiver is None else f" over a waived dirty tree ({waiver['reason']})"
         text = (
-            f"tagged {tag}; pushed to {remote} (pipeline triggered)"
+            f"tagged {tag}{waived}; pushed to {remote} (pipeline triggered)"
             if pushed
-            else f"tagged {tag}; run `git push {remote} {tag}` to trigger the pipeline"
+            else f"tagged {tag}{waived}; run `git push {remote} {tag}` to trigger the pipeline"
         )
         emit_json_or_text(plan, text, flags=flags)
     except subprocess.CalledProcessError as exc:
@@ -258,6 +511,10 @@ def release_preflight(
         str | None,
         typer.Option("--source", help="Source revision the sweep is computed against."),
     ] = None,
+    remote: Annotated[
+        str,
+        typer.Option("--remote", help="Remote the source must be reachable from."),
+    ] = "origin",
     waiver_count: Annotated[
         int,
         typer.Option("--waiver-count", help="Gate waivers recorded against the checkpoint."),
@@ -269,36 +526,23 @@ def release_preflight(
     run, so one pass shows the whole repair list rather than the first
     red row. Signals whose producer has not landed yet report
     ``unavailable`` and name the gap.
+
+    This is the same sweep ``eawf release tag --push`` is gated on and
+    the same one the release workflow runs before its publish job, so a
+    tag pushed by hand meets it too. A non-ready sweep exits non-zero
+    after printing every row -- the whole repair list, then the refusal.
     """
-    from datetime import UTC, datetime
-
-    from eawf.kernel.spec.release_config import ReleaseConfigError, load_release_config
-    from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
-    from eawf.workflow.verify.release_readiness import compute_readiness
-
     flags: GlobalFlags = ctx.obj
     try:
-        config = load_release_config(checkpoint_config_yaml(version), train=V07_TRAIN)
-    except KeyError:
-        cli_errors.emit_error(
-            cli_errors.UserError(
-                f"no release configuration authored for {version!r}", kind="NotFound"
-            ),
-            flags=flags,
-        )
-        return
-    except ReleaseConfigError as exc:
-        cli_errors.emit_error(cli_errors.ValidationError(f"{exc.code.value}: {exc}"), flags=flags)
-        return
-    try:
-        readiness = compute_readiness(
-            config,
-            observed_revision=source,
-            computed_at=datetime.now(UTC),
+        readiness = _sweep_release(
+            version=version,
+            remote=remote,
+            repo_root=Path.cwd(),
+            source=source,
             waiver_count=waiver_count,
         )
-    except ValueError as exc:
-        cli_errors.emit_error(cli_errors.ValidationError(str(exc)), flags=flags)
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
         return
     required = set(readiness.required_signals)
     lines = [
@@ -311,6 +555,8 @@ def release_preflight(
     if readiness.first_red is not None:
         lines.append(f"first red: {readiness.first_red.value}")
     emit_json_or_text(readiness.model_dump(mode="json"), "\n".join(lines), flags=flags)
+    if not readiness.ready:
+        raise typer.Exit(exit_codes.STATE_CONFLICT)
 
 
 __all__ = ["release_app"]
