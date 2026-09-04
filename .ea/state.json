@@ -14814,6 +14814,57 @@
       "status": "active",
       "summary": null,
       "worktree_ids": []
+    },
+    "SES-20260904T190754.570782Z-executor-claude-94759bcd-61cc-4c4e-b6da-4351dfa30b2d": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W20"
+      ],
+      "ended_at": null,
+      "id": "SES-20260904T190754.570782Z-executor-claude-94759bcd-61cc-4c4e-b6da-4351dfa30b2d",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W20",
+      "started_at": "2026-09-04T19:07:54.570782Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260904T190755.900161Z-executor-claude-c497f9d4-d824-4c5a-b0bb-ecb8f791c196": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W22"
+      ],
+      "ended_at": null,
+      "id": "SES-20260904T190755.900161Z-executor-claude-c497f9d4-d824-4c5a-b0bb-ecb8f791c196",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W22",
+      "started_at": "2026-09-04T19:07:55.900161Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260904T190757.238985Z-executor-claude-00107748-c5e4-42f1-b518-0f8a1420947a": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W29"
+      ],
+      "ended_at": null,
+      "id": "SES-20260904T190757.238985Z-executor-claude-00107748-c5e4-42f1-b518-0f8a1420947a",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W29",
+      "started_at": "2026-09-04T19:07:57.238985Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
     }
   },
   "artifacts": {
@@ -19737,9 +19788,16 @@
   },
   "current": {
     "active_session_ids": [
-      "SES-20260904T183331.499909Z-operator-claude-7c4ffd32-c001-428c-b333-caa5594f8dcc"
+      "SES-20260904T183331.499909Z-operator-claude-7c4ffd32-c001-428c-b333-caa5594f8dcc",
+      "SES-20260904T190754.570782Z-executor-claude-94759bcd-61cc-4c4e-b6da-4351dfa30b2d",
+      "SES-20260904T190755.900161Z-executor-claude-c497f9d4-d824-4c5a-b0bb-ecb8f791c196",
+      "SES-20260904T190757.238985Z-executor-claude-00107748-c5e4-42f1-b518-0f8a1420947a"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P31-I01-W20",
+      "P31-I01-W22",
+      "P31-I01-W29"
+    ],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -38200,7 +38258,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-04T18:33:38.579553Z",
+  "updated_at": "2026-09-04T19:07:58.519681Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -38269,6 +38327,28 @@
       "start_fact_ref": "integration:integration-fd8eea91839a07c9c9cd252d",
       "tree_sha": "102a03e7dac3d28fe1682d83ec1e40383318f985",
       "wave_id": "P31-I01-W18"
+    },
+    "P31-I01-W20::P31-I01-W19": {
+      "bound_at": "2026-09-04T19:07:55.267311Z",
+      "dep_wave_id": "P31-I01-W19",
+      "generation": 1,
+      "integrated_sha": "39372365077292650fc103adca4c6e95257148c4",
+      "integration_id": "integration-fd60bc5546a54c4782214128",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-fd60bc5546a54c4782214128",
+      "tree_sha": "45b0b37321521a980ac67d198cde66d32fb35488",
+      "wave_id": "P31-I01-W20"
+    },
+    "P31-I01-W29::P31-I01-W19": {
+      "bound_at": "2026-09-04T19:07:57.912038Z",
+      "dep_wave_id": "P31-I01-W19",
+      "generation": 1,
+      "integrated_sha": "39372365077292650fc103adca4c6e95257148c4",
+      "integration_id": "integration-fd60bc5546a54c4782214128",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-fd60bc5546a54c4782214128",
+      "tree_sha": "45b0b37321521a980ac67d198cde66d32fb35488",
+      "wave_id": "P31-I01-W29"
     },
     "P31-I01-W34::P31-I01-W17": {
       "bound_at": "2026-09-04T15:41:07.436220Z",
@@ -154102,8 +154182,8 @@
         "P31-I01-W26",
         "P31-I01-W25"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260904T190754.570782Z-executor-claude-94759bcd-61cc-4c4e-b6da-4351dfa30b2d",
+      "claimed_at": "2026-09-04T19:07:55.267457Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -154212,7 +154292,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -154448,8 +154528,8 @@
         "P31-I01-W26",
         "P31-I01-W25"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260904T190755.900161Z-executor-claude-c497f9d4-d824-4c5a-b0bb-ecb8f791c196",
+      "claimed_at": "2026-09-04T19:07:56.597030Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -154555,7 +154635,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -155881,8 +155961,8 @@
         "P31-I01-W26",
         "P31-I01-W25"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260904T190757.238985Z-executor-claude-00107748-c5e4-42f1-b518-0f8a1420947a",
+      "claimed_at": "2026-09-04T19:07:57.912104Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -156011,7 +156091,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
