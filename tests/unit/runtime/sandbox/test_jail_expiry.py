@@ -26,7 +26,7 @@ import pytest
 
 pytestmark = pytest.mark.unit
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = Path(__file__).resolve().parents[4]
 _SRC = _REPO_ROOT / "src" / "eawf"
 _SANDBOX = _SRC / "runtime" / "sandbox"
 _JAIL = _SANDBOX / "jail.py"

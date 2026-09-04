@@ -37,7 +37,7 @@ from eawf.runtime.hooks.event import HookEvent, HookEventType
 from eawf.runtime.hooks.runner import capture_runtime_on_session_end
 from eawf.workflow.lifecycle.wave import compute_runtime_delta
 
-_FIXTURES = Path(__file__).resolve().parents[1] / "runtime" / "hooks" / "fixtures"
+_FIXTURES = Path(__file__).resolve().parent / "runtime" / "hooks" / "fixtures"
 _STOP_PAYLOAD = _FIXTURES / "claude_session_end_stdin.json"
 _TRANSCRIPT = _FIXTURES / "claude_session_transcript.jsonl"
 

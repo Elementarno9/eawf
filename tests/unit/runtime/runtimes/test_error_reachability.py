@@ -36,7 +36,7 @@ from eawf.runtime.runtimes.adapter import (
 from eawf.workflow.dispatch.retry import RetryExhaustedError, spawn_with_retry
 
 #: Root of the shipped package (this file lives at ``tests/runtime/runtimes/``).
-_SRC_ROOT = Path(__file__).resolve().parents[3] / "src" / "eawf"
+_SRC_ROOT = Path(__file__).resolve().parents[4] / "src" / "eawf"
 
 #: The subtree whose declared exceptions must be catchable.
 _RUNTIME_ROOT = _SRC_ROOT / "runtime"

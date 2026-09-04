@@ -6,7 +6,8 @@ summed turn durations, the billed model id, a token-derived cost, and a
 fail-open ``None`` whenever the transcript is missing, unreadable, or carries
 nothing measurable.
 
-The fixture transcript (``tests/runtime/hooks/fixtures/claude_session_transcript.jsonl``)
+The fixture transcript
+(``tests/integration/runtime/hooks/fixtures/claude_session_transcript.jsonl``)
 is a scrubbed extract of a REAL Claude Code session JSONL -- the shape the
 hand-written statusline fixtures never matched.
 """
@@ -26,7 +27,12 @@ from eawf.runtime.runtimes.claude.transcript_counters import (
 )
 
 _TRANSCRIPT_FIXTURE = (
-    Path(__file__).parents[1] / "runtime" / "hooks" / "fixtures" / "claude_session_transcript.jsonl"
+    Path(__file__).parents[1]
+    / "integration"
+    / "runtime"
+    / "hooks"
+    / "fixtures"
+    / "claude_session_transcript.jsonl"
 )
 
 

@@ -382,8 +382,8 @@ def linux_real_host_violations(workflow: dict[str, Any]) -> list[str]:
 
     run = str(launch.get("run", ""))
     for path in (
-        "tests/runtime/sandbox/test_jail.py",
-        "tests/runtime/sandbox/test_jail_expiry.py",
+        "tests/integration/runtime/sandbox/test_jail.py",
+        "tests/unit/runtime/sandbox/test_jail_expiry.py",
     ):
         if path not in run:
             problems.append(f"the linux-jail job does not run {path}")
@@ -397,9 +397,9 @@ def test_ci_proves_the_jail_launches_on_a_linux_real_host() -> None:
 
 def test_linux_real_host_job_runs_a_guarded_launch_test() -> None:
     """The launch cases the job runs exist and skip cleanly off a bwrap host."""
-    source = (_REPO_ROOT / "tests" / "runtime" / "sandbox" / "test_jail.py").read_text(
-        encoding="utf-8"
-    )
+    source = (
+        _REPO_ROOT / "tests" / "integration" / "runtime" / "sandbox" / "test_jail.py"
+    ).read_text(encoding="utf-8")
     assert "def test_bwrap_jail_linux_launch_" in source
     assert 'shutil.which("bwrap")' in source
     assert "pytest.mark.skipif" in source
@@ -419,7 +419,7 @@ def test_linux_real_host_gate_reds_on_a_bwrap_free_job() -> None:
             if: github.event_name == 'pull_request'
             steps:
               - name: Pytest (sandbox)
-                run: uv run pytest tests/runtime/sandbox/test_jail.py
+                run: uv run pytest tests/integration/runtime/sandbox/test_jail.py
         """
     )
     problems = linux_real_host_violations(defective)

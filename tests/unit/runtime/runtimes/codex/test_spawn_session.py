@@ -148,7 +148,7 @@ def _patch_factory(monkeypatch: pytest.MonkeyPatch, proc: _FakeProcess) -> list[
     so these inner-argv assertions stay deterministic across hosts (a box
     with ``bwrap`` / ``sandbox-exec`` on PATH would otherwise prepend the
     jail wrapper). The jail seam has its own coverage in
-    ``tests/runtime/sandbox/test_jail.py``.
+    ``tests/integration/runtime/sandbox/test_jail.py``.
     """
     calls: list[list[str]] = []
 

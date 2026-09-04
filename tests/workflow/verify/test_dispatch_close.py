@@ -7,7 +7,7 @@ returned :class:`~eawf.workflow.verify.dispatch_close.VerifyResult`.
 
 The companion runner-side integration that wires the gate into
 :func:`eawf.runtime.daemon.dispatch_runner.emit_agent_end_report` is
-covered by :mod:`tests.runtime.daemon.test_dispatch_close_gate`.
+covered by :mod:`tests.integration.runtime.daemon.test_dispatch_close_gate`.
 """
 
 from __future__ import annotations

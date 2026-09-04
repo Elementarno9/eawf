@@ -38,7 +38,7 @@ _EXITED = _STARTED + timedelta(minutes=17)
 _SCOPE = "P31-I01-W08"
 
 _FIXTURE_STATE = (
-    Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"
+    Path(__file__).resolve().parents[3] / "fixtures" / "states" / "valid" / "01-empty-repo.json"
 )
 
 

@@ -207,9 +207,9 @@ jobs:
         # executes the real launch.
         run: >
           uv run pytest -n0 --no-cov
-          tests/runtime/sandbox/test_jail.py
-          tests/runtime/sandbox/test_jail_expiry.py
-          tests/runtime/sandbox/test_env_scrub.py
+          tests/integration/runtime/sandbox/test_jail.py
+          tests/unit/runtime/sandbox/test_jail_expiry.py
+          tests/unit/runtime/sandbox/test_env_scrub.py
 
   twice-green:
     name: Full suite green twice from a fresh checkout
