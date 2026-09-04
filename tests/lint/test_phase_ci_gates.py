@@ -27,6 +27,8 @@ from typing import Any
 import pytest
 import yaml
 
+from eawf.workflow.release.receipts import RECEIPT_FILENAMES
+
 pytestmark = pytest.mark.unit
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -527,4 +529,191 @@ def test_twice_green_gate_reds_on_a_missing_job() -> None:
     """A workflow with no twice-green job at all is itself the violation."""
     assert twice_green_violations(yaml.safe_load("jobs: {}\n")) == [
         "ci.yaml declares no 'twice-green' job"
+    ]
+
+
+# --- release inventory-and-reproducibility job -------------------------------
+
+
+def _upload_names(job: dict[str, Any]) -> dict[str, str]:
+    """Return ``artifact name -> uploaded path`` for one job's upload steps."""
+    uploaded: dict[str, str] = {}
+    for step in job.get("steps", []):
+        if not str(step.get("uses", "")).startswith("actions/upload-artifact"):
+            continue
+        with_block = step.get("with") or {}
+        name = with_block.get("name")
+        if isinstance(name, str):
+            uploaded[name] = str(with_block.get("path", ""))
+    return uploaded
+
+
+def inventory_job_violations(workflow: dict[str, Any]) -> list[str]:
+    """Report every way *workflow* could publish without the three receipts.
+
+    The dependency inventory, the vulnerability report and the
+    double-build receipt are produced in CI and read back by the
+    readiness sweep. A publish that does not need the producing job
+    reaches PyPI with three gates reporting ``unavailable``, which is
+    exactly as unchecked as having no gates at all.
+
+    Args:
+        workflow: The parsed release workflow.
+
+    Returns:
+        One human-readable problem per violation; empty when the job
+        exists, runs the producer, uploads all three receipts under the
+        names the library declares, and is needed by the publish job.
+    """
+    problems: list[str] = []
+    jobs = workflow.get("jobs", {})
+    job = jobs.get("inventory-and-reproducibility")
+    if job is None:
+        return ["release.yaml declares no 'inventory-and-reproducibility' job"]
+
+    if job.get("runs-on") != "ubuntu-24.04":
+        problems.append("the inventory-and-reproducibility job does not run on ubuntu-24.04")
+    steps: list[dict[str, Any]] = job.get("steps", [])
+    if not any("eawf.workflow.release.produce" in str(step.get("run", "")) for step in steps):
+        problems.append("no step runs the release receipt producer")
+    if any(step.get("continue-on-error") for step in steps):
+        problems.append("an inventory-and-reproducibility step is continue-on-error")
+
+    uploaded = _upload_names(job)
+    for artifact_name, filename in sorted(RECEIPT_FILENAMES.items()):
+        if artifact_name not in uploaded:
+            problems.append(f"the job uploads no {artifact_name!r} artifact")
+        elif not uploaded[artifact_name].endswith(filename):
+            problems.append(
+                f"the {artifact_name!r} artifact uploads {uploaded[artifact_name]!r}, "
+                f"not the {filename!r} the producer writes"
+            )
+
+    if "inventory-and-reproducibility" not in jobs.get("publish-pypi", {}).get("needs", []):
+        problems.append("publish-pypi does not need the inventory-and-reproducibility job")
+    return problems
+
+
+def test_inventory_job_gates_the_publish_job() -> None:
+    """The live release workflow produces all three receipts before publish."""
+    assert inventory_job_violations(_load_release()) == []
+
+
+def test_inventory_job_uploads_every_declared_receipt() -> None:
+    """The uploaded artifact names are exactly the ones the sweep reads back."""
+    job = _load_release()["jobs"]["inventory-and-reproducibility"]
+    assert set(_upload_names(job)) == set(RECEIPT_FILENAMES)
+    assert set(RECEIPT_FILENAMES) == {
+        "dependency-manifest",
+        "vulnerability-report",
+        "reproducible-build-receipt",
+    }
+
+
+def test_inventory_job_gate_reds_on_a_bypassing_publish() -> None:
+    """The gate fires on the real defect: a publish that needs no receipts.
+
+    The synthetic workflow also drops two uploads, swallows the
+    producer's exit code and pins the wrong runner -- the other ways a
+    job can look like this gate's subject while proving nothing.
+    """
+    defective = yaml.safe_load(
+        """
+        jobs:
+          inventory-and-reproducibility:
+            runs-on: macos-26
+            steps:
+              - name: Produce
+                continue-on-error: true
+                run: uv run python -m eawf.workflow.release.produce --source-sha deadbeef
+              - name: Upload dependency manifest
+                uses: actions/upload-artifact@v4
+                with:
+                  name: dependency-manifest
+                  path: dist/release-receipts/dependency-manifest.json
+          publish-pypi:
+            needs: [build-wheel]
+        """
+    )
+    problems = inventory_job_violations(defective)
+    assert any("publish-pypi does not need" in problem for problem in problems), problems
+    assert any("no 'vulnerability-report' artifact" in problem for problem in problems), problems
+    assert any("no 'reproducible-build-receipt' artifact" in problem for problem in problems), (
+        problems
+    )
+    assert any("continue-on-error" in problem for problem in problems), problems
+    assert any("ubuntu-24.04" in problem for problem in problems), problems
+
+
+def test_inventory_job_gate_reds_on_an_artifact_pointing_at_the_wrong_file() -> None:
+    """An upload named right but pointing elsewhere ships an empty artifact."""
+    defective = yaml.safe_load(
+        """
+        jobs:
+          inventory-and-reproducibility:
+            runs-on: ubuntu-24.04
+            steps:
+              - name: Produce
+                run: uv run python -m eawf.workflow.release.produce --source-sha deadbeef
+              - name: Upload dependency manifest
+                uses: actions/upload-artifact@v4
+                with:
+                  name: dependency-manifest
+                  path: dist/
+              - name: Upload vulnerability report
+                uses: actions/upload-artifact@v4
+                with:
+                  name: vulnerability-report
+                  path: dist/release-receipts/vulnerability-report.json
+              - name: Upload build receipt
+                uses: actions/upload-artifact@v4
+                with:
+                  name: reproducible-build-receipt
+                  path: dist/release-receipts/reproducible-build-receipt.json
+          publish-pypi:
+            needs: [inventory-and-reproducibility]
+        """
+    )
+    assert inventory_job_violations(defective) == [
+        "the 'dependency-manifest' artifact uploads 'dist/', not the "
+        "'dependency-manifest.json' the producer writes"
+    ]
+
+
+def test_inventory_job_gate_reds_on_a_producerless_job() -> None:
+    """A job that uploads receipts it never produced uploads yesterday's."""
+    defective = yaml.safe_load(
+        """
+        jobs:
+          inventory-and-reproducibility:
+            runs-on: ubuntu-24.04
+            steps:
+              - name: Checkout
+                uses: actions/checkout@v4
+              - name: Upload dependency manifest
+                uses: actions/upload-artifact@v4
+                with:
+                  name: dependency-manifest
+                  path: dist/release-receipts/dependency-manifest.json
+              - name: Upload vulnerability report
+                uses: actions/upload-artifact@v4
+                with:
+                  name: vulnerability-report
+                  path: dist/release-receipts/vulnerability-report.json
+              - name: Upload build receipt
+                uses: actions/upload-artifact@v4
+                with:
+                  name: reproducible-build-receipt
+                  path: dist/release-receipts/reproducible-build-receipt.json
+          publish-pypi:
+            needs: [inventory-and-reproducibility]
+        """
+    )
+    assert inventory_job_violations(defective) == ["no step runs the release receipt producer"]
+
+
+def test_inventory_job_gate_reds_on_a_missing_job() -> None:
+    """A release workflow with no producing job at all is the violation."""
+    assert inventory_job_violations(yaml.safe_load("jobs: {}\n")) == [
+        "release.yaml declares no 'inventory-and-reproducibility' job"
     ]

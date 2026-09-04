@@ -1,0 +1,22 @@
+{
+  "dependencies": [
+    {
+      "name": "annotated-types",
+      "version": "0.7.0",
+      "vulns": []
+    },
+    {
+      "name": "Pydantic_Core",
+      "version": "2.33.2",
+      "vulns": [
+        {
+          "id": "GHSA-0000-seed-blck",
+          "fix_versions": ["2.33.3", "2.34.0"],
+          "aliases": ["CVE-2026-00000"],
+          "description": "Seeded blocking advisory for the release security-review gate."
+        }
+      ]
+    }
+  ],
+  "fixes": []
+}

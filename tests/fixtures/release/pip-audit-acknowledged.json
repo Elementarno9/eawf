@@ -1,0 +1,17 @@
+{
+  "dependencies": [
+    {
+      "name": "annotated-types",
+      "version": "0.7.0",
+      "vulns": [
+        {
+          "id": "PYSEC-0000-SEED-ACK",
+          "fix_versions": [],
+          "aliases": [],
+          "description": "Seeded advisory a reviewer judged not to block this train."
+        }
+      ]
+    }
+  ],
+  "fixes": []
+}

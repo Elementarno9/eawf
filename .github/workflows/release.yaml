@@ -218,9 +218,76 @@ jobs:
           test -f "${tmp}/.ea/state.json"
           echo "eawf init produced .ea/state.json OK in ${tmp}"
 
+  inventory-and-reproducibility:
+    name: Dependency inventory + reproducible-build receipt
+    # Produces the three facts the readiness sweep cannot compute for
+    # itself: the lock-derived dependency inventory with each package's
+    # license, the pip-audit report over the exported lock, and a
+    # double-build receipt proving the tagged commit rebuilds to the same
+    # wheel and sdist digests. The sweep reads all three back from these
+    # artifacts, so `dependency_inventory`, `security_review` and
+    # `artifact_reproducibility` report `unavailable` when this job did
+    # not run -- and `publish-pypi` needs it, so it always does.
+    #
+    # Runs on both tag-push and `workflow_dispatch` dry-runs: the dry-run
+    # is how the receipts are inspected before a tag exists.
+    runs-on: ubuntu-24.04
+    # Two clean `uv build` runs plus a network advisory query.
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history: SOURCE_DATE_EPOCH is the tagged commit's own
+          # committer timestamp, which a shallow checkout cannot read.
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        # Frozen, because the inventory describes `uv.lock`: a sync that
+        # re-resolved would inventory a resolution nobody locked.
+        run: uv sync --frozen
+
+      - name: Produce the inventory, the audit and the build receipt
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          uv run python -m eawf.workflow.release.produce --source-sha "${SHA}"
+
+      - name: Upload dependency manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-manifest
+          path: dist/release-receipts/dependency-manifest.json
+
+      - name: Upload vulnerability report
+        uses: actions/upload-artifact@v4
+        with:
+          name: vulnerability-report
+          path: dist/release-receipts/vulnerability-report.json
+
+      - name: Upload reproducible-build receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: reproducible-build-receipt
+          path: dist/release-receipts/reproducible-build-receipt.json
+
   publish-pypi:
     name: Publish to PyPI
-    needs: [build-wheel, require-green-ci, release-preflight, install-smoke]
+    needs:
+      [
+        build-wheel,
+        require-green-ci,
+        release-preflight,
+        install-smoke,
+        inventory-and-reproducibility,
+      ]
     # Live publish, gated behind an explicit condition: only a real
     # ``v0.*`` tag push publishes. ``workflow_dispatch`` dry-runs build +
     # validate but never reach this job. Requires the ``pypi-publish``

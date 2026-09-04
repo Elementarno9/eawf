@@ -88,16 +88,27 @@ def test_release_readiness_reports_every_signal_without_probes() -> None:
     readiness = compute_readiness(_config(), computed_at=_NOW)
     assert len(readiness.signals) == len(ReleaseSignalName)
     assert [row.signal for row in readiness.signals] == list(ReleaseSignalName)
-    # The platform row is the one signal this project already produces,
-    # so it computes from the checkpoint's claims rather than reporting
-    # a missing producer.
+    # Three signals this project already produces. The platform row
+    # computes from the checkpoint's claims; the dependencies and
+    # artifacts rows are read back from CI receipts, so with none written
+    # they are unavailable naming the producing job rather than naming a
+    # producer that does not exist.
+    produced = {
+        ReleaseSignalName.PLATFORM,
+        ReleaseSignalName.DEPENDENCIES,
+        ReleaseSignalName.ARTIFACTS,
+    }
     for row in readiness.signals:
-        if row.signal is ReleaseSignalName.PLATFORM:
+        if row.signal in produced:
             continue
         assert row.status is ReleaseSignalStatus.UNAVAILABLE
         assert row.failure_code is SIGNAL_FAILURE_CODES[row.signal]
         assert "no producer is registered" in row.remediation
     assert readiness.row(ReleaseSignalName.PLATFORM).status is ReleaseSignalStatus.PASS
+    for signal in (ReleaseSignalName.DEPENDENCIES, ReleaseSignalName.ARTIFACTS):
+        receipt_row = readiness.row(signal)
+        assert receipt_row.status is ReleaseSignalStatus.UNAVAILABLE
+        assert "inventory-and-reproducibility" in receipt_row.remediation
     assert readiness.ready is False
 
 
