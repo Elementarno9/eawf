@@ -31,16 +31,25 @@ from typing import Any
 
 import orjson
 import pytest
+from pydantic import ValidationError as PydValidationError
 from typer.testing import CliRunner
 
 from eawf.kernel.spec.common import CriterionSpec, GateSpec, QualityDimension
 from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
 from eawf.kernel.state.models import AgentSession, State
 from eawf.kernel.store.paths import store_path
+from eawf.runtime.daemon.gate_execution import (
+    GateExecutionClaim,
+    GateExecutionContext,
+    gate_receipt_id,
+    run_gate_out_of_process,
+)
 from eawf.runtime.lock import portalock
 from eawf.surfaces.cli._mutation import DAEMONLESS_WAIVER_EVENT_TYPE
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import lifecycle_wave
+from eawf.surfaces.cli.commands.lifecycle_wave import _daemonless_gate_context
+from eawf.workflow.verify.compile import compile_gate
 from eawf.workflow.verify.models import CloseReadiness
 from tests._session_helpers import seed_active_session_on_disk
 from tests.conftest import make_claim_criterion
@@ -147,7 +156,7 @@ def _bootstrap_claimed_wave(workspace: Path, *, effort_bucket: str = "M") -> Non
     _state_path(workspace).write_bytes(orjson.dumps(state.model_dump(mode="json")))
 
 
-def _attach_failing_command_gate(workspace: Path) -> None:
+def _attach_failing_command_gate(workspace: Path) -> tuple[CriterionSpec, GateSpec]:
     """Attach a deterministic criterion + FAILING ``command_exit_zero`` gate.
 
     The CLI ``wave plan`` surface takes no gate flags, so the pair is injected
@@ -180,6 +189,7 @@ def _attach_failing_command_gate(workspace: Path) -> None:
     wave.success_criteria = [criterion]
     wave.gates = [gate]
     _state_path(workspace).write_text(state.model_dump_json(), encoding="utf-8")
+    return criterion, gate
 
 
 def _attach_operator_session(workspace: Path) -> None:
@@ -412,3 +422,114 @@ def test_daemonless_close_preflight_rejects_target_wave_drift(
     final = State.model_validate_json(_state_path(workspace).read_bytes())
     assert final.waves[_WAVE_ID].status.value == "claimed"
     assert final.waves[_WAVE_ID].title == "changed during preflight"
+
+
+# --- REL-025: the bypass lane runs the daemon's shared gate runner ----------
+
+
+def _gate_claims(workspace: Path) -> list[GateExecutionClaim]:
+    """Return every durable gate-execution claim written under *workspace*.
+
+    A claim under ``.ea/local/gate-claims/`` is written ONLY by
+    :func:`claim_gate_execution` running inside the out-of-process gate child,
+    so its presence is the observable proof that the close routed through the
+    shared runner rather than executing the gate in the CLI process.
+    """
+    claim_dir = workspace / ".ea" / "local" / "gate-claims"
+    if not claim_dir.is_dir():
+        return []
+    return [
+        GateExecutionClaim.model_validate(orjson.loads(path.read_bytes()))
+        for path in sorted(claim_dir.glob("*.json"))
+    ]
+
+
+def test_daemonless_gate_bearing_close_runs_shared_out_of_process_runner(
+    workspace: Path,
+) -> None:
+    """REL-025: a gate-bearing close under ``EAWF_DAEMONLESS=1`` executes its
+    deterministic gate through the SAME out-of-process runner the daemon binds,
+    and the receipt id it resolves matches the daemon lane's for the same gate.
+    """
+    _bootstrap_claimed_wave(workspace)
+    _write_enforce_profile(workspace)
+    criterion, gate = _attach_failing_command_gate(workspace)
+
+    res = runner.invoke(app, ["wave", "close", _WAVE_ID, "--outcome", "done"])
+
+    assert res.exit_code != 0, res.stdout
+    # The child claimed the gate's freshness key -- the in-process path writes
+    # no claim at all, so this file existing IS the routing proof.
+    claims = _gate_claims(workspace)
+    assert len(claims) == 1, claims
+    claim = claims[0]
+    assert claim.criterion_id == criterion.id
+    assert claim.gate_id == gate.id
+    # No live close attempt row exists, so the lane derives its durable identity
+    # from the wave rather than inventing an opaque one.
+    assert claim.attempt_id == f"daemonless-close-{_WAVE_ID}"
+
+    # Daemon-lane parity: the same compiled gate driven through the shared
+    # runner under a DAEMON-style identity resolves the same receipt id.
+    compiled = compile_gate(gate, criterion=criterion)
+    assert compiled is not None
+    daemon_result = run_gate_out_of_process(
+        compiled,
+        cwd=workspace,
+        context=GateExecutionContext(
+            state_path=workspace / ".ea-daemon" / "state.json",
+            attempt_id="close-0123456789abcdef01234567",
+        ),
+        criterion_id=criterion.id,
+        gate_id=gate.id,
+    )
+    assert daemon_result.freshness_key is not None
+    assert gate_receipt_id(claim.freshness_key) == gate_receipt_id(daemon_result.freshness_key)
+
+
+def test_daemonless_non_gate_bearing_close_claims_nothing(workspace: Path) -> None:
+    """Boundary: a wave with ZERO gates closes daemonless without spawning the
+    shared runner -- there is no gate to claim, so no claim is written.
+    """
+    _bootstrap_claimed_wave(workspace, effort_bucket="S")
+    _write_enforce_profile(workspace)
+
+    res = runner.invoke(app, ["wave", "close", _WAVE_ID, "--outcome", "done"])
+
+    assert res.exit_code == 0, res.stdout
+    assert _gate_claims(workspace) == []
+
+
+def test_daemonless_gate_context_prefers_live_close_attempt(workspace: Path) -> None:
+    """A live close attempt supplies the durable identity, so a lane switch
+    mid-close resolves the daemon's claim instead of racing a second one.
+    """
+    _bootstrap_claimed_wave(workspace)
+    state = State.model_validate(orjson.loads(_state_path(workspace).read_bytes()))
+
+    context = _daemonless_gate_context(
+        state,
+        wave_id=_WAVE_ID,
+        state_path=_state_path(workspace),
+    )
+
+    assert context.attempt_id == f"daemonless-close-{_WAVE_ID}"
+    assert context.state_path == _state_path(workspace)
+
+
+def test_daemonless_gate_context_rejects_unknown_wave(workspace: Path) -> None:
+    """Error path: an unknown wave id has no close attempt, and the derived
+    identity still satisfies the runner's non-empty ``attempt_id`` contract.
+    """
+    _bootstrap_claimed_wave(workspace)
+    state = State.model_validate(orjson.loads(_state_path(workspace).read_bytes()))
+
+    context = _daemonless_gate_context(
+        state,
+        wave_id="P99-I99-W99",
+        state_path=_state_path(workspace),
+    )
+
+    assert context.attempt_id == "daemonless-close-P99-I99-W99"
+    with pytest.raises(PydValidationError):
+        GateExecutionContext(state_path=_state_path(workspace), attempt_id="")

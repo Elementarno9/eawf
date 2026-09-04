@@ -50,7 +50,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Collection
 from pathlib import Path, PurePosixPath
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import orjson
 
@@ -75,6 +75,9 @@ from eawf.workflow.verify.models import (
     CriterionView,
     GateResult,
 )
+
+if TYPE_CHECKING:
+    from eawf.runtime.daemon.gate_execution import GateExecutionContext
 
 logger = logging.getLogger(__name__)
 
@@ -343,11 +346,70 @@ def _latest_waiver_for_gate(
     return waivers[-1] if waivers else None
 
 
+def _run_gate_via_shared_runner(
+    compiled: CheckSpec,
+    *,
+    gate: GateSpec,
+    criterion: CriterionSpec,
+    runner_cwd: Path,
+    gate_context: GateExecutionContext,
+) -> str:
+    """Execute *compiled* through the daemon's out-of-process gate runner.
+
+    The daemonless close lane reuses the SAME runner the daemon oracle drives
+    (:func:`~eawf.runtime.daemon.gate_execution.run_gate_out_of_process`), so a
+    gate-bearing close outside the daemon claims the same freshness key and
+    resolves to the same receipt id instead of executing on a private
+    in-process path. The child owns the claim, so a gate kind that hard-exits
+    cannot take the calling process down with it.
+
+    Args:
+        compiled: Already-compiled check spec for *gate*.
+        gate: Typed gate spec (its id names the claim).
+        criterion: Parent criterion (its id names the claim).
+        runner_cwd: Working directory for the child process.
+        gate_context: Durable identity the child claims the gate under.
+
+    Returns:
+        One of ``"pass"`` / ``"fail"`` / ``"blocked"``.
+    """
+    from eawf.runtime.daemon.gate_execution import (
+        GateChildCrashError,
+        gate_receipt_id,
+        run_gate_out_of_process,
+    )
+
+    try:
+        result = run_gate_out_of_process(
+            compiled,
+            cwd=runner_cwd,
+            context=gate_context,
+            criterion_id=criterion.id,
+            gate_id=gate.id,
+        )
+    except (GateChildCrashError, ValueError) as exc:
+        # A child that crashed or reported a typed fault proved NOTHING about
+        # the wave, so it must never project as a pass. "blocked" is the
+        # non-pass status the enforcing close already refuses on.
+        logger.warning(
+            f"_run_deterministic_gate gate_id={gate.id!r} status='blocked' "
+            f"runner='out-of-process' detail={exc!s}"
+        )
+        return "blocked"
+    if result.freshness_key is not None:
+        logger.info(
+            f"_run_deterministic_gate gate_id={gate.id!r} runner='out-of-process' "
+            f"receipt={gate_receipt_id(result.freshness_key)!r}"
+        )
+    return result.status or ("pass" if result.passed else "fail")
+
+
 def _run_deterministic_gate(
     gate: GateSpec,
     criterion: CriterionSpec,
     *,
     runner_cwd: Path,
+    gate_context: GateExecutionContext | None = None,
 ) -> str:
     """Compile + execute *gate* via the W15-hardened audit-DSL runner.
 
@@ -374,6 +436,11 @@ def _run_deterministic_gate(
         runner_cwd: Working directory for the subprocess + git
             diff-base + scope resolution. Threaded through from
             :func:`compute`'s ``repo_root``.
+        gate_context: When set, the gate runs through the shared
+            out-of-process runner under this durable identity instead
+            of executing in this process. The daemonless close lane
+            passes it so its gates claim + resolve exactly like the
+            daemon's; every advisory caller leaves it ``None``.
 
     Returns:
         One of ``"pass"`` / ``"fail"`` / ``"blocked"``.
@@ -384,6 +451,14 @@ def _run_deterministic_gate(
             f"_run_deterministic_gate gate_id={gate.id!r} status=blocked reason=compile-none"
         )
         return "blocked"
+    if gate_context is not None:
+        return _run_gate_via_shared_runner(
+            compiled,
+            gate=gate,
+            criterion=criterion,
+            runner_cwd=runner_cwd,
+            gate_context=gate_context,
+        )
     results = run_checks([compiled], cwd=runner_cwd)
     result = results[0]
     status = result.status or ("pass" if result.passed else "fail")
@@ -401,6 +476,7 @@ def _build_spec_views(
     *,
     runner_cwd: Path,
     prevalidated_gate_ids: Collection[str] = (),
+    gate_context: GateExecutionContext | None = None,
 ) -> tuple[list[CriterionView], list[str]]:
     """Convert typed CriterionSpec / GateSpec into :class:`CriterionView` rows.
 
@@ -436,6 +512,9 @@ def _build_spec_views(
             passed by the enforcing close oracle for the same frozen
             inputs. These gates project as pass without a second
             subprocess execution.
+        gate_context: Forwarded to :func:`_run_deterministic_gate`;
+            when set, deterministic gates execute through the shared
+            out-of-process runner instead of in this process.
 
     Returns:
         ``(views, waived_gate_ids)``.
@@ -474,6 +553,7 @@ def _build_spec_views(
                             gate,
                             criterion,
                             runner_cwd=runner_cwd,
+                            gate_context=gate_context,
                         )
                         was_waived = False
             else:
@@ -1488,6 +1568,7 @@ def compute(
     load_profile_verify: bool = True,
     deferred_criterion_ids: frozenset[str] = frozenset(),
     prevalidated_gate_ids: Collection[str] = (),
+    gate_context: GateExecutionContext | None = None,
 ) -> CloseReadiness:
     """Return the close-readiness projection for *scope_id*.
 
@@ -1547,6 +1628,11 @@ def compute(
             passed by the enforcing close oracle against the same frozen
             inputs. Readiness consumes their result instead of executing
             them again.
+        gate_context: Durable identity for the shared out-of-process gate
+            runner. The daemonless close lane passes one so its
+            deterministic gates run through the SAME runner the daemon
+            drives (claiming the same freshness key, resolving the same
+            receipt id). ``None`` keeps the legacy in-process execution.
 
     Returns:
         A :class:`CloseReadiness` view. Empty waves (no typed specs +
@@ -1612,6 +1698,7 @@ def compute(
         fresh_evidence,
         runner_cwd=repo_root,
         prevalidated_gate_ids=prevalidated_gate_ids,
+        gate_context=gate_context,
     )
     legacy_views, legacy_warnings = _build_legacy_views(wave)
     # Profile-fed floor pack. Floor checks render only

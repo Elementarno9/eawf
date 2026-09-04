@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -43,12 +44,14 @@ from eawf.surfaces.cli.commands.lifecycle import (
     wave_app,
 )
 from eawf.surfaces.cli.flags import GlobalFlags
+from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.scope import resolve_state_path
 from eawf.workflow.lifecycle._capacity import resolve_max_parallel_waves
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
     from eawf.platform.profiles.models import VerifyBlock
+    from eawf.runtime.daemon.gate_execution import GateExecutionContext
     from eawf.workflow.verify.models import CloseReadiness
 
 logger = logging.getLogger(__name__)
@@ -569,6 +572,39 @@ def _warn_on_exhausted_close_budget(state: State, *, wave_id: str) -> None:
         )
 
 
+def _daemonless_gate_context(
+    state: State,
+    *,
+    wave_id: str,
+    state_path: Path,
+) -> GateExecutionContext:
+    """Return the durable identity the daemonless lane claims its gates under.
+
+    The bypass lane must not grow a private gate-execution path: it reuses the
+    daemon's out-of-process runner, which needs a durable identity to claim
+    under. When the close already has a live attempt row, that attempt's id is
+    the identity -- identical to what the daemon would bind -- so a lane switch
+    mid-close resolves the same claim rather than racing a second one. With no
+    attempt row the id is derived from the wave so repeated daemonless closes of
+    the same wave stay attributable.
+
+    Args:
+        state: Loaded state, read for the wave's latest close attempt.
+        wave_id: Id of the closing wave.
+        state_path: Path to ``state.json``; anchors the claim + receipt stores.
+
+    Returns:
+        The :class:`GateExecutionContext` to hand the shared runner.
+    """
+    from eawf.runtime.daemon.gate_execution import GateExecutionContext
+
+    attempt = latest_close_attempt(state, wave_id)
+    return GateExecutionContext(
+        state_path=state_path,
+        attempt_id=attempt.id if attempt is not None else f"daemonless-close-{wave_id}",
+    )
+
+
 def _run_daemonless_close_preflight(
     state: State,
     *,
@@ -586,6 +622,13 @@ def _run_daemonless_close_preflight(
     raises under enforce), and a verdict-always wave with no fresh auditor verdict
     is REFUSED via the synchronous read gate (the daemonless path cannot spawn the
     auditor). Both honour ``--no-runtime``; sampled / skip waves never block.
+
+    The deterministic pre-flight executes its gates through the SAME
+    out-of-process runner the daemon binds
+    (:func:`~eawf.runtime.daemon.gate_execution.run_gate_out_of_process`, reached
+    via the ``gate_context`` seam on :func:`~eawf.workflow.verify.compute`), so a
+    bypass-lane close claims the same freshness keys and resolves the same gate
+    receipt ids rather than scoring on a private in-process path.
 
     Args:
         state: Loaded state -- read for the closing wave + persisted auditor rows.
@@ -618,6 +661,11 @@ def _run_daemonless_close_preflight(
             store_dir=_store_dir(state_path),
             repo_root=repo_root,
             config_root=config_root,
+            gate_context=_daemonless_gate_context(
+                state,
+                wave_id=wave_id,
+                state_path=state_path,
+            ),
         )
     except KeyError as exc:
         logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
@@ -1515,3 +1563,150 @@ def wave_update_cmd(
         },
         mutate=_mutator,
     )
+
+
+# ---- Daemonless-waiver audit surface ---------------------------------------
+
+
+def _commit_timestamp(repo_root: Path, ref: str) -> datetime:
+    """Return the committer timestamp of *ref* in *repo_root*, as aware UTC.
+
+    Waiver events carry no commit SHA, so "after commit X" is scored on time:
+    the bypass rows written after X was committed are the ones a checkpoint
+    close has to answer for.
+
+    Args:
+        repo_root: Repository the ref is resolved against.
+        ref: Any git commit-ish (SHA, tag, branch, ``HEAD~3``).
+
+    Returns:
+        The committer timestamp, normalised to UTC.
+
+    Raises:
+        cli_errors.UserError: *ref* does not resolve to a commit, or git
+            returned no parseable timestamp for it.
+    """
+    import subprocess
+
+    from eawf.runtime.worktree.git import commit_sha
+
+    sha = commit_sha(repo_root, ref)
+    res = subprocess.run(
+        ["git", "-C", str(repo_root), "show", "-s", "--format=%cI", sha],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    stamp = res.stdout.strip()
+    if res.returncode != 0 or not stamp:
+        raise cli_errors.UserError(
+            f"cannot read commit timestamp for {ref!r}: {(res.stderr or '').strip() or 'unknown'}",
+            kind="InvalidInput",
+        )
+    try:
+        parsed = datetime.fromisoformat(stamp)
+    except ValueError as exc:
+        raise cli_errors.UserError(
+            f"unparseable commit timestamp for {ref!r}: {stamp!r}",
+            kind="InvalidInput",
+        ) from exc
+    return parsed.astimezone(UTC)
+
+
+def _read_daemonless_waivers(state_path: Path, *, after: datetime | None) -> list[dict[str, Any]]:
+    """Return the daemonless-waiver rows in the event store, oldest first.
+
+    Args:
+        state_path: Path to ``state.json``; the event store is its sibling.
+        after: When set, only rows recorded strictly after this instant are
+            returned. ``None`` returns every waiver row ever written.
+
+    Returns:
+        One dict per waiver, each carrying ``scope`` / ``reason`` /
+        ``recorded_at``. An unparseable row is skipped -- a torn tail must not
+        hide the waivers that DID parse.
+    """
+    import orjson
+
+    from eawf.kernel.state.enums import StoreKind
+    from eawf.kernel.store.envelope import Envelope
+    from eawf.kernel.store.paths import store_path
+    from eawf.surfaces.cli._mutation import DAEMONLESS_WAIVER_EVENT_TYPE
+
+    path = store_path(state_path, StoreKind.EVENT)
+    if not path.is_file():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            envelope = Envelope.model_validate(orjson.loads(line))
+        except orjson.JSONDecodeError, ValueError:
+            continue
+        payload = envelope.payload
+        if payload.get("event_type") != DAEMONLESS_WAIVER_EVENT_TYPE:
+            continue
+        recorded_at = envelope.created_at.astimezone(UTC)
+        if after is not None and recorded_at <= after:
+            continue
+        extras = payload.get("extras") or {}
+        rows.append(
+            {
+                "scope": envelope.scope_id or extras.get("wave") or "",
+                "reason": extras.get("reason") or "unspecified",
+                "recorded_at": recorded_at.isoformat(),
+            }
+        )
+    rows.sort(key=lambda row: row["recorded_at"])
+    return rows
+
+
+@wave_app.command("waivers")
+def wave_waivers_cmd(
+    ctx: typer.Context,
+    since: Annotated[
+        str | None,
+        typer.Option(
+            "--since",
+            help="Count only waivers recorded after this commit-ish (default: all).",
+        ),
+    ] = None,
+) -> None:
+    """Count the daemonless close waivers recorded in this workspace.
+
+    The bypass lane is auditable but was not countable: a checkpoint close had
+    no way to ask "how many gate-bearing waves were force-closed daemonless
+    since the last checkpoint, and why". This read-only verb answers exactly
+    that, naming each waived scope and the operator's reason.
+    """
+    loaded = _load_state_readonly(ctx)
+    if loaded is None:
+        return
+    _state, flags = loaded
+    state_path = resolve_state_path(flags.workspace)
+    after: datetime | None = None
+    if since is not None:
+        repo_root = _resolve_repo_root_for_drift(flags.workspace)
+        if repo_root is None:
+            cli_errors.emit_error(
+                cli_errors.UserError(
+                    f"--since {since!r} needs a git repository; none found for this workspace",
+                    kind="NotFound",
+                ),
+                flags=flags,
+            )
+        try:
+            after = _commit_timestamp(repo_root, since)
+        except cli_errors.UserError as exc:
+            cli_errors.emit_error(exc, flags=flags)
+    waivers = _read_daemonless_waivers(state_path, after=after)
+    payload: dict[str, Any] = {
+        "count": len(waivers),
+        "since": since,
+        "waivers": waivers,
+    }
+    scope_text = f" since {since}" if since is not None else ""
+    lines = [f"daemonless close waivers{scope_text}: {len(waivers)}"]
+    lines.extend(f"- {row['scope']} reason={row['reason']!r}" for row in waivers)
+    emit_json_or_text(payload, "\n".join(lines), flags=flags)
