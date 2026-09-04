@@ -2606,7 +2606,7 @@ class _Loop:
             The :class:`~eawf.workflow.verify.dispatch_close.CloseGateResult`, or
             ``None`` when there is no state / wave to gate.
         """
-        from eawf.runtime.daemon.methods.state import _config_root_for_state_path
+        from eawf.runtime.daemon.methods.state_context import config_root_for_state_path
 
         if self.ctx.state_path is None:
             return None
@@ -2626,7 +2626,7 @@ class _Loop:
                 state=state,
                 state_path=state_path,
                 events_path=events_path,
-                repo_root=_config_root_for_state_path(state_path),
+                repo_root=config_root_for_state_path(state_path),
             )
         )
         return result
@@ -2652,10 +2652,10 @@ class _Loop:
             The :class:`~eawf.workflow.verify.dispatch_close.FloorFailureClass`
             the verify-layer classifier assigns.
         """
-        from eawf.runtime.daemon.methods.state import _config_root_for_state_path
+        from eawf.runtime.daemon.methods.state_context import config_root_for_state_path
 
         repo_root = (
-            _config_root_for_state_path(Path(self.ctx.state_path))
+            config_root_for_state_path(Path(self.ctx.state_path))
             if self.ctx.state_path is not None
             else Path.cwd()
         )
@@ -2907,9 +2907,9 @@ class _Loop:
                 # close flip commits, so a refused close never leaves a stray pass
                 # row. The evidence append acquires the sibling evidence.jsonl
                 # lock, distinct from the state lock the close flip held.
-                from eawf.runtime.daemon.methods.state import _append_close_evidence
+                from eawf.runtime.daemon.methods.state_close import append_close_evidence
 
-                _append_close_evidence(close_gate_evidence, state_path=Path(self.ctx.state_path))
+                append_close_evidence(close_gate_evidence, state_path=Path(self.ctx.state_path))
             self.run.counters.closed += 1
         lane_spend = self.spend(self.ctx, wave_id)
         self.run.counters.spent_eu += lane_spend.eu
@@ -4239,7 +4239,7 @@ def _resolve_run_block_authority(ctx: MethodContext) -> BlockAuthority:
     default, so a calibrated jury could never enable high-tier auto-close even
     after passing its trust floors. This resolves the run's authority through the
     SAME resolver the wave-close gate uses
-    (:func:`eawf.runtime.daemon.methods.state._resolve_jury_block_authority` over
+    (:func:`eawf.runtime.daemon.methods.state_jury.resolve_jury_block_authority` over
     the active :class:`~eawf.platform.profiles.models.VerifyBlock`), so a drive
     auto-closes a high-tier lane exactly when the close gate would -- one
     authority source, not a drive-local default that drifts from the gate.
@@ -4256,7 +4256,7 @@ def _resolve_run_block_authority(ctx: MethodContext) -> BlockAuthority:
     """
     if ctx.state_path is None:
         return BlockAuthority.ADVISORY
-    from eawf.runtime.daemon.methods.state import _resolve_jury_block_authority
+    from eawf.runtime.daemon.methods.state_jury import resolve_jury_block_authority
     from eawf.workflow.verify.readiness import load_active_verify_block
 
     state_path = Path(ctx.state_path)
@@ -4265,7 +4265,7 @@ def _resolve_run_block_authority(ctx: MethodContext) -> BlockAuthority:
     if scope_id is None:
         return BlockAuthority.ADVISORY
     verify_block = load_active_verify_block(scope_id, state, repo_root=state_path.parent.parent)
-    authority = _resolve_jury_block_authority(
+    authority = resolve_jury_block_authority(
         state, state_path=state_path, verify_block=verify_block
     )
     logger.info(f"_resolve_run_block_authority authority={authority.value}")

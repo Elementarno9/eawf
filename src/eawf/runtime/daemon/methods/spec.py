@@ -77,10 +77,10 @@ from eawf.runtime.daemon.methods.spec_sync_lints import (
     require_affordance_parity_for_ui_scope,
     require_transition_coverage_for_ui_transitions,
 )
-from eawf.runtime.daemon.methods.state import (
-    _read_state,
-    _resolve_mutator_paths,
-    _state_version,
+from eawf.runtime.daemon.methods.state_context import (
+    read_state,
+    resolve_mutator_paths,
+    state_version,
 )
 from eawf.runtime.daemon.wal import WalRecord
 from eawf.workflow.lifecycle.transitions import LifecycleError, edit_wave_plan
@@ -1021,7 +1021,7 @@ async def sync(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     except (ValueError, yaml.YAMLError, ValidationError) as exc:
         raise DaemonValidationError(f"validation_failed: spec body parse failed: {exc}") from exc
 
-    state_path, event_path, wal_path = _resolve_mutator_paths(
+    state_path, event_path, wal_path = resolve_mutator_paths(
         repo_root=args.repo_root,
         ctx=ctx,
     )
@@ -1118,8 +1118,8 @@ def _apply_sync_locked(
             validation (mapped to ``-32002``).
         ValueError: When the wave id is unknown (mapped to ``-32602``).
     """
-    state, _payload = _read_state(state_path)
-    before_version = _state_version(state.model_dump(mode="json"))
+    state, _payload = read_state(state_path)
+    before_version = state_version(state.model_dump(mode="json"))
     wave = state.waves.get(args.wave_id)
     if wave is None:
         raise ValueError(f"validation_failed: unknown wave: {args.wave_id!r}")
@@ -1242,7 +1242,7 @@ def _validate_post_sync(new_payload: dict[str, Any]) -> str:
         raise DaemonValidationError(
             f"validation_failed: post-mutation invariants violated: {codes}"
         )
-    return _state_version(new_payload)
+    return state_version(new_payload)
 
 
 def _build_sync_envelope(

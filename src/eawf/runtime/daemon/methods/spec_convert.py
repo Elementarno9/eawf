@@ -46,10 +46,10 @@ from eawf.runtime.daemon.methods.spec import (
     _validate_post_sync,
 )
 from eawf.runtime.daemon.methods.spec_sync_lints import measure_criteria
-from eawf.runtime.daemon.methods.state import (
-    _read_state,
-    _resolve_mutator_paths,
-    _state_version,
+from eawf.runtime.daemon.methods.state_context import (
+    read_state,
+    resolve_mutator_paths,
+    state_version,
 )
 from eawf.runtime.daemon.wal import WalRecord
 from eawf.workflow.lifecycle._errors import LifecycleGuardError, check_disabled_waiver_policy
@@ -328,13 +328,13 @@ async def convert_legacy(ctx: MethodContext, params: dict[str, Any]) -> dict[str
         logger.info(f"convert_legacy idempotent_replay scope_id={args.scope_id!r}")
         return replay
 
-    state_path, event_path, wal_path = _resolve_mutator_paths(
+    state_path, event_path, wal_path = resolve_mutator_paths(
         repo_root=args.repo_root,
         ctx=ctx,
     )
 
     if args.dry_run:
-        state, _payload = _read_state(state_path)
+        state, _payload = read_state(state_path)
         rows: list[ConvertRowReport] = []
         for wave_id in _waves_for_convert_scope(state, args.scope_id, kind):
             _criteria, _gates, reports = _convert_wave_rows(state.waves[wave_id])
@@ -391,8 +391,8 @@ def _apply_convert_legacy_locked(
         DaemonValidationError: When the post-mutation state fails schema /
             invariant validation (mapped to -32002).
     """
-    state, _payload = _read_state(state_path)
-    before_version = _state_version(state.model_dump(mode="json"))
+    state, _payload = read_state(state_path)
+    before_version = state_version(state.model_dump(mode="json"))
     config_root = state_path.parent.parent if state_path.parent.name == ".ea" else state_path.parent
     repo_root = Path(args.repo_root) if args.repo_root is not None else config_root
     try:

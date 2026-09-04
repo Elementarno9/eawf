@@ -649,7 +649,7 @@ async def add_question(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
     The daemon-canonical mutator for ``state.open_questions`` (AGENTS rule 4);
     the TUI ``o`` key + the headless ``eawf research question add`` verb proxy
     here. The row lands through the same per-file portalock + WAL + event-append
-    path every state mutator uses (:func:`_commit_worktree_state`), so the
+    path every state mutator uses (:func:`commit_worktree_state`), so the
     single-writer invariant holds and the board re-renders the new question on
     its next refresh.
 
@@ -666,7 +666,9 @@ async def add_question(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
             :class:`AddQuestionParams` (an unknown key, an empty / over-cap
             title). Mapped to ``-32602 invalid params``.
     """
-    from eawf.runtime.daemon.methods.state import _commit_worktree_state
+    from eawf.runtime.daemon.methods.state_worktree import (
+        commit_worktree_state as _commit_worktree_state,
+    )
 
     args = AddQuestionParams.model_validate(params)
     repo_root = Path(args.repo_root) if args.repo_root else None
@@ -784,7 +786,7 @@ async def resolve_question(ctx: MethodContext, params: dict[str, Any]) -> dict[s
     question + the headless ``eawf research question resolve`` verb proxy here.
     The row moves to a terminal status with its ``blocking`` bit cleared through
     the same per-file portalock + WAL + event-append path every state mutator
-    uses (:func:`_commit_worktree_state`), so the single-writer invariant holds
+    uses (:func:`commit_worktree_state`), so the single-writer invariant holds
     and the board re-renders the run as resumed on its next refresh.
 
     Args:
@@ -801,7 +803,9 @@ async def resolve_question(ctx: MethodContext, params: dict[str, Any]) -> dict[s
             names no open-question row. Mapped to ``-32602 invalid params`` /
             ``-32002 validation_failed``.
     """
-    from eawf.runtime.daemon.methods.state import _commit_worktree_state
+    from eawf.runtime.daemon.methods.state_worktree import (
+        commit_worktree_state as _commit_worktree_state,
+    )
 
     args = ResolveQuestionParams.model_validate(params)
     repo_root = Path(args.repo_root) if args.repo_root else None
@@ -1886,7 +1890,7 @@ def _reconcile_round_claims_for(
     """Reconcile a round's findings into Claim rows, folding into real state.
 
     When *fold_into_state* is true the reconcile runs inside
-    :func:`~eawf.runtime.daemon.methods.state._commit_worktree_state` so the new
+    :func:`~eawf.runtime.daemon.methods.state_worktree.commit_worktree_state` so the new
     Claim rows land on the canonical ``state.claims`` through the daemon-owned
     per-file portalock + WAL + event-append path (AGENTS rule 4) -- the same
     writer ``add_question`` uses for ``state.open_questions`` -- and the rows are
@@ -1913,7 +1917,9 @@ def _reconcile_round_claims_for(
         reconcile_round_claims(shadow, findings, scope_id=scope_id, now=now)
         return list((shadow.claims or {}).values())
 
-    from eawf.runtime.daemon.methods.state import _commit_worktree_state
+    from eawf.runtime.daemon.methods.state_worktree import (
+        commit_worktree_state as _commit_worktree_state,
+    )
     from eawf.workflow.evidence._io import load_state
 
     written_ids: list[str] = []
@@ -2014,7 +2020,7 @@ def run_campaign(
     # Reconcile each round's findings into Claim rows as the loop drives, so
     # the saturation reducer scores the real ledger. Each round's claims fold
     # into the canonical ``state.claims`` through the daemon-owned state writer
-    # (:func:`_commit_worktree_state`, the same path ``add_question`` uses), so
+    # (:func:`commit_worktree_state`, the same path ``add_question`` uses), so
     # a live run populates ``state.claims`` rather than a throwaway shadow. The
     # per-round store append + the L1 carryover prune ride alongside.
     claim_ids: list[str] = []

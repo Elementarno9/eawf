@@ -44,9 +44,6 @@ from eawf.runtime.daemon.gate_execution import (
 )
 from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.daemon.methods.close_evidence import (
-    _commit_attempt as _commit_attempt,
-)
-from eawf.runtime.daemon.methods.close_evidence import (
     _digest as _digest,
 )
 from eawf.runtime.daemon.methods.close_evidence import (
@@ -54,6 +51,9 @@ from eawf.runtime.daemon.methods.close_evidence import (
 )
 from eawf.runtime.daemon.methods.close_evidence import (
     _state_path as _state_path,
+)
+from eawf.runtime.daemon.methods.close_evidence import (
+    commit_attempt as commit_attempt,
 )
 from eawf.runtime.daemon.methods.close_evidence import (
     gate_freshness_inputs as gate_freshness_inputs,
@@ -387,7 +387,7 @@ def _attempt_digest_mismatches(
     return [cause for cause, (current, expected) in comparisons.items() if current != expected]
 
 
-def _attempt_invalidation_causes(
+def attempt_invalidation_causes(
     state: State,
     *,
     repo_root: Path,
@@ -437,7 +437,7 @@ def _create_attempt(
     repo_root: Path,
     args: CloseSubmitParams,
 ) -> CloseAttempt:
-    from eawf.runtime.daemon.methods.state import _commit_worktree_state
+    from eawf.runtime.daemon.methods.state_worktree import commit_worktree_state
 
     state = _load_state(ctx, repo_root)
     wave = state.waves.get(args.wave_id)
@@ -575,7 +575,7 @@ def _create_attempt(
             "status": chosen.status.value,
         }
 
-    result = _commit_worktree_state(
+    result = commit_worktree_state(
         ctx=ctx,
         repo_root=repo_root,
         params={"wave_id": args.wave_id, "integration_id": integration.id},
@@ -593,7 +593,7 @@ def _create_repair_attempt(
     blocked_attempt_id: str,
 ) -> CloseAttempt:
     """Create one linked repair generation without rewriting its BLOCKED parent."""
-    from eawf.runtime.daemon.methods.state import _commit_worktree_state
+    from eawf.runtime.daemon.methods.state_worktree import commit_worktree_state
 
     holder: list[CloseAttempt] = []
 
@@ -741,7 +741,7 @@ def _create_repair_attempt(
             "status": repair.status.value,
         }
 
-    _commit_worktree_state(
+    commit_worktree_state(
         ctx=ctx,
         repo_root=repo_root,
         params={"blocked_attempt_id": blocked_attempt_id},
@@ -819,7 +819,7 @@ def _mutation_fault(
         return CloseStaleInputError(
             str(exc), causes=[f"close attempt {attempt_id!r} no longer exists"]
         )
-    causes = _attempt_invalidation_causes(
+    causes = attempt_invalidation_causes(
         state,
         repo_root=repo_root,
         attempt=attempt,
@@ -839,7 +839,7 @@ def transition_attempt_stage(
     status: CloseAttemptStatus,
 ) -> CloseAttempt:
     """Persist one truthful close-worker stage transition."""
-    return _commit_attempt(
+    return commit_attempt(
         ctx,
         repo_root=repo_root,
         attempt_id=attempt_id,
@@ -856,7 +856,7 @@ def mark_attempt_ready(
     expected_wave_payload: dict[str, Any] | None,
 ) -> CloseAttempt:
     """CAS verified integration and READY attempt against the preflight wave."""
-    from eawf.runtime.daemon.methods.state import _commit_worktree_state
+    from eawf.runtime.daemon.methods.state_worktree import commit_worktree_state
 
     holder: list[CloseAttempt] = []
 
@@ -871,7 +871,7 @@ def mark_attempt_ready(
                 f"close attempt stale: wave {attempt.wave_id!r} changed during preflight",
                 causes=[f"wave {attempt.wave_id!r} changed during preflight"],
             )
-        causes = _attempt_invalidation_causes(
+        causes = attempt_invalidation_causes(
             state,
             repo_root=repo_root,
             attempt=attempt,
@@ -896,7 +896,7 @@ def mark_attempt_ready(
             "integration": updated.integration_id,
         }
 
-    _commit_worktree_state(
+    commit_worktree_state(
         ctx=ctx,
         repo_root=repo_root,
         params={"attempt_id": attempt_id},
@@ -929,7 +929,7 @@ async def _run_attempt(  # noqa: C901
                 repo_root,
                 attempt_id=attempt.id,
             )
-            _commit_attempt(
+            commit_attempt(
                 ctx,
                 repo_root=repo_root,
                 attempt_id=attempt.id,
@@ -940,14 +940,14 @@ async def _run_attempt(  # noqa: C901
                 command="close.reconcile",
             )
             return
-        causes = _attempt_invalidation_causes(
+        causes = attempt_invalidation_causes(
             state,
             repo_root=repo_root,
             attempt=attempt,
         )
         if causes:
             raise CloseStaleInputError(f"close attempt stale: {'; '.join(causes)}", causes=causes)
-        _commit_attempt(
+        commit_attempt(
             ctx,
             repo_root=repo_root,
             attempt_id=attempt.id,
@@ -1021,7 +1021,7 @@ async def _run_attempt(  # noqa: C901
             )
             workspace_created = False
 
-        from eawf.runtime.daemon.methods.state import _commit_worktree_state
+        from eawf.runtime.daemon.methods.state_worktree import commit_worktree_state
 
         def _finish(current: State) -> dict[str, Any]:
             row = current.close_attempts[attempt.id]
@@ -1046,7 +1046,7 @@ async def _run_attempt(  # noqa: C901
                 "status": CloseAttemptStatus.CLOSED.value,
             }
 
-        _commit_worktree_state(
+        commit_worktree_state(
             ctx=ctx,
             repo_root=repo_root,
             params={"attempt_id": attempt.id, "apply_event_id": event_id},
@@ -1059,7 +1059,7 @@ async def _run_attempt(  # noqa: C901
             CloseAttemptStatus.QUEUED if _SHUTTING_DOWN else CloseAttemptStatus.CANCELLED
         )
         with contextlib.suppress(Exception):
-            _commit_attempt(
+            commit_attempt(
                 ctx,
                 repo_root=repo_root,
                 attempt_id=attempt_id,
@@ -1112,7 +1112,7 @@ async def _run_attempt(  # noqa: C901
             if exhausted_axis is not None:
                 budget_updates = _budget_receipt_updates(current_attempt, axis=exhausted_axis)
         try:
-            _commit_attempt(
+            commit_attempt(
                 ctx,
                 repo_root=repo_root,
                 attempt_id=attempt_id,
@@ -1243,7 +1243,7 @@ async def resume(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             blocked_attempt_id=attempt.id,
         )
     else:
-        attempt = _commit_attempt(
+        attempt = commit_attempt(
             ctx,
             repo_root=repo_root,
             attempt_id=attempt.id,
@@ -1284,7 +1284,7 @@ async def cancel(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             await task
     attempt = _resolve_attempt(_load_state(ctx, repo_root), attempt.id)
     if attempt.status is not CloseAttemptStatus.CANCELLED:
-        attempt = _commit_attempt(
+        attempt = commit_attempt(
             ctx,
             repo_root=repo_root,
             attempt_id=attempt.id,
@@ -1321,7 +1321,7 @@ def resume_durable_close_attempts(ctx: MethodContext) -> int:
         if attempt.status not in _INTERRUPTED_STATUSES:
             continue
         if attempt.status is not CloseAttemptStatus.QUEUED:
-            _commit_attempt(
+            commit_attempt(
                 ctx,
                 repo_root=repo_root,
                 attempt_id=attempt.id,

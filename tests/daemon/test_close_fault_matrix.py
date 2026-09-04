@@ -38,7 +38,7 @@ from eawf.runtime.daemon import gate_execution
 from eawf.runtime.daemon.close_workspace import CloseWorkspaceError
 from eawf.runtime.daemon.methods import close as close_module
 from eawf.runtime.daemon.methods.close import (
-    _attempt_invalidation_causes,
+    attempt_invalidation_causes,
     resume_durable_close_attempts,
     shutdown_close_attempts,
     submit,
@@ -239,7 +239,7 @@ def _inject_worker_termination(
             raise _WorkerTerminated
 
     if target is CloseAttemptStatus.PREPARING:
-        real_commit = close_module._commit_attempt
+        real_commit = close_module.commit_attempt
 
         def _commit(*args: Any, **kwargs: Any) -> Any:
             result = real_commit(*args, **kwargs)
@@ -247,7 +247,7 @@ def _inject_worker_termination(
                 _terminate()
             return result
 
-        monkeypatch.setattr(close_module, "_commit_attempt", _commit)
+        monkeypatch.setattr(close_module, "commit_attempt", _commit)
         return
     if target is CloseAttemptStatus.READY:
         real_ready = close_module.mark_attempt_ready
@@ -377,7 +377,7 @@ def _causes(
     attempt_id: str,
 ) -> list[str]:
     state = State.model_validate_json(state_path.read_bytes())
-    return _attempt_invalidation_causes(
+    return attempt_invalidation_causes(
         state,
         repo_root=repo,
         attempt=state.close_attempts[attempt_id],

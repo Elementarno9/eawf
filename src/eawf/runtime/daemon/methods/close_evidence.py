@@ -50,9 +50,9 @@ def _state_path(ctx: MethodContext, repo_root: Path) -> Path:
 
 
 def _load_state(ctx: MethodContext, repo_root: Path) -> State:
-    from eawf.runtime.daemon.methods.state import _read_state
+    from eawf.runtime.daemon.methods.state_context import read_state
 
-    state, _payload = _read_state(_state_path(ctx, repo_root))
+    state, _payload = read_state(_state_path(ctx, repo_root))
     return state
 
 
@@ -60,7 +60,7 @@ def _digest(value: Any) -> str:
     return hashlib.sha256(orjson.dumps(value, option=orjson.OPT_SORT_KEYS)).hexdigest()
 
 
-def _commit_attempt(
+def commit_attempt(
     ctx: MethodContext,
     *,
     repo_root: Path,
@@ -69,7 +69,7 @@ def _commit_attempt(
     command: str,
 ) -> CloseAttempt:
     """Persist one immutable replacement of a durable close attempt."""
-    from eawf.runtime.daemon.methods.state import _commit_worktree_state
+    from eawf.runtime.daemon.methods.state_worktree import commit_worktree_state
 
     holder: list[CloseAttempt] = []
 
@@ -89,7 +89,7 @@ def _commit_attempt(
             "status": updated.status.value,
         }
 
-    _commit_worktree_state(
+    commit_worktree_state(
         ctx=ctx,
         repo_root=repo_root,
         params={"attempt_id": attempt_id, "status": str(updates.get("status", ""))},
@@ -202,7 +202,7 @@ def _reuse_existing_gate_receipt(
         return True, None
     row = _load_state(ctx, repo_root).close_attempts.get(attempt.id)
     if row is not None and existing.id not in row.gate_receipt_ids:
-        _commit_attempt(
+        commit_attempt(
             ctx,
             repo_root=repo_root,
             attempt_id=attempt.id,
@@ -482,7 +482,7 @@ def persist_gate_receipt(
     append_gate_receipt(_state_path(ctx, repo_root), receipt)
     row = _load_state(ctx, repo_root).close_attempts.get(attempt_id)
     if row is not None and receipt.id not in row.gate_receipt_ids:
-        _commit_attempt(
+        commit_attempt(
             ctx,
             repo_root=repo_root,
             attempt_id=attempt_id,

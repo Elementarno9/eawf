@@ -121,7 +121,7 @@ def _verify_adopted_commit(repo_root: Path, commit_ref: str) -> _AdoptionFacts:
 @register("integration.adopt")
 async def adopt(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Persist an explicit, ancestry-verified ADOPT integration fact."""
-    from eawf.runtime.daemon.methods.state import _commit_worktree_state
+    from eawf.runtime.daemon.methods.state_worktree import commit_worktree_state
 
     args = IntegrationAdoptParams.model_validate(params)
     repo_root = Path(args.repo_root).resolve()
@@ -153,7 +153,7 @@ async def adopt(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             "tree_verified": True,
         }
 
-    return _commit_worktree_state(
+    return commit_worktree_state(
         ctx=ctx,
         repo_root=repo_root,
         params=args.model_dump(mode="json"),
@@ -169,7 +169,7 @@ async def set_dependency_barrier(
     params: dict[str, Any],
 ) -> dict[str, Any]:
     """Author or revise one explicit dependency barrier on a PENDING Wave."""
-    from eawf.runtime.daemon.methods.state import _commit_worktree_state
+    from eawf.runtime.daemon.methods.state_worktree import commit_worktree_state
 
     args = DependencyBarrierSetParams.model_validate(params)
     repo_root = Path(args.repo_root).resolve()
@@ -207,7 +207,7 @@ async def set_dependency_barrier(
             "barrier": barrier.model_dump(mode="json"),
         }
 
-    return _commit_worktree_state(
+    return commit_worktree_state(
         ctx=ctx,
         repo_root=repo_root,
         params=args.model_dump(mode="json"),

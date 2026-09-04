@@ -65,14 +65,14 @@ logger = logging.getLogger(__name__)
 
 #: Module-level one-shot flag for the back-compat warning emitted when a
 #: caller omits the ``repo_root`` param. Mirrors the state-side flag in
-#: :data:`eawf.runtime.daemon.methods.state._ANCHOR_FALLBACK_WARN_EMITTED` —
+#: :data:`eawf.runtime.daemon.methods.state_context._ANCHOR_FALLBACK_WARN_EMITTED` —
 #: one warning per process per surface keeps the daemon log readable
 #: under stale-CLI load.
 _ANCHOR_FALLBACK_WARN_EMITTED: bool = False
 
 
 #: TTL for cached idempotency results (seconds). Mirrors
-#: :data:`eawf.runtime.daemon.methods.state.IDEMPOTENCY_TTL_SECONDS` so the
+#: :data:`eawf.runtime.daemon.methods.state_context.IDEMPOTENCY_TTL_SECONDS` so the
 #: replay window across the two mutator surfaces stays consistent.
 IDEMPOTENCY_TTL_SECONDS: Final[float] = 60.0
 
@@ -267,7 +267,7 @@ def _idempotency_cache(ctx: MethodContext) -> dict[str, _CachedConfigMutation]:
     ``state.mutate`` + ``config.set_layer_value`` + ``registry.update``
     because the idempotency-key namespace is caller-owned and a single
     cache simplifies eviction. State entries live under
-    :class:`eawf.runtime.daemon.methods.state._CachedMutation`; config entries
+    :class:`eawf.runtime.daemon.methods.state_models.CachedMutation`; config entries
     live under this class. Cross-pollination is harmless because the
     state cache lookups type-check before unboxing.
     """

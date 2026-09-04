@@ -5,48 +5,55 @@ handler is the **sole canonical writer** for ``state.json`` +
 ``event.jsonl`` (authority-map rows 1-4); every state-mutating CLI verb
 routes through this RPC once ``daemon.proxy_enabled`` flips to ``true``.
 
-Algorithm — the transaction lifecycle:
+Algorithm -- the transaction lifecycle:
 
 1. Idempotency-cache lookup keyed by :attr:`Mutation.idempotency_key`.
-2. ``portalock(state.json, timeout=5)`` — defense-in-depth; AGENTS
+2. ``portalock(state.json, timeout=5)`` -- defense-in-depth; AGENTS
    rule 4 retains portalocker as belt-and-braces under the daemon.
-3. Read + decode + validate ``state.json`` → :class:`State`.
+3. Read + decode + validate ``state.json`` -> :class:`State`.
 4. Dispatch the :class:`MutationKind` to its per-kind apply function;
    on success the candidate :class:`State` carries the mutation.
-5. Re-validate the post-mutation state → on failure return
+5. Re-validate the post-mutation state -> on failure return
    ``-32002 validation_failed`` and leave ``state.json`` untouched.
 6. Build the canonical event envelope (``EventPayload`` body) +
    write the WAL ``.pending.json`` record.
 7. Atomic-write ``state.json`` (existing
-   :func:`eawf.kernel.state.writer.atomic_write_json_locked`) — the point of
+   :func:`eawf.kernel.state.writer.atomic_write_json_locked`) -- the point of
    no return (state.json is fsynced here).
-8. WAL ``.pending`` → ``.applied`` rename, BEFORE the event append, so
-   a crash in the state-write→event-append window leaves an APPLIED
+8. WAL ``.pending`` -> ``.applied`` rename, BEFORE the event append, so
+   a crash in the state-write->event-append window leaves an APPLIED
    record. :func:`eawf.runtime.daemon.recovery.replay_wal` re-issues the
    captured envelope for an APPLIED record (idempotent on envelope id),
-   whereas a PENDING record would be POISONED and the event row lost —
+   whereas a PENDING record would be POISONED and the event row lost --
    diverging state from the event log.
 9. Append the envelope to ``event.jsonl`` via
    :func:`eawf.kernel.store.append.append_envelope`, then WAL
-   ``.applied`` → ``.fsynced`` (lock-free renames from
+   ``.applied`` -> ``.fsynced`` (lock-free renames from
    :mod:`eawf.runtime.daemon.wal`).
 10. Publish the envelope on the subscription bus
     (:meth:`eawf.runtime.daemon.bus.EventBus.publish`).
 11. Release portalock; cache the result for the idempotency window;
     return ``{event, before_version, after_version}``.
 
-The per-kind apply registry is loose-typed (the
-:attr:`Mutation.params` dict is the contract). A later wave hardens each
-variant into a Pydantic subclass per MutationKind.
+This module is the facade of the state-method family: it owns the
+registered handlers, the wave-close orchestration, and the auditor / jury
+gate that sequences the rest. The per-concern collaborators live beside
+it and are re-exported here so the module's import surface is unchanged:
 
-Every :class:`MutationKind` now resolves to a real apply function — the
-wave / phase / iter lifecycle kinds delegate to
-:mod:`eawf.workflow.lifecycle.transitions`; ``ROADMAP_REVISE`` dispatches one of
-the ``plan_wave`` / ``remove_wave_plan`` / ``set_wave_deps`` /
-``edit_wave_plan`` transitions on its ``params['op']`` discriminator;
-``ROADMAP_APPLY`` is a readiness check; ``ROADMAP_DROP`` archives the
-phase; and ``EVENT_APPEND`` is a no-op on :class:`State` whose side
-effect is the canonical event row the mutator always appends.
+* :mod:`~eawf.runtime.daemon.methods.state_models` -- typed params / results.
+* :mod:`~eawf.runtime.daemon.methods.state_context` -- repo anchoring, state
+  read/digest, idempotency cache.
+* :mod:`~eawf.runtime.daemon.methods.state_apply` -- per-kind appliers and the
+  dispatch table.
+* :mod:`~eawf.runtime.daemon.methods.state_close` -- close readiness, runtime
+  rollups, the per-criterion oracle loop, close evidence.
+* :mod:`~eawf.runtime.daemon.methods.state_jury` -- auditor / juror spawn
+  plumbing and durable audit context.
+* :mod:`~eawf.runtime.daemon.methods.state_events` -- event-envelope builders.
+* :mod:`~eawf.runtime.daemon.methods.state_codex` -- ``runtime.codex_lifecycle``.
+* :mod:`~eawf.runtime.daemon.methods.state_runtime` -- ``runtime.capture``.
+* :mod:`~eawf.runtime.daemon.methods.state_worktree` -- ``wave land`` /
+  ``wave autoland`` / ``track.sync``.
 """
 
 from __future__ import annotations
@@ -54,1402 +61,164 @@ from __future__ import annotations
 import hashlib
 import logging
 import time
-import uuid
-from collections.abc import Callable, Collection
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, Literal, cast
+from typing import TYPE_CHECKING, Any, Final
 
 import orjson
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import ValidationError
 
-from eawf.kernel.config.schema import EuBasis, VerifyWaiverMode
-from eawf.kernel.spec.common import (
-    CriterionSpec,
-    grandfather_criterion,
-    validate_criterion_gate_refs,
-)
-from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     CloseAttemptStatus,
-    EffortBucket,
-    MeasurementQuality,
-    MeasurementStatus,
-    PhaseStatus,
     StoreKind,
-    TrackKind,
-    WaveStatus,
 )
 from eawf.kernel.state.models import (
-    AgentSession,
-    CriteriaFloorWaiver,
-    RuntimeBaseline,
-    RuntimeCarry,
-    RuntimeLatest,
-    SessionAttempt,
     State,
-    Track,
     Wave,
 )
 from eawf.kernel.state.mutations import (
-    DecisionMutationError,
-    MemoryMutationError,
     Mutation,
     MutationKind,
-    apply_decision_obsolete,
-    apply_memory_add,
-    apply_memory_prune,
-    apply_memory_review,
-    apply_memory_supersede,
-    apply_memory_update,
 )
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
-from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.kinds.event import EventKind, EventPayload
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.kernel.store.paths import store_path
 from eawf.kernel.validate.strict import validate_state
-from eawf.observability.telemetry.join import (
-    DEFAULT_EU_MINUTES,
-    WaveSessionRollup,
-    rollup_wave_sessions,
-)
-from eawf.observability.telemetry.models import TelemetrySession
 from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.methods import (
     VALIDATION_FAILED,
     DaemonValidationError,
     MethodContext,
-    note_cross_root_serve,
     register,
 )
 from eawf.runtime.daemon.wal import WalRecord
-from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
-from eawf.workflow.lifecycle._capacity import (
-    DEFAULT_MAX_PARALLEL_WAVES,
-    resolve_max_parallel_waves,
-)
 from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
     LifecycleGuardError,
-    activate_phase,
-    add_track,
-    archive_phase,
-    claim_wave,
     close_iter,
-    close_phase,
-    close_wave,
-    edit_iter_plan,
-    edit_wave_plan,
-    fail_wave,
-    open_iter,
-    open_phase,
-    plan_wave,
-    release_wave,
-    remove_wave_plan,
-    set_wave_deps,
-    switch_track,
 )
-from eawf.workflow.lifecycle.wave import RuntimeDelta, compute_runtime_delta
-from eawf.workflow.skills.needs_user import retract_wave_pauses
-from eawf.workflow.verify.models import CloseReadiness
 from eawf.workflow.verify.preflight import run_close_preflight
 
 if TYPE_CHECKING:
-    from eawf.observability.eval.jury import JurorBallot
-    from eawf.observability.eval.jury_validation import BlockAuthority
     from eawf.platform.profiles.models import VerifyBlock
     from eawf.workflow.dispatch.verdict import DurableAuditContext
+from eawf.runtime.daemon.methods.state_apply import (
+    ApplyFunc,
+    apply_iter_open,
+    apply_mutation_under_lock,
+    apply_phase_open,
+    apply_roadmap_revise,
+    apply_wave_close,
+    build_apply_registry,
+    log_guard_rejection,
+    sync_wave_close_track,
+)
+from eawf.runtime.daemon.methods.state_close import (
+    WaveCloseRefusalError,
+    append_close_evidence,
+    build_close_attempt_hooks,
+    compute_wave_close_extras,
+    compute_wave_close_readiness,
+    enforce_nonzero_runtime_close,
+    enforce_wave_verdict_gate,
+    load_wave_session_rollup,
+    retract_closed_wave_advisories,
+    score_required_criteria,
+    validate_close_apply_snapshot,
+    validate_wave_close_gate_refs,
+    wave_close_elapsed_eu,
+    wave_close_rollup_config,
+    wave_runtime_delta,
+)
+from eawf.runtime.daemon.methods.state_codex import codex_lifecycle
+from eawf.runtime.daemon.methods.state_context import (
+    IDEMPOTENCY_TTL_SECONDS,
+    bus_for_root,
+    config_root_for_state_path,
+    event_store_path_for,
+    evict_expired,
+    idempotency_cache,
+    read_state,
+    resolve_mutator_paths,
+    resolve_state_path,
+    state_version,
+)
+from eawf.runtime.daemon.methods.state_events import (
+    MUTATION_EVENT_KIND,
+    bucket_drift_extras,
+    build_bucket_drift_envelope,
+    build_event_envelope,
+    mutation_event_extras,
+    publish_wave_elapsed_updates,
+)
+from eawf.runtime.daemon.methods.state_jury import (
+    build_durable_audit_context,
+    cross_vendor_lanes_ready,
+    jury_spawn_factory,
+    load_wave_spec,
+    persist_auditor_session_snapshot,
+    resolve_jury_block_authority,
+)
+from eawf.runtime.daemon.methods.state_models import (
+    CachedMutation,
+    DigestParams,
+    DigestResult,
+    MutateParams,
+    MutateResult,
+    ReadParams,
+    ReadResult,
+)
+from eawf.runtime.daemon.methods.state_runtime import (
+    counters_incomparable,
+    merge_runtime_latest,
+    rebase_for_session,
+    reorigin_on_reset,
+    runtime_capture,
+    upsert_interactive_session_attempt,
+)
+from eawf.runtime.daemon.methods.state_worktree import (
+    commit_worktree_state,
+    track_sync_rpc,
+    wave_autoland_rpc,
+    wave_land_batch_rpc,
+    wave_land_rpc,
+)
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
 
 logger = logging.getLogger(__name__)
 
 
-#: Module-level one-shot flag for the back-compat warning emitted when a
-#: caller omits the ``repo_root`` param. Flipped True on the first emit;
-#: never reset for the lifetime of the daemon process. The companion
-#: helper :func:`_resolve_anchor` reads + writes this directly.
-_ANCHOR_FALLBACK_WARN_EMITTED: bool = False
-
-
-#: TTL for cached idempotency results (seconds). A repeat
-#: ``state.mutate`` with the same ``idempotency_key`` inside this
-#: window replays the cached envelope verbatim. Outside the window
-#: the daemon treats the call as new (the WAL record carries the
-#: durable replay guarantee).
-IDEMPOTENCY_TTL_SECONDS: Final[float] = 60.0
-
-#: Active-wave elapsed updates are coarse-grained to one event per wave per
-#: elapsed minute. The in-memory cache suppresses repeated digest polls inside
-#: the same minute; a daemon restart may re-emit the current minute, which is
-#: acceptable for a live advisory stream.
-_WAVE_ELAPSED_ACTIVE_STATUSES: Final[frozenset[WaveStatus]] = frozenset(
-    {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}
-)
-_WAVE_ELAPSED_WARN_FRACTION: Final[float] = 0.8
-_WAVE_ELAPSED_ERROR_FRACTION: Final[float] = 1.0
-_WAVE_ELAPSED_LAST_MINUTE: dict[int, dict[str, int]] = {}
-
-
-# ---- Params + Result models ------------------------------------------------
-
-
-class ReadParams(BaseModel):
-    """Params for :func:`read`.
-
-    Attributes:
-        scope_id: Optional scope filter (not yet enforced; returns
-            the full state — projection lands in a later wave).
-        fields: Optional projection list (not yet enforced — see above).
-        repo_root: Optional absolute path of the repo whose ``state.json``
-            the daemon should read. The CLI proxy forwards ``flags.workspace``
-            (or ``Path.cwd()``) here so the daemon — which is one per user,
-            not one per repo — resolves the right anchor regardless of the
-            boot-time cwd. Omitting falls back to ``ctx.state_path`` with a
-            one-shot ``daemon_anchor_fallback`` warning.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-    scope_id: str | None = None
-    fields: list[str] | None = None
-    repo_root: str | None = None
-
-
-class ReadResult(BaseModel):
-    """Result of :func:`read`.
-
-    The ``state`` field carries the full validated state payload as a
-    JSON-mode dict; callers re-validate against
-    :class:`eawf.kernel.state.models.State` if they need a typed object.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-    state: dict[str, Any]
-    version: str
-
-
-class MutateParams(BaseModel):
-    """Params for :func:`mutate`.
-
-    Attributes:
-        mutation: Typed :class:`Mutation` payload.
-        idempotency_key: Optional caller-supplied key. When supplied,
-            shadows :attr:`Mutation.idempotency_key`; precedence matches
-            ``DaemonClient.call(idempotency_key=...)`` which carries the
-            key as a sibling field of ``params``.
-        repo_root: Optional absolute path of the repo whose ``state.json``
-            the daemon should mutate. Same semantics as the field on
-            :class:`ReadParams`.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-    mutation: Mutation
-    idempotency_key: str | None = None
-    repo_root: str | None = None
-
-
-class MutateResult(BaseModel):
-    """Result of :func:`mutate`."""
-
-    model_config = ConfigDict(extra="forbid")
-    event: dict[str, Any]
-    before_version: str
-    after_version: str
-    idempotent_replay: bool = False
-
-
-class DigestParams(BaseModel):
-    """Params for :func:`digest`.
-
-    Attributes:
-        repo_root: Optional absolute path of the repo whose ``state.json``
-            digest the daemon should return. Same semantics as the field
-            on :class:`ReadParams`.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-    repo_root: str | None = None
-
-
-class DigestResult(BaseModel):
-    """Result of :func:`digest`."""
-
-    model_config = ConfigDict(extra="forbid")
-    version: str
-
-
-class RuntimeCaptureParams(RuntimeCounters):
-    """Params for :func:`runtime_capture`.
-
-    The runtime-owned counters are cumulative, so this RPC records the latest
-    observed snapshot onto one exactly correlated active wave. ``wave_id`` may
-    name it directly; otherwise the daemon uses an exact Codex provider-session
-    binding or the sole-active-wave fallback. ``session_id`` names the session
-    the counters were read from, which is load-bearing rather than decorative:
-    counters are cumulative
-    *per session*, so it is what lets a capture from a new session rebase the
-    wave's baseline onto that session's origin
-    (:func:`_rebase_for_session`) and what dedupes the interactive
-    :class:`~eawf.kernel.state.models.SessionAttempt`
-    (:func:`_upsert_interactive_session_attempt`). It stays optional: a runtime
-    that discloses no session id still captures, and the wave is then treated as
-    single-session.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    repo_root: str | None = None
-    wave_id: str | None = None
-    session_id: str | None = None
-    captured_at: datetime | None = None
-
-
-class RuntimeCaptureResult(BaseModel):
-    """Result of :func:`runtime_capture`."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    active_wave_ids: list[str]
-    active_count: int
-    before_version: str
-    after_version: str
-    event: dict[str, Any]
-
-
-class CodexLifecycleParams(BaseModel):
-    """Provider-native Codex session/subagent lifecycle event."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    event_type: Literal[
-        "session_start",
-        "subagent_start",
-        "subagent_stop",
-        "session_end",
-    ]
-    provider_session_id: str = Field(min_length=1)
-    agent_id: str | None = None
-    agent_transcript_path: str | None = None
-    occurred_at: datetime
-    repo_root: str | None = None
-    counters: RuntimeCounters | None = None
-    measurement_quality: MeasurementQuality = MeasurementQuality.UNAVAILABLE
-    measurement_status: MeasurementStatus = MeasurementStatus.USAGE_UNAVAILABLE
-    measurement_reason: str | None = Field(default=None, min_length=1, max_length=200)
-
-
-class CodexLifecycleResult(BaseModel):
-    """Result of one Codex lifecycle correlation attempt."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    correlated: bool
-    reason: str | None = None
-    agent_session_id: str | None = None
-    wave_id: str | None = None
-    attempt: int | None = None
-    before_version: str
-    after_version: str
-    event: dict[str, Any] | None = None
-
-
-class WaveLandParams(BaseModel):
-    """Params for :func:`wave_land_rpc`."""
-
-    model_config = ConfigDict(extra="forbid")
-    repo_root: str
-    wave_id: str
-    outcome: str | None = None
-    keep_worktree: bool = False
-
-
-class WaveLandRpcResult(BaseModel):
-    """Result of :func:`wave_land_rpc`."""
-
-    model_config = ConfigDict(extra="forbid")
-    wave: str
-    commits: list[str]
-    outcome: str
-    closed: bool
-    worktree_cleaned: bool
-    merged_commit: str
-    integration_id: str | None = None
-    close_attempt: dict[str, Any] | None = None
-    close_backgrounded: bool = False
-
-
-class WaveLandBatchParams(BaseModel):
-    """Params for :func:`wave_land_batch_rpc`."""
-
-    model_config = ConfigDict(extra="forbid")
-    repo_root: str
-    iter_id: str | None = None
-    ready_only: bool = False
-    keep_worktree: bool = False
-
-
-class WaveLandBatchRpcResult(BaseModel):
-    """Result of :func:`wave_land_batch_rpc`."""
-
-    model_config = ConfigDict(extra="forbid")
-    landed: list[WaveLandRpcResult]
-    failed_wave: str | None
-    error: str | None
-    skipped: list[str]
-    barrier_requirements: dict[str, list[str]]
-    close_mode: Literal["durable_async", "daemonless_synchronous"]
-
-
-class WaveAutolandParams(BaseModel):
-    """Params for :func:`wave_autoland_rpc`."""
-
-    model_config = ConfigDict(extra="forbid")
-    repo_root: str
-    iter_id: str | None = None
-    keep_worktree: bool = False
-    dry_run: bool = False
-
-
-class WaveAutolandRpcResult(BaseModel):
-    """Result of :func:`wave_autoland_rpc`."""
-
-    model_config = ConfigDict(extra="forbid")
-    order: list[str]
-    landed: list[dict[str, Any]]
-    failed_wave: str | None
-    error: str | None
-    remaining: list[str]
-    dry_run: bool
-
-
-# ---- track.* params + result -------------------------------------------------
-
-
-class TrackSyncParams(BaseModel):
-    """Params for :func:`track_sync_rpc`.
-
-    ``track_id`` names an existing Track whose measured outcome statuses are
-    recomputed from their samples (the same reducer the wave-close hook fires).
-    An unknown id is a no-op (the reducer returns no changes). When omitted the
-    daemon syncs the Track under :attr:`CurrentPointers.track_id`.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-    repo_root: str | None = None
-    track_id: str | None = None
-
-
-class TrackSyncRpcResult(BaseModel):
-    """Result of :func:`track_sync_rpc`."""
-
-    model_config = ConfigDict(extra="forbid")
-    track_id: str | None
-    changed_outcome_ids: list[str]
-    changed: int
-
-
-# ---- Idempotency cache ------------------------------------------------------
-
-
-class _CachedMutation(BaseModel):
-    """One row in the daemon's in-memory idempotency cache.
-
-    Stored verbatim under :class:`MethodContext.idempotency_cache` (a
-    plain dict keyed by ``idempotency_key``). Entries older than
-    :data:`IDEMPOTENCY_TTL_SECONDS` are pruned on every lookup; the
-    durable replay guarantee lives in the WAL, not here.
-
-    Attributes:
-        result: The :class:`MutateResult` dict returned to the original
-            caller. On replay this is returned verbatim with
-            ``idempotent_replay=True`` flipped on.
-        cached_at: ``time.monotonic()`` value when the entry was
-            written; used for TTL eviction.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-    result: dict[str, Any]
-    cached_at: float = Field(ge=0.0)
-
-
-def _idempotency_cache(ctx: MethodContext) -> dict[str, _CachedMutation]:
-    """Return the in-memory idempotency cache attached to *ctx*.
-
-    The cache is stored on the :class:`MethodContext` dataclass field
-    set up by :mod:`eawf.runtime.daemon.main`; legacy contexts (unit tests,
-    daemonless paths) get a fresh dict installed lazily. The cache
-    lives only for the lifetime of the daemon process — restart wipes
-    it; the WAL carries the durable replay guarantee.
-    """
-    if isinstance(ctx.idempotency_cache, dict):
-        return ctx.idempotency_cache
-    fresh: dict[str, _CachedMutation] = {}
-    ctx.idempotency_cache = fresh
-    return fresh
-
-
-def _evict_expired(cache: dict[str, _CachedMutation], *, now: float) -> None:
-    """Drop entries whose age exceeds :data:`IDEMPOTENCY_TTL_SECONDS`."""
-    expired = [k for k, v in cache.items() if now - v.cached_at > IDEMPOTENCY_TTL_SECONDS]
-    for k in expired:
-        cache.pop(k, None)
-
-
-# ---- Per-request repo anchor resolution -----------------------------------
-
-
-def _emit_anchor_fallback_warning(ctx: MethodContext) -> None:
-    """Log the one-shot ``daemon_anchor_fallback`` deprecation warning.
-
-    Stays a no-op after the first call for the lifetime of the daemon
-    process — mirrors the
-    :data:`eawf.kernel.config.layered._LEGACY_RUNTIME_WARN_EMITTED` pattern so
-    a stale CLI client does not spam the daemon log.
-    """
-    global _ANCHOR_FALLBACK_WARN_EMITTED
-    if _ANCHOR_FALLBACK_WARN_EMITTED:
-        return
-    logger.warning(
-        f"daemon_anchor_fallback state_path={ctx.state_path!r}; "
-        f"caller omitted 'repo_root' param, resolving against the boot-time "
-        f"state_path — update the caller to pass repo_root explicitly "
-        f"(the boot-time fallback will be removed in a future wave)"
-    )
-    _ANCHOR_FALLBACK_WARN_EMITTED = True
-
-
-def _resolve_state_path(*, repo_root: str | None, ctx: MethodContext) -> Path:
-    """Return ``<repo>/.ea/state.json`` for the caller's repo.
-
-    The daemon process owns one per-user UDS / named pipe and serves
-    many repos. Path joins against ``<repo>/.ea/...`` MUST honour the
-    caller's repo root, not the daemon's boot-time cwd — otherwise a
-    daemon spawned from one directory will resolve a different repo's
-    ``state.json`` against its own anchor and (on a read-only-root host)
-    blow up with ``[Errno 30] Read-only file system: '/.ea'``.
-
-    Precedence:
-
-    1. Per-request *repo_root* param (the canonical, post-W03 callsite).
-    2. Boot-time ``ctx.state_path`` (legacy fallback for callers that
-       have not yet been rewired). Emits a one-shot
-       ``daemon_anchor_fallback`` warning per process so stale clients
-       surface in the daemon log without breaking CI.
-
-    Raises:
-        RuntimeError: When *repo_root* is ``None`` AND ``ctx.state_path``
-            is also unset.
-    """
-    if repo_root:
-        return Path(repo_root) / ".ea" / "state.json"
-    if ctx.state_path is None:
-        raise RuntimeError("state_path not configured on daemon context")
-    _emit_anchor_fallback_warning(ctx)
-    return Path(ctx.state_path)
-
-
-def _resolve_mutator_paths(
-    *,
-    repo_root: str | None,
-    ctx: MethodContext,
-) -> tuple[Path, Path, Path]:
-    """Return ``(state_path, event_path, wal_dir)`` for the mutator path.
-
-    Same precedence as :func:`_resolve_state_path` for *state_path*;
-    *event_path* is always derived from the resolved *state_path* via
-    :func:`eawf.kernel.store.paths.store_path` so a per-request ``repo_root``
-    routes the event-jsonl append to the correct repo too. *wal_dir*
-    stays daemon-process-local (one WAL per daemon).
-
-    Raises:
-        RuntimeError: When the state path cannot be resolved or
-            ``ctx.wal_dir`` is unset.
-    """
-    note_cross_root_serve(ctx, repo_root=repo_root, command="state mutation")
-    state_path = _resolve_state_path(repo_root=repo_root, ctx=ctx)
-    if repo_root:
-        event_path = store_path(state_path, StoreKind.EVENT)
-    else:
-        event_path = (
-            Path(ctx.event_path)
-            if ctx.event_path is not None
-            else store_path(state_path, StoreKind.EVENT)
-        )
-    if not isinstance(ctx.wal_dir, Path):
-        raise RuntimeError("wal_dir not configured on daemon context")
-    return state_path, event_path, ctx.wal_dir
-
-
-def _bus_for_root(ctx: MethodContext, state_path: Path) -> Any | None:
-    """Return the publishable bus iff *state_path* is the daemon's boot root.
-
-    Live subscribers attach to the boot root's stream only; a mutation
-    served for another repo root appends to that repo's own event log but
-    must not leak its envelopes onto the boot root's bus. Returns ``None``
-    when the bus is absent, has no ``publish``, or the target root differs
-    from the bound root.
-    """
-    bus = ctx.bus
-    if bus is None or not hasattr(bus, "publish"):
-        return None
-    if ctx.state_path is not None and Path(state_path).resolve() != Path(ctx.state_path).resolve():
-        return None
-    return bus
-
-
-# ---- State payload helpers --------------------------------------------------
-
-
-def _state_version(payload: dict[str, Any]) -> str:
-    """Stable 16-hex-char digest of a state payload.
-
-    Mirrors :func:`eawf.surfaces.cli.commands.lifecycle._state_version` so the
-    before/after-version strings stay comparable across the in-process
-    and daemon-proxy paths.
-    """
-    raw = orjson.dumps(payload, option=orjson.OPT_SORT_KEYS)
-    return hashlib.sha256(raw).hexdigest()[:16]
-
-
-def _read_state(state_path: Path) -> tuple[State, dict[str, Any]]:
-    """Load + validate ``state.json``; return ``(typed_state, payload)``.
-
-    Raises:
-        FileNotFoundError: when *state_path* does not exist.
-        ValueError: when the on-disk payload fails schema validation.
-            This is on-disk corruption (not a mutation rejection), so it
-            stays a bare ``ValueError`` that the server maps to
-            ``-32602 invalid_params`` — distinct from the typed
-            :class:`~eawf.runtime.daemon.methods.DaemonValidationError` the
-            mutator raises for a *rejected* mutation (``-32002``).
-    """
-    if not state_path.exists():
-        raise FileNotFoundError(f"state file not found: {state_path!r}")
-    raw = state_path.read_bytes()
-    payload = orjson.loads(raw)
-    report = validate_state(payload, strict_optional=False)
-    if report.state is None:
-        raise ValueError("state schema invalid: " + "; ".join(report.schema_errors[:3]))
-    return report.state, payload
-
-
-def _args_hash(mutation: Mutation) -> str:
-    """Stable 16-hex-char digest of the mutation params."""
-    raw = orjson.dumps(mutation.params, option=orjson.OPT_SORT_KEYS)
-    return hashlib.sha256(raw).hexdigest()[:16]
-
-
-# ---- Apply registry ---------------------------------------------------------
-
-#: Callable that mutates *state* in place per the supplied
-#: :class:`Mutation` payload. Apply functions raise
-#: :class:`LifecycleError` to signal a guard rejection
-#: (mapped to ``-32002 validation_failed``).
-ApplyFunc = Callable[[State, Mutation], None]
-
-
-def _apply_wave_claim(
-    state: State,
-    mutation: Mutation,
-    *,
-    max_parallel_waves: int = DEFAULT_MAX_PARALLEL_WAVES,
-) -> None:
-    """Apply :attr:`MutationKind.WAVE_CLAIM` — delegate to ``claim_wave``."""
-    params = mutation.params
-    claim_wave(
-        state,
-        wave_id=str(params["wave_id"]),
-        session_id=str(params["session_id"]),
-        out_of_order=bool(params.get("out_of_order", False)),
-        max_parallel_waves=max_parallel_waves,
-        waiver_mode=_mutation_waiver_mode(mutation),
-    )
-
-
-def _mutation_waiver_mode(mutation: Mutation) -> VerifyWaiverMode:
-    """Return the daemon-injected waiver mode, defaulting for direct tests."""
-    value = mutation.params.get("waiver_mode", "B")
-    if value not in {"A", "B", "C", "disabled"}:
-        raise LifecycleError(f"invalid waiver_mode: {value!r}")
-    return cast("VerifyWaiverMode", value)
-
-
-def _thread_mutation_waiver_mode(
-    state: State,
-    mutation: Mutation,
-    *,
-    state_path: Path,
-    repo_root_override: str | None,
-) -> None:
-    """Overwrite caller input with the strict config-derived waiver policy."""
-    from eawf.workflow.verify.readiness import load_active_waiver_mode
-
-    config_root = _config_root_for_state_path(state_path)
-    repo_root = Path(repo_root_override) if repo_root_override else config_root
-    scope_id = str(mutation.params.get("wave_id") or mutation.scope_id)
-    mutation.params["waiver_mode"] = load_active_waiver_mode(
-        scope_id,
-        state,
-        repo_root=repo_root,
-        config_root=config_root,
-    )
-
-
-def _apply_wave_close(
-    state: State,
-    mutation: Mutation,
-    *,
-    wave_session_rollup: WaveSessionRollup | None = None,
-    elapsed_eu: float | None = None,
-    runtime_delta: RuntimeDelta | None = None,
-) -> None:
-    """Apply :attr:`MutationKind.WAVE_CLOSE` — delegate to ``close_wave``.
-
-    Optionally pins ``Wave.commit`` when the params carry a resolved
-    SHA; the CLI side (in :mod:`eawf.surfaces.cli.commands.lifecycle`) resolves
-    ``--commit <ref>`` BEFORE calling the daemon so the daemon never
-    has to invoke git.
-
-    *elapsed_eu* is the measured runtime EU that the auto-created
-    :class:`ActualSummary` records on ``elapsed_eu``; it may come from the
-    runtime baseline/latest delta or from the legacy telemetry rollup.
-    ``None`` leaves the auto-created elapsed at ``0.0``.
-    """
-    params = mutation.params
-    tokens_raw = params.get("tokens_consumed")
-    close_tokens = None
-    if runtime_delta is not None:
-        close_tokens = runtime_delta.actual_tokens
-    elif tokens_raw is not None:
-        close_tokens = int(tokens_raw)
-    # WaveSessionRollup only carries ``attention_eu`` today (see
-    # :class:`eawf.observability.telemetry.join.WaveSessionRollup`). Until the
-    # rollup gains a separate runtime-EU column, runtime EU stays ``None`` so
-    # the close path never substitutes attention for runtime — the two metrics
-    # measure different things and a conflated value would mis-rollup the
-    # WaveSessionRollup variance / velocity numbers downstream.
-    rollup_attention_eu = (
-        wave_session_rollup.attention_eu if wave_session_rollup is not None else None
-    )
-    wave = close_wave(
-        state,
-        wave_id=str(params["wave_id"]),
-        outcome=str(params["outcome"]),
-        tokens_consumed=close_tokens,
-        actual_attention_eu=rollup_attention_eu,
-        actual_agent_runtime_eu=(
-            runtime_delta.agent_runtime_eu if runtime_delta is not None else None
-        ),
-        actual_elapsed_eu=elapsed_eu,
-        actual_cost_usd=runtime_delta.actual_cost_usd if runtime_delta is not None else None,
-    )
-    commit = params.get("commit")
-    if commit is not None:
-        wave.commit = str(commit)
-        identity_digest = params.get("commit_identity_digest")
-        wave.commit_identity_digest = str(identity_digest) if identity_digest is not None else None
-
-
-def _resolve_wave_track_id(state: State, wave_id: str) -> str | None:
-    """Return the Track id that owns *wave_id*, or ``None``.
-
-    Resolves the ``Wave -> Iter -> Phase`` chain and reads the
-    :attr:`Phase.track_id` the phase was stamped with when it opened while a
-    Track was in focus (the P30-I11-W03 silent phase-tag binding). Falls back to
-    :attr:`CurrentPointers.track_id` when the chain does not resolve a tag so a
-    close fired with a Track in focus but an un-tagged phase still syncs the
-    active Track. ``None`` means no Track owns the wave -- the close-time sync is
-    then a no-op.
-    """
-    wave = state.waves.get(wave_id)
-    if wave is None:
-        return state.current.track_id
-    iter_row = (state.iters or {}).get(wave.iter_id)
-    if iter_row is not None:
-        phase = (state.phases or {}).get(iter_row.phase_id)
-        if phase is not None and phase.track_id:
-            return phase.track_id
-    return state.current.track_id
-
-
-def _sync_wave_close_track(state: State, mutation: Mutation) -> list[str]:
-    """Recompute the closing wave's Track outcome statuses in place.
-
-    The wave-close hook half of the Track outcome reducer: once
-    ``_apply_wave_close`` has flipped the wave to CLOSED, the Track that owns the
-    wave has its measured outcome statuses re-derived from their samples via
-    :func:`eawf.workflow.evidence.outcome.sync_track_outcomes`, so closing work
-    that moves a metric updates the Track's standings without a manual
-    ``outcome set`` re-run. Resolving no Track (an un-tagged wave with no Track
-    in focus) makes the hook a no-op.
-
-    Returns:
-        The ids of the outcomes whose status changed (empty on a no-op).
-    """
-    from eawf.workflow.evidence.outcome import sync_track_outcomes
-
-    wave_id = str(mutation.params.get("wave_id", ""))
-    if not wave_id:
-        return []
-    track_id = _resolve_wave_track_id(state, wave_id)
-    if track_id is None:
-        return []
-    return sync_track_outcomes(state, track_id=track_id)
-
-
-def _wave_close_elapsed_eu(
-    wave_session_rollup: WaveSessionRollup | None,
-    *,
-    eu_minutes: float,
-) -> float | None:
-    """Return the measured elapsed EU for a wave close, or ``None``.
-
-    Derives elapsed EU from the telemetry rollup's aggregate session
-    ``duration_ms`` (the measured agent runtime captured across the
-    wave's sessions) via :func:`eawf.observability.telemetry.join._duration_ms_to_eu`.
-    Returns ``None`` when no rollup is present or the rollup carries no
-    duration — so a wave with no captured runtime keeps the honest
-    zero-EU auto-actual.
-
-    Args:
-        wave_session_rollup: The telemetry rollup joined at close, or
-            ``None`` when no telemetry matched the wave's sessions.
-        eu_minutes: Minutes represented by one effort unit (the same
-            ``estimation.eu_minutes`` used for the rollup join).
-
-    Returns:
-        The measured elapsed EU, or ``None`` when no runtime was captured.
-    """
-    from eawf.observability.telemetry.join import _duration_ms_to_eu
-
-    if wave_session_rollup is None:
-        return None
-    return _duration_ms_to_eu(wave_session_rollup.duration_ms, eu_minutes=eu_minutes)
-
-
-def _wave_runtime_delta(
-    state: State,
-    mutation: Mutation,
-    *,
-    eu_minutes: float,
-    eu_basis: EuBasis,
-) -> RuntimeDelta | None:
-    """Return the close-time runtime delta for the wave, when captured."""
-    wave_id = str(mutation.params.get("wave_id", ""))
-    if not wave_id:
-        return None
-    wave = state.waves.get(wave_id)
-    if wave is None:
-        return None
-    return compute_runtime_delta(
-        wave.runtime_baseline,
-        wave.runtime_latest,
-        carry=wave.runtime_carry,
-        eu_minutes=eu_minutes,
-        eu_basis=eu_basis,
-    )
-
-
-def _wave_close_rollup_config(repo_root: Path) -> tuple[str, float, EuBasis]:
-    """Return close-time telemetry DB, EU minutes, and runtime-basis config."""
-    try:
-        from eawf.kernel.config.layered import get_dotted, merge_config
-
-        merged, _sources = merge_config(repo=repo_root)
-        db_kind = str(get_dotted(merged, "telemetry.db_kind"))
-        eu_minutes = float(get_dotted(merged, "estimation.eu_minutes"))
-        eu_basis_raw = str(get_dotted(merged, "estimation.eu_basis"))
-    except Exception as exc:
-        logger.warning(f"wave_close_rollup config='default' err={exc!s}")
-        return "sqlite", DEFAULT_EU_MINUTES, EuBasis.API_DURATION
-    try:
-        eu_basis = EuBasis(eu_basis_raw)
-    except ValueError as exc:
-        raise LifecycleError(f"invalid estimation.eu_basis: {eu_basis_raw!r}") from exc
-    if eu_minutes <= 0.0:
-        logger.warning(f"wave_close_rollup eu_minutes={eu_minutes!r} invalid; using default")
-        eu_minutes = DEFAULT_EU_MINUTES
-    return db_kind, eu_minutes, eu_basis
-
-
-def _load_wave_session_rollup(
-    state: State,
-    mutation: Mutation,
-    *,
-    state_path: Path,
-    repo_root: Path,
-) -> WaveSessionRollup | None:
-    """Join projected telemetry sessions for the wave being closed."""
-    wave_id = str(mutation.params.get("wave_id", ""))
-    if not wave_id:
-        return None
-    wave = state.waves.get(wave_id)
-    if wave is None or not wave.sessions:
-        return None
-
-    from eawf.observability.telemetry.store import metrics_db_path, open_store
-
-    db_path = metrics_db_path(state_path)
-    if not db_path.exists():
-        return None
-
-    db_kind, eu_minutes, _eu_basis = _wave_close_rollup_config(repo_root)
-    store = open_store(db_kind, db_path)  # type: ignore[arg-type]
-    try:
-        rows = store.fetch_all("telemetry_sessions", TelemetrySession)
-    except Exception as exc:
-        logger.warning(f"wave_close_rollup wave={wave_id!r} status='skip' err={exc!s}")
-        return None
-    finally:
-        store.close()
-
-    telemetry_sessions = [row for row in rows if isinstance(row, TelemetrySession)]
-    rollup = rollup_wave_sessions(wave, telemetry_sessions, eu_minutes=eu_minutes)
-    if rollup.attention_eu is None:
-        return None
-    logger.info(
-        f"wave_close_rollup wave={wave_id!r} attempts={len(rollup.attempts)} "
-        f"duration_ms={rollup.duration_ms} attention_eu={rollup.attention_eu}"
-    )
-    return rollup
-
-
-def _config_root_for_state_path(state_path: Path) -> Path:
-    """Return the root that owns ``.ea/config.yaml`` for *state_path*."""
-    return state_path.parent.parent if state_path.parent.name == ".ea" else state_path.parent
-
-
-def _compute_wave_close_readiness(
-    state: State,
-    mutation: Mutation,
-    *,
-    state_path: Path,
-    repo_root: Path,
-    defer_verdict_kinds: bool = False,
-    prevalidated_gate_ids: Collection[str] = (),
-) -> CloseReadiness | None:
-    """Return the enforcing pre-close readiness view for a wave-close mutation.
-
-    Returns ``None`` when no active profile enforces verify (the advisory
-    paths recompute their own view); otherwise the rolled-up
-    :class:`~eawf.workflow.verify.models.CloseReadiness`. The verdict gate
-    (single-auditor or cross-vendor jury) runs in the separate async step
-    :func:`_enforce_wave_close_gate` so this helper stays a pure, sync
-    readiness compute.
-
-    Raises:
-        LifecycleError: When ``profile.verify.enforce`` is active and the
-            rolled-up readiness is not ready (criteria floor /
-            evidence-row rollup). The daemon maps this onto
-            ``validation_failed`` like every other wave-close lifecycle
-            rejection.
-    """
-    from eawf.kernel.store.paths import store_dir as _store_dir
-    from eawf.workflow.lifecycle._errors import check_disabled_waiver_policy
-    from eawf.workflow.verify import compute as compute_readiness
-    from eawf.workflow.verify.readiness import (
-        load_active_verify_block,
-        resolve_wave_verify_block,
-    )
-
-    wave_id = str(mutation.params.get("wave_id", ""))
-    if not wave_id or wave_id not in state.waves:
-        return None
-    # Band-conditional enforcement: the merged block records the fleet
-    # intent; the wave-aware resolver narrows ``enforce`` to the UI/UX band
-    # so a non-band wave keeps the advisory close path even when a
-    # band-scoped profile is enabled.
-    policy_block = load_active_verify_block(
-        wave_id,
-        state,
-        repo_root=repo_root,
-        config_root=_config_root_for_state_path(state_path),
-    )
-    check_disabled_waiver_policy(
-        waiver_mode="B" if policy_block is None else policy_block.waiver_mode,
-        scope_id=wave_id,
-        criteria=list(state.waves[wave_id].success_criteria),
-        criteria_floor_waiver=state.waves[wave_id].criteria_floor_waiver,
-    )
-    verify_block = resolve_wave_verify_block(policy_block, state.waves[wave_id])
-    if verify_block is None or not verify_block.enforce:
-        return None
-    deferred: frozenset[str] = frozenset()
-    if defer_verdict_kinds:
-        # D-LOCK-SPLIT pre-flight: an un-gated verdict-kind criterion is
-        # enforced by the under-lock verdict / jury tier (which writes the
-        # auditor evidence this rollup reads), so its PENDING status must
-        # not block the lock-free phase.
-        deferred = frozenset(
-            criterion.id
-            for criterion in state.waves[wave_id].success_criteria
-            if criterion.required
-            and not criterion.gate_ids
-            and criterion.evidence_kind != "deterministic"
-        )
-    return compute_readiness(
-        wave_id,
-        state=state,
-        store_dir=_store_dir(state_path),
-        repo_root=repo_root,
-        config_root=_config_root_for_state_path(state_path),
-        deferred_criterion_ids=deferred,
-        prevalidated_gate_ids=prevalidated_gate_ids,
-    )
-
-
-def _runtime_zero_close_enforces(
-    state: State,
-    *,
-    wave_id: str,
-    state_path: Path,
-    repo_root: Path,
-) -> bool:
-    """Return whether a zero-runtime close should block instead of warn.
-
-    Reads the FLEET verify block, not the band-narrowed one. The UI/UX band exists
-    to scope *criteria* enforcement -- a spec jury judging a screen has nothing to
-    say about a wave that touches no screen -- but runtime capture is not a property
-    of the band: every wave burns agent runtime and every wave's actual feeds the
-    same corpus. Narrowing this gate by band made it advisory for every wave outside
-    the band, which in P30-I25 meant every wave in the iter: the gate that exists to
-    refuse a silent zero could not refuse anything, and reported a pass while doing
-    it. A gate that cannot fail is not a gate.
-    """
-    from eawf.workflow.verify.readiness import load_active_verify_block
-
-    if wave_id not in state.waves:
-        return True
-    verify_block = load_active_verify_block(
-        wave_id,
-        state,
-        repo_root=repo_root,
-        config_root=_config_root_for_state_path(state_path),
-    )
-    return True if verify_block is None else verify_block.enforce
-
-
-def _zero_is_explained_by_a_reset(wave: Wave) -> bool:
-    """Return whether this wave's missing runtime is explained by a counter reset.
-
-    A reset drops the runtime measured before it, so it IS an honest reason for a
-    zero -- but only while nothing has been MEASURED since. Once a capture reports
-    counters beyond the re-originated baseline, the capture path has proven itself
-    alive and productive, and any zero from that point on is unexplained again.
-
-    Without that second condition the exemption is a standing pardon: one reset in a
-    wave's first minute would excuse every zero it ever records, including the zeros
-    of a capture path that silently dies forty turns later -- the precise failure the
-    gate exists to catch, laundered through the mechanism meant to keep an honest
-    reset from stranding a wave.
-
-    The condition is deliberately the CLOCK, not the counters, and the choice is
-    load-bearing. "An honest reset with a no-op capture after it" and "a capture path
-    that is alive but reporting a frozen snapshot" are the same bytes in
-    ``state.json``: identical counters, a later ``captured_at``. One rule has to lose.
-    Pardoning on frozen counters would close the second case in silence -- which is
-    the original defect of this whole iter, where every wave recorded 0.0 EU for
-    months and nobody noticed. Refusing it costs an explicit ``--no-runtime`` waiver,
-    which is recorded on the wave and visible in review.
-
-    So a wave whose measure was re-originated and which then takes a capture that
-    measures nothing does NOT close silently; it closes with a waiver, or it closes
-    once a capture measures something. Neither strands it (:func:`_reorigin_on_reset`
-    guarantees it stays measurable going forward), and neither hides it.
-    """
-    carry = wave.runtime_carry
-    baseline = wave.runtime_baseline
-    if carry is None or carry.counter_resets <= 0 or baseline is None:
-        return False
-    latest = wave.runtime_latest
-    return latest is None or latest.captured_at <= baseline.captured_at
-
-
-def _enforce_nonzero_runtime_close(
-    state: State,
-    mutation: Mutation,
-    *,
-    elapsed_eu: float | None,
-    state_path: Path,
-    repo_root: Path,
-) -> None:
-    """Reject SILENT zero-EU wave closes unless the profile is advisory or the zero is explained.
-
-    The word doing the work is *silent*. The gate exists because a zero-EU close
-    used to mean the capture path had quietly died -- which it had, for the whole
-    of its life. It does not exist to punish a wave whose runtime is missing for a
-    RECORDED reason.
-
-    A counter reset is such a reason: the source was truncated or its basis
-    changed, the capture path re-originated the wave, and the runtime measured
-    before that point is gone for good. The wave records this on
-    :attr:`~eawf.kernel.state.models.RuntimeCarry.counter_resets`. Refusing the
-    close would strand it -- the baseline lives on disk, so every retry hits the
-    same zero -- which is the same unrecoverable trap the gate was written to
-    prevent, just wearing the gate's own uniform.
-    """
-    wave_id = str(mutation.params.get("wave_id", ""))
-    if not wave_id or (elapsed_eu is not None and elapsed_eu > 0.0):
-        return
-    message = (
-        f"wave {wave_id!r} has no captured runtime; refusing silent 0-EU close "
-        "without a runtime waiver"
-    )
-    if mutation.params.get("no_runtime_waiver") is True:
-        logger.warning(
-            f"wave_close_runtime_zero wave={wave_id!r} mode='waived' message={message!r}"
-        )
-        return
-    wave = state.waves.get(wave_id)
-    if wave is not None and _zero_is_explained_by_a_reset(wave):
-        resets = wave.runtime_carry.counter_resets if wave.runtime_carry else 0
-        logger.warning(
-            f"wave_close_runtime_zero wave={wave_id!r} mode='reset' counter_resets={resets}; "
-            "runtime lost to a counter-source reset -- closing on the recorded reason"
-        )
-        return
-    if _runtime_zero_close_enforces(
-        state,
-        wave_id=wave_id,
-        state_path=state_path,
-        repo_root=repo_root,
-    ):
-        raise LifecycleError(message)
-    logger.warning(f"wave_close_runtime_zero wave={wave_id!r} mode='warn' message={message!r}")
-
-
-def _validate_wave_close_gate_refs(state: State, mutation: Mutation) -> None:
-    """Reject a wave-close mutation whose criterion/gate refs do not resolve.
-
-    Runs at the close-mutation model-validate boundary REGARDLESS of
-    ``verify.enforce`` -- a malformed spec (an orphan ``gate_ids`` entry,
-    a gate naming an unknown criterion, an un-compilable deterministic
-    gate, or an author-set ``oracle_tier``) is a structural defect that
-    must be rejected before any apply, independent of whether the active
-    profile gates the close.
-
-    The check is a deliberate no-op for the grandfathered common case
-    (criteria with empty ``gate_ids`` + no gate rows), so every live and
-    migration-grandfathered wave closes through this boundary unchanged.
-
-    Args:
-        state: Validated state the closing wave row is read from.
-        mutation: The wave-close mutation; its ``wave_id`` param names
-            the wave under validation.
-
-    Raises:
-        DaemonValidationError: When
-            :func:`eawf.kernel.spec.common.validate_criterion_gate_refs`
-            rejects the wave's criteria / gate refs.
-    """
-    from eawf.workflow.verify.readiness import _load_gate_specs
-
-    wave_id = str(mutation.params.get("wave_id", ""))
-    if not wave_id or wave_id not in state.waves:
-        return
-    wave = state.waves[wave_id]
-    try:
-        validate_criterion_gate_refs(
-            list(wave.success_criteria),
-            _load_gate_specs(wave_id, state),
-            allow_computed_tier=True,
-        )
-    except ValueError as exc:
-        raise DaemonValidationError(f"validation_failed: {exc}") from exc
-
-
-def _enforce_wave_verdict_gate(wave: Wave, *, state_path: Path) -> None:
-    """Raise when the wave's single fresh-auditor verdict gate blocks close.
-
-    The daemon-side hook into the dispatch-layer verdict producer
-    (P29-I04-W07). It is the DEFAULT enforcing gate and the degrade target
-    when the cross-vendor jury is unavailable or not opted in.
-    The caller (:func:`_enforce_wave_close_gate`) has already confirmed
-    ``verify_block.enforce``, so the advisory-only close paths -- and every
-    wave-close test that does not enable enforcement -- are unaffected. The
-    gate blocks only the required subset: a high-risk (``"always"``) or
-    sampled wave whose freshest auditor verdict is absent or not close-ready
-    raises; a ``"skip"`` mechanical wave never blocks.
-
-    Args:
-        wave: The wave being closed.
-        state_path: Path to ``state.json``; the auditor report store
-            resolves under its sibling ``store/`` directory.
-
-    Raises:
-        LifecycleError: When the verdict gate refuses close.
-    """
-    from eawf.workflow.dispatch.verdict import verify_wave_verdict_gate
-
-    gate = verify_wave_verdict_gate(wave, state_path=state_path)
-    if gate.passed:
-        return
-    reasons = "; ".join(gate.reasons) if gate.reasons else "no reasons recorded"
-    logger.warning(
-        f"_enforce_wave_verdict_gate wave={wave.id} requirement={gate.requirement} "
-        f"blocked reasons=[{reasons}]"
-    )
-    raise LifecycleError(
-        f"wave {wave.id!r} verdict gate blocked close (requirement={gate.requirement}): {reasons}"
-    )
-
-
-def _persist_auditor_session_snapshot(
-    snapshot: State,
-    *,
-    state_path: Path,
-    wave_id: str,
-) -> None:
-    """Merge one close auditor's session row into canonical state.
-
-    Close verification runs without the long-lived state lock. The verdict
-    producer still needs to expose its live and terminal auditor session to
-    Watch, so its callbacks pass the in-memory verification snapshot here.
-    Only the qualified ``<wave>::audit`` session rows are copied; unrelated
-    state from the pre-flight snapshot is never written back over concurrent
-    mutations.
-
-    Args:
-        snapshot: Verification snapshot carrying the auditor session update.
-        state_path: Canonical repository state path.
-        wave_id: Wave whose qualified auditor session may be copied.
-
-    Raises:
-        DaemonValidationError: When the merged state fails strict validation.
-    """
-    from eawf.runtime.lock import portalock
-
-    auditor_scope = f"{wave_id}::audit"
-    changed = {
-        session_id: session
-        for session_id, session in snapshot.agent_sessions.items()
-        if session.role is AgentSessionRole.AUDITOR and session.scope_id == auditor_scope
-    }
-    if not changed:
-        return
-    with portalock.acquire(state_path, timeout=5.0):
-        current, _payload = _read_state(state_path)
-        current.agent_sessions.update(changed)
-        current.updated_at = datetime.now(UTC)
-        payload = current.model_dump(mode="json")
-        post = validate_state(payload, strict_optional=False)
-        if post.state is None or post.violations:
-            details = list(post.schema_errors[:3])
-            details.extend(violation.code for violation in post.violations[:3])
-            raise DaemonValidationError(
-                "validation_failed: auditor session snapshot invalid: " + "; ".join(details)
-            )
-        atomic_write_json_locked(state_path, payload)
-    logger.info(f"_persist_auditor_session_snapshot wave={wave_id!r} sessions={len(changed)}")
-
-
-#: The three disjoint juror runtime families the cross-vendor jury convenes
-#: one auditor from each of (plugin-manifest spelling). Mirrored here so the
-#: lane-availability pre-check + the per-runtime spawn factory read the same
-#: source as :data:`eawf.observability.eval.cross_vendor_jury.JURY_RUNTIME_FAMILIES`.
-_JURY_RUNTIME_TRIPLE: dict[str, str] = {
-    "claude-code": "claude",
-    "codex": "codex",
-    "opencode": "opencode",
-}
-
-
-def _cross_vendor_lanes_ready(*, quorum: int) -> bool:
-    """Return whether enough juror CLI binaries resolve on PATH to convene.
-
-    A real cross-vendor jury needs at least *quorum* of the three disjoint
-    vendor CLIs installed on the host; a box with only the claude CLI cannot
-    cast independent cross-vendor ballots, so the close path degrades to the
-    single-auditor gate rather than forcing every enforcing close to the
-    operator. Reads only binary presence (:func:`shutil.which`) -- never a
-    credential -- so it does not weaken the env-scrub / jail floor.
-
-    Args:
-        quorum: Minimum number of juror lanes whose CLI must resolve.
-
-    Returns:
-        ``True`` when at least *quorum* of the juror CLI binaries resolve.
-    """
-    import shutil
-
-    from eawf.runtime.runtimes.selector import select_adapter
-
-    available = 0
-    for runtime in _JURY_RUNTIME_TRIPLE:
-        try:
-            binary = select_adapter(runtime).cli_binary
-        except ValueError:
-            continue
-        if shutil.which(binary) is not None:
-            available += 1
-    ready = available >= quorum
-    logger.info(f"_cross_vendor_lanes_ready available={available} quorum={quorum} ready={ready}")
-    return ready
-
-
-def _jury_spawn_factory(
-    state: State,
-    wave: Wave,
-    *,
-    repo_root: Path,
-    timeout_seconds: float = 600.0,
-    events_path: Path | None = None,
-) -> Any:
-    """Return the production per-runtime spawn factory for the jury convener.
-
-    Binds, per juror runtime, that vendor's
-    :meth:`~eawf.runtime.runtimes.adapter.RuntimeAdapter.spawn_session` with the
-    runtime's OWN per-tier model (resolved via
-    :func:`eawf.workflow.dispatch.routing.model_for_runtime`) + the wave's
-    sandbox deny-list, so each juror spawns its own vendor's CLI behind the
-    safety floor. Tests monkeypatch this factory builder to return recording
-    stubs so no real subprocess runs.
-
-    When *events_path* is supplied, each juror spawn also streams its stdout
-    LIVE to the auditor's Watch roster row: the spawn binds an ``on_chunk``
-    callback that batches output off the count / wall-clock budget
-    (:func:`~eawf.runtime.daemon.dispatch_runner._chunk_should_flush`, W19) and
-    persists each batch bus-less to the auditor session scope
-    (:func:`~eawf.workflow.dispatch.verdict._auditor_scope_id`) via
-    :func:`~eawf.runtime.daemon.dispatch_runner.persist_agent_output_chunk`. The
-    close gate severs the :class:`MethodContext` (only paths cross into
-    ``run_oracle``), so the store-poll tail -- not the bus -- surfaces the chunk;
-    a call site that threads no *events_path* (the spec-jury builder) spawns
-    unchanged, with no live tail.
-
-    Args:
-        state: Validated state -- read for the wave's sandbox deny-list + role.
-        wave: The wave under audit (supplies role + effort for model routing).
-        repo_root: Repository root the juror spawns run in.
-        timeout_seconds: Per-juror spawn wall-clock ceiling.
-        events_path: Optional ``event.jsonl`` path -- when set, juror stdout
-            streams live to the auditor's Watch row; when ``None``, no live tail.
-
-    Returns:
-        A :data:`~eawf.observability.eval.cross_vendor_jury.SpawnFactory` -- a
-        ``runtime -> SpawnFn`` callable.
-    """
-    from eawf.kernel.config.layered import resolve_runtime_tier_models
-    from eawf.kernel.state.enums import AgentSessionRole as _Role
-    from eawf.kernel.state.enums import EffortBucket as _Effort
-    from eawf.runtime.daemon.dispatch_runner import (
-        _chunk_should_flush,
-        persist_agent_output_chunk,
-    )
-    from eawf.runtime.runtimes.adapter import SpawnResult
-    from eawf.runtime.runtimes.selector import select_adapter
-    from eawf.runtime.sandbox.policy import resolve_denied_tools
-    from eawf.workflow.dispatch.llm_assist import SpawnFn
-    from eawf.workflow.dispatch.routing import model_for_runtime
-    from eawf.workflow.dispatch.verdict import _auditor_scope_id
-
-    role = wave.agent_role if wave.agent_role is not None else _Role.AUDITOR
-    effort = wave.effort_bucket if wave.effort_bucket is not None else _Effort.M
-    denied = sorted(resolve_denied_tools(state.sandbox_policies, wave_id=wave.id))
-    cwd = str(repo_root)
-    runtime_models = resolve_runtime_tier_models(repo_root)
-    chunk_scope = _auditor_scope_id(wave.id)
-
-    def _factory(runtime: str) -> SpawnFn:
-        triple = _JURY_RUNTIME_TRIPLE.get(runtime, "claude")
-        model = model_for_runtime(role, effort, triple, runtime_models=runtime_models)
-        adapter = select_adapter(runtime)
-
-        async def _spawn(prompt: str) -> SpawnResult:
-            if events_path is None:
-                return await adapter.spawn_session(
-                    prompt,
-                    model=model,
-                    cwd=cwd,
-                    denied_tools=denied,
-                    timeout=timeout_seconds,
-                )
-            # Live juror-stdout tail: batch chunks off the W19 count /
-            # time budget and persist each batch bus-less to the auditor session
-            # scope so the Watch store-poll tail renders the juror's own words.
-            chunk_buffer: list[str] = []
-            chunk_seq = [0]
-            last_chunk_flush = [time.monotonic()]
-
-            def _flush_chunk_buffer() -> None:
-                if not chunk_buffer:
-                    return
-                persist_agent_output_chunk(
-                    events_path,
-                    scope_id=chunk_scope,
-                    session_id=None,
-                    seq=chunk_seq[0],
-                    text="".join(chunk_buffer),
-                )
-                chunk_seq[0] += 1
-                chunk_buffer.clear()
-                last_chunk_flush[0] = time.monotonic()
-
-            async def _on_chunk(line: str) -> None:
-                chunk_buffer.append(line)
-                if _chunk_should_flush(
-                    buffered=len(chunk_buffer),
-                    elapsed_s=time.monotonic() - last_chunk_flush[0],
-                ):
-                    _flush_chunk_buffer()
-
-            try:
-                return await adapter.spawn_session(
-                    prompt,
-                    model=model,
-                    cwd=cwd,
-                    denied_tools=denied,
-                    timeout=timeout_seconds,
-                    on_chunk=_on_chunk,
-                )
-            finally:
-                _flush_chunk_buffer()
-
-        return _spawn
-
-    return _factory
-
-
-def _load_wave_spec(wave_id: str, *, repo_root: Path) -> Any:
-    """Return the on-disk :class:`WaveSpec` for *wave_id*, or ``None``.
-
-    Resolves ``.ea/specs/<phase>/<iter>/<wave>.md``
-    (:func:`eawf.kernel.spec.writer.spec_file_path`) and validates its YAML
-    frontmatter through :class:`~eawf.kernel.spec.wave.WaveSpec`. Returns
-    ``None`` on any miss -- file absent, frontmatter unparseable, or schema
-    invalid -- so a banded close with an authoring gap degrades to a
-    safe-skip rather than raising out of the close path. The spec-jury
-    producer treats a ``None`` spec as nothing to score.
-
-    Args:
-        wave_id: The canonical ``P##-I##-W##`` wave id.
-        repo_root: Repository root the ``.ea/specs`` tree lives under.
-
-    Returns:
-        The validated :class:`~eawf.kernel.spec.wave.WaveSpec`, or ``None``.
-    """
-    from eawf.kernel.spec.wave import WaveSpec
-    from eawf.kernel.spec.writer import spec_file_path
-    from eawf.workflow.audit_dsl.kinds.verify_implements import _parse_frontmatter
-
-    spec_path = spec_file_path(wave_id, repo_root=repo_root)
-    if not spec_path.exists():
-        logger.debug(f"_load_wave_spec wave={wave_id} status=skip reason=no-spec-file")
-        return None
-    try:
-        frontmatter = _parse_frontmatter(spec_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        logger.debug(f"_load_wave_spec wave={wave_id} status=skip err={exc!s}")
-        return None
-    if frontmatter is None or frontmatter.get("kind") != "WaveSpec":
-        return None
-    try:
-        return WaveSpec.model_validate(frontmatter)
-    except ValidationError as exc:
-        logger.warning(f"_load_wave_spec wave={wave_id} status=invalid errors={exc.error_count()}")
-        return None
+# Pre-split private spellings, kept resolvable on the facade: callers
+# monkeypatch several of them through this module and one source-scanning gate
+# reads them off this file, so both names must land on the same object.
+_CachedMutation = CachedMutation
+_MUTATION_EVENT_KIND = MUTATION_EVENT_KIND
+_apply_iter_open = apply_iter_open
+_apply_phase_open = apply_phase_open
+_apply_roadmap_revise = apply_roadmap_revise
+_build_durable_audit_context = build_durable_audit_context
+_build_event_envelope = build_event_envelope
+_commit_worktree_state = commit_worktree_state
+_compute_wave_close_extras = compute_wave_close_extras
+_compute_wave_close_readiness = compute_wave_close_readiness
+_counters_incomparable = counters_incomparable
+_cross_vendor_lanes_ready = cross_vendor_lanes_ready
+_enforce_wave_verdict_gate = enforce_wave_verdict_gate
+_jury_spawn_factory = jury_spawn_factory
+_merge_runtime_latest = merge_runtime_latest
+_read_state = read_state
+_rebase_for_session = rebase_for_session
+_reorigin_on_reset = reorigin_on_reset
+_resolve_jury_block_authority = resolve_jury_block_authority
+_resolve_state_path = resolve_state_path
+_state_version = state_version
+_upsert_interactive_session_attempt = upsert_interactive_session_attempt
+_validate_wave_close_gate_refs = validate_wave_close_gate_refs
+_wave_close_elapsed_eu = wave_close_elapsed_eu
+_wave_close_rollup_config = wave_close_rollup_config
 
 
 def _spec_jury_ballot_fn(state: State, wave: Wave, *, repo_root: Path) -> Any:
@@ -1457,7 +226,7 @@ def _spec_jury_ballot_fn(state: State, wave: Wave, *, repo_root: Path) -> Any:
 
     The TRUST-5 live binding: it reuses the cross-vendor jury's per-runtime
     spawn factory (:func:`_jury_spawn_factory`) and the wave's on-disk rubric
-    (:func:`_load_wave_spec` -> :func:`eawf.kernel.spec.rubric.rubric_items`)
+    (:func:`load_wave_spec` -> :func:`eawf.kernel.spec.rubric.rubric_items`)
     to bind :func:`eawf.workflow.dispatch.spec_jury.live_per_item_ballot_fn`,
     which drives each disjoint juror runtime through the bounded re-ask loop
     and parses one per-item ballot per juror. Returns ``None`` only when fewer
@@ -1486,7 +255,7 @@ def _spec_jury_ballot_fn(state: State, wave: Wave, *, repo_root: Path) -> Any:
     if not _cross_vendor_lanes_ready(quorum=JURY_QUORUM):
         logger.info(f"_spec_jury_ballot_fn wave={wave.id} status=idle reason=sub-quorum-lanes")
         return None
-    spec = _load_wave_spec(wave.id, repo_root=repo_root)
+    spec = load_wave_spec(wave.id, repo_root=repo_root)
     rubric = rubric_items(spec) if spec is not None else ()
     spawn_factory = _jury_spawn_factory(state, wave, repo_root=repo_root)
     return live_per_item_ballot_fn(spawn_factory=spawn_factory, rubric=rubric)
@@ -1552,7 +321,7 @@ async def _enforce_spec_jury_gate(
         logger.info(f"_enforce_spec_jury_gate wave={wave.id} status=idle degrade=default-gate")
         return False
 
-    spec = _load_wave_spec(wave.id, repo_root=repo_root)
+    spec = load_wave_spec(wave.id, repo_root=repo_root)
     events_path = store_path(state_path, StoreKind.EVENT)
     auditor_session = _resolve_auditor_session(
         state=state,
@@ -1681,7 +450,7 @@ async def _produce_high_risk_verdict(
         while the auditor runs. Merge only the qualified auditor session into
         the latest canonical state so concurrent lifecycle mutations survive.
         """
-        _persist_auditor_session_snapshot(
+        persist_auditor_session_snapshot(
             registered,
             state_path=state_path,
             wave_id=wave.id,
@@ -1690,7 +459,7 @@ async def _produce_high_risk_verdict(
 
     def _persist_terminal_auditor_session(terminal: State) -> None:
         """Persist the auditor terminal row before later close guards run."""
-        _persist_auditor_session_snapshot(
+        persist_auditor_session_snapshot(
             terminal,
             state_path=state_path,
             wave_id=wave.id,
@@ -1713,269 +482,6 @@ async def _produce_high_risk_verdict(
         return None
     logger.info(f"_produce_high_risk_verdict wave={wave.id} status=produced")
     return verdict_result.append_result.envelope.id
-
-
-def _build_durable_audit_context(
-    *,
-    state_path: Path,
-    close_attempt_id: str,
-    wave: Wave,
-) -> DurableAuditContext:
-    """Bind a durable auditor to exact close inputs and persisted receipts.
-
-    This helper is intentionally called after the deterministic oracle loop.
-    It re-reads canonical state plus the append-only GateReceipt store, so an
-    in-memory callback result that was never durably written cannot enter the
-    auditor prompt as proof.
-
-    Raises:
-        LifecycleError: When the close attempt is absent, a bound receipt is
-            invalid for the frozen attempt, or a required deterministic
-            criterion lacks a passing persisted GateReceipt.
-    """
-    from eawf.kernel.state.enums import GateReceiptResult
-    from eawf.kernel.state.urn import build as build_urn
-    from eawf.kernel.store.kinds.gate_receipt import GateReceipt, canonical_gate_digest
-    from eawf.workflow.dispatch.verdict import DurableAuditContext, DurableAuditCriterion
-
-    canonical_state, _ = _read_state(state_path)
-    attempt = canonical_state.close_attempts.get(close_attempt_id)
-    if attempt is None:
-        raise LifecycleError(f"unknown close attempt: {close_attempt_id!r}")
-
-    criteria_by_id = {
-        criterion.id: criterion for criterion in wave.success_criteria if criterion.required
-    }
-    wanted = set(attempt.gate_receipt_ids)
-    receipts_by_criterion: dict[str, list[str]] = {}
-    receipt_path = store_path(state_path, StoreKind.GATE_RECEIPT)
-    if wanted and receipt_path.is_file():
-        for line in receipt_path.read_bytes().splitlines():
-            if not line:
-                continue
-            try:
-                envelope = Envelope.model_validate(orjson.loads(line))
-                if envelope.id not in wanted:
-                    continue
-                receipt = GateReceipt.model_validate(envelope.payload)
-            except orjson.JSONDecodeError, ValidationError:
-                continue
-            if (
-                receipt.result is not GateReceiptResult.PASS
-                or receipt.scope_id != attempt.wave_id
-                or receipt.integration_id != attempt.integration_id
-                or receipt.integrated_sha != attempt.integrated_sha
-                or receipt.tree_sha != attempt.tree_sha
-                or receipt.contract_digest != canonical_gate_digest(attempt.spec_digest)
-                or receipt.criteria_digest != canonical_gate_digest(attempt.criteria_digest)
-                or receipt.gate_manifest_digest
-                != canonical_gate_digest(attempt.gate_manifest_digest)
-                or receipt.policy_digest != canonical_gate_digest(attempt.policy_digest)
-                or receipt.dependency_binding_digest
-                != canonical_gate_digest(attempt.dependency_binding_digest)
-                or receipt.runner_environment_digest
-                != canonical_gate_digest(attempt.runner_environment_digest)
-            ):
-                raise LifecycleError(
-                    f"gate receipt does not match frozen close attempt: {envelope.id!r}"
-                )
-            if receipt.criterion_id is None:
-                raise LifecycleError(f"gate receipt has no criterion binding: {envelope.id!r}")
-            criterion = criteria_by_id.get(receipt.criterion_id)
-            if (
-                envelope.kind is not StoreKind.GATE_RECEIPT
-                or criterion is None
-                or receipt.gate_id not in criterion.gate_ids
-                or receipt.gate_id not in attempt.required_gate_ids
-            ):
-                raise LifecycleError(
-                    f"gate receipt has invalid criterion/gate binding: {envelope.id!r}"
-                )
-            urn = build_urn(
-                "store",
-                owner=receipt.scope_id,
-                id=f"{StoreKind.GATE_RECEIPT.value}/{receipt.id}",
-            )
-            receipts_by_criterion.setdefault(receipt.criterion_id, []).append(urn)
-
-    criteria: list[DurableAuditCriterion] = []
-    for criterion in wave.success_criteria:
-        if not criterion.required:
-            continue
-        deterministic = criterion.evidence_kind == "deterministic"
-        receipt_urns = tuple(dict.fromkeys(receipts_by_criterion.get(criterion.id, [])))
-        if deterministic and not receipt_urns:
-            raise LifecycleError(
-                f"required deterministic criterion has no persisted GateReceipt: {criterion.id!r}"
-            )
-        criteria.append(
-            DurableAuditCriterion(
-                criterion_id=criterion.id,
-                text=criterion.text,
-                deterministic=deterministic,
-                gate_receipt_urns=receipt_urns,
-            )
-        )
-    return DurableAuditContext(
-        wave_id=wave.id,
-        close_attempt_id=attempt.id,
-        integration_id=attempt.integration_id,
-        integrated_sha=attempt.integrated_sha,
-        tree_sha=attempt.tree_sha,
-        spec_digest=attempt.spec_digest,
-        criteria_digest=attempt.criteria_digest,
-        gate_manifest_digest=attempt.gate_manifest_digest,
-        policy_digest=attempt.policy_digest,
-        runner_digest=attempt.runner_environment_digest,
-        dependency_binding_digest=attempt.dependency_binding_digest,
-        criteria=tuple(criteria),
-    )
-
-
-class WaveCloseRefusalError(LifecycleError):
-    """Raised when the ordered oracle refuses a wave close on one criterion.
-
-    A :class:`~eawf.workflow.lifecycle.transitions.LifecycleError` subclass so
-    the existing CLI / daemon catch sites remap it to the same exit code, but
-    structured so a repair caller is FED the grounding payload directly off the
-    exception rather than re-parsing the message string. The refused criterion
-    and the concrete failing-check output (the oracle
-    :meth:`~eawf.workflow.verify.oracle.OracleResult.failing_detail`) are carried
-    as attributes so a grounded repair re-dispatch
-    (:func:`eawf.workflow.dispatch.retry.build_repair_prompt`) can be built
-    without the failing payload going missing -- a content-free "drifted, redo"
-    repair is impossible by construction because there is no path from a refusal
-    to a repair that drops the criterion text or the failing detail.
-
-    Attributes:
-        wave_id: The wave whose close was refused.
-        criterion: The refused success criterion (its text grounds the repair).
-        failing_detail: The concrete failing-check output the oracle refused on
-            -- non-empty, the grounding payload of the repair re-dispatch.
-        tier: The integer oracle tier that produced the refusal.
-        status: The closed non-pass status word the oracle scored.
-    """
-
-    def __init__(
-        self,
-        *,
-        wave_id: str,
-        criterion: CriterionSpec,
-        failing_detail: str,
-        tier: int,
-        status: str,
-    ) -> None:
-        self.wave_id = wave_id
-        self.criterion = criterion
-        self.failing_detail = failing_detail
-        self.tier = tier
-        self.status = status
-        super().__init__(
-            f"wave {wave_id!r} oracle blocked close "
-            f"(criterion={criterion.id!r} tier={tier} status={status}): {failing_detail}"
-        )
-
-
-def _resolve_jury_block_authority(
-    state: State,
-    *,
-    state_path: Path,
-    verify_block: VerifyBlock | None,
-) -> BlockAuthority:
-    """Compute the jury's earned block authority for the close gate -- pure read.
-
-    The TRUST-4 staged gate: a cross-vendor jury earns the right to BLOCK a
-    close (rather than merely log an advisory veto) only once it has cleared its
-    trust floors on eawf's own distribution. This helper scores the jury against
-    the ground-truth validation substrate and returns the resulting
-    :class:`~eawf.observability.eval.jury_validation.BlockAuthority`:
-
-    - it builds the validation cohort
-      (:func:`~eawf.observability.eval.jury_validation.build_jury_validation_cohort`)
-      and the verbosity-bias probe over the persisted substrate;
-    - it scores the validation report
-      (:func:`~eawf.observability.eval.jury_validation.validate_jury`) and the
-      verbosity report
-      (:func:`~eawf.observability.eval.jury_validation.measure_verbosity_bias`);
-    - it maps the profile's ``verify.jury_authority`` leaf onto the eval-module
-      :class:`~eawf.observability.eval.jury_validation.JuryAuthorityConfig` and
-      runs the earned-authority gate
-      (:func:`~eawf.observability.eval.jury_validation.jury_block_authority`).
-
-    Default-advisory by construction: the validation substrate is empty today
-    (no labelled cohort, no recorded ballots), so the cohort is honest-empty,
-    the validation report is :attr:`JuryValidationStatus.INSUFFICIENT`, and the
-    gate returns
-    :attr:`~eawf.observability.eval.jury_validation.BlockAuthority.ADVISORY` --
-    an enforcing close never blocks on an uncalibrated jury.
-
-    Args:
-        state: Loaded, validated state supplying the wave tree the cohort is
-            anchored against. Read-only here.
-        state_path: Path to ``state.json``; the verdict + gold-label stores
-            resolve under its sibling ``store/`` directory.
-        verify_block: The resolved verify block (a
-            :class:`~eawf.platform.profiles.models.VerifyBlock`) whose
-            ``jury_authority`` leaf supplies the trust floors. ``None`` (or a
-            block with the default leaf) uses the safe advisory-leaning floors.
-
-    Returns:
-        The :class:`~eawf.observability.eval.jury_validation.BlockAuthority`
-        the jury has earned -- ``BLOCKING`` only when every trust floor clears,
-        else ``ADVISORY``.
-    """
-    from eawf.observability.eval.jury_validation import (
-        BlockAuthority,
-        build_jury_validation_cohort,
-        jury_block_authority,
-        measure_verbosity_bias,
-        validate_jury,
-    )
-    from eawf.observability.eval.jury_validation import (
-        JuryAuthorityConfig as EvalJuryAuthorityConfig,
-    )
-
-    if verify_block is None:
-        return BlockAuthority.ADVISORY
-    leaf = verify_block.jury_authority
-    authority_config = EvalJuryAuthorityConfig(
-        min_labeled_waves=leaf.min_labeled_waves,
-        known_bad_catch_lb_floor=leaf.known_bad_catch_lb_floor,
-        unanimous_pass_ceiling=leaf.unanimous_pass_ceiling,
-    )
-    cohort = build_jury_validation_cohort(state, state_path)
-    # An empty cohort short-circuits to advisory rather than scoring
-    # (validate_jury would otherwise need the ballot substrate a later wave
-    # builds); this read stays honest-empty rather than fabricating a
-    # calibrated jury.
-    if not cohort.silver and not cohort.gold:
-        return BlockAuthority.ADVISORY
-    ballots_by_wave = _load_recorded_ballots(state_path)
-    # A labelled cohort with NO recorded ballots means the jury has never
-    # actually run on those waves -- uncalibrated, so advisory. Scoring it
-    # instead would trip validate_jury's phantom-jury hard error and crash
-    # every enforcing close the moment the first auditor verdict settles into
-    # the silver cohort; that hard error stays reserved for the calibration
-    # path, where ballots are expected on record.
-    if not ballots_by_wave:
-        return BlockAuthority.ADVISORY
-    report = validate_jury(cohort, ballots_by_wave=ballots_by_wave)
-    verbosity = measure_verbosity_bias([])
-    return jury_block_authority(report, verbosity, authority_config)
-
-
-def _load_recorded_ballots(state_path: Path) -> dict[str, tuple[JurorBallot, ...]]:
-    """Return the persisted per-wave juror ballots from the ballot store.
-
-    Un-idled by P30-I23-W17: the convener now appends one ballot row per
-    juror to ``jury_ballot.jsonl``, so the calibration substrate accrues
-    from every convened jury. The close-path caller still resolves
-    advisory authority on an empty map, so a repo with no convened jury
-    keeps the honest-empty behaviour.
-    """
-    from eawf.observability.eval.jury_validation import read_recorded_ballots
-
-    return read_recorded_ballots(state_path)
 
 
 async def _enforce_wave_close_gate(
@@ -2022,7 +528,7 @@ async def _enforce_wave_close_gate(
     ``gate_id`` only on the deterministic-gate branch) mints one
     ``deterministic`` / ``pass`` :class:`EvidenceRecord`. The records are
     BUILT here but NOT yet persisted -- the caller appends them only after
-    ``_apply_wave_close`` succeeds, so a wave whose close is later refused
+    ``apply_wave_close`` succeeds, so a wave whose close is later refused
     on a different criterion never leaves a stray pass row behind. The
     jury / single-auditor fallthrough has ``gate_id is None`` and mints no
     deterministic row (it is not a code-gated check).
@@ -2050,10 +556,8 @@ async def _enforce_wave_close_gate(
             repair re-dispatch is fed the concrete falsifier.
         LifecycleError: When the high-risk single-auditor gate refuses close.
     """
-    from eawf.kernel.store.kinds.evidence import deterministic_pass_record
     from eawf.observability.eval.jury_validation import BlockAuthority
     from eawf.workflow.dispatch.verdict import verdict_requirement
-    from eawf.workflow.verify.oracle import run_oracle
     from eawf.workflow.verify.readiness import (
         _load_gate_specs,
         load_active_verify_block,
@@ -2082,7 +586,7 @@ async def _enforce_wave_close_gate(
             wave_id,
             state,
             repo_root=repo_root,
-            config_root=_config_root_for_state_path(state_path),
+            config_root=config_root_for_state_path(state_path),
         ),
         wave,
     )
@@ -2165,78 +669,25 @@ async def _enforce_wave_close_gate(
     # once above) is threaded into every per-criterion run_oracle call; with
     # an empty validation substrate the jury stays advisory, so an enforcing
     # close never blocks on an uncalibrated jury.
-    deterministic_evidence: list[EvidenceRecord] = []
-    for criterion in wave.success_criteria:
-        if not criterion.required:
-            continue
-        gates = [g for g in gate_specs if g.criterion_id == criterion.id]
-        # D-LOCK-SPLIT tier filter: a gated criterion scores at the
-        # deterministic tier (off-lock); an un-gated criterion falls to the
-        # verdict / jury tier (under the lock, W08-bounded). tier="all"
-        # keeps the pre-split single-pass behaviour for non-split callers.
-        if tier == "deterministic" and not gates:
-            continue
-        if tier == "verdict" and gates:
-            continue
-        if (
-            high_risk_single_auditor
-            and close_attempt_id
-            and (not gates or criterion.evidence_kind != "deterministic")
-        ):
-            continue
-        if not gates:
-            _announce_auditing()
-        criterion_freshness = {
-            gate.id: freshness_inputs[gate.id].model_copy(update={"criterion_id": criterion.id})
-            for gate in gates
-            if gate.id in freshness_inputs
-        }
-        result = await run_oracle(
-            criterion,
-            gates,
-            wave=wave,
-            state=state,
-            state_path=state_path,
-            events_path=events_path,
-            repo_root=repo_root,
-            spawn_factory=spawn_factory,
-            block_authority=block_authority,
-            freshness_by_gate=criterion_freshness,
-            reusable_pass_gate_ids=reusable_pass_gate_ids,
-            before_gate_execute=before_gate_execute,
-            after_gate_execute=on_gate_result,
-            require_all_deterministic=bool(close_attempt_id),
-        )
-        if result.status != "pass":
-            logger.warning(
-                f"_enforce_wave_close_gate wave={wave_id} criterion={criterion.id!r} "
-                f"tier={int(result.tier)} status={result.status} blocked"
-            )
-            # Carry the criterion + the GROUNDED failing-check output onto the
-            # structured refusal so a repair re-dispatch is fed the concrete
-            # falsifier (never re-parsed from the message string). failing_detail
-            # is non-empty by construction, so a content-free repair cannot be
-            # built downstream.
-            raise WaveCloseRefusalError(
-                wave_id=wave_id,
-                criterion=criterion,
-                failing_detail=result.failing_detail(),
-                tier=int(result.tier),
-                status=result.status,
-            )
-        # Only a deterministic gate carries a gate_id; the jury /
-        # single-auditor fallthrough scores the whole wave (gate_id=None)
-        # and is not a code-gated check, so it mints no deterministic row.
-        if result.gate_id is not None:
-            deterministic_evidence.append(
-                deterministic_pass_record(
-                    scope_id=wave_id,
-                    criterion_id=result.criterion_id,
-                    gate_id=result.gate_id,
-                    tier=int(result.tier),
-                    detail=result.detail,
-                )
-            )
+    deterministic_evidence = await score_required_criteria(
+        wave,
+        wave_id=wave_id,
+        state=state,
+        state_path=state_path,
+        events_path=events_path,
+        repo_root=repo_root,
+        gate_specs=gate_specs,
+        spawn_factory=spawn_factory,
+        block_authority=block_authority,
+        freshness_inputs=freshness_inputs,
+        tier=tier,
+        high_risk_single_auditor=high_risk_single_auditor,
+        close_attempt_id=close_attempt_id,
+        reusable_pass_gate_ids=reusable_pass_gate_ids,
+        before_gate_execute=before_gate_execute,
+        on_gate_result=on_gate_result,
+        announce_auditing=_announce_auditing,
+    )
     if high_risk_single_auditor and close_attempt_id and tier in {"all", "verdict"}:
         durable_context = _build_durable_audit_context(
             state_path=state_path,
@@ -2281,258 +732,11 @@ async def _enforce_wave_close_gate(
     return deterministic_evidence
 
 
-def _append_close_evidence(
-    records: list[EvidenceRecord],
-    *,
-    state_path: Path,
-) -> None:
-    """Append every deterministic-pass close-gate row to ``evidence.jsonl``.
-
-    Each :class:`EvidenceRecord` is wrapped in a
-    :class:`~eawf.kernel.store.envelope.Envelope` (``kind=StoreKind.EVIDENCE``)
-    and written through :func:`eawf.kernel.store.append.append_envelope` so
-    the on-disk shape is indistinguishable from a row written by the
-    ``evidence.append`` RPC or the waiver path. The append acquires the
-    sibling ``evidence.jsonl`` portalock — distinct from the ``state.json``
-    lock the close mutation holds, so there is no deadlock — which is why
-    this in-close append is safe (see
-    :func:`eawf.kernel.store.append.append_envelope`).
-
-    Args:
-        records: The deterministic-pass rows minted by
-            :func:`_enforce_wave_close_gate`. May be empty (no-op).
-        state_path: Path to ``state.json``; anchors
-            ``<state_dir>/store/evidence.jsonl``.
-    """
-    evidence_path = store_path(state_path, StoreKind.EVIDENCE)
-    for record in records:
-        envelope = Envelope(
-            id=record.id,
-            kind=StoreKind.EVIDENCE,
-            scope_id=record.scope_id,
-            created_at=record.created_at,
-            summary=record.summary,
-            payload=record.model_dump(mode="json"),
-        )
-        append_envelope(evidence_path, envelope)
-        logger.info(
-            f"_append_close_evidence scope_id={record.scope_id!r} evidence_id={record.id!r} "
-            f"evidence_kind={record.evidence_kind!r} status={record.status!r}"
-        )
-
-
-def _compute_wave_close_extras(
-    state: State,
-    mutation: Mutation,
-    *,
-    state_path: Path,
-    repo_root: Path,
-    readiness: CloseReadiness | None = None,
-    actual_written_auto: bool = False,
-) -> dict[str, str | int | float | bool]:
-    """Return the W06 close-readiness advisory metrics for *mutation*.
-
-    Folds the rolled-up advisory tally into an
-    :attr:`EventPayload.extras`-shaped dict. Failures are non-blocking
-    unless the pre-close readiness pass already raised under
-    ``profile.verify.enforce``.
-
-    Args:
-        state: In-memory state AFTER ``_apply_wave_close`` succeeds.
-        mutation: The wave_close mutation just applied; its
-            ``scope_id`` names the wave under evaluation.
-        state_path: Filesystem path to ``state.json``; the readiness
-            compute uses this to locate ``<state_dir>/store/`` for
-            evidence rows.
-        repo_root: Repository root the evidence freshness check runs
-            against (forwarded to
-            :func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha`).
-        readiness: Optional pre-close readiness view. When absent, the
-            helper computes an advisory view itself.
-        actual_written_auto: Whether this close created the
-            :class:`ActualSummary` row instead of refreshing an existing
-            operator-authored actual.
-
-    Returns:
-        Dict with the ``readiness_warnings_count`` key (always set;
-        ``0`` on the happy path) and — when the wave's close path
-        upserted an :class:`ActualSummary` — the
-        ``actual_tokens`` + ``actual_cost_usd`` rollup so the
-        ``wave_closed`` event publishes the close-time cost view
-        without subscribers re-reading state.json. Empty dict on
-        KeyError so the envelope-extras merge stays a no-op for
-        non-wave scopes.
-    """
-    wave_id = str(mutation.params.get("wave_id", ""))
-    if not wave_id:
-        return {}
-    if readiness is None:
-        try:
-            readiness = _compute_wave_close_readiness(
-                state,
-                mutation,
-                state_path=state_path,
-                repo_root=repo_root,
-            )
-        except KeyError as exc:
-            logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
-            return {}
-    if readiness is None:
-        try:
-            from eawf.kernel.store.paths import store_dir as _store_dir
-            from eawf.workflow.verify import compute as compute_readiness
-
-            readiness = compute_readiness(
-                wave_id,
-                state=state,
-                store_dir=_store_dir(state_path),
-                repo_root=repo_root,
-                config_root=_config_root_for_state_path(state_path),
-                load_profile_verify=False,
-            )
-        except KeyError as exc:
-            logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
-            return {}
-    count = len(readiness.warnings)
-    for view in readiness.criteria:
-        if view.status != "pass":
-            logger.warning(
-                f"close_advisory wave={wave_id!r} criterion={view.id!r} status={view.status!r}"
-            )
-    # The daemon mediates this close (it is the canonical writer running this
-    # code), so the mechanism is always "daemon"; the daemonless-with-waiver
-    # bypass stamps its own mechanism on the in-process fallback close event.
-    # Stamping it here guarantees EVERY daemon close event carries
-    # close_mechanism alongside the in-process path so an audit can tell the two
-    # apart without re-deriving.
-    extras: dict[str, str | int | float | bool] = {
-        "readiness_warnings_count": count,
-        "close_mechanism": "daemon",
-    }
-    # P28-I02-W03: surface the close-time token + cost rollup on the
-    # event envelope. The wave_close apply (close_wave -> upsert
-    # ActualSummary) populated these from Wave.tokens_consumed; cost
-    # stays 0.0 until the per-model rate table lands.
-    actuals = state.actuals or {}
-    actual = actuals.get(wave_id)
-    if actual is not None:
-        extras["actual_written_auto"] = actual_written_auto
-        extras["actual_tokens"] = actual.actual_tokens
-        extras["actual_cost_usd"] = actual.actual_cost_usd
-        if actual.attention_eu is not None:
-            extras["actual_attention_eu"] = actual.attention_eu
-        if actual.agent_runtime_eu is not None:
-            extras["actual_agent_runtime_eu"] = actual.agent_runtime_eu
-    return extras
-
-
-def _retract_closed_wave_advisories(
-    state_path: Path,
-    *,
-    wave_id: str,
-    bus: object | None,
-) -> None:
-    """Retract the closing wave's open over-budget advisory pauses.
-
-    The daemon's stale-wave sweep raises a durable ``needs_user`` pause when
-    an active wave runs past its time budget. Nothing paired that pause with
-    a resume on close, so a CLOSED wave kept surfacing the over-budget prompt
-    in the operator's needs_user feed forever. Pairing the retraction with
-    the close mutation clears the advisory the moment the wave reaches its
-    terminal state.
-
-    Best-effort: the close itself is already durable by the time this runs,
-    so a retraction failure is logged and swallowed rather than failing a
-    committed close.
-
-    Args:
-        state_path: Filesystem path to ``state.json``.
-        wave_id: The wave whose close just committed.
-        bus: The daemon event bus (or ``None``); a resume envelope is
-            published on it so live subscribers drop the cleared pause.
-    """
-    if not wave_id:
-        return
-    publish = bus.publish if bus is not None and hasattr(bus, "publish") else None
-    try:
-        retract_wave_pauses(state_path, wave_id=wave_id, publish=publish)
-    except OSError as exc:
-        logger.warning(f"retract_closed_wave_advisories wave={wave_id!r} status='skip' err={exc!s}")
-
-
-def _apply_wave_fail(state: State, mutation: Mutation) -> None:
-    """Apply :attr:`MutationKind.WAVE_FAIL` — delegate to ``fail_wave``."""
-    params = mutation.params
-    fail_wave(
-        state,
-        wave_id=str(params["wave_id"]),
-        reason=str(params["reason"]),
-    )
-
-
-def _apply_phase_open(state: State, mutation: Mutation) -> None:
-    """Apply :attr:`MutationKind.PHASE_OPEN` — delegate to ``open_phase``.
-
-    Optionally seeds :attr:`Phase.intent` from a typed
-    :class:`IntentBrief` dict on ``params['intent']``. Additive +
-    replay-safe — omitting it leaves the phase intent unset.
-    """
-    params = mutation.params
-    description = params.get("description")
-    intent_raw = params.get("intent")
-    intent = IntentBrief.model_validate(intent_raw) if intent_raw is not None else None
-    open_phase(
-        state,
-        phase_id=str(params["phase_id"]),
-        title=str(params["title"]),
-        scope_id=params.get("scope_id"),
-        description=str(description) if description is not None else None,
-        intent=intent,
-    )
-
-
-def _apply_phase_activate(state: State, mutation: Mutation) -> None:
-    """Apply :attr:`MutationKind.PHASE_ACTIVATE` — delegate to ``activate_phase``."""
-    activate_phase(state, phase_id=str(mutation.params["phase_id"]))
-
-
-def _apply_phase_close(state: State, mutation: Mutation) -> None:
-    """Apply :attr:`MutationKind.PHASE_CLOSE` — delegate to ``close_phase``."""
-    params = mutation.params
-    close_phase(
-        state,
-        phase_id=str(params["phase_id"]),
-        audit_id=str(params["audit_id"]),
-        checkpoint=params.get("checkpoint"),
-    )
-
-
-def _apply_iter_open(state: State, mutation: Mutation) -> None:
-    """Apply :attr:`MutationKind.ITER_OPEN` — delegate to ``open_iter``.
-
-    Optionally seeds :attr:`Iter.intent` from a typed
-    :class:`IntentBrief` dict on ``params['intent']``. Additive +
-    replay-safe — omitting it leaves the iter intent unset.
-    """
-    params = mutation.params
-    description = params.get("description")
-    intent_raw = params.get("intent")
-    intent = IntentBrief.model_validate(intent_raw) if intent_raw is not None else None
-    open_iter(
-        state,
-        iter_id=str(params["iter_id"]),
-        phase_id=str(params["phase_id"]),
-        title=str(params["title"]),
-        description=str(description) if description is not None else None,
-        intent=intent,
-    )
-
-
 def _apply_iter_close(state: State, mutation: Mutation) -> None:
     """Apply :attr:`MutationKind.ITER_CLOSE` — delegate to ``close_iter``.
 
     The optional ``odr_floor`` / ``odr_blocking`` params are threaded in
-    daemon-side by :func:`_thread_iter_close_verify_params` from the resolved
+    daemon-side by :func:`thread_iter_close_verify_params` from the resolved
     verify block, so the repo's ``verify.odr_blocking`` opt-in actually
     reaches the ODR gate instead of dying at the default arguments.
     """
@@ -2549,262 +753,10 @@ def _apply_iter_close(state: State, mutation: Mutation) -> None:
     )
 
 
-def _thread_iter_close_verify_params(
-    state: State,
-    mutation: Mutation,
-    *,
-    state_path: Path,
-    repo_root_override: str | None,
-) -> None:
-    """Thread resolved verify leaves into an ITER_CLOSE without weakening.
-
-    Runs under the commit lock with the freshly read state, so the flags
-    the applier consumes reflect the same config the close is about. Params
-    Caller-supplied ODR dials retain their historical precedence. Audit
-    acceptance is tighten-only: a caller may opt in, but cannot override an
-    enforcing profile or repo leaf with ``False``. Resolution failures leave
-    caller/default behaviour in place.
-    """
-    from eawf.workflow.verify.readiness import load_active_verify_block
-
-    iter_id = str(mutation.params.get("iter_id", ""))
-    caller_requires_audit = bool(mutation.params.get("require_audit_accepted", False))
-    repo_root = Path(repo_root_override) if repo_root_override else state_path.parent.parent
-    verify_block = load_active_verify_block(
-        iter_id,
-        state,
-        repo_root=repo_root,
-        config_root=_config_root_for_state_path(state_path),
-    )
-    if verify_block is None:
-        mutation.params["require_audit_accepted"] = caller_requires_audit
-        return
-    mutation.params.setdefault("odr_floor", verify_block.odr_floor)
-    mutation.params.setdefault("odr_blocking", verify_block.odr_blocking)
-    mutation.params["require_audit_accepted"] = (
-        caller_requires_audit or verify_block.require_iter_audit_accepted
-    )
-
-
-def _apply_track_add(state: State, mutation: Mutation) -> None:
-    """Apply :attr:`MutationKind.TRACK_ADD` — delegate to ``add_track``."""
-    params = mutation.params
-    domains = params.get("domains") or []
-    add_track(
-        state,
-        code=str(params["code"]),
-        kind=TrackKind(str(params["kind"])),
-        title=str(params["title"]),
-        domains=list(domains),
-    )
-
-
-def _apply_track_switch(state: State, mutation: Mutation) -> None:
-    """Apply :attr:`MutationKind.TRACK_SWITCH` — delegate to ``switch_track``."""
-    switch_track(state, code=str(mutation.params["code"]))
-
-
-def _apply_wave_release(state: State, mutation: Mutation) -> None:
-    """Apply :attr:`MutationKind.WAVE_RELEASE` — delegate to ``release_wave``.
-
-    Releases a claimed/in-progress wave back to ``pending`` so another
-    runtime can re-claim it (the inverse of ``WAVE_CLAIM``). The
-    optional ``reason`` is recorded on the lifecycle log line only.
-    """
-    params = mutation.params
-    release_wave(
-        state,
-        wave_id=str(params["wave_id"]),
-        reason=str(params["reason"]) if params.get("reason") is not None else None,
-    )
-
-
-def _apply_phase_archive(state: State, mutation: Mutation) -> None:
-    """Apply :attr:`MutationKind.ROADMAP_DROP` — delegate to ``archive_phase``.
-
-    ``roadmap drop`` archives a PLANNED phase (PLANNED → ARCHIVED) and
-    cascades its non-terminal child iters / waves to ABANDONED.
-    """
-    archive_phase(state, phase_id=str(mutation.params["phase_id"]))
-
-
-def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
-    """Apply :attr:`MutationKind.ROADMAP_REVISE` — dispatch one revise op.
-
-    ``roadmap revise`` is the structured-flag editor for PENDING waves
-    under a PLANNED or ACTIVE phase. Exactly one operation per mutation,
-    keyed by ``params['op']`` (one of ``add_wave`` / ``remove_wave`` /
-    ``set_deps`` / ``retitle``), delegating to the matching
-    :mod:`eawf.workflow.lifecycle.wave` transition. The CLI side resolves bare
-    ``W##`` ids to full ``P##-I##-W##`` ids before calling the daemon, so
-    the apply works with already-canonical ids. The ``retitle`` op routes
-    to :func:`eawf.workflow.lifecycle.iter_.edit_iter_plan` when ``params`` carries
-    an ``iter_id``; otherwise it retitles the wave named by ``wave_id``.
-
-    The ``description`` param is wired into both ``add_wave`` (passed to
-    :func:`eawf.workflow.lifecycle.wave.plan_wave`) and ``retitle`` (routed to
-    the appropriate ``edit_*_plan`` transition alongside the optional
-    title). Omitting it leaves the underlying field unchanged; a supplied
-    string is bound-checked at ≤500 chars by the model.
-
-    The ``intent`` param (a dict matching :class:`IntentBrief`) is also
-    wired into ``add_wave`` and ``retitle`` (both wave + iter forms).
-    Omitting it leaves the existing intent untouched; a supplied dict is
-    validated against :class:`IntentBrief` (which raises
-    :class:`pydantic.ValidationError` on a bound or unknown-field
-    failure). Additive + replay-safe per the AGENTS "state vs specs"
-    rule — on-disk state without an ``intent`` field re-validates.
-
-    Raises:
-        LifecycleError: when ``op`` is missing or unknown, the ``add_wave``
-            op carries no ``intent`` param (authored waves must attach an
-            IntentBrief), or the underlying wave transition rejects the
-            edit.
-        pydantic.ValidationError: when the ``intent`` param payload
-            fails the :class:`IntentBrief` typed contract.
-    """
-    params = mutation.params
-    op = params.get("op")
-    description = params.get("description")
-    description_str = str(description) if description is not None else None
-    intent_raw = params.get("intent")
-    intent = IntentBrief.model_validate(intent_raw) if intent_raw is not None else None
-    if op == "add_wave":
-        if intent is None:
-            raise LifecycleError(
-                f"add_wave for {params.get('wave_id')!r} requires an intent param; "
-                "authored waves carry an IntentBrief"
-            )
-        role = AgentSessionRole(params["agent_role"]) if params.get("agent_role") else None
-        bucket = EffortBucket(params["effort_bucket"]) if params.get("effort_bucket") else None
-        plan_wave(
-            state,
-            wave_id=str(params["wave_id"]),
-            iter_id=str(params["iter_id"]),
-            title=str(params["title"]),
-            file_scopes=list(params.get("file_scopes", [])),
-            deps=list(params["deps"]) if params.get("deps") is not None else None,
-            success_criteria=(
-                [
-                    grandfather_criterion(str(text), index=idx)
-                    for idx, text in enumerate(params["success_criteria"], start=1)
-                ]
-                if params.get("success_criteria") is not None
-                else None
-            ),
-            agent_role=role,
-            effort_bucket=bucket,
-            description=description_str,
-            intent=intent,
-            criteria_floor_waiver=(
-                CriteriaFloorWaiver(
-                    reason=str(params["criteria_floor_waiver_reason"]),
-                    waived_at=datetime.now(UTC),
-                )
-                if params.get("criteria_floor_waiver_reason")
-                else None
-            ),
-            waiver_mode=_mutation_waiver_mode(mutation),
-        )
-    elif op == "remove_wave":
-        remove_wave_plan(state, wave_id=str(params["wave_id"]))
-    elif op == "set_deps":
-        set_wave_deps(state, wave_id=str(params["wave_id"]), deps=list(params["deps"]))
-    elif op == "retitle":
-        title_raw = params.get("title")
-        title_str = str(title_raw) if title_raw is not None else None
-        if params.get("iter_id") is not None:
-            edit_iter_plan(
-                state,
-                iter_id=str(params["iter_id"]),
-                title=title_str,
-                description=description_str,
-                intent=intent,
-            )
-        else:
-            edit_wave_plan(
-                state,
-                wave_id=str(params["wave_id"]),
-                title=title_str,
-                description=description_str,
-                intent=intent,
-                waiver_mode=_mutation_waiver_mode(mutation),
-            )
-    else:
-        raise LifecycleError(f"unknown roadmap revise op: {op!r}")
-
-
-def _apply_roadmap_apply(state: State, mutation: Mutation) -> None:
-    """Apply :attr:`MutationKind.ROADMAP_APPLY` — validate apply readiness.
-
-    ``roadmap apply`` is informational: ``roadmap propose`` already
-    persists the PLANNED scope, so this op only confirms the phase is
-    PLANNED with at least one wave before ``/prep`` activates it. It
-    makes no structural state change beyond the ``updated_at`` bump the
-    mutator stamps on every call.
-
-    Raises:
-        LifecycleError: when the phase is unknown, not PLANNED, or has no
-            waves planned under it.
-    """
-    phase_id = str(mutation.params["phase_id"])
-    phase = state.phases.get(phase_id)
-    if phase is None:
-        raise LifecycleError(f"unknown phase {phase_id!r}")
-    if phase.status != PhaseStatus.PLANNED:
-        raise LifecycleError(
-            f"phase {phase_id!r} has status {phase.status.value!r}; only planned phases can apply"
-        )
-    iter_ids = set(phase.iter_ids)
-    wave_count = sum(1 for w in state.waves.values() if w.iter_id in iter_ids)
-    if wave_count == 0:
-        raise LifecycleError(f"phase {phase_id!r} has no waves; revise --add-wave before apply")
-
-
-def _apply_event_append(state: State, mutation: Mutation) -> None:
-    """Apply :attr:`MutationKind.EVENT_APPEND` — append-only audit row.
-
-    EVENT_APPEND records an out-of-band audit event without any
-    structural ``state.json`` change. The canonical event envelope the
-    mutator always builds + appends to ``event.jsonl`` *is* the side
-    effect, so this apply is a deliberate no-op on the :class:`State`
-    (the ``updated_at`` bump the mutator stamps afterwards keeps the
-    before/after digests distinct). Validating ``event_type`` here gives
-    a clear rejection for a malformed append rather than a silent empty
-    row.
-
-    Raises:
-        LifecycleError: when the required ``event_type`` param is missing
-            or empty.
-    """
-    event_type = mutation.params.get("event_type")
-    if not event_type or not str(event_type).strip():
-        raise LifecycleError("event_append requires a non-empty 'event_type' param")
-
-
-_APPLY_REGISTRY: Final[dict[MutationKind, ApplyFunc]] = {
-    MutationKind.WAVE_CLAIM: _apply_wave_claim,
-    MutationKind.WAVE_CLOSE: _apply_wave_close,
-    MutationKind.WAVE_FAIL: _apply_wave_fail,
-    MutationKind.WAVE_RELEASE: _apply_wave_release,
-    MutationKind.PHASE_OPEN: _apply_phase_open,
-    MutationKind.PHASE_ACTIVATE: _apply_phase_activate,
-    MutationKind.PHASE_CLOSE: _apply_phase_close,
-    MutationKind.ITER_OPEN: _apply_iter_open,
-    MutationKind.ITER_CLOSE: _apply_iter_close,
-    MutationKind.TRACK_ADD: _apply_track_add,
-    MutationKind.TRACK_SWITCH: _apply_track_switch,
-    MutationKind.EVENT_APPEND: _apply_event_append,
-    MutationKind.ROADMAP_REVISE: _apply_roadmap_revise,
-    MutationKind.ROADMAP_APPLY: _apply_roadmap_apply,
-    MutationKind.ROADMAP_DROP: _apply_phase_archive,
-    MutationKind.MEMORY_ADD: apply_memory_add,
-    MutationKind.MEMORY_UPDATE: apply_memory_update,
-    MutationKind.MEMORY_SUPERSEDE: apply_memory_supersede,
-    MutationKind.MEMORY_PRUNE: apply_memory_prune,
-    MutationKind.MEMORY_REVIEW: apply_memory_review,
-    MutationKind.DECISION_OBSOLETE: apply_decision_obsolete,
-}
+#: Closed ``MutationKind -> apply`` dispatch table for :func:`mutate`.
+_APPLY_REGISTRY: Final[dict[MutationKind, ApplyFunc]] = build_apply_registry(
+    apply_iter_close=_apply_iter_close,
+)
 
 
 def _resolve_apply(kind: MutationKind) -> ApplyFunc:
@@ -2819,1230 +771,6 @@ def _resolve_apply(kind: MutationKind) -> ApplyFunc:
     if func is None:
         raise NotImplementedError(f"no apply registered for mutation kind {kind.value!r}")
     return func
-
-
-# ---- Envelope construction --------------------------------------------------
-
-
-#: Map :class:`MutationKind` -> closed :data:`EventKind` literal so the
-#: post-mutation envelope carries a typed ``event_kind`` discriminator
-#: (P28-I02-W03). Kinds not in this table land with ``event_kind=None``
-#: during the v0.3-v0.5 migration window — the field is optional on
-#: :class:`EventPayload` until every emitter is migrated, at which point
-#: v0.5+ governance flips it to non-optional. Wave claim/close are wired
-#: first because runtime subscribers use them to track active work and
-#: close-time actuals.
-_MUTATION_EVENT_KIND: Final[dict[MutationKind, EventKind]] = {
-    MutationKind.WAVE_CLAIM: "wave_claimed",
-    MutationKind.WAVE_CLOSE: "wave_closed",
-    MutationKind.PHASE_ACTIVATE: "phase_activated",
-    MutationKind.ITER_CLOSE: "iter_closed",
-    MutationKind.PHASE_CLOSE: "phase_closed",
-}
-
-
-def _log_guard_rejection(mutation: Mutation, exc: LifecycleGuardError) -> None:
-    """Log one coded lifecycle rejection without emitting a durable event."""
-    logger.warning(
-        f"mutate rejected mutation_kind={mutation.kind.value} "
-        f"scope_id={mutation.scope_id!r} guard_code={exc.code}"
-    )
-
-
-def _bucket_drift_extras(state: State) -> dict[str, str | int | float | bool]:
-    """Return bucket calibration drift extras, or empty when no drift fires."""
-    from eawf.workflow.estimation.buckets import calibrate_buckets
-
-    report = calibrate_buckets(state)
-    nudged = [row for row in report.buckets if row.nudge]
-    if not nudged:
-        return {}
-    max_drift = max(row.drift_pct or 0.0 for row in nudged)
-    sample_count = sum(row.sample_count for row in report.buckets)
-    return {
-        "bucket_drift": True,
-        "bucket_drift_count": len(nudged),
-        "bucket_drift_max_pct": max_drift,
-        "bucket_drift_samples": sample_count,
-        "bucket_drift_buckets": ",".join(row.bucket.value for row in nudged),
-    }
-
-
-def _wave_elapsed_cache(ctx: MethodContext) -> dict[str, int]:
-    """Return the daemon-local ``wave_id -> elapsed_minute`` publish cache."""
-    return _WAVE_ELAPSED_LAST_MINUTE.setdefault(id(ctx), {})
-
-
-def _wave_elapsed_budget_minutes(state: State, wave_id: str) -> float | None:
-    """Return the time-burn budget for *wave_id*, preferring estimates."""
-    estimates = state.estimates or {}
-    estimate = estimates.get(wave_id)
-    if estimate is not None and estimate.pessimistic_minutes > 0:
-        return estimate.pessimistic_minutes
-    wave = state.waves.get(wave_id)
-    if wave is None or wave.effort_bucket is None:
-        return None
-    from eawf.workflow.estimation.buckets import EU_MINUTES, wave_estimate_eu
-
-    minutes = wave_estimate_eu(wave) * EU_MINUTES
-    return minutes if minutes > 0 else None
-
-
-def _wave_elapsed_band(elapsed_minutes: float, budget_minutes: float | None) -> str:
-    """Classify elapsed time against the 80% warning / 100% error bands."""
-    if budget_minutes is None or budget_minutes <= 0:
-        return "ok"
-    fraction = elapsed_minutes / budget_minutes
-    if fraction >= _WAVE_ELAPSED_ERROR_FRACTION:
-        return "err"
-    if fraction >= _WAVE_ELAPSED_WARN_FRACTION:
-        return "warn"
-    return "ok"
-
-
-def _build_wave_elapsed_envelope(
-    *,
-    wave_id: str,
-    elapsed_minute: int,
-    elapsed_minutes: float,
-    budget_minutes: float | None,
-    before_version: str,
-    after_version: str,
-) -> Envelope:
-    """Build one ``wave_elapsed_update`` event envelope."""
-    now = datetime.now(UTC)
-    band = _wave_elapsed_band(elapsed_minutes, budget_minutes)
-    status = "error" if band == "err" else band
-    ratio = elapsed_minutes / budget_minutes if budget_minutes else 0.0
-    args_raw = f"{wave_id}:{elapsed_minute}".encode()
-    extras: dict[str, str | int | float | bool] = {
-        "wave_id": wave_id,
-        "elapsed_minute": elapsed_minute,
-        "elapsed_minutes": round(elapsed_minutes, 4),
-        "elapsed_band": band,
-    }
-    if budget_minutes is not None:
-        extras["elapsed_budget_minutes"] = round(budget_minutes, 4)
-        extras["elapsed_ratio"] = round(ratio, 4)
-        extras["elapsed_percent"] = round(ratio * 100.0, 2)
-    summary = f"wave_elapsed_update wave={wave_id} minute={elapsed_minute}"
-    payload = EventPayload(
-        timestamp=now,
-        event_type="wave_elapsed_update",
-        event_kind="wave_elapsed_update",
-        actor="daemon",
-        command="state.digest.wave_elapsed_update",
-        args_hash=hashlib.sha256(args_raw).hexdigest()[:16],
-        before_state_version=before_version,
-        after_state_version=after_version,
-        status=status,
-        message=summary,
-        extras=extras,
-    ).model_dump(mode="json")
-    return Envelope(
-        schema_version="1.0",
-        id=f"EV-{uuid.uuid4().hex[:12]}",
-        kind=StoreKind.EVENT,
-        scope_id=wave_id,
-        created_at=now,
-        updated_at=None,
-        summary=summary,
-        payload=payload,
-        blob_refs=[],
-        artifact_ids=[],
-    )
-
-
-def _publish_wave_elapsed_updates(
-    *,
-    ctx: MethodContext,
-    state: State,
-    state_path: Path,
-    event_path: Path,
-    version: str,
-    now: datetime,
-) -> None:
-    """Append + publish at most one elapsed update per active wave minute.
-
-    Anchors on ``claimed_at`` (work-start), not ``opened_at``
-    (plan/creation): a wave planned long before it is claimed must not
-    publish an inflated elapsed clock. A wave without a ``claimed_at``
-    (no work-start fact) is skipped, so no elapsed update fires for it.
-    """
-    cache = _wave_elapsed_cache(ctx)
-    bus = _bus_for_root(ctx, state_path)
-    for wave in state.waves.values():
-        if wave.status not in _WAVE_ELAPSED_ACTIVE_STATUSES or wave.claimed_at is None:
-            continue
-        elapsed_seconds = (now - wave.claimed_at).total_seconds()
-        if elapsed_seconds < 60.0:
-            continue
-        elapsed_minute = int(elapsed_seconds // 60)
-        # Wave ids repeat across repos (every repo has a P01-W01), so the
-        # dedup cache is keyed per root as well.
-        cache_key = f"{state_path}:{wave.id}"
-        if cache.get(cache_key) == elapsed_minute:
-            continue
-        cache[cache_key] = elapsed_minute
-        elapsed_minutes = elapsed_seconds / 60.0
-        envelope = _build_wave_elapsed_envelope(
-            wave_id=wave.id,
-            elapsed_minute=elapsed_minute,
-            elapsed_minutes=elapsed_minutes,
-            budget_minutes=_wave_elapsed_budget_minutes(state, wave.id),
-            before_version=version,
-            after_version=version,
-        )
-        append_envelope(event_path, envelope)
-        if bus is not None:
-            bus.publish(envelope)
-        ctx.last_event_id = envelope.id
-        logger.info(f"wave_elapsed_update wave={wave.id!r} minute={elapsed_minute}")
-
-
-def _build_event_envelope(
-    *,
-    mutation: Mutation,
-    before_version: str,
-    after_version: str,
-    extras: dict[str, str | int | float | bool] | None = None,
-) -> Envelope:
-    """Build the canonical ``StoreKind.EVENT`` envelope for *mutation*.
-
-    The envelope shape mirrors :func:`eawf.surfaces.cli.commands.lifecycle._append_event`
-    so subscribers cannot tell whether the envelope was produced via
-    the daemon or the daemonless fallback — both paths converge on
-    the same on-disk row.
-
-    Args:
-        mutation: The mutation just applied; supplies ``kind`` /
-            ``scope_id`` / params hash.
-        before_version: State digest before the apply.
-        after_version: State digest after the apply.
-        extras: Optional rolled-up advisory metrics to surface on the
-            envelope's :attr:`EventPayload.extras` map. Today the
-            ``WAVE_CLOSE`` path populates this (W06
-            ``readiness_warnings_count`` + the P28-I02-W03
-            ``actual_tokens`` / ``actual_cost_usd`` rollup from the
-            close-time ActualSummary); future verify-spine waves may
-            extend the set (compile-gate fail count, waiver count,
-            etc.). Additive — existing subscribers ignore unknown
-            extras.
-    """
-    now = datetime.now(UTC)
-    summary = f"state.mutate {mutation.kind.value} scope={mutation.scope_id}"
-    payload = EventPayload(
-        timestamp=now,
-        event_type=f"state.mutate.{mutation.kind.value}",
-        event_kind=_MUTATION_EVENT_KIND.get(mutation.kind),
-        actor="daemon",
-        command=f"state.mutate.{mutation.kind.value}",
-        args_hash=_args_hash(mutation),
-        before_state_version=before_version,
-        after_state_version=after_version,
-        status="ok",
-        message=summary,
-        extras=dict(extras) if extras else {},
-    ).model_dump(mode="json")
-    return Envelope(
-        schema_version="1.0",
-        id=f"EV-{uuid.uuid4().hex[:12]}",
-        kind=StoreKind.EVENT,
-        scope_id=mutation.scope_id,
-        created_at=now,
-        updated_at=None,
-        summary=summary,
-        payload=payload,
-        blob_refs=[],
-        artifact_ids=[],
-    )
-
-
-def _build_bucket_drift_envelope(
-    *,
-    mutation: Mutation,
-    before_version: str,
-    after_version: str,
-    extras: dict[str, str | int | float | bool],
-) -> Envelope:
-    """Build the ``bucket_drift_detected`` event envelope."""
-    now = datetime.now(UTC)
-    summary = f"bucket_drift_detected scope={mutation.scope_id}"
-    payload = EventPayload(
-        timestamp=now,
-        event_type="bucket_drift_detected",
-        event_kind="bucket_drift_detected",
-        actor="daemon",
-        command=f"state.mutate.{mutation.kind.value}",
-        args_hash=_args_hash(mutation),
-        before_state_version=before_version,
-        after_state_version=after_version,
-        status="warn",
-        message=summary,
-        extras=extras,
-    ).model_dump(mode="json")
-    return Envelope(
-        schema_version="1.0",
-        id=f"EV-{uuid.uuid4().hex[:12]}",
-        kind=StoreKind.EVENT,
-        scope_id=mutation.scope_id,
-        created_at=now,
-        updated_at=None,
-        summary=summary,
-        payload=payload,
-        blob_refs=[],
-        artifact_ids=[],
-    )
-
-
-def _wave_land_payload(result: Any) -> dict[str, Any]:
-    """Return the JSON-mode result shape for one wave-land result."""
-    return WaveLandRpcResult(
-        wave=result.wave_id,
-        commits=list(result.commits),
-        outcome=result.outcome,
-        closed=result.closed,
-        worktree_cleaned=result.worktree_cleaned,
-        merged_commit=result.merged_commit,
-        integration_id=result.integration_id,
-        close_attempt=None,
-        close_backgrounded=False,
-    ).model_dump(mode="json")
-
-
-def _wave_land_batch_payload(
-    result: Any,
-    *,
-    close_mode: Literal["durable_async", "daemonless_synchronous"],
-) -> dict[str, Any]:
-    """Return the JSON-mode result shape for a wave-land-batch result."""
-    return WaveLandBatchRpcResult(
-        landed=[WaveLandRpcResult.model_validate(_wave_land_payload(row)) for row in result.landed],
-        failed_wave=result.failed_wave,
-        error=result.error,
-        skipped=list(result.skipped),
-        barrier_requirements={
-            wave_id: list(stages) for wave_id, stages in result.barrier_requirements.items()
-        },
-        close_mode=close_mode,
-    ).model_dump(mode="json")
-
-
-def _wave_autoland_row_payload(row: Any) -> dict[str, Any]:
-    """Return the JSON-mode result shape for one autoland row."""
-    return {
-        "wave": row.wave_id,
-        "commits": list(row.commits),
-        "merged_commit": row.merged_commit,
-        "worktree_cleaned": row.worktree_cleaned,
-    }
-
-
-def _wave_autoland_payload(result: Any) -> dict[str, Any]:
-    """Return the JSON-mode result shape for a wave-autoland result."""
-    return WaveAutolandRpcResult(
-        order=list(result.order),
-        landed=[_wave_autoland_row_payload(row) for row in result.landed],
-        failed_wave=result.failed_wave,
-        error=result.error,
-        remaining=list(result.remaining),
-        dry_run=result.dry_run,
-    ).model_dump(mode="json")
-
-
-def _build_worktree_event_envelope(
-    *,
-    command: str,
-    scope_id: str | None,
-    params: dict[str, Any],
-    result: dict[str, Any],
-    before_version: str,
-    after_version: str,
-) -> Envelope:
-    """Build the canonical event row for daemon-owned worktree mutations."""
-    now = datetime.now(UTC)
-    summary = f"{command} scope={scope_id}"
-    args_raw = orjson.dumps(params, option=orjson.OPT_SORT_KEYS)
-    extras: dict[str, str | int | float | bool] = {}
-    if command == "state.wave_land":
-        extras = {
-            "closed": bool(result.get("closed", False)),
-            "worktree_cleaned": bool(result.get("worktree_cleaned", False)),
-            "commit_count": len(result.get("commits", [])),
-        }
-    elif command == "state.wave_land_batch":
-        extras = {
-            "landed_count": len(result.get("landed", [])),
-            "failed": result.get("failed_wave") is not None,
-            "skipped_count": len(result.get("skipped", [])),
-        }
-    elif command == "state.wave_autoland":
-        extras = {
-            "landed_count": len(result.get("landed", [])),
-            "failed": result.get("failed_wave") is not None,
-            "remaining_count": len(result.get("remaining", [])),
-            "dry_run": bool(result.get("dry_run", False)),
-        }
-    payload = EventPayload(
-        timestamp=now,
-        event_type=command,
-        event_kind=None,
-        actor="daemon",
-        command=command,
-        args_hash=hashlib.sha256(args_raw).hexdigest()[:16],
-        before_state_version=before_version,
-        after_state_version=after_version,
-        status="warn" if result.get("failed_wave") is not None else "ok",
-        message=summary,
-        extras=extras,
-    ).model_dump(mode="json")
-    return Envelope(
-        schema_version="1.0",
-        id=f"EV-{uuid.uuid4().hex[:12]}",
-        kind=StoreKind.EVENT,
-        scope_id=scope_id,
-        created_at=now,
-        updated_at=None,
-        summary=summary,
-        payload=payload,
-        blob_refs=[],
-        artifact_ids=[],
-    )
-
-
-def _build_runtime_capture_event_envelope(
-    *,
-    active_wave_ids: list[str],
-    params: dict[str, Any],
-    before_version: str,
-    after_version: str,
-) -> Envelope:
-    """Build the event row emitted after a runtime.capture write."""
-    now = datetime.now(UTC)
-    scope_id = ",".join(active_wave_ids)
-    args_raw = orjson.dumps(params, option=orjson.OPT_SORT_KEYS)
-    extras: dict[str, str | int | float | bool] = {
-        "active_count": len(active_wave_ids),
-        "active_wave_ids": scope_id,
-    }
-    session_id = params.get("session_id")
-    if isinstance(session_id, str) and session_id:
-        extras["session_id"] = session_id
-    payload = EventPayload(
-        timestamp=now,
-        event_type="runtime.capture",
-        event_kind=None,
-        actor="daemon",
-        command="runtime.capture",
-        args_hash=hashlib.sha256(args_raw).hexdigest()[:16],
-        before_state_version=before_version,
-        after_state_version=after_version,
-        status="ok",
-        message=f"runtime.capture active_count={len(active_wave_ids)}",
-        extras=extras,
-    ).model_dump(mode="json")
-    return Envelope(
-        schema_version="1.0",
-        id=f"EV-{uuid.uuid4().hex[:12]}",
-        kind=StoreKind.EVENT,
-        scope_id=scope_id,
-        created_at=now,
-        updated_at=None,
-        summary=f"runtime.capture active_count={len(active_wave_ids)}",
-        payload=payload,
-        blob_refs=[],
-        artifact_ids=[],
-    )
-
-
-def _build_codex_lifecycle_event_envelope(
-    *,
-    args: CodexLifecycleParams,
-    result: CodexLifecycleResult,
-    before_version: str,
-    after_version: str,
-) -> Envelope:
-    """Build the event row emitted for Codex lifecycle correlation."""
-    now = datetime.now(UTC)
-    safe_params = args.model_dump(
-        mode="json",
-        exclude={"repo_root", "agent_transcript_path"},
-    )
-    args_raw = orjson.dumps(safe_params, option=orjson.OPT_SORT_KEYS)
-    scope_id = result.wave_id or result.agent_session_id or ""
-    extras: dict[str, str | int | float | bool] = {
-        "provider_event": args.event_type,
-        "correlated": result.correlated,
-    }
-    if result.reason is not None:
-        extras["reason"] = result.reason
-    if result.wave_id is not None:
-        extras["wave"] = result.wave_id
-    if result.attempt is not None:
-        extras["attempt"] = result.attempt
-    payload = EventPayload(
-        timestamp=now,
-        event_type="runtime.codex_lifecycle",
-        event_kind=None,
-        actor="daemon",
-        command="runtime.codex_lifecycle",
-        args_hash=hashlib.sha256(args_raw).hexdigest()[:16],
-        before_state_version=before_version,
-        after_state_version=after_version,
-        status="ok" if result.correlated else "warn",
-        message=(f"runtime.codex_lifecycle event={args.event_type} correlated={result.correlated}"),
-        extras=extras,
-    ).model_dump(mode="json")
-    return Envelope(
-        schema_version="1.0",
-        id=f"EV-{uuid.uuid4().hex[:12]}",
-        kind=StoreKind.EVENT,
-        scope_id=scope_id,
-        created_at=now,
-        updated_at=None,
-        summary=(f"runtime.codex_lifecycle event={args.event_type} correlated={result.correlated}"),
-        payload=payload,
-        blob_refs=[],
-        artifact_ids=[],
-    )
-
-
-def _active_codex_sessions(state: State) -> list[AgentSession]:
-    return [
-        session
-        for session in state.agent_sessions.values()
-        if session.runtime == "codex" and session.status == "active"
-    ]
-
-
-def _bind_codex_provider_session(
-    state: State,
-    provider_session_id: str,
-) -> tuple[AgentSession | None, str | None]:
-    sessions = _active_codex_sessions(state)
-    bound = [session for session in sessions if session.runtime_session_id == provider_session_id]
-    if len(bound) == 1:
-        return bound[0], None
-    if len(bound) > 1:
-        return None, "provider_session_binding_ambiguous"
-    unbound = [session for session in sessions if session.runtime_session_id is None]
-    if len(unbound) != 1:
-        reason = (
-            "provider_session_target_missing"
-            if not unbound
-            else "provider_session_target_ambiguous"
-        )
-        return None, reason
-    unbound[0].runtime_session_id = provider_session_id
-    return unbound[0], None
-
-
-def _bound_codex_session(
-    state: State,
-    provider_session_id: str,
-) -> tuple[AgentSession | None, str | None]:
-    bound = [
-        session
-        for session in _active_codex_sessions(state)
-        if session.runtime_session_id == provider_session_id
-    ]
-    if len(bound) == 1:
-        return bound[0], None
-    reason = (
-        "provider_session_binding_missing" if not bound else "provider_session_binding_ambiguous"
-    )
-    return None, reason
-
-
-def _codex_session_wave(
-    state: State,
-    session: AgentSession,
-) -> tuple[Wave | None, str | None]:
-    active_wave_ids = set(state.current.active_wave_ids)
-    candidates = {wave_id for wave_id in session.claimed_wave_ids if wave_id in active_wave_ids}
-    if session.scope_id in active_wave_ids:
-        candidates.add(session.scope_id)
-    if len(candidates) != 1:
-        reason = "wave_correlation_missing" if not candidates else "wave_correlation_ambiguous"
-        return None, reason
-    wave_id = next(iter(candidates))
-    wave = state.waves.get(wave_id)
-    if wave is None:
-        return None, "wave_record_missing"
-    return wave, None
-
-
-def _apply_codex_lifecycle(
-    state: State,
-    args: CodexLifecycleParams,
-) -> CodexLifecycleResult:
-    before_version = ""
-    after_version = ""
-    if args.event_type == "session_start":
-        session, reason = _bind_codex_provider_session(state, args.provider_session_id)
-        return CodexLifecycleResult(
-            correlated=session is not None,
-            reason=reason,
-            agent_session_id=session.id if session is not None else None,
-            before_version=before_version,
-            after_version=after_version,
-        )
-
-    session, reason = _bound_codex_session(state, args.provider_session_id)
-    if session is None:
-        return CodexLifecycleResult(
-            correlated=False,
-            reason=reason,
-            before_version=before_version,
-            after_version=after_version,
-        )
-    if args.event_type == "session_end":
-        wave, reason = _codex_session_wave(state, session)
-        return CodexLifecycleResult(
-            correlated=wave is not None,
-            reason=reason,
-            agent_session_id=session.id,
-            wave_id=wave.id if wave is not None else None,
-            before_version=before_version,
-            after_version=after_version,
-        )
-
-    if args.agent_id is None:
-        return CodexLifecycleResult(
-            correlated=False,
-            reason="agent_id_missing",
-            agent_session_id=session.id,
-            before_version=before_version,
-            after_version=after_version,
-        )
-    wave, reason = _codex_session_wave(state, session)
-    if wave is None:
-        return CodexLifecycleResult(
-            correlated=False,
-            reason=reason,
-            agent_session_id=session.id,
-            before_version=before_version,
-            after_version=after_version,
-        )
-
-    existing_no = next(
-        (
-            attempt_no
-            for attempt_no, attempt in wave.sessions.items()
-            if attempt.runtime == "codex" and attempt.session_id == args.agent_id
-        ),
-        None,
-    )
-    if args.event_type == "subagent_start":
-        if existing_no is None:
-            attempt_no = (max(wave.sessions) if wave.sessions else 0) + 1
-            wave.sessions[attempt_no] = SessionAttempt(
-                attempt=attempt_no,
-                runtime="codex",
-                session_id=args.agent_id,
-                session_log_handle=(f"urn:eawf:v1:session-log:codex:{uuid.uuid4().hex}"),
-                started_at=args.occurred_at,
-                measurement_quality=MeasurementQuality.UNAVAILABLE,
-                measurement_status=MeasurementStatus.USAGE_UNAVAILABLE,
-                measurement_reason="awaiting_subagent_stop",
-            )
-        else:
-            attempt_no = existing_no
-        return CodexLifecycleResult(
-            correlated=True,
-            agent_session_id=session.id,
-            wave_id=wave.id,
-            attempt=attempt_no,
-            before_version=before_version,
-            after_version=after_version,
-        )
-
-    if existing_no is None:
-        return CodexLifecycleResult(
-            correlated=False,
-            reason="subagent_start_missing",
-            agent_session_id=session.id,
-            wave_id=wave.id,
-            before_version=before_version,
-            after_version=after_version,
-        )
-    attempt = wave.sessions[existing_no]
-    counters = args.counters
-    session_log_handle = attempt.session_log_handle
-    if args.agent_transcript_path is not None:
-        from eawf.runtime.daemon.session import register_session_log
-
-        session_log_handle = register_session_log(
-            "codex",
-            Path(args.agent_transcript_path),
-            wave_id=wave.id,
-        )
-    wave.sessions[existing_no] = attempt.model_copy(
-        update={
-            "session_log_handle": session_log_handle,
-            "ended_at": args.occurred_at,
-            "cache_creation_input_tokens": (
-                counters.cache_creation_input_tokens if counters is not None else None
-            ),
-            "cache_read_input_tokens": (
-                counters.cache_read_input_tokens if counters is not None else None
-            ),
-            "input_tokens": counters.input_tokens if counters is not None else None,
-            "output_tokens": counters.output_tokens if counters is not None else None,
-            "cost_usd": (
-                float(counters.cost_usd)
-                if counters is not None and counters.cost_usd is not None
-                else None
-            ),
-            "measurement_quality": args.measurement_quality,
-            "measurement_status": args.measurement_status,
-            "measurement_reason": args.measurement_reason,
-        }
-    )
-    return CodexLifecycleResult(
-        correlated=True,
-        agent_session_id=session.id,
-        wave_id=wave.id,
-        attempt=existing_no,
-        before_version=before_version,
-        after_version=after_version,
-    )
-
-
-def _runtime_latest_from_params(
-    params: RuntimeCaptureParams,
-    *,
-    shared_wave_count: int,
-) -> RuntimeLatest:
-    """Convert capture params into the state-model runtime snapshot.
-
-    Threads the parser-stamped ``harness`` + ``model`` attribution off the
-    capture params (W19 added them to :class:`RuntimeCounters`, which
-    :class:`RuntimeCaptureParams` extends) onto the persisted
-    :class:`RuntimeLatest` so a recorded actual derived from this snapshot
-    carries non-null attribution and becomes calibratable by harness+model.
-    Both stay nullable -- a payload with no recognised model still persists.
-
-    ``shared_wave_count`` is the daemon's own count of the waves this one capture
-    is about to be written to. The counters are the SESSION's, not any one wave's,
-    so the count is what lets the close-time delta hand each wave a share instead
-    of handing every wave the whole session.
-
-    Args:
-        params: The validated capture payload.
-        shared_wave_count: How many active waves this capture is written to.
-    """
-    captured_at = params.captured_at or datetime.now(UTC)
-    cost_usd = float(params.cost_usd) if params.cost_usd is not None else None
-    return RuntimeLatest(
-        api_duration_ms=params.api_duration_ms,
-        total_duration_ms=params.total_duration_ms,
-        cost_usd=cost_usd,
-        input_tokens=params.input_tokens,
-        output_tokens=params.output_tokens,
-        cache_creation_input_tokens=params.cache_creation_input_tokens,
-        cache_read_input_tokens=params.cache_read_input_tokens,
-        harness=params.harness,
-        model=params.model,
-        session_id=params.session_id,
-        measure_version=params.measure_version,
-        shared_wave_count=shared_wave_count,
-        captured_at=captured_at,
-    )
-
-
-def _resolve_runtime_capture_wave_ids(
-    state: State,
-    params: RuntimeCaptureParams,
-) -> list[str]:
-    """Resolve one exact wave for a runtime capture.
-
-    Runtime counters are session-scoped. Copying one snapshot onto every active
-    wave fabricates attribution, so ambiguous correlation is rejected. Callers
-    may name the wave directly; Codex session-end captures may instead resolve
-    through the daemon-owned :class:`AgentSession` provider-session binding.
-    The sole-active-wave fallback preserves the unambiguous legacy path.
-    """
-    active_wave_ids = list(state.current.active_wave_ids)
-    if not active_wave_ids:
-        raise DaemonValidationError("validation_failed: runtime.capture requires active waves")
-
-    if params.wave_id is not None:
-        if params.wave_id not in active_wave_ids:
-            raise DaemonValidationError(
-                f"validation_failed: runtime.capture wave is not active: {params.wave_id!r}"
-            )
-        return [params.wave_id]
-
-    if params.harness == "codex" and params.session_id is not None:
-        candidates: set[str] = set()
-        for session in state.agent_sessions.values():
-            if (
-                session.runtime != "codex"
-                or session.runtime_session_id != params.session_id
-                or session.status != "active"
-            ):
-                continue
-            candidates.update(
-                wave_id for wave_id in session.claimed_wave_ids if wave_id in active_wave_ids
-            )
-            if session.scope_id in active_wave_ids:
-                candidates.add(session.scope_id)
-        if len(candidates) == 1:
-            return sorted(candidates)
-        if candidates:
-            raise DaemonValidationError(
-                "validation_failed: runtime.capture correlation ambiguous: "
-                f"candidate_count={len(candidates)}"
-            )
-
-    if len(active_wave_ids) == 1:
-        return active_wave_ids
-    raise DaemonValidationError(
-        "validation_failed: runtime.capture correlation ambiguous: "
-        f"active_count={len(active_wave_ids)}"
-    )
-
-
-#: Every counter a runtime snapshot carries and a carry accumulates.
-_RUNTIME_COUNTER_FIELDS: Final[tuple[str, ...]] = (
-    "api_duration_ms",
-    "total_duration_ms",
-    "cost_usd",
-    "input_tokens",
-    "output_tokens",
-    "cache_creation_input_tokens",
-    "cache_read_input_tokens",
-)
-
-
-def _fold_finished_session(
-    carry: RuntimeCarry | None,
-    baseline: RuntimeBaseline,
-    latest: RuntimeLatest | None,
-) -> RuntimeCarry:
-    """Return *carry* with the finished session's total (``latest - baseline``) added.
-
-    Counter deltas are clamped at zero: a session whose snapshots regressed (a
-    reset counter source) contributes nothing rather than a negative total.
-
-    The folded total is the wave's SHARE of that session -- divided by however many
-    waves were active when its counters were captured
-    (:func:`~eawf.workflow.lifecycle.wave.shared_wave_divisor`). Dividing here, at
-    the point the session's total is finalised, is what lets the close-time delta
-    add the carry verbatim: each session is split by ITS OWN concurrency rather
-    than by whatever concurrency the wave happens to end under.
-    """
-    from eawf.workflow.lifecycle.wave import shared_wave_divisor
-
-    base = carry or RuntimeCarry()
-    if latest is None:
-        # The session ended without ever capturing, so there is nothing measured
-        # to fold. Counting it as "folded" would claim a session's runtime was
-        # accounted for when in truth it was never seen -- but dropping it in
-        # silence is how a dead capture path passes for an idle one. Say what is
-        # being lost, so the missing runtime has a recorded reason like every
-        # other way this wave can under-report.
-        logger.warning(
-            f"fold_finished_session session={baseline.session_id!r} status='never-captured'; "
-            "the session ended with nothing captured against its baseline -- "
-            "whatever runtime it spent on this wave is dropped, not carried"
-        )
-        return base
-    divisor = shared_wave_divisor(baseline, latest)
-    folded: dict[str, float | int] = {}
-    for field in _RUNTIME_COUNTER_FIELDS:
-        latest_value = getattr(latest, field)
-        if latest_value is None:
-            continue
-        baseline_value = getattr(baseline, field) or 0
-        session_total = max(0, latest_value - baseline_value) / divisor
-        existing = getattr(base, field)
-        folded[field] = (
-            existing + session_total
-            if isinstance(existing, float)
-            else existing + int(session_total)
-        )
-    folded["sessions_folded"] = base.sessions_folded + 1
-    return base.model_copy(update=folded)
-
-
-def _counters_incomparable(baseline: RuntimeBaseline, incoming: RuntimeLatest) -> bool:
-    """Return whether *incoming* cannot be differenced against *baseline*.
-
-    Two ways that happens, and the second is the one that bites quietly:
-
-    * **The counters went backwards.** Cumulative counters only grow, so a drop
-      means the source changed under the wave -- a truncated transcript, a reset.
-    * **The measure changed.** When the definition of the counter changes, the
-      difference between two snapshots is not work, it is the redefinition. This
-      is NOT detectable from the direction the number moved: a redefinition that
-      lowers the figure looks like a regression and gets caught, but one that
-      RAISES it looks exactly like a productive week and gets banked as runtime.
-      Both happened inside P30-I25 -- the first redefinition stranded two claimed
-      waves, the very next inflated three of them by thirteen hours apiece -- which
-      is why the snapshots carry ``measure_version`` and this check reads it rather
-      than inferring from the numbers.
-    """
-    base_version = baseline.measure_version
-    new_version = incoming.measure_version
-    if base_version != new_version and not (base_version is None and new_version is None):
-        # An UNVERSIONED baseline is not a matching one -- it was produced by some
-        # earlier definition of the counters, and which one is exactly the fact
-        # nobody recorded. Treating unknown as "same" is what let the gap-heuristic
-        # baselines survive the turn-span change and bank 13 hours apiece. Two
-        # unversioned snapshots (the statusline path, which declares no measure at
-        # all) still fall through to the direction check below.
-        return True
-    for field in _RUNTIME_COUNTER_FIELDS:
-        base_value = getattr(baseline, field)
-        new_value = getattr(incoming, field)
-        if base_value is not None and new_value is not None and new_value < base_value:
-            return True
-    return False
-
-
-def _reorigin_on_reset(wave: Wave, incoming: RuntimeLatest) -> None:
-    """Re-origin the baseline on incomparable counters so the wave stays measurable.
-
-    The alternative is what the close path used to do: raise on the backwards
-    counter, which strands the wave FOREVER -- no retry can help, because the
-    baseline is on disk and every future capture compares against it. The runtime
-    the old basis measured cannot be recovered, so it is dropped (loudly); what
-    matters is that the wave stays closable and keeps measuring forward.
-    """
-    baseline = wave.runtime_baseline
-    if baseline is None:
-        return
-    logger.warning(
-        f"reorigin_on_counter_reset wave={wave.id} session={incoming.session_id!r} "
-        f"baseline_api_duration_ms={baseline.api_duration_ms!r} "
-        f"incoming_api_duration_ms={incoming.api_duration_ms!r}; "
-        "counters regressed (source reset or basis change) -- re-originating"
-    )
-    wave.runtime_baseline = baseline.model_copy(
-        update={field: getattr(incoming, field) or 0 for field in _RUNTIME_COUNTER_FIELDS}
-        | {
-            "captured_at": datetime.now(UTC),
-            "measure_version": incoming.measure_version,
-            "shared_wave_count": incoming.shared_wave_count,
-        }
-    )
-    wave.runtime_latest = None
-    # Record WHY this wave's runtime is short. The measurement taken before the
-    # reset cannot be re-derived, so the wave may close with less runtime than it
-    # really spent -- or with none. Without the count, that close is
-    # indistinguishable from a capture path that silently did nothing, and the
-    # zero-runtime gate must then either refuse every reset or trust every zero.
-    carry = wave.runtime_carry or RuntimeCarry()
-    wave.runtime_carry = carry.model_copy(update={"counter_resets": carry.counter_resets + 1})
-
-
-def _rebase_for_session(wave: Wave, incoming: RuntimeLatest, session_id: str | None) -> None:
-    """Rebase the wave's runtime snapshots onto *session_id*'s counter origin.
-
-    Runtime counters are cumulative *within* a session: session B's transcript
-    starts from zero regardless of what session A already spent on the wave.
-    Differencing B's counters against A's baseline is therefore meaningless --
-    the delta goes backwards, and the close path clamps a backwards counter to
-    zero, so the wave would close reporting no runtime at all. So on the first
-    capture from a session other than the baseline's, the finished session's
-    total is folded into ``wave.runtime_carry`` and the baseline is re-originated
-    on the new session -- the close-time delta then sums every session's runtime.
-
-    **The new origin is the capturing session's counters right now, not zero.**
-    A zero origin is wrong in two ways, and both bite:
-
-    * *Returning to a session double-counts it.* Sessions interleave (A -> B ->
-      A). On the return to A, a zero origin makes the next delta A's ENTIRE
-      cumulative -- including the work already folded into the carry when A was
-      first left. The wave is then charged twice for it, without bound, once per
-      alternation.
-    * *It absorbs work the wave did not do.* Session B's counters cover
-      everything the operator did in B, so a zero origin charges the wave for any
-      unrelated work B did before the wave was resumed.
-
-    Originating on the incoming counters costs at most the turn that just ended
-    (its work lands before the first capture in the new session establishes the
-    origin). That is a bounded under-count of one turn, against an unbounded
-    over-count -- the safer error, and the honest one.
-
-    A capture with no session id, or one matching the baseline's session, leaves
-    the snapshots alone. A baseline predating the session stamp (schema < 1.15)
-    adopts the capturing session when nothing has been captured against it yet.
-    """
-    baseline = wave.runtime_baseline
-    if baseline is None or session_id is None:
-        return
-    if baseline.session_id == session_id:
-        return
-    if baseline.session_id is None and wave.runtime_latest is None:
-        # A baseline predating the session stamp with nothing captured against it
-        # yet: adopt the capturing session rather than treating the wave as
-        # multi-session and folding a zero total.
-        wave.runtime_baseline = baseline.model_copy(update={"session_id": session_id})
-        return
-
-    wave.runtime_carry = _fold_finished_session(
-        wave.runtime_carry, baseline=baseline, latest=wave.runtime_latest
-    )
-    wave.runtime_baseline = RuntimeBaseline(
-        api_duration_ms=incoming.api_duration_ms or 0,
-        total_duration_ms=incoming.total_duration_ms or 0,
-        cost_usd=incoming.cost_usd or 0.0,
-        input_tokens=incoming.input_tokens or 0,
-        output_tokens=incoming.output_tokens or 0,
-        cache_creation_input_tokens=incoming.cache_creation_input_tokens or 0,
-        cache_read_input_tokens=incoming.cache_read_input_tokens or 0,
-        harness=incoming.harness or baseline.harness,
-        model=incoming.model or baseline.model,
-        session_id=session_id,
-        measure_version=incoming.measure_version,
-        shared_wave_count=incoming.shared_wave_count,
-        captured_at=datetime.now(UTC),
-    )
-    wave.runtime_latest = None
-    logger.info(
-        f"rebase_runtime_counters wave={wave.id} session={session_id!r} "
-        f"sessions_folded={wave.runtime_carry.sessions_folded}"
-    )
-
-
-#: Per-class token fields a runtime.capture merge must never null-clobber.
-_RUNTIME_TOKEN_FIELDS: Final[tuple[str, ...]] = (
-    "input_tokens",
-    "output_tokens",
-    "cache_creation_input_tokens",
-    "cache_read_input_tokens",
-)
-
-
-def _merge_runtime_latest(existing: RuntimeLatest | None, incoming: RuntimeLatest) -> RuntimeLatest:
-    """Merge a fresh capture over the existing snapshot without null-clobbering tokens.
-
-    A ``runtime.capture`` payload can carry a priced cost + duration while
-    omitting the per-class token counts (the ``context_window.current_usage``
-    block is absent for some payloads). A blind overwrite would wipe token
-    fields a prior headless snapshot populated, collapsing the close-time
-    runtime-delta token tally to zero. Merge so a ``None`` incoming token field
-    preserves the existing populated value; every other field takes the fresh
-    capture's value.
-
-    ``shared_wave_count`` takes the LARGEST concurrency either snapshot saw, not
-    the freshest. A wave that shared its session with three others and then ran on
-    alone still accrued that shared runtime, so letting the final solo capture
-    (count 1) overwrite the count would hand it the whole session back.
-
-    Args:
-        existing: The wave's current ``runtime_latest`` snapshot, or ``None``.
-        incoming: The freshly-parsed capture snapshot to fold in.
-
-    Returns:
-        ``incoming`` unchanged when there is no existing snapshot; otherwise a
-        copy of ``incoming`` whose per-class token fields fall back to the
-        existing value wherever ``incoming`` left them ``None``, and whose
-        shared-wave count is the max of the two.
-    """
-    if existing is None:
-        return incoming
-    updates: dict[str, Any] = {
-        field: getattr(existing, field)
-        for field in _RUNTIME_TOKEN_FIELDS
-        if getattr(incoming, field) is None and getattr(existing, field) is not None
-    }
-    shared_counts = [
-        count
-        for count in (existing.shared_wave_count, incoming.shared_wave_count)
-        if count is not None
-    ]
-    if shared_counts and max(shared_counts) != incoming.shared_wave_count:
-        updates["shared_wave_count"] = max(shared_counts)
-    if not updates:
-        return incoming
-    return incoming.model_copy(update=updates)
-
-
-def _upsert_interactive_session_attempt(
-    wave: Wave,
-    *,
-    latest: RuntimeLatest,
-    session_id: str | None,
-) -> None:
-    """Mint (or update) the interactive-Claude ``SessionAttempt`` from a capture.
-
-    The interactive-Claude lifecycle (claude CLI claim/close + the Stop hook)
-    fires ``runtime.capture``, which stamps ``wave.runtime_latest`` -- but unlike
-    a headless spawn (which stamps :attr:`SessionAttempt.cost_usd` in
-    :func:`~eawf.runtime.daemon.methods.agent._persist_live_session_attempt`) it
-    minted NO attempt, so an interactive wave carried cost only on the wave-level
-    snapshot and never surfaced a per-attempt cost row like a headless wave does.
-    This upsert records that attempt, restoring per-attempt-cost parity across
-    the headless/interactive axis.
-
-    The attempt carries the wave's **delta**, not the capture snapshot. The
-    snapshot is cumulative for the whole session, so stamping it verbatim charged
-    every active wave with the entire session's cost and token volume, and left
-    the attempt with ``started_at == ended_at`` -- a zero-length span, which the
-    wave-detail metrics tab (which derives EU from attempt spans) renders as
-    ``0.00 EU`` even though the recorded actual carries real EU. The attempt
-    therefore spans claim (the baseline capture) to this capture, and its cost and
-    per-class tokens come from :func:`compute_runtime_delta`.
-
-    Idempotency mirrors the headless attempt-counter handling: a repeated
-    Stop-hook capture for the SAME interactive session UPDATES the existing
-    attempt in place (preserving its ``attempt`` number + ``started_at``) rather
-    than appending a duplicate. The dedup key is the capture ``session_id``,
-    synthesised per-wave when the hook omits it so a session-less capture still
-    dedupes onto a single attempt. A capture carrying no priced cost, or one with
-    no baseline to difference against, is a no-op: there is nothing wave-scoped to
-    surface, so the wave-level snapshot stays the only record.
-
-    Args:
-        wave: The active wave whose ``runtime_latest`` this capture stamped.
-        latest: The runtime snapshot the same capture produced; the wave's delta
-            against it feeds the attempt.
-        session_id: The interactive Claude Code session id off the capture,
-            or ``None`` when the Stop hook omitted it.
-    """
-    if latest.cost_usd is None:
-        return
-    # The snapshot is CUMULATIVE for the whole session, so stamping it verbatim
-    # put the entire session's spend on every wave and left the attempt with a
-    # zero-length span (started_at == ended_at), which the wave-detail metrics tab
-    # renders as 0.00 EU. The wave's own delta is what belongs on its attempt row.
-    delta = compute_runtime_delta(
-        wave.runtime_baseline,
-        latest,
-        carry=wave.runtime_carry,
-        eu_minutes=DEFAULT_EU_MINUTES,
-    )
-    if delta is None:
-        return
-    handle_id = session_id or f"interactive:{wave.id}"
-    runtime = latest.harness or "claude-code"
-    existing_no = next(
-        (no for no, sess in wave.sessions.items() if sess.session_id == handle_id),
-        None,
-    )
-    if existing_no is not None:
-        attempt_no = existing_no
-        started_at = wave.sessions[existing_no].started_at
-        outcome = "update"
-    else:
-        attempt_no = (max(wave.sessions) if wave.sessions else 0) + 1
-        # The attempt starts when the wave was baselined (its claim), not when the
-        # capture fired, so the span is the wave's working window.
-        started_at = (
-            wave.runtime_baseline.captured_at
-            if wave.runtime_baseline is not None
-            else latest.captured_at
-        )
-        outcome = "mint"
-    wave.sessions[attempt_no] = SessionAttempt(
-        attempt=attempt_no,
-        runtime=runtime,
-        session_id=handle_id,
-        session_log_handle=f"urn:eawf:v1:session-log:{runtime}:{handle_id}",
-        started_at=started_at,
-        ended_at=latest.captured_at,
-        exit_status=0,
-        input_tokens=delta.input_tokens,
-        output_tokens=delta.output_tokens,
-        cache_creation_input_tokens=delta.cache_creation_input_tokens,
-        cache_read_input_tokens=delta.cache_read_input_tokens,
-        cost_usd=delta.actual_cost_usd,
-    )
-    logger.info(
-        f"_upsert_interactive_session_attempt wave={wave.id} attempt={attempt_no} "
-        f"session={handle_id!r} cost_usd={delta.actual_cost_usd} "
-        f"tokens={delta.actual_tokens} outcome={outcome}"
-    )
-
-
-def _commit_worktree_state(
-    *,
-    ctx: MethodContext,
-    repo_root: Path | None,
-    params: dict[str, Any],
-    command: str,
-    scope_id: str | None,
-    apply_func: Callable[[State], dict[str, Any]],
-) -> dict[str, Any]:
-    """Run a daemon-owned mutator under canonical state persistence.
-
-    When *repo_root* is ``None`` the mutator paths resolve via the
-    boot-time ``ctx.state_path`` anchor (the legacy / in-process test
-    fallback). A real *repo_root* routes the state + event writes to that
-    repo, matching the per-request anchoring the worktree-land handlers use.
-    """
-    from eawf.runtime.lock import portalock
-    from eawf.surfaces.cli import errors as cli_errors
-
-    state_path, event_path, wal_path = _resolve_mutator_paths(
-        repo_root=str(repo_root) if repo_root is not None else None,
-        ctx=ctx,
-    )
-    ctx.in_flight_mutations += 1
-    try:
-        with portalock.acquire(state_path, timeout=5.0):
-            state, payload = _read_state(state_path)
-            before_version = _state_version(payload)
-            try:
-                result = apply_func(state)
-            except cli_errors.ValidationError as exc:
-                raise DaemonValidationError(f"validation_failed: {exc}") from exc
-            except cli_errors.CliError as exc:
-                raise ValueError(str(exc)) from exc
-
-            state.updated_at = datetime.now(UTC)
-            new_payload = state.model_dump(mode="json")
-            post = validate_state(new_payload, strict_optional=False)
-            if post.state is None:
-                raise DaemonValidationError(
-                    "validation_failed: post-mutation schema invalid: "
-                    + "; ".join(post.schema_errors[:3])
-                )
-            if post.violations:
-                violation_codes = ",".join(v.code for v in post.violations)
-                raise DaemonValidationError(
-                    f"validation_failed: post-mutation invariants violated: {violation_codes}"
-                )
-            after_version = _state_version(new_payload)
-            envelope = _build_worktree_event_envelope(
-                command=command,
-                scope_id=scope_id,
-                params=params,
-                result=result,
-                before_version=before_version,
-                after_version=after_version,
-            )
-            record_id = uuid.uuid4().hex
-            record = WalRecord(
-                record_id=record_id,
-                envelope=envelope,
-                idempotency_key=None,
-                written_at=datetime.now(UTC),
-                before_state_version=before_version,
-                after_state_version=after_version,
-                state_path=str(state_path),
-            )
-            wal.write_pending(wal_path, record)
-            atomic_write_json_locked(state_path, new_payload)
-            wal.mark_applied(wal_path, record_id)
-            append_envelope(event_path, envelope)
-            wal.mark_fsynced(wal_path, record_id)
-            bus = _bus_for_root(ctx, state_path)
-            if bus is not None:
-                bus.publish(envelope)
-            ctx.last_event_id = envelope.id
-            logger.info(
-                f"_commit_worktree_state command={command!r} scope_id={scope_id!r} "
-                f"before={before_version} "
-                f"after={after_version} envelope_id={envelope.id!r}"
-            )
-            return result
-    finally:
-        ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
 
 
 # ---- Handlers ---------------------------------------------------------------
@@ -4069,9 +797,9 @@ async def read(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             :func:`eawf.runtime.daemon.server._process_frame`.
     """
     args = ReadParams.model_validate(params)
-    state_path = _resolve_state_path(repo_root=args.repo_root, ctx=ctx)
+    state_path = resolve_state_path(repo_root=args.repo_root, ctx=ctx)
     _, payload = _read_state(state_path)
-    version = _state_version(payload)
+    version = state_version(payload)
     return ReadResult(state=payload, version=version).model_dump(mode="json")
 
 
@@ -4094,7 +822,7 @@ async def digest(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         Dict matching :class:`DigestResult`.
     """
     args = DigestParams.model_validate(params)
-    state_path = _resolve_state_path(repo_root=args.repo_root, ctx=ctx)
+    state_path = resolve_state_path(repo_root=args.repo_root, ctx=ctx)
     if not state_path.exists():
         # An absent state file is a digest of empty bytes — keeps the
         # TUI poll path from faulting on an uninitialised project.
@@ -4112,7 +840,7 @@ async def digest(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             if args.repo_root is None and ctx.event_path is not None
             else store_path(state_path, StoreKind.EVENT)
         )
-        _publish_wave_elapsed_updates(
+        publish_wave_elapsed_updates(
             ctx=ctx,
             state=state,
             state_path=state_path,
@@ -4121,198 +849,6 @@ async def digest(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             now=datetime.now(UTC),
         )
     return DigestResult(version=version).model_dump(mode="json")
-
-
-@register("runtime.codex_lifecycle")
-async def codex_lifecycle(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Correlate provider-native Codex lifecycle events under daemon ownership."""
-    try:
-        args = CodexLifecycleParams.model_validate(params)
-    except ValidationError as exc:
-        raise DaemonValidationError(f"validation_failed: {exc}") from exc
-
-    state_path, event_path, wal_path = _resolve_mutator_paths(
-        repo_root=args.repo_root,
-        ctx=ctx,
-    )
-    from eawf.runtime.lock import portalock
-
-    ctx.in_flight_mutations += 1
-    try:
-        with portalock.acquire(state_path, timeout=5.0):
-            state, payload = _read_state(state_path)
-            before_version = _state_version(payload)
-            result = _apply_codex_lifecycle(state, args)
-            if result.correlated:
-                state.updated_at = datetime.now(UTC)
-            new_payload = state.model_dump(mode="json")
-            post = validate_state(new_payload, strict_optional=False)
-            if post.state is None:
-                raise DaemonValidationError(
-                    "validation_failed: post-mutation schema invalid: "
-                    + "; ".join(post.schema_errors[:3])
-                )
-            if post.violations:
-                violation_codes = ",".join(v.code for v in post.violations)
-                raise DaemonValidationError(
-                    f"validation_failed: post-mutation invariants violated: {violation_codes}"
-                )
-            after_version = _state_version(new_payload)
-            result = result.model_copy(
-                update={
-                    "before_version": before_version,
-                    "after_version": after_version,
-                }
-            )
-            envelope = _build_codex_lifecycle_event_envelope(
-                args=args,
-                result=result,
-                before_version=before_version,
-                after_version=after_version,
-            )
-            result = result.model_copy(update={"event": envelope.model_dump(mode="json")})
-            record_id = uuid.uuid4().hex
-            record = WalRecord(
-                record_id=record_id,
-                envelope=envelope,
-                idempotency_key=None,
-                written_at=datetime.now(UTC),
-                before_state_version=before_version,
-                after_state_version=after_version,
-                state_path=str(state_path),
-            )
-            wal.write_pending(wal_path, record)
-            atomic_write_json_locked(state_path, new_payload)
-            wal.mark_applied(wal_path, record_id)
-            append_envelope(event_path, envelope)
-            wal.mark_fsynced(wal_path, record_id)
-            bus = _bus_for_root(ctx, state_path)
-            if bus is not None:
-                bus.publish(envelope)
-            ctx.last_event_id = envelope.id
-            logger.info(
-                f"codex_lifecycle event={args.event_type} "
-                f"correlated={result.correlated} wave={result.wave_id!r}"
-            )
-            return result.model_dump(mode="json")
-    finally:
-        ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
-
-
-@register("runtime.capture")
-async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Persist latest runtime counters onto one exactly correlated active wave.
-
-    Args:
-        ctx: Server context; state, event, and WAL paths are resolved the same
-            way as ``state.mutate``.
-        params: Strict :class:`RuntimeCaptureParams` payload.
-
-    Returns:
-        Dict matching :class:`RuntimeCaptureResult`.
-
-    Raises:
-        DaemonValidationError: When params fail validation, no active waves are
-            registered, an active wave id is missing, or post-write state
-            validation rejects the candidate payload.
-    """
-    try:
-        args = RuntimeCaptureParams.model_validate(params)
-    except ValidationError as exc:
-        raise DaemonValidationError(f"validation_failed: {exc}") from exc
-
-    state_path, event_path, wal_path = _resolve_mutator_paths(
-        repo_root=args.repo_root,
-        ctx=ctx,
-    )
-
-    from eawf.runtime.lock import portalock
-
-    ctx.in_flight_mutations += 1
-    try:
-        with portalock.acquire(state_path, timeout=5.0):
-            state, payload = _read_state(state_path)
-            before_version = _state_version(payload)
-            active_wave_ids = _resolve_runtime_capture_wave_ids(state, args)
-
-            latest = _runtime_latest_from_params(args, shared_wave_count=len(active_wave_ids))
-            for wave_id in active_wave_ids:
-                wave = state.waves.get(wave_id)
-                if wave is None:
-                    raise DaemonValidationError(
-                        f"validation_failed: active wave missing: {wave_id!r}"
-                    )
-                # A capture from a session other than the baseline's measures a
-                # fresh counter origin, so rebase (folding the finished session's
-                # total into runtime_carry, and re-originating on THIS session's
-                # counters) before merging this session's snapshot in.
-                _rebase_for_session(wave, incoming=latest, session_id=args.session_id)
-                # Same session, but the snapshot is not comparable to the baseline:
-                # the counters went backwards, or the measure itself changed. Either
-                # way the difference is not work, so re-origin rather than record it.
-                if wave.runtime_baseline is not None and _counters_incomparable(
-                    wave.runtime_baseline, latest
-                ):
-                    _reorigin_on_reset(wave, latest)
-                wave.runtime_latest = _merge_runtime_latest(wave.runtime_latest, latest)
-                # The interactive-Claude lifecycle mints no SessionAttempt on
-                # its own (only the headless spawn does); record one here off the
-                # same priced capture so an interactive wave surfaces per-attempt
-                # cost the way a headless wave does. Idempotent per session id.
-                _upsert_interactive_session_attempt(wave, latest=latest, session_id=args.session_id)
-            state.updated_at = datetime.now(UTC)
-            new_payload = state.model_dump(mode="json")
-            post = validate_state(new_payload, strict_optional=False)
-            if post.state is None:
-                raise DaemonValidationError(
-                    "validation_failed: post-mutation schema invalid: "
-                    + "; ".join(post.schema_errors[:3])
-                )
-            if post.violations:
-                violation_codes = ",".join(v.code for v in post.violations)
-                raise DaemonValidationError(
-                    f"validation_failed: post-mutation invariants violated: {violation_codes}"
-                )
-            after_version = _state_version(new_payload)
-            event_params = args.model_dump(mode="json", exclude={"repo_root"})
-            envelope = _build_runtime_capture_event_envelope(
-                active_wave_ids=active_wave_ids,
-                params=event_params,
-                before_version=before_version,
-                after_version=after_version,
-            )
-            record_id = uuid.uuid4().hex
-            record = WalRecord(
-                record_id=record_id,
-                envelope=envelope,
-                idempotency_key=None,
-                written_at=datetime.now(UTC),
-                before_state_version=before_version,
-                after_state_version=after_version,
-                state_path=str(state_path),
-            )
-            wal.write_pending(wal_path, record)
-            atomic_write_json_locked(state_path, new_payload)
-            wal.mark_applied(wal_path, record_id)
-            append_envelope(event_path, envelope)
-            wal.mark_fsynced(wal_path, record_id)
-            bus = _bus_for_root(ctx, state_path)
-            if bus is not None:
-                bus.publish(envelope)
-            ctx.last_event_id = envelope.id
-            logger.info(
-                f"runtime_capture active_count={len(active_wave_ids)} "
-                f"before={before_version} after={after_version} envelope_id={envelope.id!r}"
-            )
-            return RuntimeCaptureResult(
-                active_wave_ids=active_wave_ids,
-                active_count=len(active_wave_ids),
-                before_version=before_version,
-                after_version=after_version,
-                event=envelope.model_dump(mode="json"),
-            ).model_dump(mode="json")
-    finally:
-        ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
 
 
 @register("state.mutate")
@@ -4348,7 +884,7 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         # failed the typed Mutation contract.
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
 
-    state_path, event_path, wal_path = _resolve_mutator_paths(
+    state_path, event_path, wal_path = resolve_mutator_paths(
         repo_root=args.repo_root,
         ctx=ctx,
     )
@@ -4359,9 +895,9 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     # serves many repos and a bare client key must not replay another
     # repo's result. The WAL record keeps the raw key (wire contract).
     cache_key = f"{state_path}:{idempotency_key}" if idempotency_key is not None else None
-    cache = _idempotency_cache(ctx)
+    cache = idempotency_cache(ctx)
     now_mono = time.monotonic()
-    _evict_expired(cache, now=now_mono)
+    evict_expired(cache, now=now_mono)
     if cache_key is not None:
         cached = cache.get(cache_key)
         if cached is not None:
@@ -4414,79 +950,15 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         with portalock.acquire(state_path, timeout=5.0) as generic_lock_handle:
             ctx.active_lock_handle = generic_lock_handle
             state, payload = _read_state(state_path)
-            before_version = _state_version(payload)
+            before_version = state_version(payload)
 
-            if mutation.kind is MutationKind.ITER_CLOSE:
-                _thread_iter_close_verify_params(
-                    state,
-                    mutation,
-                    state_path=state_path,
-                    repo_root_override=args.repo_root,
-                )
-
-            try:
-                if mutation.kind in {
-                    MutationKind.WAVE_CLAIM,
-                    MutationKind.ROADMAP_REVISE,
-                }:
-                    _thread_mutation_waiver_mode(
-                        state,
-                        mutation,
-                        state_path=state_path,
-                        repo_root_override=args.repo_root,
-                    )
-                if mutation.kind is MutationKind.WAVE_CLAIM:
-                    repo_anchor = (
-                        Path(args.repo_root)
-                        if args.repo_root
-                        else _config_root_for_state_path(state_path)
-                    )
-                    _apply_wave_claim(
-                        state,
-                        mutation,
-                        max_parallel_waves=resolve_max_parallel_waves(repo_anchor),
-                    )
-                else:
-                    apply_func(state, mutation)
-            except LifecycleGuardError as exc:
-                _log_guard_rejection(mutation, exc)
-                raise DaemonValidationError(f"validation_failed: {exc}") from exc
-            except LifecycleError as exc:
-                # Closure-kind (*_CLOSE) rejections surface as -32002
-                # (ValidationError, exit 2); every other lifecycle-guard
-                # rejection surfaces as a plain ValueError -> -32602
-                # (UserError kind="InvalidInput", exit 1). This mirrors the
-                # in-process fallback taxonomy so the daemon path and the
-                # daemon-down fallback agree on the exit code for the same
-                # rejection: phase/iter close pass closure_kind=True to
-                # ``_state_transaction`` and wave close maps -32002 in its
-                # bespoke ``_wave_close_via_daemon`` proxy (both ->
-                # ValidationError), while every other verb maps a lifecycle
-                # rejection to UserError (kind="InvalidInput").
-                if mutation.kind in (
-                    MutationKind.PHASE_CLOSE,
-                    MutationKind.ITER_CLOSE,
-                    MutationKind.WAVE_CLOSE,
-                ):
-                    raise DaemonValidationError(f"validation_failed: {exc}") from exc
-                raise ValueError(str(exc)) from exc
-            except (MemoryMutationError, DecisionMutationError) as exc:
-                # Memory/decision apply rejections (duplicate id, unknown id,
-                # already-pruned/obsolete) surface the same way non-closure
-                # lifecycle rejections do: plain ValueError -> -32602
-                # (UserError kind="InvalidInput", exit 1). These kinds are
-                # not closure kinds, so no -32002 mapping is needed.
-                raise ValueError(str(exc)) from exc
-            except ValidationError as exc:
-                # Model-level bound rejections (e.g. the ≤500-char Wave /
-                # Iter / Phase description cap) trip on Pydantic before
-                # any lifecycle guard fires. Surface them as
-                # ``validation_failed`` so the wire-error matches the
-                # post-mutation schema rejection at line ~847 and the
-                # CLI exit code stays consistent.
-                raise DaemonValidationError(f"validation_failed: {exc}") from exc
-            except KeyError as exc:
-                raise DaemonValidationError(f"validation_failed: missing param {exc!s}") from exc
+            apply_mutation_under_lock(
+                state,
+                mutation,
+                apply_func=apply_func,
+                state_path=state_path,
+                repo_root_override=args.repo_root,
+            )
 
             state.updated_at = datetime.now(UTC)
             new_payload = state.model_dump(mode="json")
@@ -4501,53 +973,23 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 raise DaemonValidationError(
                     f"validation_failed: post-mutation invariants violated: {violation_codes}"
                 )
-            after_version = _state_version(new_payload)
+            after_version = state_version(new_payload)
 
             # W06 advisory: compute close-readiness AFTER the apply
             # succeeds and pin the rolled-up count on the envelope
             # extras. Wave-close only; non-wave mutations get an empty
             # extras dict so the envelope shape stays uniform.
-            extras: dict[str, str | int | float | bool] = {}
+            extras = mutation_event_extras(state, mutation)
             drift_extras: dict[str, str | int | float | bool] = {}
-            if mutation.kind is MutationKind.WAVE_CLAIM:
-                claimed_wave_id = str(mutation.params["wave_id"])
-                claim_session_id = state.waves[claimed_wave_id].claim_session_id
-                if claim_session_id is None:  # pragma: no cover - claim transition guarantees it
-                    raise DaemonValidationError(
-                        f"validation_failed: claimed wave has no session: {claimed_wave_id!r}"
-                    )
-                # The daemon executed the mutation, so actor remains ``daemon``.
-                # This additive reference records which already-validated live
-                # session gained the wave without claiming that session
-                # authenticated the state.mutate request.
-                extras["claim_session_id"] = claim_session_id
-            elif mutation.kind is MutationKind.ITER_CLOSE:
-                from eawf.kernel.state.enums import AuditVerdict
-                from eawf.workflow.lifecycle._audit_acceptance import (
-                    AUDIT_MINOR_BACKLOG_TRIAGE,
-                )
 
-                audit_id = str(mutation.params["audit_id"])
-                audit = (state.audits or {}).get(audit_id)
-                extras["audit_id"] = audit_id
-                extras["require_audit_accepted"] = bool(
-                    mutation.params.get("require_audit_accepted", False)
-                )
-                if (
-                    bool(mutation.params.get("require_audit_accepted", False))
-                    and audit is not None
-                    and audit.verdict is AuditVerdict.MINOR
-                ):
-                    extras["warning"] = AUDIT_MINOR_BACKLOG_TRIAGE
-
-            envelope = _build_event_envelope(
+            envelope = build_event_envelope(
                 mutation=mutation,
                 before_version=before_version,
                 after_version=after_version,
                 extras=extras,
             )
             drift_envelope = (
-                _build_bucket_drift_envelope(
+                build_bucket_drift_envelope(
                     mutation=mutation,
                     before_version=before_version,
                     after_version=after_version,
@@ -4593,7 +1035,7 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             # pipeline is no longer write-idle: the trust scorecard reads
             # these ``deterministic`` / ``pass`` rows to label the wave
             # ``verified``. Empty on every advisory / non-enforcing close.
-            bus = _bus_for_root(ctx, state_path)
+            bus = bus_for_root(ctx, state_path)
             if bus is not None:
                 bus.publish(envelope)
                 if drift_envelope is not None:
@@ -4613,7 +1055,7 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             ).model_dump(mode="json")
 
             if cache_key is not None:
-                cache[cache_key] = _CachedMutation(
+                cache[cache_key] = CachedMutation(
                     result=result,
                     cached_at=time.monotonic(),
                 )
@@ -4629,81 +1071,13 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             )
 
 
-def _validate_close_apply_snapshot(
-    state: State,
-    *,
-    state_path: Path,
-    repo_root: Path,
-    attempt_id: str,
-) -> None:
-    """Reject durable close inputs or proof that drifted after READY.
-
-    Args:
-        state: Canonical state reloaded under the final mutation lock.
-        state_path: Canonical state file used to resolve durable proof.
-        repo_root: Repository whose effective close policy is authoritative.
-        attempt_id: Durable close attempt entering APPLYING.
-
-    Raises:
-        DaemonValidationError: When the attempt, its governing inputs, or its
-            bound gate/audit proof changed after READY.
-    """
-    from eawf.runtime.daemon.methods.close import (
-        _attempt_invalidation_causes,
-        reusable_bound_audit_report_id,
-    )
-
-    attempt = state.close_attempts.get(attempt_id)
-    if attempt is None:
-        raise DaemonValidationError(
-            f"validation_failed: close_preflight_stale: close attempt "
-            f"{attempt_id!r} disappeared before apply"
-        )
-    governing_drift = _attempt_invalidation_causes(
-        state,
-        repo_root=repo_root,
-        attempt=attempt,
-    )
-    if governing_drift:
-        raise DaemonValidationError(
-            "validation_failed: close_preflight_stale: governing inputs "
-            f"changed after READY: {'; '.join(governing_drift)}"
-        )
-    if not attempt.gate_receipt_ids and attempt.audit_report_id is None:
-        return
-
-    current_wave = state.waves.get(attempt.wave_id)
-    if current_wave is None:
-        raise DaemonValidationError(
-            f"validation_failed: close_preflight_stale: wave "
-            f"{attempt.wave_id!r} disappeared before proof CAS"
-        )
-    try:
-        durable_context = _build_durable_audit_context(
-            state_path=state_path,
-            close_attempt_id=attempt.id,
-            wave=current_wave,
-        )
-        if attempt.audit_report_id is not None:
-            reusable_bound_audit_report_id(
-                state_path,
-                attempt_id=attempt.id,
-                durable_context=durable_context,
-            )
-    except (LifecycleError, ValueError) as exc:
-        raise DaemonValidationError(
-            "validation_failed: close_preflight_stale: bound gate/audit "
-            f"proof changed after READY: {exc!s}"
-        ) from exc
-
-
 async def _mutate_wave_close(
     ctx: MethodContext,
     *,
     mutation: Mutation,
     idempotency_key: str | None,
     cache_key: str | None,
-    cache: dict[str, _CachedMutation],
+    cache: dict[str, CachedMutation],
     state_path: Path,
     event_path: Path,
     wal_path: Path,
@@ -4763,109 +1137,26 @@ async def _mutate_wave_close(
         else (
             Path(repo_root_override)
             if repo_root_override
-            else _config_root_for_state_path(state_path)
+            else config_root_for_state_path(state_path)
         )
     )
     canonical_repo_root = (
-        Path(repo_root_override) if repo_root_override else _config_root_for_state_path(state_path)
+        Path(repo_root_override) if repo_root_override else config_root_for_state_path(state_path)
     )
     wave_id = str(mutation.params.get("wave_id", ""))
     close_attempt_id = str(mutation.params.get("close_attempt_id", ""))
-    on_auditing: Callable[[], None] | None = None
-    on_audit_result: Callable[[str], None] | None = None
-    before_gate_execute: (
-        Callable[
-            [str, str, CheckSpec, str],
-            CheckResult | None,
-        ]
-        | None
-    ) = None
-    on_gate_result: Callable[[str, str, CheckResult], None] | None = None
-    prevalidated_gate_ids: set[str] = set()
-    if close_attempt_id:
-        from eawf.runtime.daemon.gate_execution import (
-            claim_gate_execution,
-            complete_gate_execution,
-        )
-        from eawf.runtime.daemon.methods.close import (
-            persist_gate_receipt,
-            transition_attempt_stage,
-        )
-
-        transition_attempt_stage(
-            ctx,
-            repo_root=canonical_repo_root,
-            attempt_id=close_attempt_id,
-            status=CloseAttemptStatus.CHECKING,
-        )
-
-        def _on_auditing() -> None:
-            transition_attempt_stage(
-                ctx,
-                repo_root=canonical_repo_root,
-                attempt_id=close_attempt_id,
-                status=CloseAttemptStatus.AUDITING,
-            )
-
-        def _before_gate_execute(
-            criterion_id: str,
-            gate_id: str,
-            spec: CheckSpec,
-            freshness_key: str,
-        ) -> CheckResult | None:
-            return claim_gate_execution(
-                state_path,
-                attempt_id=close_attempt_id,
-                criterion_id=criterion_id,
-                gate_id=gate_id,
-                spec=spec,
-                freshness_key=freshness_key,
-            )
-
-        def _on_gate_result(
-            criterion_id: str,
-            gate_id: str,
-            result: CheckResult,
-        ) -> None:
-            receipt_id = persist_gate_receipt(
-                ctx,
-                repo_root=canonical_repo_root,
-                execution_root=repo_anchor,
-                attempt_id=close_attempt_id,
-                criterion_id=criterion_id,
-                gate_id=gate_id,
-                result=result,
-            )
-            if receipt_id is not None and result.freshness_key is not None:
-                complete_gate_execution(
-                    state_path,
-                    attempt_id=close_attempt_id,
-                    freshness_key=result.freshness_key,
-                    receipt_id=receipt_id,
-                    result=result,
-                )
-                if result.status == "pass" or (result.status is None and result.passed):
-                    prevalidated_gate_ids.add(gate_id)
-
-        def _on_audit_result(report_id: str) -> None:
-            from eawf.runtime.daemon.methods.close import _commit_attempt
-
-            _commit_attempt(
-                ctx,
-                repo_root=canonical_repo_root,
-                attempt_id=close_attempt_id,
-                updates={"audit_report_id": report_id},
-                command="close.audit_receipt",
-            )
-
-        on_auditing = _on_auditing
-        on_audit_result = _on_audit_result
-        before_gate_execute = _before_gate_execute
-        on_gate_result = _on_gate_result
+    hooks = build_close_attempt_hooks(
+        ctx,
+        state_path=state_path,
+        canonical_repo_root=canonical_repo_root,
+        execution_root=repo_anchor,
+        close_attempt_id=close_attempt_id,
+    )
+    prevalidated_gate_ids = hooks.prevalidated_gate_ids
 
     # ---- Phase 1: pre-flight, NO lock --------------------------------------
     state_pre, payload_pre = _read_state(state_path)
-    preflight_version = _state_version(payload_pre)
+    preflight_version = state_version(payload_pre)
     preflight_wave_row = (payload_pre.get("waves") or {}).get(wave_id)
     try:
         preflight = await run_close_preflight(
@@ -4877,10 +1168,10 @@ async def _mutate_wave_close(
             enforce_close_gate=partial(
                 _enforce_wave_close_gate,
                 tier="all",
-                on_auditing=on_auditing,
-                on_audit_result=on_audit_result,
-                before_gate_execute=before_gate_execute,
-                on_gate_result=on_gate_result,
+                on_auditing=hooks.on_auditing,
+                on_audit_result=hooks.on_audit_result,
+                before_gate_execute=hooks.before_gate_execute,
+                on_gate_result=hooks.on_gate_result,
             ),
             compute_readiness=partial(
                 _compute_wave_close_readiness,
@@ -4889,19 +1180,19 @@ async def _mutate_wave_close(
             ),
         )
     except LifecycleGuardError as exc:
-        _log_guard_rejection(mutation, exc)
+        log_guard_rejection(mutation, exc)
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
     except LifecycleError as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
     wave_close_readiness = preflight.readiness
-    _, _close_eu_minutes, _close_eu_basis = _wave_close_rollup_config(repo_anchor)
-    runtime_delta = _wave_runtime_delta(
+    _, _close_eu_minutes, _close_eu_basis = wave_close_rollup_config(repo_anchor)
+    runtime_delta = wave_runtime_delta(
         state_pre,
         mutation,
         eu_minutes=_close_eu_minutes,
         eu_basis=_close_eu_basis,
     )
-    wave_close_rollup = _load_wave_session_rollup(
+    wave_close_rollup = load_wave_session_rollup(
         state_pre,
         mutation,
         state_path=state_path,
@@ -4922,10 +1213,10 @@ async def _mutate_wave_close(
     # wave's runtime. Preferring a manufactured 0.0 over a measured figure throws
     # away the better answer.
     measured_eu = runtime_delta.elapsed_eu if runtime_delta is not None else None
-    wave_close_elapsed_eu = (
+    close_elapsed_eu = (
         measured_eu
         if measured_eu
-        else _wave_close_elapsed_eu(
+        else wave_close_elapsed_eu(
             wave_close_rollup,
             eu_minutes=_close_eu_minutes,
         )
@@ -4937,6 +1228,8 @@ async def _mutate_wave_close(
     # after the handle is already released, and a dangling closed handle
     # kills the watchdog's next heartbeat (W35 review blocker).
     if close_attempt_id:
+        from eawf.runtime.daemon.methods.close import transition_attempt_stage
+
         transition_attempt_stage(
             ctx,
             repo_root=canonical_repo_root,
@@ -4947,7 +1240,7 @@ async def _mutate_wave_close(
         with portalock.acquire(state_path, timeout=5.0) as lock_handle:
             ctx.active_lock_handle = lock_handle
             state, payload = _read_state(state_path)
-            before_version = _state_version(payload)
+            before_version = state_version(payload)
             if before_version != preflight_version:
                 # The optimistic re-check: another writer moved state during
                 # pre-flight. A target-Wave change invalidates immediately;
@@ -4961,7 +1254,7 @@ async def _mutate_wave_close(
                         "(the retry re-runs pre-flight off-lock)"
                     )
             if close_attempt_id:
-                _validate_close_apply_snapshot(
+                validate_close_apply_snapshot(
                     state,
                     state_path=state_path,
                     repo_root=canonical_repo_root,
@@ -4970,23 +1263,23 @@ async def _mutate_wave_close(
             wave_close_evidence = list(preflight.evidence)
             actual_written_auto = bool(wave_id and wave_id not in (state.actuals or {}))
             try:
-                _enforce_nonzero_runtime_close(
+                enforce_nonzero_runtime_close(
                     state,
                     mutation,
-                    elapsed_eu=wave_close_elapsed_eu,
+                    elapsed_eu=close_elapsed_eu,
                     state_path=state_path,
                     repo_root=repo_anchor,
                 )
-                _apply_wave_close(
+                apply_wave_close(
                     state,
                     mutation,
                     wave_session_rollup=wave_close_rollup,
-                    elapsed_eu=wave_close_elapsed_eu,
+                    elapsed_eu=close_elapsed_eu,
                     runtime_delta=runtime_delta,
                 )
-                _sync_wave_close_track(state, mutation)
+                sync_wave_close_track(state, mutation)
             except LifecycleGuardError as exc:
-                _log_guard_rejection(mutation, exc)
+                log_guard_rejection(mutation, exc)
                 raise DaemonValidationError(f"validation_failed: {exc}") from exc
             except LifecycleError as exc:
                 raise DaemonValidationError(f"validation_failed: {exc}") from exc
@@ -5008,7 +1301,7 @@ async def _mutate_wave_close(
                 raise DaemonValidationError(
                     f"validation_failed: post-mutation invariants violated: {violation_codes}"
                 )
-            after_version = _state_version(new_payload)
+            after_version = state_version(new_payload)
 
             extras = _compute_wave_close_extras(
                 state,
@@ -5018,15 +1311,15 @@ async def _mutate_wave_close(
                 readiness=wave_close_readiness,
                 actual_written_auto=actual_written_auto,
             )
-            drift_extras = _bucket_drift_extras(state)
-            envelope = _build_event_envelope(
+            drift_extras = bucket_drift_extras(state)
+            envelope = build_event_envelope(
                 mutation=mutation,
                 before_version=before_version,
                 after_version=after_version,
                 extras=extras,
             )
             drift_envelope = (
-                _build_bucket_drift_envelope(
+                build_bucket_drift_envelope(
                     mutation=mutation,
                     before_version=before_version,
                     after_version=after_version,
@@ -5056,13 +1349,13 @@ async def _mutate_wave_close(
 
     # ---- Phase 3: post-lock tail --------------------------------------------
     if wave_close_evidence:
-        _append_close_evidence(wave_close_evidence, state_path=state_path)
-    bus = _bus_for_root(ctx, state_path)
+        append_close_evidence(wave_close_evidence, state_path=state_path)
+    bus = bus_for_root(ctx, state_path)
     if bus is not None:
         bus.publish(envelope)
         if drift_envelope is not None:
             bus.publish(drift_envelope)
-    _retract_closed_wave_advisories(state_path, wave_id=wave_id, bus=bus)
+    retract_closed_wave_advisories(state_path, wave_id=wave_id, bus=bus)
     ctx.last_event_id = envelope.id
 
     logger.info(
@@ -5077,205 +1370,18 @@ async def _mutate_wave_close(
         idempotent_replay=False,
     ).model_dump(mode="json")
     if cache_key is not None:
-        cache[cache_key] = _CachedMutation(
+        cache[cache_key] = CachedMutation(
             result=result,
             cached_at=time.monotonic(),
         )
     return result
 
 
-@register("state.wave_land")
-async def wave_land_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Daemon-owned implementation of ``eawf wave land``."""
-    args = WaveLandParams.model_validate(params)
-    repo_root = Path(args.repo_root)
-
-    from eawf.runtime.worktree import wave_land, worktree_registry_lock
-
-    with worktree_registry_lock(repo_root, timeout=5.0):
-        landed = _commit_worktree_state(
-            ctx=ctx,
-            repo_root=repo_root,
-            params=params,
-            command="state.wave_land",
-            scope_id=args.wave_id,
-            apply_func=lambda state: _wave_land_payload(
-                wave_land(
-                    state,
-                    repo_root=repo_root,
-                    wave_id=args.wave_id,
-                    outcome=args.outcome,
-                    keep_worktree=args.keep_worktree,
-                    defer_close=True,
-                )
-            ),
-        )
-    from eawf.runtime.daemon.methods.close import submit as submit_close
-
-    submitted = await submit_close(
-        ctx,
-        {
-            "wave_id": args.wave_id,
-            "outcome": landed["outcome"],
-            "commit": landed["merged_commit"],
-            "repo_root": str(repo_root),
-        },
-    )
-    landed["close_attempt"] = submitted["attempt"]
-    landed["close_backgrounded"] = submitted["backgrounded"]
-    return WaveLandRpcResult.model_validate(landed).model_dump(mode="json")
-
-
-@register("state.wave_land_batch")
-async def wave_land_batch_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Integrate a batch, then submit each durable close outside the state lock."""
-    args = WaveLandBatchParams.model_validate(params)
-    repo_root = Path(args.repo_root)
-
-    from eawf.runtime.worktree import wave_land_batch, worktree_registry_lock
-
-    with worktree_registry_lock(repo_root, timeout=5.0):
-        landed = _commit_worktree_state(
-            ctx=ctx,
-            repo_root=repo_root,
-            params=params,
-            command="state.wave_land_batch",
-            scope_id=args.iter_id,
-            apply_func=lambda state: _wave_land_batch_payload(
-                wave_land_batch(
-                    state,
-                    repo_root=repo_root,
-                    iter_id=args.iter_id,
-                    ready_only=args.ready_only,
-                    keep_worktree=args.keep_worktree,
-                    defer_close=True,
-                ),
-                close_mode="durable_async",
-            ),
-        )
-    from eawf.runtime.daemon.methods.close import submit as submit_close
-
-    for row in landed["landed"]:
-        submitted = await submit_close(
-            ctx,
-            {
-                "wave_id": row["wave"],
-                "outcome": row["outcome"],
-                "commit": row["merged_commit"],
-                "repo_root": str(repo_root),
-            },
-        )
-        row["close_attempt"] = submitted["attempt"]
-        row["close_backgrounded"] = submitted["backgrounded"]
-    return WaveLandBatchRpcResult.model_validate(landed).model_dump(mode="json")
-
-
-@register("state.wave_autoland")
-async def wave_autoland_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Daemon-owned implementation of ``eawf wave autoland``."""
-    args = WaveAutolandParams.model_validate(params)
-    repo_root = Path(args.repo_root)
-
-    from eawf.runtime.worktree import wave_autoland, worktree_registry_lock
-
-    with worktree_registry_lock(repo_root, timeout=5.0):
-        return _commit_worktree_state(
-            ctx=ctx,
-            repo_root=repo_root,
-            params=params,
-            command="state.wave_autoland",
-            scope_id=args.iter_id,
-            apply_func=lambda state: _wave_autoland_payload(
-                wave_autoland(
-                    state,
-                    repo_root=repo_root,
-                    iter_id=args.iter_id,
-                    keep_worktree=args.keep_worktree,
-                    dry_run=args.dry_run,
-                )
-            ),
-        )
-
-
-# ---- track.* mutators --------------------------------------------------------
-
-
-def _tracks(state: State) -> dict[str, Track]:
-    """Return ``state.tracks`` as a non-``None`` dict in place.
-
-    Creates a fresh empty dict on the state when the field is currently
-    ``None`` so a first ``track.add`` has somewhere to land.
-    """
-    if state.tracks is None:
-        state.tracks = {}
-    return state.tracks
-
-
-def _apply_track_sync(state: State, args: TrackSyncParams) -> dict[str, Any]:
-    """Recompute a Track's measured outcome statuses from their samples.
-
-    Resolves the target Track (the explicit ``track_id`` param, else the
-    :attr:`CurrentPointers.track_id` cursor) and runs the
-    :func:`eawf.workflow.evidence.outcome.sync_track_outcomes` reducer -- the
-    same reducer the wave-close hook fires -- so an operator can re-derive the
-    standings on demand. An absent target Track (no id and no cursor) yields a
-    typed no-op result with an empty change list rather than raising, so
-    ``track sync`` on a repo with no Track in focus is harmless.
-
-    Args:
-        state: Loaded :class:`State`. Mutated in place by the reducer.
-        args: Validated :class:`TrackSyncParams`.
-
-    Returns:
-        Result dict matching :class:`TrackSyncRpcResult`.
-    """
-    from eawf.workflow.evidence.outcome import sync_track_outcomes
-
-    track_id = args.track_id if args.track_id else state.current.track_id
-    changed = sync_track_outcomes(state, track_id=track_id) if track_id else []
-    logger.info(f"_apply_track_sync track={track_id!r} changed={len(changed)}")
-    return TrackSyncRpcResult(
-        track_id=track_id,
-        changed_outcome_ids=changed,
-        changed=len(changed),
-    ).model_dump(mode="json")
-
-
-@register("track.sync")
-async def track_sync_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Daemon-owned ``track.sync`` mutator.
-
-    Recomputes a Track's measured outcome statuses from their samples via the
-    same reducer the wave-close hook fires. The daemon is the sole canonical
-    mutator (AGENTS rule 4); the CLI ``track sync`` shim routes here over
-    JSON-RPC.
-    """
-    args = TrackSyncParams.model_validate(params)
-    repo_root = Path(args.repo_root) if args.repo_root else None
-    return _commit_worktree_state(
-        ctx=ctx,
-        repo_root=repo_root,
-        params=params,
-        command="track.sync",
-        scope_id=args.track_id,
-        apply_func=lambda state: _apply_track_sync(state, args),
-    )
-
-
-def event_store_path_for(state_path: Path) -> Path:
-    """Return the ``event.jsonl`` path that pairs with *state_path*.
-
-    Thin wrapper around :func:`eawf.kernel.store.paths.store_path` so callers
-    in :mod:`eawf.runtime.daemon.main` keep a single import surface for the
-    canonical pairing.
-    """
-    return store_path(state_path, StoreKind.EVENT)
-
-
 __all__ = [
     "IDEMPOTENCY_TTL_SECONDS",
     "VALIDATION_FAILED",
     "_APPLY_REGISTRY",
+    "WaveCloseRefusalError",
     "codex_lifecycle",
     "event_store_path_for",
     "runtime_capture",
