@@ -10,7 +10,9 @@ at authoring (the gateless-deterministic hole).
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -18,6 +20,7 @@ from pydantic import ValidationError
 
 from eawf.kernel.spec.common import (
     CriterionSpec,
+    GateSpec,
     ResponseClause,
     grandfather_criterion,
 )
@@ -97,6 +100,17 @@ def _typed_criterion(
             object="zero from the units suite",
             locus="pytest",
         ),
+    )
+
+
+def _gate(*, gate_id: str, criterion_id: str) -> GateSpec:
+    return GateSpec(
+        id=gate_id,
+        criterion_id=criterion_id,
+        kind="schema_validate",
+        args={"model": "CloseReadiness"},
+        policy="block",
+        cadence="every-wave",
     )
 
 
@@ -304,3 +318,149 @@ def test_plan_wave_accepts_gated_deterministic_criterion() -> None:
     wave = _plan(state, success_criteria=[_typed_criterion(gate_ids=["G-01"])])
     assert wave.success_criteria[0].gate_ids == ["G-01"]
     assert wave.criteria_floor_waiver is None
+
+
+# ---- CR-04: criterion/gate cross-references must resolve both ways ----------
+
+
+def test_check_criteria_floor_rejects_gate_ref_that_does_not_resolve() -> None:
+    """A gate_ids entry naming a gate the wave does not own is rejected."""
+    criterion = _typed_criterion(gate_ids=["G-404"])
+    with pytest.raises(LifecycleError) as excinfo:
+        check_criteria_floor(
+            [criterion],
+            entity_kind="wave",
+            entity_id="W-X",
+            gates=[_gate(gate_id="G-01", criterion_id="CR-01")],
+        )
+    message = str(excinfo.value)
+    assert "unknown gate ids" in message
+    assert "CR-01->G-404" in message
+
+
+def test_check_criteria_floor_passes_when_every_gate_ref_resolves() -> None:
+    """Symmetric single criterion/gate pair returns without raising."""
+    check_criteria_floor(
+        [_typed_criterion(gate_ids=["G-01"])],
+        entity_kind="wave",
+        entity_id="W-X",
+        gates=[_gate(gate_id="G-01", criterion_id="CR-01")],
+    )
+
+
+def test_check_criteria_floor_rejects_one_way_gate_binding_that_does_not_resolve() -> None:
+    """A gate naming a criterion that omits it from gate_ids is rejected.
+
+    The field-observed deadlock: the gate RUNS and PASSES, its receipt is
+    stored, and the close then fails ``close_preflight_stale`` because the
+    receipt's gate id is absent from the scored criterion's ``gate_ids``.
+    """
+    criterion = _typed_criterion(gate_ids=["G-01"])
+    with pytest.raises(LifecycleError) as excinfo:
+        check_criteria_floor(
+            [criterion],
+            entity_kind="wave",
+            entity_id="W-X",
+            gates=[
+                _gate(gate_id="G-01", criterion_id="CR-01"),
+                _gate(gate_id="G-02", criterion_id="CR-01"),
+            ],
+        )
+    message = str(excinfo.value)
+    assert "does not list them in gate_ids" in message
+    assert "G-02->CR-01" in message
+
+
+def test_check_criteria_floor_leaves_gate_naming_absent_criterion_to_the_spec_layer() -> None:
+    """A gate whose criterion_id resolves to nothing is not the floor's leg."""
+    check_criteria_floor(
+        [_typed_criterion(gate_ids=["G-01"])],
+        entity_kind="wave",
+        entity_id="W-X",
+        gates=[
+            _gate(gate_id="G-01", criterion_id="CR-01"),
+            _gate(gate_id="G-02", criterion_id="CR-99"),
+        ],
+    )
+
+
+def test_check_criteria_floor_gate_refs_must_resolve_even_under_a_waiver() -> None:
+    """The cross-reference leg is unwaivable: it precedes the waiver return."""
+    with pytest.raises(LifecycleError, match="unknown gate ids"):
+        check_criteria_floor(
+            [_typed_criterion(gate_ids=["G-404"])],
+            entity_kind="wave",
+            entity_id="W-X",
+            waiver=_waiver(),
+            gates=[],
+        )
+
+
+def test_check_criteria_floor_skips_resolve_leg_when_the_gate_set_is_unknown() -> None:
+    """``gates=None`` means the gate set is undecided, so the leg is skipped."""
+    check_criteria_floor(
+        [_typed_criterion(gate_ids=["G-01"])],
+        entity_kind="wave",
+        entity_id="W-X",
+        gates=None,
+    )
+
+
+def test_check_criteria_floor_empty_criteria_and_gates_resolve() -> None:
+    """Both sides empty is the vacuous boundary and returns without raising."""
+    check_criteria_floor([], entity_kind="wave", entity_id="W-X", gates=[])
+
+
+def test_edit_wave_plan_rejects_criteria_whose_gate_refs_do_not_resolve() -> None:
+    """The wired edit path resolves the incoming criteria against row gates."""
+    state = _seeded_state()
+    _plan(state, success_criteria=[])
+    state.waves["P01-I01-W01"].gates = [_gate(gate_id="G-01", criterion_id="CR-01")]
+    with pytest.raises(LifecycleError, match="unknown gate ids"):
+        edit_wave_plan(
+            state,
+            wave_id="P01-I01-W01",
+            success_criteria=[_typed_criterion(gate_ids=["G-404"])],
+        )
+    assert state.waves["P01-I01-W01"].success_criteria == []
+
+
+def test_edit_wave_plan_resolves_gate_refs_against_the_supplied_gates() -> None:
+    """Supplied gates win over the row's pre-sync gates and land together."""
+    state = _seeded_state()
+    _plan(state, success_criteria=[])
+    incoming = [_gate(gate_id="G-07", criterion_id="CR-01")]
+    wave = edit_wave_plan(
+        state,
+        wave_id="P01-I01-W01",
+        success_criteria=[_typed_criterion(gate_ids=["G-07"])],
+        gates=incoming,
+    )
+    assert [gate.id for gate in wave.gates] == ["G-07"]
+    assert wave.success_criteria[0].gate_ids == ["G-07"]
+
+
+def test_tightened_floor_resolves_for_every_synced_p31_wave() -> None:
+    """Every synced P31 wave clears the tightened floor with no waiver.
+
+    Reads the committed ``.ea/state.json`` rather than a fixture so the
+    tightening is scored against the real corpus it has to admit.
+    """
+    state_path = Path(__file__).resolve().parents[3] / ".ea" / "state.json"
+    if not state_path.exists():
+        pytest.skip("no .ea/state.json in this checkout")
+    state = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
+    synced = [
+        wave
+        for wave_id, wave in sorted(state.waves.items())
+        if wave_id.startswith("P31") and wave.success_criteria
+    ]
+    assert synced, "expected at least one synced P31 wave in the corpus"
+    for wave in synced:
+        check_criteria_floor(
+            list(wave.success_criteria),
+            entity_kind="wave",
+            entity_id=wave.id,
+            waiver=None,
+            gates=list(wave.gates),
+        )

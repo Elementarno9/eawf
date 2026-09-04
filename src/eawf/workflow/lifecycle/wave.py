@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from eawf.kernel.config.schema import EuBasis, VerifyWaiverMode
-from eawf.kernel.spec.common import CriterionSpec
+from eawf.kernel.spec.common import CriterionSpec, GateSpec
 from eawf.kernel.spec.intent import IntentBrief, has_authoring_body
 from eawf.kernel.state.enums import (
     ActualStatus,
@@ -583,7 +583,10 @@ def plan_wave(
     check_criteria_measurability(candidate_criteria, entity_kind="wave", entity_id=wave_id)
     # The typed-criteria floor rejects legacy-string rows and gateless
     # deterministic claims at author time; a typed waiver bypasses it and
-    # is persisted on the wave row so the bypass stays visible.
+    # is persisted on the wave row so the bypass stays visible. The gate set
+    # is passed as None because a wave being inserted has not earned its
+    # gates yet -- they arrive with `spec sync` -- so the cross-reference leg
+    # has nothing authoritative to resolve against and is skipped here.
     check_criteria_floor(
         candidate_criteria,
         entity_kind="wave",
@@ -668,6 +671,7 @@ def edit_wave_plan(
     title: str | None = None,
     file_scopes: list[str] | None = None,
     success_criteria: list[CriterionSpec] | None = None,
+    gates: list[GateSpec] | None = None,
     agent_role: AgentSessionRole | None = None,
     effort_bucket: EffortBucket | None = None,
     description: str | None = None,
@@ -677,8 +681,8 @@ def edit_wave_plan(
 ) -> Wave:
     """Mutate a PENDING wave's plan-time fields. Rejects non-PENDING waves.
 
-    Editable surface: title, file_scopes, success_criteria, agent_role,
-    effort_bucket, description, intent. Dep mutations go through
+    Editable surface: title, file_scopes, success_criteria, gates,
+    agent_role, effort_bucket, description, intent. Dep mutations go through
     :func:`set_wave_deps` (it maintains the reverse ``blocks`` index and
     re-runs the cycle check). The description field is routed through the
     model's assignment validator so the ≤500-character bound is re-checked
@@ -697,6 +701,12 @@ def edit_wave_plan(
         success_criteria: Optional replacement typed
             :class:`~eawf.kernel.spec.common.CriterionSpec` rows; ``None``
             leaves untouched.
+        gates: Optional replacement typed
+            :class:`~eawf.kernel.spec.common.GateSpec` rows, supplied with
+            *success_criteria* by ``spec sync`` so the floor resolves the
+            incoming criteria against the incoming gates rather than the
+            row's pre-sync ones, and both land as one mutation. ``None``
+            leaves the row's gates untouched and resolves against them.
         agent_role: Optional replacement role; ``None`` leaves untouched.
         effort_bucket: Optional replacement bucket; ``None`` leaves untouched.
         description: Optional replacement description (≤500 chars);
@@ -744,6 +754,7 @@ def edit_wave_plan(
             waiver=criteria_floor_waiver
             if criteria_floor_waiver is not None
             else wave.criteria_floor_waiver,
+            gates=list(gates) if gates is not None else list(wave.gates),
         )
     if title is not None:
         wave.title = title
@@ -751,6 +762,8 @@ def edit_wave_plan(
         wave.file_scopes = list(file_scopes)
     if success_criteria is not None:
         wave.success_criteria = list(success_criteria)
+    if gates is not None:
+        wave.gates = list(gates)
     if agent_role is not None:
         wave.agent_role = agent_role
     if effort_bucket is not None:

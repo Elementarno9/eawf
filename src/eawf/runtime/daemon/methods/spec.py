@@ -1089,8 +1089,10 @@ def _apply_sync_locked(
 
     The caller holds the state-path portalock. This helper reads + validates
     state, enforces the PENDING-only gate, runs the EAWF021 + EAWF022 lints
-    (rejecting before any mutation), materialises the criteria via
-    :func:`~eawf.workflow.lifecycle.wave.edit_wave_plan` + sets the gates,
+    (rejecting before any mutation), materialises the criteria AND the gates
+    through a single :func:`~eawf.workflow.lifecycle.wave.edit_wave_plan`
+    call so the plan-time floor resolves each criterion's ``gate_ids``
+    against the incoming gates rather than the row's pre-sync ones,
     re-validates the post-mutation state, then commits through the canonical
     WAL → atomic-write → event-append sequence and publishes the envelope.
 
@@ -1169,11 +1171,11 @@ def _apply_sync_locked(
             state,
             wave_id=args.wave_id,
             success_criteria=criteria,
+            gates=gates,
             waiver_mode=waiver_mode,
         )
     except (LifecycleError, OSError, ValueError, KeyError) as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
-    wave.gates = list(gates)
 
     state.updated_at = datetime.now(UTC)
     new_payload = state.model_dump(mode="json")

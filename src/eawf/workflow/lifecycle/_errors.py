@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
-    from eawf.kernel.spec.common import CriterionSpec
+    from eawf.kernel.spec.common import CriterionSpec, GateSpec
 
 
 class LifecycleError(Exception):
@@ -216,22 +216,100 @@ def check_criteria_measurability(
         )
 
 
+def _check_gate_refs_resolve(
+    criteria: list[CriterionSpec],
+    gates: list[GateSpec],
+    *,
+    entity_kind: str,
+    entity_id: str,
+) -> None:
+    """Reject a criterion/gate pair whose cross-references are not symmetric.
+
+    Both directions of the binding are load-bearing at the close boundary,
+    where the receipt preflight rejects any receipt whose ``gate_id`` is
+    absent from the scored criterion's ``gate_ids``:
+
+    * forward -- a ``gate_ids`` entry naming a gate the wave does not own
+      is dangling, so the criterion claims a falsifier that can never run;
+    * reverse -- a gate whose ``criterion_id`` names a criterion that does
+      not name the gate back binds one-way. The gate RUNS and PASSES, its
+      receipt is stored, and the close then deadlocks on
+      ``close_preflight_stale`` because the stored receipt fails the
+      binding check. A gate that never ran emits no receipt to reject, so
+      the passing gate is precisely what makes this shape fatal.
+
+    Rejection is preferred over inserting the missing id: a silent
+    normalisation would hide the authoring error that produced the
+    asymmetry, and the author is the only party who knows which of the two
+    rows is wrong.
+
+    Args:
+        criteria: The success-criterion rows under the floor.
+        gates: The gate rows the criteria are scored by.
+        entity_kind: Human label for the entity kind (``"wave"``).
+        entity_id: The entity id, interpolated into the error.
+
+    Raises:
+        LifecycleError: when a ``gate_ids`` entry does not resolve against
+            *gates*, or a gate's ``criterion_id`` names a criterion whose
+            ``gate_ids`` omits that gate.
+    """
+    known_gate_ids = {gate.id for gate in gates}
+    dangling = [
+        f"{criterion.id}->{ref}"
+        for criterion in criteria
+        for ref in criterion.gate_ids
+        if ref not in known_gate_ids
+    ]
+    if dangling:
+        raise LifecycleError(
+            f"{entity_kind} {entity_id!r} fails the typed-criteria floor: "
+            f"criteria reference unknown gate ids {dangling}; attach the gate "
+            "(spec sync) or drop the dangling gate_ids entry"
+        )
+    criterion_by_id = {criterion.id: criterion for criterion in criteria}
+    one_way = [
+        f"{gate.id}->{gate.criterion_id}"
+        for gate in gates
+        if (owner := criterion_by_id.get(gate.criterion_id)) is not None
+        and gate.id not in owner.gate_ids
+    ]
+    if one_way:
+        raise LifecycleError(
+            f"{entity_kind} {entity_id!r} fails the typed-criteria floor: "
+            f"gates {one_way} name a criterion that does not list them in "
+            "gate_ids; add the gate id to that criterion's gate_ids so the "
+            "close-time receipt binding resolves"
+        )
+
+
 def check_criteria_floor(
     criteria: list[CriterionSpec],
     *,
     entity_kind: str,
     entity_id: str,
     waiver: object | None = None,
+    gates: list[GateSpec] | None = None,
 ) -> None:
     """Enforce the plan-time typed-criteria floor at a wave-plan boundary.
 
     The authoring counterpart of the close-time verifier: a wave may not
-    land with legacy-string (untyped) criteria, and a criterion that claims
+    land with legacy-string (untyped) criteria, a criterion that claims
     ``evidence_kind == "deterministic"`` may not land without at least one
-    gate to falsify it (the gateless-deterministic hole). A typed
+    gate to falsify it (the gateless-deterministic hole), and every
+    criterion/gate cross-reference must resolve symmetrically against
+    *gates*. A typed
     :class:`~eawf.kernel.state.models.CriteriaFloorWaiver` bypasses the
-    floor so repair-burst authoring stays possible but VISIBLE on the wave
-    row -- the caller persists the waiver record.
+    quality legs of the floor so repair-burst authoring stays possible but
+    VISIBLE on the wave row -- the caller persists the waiver record.
+
+    The cross-reference leg runs BEFORE the waiver is honoured and is
+    therefore unwaivable. The waiver exists to admit criteria that are
+    merely under-specified, which a later ``spec sync`` can upgrade; an
+    unresolved gate reference instead strands the wave at close, where the
+    receipt preflight validates stored receipts before any waiver is
+    considered. Letting the waiver through here would buy an authoring
+    convenience at the price of a close-time deadlock.
 
     An empty criteria list passes: the authoring flow lands the wave first
     and materialises typed criteria via ``eawf spec sync`` before claim.
@@ -241,13 +319,32 @@ def check_criteria_floor(
         entity_kind: Human label for the entity kind (``"wave"``).
         entity_id: The entity id, interpolated into the error.
         waiver: The typed waiver record, or ``None`` when not waived.
+        gates: The authoritative gate set the criteria resolve against, or
+            ``None`` when the caller does not know it. The distinction is
+            deliberate: a list (empty included) asserts "these are the
+            entity's gates", so the cross-reference leg runs, while
+            ``None`` means the gate set has not been decided yet and the
+            leg is skipped. Only :func:`~eawf.workflow.lifecycle.wave.plan_wave`
+            passes ``None`` -- a wave being inserted earns its gates from a
+            later ``spec sync``, and a deterministic criterion must already
+            carry ``gate_ids`` to clear the gateless leg, so resolving
+            against the not-yet-existent set would make such a criterion
+            unauthorable. Every edit path supplies a list.
 
     Raises:
-        LifecycleError: when a legacy row or a gateless deterministic
-            criterion lands without a waiver.
+        LifecycleError: when a criterion/gate cross-reference does not
+            resolve, or (absent a waiver) a legacy row or a gateless
+            deterministic criterion lands.
     """
     from eawf.kernel.spec.common import GRANDFATHERED_KIND
 
+    if gates is not None:
+        _check_gate_refs_resolve(
+            criteria,
+            list(gates),
+            entity_kind=entity_kind,
+            entity_id=entity_id,
+        )
     if waiver is not None:
         return
     legacy = [criterion.id for criterion in criteria if criterion.kind == GRANDFATHERED_KIND]
