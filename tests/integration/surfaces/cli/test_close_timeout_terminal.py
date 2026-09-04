@@ -38,7 +38,7 @@ from eawf.surfaces.cli.commands.lifecycle import _close_failure_kind
 from tests._session_helpers import seed_active_session_on_disk
 from tests.conftest import make_claim_criterion
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 runner = CliRunner()
 
@@ -296,8 +296,11 @@ def test_resolve_close_mechanism_transport_fallback_wins() -> None:
     )
 
 
-def test_resolve_close_mechanism_default_is_daemon() -> None:
+def test_resolve_close_mechanism_default_is_daemon(monkeypatch: pytest.MonkeyPatch) -> None:
     """Boundary: the default (no transport fallback, no daemonless env) is ``"daemon"``."""
+    # The integration tier forces the daemonless carve-out for every test; this
+    # one asserts the behaviour when that env is ABSENT, so it clears it first.
+    monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
     assert resolve_close_mechanism(gate_bearing=True, waived=False) == "daemon"
 
 

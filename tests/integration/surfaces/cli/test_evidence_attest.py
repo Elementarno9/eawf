@@ -17,7 +17,7 @@ from eawf.kernel.store.paths import store_path
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import evidence as evidence_cli
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 runner = CliRunner()
 

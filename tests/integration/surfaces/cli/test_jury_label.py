@@ -26,7 +26,7 @@ from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import jury as jury_cmd
 from tests.eval.jury.test_cross_vendor_jury import _WAVE_ID, _write_state
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 
 def _ctx(state_path: Path) -> MethodContext:

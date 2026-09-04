@@ -2,7 +2,7 @@
 
 The P26-I01-W06 ``completion`` verb generates a completion script with
 Typer's blessed ``get_completion_script``; the existing
-:mod:`tests.cli.test_streaming` suite only exercises the *generation* path
+:mod:`tests.integration.surfaces.cli.test_streaming` suite only exercises the *generation* path
 (``completion show`` writes a script, ``completion install`` writes a file).
 It never invokes the *runtime* handshake — the second process the shell spawns
 at tab-completion time with ``_EAWF_COMPLETE=complete_<shell>`` set. That gap
@@ -31,7 +31,7 @@ import pytest
 
 from eawf.surfaces.cli.commands.completion import _render_script
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 #: The console-script entry point ``uv`` installs into the active venv. When
 #: the suite runs under ``uv run pytest`` the script is on ``PATH`` and its

@@ -14,8 +14,8 @@ integration suite is functionally the first of these — short-lived
 in-process invocations with no live daemon. We honour that by
 forcing ``EAWF_DAEMONLESS=1`` at the start of every integration
 test; suites that need to exercise the proxy path directly (the
-W10 ``tests/cli/test_*_proxy.py`` modules) set the env explicitly
-inside their own fixtures.
+``tests/unit/surfaces/cli/test_*_proxy.py`` modules) are filed under
+the unit kind, so this fixture never reaches them.
 """
 
 from __future__ import annotations
@@ -46,9 +46,9 @@ def _daemonless_default(monkeypatch: pytest.MonkeyPatch) -> None:
     """Force the V1 daemonless carve-out for every integration test.
 
     Tests that explicitly exercise the daemon-proxy path
-    (``tests/cli/test_*_proxy.py``) live in the ``tests/cli/`` tree;
-    integration tests stay daemonless until a dedicated daemon-up
-    fixture is wired in a later wave.
+    (``test_*_proxy.py``) are filed under the unit kind, out of this
+    tier directory; integration tests stay daemonless until a
+    dedicated daemon-up fixture is wired in a later wave.
     """
     monkeypatch.setenv("EAWF_DAEMONLESS", "1")
 

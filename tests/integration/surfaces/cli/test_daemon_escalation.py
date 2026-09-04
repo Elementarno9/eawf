@@ -40,7 +40,7 @@ from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.flags import GlobalFlags
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 runner = CliRunner()
 

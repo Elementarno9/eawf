@@ -1,6 +1,6 @@
 """CLI-side tests for the W10 ``_persist_registry`` proxy dispatcher.
 
-The four scenarios mirror :mod:`tests.cli.test_config_proxy`:
+The four scenarios mirror :mod:`tests.unit.surfaces.cli.test_config_proxy`:
 
 1. ``daemon.proxy_enabled=True`` (new default) + daemon up — the call
    diffs the candidate against the on-disk registry and dispatches

@@ -369,5 +369,5 @@ jobs:
           tests/daemon/test_windows_pipe_poc_scenarios.py
           tests/daemon/test_win_service.py
           tests/integration/test_windows_atomic_floor.py
-          tests/cli/test_windows_w04_policy.py
+          tests/integration/surfaces/cli/test_windows_w04_policy.py
           tests/integration/test_packaging.py

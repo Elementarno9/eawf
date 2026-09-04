@@ -39,7 +39,7 @@ from eawf.surfaces.cli.streaming import (
     stream_events,
 )
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 runner = CliRunner()
 

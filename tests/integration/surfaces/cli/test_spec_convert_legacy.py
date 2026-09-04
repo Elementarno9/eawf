@@ -25,7 +25,7 @@ from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import spec as spec_cmd
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 
 class _FakeClient:

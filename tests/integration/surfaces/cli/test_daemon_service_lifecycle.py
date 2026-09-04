@@ -27,7 +27,7 @@ from eawf.runtime.daemon import service_install
 from eawf.runtime.daemon.lifecycle import DaemonLifecycleResult
 from eawf.surfaces.cli.app import app
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 runner = CliRunner()
 

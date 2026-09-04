@@ -54,7 +54,7 @@ from eawf.workflow.verify.models import CloseReadiness
 from tests._session_helpers import seed_active_session_on_disk
 from tests.conftest import make_claim_criterion
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 runner = CliRunner()
 

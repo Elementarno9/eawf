@@ -24,7 +24,7 @@ from typer.testing import CliRunner
 from eawf.surfaces.cli import _dispatch
 from eawf.surfaces.cli.app import app
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 runner = CliRunner()
 
@@ -38,7 +38,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]
     yield tmp_path
 
 
-def test_proxy_enabled_is_not_platform_gated() -> None:
+def test_proxy_enabled_is_not_platform_gated(monkeypatch: pytest.MonkeyPatch) -> None:
     """``_proxy_enabled`` defaults True regardless of platform.
 
     The daemon-default routing on Windows rides the same predicate the
@@ -49,6 +49,9 @@ def test_proxy_enabled_is_not_platform_gated() -> None:
     """
     from eawf.surfaces.cli._mutation import _proxy_enabled
 
+    # The integration tier forces the daemonless carve-out for every test; this
+    # one asserts the behaviour when that env is ABSENT, so it clears it first.
+    monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
     # Default config in a fresh cwd: proxy enabled (no daemonless env set).
     assert _proxy_enabled(None) is True
 

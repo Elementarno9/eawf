@@ -33,7 +33,7 @@ from eawf.runtime.daemon.wal import (
 )
 from eawf.surfaces.cli.app import app
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 runner = CliRunner()
 
