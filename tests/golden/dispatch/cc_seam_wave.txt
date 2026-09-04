@@ -1,27 +1,34 @@
-# Wave P07-I01-W05: flow surface
+# Wave P09-I01-W07: Render the wave intent block in dispatch
+
+## Description
+
+The seam waves carry an intent block in state but the dispatch renderer never emits it, and the Decisions section dumps every row in the store. Render the intent and scope the decisions, keeping D-CITED-01 intact.
 
 ## Wave tags
 
 - agent_role: executor
-- effort_bucket: L
+- effort_bucket: XS
 - success_criteria:
-  - autonomous execute loop drains the ready frontier
+  - the dispatch prompt carries the wave intent
+  - the dispatch prompt carries only the wave's decisions
 
 ## Intent
 
-- problem: test wave lacks a typed intent
-- desired_outcome: the test wave carries a populated IntentBrief
+- problem: executors never see the intent block the planner attached
+- desired_outcome: each dispatch prompt carries the intent and the wave's decisions
 - planned_steps:
-  - stage the wave with a populated intent
+  - render the intent as its own section
+  - filter the decisions to the wave's phase and its citations
 - risks:
-  - none material for the test fixture
-- evidence_refs: none
+  - existing dispatch goldens move when the section order changes
+- evidence_refs:
+  - docs/rules/artifact-chassis.md
 
 ## Scope
 
-src/eawf/, tests/
+src/eawf/workflow/dispatch/renderer.py, tests/golden/dispatch
 
-Scope is anchored on iter P07-I01 under scope ABC. Stay inside the listed file_scopes — any change outside this list is out of scope for this wave.
+Scope is anchored on iter P09-I01 under scope QR. Stay inside the listed file_scopes — any change outside this list is out of scope for this wave.
 
 ## Dependencies
 
@@ -29,7 +36,17 @@ None.
 
 ## Decisions
 
-None.
+### D-CITED-01: Scope the decisions to the dispatched wave
+
+A project-scoped row the wave names by id stays in the prompt.
+
+### D-SEAM-01: Render the intent block in dispatch
+
+The planner's intent is the wave's why; dispatch must carry it.
+
+### D-SEAM-02: Keep the memory section as it is
+
+The prompt-size drop must come from the decision filter alone.
 
 ## Hypotheses
 
@@ -110,7 +127,7 @@ If any check fails on a post-drain wave, emit verdict=blocked naming the gap. Ne
    - `uv run mypy src/`
    - `uv run pytest tests/ -q`
    A schema or persisted-model wave never narrows this run: keep the full-tree `tests/` sweep (a scoped gauntlet hides fixture fallout in sibling suites).
-4. Commit with prefix `[P07-W05] <type>: <summary>` (3-6 bullet body) and the recognized Claude or Codex `Co-Authored-By` trailer.
+4. Commit with prefix `[P09-W07] <type>: <summary>` (3-6 bullet body) and the recognized Claude or Codex `Co-Authored-By` trailer.
 5. Emit the typed executor report as your final message; the dispatching parent session verifies your work, supplies `--tokens-consumed` from your report, and runs the close itself.
 6. Stop after the report. Take no further action — the close is run for you, never by you.
 
@@ -124,7 +141,7 @@ If any check fails on a post-drain wave, emit verdict=blocked naming the gap. Ne
 
 ## Estimate
 
-- bucket: L
+- bucket: XS
 - expected_eu: unknown
 - expected_minutes: unknown
 - token_budget: unknown

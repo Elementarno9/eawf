@@ -7,6 +7,16 @@
 - success_criteria:
   - audit verdict recorded with evidence chain
 
+## Intent
+
+- problem: test wave lacks a typed intent
+- desired_outcome: the test wave carries a populated IntentBrief
+- planned_steps:
+  - stage the wave with a populated intent
+- risks:
+  - none material for the test fixture
+- evidence_refs: none
+
 ## Scope
 
 src/eawf/validate/

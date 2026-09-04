@@ -8,12 +8,14 @@ string.
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     AgentSessionStatus,
@@ -22,6 +24,7 @@ from eawf.kernel.state.enums import (
     AuditVerdict,
     Confidence,
     DecisionStatus,
+    EffortBucket,
     HypothesisStatus,
     HypothesisVerdict,
     ProjectStatus,
@@ -42,15 +45,25 @@ from eawf.kernel.state.models import (
 )
 from eawf.surfaces.cli.app import app as cli_app
 from eawf.workflow.agents.specs.models import SubagentSpec
-from eawf.workflow.dispatch import build_subagent_spec, render_wave_prompt
+from eawf.workflow.dispatch import (
+    build_subagent_spec,
+    render_dispatch_envelope,
+    render_wave_prompt,
+)
 from eawf.workflow.lifecycle.transitions import (
     open_iter,
     open_phase,
     plan_wave,
 )
-from tests.conftest import make_intent
+from tests._criteria_helpers import legacy_criteria
+from tests.conftest import make_floor_waiver, make_intent
 
 _T0 = datetime(2026, 1, 1, tzinfo=UTC)
+# Seam-wave golden: the dispatch prompt an intent-bearing wave renders once
+# the decision store is filtered down to the wave's own rows.
+_SEAM_WAVE_ID = "P09-I01-W07"
+_SEAM_GOLDEN = Path(__file__).resolve().parents[1] / "golden" / "dispatch" / "cc_seam_wave.txt"
+_PROMPT_BUDGET_BYTES = 20 * 1024
 
 # ---- Builders ---------------------------------------------------------------
 
@@ -111,6 +124,101 @@ def _seed_chain(state: State) -> None:
     )
 
 
+def _decision(
+    *,
+    decision_id: str,
+    scope_id: str,
+    title: str,
+    rationale: str = "Recorded so the dispatch renderer has a row to project.",
+    status: DecisionStatus = DecisionStatus.ACTIVE,
+) -> Decision:
+    """Return one decision row for the dispatch scoping tests."""
+    return Decision(
+        id=decision_id,
+        scope_id=scope_id,
+        title=title,
+        rationale=rationale,
+        alternatives=[],
+        status=status,
+        created_at=_T0,
+        superseded_by=None,
+    )
+
+
+def _seam_wave_state() -> State:
+    """Return a seam-wave state: in-scope decisions plus a project-scope flood.
+
+    Models the shape the filter exists for — a handful of rows the wave
+    actually needs (phase-scoped, iter-scoped, and one project-scoped row
+    the wave cites by id) drowning in thirty project-scoped rows it does
+    not, whose rationales alone outweigh the whole prompt budget.
+    """
+    state = _empty_state()
+    open_phase(state, phase_id="P09", title="Seam repairs")
+    open_iter(state, iter_id="P09-I01", phase_id="P09", title="Wire the dispatch seams")
+    plan_wave(
+        state,
+        wave_id=_SEAM_WAVE_ID,
+        iter_id="P09-I01",
+        title="Render the wave intent block in dispatch",
+        description=(
+            "The seam waves carry an intent block in state but the dispatch renderer "
+            "never emits it, and the Decisions section dumps every row in the store. "
+            "Render the intent and scope the decisions, keeping D-CITED-01 intact."
+        ),
+        file_scopes=["src/eawf/workflow/dispatch/renderer.py", "tests/golden/dispatch"],
+        success_criteria=legacy_criteria(
+            "the dispatch prompt carries the wave intent",
+            "the dispatch prompt carries only the wave's decisions",
+        ),
+        criteria_floor_waiver=make_floor_waiver(),
+        agent_role=AgentSessionRole.EXECUTOR,
+        effort_bucket=EffortBucket.XS,
+        intent=IntentBrief(
+            problem="executors never see the intent block the planner attached",
+            desired_outcome="each dispatch prompt carries the intent and the wave's decisions",
+            priority_rationale="thirteen seam waves are dispatchable and each would run blind",
+            planned_steps=[
+                "render the intent as its own section",
+                "filter the decisions to the wave's phase and its citations",
+            ],
+            risks=["existing dispatch goldens move when the section order changes"],
+            evidence_refs=["docs/rules/artifact-chassis.md"],
+        ),
+    )
+    decisions = {
+        "D-SEAM-01": _decision(
+            decision_id="D-SEAM-01",
+            scope_id="P09",
+            title="Render the intent block in dispatch",
+            rationale="The planner's intent is the wave's why; dispatch must carry it.",
+        ),
+        "D-SEAM-02": _decision(
+            decision_id="D-SEAM-02",
+            scope_id="P09-I01",
+            title="Keep the memory section as it is",
+            rationale="The prompt-size drop must come from the decision filter alone.",
+        ),
+        "D-CITED-01": _decision(
+            decision_id="D-CITED-01",
+            scope_id="QR",
+            title="Scope the decisions to the dispatched wave",
+            rationale="A project-scoped row the wave names by id stays in the prompt.",
+        ),
+    }
+    noise = "Project-scoped rationale with nothing to say about the seam wave. " * 12
+    for index in range(30):
+        decision_id = f"D-NOISE-{index:02d}"
+        decisions[decision_id] = _decision(
+            decision_id=decision_id,
+            scope_id="QR",
+            title=f"Unrelated project decision {index:02d}",
+            rationale=noise,
+        )
+    state.decisions = decisions
+    return state
+
+
 def _estimate(*, wave_id: str, expected_eu: float, expected_minutes: float) -> EstimateSummary:
     """Return a deterministic estimate summary for renderer tests."""
     return EstimateSummary(
@@ -149,11 +257,17 @@ def test_build_subagent_spec_returns_typed_spec() -> None:
 
 
 def test_build_subagent_spec_renders_identically_to_render_wave_prompt() -> None:
-    """The spec's ``render`` output equals the public ``render_wave_prompt``."""
+    """The spec render is the prompt minus the state-spliced intent section."""
     state = _empty_state()
     _seed_chain(state)
     spec = build_subagent_spec(state, "P01-I01-W01")
-    assert spec.render() == render_wave_prompt(state, "P01-I01-W01")
+    prompt = render_wave_prompt(state, "P01-I01-W01")
+    # The intent lives on ``Wave``, not on the spec, so the renderer splices
+    # it between the wave tags and the scope; every other byte is the spec's.
+    start = prompt.index("\n\n## Intent")
+    end = prompt.index("\n\n## Scope")
+    assert "## Intent" not in spec.render()
+    assert prompt[:start] + prompt[end:] == spec.render()
 
 
 def test_build_subagent_spec_unknown_wave_raises_key_error() -> None:
@@ -319,13 +433,13 @@ def test_render_includes_dependencies_with_status() -> None:
 
 
 def test_render_includes_attached_decisions() -> None:
-    """Decisions in the same scope appear under ``## Decisions`` with rationale."""
+    """Decisions scoped to the wave's phase appear with their rationale."""
     state = _empty_state()
     _seed_chain(state)
     state.decisions = {
         "D01": Decision(
             id="D01",
-            scope_id="QR",
+            scope_id="P01",
             title="Cherry-pick worktrees, never merge",
             rationale="Merges break the [P-W] / [P-CORE] history audit trail.",
             alternatives=["squash"],
@@ -335,7 +449,7 @@ def test_render_includes_attached_decisions() -> None:
         ),
         "D02": Decision(
             id="D02",
-            scope_id="QR",
+            scope_id="P01-I01",
             title="State CLI is the only writer",
             rationale="Direct edits bypass the audit-side event.jsonl.",
             alternatives=[],
@@ -371,7 +485,7 @@ def test_render_filters_obsolete_and_superseded_decisions() -> None:
     state.decisions = {
         "D01": Decision(
             id="D01",
-            scope_id="QR",
+            scope_id="P01",
             title="Active decision",
             rationale="Should appear.",
             alternatives=[],
@@ -381,7 +495,7 @@ def test_render_filters_obsolete_and_superseded_decisions() -> None:
         ),
         "D02": Decision(
             id="D02",
-            scope_id="QR",
+            scope_id="P01",
             title="Superseded decision",
             rationale="Should not appear.",
             alternatives=[],
@@ -391,7 +505,7 @@ def test_render_filters_obsolete_and_superseded_decisions() -> None:
         ),
         "D03": Decision(
             id="D03",
-            scope_id="QR",
+            scope_id="P01",
             title="Obsolete decision",
             rationale="Should not appear.",
             alternatives=[],
@@ -406,6 +520,248 @@ def test_render_filters_obsolete_and_superseded_decisions() -> None:
     assert "### D01: Active decision" in out
     assert "D02" not in out
     assert "D03" not in out
+
+
+def test_render_decisions_drops_project_scoped_rows_the_wave_never_cites() -> None:
+    """A project-scoped decision no longer rides along on every wave prompt."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.decisions = {
+        "D01": _decision(decision_id="D01", scope_id="P01", title="Phase decision"),
+        "D02": _decision(decision_id="D02", scope_id="P01-I01", title="Iter decision"),
+        "D03": _decision(decision_id="D03", scope_id="P01-I01-W01", title="Wave decision"),
+        "D04": _decision(decision_id="D04", scope_id="QR", title="Project decision"),
+        "D05": _decision(decision_id="D05", scope_id="P02", title="Other-phase decision"),
+    }
+
+    out = render_wave_prompt(state, "P01-I01-W01")
+
+    assert "### D01: Phase decision" in out
+    assert "### D02: Iter decision" in out
+    assert "### D03: Wave decision" in out
+    assert "D04" not in out
+    assert "D05" not in out
+
+
+def test_render_decisions_keep_ids_cited_by_the_wave_description() -> None:
+    """An out-of-phase decision the description names by id still renders."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.waves["P01-I01-W01"].description = "Implements the D04 contract end to end."
+    state.decisions = {
+        "D04": _decision(decision_id="D04", scope_id="QR", title="Cited project decision"),
+        "D05": _decision(decision_id="D05", scope_id="QR", title="Uncited project decision"),
+    }
+
+    out = render_wave_prompt(state, "P01-I01-W01")
+
+    assert "### D04: Cited project decision" in out
+    assert "D05" not in out
+
+
+def test_render_decisions_keep_ids_cited_by_the_wave_intent() -> None:
+    """Every intent field is scanned for citations, evidence refs included."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.waves["P01-I01-W01"].intent = IntentBrief(
+        problem="the D06 seam is unwired",
+        desired_outcome="the seam is wired",
+        priority_rationale="D07 ranked it first",
+        planned_steps=["wire the D08 adapter"],
+        risks=["D09 may need a follow-up"],
+        evidence_refs=["docs/decisions/D10.md"],
+    )
+    state.decisions = {
+        f"D{index:02d}": _decision(
+            decision_id=f"D{index:02d}", scope_id="QR", title=f"Decision {index:02d}"
+        )
+        for index in range(6, 12)
+    }
+
+    out = render_wave_prompt(state, "P01-I01-W01")
+
+    for cited in ("D06", "D07", "D08", "D09", "D10"):
+        assert f"### {cited}: " in out, f"{cited} cited by the intent but dropped"
+    assert "D11" not in out
+
+
+def test_render_decisions_citation_match_is_boundary_anchored() -> None:
+    """A citation of ``D01`` must not drag ``D012`` into the prompt."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.waves["P01-I01-W01"].description = "Follows D01 exactly."
+    state.decisions = {
+        "D01": _decision(decision_id="D01", scope_id="QR", title="Cited short id"),
+        "D012": _decision(decision_id="D012", scope_id="QR", title="Longer id prefix match"),
+    }
+
+    out = render_wave_prompt(state, "P01-I01-W01")
+
+    assert "### D01: Cited short id" in out
+    assert "D012" not in out
+
+
+def test_render_decisions_hide_superseded_rows_even_when_cited() -> None:
+    """The status filter outranks a citation — a stale decision stays hidden."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.waves["P01-I01-W01"].description = "Supersedes D04 and D05 alike."
+    state.decisions = {
+        "D04": _decision(
+            decision_id="D04",
+            scope_id="QR",
+            title="Superseded but cited",
+            status=DecisionStatus.SUPERSEDED,
+        ),
+        "D05": _decision(
+            decision_id="D05",
+            scope_id="P01",
+            title="Obsolete and in phase",
+            status=DecisionStatus.OBSOLETE,
+        ),
+    }
+
+    out = render_wave_prompt(state, "P01-I01-W01")
+
+    assert "## Decisions\n\nNone." in out
+    assert "### D04" not in out
+    assert "### D05" not in out
+
+
+def test_render_decisions_empty_store_renders_the_none_sentinel() -> None:
+    """An empty decision store keeps the section with its ``None.`` body."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.decisions = {}
+
+    out = render_wave_prompt(state, "P01-I01-W01")
+
+    assert "## Decisions\n\nNone." in out
+
+
+def test_render_decisions_unknown_wave_raises_key_error() -> None:
+    """The decision filter never runs for a wave id absent from state."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.decisions = {
+        "D01": _decision(decision_id="D01", scope_id="P01", title="Phase decision"),
+    }
+
+    with pytest.raises(KeyError, match="unknown wave"):
+        render_wave_prompt(state, "P01-I01-W99")
+
+
+def test_seam_wave_prompt_decisions_golden_stays_under_20kb() -> None:
+    """A seam wave renders its own decisions only and fits the 20 KB budget.
+
+    Regenerate the fixture with ``EAWF_REFRESH_GOLDEN=1 uv run pytest
+    tests/integration/test_dispatch_renderer.py -k decisions``.
+    """
+    state = _seam_wave_state()
+    rendered = render_wave_prompt(state, _SEAM_WAVE_ID)
+
+    if os.environ.get("EAWF_REFRESH_GOLDEN") == "1":
+        _SEAM_GOLDEN.parent.mkdir(parents=True, exist_ok=True)
+        _SEAM_GOLDEN.write_text(rendered, encoding="utf-8")
+
+    expected = _SEAM_GOLDEN.read_text(encoding="utf-8")
+    assert rendered == expected, (
+        f"seam dispatch golden {_SEAM_GOLDEN.name!r} drifted. If intentional, "
+        "regenerate with EAWF_REFRESH_GOLDEN=1 and commit the new bytes."
+    )
+    # The unfiltered store alone busts the budget, so passing the cap is
+    # the decision filter's doing rather than a small fixture's.
+    noise = sum(len(d.rationale.encode("utf-8")) for d in (state.decisions or {}).values())
+    assert noise > _PROMPT_BUDGET_BYTES
+    assert len(rendered.encode("utf-8")) < _PROMPT_BUDGET_BYTES
+    assert "### D-SEAM-01: Render the intent block in dispatch" in rendered
+    assert "### D-CITED-01: Scope the decisions to the dispatched wave" in rendered
+    assert "D-NOISE-" not in rendered
+
+
+# ---- Intent section ---------------------------------------------------------
+
+
+def test_render_intent_section_emits_every_planner_field() -> None:
+    """The intent renders problem, outcome, steps, risks and evidence refs."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.waves["P01-I01-W01"].intent = IntentBrief(
+        problem="dispatch prompts hide the planner's intent",
+        desired_outcome="every dispatched agent reads the intent it implements",
+        priority_rationale="thirteen seam waves are dispatchable now",
+        planned_steps=["render the intent section", "scope the decisions"],
+        risks=["golden fixtures move"],
+        evidence_refs=["docs/rules/artifact-chassis.md", "urn:eawf:v1:decision:DX"],
+    )
+
+    out = render_wave_prompt(state, "P01-I01-W01")
+    block = out.split("## Intent", 1)[1].split("\n## ", 1)[0]
+
+    assert "- problem: dispatch prompts hide the planner's intent" in block
+    assert "- desired_outcome: every dispatched agent reads the intent it implements" in block
+    assert "- planned_steps:\n  - render the intent section\n  - scope the decisions" in block
+    assert "- risks:\n  - golden fixtures move" in block
+    assert "- evidence_refs:\n  - docs/rules/artifact-chassis.md" in block
+    assert "  - urn:eawf:v1:decision:DX" in block
+
+
+def test_render_intent_section_renders_none_for_empty_list_fields() -> None:
+    """Empty planner lists render as ``none`` rather than vanishing."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.waves["P01-I01-W01"].intent = IntentBrief(
+        problem="the wave has no planned steps yet",
+        desired_outcome="the empty lists still render",
+    )
+
+    out = render_wave_prompt(state, "P01-I01-W01")
+    block = out.split("## Intent", 1)[1].split("\n## ", 1)[0]
+
+    assert "- planned_steps: none" in block
+    assert "- risks: none" in block
+    assert "- evidence_refs: none" in block
+
+
+def test_render_omits_intent_section_when_the_wave_carries_no_intent() -> None:
+    """A wave without an intent renders no ``## Intent`` heading at all."""
+    state = _empty_state()
+    _seed_chain(state)
+    state.waves["P01-I01-W01"].intent = None
+
+    out = render_wave_prompt(state, "P01-I01-W01")
+
+    assert "## Intent" not in out
+
+
+def test_render_intent_section_lands_between_wave_tags_and_scope() -> None:
+    """The intent reads before the scope so the why precedes the where."""
+    state = _empty_state()
+    _seed_chain(state)
+
+    out = render_wave_prompt(state, "P01-I01-W01")
+
+    assert out.index("## Wave tags") < out.index("## Intent") < out.index("## Scope")
+
+
+def test_dispatch_envelope_prompt_carries_the_intent_section() -> None:
+    """The typed dispatch envelope ships the same intent block as the prompt."""
+    state = _empty_state()
+    _seed_chain(state)
+
+    envelope = render_dispatch_envelope(state, "P01-I01-W01", "claude-code")
+
+    assert "## Intent" in envelope.prompt
+    assert "- problem: test wave lacks a typed intent" in envelope.prompt
+
+
+def test_render_intent_section_unknown_wave_raises_key_error() -> None:
+    """A wave id absent from state raises before any intent is rendered."""
+    state = _empty_state()
+    _seed_chain(state)
+
+    with pytest.raises(KeyError, match="unknown wave"):
+        render_wave_prompt(state, "P01-I01-W99")
 
 
 def test_render_includes_hypotheses_with_open_verdict() -> None:

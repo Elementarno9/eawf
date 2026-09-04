@@ -51,12 +51,24 @@ Memory recall is read-only. When ``state.memory_index`` carries active
 entries, the prompt includes a ``## Memory`` section rendered through the
 same token-budgeted context walker as ``eawf memory render-context``. The
 state object and memory store are never mutated by dispatch rendering.
+
+The wave's typed :class:`~eawf.kernel.spec.intent.IntentBrief` renders as
+its own ``## Intent`` section directly after ``## Wave tags`` so the
+dispatched agent reads the problem, the desired outcome, the planned
+steps, the accepted risks, and the evidence refs the planner attached; a
+wave without an intent omits the section. The ``## Decisions`` section is
+scoped to the wave rather than to the whole project: a decision qualifies
+when its ``scope_id`` names the wave's phase (or an iter / wave nested
+under it) or when the wave's own description / intent cites the decision
+id. Dumping every project-scoped row buried the wave's own contract in a
+40 KB prompt.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -625,7 +637,7 @@ def build_subagent_spec(
         success_criteria=[c.text for c in wave.success_criteria],
         file_scopes=list(wave.file_scopes),
         dependencies=_build_dependencies(state, wave),
-        decisions=_build_decisions(state, scope_id=scope_id),
+        decisions=_build_decisions(state, wave=wave, phase_id=parent_iter.phase_id),
         hypotheses=_build_hypotheses(state, scope_id=scope_id),
         recent_audits=_build_recent_audits(state, scope_id=scope_id),
         references=_find_spike_briefs(wave, repo_root=repo_root) if repo_root is not None else [],
@@ -812,6 +824,12 @@ def _render_spec_prompt(
     ceremony = _render_ceremony_section(state, wave_id=wave_id)
     if ceremony is not None:
         prompt = _insert_section_after_heading(prompt, ceremony, heading="## Wave tags")
+    # Inserted after the ceremony block so the intent lands first: each
+    # insert goes immediately before the next section, so the last insert
+    # anchored on the same heading ends up closest to it.
+    intent = _render_intent_section(state, wave_id=wave_id)
+    if intent is not None:
+        prompt = _insert_section_after_heading(prompt, intent, heading="## Wave tags")
     section = _render_memory_section(state, wave_id=wave_id, repo_root=repo_root)
     if section is None:
         return prompt
@@ -839,6 +857,40 @@ def _render_ceremony_section(state: State, *, wave_id: str) -> str | None:
             f"- basis: {recommendation.reason}",
         ]
     )
+
+
+def _render_intent_section(state: State, *, wave_id: str) -> str | None:
+    """Return the dispatch ``## Intent`` section, or ``None`` when unset.
+
+    The section renders the planner's typed
+    :class:`~eawf.kernel.spec.intent.IntentBrief` verbatim: the problem,
+    the desired outcome, the planned steps, the accepted risks, and the
+    evidence refs that back the brief. Every list field renders even when
+    empty (as ``none``) so the dispatched agent can tell "the planner left
+    it empty" from "the renderer dropped it". A wave with no intent
+    returns ``None`` and the prompt omits the section entirely.
+    """
+    wave = state.waves.get(wave_id)
+    if wave is None or wave.intent is None:
+        return None
+    intent = wave.intent
+    lines = [
+        "## Intent",
+        "",
+        f"- problem: {intent.problem}",
+        f"- desired_outcome: {intent.desired_outcome}",
+    ]
+    lines.extend(_intent_list_lines("planned_steps", intent.planned_steps))
+    lines.extend(_intent_list_lines("risks", intent.risks))
+    lines.extend(_intent_list_lines("evidence_refs", intent.evidence_refs))
+    return "\n".join(lines)
+
+
+def _intent_list_lines(label: str, values: Sequence[str]) -> list[str]:
+    """Return the ``- <label>:`` block for one intent list field."""
+    if not values:
+        return [f"- {label}: none"]
+    return [f"- {label}:", *(f"  - {value}" for value in values)]
 
 
 def _render_memory_section(
@@ -934,15 +986,15 @@ def _build_dependencies(state: State, wave: Wave) -> list[SpecDependency]:
     return rows
 
 
-def _build_decisions(state: State, *, scope_id: str) -> list[SpecDecision]:
-    """Project in-scope decisions into typed :class:`SpecDecision` rows."""
+def _build_decisions(state: State, *, wave: Wave, phase_id: str) -> list[SpecDecision]:
+    """Project the wave's decisions into typed :class:`SpecDecision` rows."""
     return [
         SpecDecision(
             decision_id=decision.id,
             title=decision.title,
             rationale=decision.rationale,
         )
-        for decision in _decisions_for_scope(state, scope_id=scope_id)
+        for decision in _decisions_for_wave(state, wave=wave, phase_id=phase_id)
     ]
 
 
@@ -1028,16 +1080,74 @@ def _find_spike_briefs(wave: Wave, *, repo_root: Path) -> list[str]:
 # ---- Lookup helpers ---------------------------------------------------------
 
 
-def _decisions_for_scope(state: State, *, scope_id: str) -> list[Decision]:
-    """Return decisions attached to *scope_id*, sorted by id."""
+def _decisions_for_wave(state: State, *, wave: Wave, phase_id: str) -> list[Decision]:
+    """Return the decisions the dispatched wave must read, sorted by id.
+
+    Two admission rules, unioned: the decision's ``scope_id`` names the
+    wave's phase (the phase id itself or an iter / wave scope nested under
+    it), or the wave's own description / intent cites the decision id. A
+    project-scoped row the wave never mentions is dropped — the store
+    carries dozens of them and dumping every one buries the wave's own
+    contract in the prompt. Obsolete / superseded rows stay hidden even
+    when cited: a stale decision is not the contract the wave implements.
+
+    Args:
+        state: Validated, read-only state snapshot.
+        wave: The dispatched wave, whose prose supplies the citations.
+        phase_id: The wave's parent phase id.
+
+    Returns:
+        The admitted :class:`Decision` rows sorted by id.
+    """
     pool = state.decisions or {}
+    cited = _cited_decision_ids(pool, wave=wave)
     out = [
         d
         for d in pool.values()
-        if d.scope_id == scope_id and d.status not in _HIDDEN_DECISION_STATUSES
+        if d.status not in _HIDDEN_DECISION_STATUSES
+        and (_is_phase_scoped(d.scope_id, phase_id=phase_id) or d.id in cited)
     ]
     out.sort(key=lambda d: d.id)
+    logger.debug(
+        f"_decisions_for_wave wave={wave.id!r} phase={phase_id!r} "
+        f"pool={len(pool)} cited={len(cited)} selected={len(out)}"
+    )
     return out
+
+
+def _is_phase_scoped(scope_id: str, *, phase_id: str) -> bool:
+    """Return whether *scope_id* is the phase or a scope nested under it."""
+    return scope_id == phase_id or scope_id.startswith(f"{phase_id}-")
+
+
+def _cited_decision_ids(pool: Mapping[str, Decision], *, wave: Wave) -> set[str]:
+    """Return the ids in *pool* that the wave's own prose cites.
+
+    The match is anchored on alphanumeric boundaries so ``D01`` does not
+    admit ``D012`` and a hyphenated id such as ``D-SUP-01`` still matches
+    the way an author writes it inline.
+    """
+    text = _wave_citation_text(wave)
+    if not text.strip():
+        return set()
+    return {
+        d.id
+        for d in pool.values()
+        if re.search(rf"(?<![A-Za-z0-9]){re.escape(d.id)}(?![A-Za-z0-9])", text)
+    }
+
+
+def _wave_citation_text(wave: Wave) -> str:
+    """Return the wave prose a decision id may be cited in."""
+    parts: list[str] = [wave.description or ""]
+    intent = wave.intent
+    if intent is not None:
+        parts.extend([intent.problem, intent.desired_outcome, intent.priority_rationale or ""])
+        parts.extend(intent.planned_steps)
+        parts.extend(intent.risks)
+        parts.extend(intent.evidence_refs)
+        parts.extend(intent.source_brief_ids)
+    return "\n".join(parts)
 
 
 def _hypotheses_for_scope(state: State, *, scope_id: str) -> list[Hypothesis]:
