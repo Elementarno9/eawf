@@ -22,7 +22,6 @@ import os
 import re
 import shutil
 import sys
-import threading
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
@@ -34,18 +33,20 @@ from typing import TYPE_CHECKING
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.runtimes.adapter import (
+    ConcurrentSpawnCapError,
     ErrorClass,
     RuntimeAdapter,
     RuntimeSpawnError,
     SessionResumeFailedError,
     SpawnResult,
+    acquire_spawn_slot,
+    release_spawn_slot,
 )
 from eawf.runtime.runtimes.cache_control import inject_cache_control
 from eawf.runtime.runtimes.selector import runtime_supports
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
 from eawf.runtime.sandbox.egress_proxy import (
     EnforcementSink,
-    SandboxError,
     emit_enforcement,
     make_enforcement_event,
 )
@@ -56,56 +57,6 @@ if TYPE_CHECKING:
     from eawf.workflow.agents.specs.models import RoleContract
 
 logger = logging.getLogger(__name__)
-
-#: Ceiling on live agent spawns in flight at once. Mirrors the claude + codex
-#: lanes' floor so the cross-vendor fleet shares one cap value: a spawn past
-#: the cap fails fast with :class:`ConcurrentSpawnCapError` rather than
-#: queueing. The counter is opencode-local (each adapter holds its own
-#: in-flight count) because this wave edits only the opencode module; the cap
-#: VALUE matches the other lanes so the parity is honest.
-_CONCURRENT_SPAWN_CAP: int = 16
-
-#: Live in-flight spawn counter + its lock. Module-global because the cap is
-#: per-process (the daemon hosts every spawn); guarded by a lock so the
-#: increment / cap-check is atomic under the asyncio + worker-thread mix the
-#: daemon runs spawns on.
-_spawn_inflight: int = 0
-_spawn_lock = threading.Lock()
-
-
-class ConcurrentSpawnCapError(SandboxError):
-    """Raised when an opencode spawn would exceed the concurrent-spawn cap.
-
-    Mirrors :class:`eawf.runtime.runtimes.claude.adapter.ConcurrentSpawnCapError`
-    so the cross-vendor floor refuses to fork a new jailed child once
-    :data:`_CONCURRENT_SPAWN_CAP` are already in flight; a runaway dispatch
-    loop fails fast at the spawn boundary rather than exhausting process /
-    socket resources.
-    """
-
-
-def _acquire_spawn_slot() -> None:
-    """Reserve one in-flight spawn slot or fail fast at the cap.
-
-    Raises:
-        ConcurrentSpawnCapError: When :data:`_CONCURRENT_SPAWN_CAP` spawns
-            are already in flight.
-    """
-    global _spawn_inflight
-    with _spawn_lock:
-        if _spawn_inflight >= _CONCURRENT_SPAWN_CAP:
-            raise ConcurrentSpawnCapError(
-                f"concurrent spawn cap reached: inflight={_spawn_inflight} "
-                f"cap={_CONCURRENT_SPAWN_CAP}"
-            )
-        _spawn_inflight += 1
-
-
-def _release_spawn_slot() -> None:
-    """Release one in-flight spawn slot (never drops below zero)."""
-    global _spawn_inflight
-    with _spawn_lock:
-        _spawn_inflight = max(_spawn_inflight - 1, 0)
 
 
 def _record_env_scrub(
@@ -539,6 +490,7 @@ def _parse_opencode_result(
             f"opencode spawn exited nonzero: status={exit_status} detail={diagnostic[:300]!r}",
             exit_status=exit_status,
             stderr=diagnostic.encode() if diagnostic else stderr,
+            stdout=stdout,
         )
     raw = stdout.decode(errors="replace").strip()
     if not raw:
@@ -692,7 +644,7 @@ class OpenCodeAdapter:
         fallback are each recorded to *enforcement_sink* (when wired) so a
         denial-timeline surface reads what the floor refused for *session*.
         The floor also caps the number of live spawns in flight at once
-        (:data:`_CONCURRENT_SPAWN_CAP`): a spawn past the cap fails fast with
+        (:data:`CONCURRENT_SPAWN_CAP`): a spawn past the cap fails fast with
         :class:`ConcurrentSpawnCapError` before any subprocess is forked.
 
         **denied_tools is honoured by the FS-jail floor, not a fictional argv
@@ -805,7 +757,7 @@ class OpenCodeAdapter:
         # The concurrent-spawn cap is the LAST gate before the fork so the slot
         # is held only for the real subprocess lifetime; it is released in the
         # ``finally`` after the child is reaped / parsed.
-        _acquire_spawn_slot()
+        acquire_spawn_slot()
         try:
             started_at = datetime.now(UTC)
             proc = await asyncio.create_subprocess_exec(
@@ -861,7 +813,7 @@ class OpenCodeAdapter:
                 ended_at=ended_at,
             )
         finally:
-            _release_spawn_slot()
+            release_spawn_slot()
 
     async def continue_session(
         self,

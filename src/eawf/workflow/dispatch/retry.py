@@ -54,7 +54,12 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.state.models import resolve_close_budget
-from eawf.runtime.runtimes.adapter import RuntimeSpawnError
+from eawf.runtime.runtimes.adapter import (
+    RUNTIME_RATE_LIMIT,
+    ConcurrentSpawnCapError,
+    RuntimeSpawnError,
+    classify_stream_error,
+)
 from eawf.runtime.runtimes.fallback import (
     FallbackAction,
     fallback_action,
@@ -157,6 +162,10 @@ class SpawnAttemptFailure(BaseModel):
         detail: Scrubbed human-readable failure detail (the
             :class:`RuntimeSpawnError` message), bounded so a long message
             cannot blow the field.
+        retry_after_seconds: How long the caller should wait before
+            re-requesting, when the failure carried typed backpressure (a
+            saturated concurrent-spawn cap). ``None`` for a vendor failure,
+            which carries no local wait.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -166,6 +175,7 @@ class SpawnAttemptFailure(BaseModel):
     error_class: str = Field(min_length=1)
     action: FallbackAction
     detail: str = Field(min_length=1, max_length=2000)
+    retry_after_seconds: float | None = Field(default=None, gt=0)
 
 
 class FailureNotice(BaseModel):
@@ -186,6 +196,10 @@ class FailureNotice(BaseModel):
             failure.
         attempts_used: Number of spawns the loop burned before terminating.
         message: Human-readable one-line summary of the terminal failure.
+        retry_after_seconds: Typed backpressure carried off the terminal
+            failure -- how long to wait before re-requesting. Populated when
+            the loop terminated on a saturated concurrent-spawn cap; ``None``
+            for a vendor failure.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -195,6 +209,7 @@ class FailureNotice(BaseModel):
     error_class: str = Field(min_length=1)
     attempts_used: int = Field(ge=1)
     message: str = Field(min_length=1, max_length=2000)
+    retry_after_seconds: float | None = Field(default=None, gt=0)
 
 
 #: V5 ladder action -> terminal failure tier. Total over
@@ -406,6 +421,7 @@ def _failure_notice(*, failures: list[SpawnAttemptFailure], attempts_used: int) 
             f"spawn on runtime {terminal.runtime!r} failed with "
             f"{terminal.error_class} after {attempts_used} attempt(s): {terminal.detail}"
         ),
+        retry_after_seconds=terminal.retry_after_seconds,
     )
 
 
@@ -435,6 +451,17 @@ async def spawn_with_retry(
       stop and exhaust.
     - :attr:`~eawf.runtime.runtimes.fallback.FallbackAction.HALT` -- stop
       immediately with no retry (auth never auto-retries).
+
+    Classification reads the stream the vendor actually wrote its error to:
+    :func:`~eawf.runtime.runtimes.adapter.classify_stream_error` reads the
+    stream-json payload on the failure's stdout first, and *classify* owns the
+    stderr-bearing failures the payload does not name.
+
+    A :class:`~eawf.runtime.runtimes.adapter.ConcurrentSpawnCapError` -- the
+    process-wide spawn ceiling saturating -- is caught here rather than
+    escaping: it is local backpressure, so the loop records it as
+    ``RUNTIME_RATE_LIMIT`` / ``RETRY_SAME`` and carries the typed
+    ``retry_after_seconds`` onto the :class:`FailureNotice`.
 
     The loop is **bounded** (never more than *max_attempts* spawns) and
     **fail-loud** (a terminal failure raises :class:`RetryExhaustedError`
@@ -479,8 +506,36 @@ async def spawn_with_retry(
     for attempt in range(1, max_attempts + 1):
         try:
             result = await spawn(current_runtime)
+        except ConcurrentSpawnCapError as exc:
+            # A saturated spawn cap is eawf-side backpressure, not a vendor
+            # outage: the ceiling is process-wide, so no other runtime has a
+            # free slot and switching cannot help. Retry the same runtime and
+            # carry the typed wait instead of letting the cap error escape the
+            # ladder uncaught.
+            failures.append(
+                SpawnAttemptFailure(
+                    attempt=attempt,
+                    runtime=current_runtime,
+                    error_class=RUNTIME_RATE_LIMIT,
+                    action=FallbackAction.RETRY_SAME,
+                    detail=f"{exc}"[:2000],
+                    retry_after_seconds=exc.retry_after_seconds,
+                )
+            )
+            logger.info(
+                f"spawn_with_retry spawn_attempt={attempt} runtime={current_runtime!r} "
+                f"status=cap_saturated inflight={exc.inflight} cap={exc.cap} "
+                f"retry_after_seconds={exc.retry_after_seconds}"
+            )
+            continue
         except RuntimeSpawnError as exc:
-            error_class = classify(exc, current_runtime)
+            # Under stream-json the vendor writes its error envelope to stdout
+            # and leaves stderr empty, so read that stream first; the injected
+            # per-runtime classifier still owns every stderr-bearing failure.
+            stream_class = classify_stream_error(exc.stdout)
+            error_class = (
+                stream_class if stream_class is not None else classify(exc, current_runtime)
+            )
             action = fallback_action(error_class)
             failures.append(
                 SpawnAttemptFailure(

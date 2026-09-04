@@ -41,6 +41,7 @@ in :class:`~eawf.kernel.state.models.SessionAttempt.runtime`,
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Awaitable, Callable, Sequence
 from decimal import Decimal
 from typing import TYPE_CHECKING, Annotated, Final, Literal, Protocol, runtime_checkable
@@ -51,6 +52,7 @@ from eawf.kernel.state.enums import MeasurementQuality, MeasurementStatus
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.kinds.event import Event, EventKind, EventPayload
+from eawf.runtime.runtimes.stream_json import vendor_error_signal
 
 if TYPE_CHECKING:
     from eawf.workflow.agents.specs.models import RoleContract
@@ -115,20 +117,25 @@ class RuntimeSpawnError(RuntimeError):
     :class:`json.JSONDecodeError` / partial-output failure surfaces as a
     typed adapter-layer error rather than leaking out of the spawn seam.
 
-    Carries the optional spawn-failure context (:attr:`exit_status` +
-    :attr:`stderr`) so a caller can feed it back through
-    :meth:`RuntimeAdapter.parse_error` to classify the failure into a
-    canonical :data:`ErrorClass` for the V5 reactive-switch ladder. The
-    raise sites that have the subprocess exit + stderr in hand (a non-zero
-    exit, a timeout) populate them; the parse-level raise sites (empty
-    stdout, unparseable JSON) leave the defaults, so a classifier coerces
-    them to the conservative ``RUNTIME_API_ERROR`` (a switch signal).
+    Carries the spawn-failure context (:attr:`exit_status` + :attr:`stderr` +
+    :attr:`stdout`) so a caller can classify the failure into a canonical
+    :data:`ErrorClass` for the V5 reactive-switch ladder. Both output streams
+    are carried because the vendors disagree about which one a failure lands
+    on: a non-zero exit writes to stderr, while a ``--output-format
+    stream-json`` failure routes the vendor's error envelope to **stdout** and
+    leaves stderr empty. Classifying from stderr alone therefore misses the
+    whole stream-json failure population -- :func:`classify_stream_error`
+    reads :attr:`stdout` so the taxonomy sees the stream the vendor actually
+    wrote to.
 
     Attributes:
         exit_status: Subprocess exit code when known (``None`` for a
             parse-level failure with no exit context).
-        stderr: Captured stderr bytes when known (``b""`` for a
-            parse-level failure).
+        stderr: Captured stderr bytes when known (``b""`` when the vendor
+            wrote nothing there).
+        stdout: Captured stdout bytes when known (``b""`` when the raise site
+            has no output in hand). Carries the stream-json transcript whose
+            error envelope :func:`classify_stream_error` reads.
     """
 
     def __init__(
@@ -137,10 +144,192 @@ class RuntimeSpawnError(RuntimeError):
         *,
         exit_status: int | None = None,
         stderr: bytes = b"",
+        stdout: bytes = b"",
     ) -> None:
         super().__init__(message)
         self.exit_status = exit_status
         self.stderr = stderr
+        self.stdout = stdout
+
+
+# ---------------------------------------------------------------------------
+# Concurrent-spawn ceiling (the one effective cap)
+# ---------------------------------------------------------------------------
+
+CONCURRENT_SPAWN_CAP: Final[int] = 16
+"""The one effective ceiling on live agent spawns in flight at once.
+
+Every adapter reserves its slot from this module, so the ceiling is a
+*process-wide* count rather than a per-vendor one: three vendor modules each
+holding their own counter would have made the effective cap three times the
+number any one of them stated, which is exactly the runaway fan-out the cap
+exists to bound. Chosen to comfortably cover the parallel-wave fleet while
+still bounding the blast radius of a dispatch-loop bug.
+"""
+
+CAP_RETRY_AFTER_SECONDS: Final[float] = 5.0
+"""Seconds a cap-saturated caller should wait before re-requesting a slot.
+
+A saturated cap is a *local* backpressure signal, not a vendor outage: the
+slots free themselves as in-flight spawns finish, so the wait is short and
+fixed rather than derived from a vendor ``Retry-After`` header.
+"""
+
+
+class ConcurrentSpawnCapError(RuntimeSpawnError):
+    """Raised when a spawn would exceed :data:`CONCURRENT_SPAWN_CAP`.
+
+    The spawn floor refuses to fork a new jailed child once the ceiling is
+    already in flight, so a runaway dispatch loop fails fast at the spawn
+    boundary rather than exhausting process / socket resources.
+
+    Subclasses :class:`RuntimeSpawnError` so the bounded retry ladder
+    (:func:`~eawf.workflow.dispatch.retry.spawn_with_retry`) catches a
+    saturated cap on the same seam as every other spawn failure instead of
+    letting it escape uncaught; the ladder reads :attr:`retry_after_seconds`
+    to surface typed backpressure rather than switching runtimes (no other
+    runtime has a free slot either -- the ceiling is process-wide).
+
+    Attributes:
+        inflight: Spawns already in flight when the slot was refused.
+        cap: The ceiling in force (:data:`CONCURRENT_SPAWN_CAP`).
+        retry_after_seconds: How long the caller should wait before
+            re-requesting a slot.
+    """
+
+    def __init__(
+        self,
+        *,
+        inflight: int,
+        cap: int,
+        retry_after_seconds: float = CAP_RETRY_AFTER_SECONDS,
+    ) -> None:
+        super().__init__(f"concurrent spawn cap reached: inflight={inflight} cap={cap}")
+        self.inflight = inflight
+        self.cap = cap
+        self.retry_after_seconds = retry_after_seconds
+
+
+#: Live in-flight spawn counter + its lock. Module-global because the cap is
+#: per-process (the daemon hosts every spawn); guarded by a lock so the
+#: increment / cap-check is atomic under the asyncio + worker-thread mix the
+#: daemon runs spawns on.
+_spawn_inflight: int = 0
+_spawn_lock = threading.Lock()
+
+
+def acquire_spawn_slot() -> None:
+    """Reserve one in-flight spawn slot or fail fast at the ceiling.
+
+    Raises:
+        ConcurrentSpawnCapError: :data:`CONCURRENT_SPAWN_CAP` spawns are
+            already in flight.
+    """
+    global _spawn_inflight
+    with _spawn_lock:
+        if _spawn_inflight >= CONCURRENT_SPAWN_CAP:
+            raise ConcurrentSpawnCapError(
+                inflight=_spawn_inflight,
+                cap=CONCURRENT_SPAWN_CAP,
+            )
+        _spawn_inflight += 1
+
+
+def release_spawn_slot() -> None:
+    """Release one in-flight spawn slot (never drops below zero)."""
+    global _spawn_inflight
+    with _spawn_lock:
+        _spawn_inflight = max(0, _spawn_inflight - 1)
+
+
+def spawn_inflight() -> int:
+    """Return the number of spawn slots currently reserved."""
+    with _spawn_lock:
+        return _spawn_inflight
+
+
+# ---------------------------------------------------------------------------
+# Stream-aware error classification (§5.5)
+# ---------------------------------------------------------------------------
+
+#: Vendor error-type token -> canonical class. Keyed on the machine-readable
+#: token the vendor stamps on its error envelope (never on the human-readable
+#: message, which is not a stable contract). Spans the Anthropic vocabulary the
+#: claude / opencode lanes surface and the OpenAI vocabulary codex surfaces.
+_CLASS_FOR_ERROR_TYPE: Final[dict[str, ErrorClass]] = {
+    "authentication_error": RUNTIME_AUTH_ERROR,
+    "invalid_api_key": RUNTIME_AUTH_ERROR,
+    "permission_error": RUNTIME_AUTH_ERROR,
+    "permission_denied": RUNTIME_AUTH_ERROR,
+    "insufficient_quota": RUNTIME_AUTH_ERROR,
+    "rate_limit_error": RUNTIME_RATE_LIMIT,
+    "rate_limit_exceeded": RUNTIME_RATE_LIMIT,
+    "overloaded_error": RUNTIME_SERVER_ERROR,
+    "server_error": RUNTIME_SERVER_ERROR,
+    "api_error": RUNTIME_SERVER_ERROR,
+    "deadline_exceeded": RUNTIME_TIMEOUT,
+    "timeout": RUNTIME_TIMEOUT,
+    "timeout_error": RUNTIME_TIMEOUT,
+    "error_max_turns": RUNTIME_API_ERROR,
+    "invalid_request_error": RUNTIME_API_ERROR,
+    "not_found_error": RUNTIME_API_ERROR,
+    "request_too_large": RUNTIME_API_ERROR,
+}
+
+#: HTTP status -> canonical class. The second reading of a vendor error
+#: envelope, consulted when the envelope names no error-type token.
+_CLASS_FOR_STATUS: Final[dict[int, ErrorClass]] = {
+    400: RUNTIME_API_ERROR,
+    401: RUNTIME_AUTH_ERROR,
+    403: RUNTIME_AUTH_ERROR,
+    404: RUNTIME_API_ERROR,
+    408: RUNTIME_TIMEOUT,
+    413: RUNTIME_API_ERROR,
+    422: RUNTIME_API_ERROR,
+    429: RUNTIME_RATE_LIMIT,
+    500: RUNTIME_SERVER_ERROR,
+    502: RUNTIME_SERVER_ERROR,
+    503: RUNTIME_SERVER_ERROR,
+    504: RUNTIME_TIMEOUT,
+    529: RUNTIME_SERVER_ERROR,
+}
+
+
+def classify_stream_error(stdout: bytes) -> ErrorClass | None:
+    """Classify a failure from the stream-json payload the vendor wrote to stdout.
+
+    Under ``--output-format stream-json`` a failing call routes the vendor's
+    error envelope to stdout and leaves stderr empty, so the per-adapter
+    :meth:`RuntimeAdapter.parse_error` stderr ladder sees nothing and returns
+    its ``RUNTIME_API_ERROR`` default for every such failure regardless of the
+    real cause. This reads the stream the vendor actually wrote to: it lifts
+    the structured error fields off the transcript
+    (:func:`~eawf.runtime.runtimes.stream_json.vendor_error_signal`) and maps
+    them through :data:`_CLASS_FOR_ERROR_TYPE` then :data:`_CLASS_FOR_STATUS`.
+
+    Returns ``None`` rather than a default when the payload names no
+    recognised signal, so the caller falls through to the adapter's stderr
+    ladder instead of this reading masking it.
+
+    Args:
+        stdout: Raw captured stdout bytes of the failed spawn.
+
+    Returns:
+        The canonical :data:`ErrorClass` the payload names, or ``None`` when
+        it names none.
+    """
+    if not stdout:
+        return None
+    signal = vendor_error_signal(stdout.decode(errors="replace"))
+    if signal is None:
+        return None
+    if signal.error_type is not None:
+        by_type = _CLASS_FOR_ERROR_TYPE.get(signal.error_type.strip().lower())
+        if by_type is not None:
+            return by_type
+    if signal.status_code is not None:
+        return _CLASS_FOR_STATUS.get(signal.status_code)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -521,16 +710,23 @@ def emit_runtime_event(
 
 __all__ = [
     "ALL_ERROR_CLASSES",
+    "CAP_RETRY_AFTER_SECONDS",
+    "CONCURRENT_SPAWN_CAP",
     "RUNTIME_API_ERROR",
     "RUNTIME_AUTH_ERROR",
     "RUNTIME_RATE_LIMIT",
     "RUNTIME_SERVER_ERROR",
     "RUNTIME_TIMEOUT",
+    "ConcurrentSpawnCapError",
     "DispatchEventKind",
     "ErrorClass",
     "RuntimeAdapter",
     "RuntimeSpawnError",
     "SessionResumeFailedError",
     "SpawnResult",
+    "acquire_spawn_slot",
+    "classify_stream_error",
     "emit_runtime_event",
+    "release_spawn_slot",
+    "spawn_inflight",
 ]

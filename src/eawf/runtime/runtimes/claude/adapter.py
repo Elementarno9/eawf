@@ -16,7 +16,6 @@ import os
 import re
 import shutil
 import sys
-import threading
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
@@ -27,10 +26,13 @@ from typing import TYPE_CHECKING
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.runtimes.adapter import (
+    ConcurrentSpawnCapError,
     ErrorClass,
     RuntimeAdapter,
     RuntimeSpawnError,
     SpawnResult,
+    acquire_spawn_slot,
+    release_spawn_slot,
 )
 from eawf.runtime.runtimes.cache_control import inject_cache_control
 from eawf.runtime.runtimes.selector import runtime_supports
@@ -38,7 +40,6 @@ from eawf.runtime.runtimes.stream_json import terminal_result_envelope
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
 from eawf.runtime.sandbox.egress_proxy import (
     EnforcementSink,
-    SandboxError,
     emit_enforcement,
     make_enforcement_event,
 )
@@ -56,55 +57,6 @@ _JAIL_WRAPPER_BINARY: dict[str, str] = {
     "darwin": "sandbox-exec",
     "linux": "bwrap",
 }
-
-#: Ceiling on live agent spawns in flight at once. The floor caps the spawn
-#: fan-out so a runaway dispatcher cannot fork an unbounded fleet of jailed
-#: children (each holds an egress socket + a process group); a spawn past
-#: the cap fails fast with :class:`ConcurrentSpawnCapError` rather than
-#: queueing. Chosen to comfortably cover the parallel-wave fleet while still
-#: bounding the blast radius of a dispatch loop bug.
-_CONCURRENT_SPAWN_CAP: int = 16
-
-#: Live in-flight spawn counter + its lock. Module-global because the cap is
-#: per-process (the daemon hosts every spawn); guarded by a lock so the
-#: increment / cap-check is atomic under the asyncio + worker-thread mix the
-#: daemon runs spawns on.
-_spawn_inflight: int = 0
-_spawn_lock = threading.Lock()
-
-
-class ConcurrentSpawnCapError(SandboxError):
-    """Raised when a spawn would exceed the concurrent-spawn cap.
-
-    The floor refuses to fork a new jailed child once
-    :data:`_CONCURRENT_SPAWN_CAP` are already in flight, so a runaway
-    dispatch loop fails fast at the spawn boundary rather than exhausting
-    process / socket resources.
-    """
-
-
-def _acquire_spawn_slot() -> None:
-    """Reserve one in-flight spawn slot or fail fast at the cap.
-
-    Raises:
-        ConcurrentSpawnCapError: When :data:`_CONCURRENT_SPAWN_CAP` spawns
-            are already in flight.
-    """
-    global _spawn_inflight
-    with _spawn_lock:
-        if _spawn_inflight >= _CONCURRENT_SPAWN_CAP:
-            raise ConcurrentSpawnCapError(
-                f"concurrent spawn cap reached: inflight={_spawn_inflight} "
-                f"cap={_CONCURRENT_SPAWN_CAP}"
-            )
-        _spawn_inflight += 1
-
-
-def _release_spawn_slot() -> None:
-    """Release one in-flight spawn slot (never drops below zero)."""
-    global _spawn_inflight
-    with _spawn_lock:
-        _spawn_inflight = max(_spawn_inflight - 1, 0)
 
 
 def _jail_wrapper_binary(platform: str) -> str | None:
@@ -398,6 +350,7 @@ def _parse_claude_result(
             f"claude spawn exited nonzero: status={exit_status} stderr={snippet!r}",
             exit_status=exit_status,
             stderr=stderr,
+            stdout=stdout,
         )
     raw = stdout.decode(errors="replace").strip()
     if not raw:
@@ -417,7 +370,14 @@ def _parse_claude_result(
         raise RuntimeSpawnError(f"claude output is not a json object: {type(data).__name__}")
     if data.get("is_error"):
         detail = data.get("subtype") or data.get("result")
-        raise RuntimeSpawnError(f"claude reported an error result: {detail!r}")
+        # The vendor's error envelope IS the stdout payload here (stderr is
+        # empty on a stream-json failure), so carry it for classification.
+        raise RuntimeSpawnError(
+            f"claude reported an error result: {detail!r}",
+            exit_status=exit_status,
+            stderr=stderr,
+            stdout=stdout,
+        )
     usage = data.get("usage") or {}
     if not isinstance(usage, dict):
         raise RuntimeSpawnError("claude usage block is not a json object")
@@ -619,7 +579,7 @@ class ClaudeAdapter:
         to the buffered path.
 
         The floor caps the number of live spawns in flight at once
-        (:data:`_CONCURRENT_SPAWN_CAP`): a spawn past the cap fails fast
+        (:data:`CONCURRENT_SPAWN_CAP`): a spawn past the cap fails fast
         with :class:`ConcurrentSpawnCapError` before any subprocess is
         forked. Each enforcement decision the spawn makes -- the env-scrub
         drop, the per-wave argv deny, the cwd-guard fallback -- is recorded
@@ -724,7 +684,7 @@ class ClaudeAdapter:
         # The concurrent-spawn cap is the LAST gate before the fork so the
         # slot is held only for the real subprocess lifetime; it is released
         # in the ``finally`` after the child is reaped / parsed.
-        _acquire_spawn_slot()
+        acquire_spawn_slot()
         try:
             started_at = datetime.now(UTC)
             proc = await asyncio.create_subprocess_exec(
@@ -779,7 +739,7 @@ class ClaudeAdapter:
                 ended_at=ended_at,
             )
         finally:
-            _release_spawn_slot()
+            release_spawn_slot()
 
     @staticmethod
     def _record_env_scrub(

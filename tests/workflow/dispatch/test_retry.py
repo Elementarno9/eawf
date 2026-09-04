@@ -24,8 +24,21 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from eawf.runtime.runtimes.adapter import ErrorClass, RuntimeSpawnError, SpawnResult
+from eawf.runtime.runtimes.adapter import (
+    CAP_RETRY_AFTER_SECONDS,
+    CONCURRENT_SPAWN_CAP,
+    ConcurrentSpawnCapError,
+    ErrorClass,
+    RuntimeSpawnError,
+    SpawnResult,
+    acquire_spawn_slot,
+    release_spawn_slot,
+    spawn_inflight,
+)
+from eawf.runtime.runtimes.claude import adapter as claude_adapter
+from eawf.runtime.runtimes.codex import adapter as codex_adapter
 from eawf.runtime.runtimes.fallback import FallbackAction
+from eawf.runtime.runtimes.opencode import adapter as opencode_adapter
 from eawf.workflow.dispatch.retry import (
     DEFAULT_MAX_ATTEMPTS,
     FailureNotice,
@@ -524,3 +537,149 @@ def test_retry_exhausted_error_carries_notice_and_trail_together() -> None:
     assert err.notice.runtime == "codex"
     assert err.notice.error_class == "RUNTIME_TIMEOUT"
     assert err.notice.attempts_used == 2
+
+
+# ---------------------------------------------------------------------------
+# Cap saturation: one effective ceiling, typed retry-after through the ladder
+# ---------------------------------------------------------------------------
+
+
+def _cap_error() -> ConcurrentSpawnCapError:
+    """Build a cap-saturation error at the one effective ceiling."""
+    return ConcurrentSpawnCapError(inflight=CONCURRENT_SPAWN_CAP, cap=CONCURRENT_SPAWN_CAP)
+
+
+def test_cap_saturation_is_caught_by_the_ladder_not_escaped() -> None:
+    """A saturated cap surfaces as ``RetryExhaustedError``, never as the cap error."""
+
+    async def _spawn(_runtime: str) -> SpawnResult:
+        raise _cap_error()
+
+    with pytest.raises(RetryExhaustedError):
+        asyncio.run(
+            spawn_with_retry(
+                runtime="claude-code",
+                preference=["claude-code", "codex"],
+                spawn=_spawn,
+                classify=_classify,
+                max_attempts=2,
+            )
+        )
+
+
+def test_cap_saturation_carries_a_typed_retry_after() -> None:
+    """The terminal notice carries the typed wait rather than a bare message."""
+
+    async def _spawn(_runtime: str) -> SpawnResult:
+        raise _cap_error()
+
+    with pytest.raises(RetryExhaustedError) as excinfo:
+        asyncio.run(
+            spawn_with_retry(
+                runtime="claude-code",
+                preference=["claude-code", "codex"],
+                spawn=_spawn,
+                classify=_classify,
+                max_attempts=2,
+            )
+        )
+    notice = excinfo.value.notice
+    assert notice.retry_after_seconds == pytest.approx(CAP_RETRY_AFTER_SECONDS)
+    assert notice.error_class == "RUNTIME_RATE_LIMIT"
+    assert notice.tier is FailureTier.TRANSIENT_RETRYABLE
+
+
+def test_cap_saturation_retries_the_same_runtime_and_never_switches() -> None:
+    """The ceiling is process-wide, so switching runtimes cannot free a slot."""
+    seen: list[str] = []
+
+    async def _spawn(runtime: str) -> SpawnResult:
+        seen.append(runtime)
+        raise _cap_error()
+
+    with pytest.raises(RetryExhaustedError) as excinfo:
+        asyncio.run(
+            spawn_with_retry(
+                runtime="claude-code",
+                preference=["claude-code", "codex", "opencode"],
+                spawn=_spawn,
+                classify=_classify,
+                max_attempts=3,
+            )
+        )
+    assert seen == ["claude-code", "claude-code", "claude-code"]
+    assert [f.action for f in excinfo.value.failures] == [FallbackAction.RETRY_SAME] * 3
+
+
+def test_cap_saturation_never_reaches_the_vendor_classifier() -> None:
+    """The cap is an eawf-side condition; no vendor ``parse_error`` is consulted."""
+
+    async def _spawn(_runtime: str) -> SpawnResult:
+        raise _cap_error()
+
+    def _explode(_exc: RuntimeSpawnError, _runtime: str) -> ErrorClass:
+        raise AssertionError("cap saturation must not be classified by the vendor ladder")
+
+    with pytest.raises(RetryExhaustedError):
+        asyncio.run(
+            spawn_with_retry(
+                runtime="claude-code",
+                preference=[],
+                spawn=_spawn,
+                classify=_explode,
+                max_attempts=1,
+            )
+        )
+
+
+def test_cap_saturation_recovers_when_a_slot_frees_mid_ladder() -> None:
+    """A cap that clears between attempts lets the next spawn through."""
+    attempts: list[str] = []
+
+    async def _spawn(runtime: str) -> SpawnResult:
+        attempts.append(runtime)
+        if len(attempts) == 1:
+            raise _cap_error()
+        return _spawn_result(runtime)
+
+    result = asyncio.run(
+        spawn_with_retry(
+            runtime="claude-code",
+            preference=["claude-code", "codex"],
+            spawn=_spawn,
+            classify=_classify,
+            max_attempts=2,
+        )
+    )
+    assert result.runtime == "claude-code"
+    assert attempts == ["claude-code", "claude-code"]
+
+
+def test_cap_saturation_states_one_effective_ceiling_across_vendors() -> None:
+    """Every vendor adapter draws its slot from the single shared counter."""
+    assert claude_adapter.acquire_spawn_slot is acquire_spawn_slot
+    assert codex_adapter.acquire_spawn_slot is acquire_spawn_slot
+    assert opencode_adapter.acquire_spawn_slot is acquire_spawn_slot
+    assert claude_adapter.ConcurrentSpawnCapError is ConcurrentSpawnCapError
+    assert codex_adapter.ConcurrentSpawnCapError is ConcurrentSpawnCapError
+    assert opencode_adapter.ConcurrentSpawnCapError is ConcurrentSpawnCapError
+
+
+def test_cap_saturation_ceiling_is_the_shared_counter_not_a_per_module_one() -> None:
+    """Saturating the shared counter refuses a slot on every vendor lane."""
+    for _ in range(CONCURRENT_SPAWN_CAP):
+        acquire_spawn_slot()
+    try:
+        assert spawn_inflight() == CONCURRENT_SPAWN_CAP
+        with pytest.raises(ConcurrentSpawnCapError, match="concurrent spawn cap"):
+            acquire_spawn_slot()
+    finally:
+        for _ in range(CONCURRENT_SPAWN_CAP):
+            release_spawn_slot()
+    assert spawn_inflight() == 0
+
+
+def test_release_spawn_slot_never_drops_below_zero() -> None:
+    """An unbalanced release floors at zero rather than going negative."""
+    release_spawn_slot()
+    assert spawn_inflight() == 0

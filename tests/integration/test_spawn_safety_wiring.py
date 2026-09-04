@@ -48,6 +48,7 @@ from eawf.runtime.daemon.dispatch_runner import (
     persist_enforcement_event,
 )
 from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.runtimes import adapter as shared_adapter
 from eawf.runtime.runtimes.claude import adapter as claude_adapter
 from eawf.runtime.runtimes.claude.adapter import (
     ClaudeAdapter,
@@ -496,8 +497,10 @@ def test_persist_enforcement_event_without_event_path_raises(tmp_path: Path) -> 
 
 def test_concurrent_spawn_cap_fails_fast_at_ceiling(monkeypatch: pytest.MonkeyPatch) -> None:
     """A spawn past the concurrent cap raises before any subprocess is forked."""
-    # Saturate the in-flight counter at the cap so the next acquire fails.
-    monkeypatch.setattr(claude_adapter, "_spawn_inflight", claude_adapter._CONCURRENT_SPAWN_CAP)
+    # Saturate the shared in-flight counter at the one ceiling so the next
+    # acquire fails. The counter lives on the shared adapter module: the cap is
+    # process-wide, not per-vendor.
+    monkeypatch.setattr(shared_adapter, "_spawn_inflight", shared_adapter.CONCURRENT_SPAWN_CAP)
 
     async def _spawn() -> Any:
         return await ClaudeAdapter().spawn_session(

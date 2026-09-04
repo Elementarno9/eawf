@@ -42,6 +42,7 @@ from typing import Any
 
 import pytest
 
+from eawf.runtime.runtimes import adapter as shared_adapter
 from eawf.runtime.runtimes.adapter import RuntimeSpawnError, SpawnResult
 from eawf.runtime.runtimes.claude import adapter as claude_adapter
 from eawf.runtime.runtimes.claude.adapter import ClaudeAdapter
@@ -542,11 +543,11 @@ def test_concurrent_spawn_cap_fails_fast_at_ceiling(
 ) -> None:
     """A spawn past the concurrent cap fails fast before any subprocess forks.
 
-    The fleet-overrun guard is at parity with claude: saturating the in-flight
-    counter at the cap makes the next acquire raise rather than fork an
-    unbounded fleet.
+    The fleet-overrun guard is at parity with claude because every lane draws
+    from the SAME ceiling: saturating the shared in-flight counter makes the
+    next acquire raise on any vendor rather than fork an unbounded fleet.
     """
-    monkeypatch.setattr(module, "_spawn_inflight", module._CONCURRENT_SPAWN_CAP)
+    monkeypatch.setattr(shared_adapter, "_spawn_inflight", shared_adapter.CONCURRENT_SPAWN_CAP)
     adapter = CodexAdapter() if module is codex_adapter else OpenCodeAdapter()
 
     with pytest.raises(cap_error, match="concurrent spawn cap"):
