@@ -13020,6 +13020,21 @@
       "status": "done",
       "updated_at": "2026-09-04T18:33:38.579326Z"
     },
+    "P31-I01-W20": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W20",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W20",
+      "model": null,
+      "scope_id": "P31-I01-W20",
+      "status": "done",
+      "updated_at": "2026-09-04T19:50:23.165915Z"
+    },
     "P31-I01-W21": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13035,6 +13050,21 @@
       "status": "done",
       "updated_at": "2026-09-04T16:44:11.356835Z"
     },
+    "P31-I01-W22": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W22",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W22",
+      "model": null,
+      "scope_id": "P31-I01-W22",
+      "status": "done",
+      "updated_at": "2026-09-04T19:51:02.573262Z"
+    },
     "P31-I01-W24": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13049,6 +13079,21 @@
       "scope_id": "P31-I01-W24",
       "status": "done",
       "updated_at": "2026-09-04T16:44:17.770506Z"
+    },
+    "P31-I01-W29": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W29",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W29",
+      "model": null,
+      "scope_id": "P31-I01-W29",
+      "status": "done",
+      "updated_at": "2026-09-04T19:51:08.001225Z"
     },
     "P31-I01-W34": {
       "actual_cost_usd": 0.0,
@@ -14804,15 +14849,15 @@
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-04T19:49:52.941787Z",
       "id": "SES-20260904T183331.499909Z-operator-claude-7c4ffd32-c001-428c-b333-caa5594f8dcc",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-c19",
       "started_at": "2026-09-04T18:33:31.499909Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T190754.570782Z-executor-claude-94759bcd-61cc-4c4e-b6da-4351dfa30b2d": {
@@ -14821,15 +14866,15 @@
       "claimed_wave_ids": [
         "P31-I01-W20"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-04T19:49:52.944051Z",
       "id": "SES-20260904T190754.570782Z-executor-claude-94759bcd-61cc-4c4e-b6da-4351dfa30b2d",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W20",
       "started_at": "2026-09-04T19:07:54.570782Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T190755.900161Z-executor-claude-c497f9d4-d824-4c5a-b0bb-ecb8f791c196": {
@@ -14838,15 +14883,15 @@
       "claimed_wave_ids": [
         "P31-I01-W22"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-04T19:49:52.944751Z",
       "id": "SES-20260904T190755.900161Z-executor-claude-c497f9d4-d824-4c5a-b0bb-ecb8f791c196",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W22",
       "started_at": "2026-09-04T19:07:55.900161Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T190757.238985Z-executor-claude-00107748-c5e4-42f1-b518-0f8a1420947a": {
@@ -14855,13 +14900,58 @@
       "claimed_wave_ids": [
         "P31-I01-W29"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-04T19:49:52.945380Z",
       "id": "SES-20260904T190757.238985Z-executor-claude-00107748-c5e4-42f1-b518-0f8a1420947a",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W29",
       "started_at": "2026-09-04T19:07:57.238985Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260904T195008.973115Z-operator-claude-09360882-ae69-4c64-8ed9-7a5e631aeefe": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-04T19:50:10.577613Z",
+      "id": "SES-20260904T195008.973115Z-operator-claude-09360882-ae69-4c64-8ed9-7a5e631aeefe",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-b4c1",
+      "started_at": "2026-09-04T19:50:08.973115Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260904T195023.850905Z-operator-claude-0a9870fb-2fef-47c3-aa8d-773fce90e894": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260904T195023.850905Z-operator-claude-0a9870fb-2fef-47c3-aa8d-773fce90e894",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-b4c2",
+      "started_at": "2026-09-04T19:50:23.850905Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260904T195103.267541Z-operator-claude-fefcdfa5-1812-47cd-9269-734aae4a9f97": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260904T195103.267541Z-operator-claude-fefcdfa5-1812-47cd-9269-734aae4a9f97",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-b4c3",
+      "started_at": "2026-09-04T19:51:03.267541Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -19788,16 +19878,10 @@
   },
   "current": {
     "active_session_ids": [
-      "SES-20260904T183331.499909Z-operator-claude-7c4ffd32-c001-428c-b333-caa5594f8dcc",
-      "SES-20260904T190754.570782Z-executor-claude-94759bcd-61cc-4c4e-b6da-4351dfa30b2d",
-      "SES-20260904T190755.900161Z-executor-claude-c497f9d4-d824-4c5a-b0bb-ecb8f791c196",
-      "SES-20260904T190757.238985Z-executor-claude-00107748-c5e4-42f1-b518-0f8a1420947a"
+      "SES-20260904T195023.850905Z-operator-claude-0a9870fb-2fef-47c3-aa8d-773fce90e894",
+      "SES-20260904T195103.267541Z-operator-claude-fefcdfa5-1812-47cd-9269-734aae4a9f97"
     ],
-    "active_wave_ids": [
-      "P31-I01-W20",
-      "P31-I01-W22",
-      "P31-I01-W29"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -38258,7 +38342,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-04T19:07:58.519681Z",
+  "updated_at": "2026-09-04T19:51:08.001451Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -38448,6 +38532,22 @@
       "supersedes_id": null,
       "tree_sha": "4ddca4ece85b58c139b48af3847fc5e4d66036c4",
       "wave_id": "P31-I01-W07"
+    },
+    "integration-255c31588340e5fb494bf5d9": {
+      "base_sha": "1f55e5d19f2c6a0b374fe2c5f609709ba08176cc",
+      "candidate_sha": "d71e0d441a7d61b0e831655e76fac524094eeab6",
+      "created_at": "2026-09-04T19:49:58.509382Z",
+      "diff_digest": "01a77636e1bd53401b56ce5e2ee0733d0f13f5cb8e41f4a2843b8cd830b7df9e",
+      "generation": 1,
+      "id": "integration-255c31588340e5fb494bf5d9",
+      "integrated_sha": "d71e0d441a7d61b0e831655e76fac524094eeab6",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and all declared gates re-run green on the integrated HEAD.",
+      "spec_digest": "835ec6cb82b7546fbe2dffd058f61178a7c75ec315f664d6b2f2652535994a78",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "354f40926319214ab129137c1cd23b4b872b3d5b",
+      "wave_id": "P31-I01-W20"
     },
     "integration-309374c72f55417386012354": {
       "base_sha": "be1aeebef5932baa857a6e8fdb1762c6b9af7465",
@@ -38753,6 +38853,22 @@
       "tree_sha": "f73776d3a9ff908b1a92f6c828bee939d20406f5",
       "wave_id": "P31-I01-W39"
     },
+    "integration-b92d475eb4bf3a03f53499df": {
+      "base_sha": "d71e0d441a7d61b0e831655e76fac524094eeab6",
+      "candidate_sha": "4aeb9776e322d8defff7a7e7c5df7b2f79f765be",
+      "created_at": "2026-09-04T19:49:59.290905Z",
+      "diff_digest": "c080bedd0d8eb11a33ac777cda44ee70aa6f0f354e8ab4511160d3a73d041152",
+      "generation": 1,
+      "id": "integration-b92d475eb4bf3a03f53499df",
+      "integrated_sha": "4aeb9776e322d8defff7a7e7c5df7b2f79f765be",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and all declared gates re-run green on the integrated HEAD.",
+      "spec_digest": "da0896a0a21c65edeaf5e26f3e5640c40eae29ea9b64d6962af86113c479ec6e",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "bcc1c1141369a944bb0bcb52e756012f60621660",
+      "wave_id": "P31-I01-W22"
+    },
     "integration-b9cf3e562f83c60f9a935dd2": {
       "base_sha": "a91bf67b4baa1f938e23ef78de7b75f1ff0efd00",
       "candidate_sha": "f784e1f3b2ac9abf72c0a0afdbc011a6e79f68f9",
@@ -38832,6 +38948,22 @@
       "supersedes_id": null,
       "tree_sha": "23086e1cd2f4f74c57d5ba6ea2c300653198c451",
       "wave_id": "P31-I01-W18"
+    },
+    "integration-f13aea6175d3fd72a8b2ab71": {
+      "base_sha": "4aeb9776e322d8defff7a7e7c5df7b2f79f765be",
+      "candidate_sha": "3294be96930a99dd045d9b4dfc9eb6f44365d2b1",
+      "created_at": "2026-09-04T19:50:00.066604Z",
+      "diff_digest": "96f8995efa4c20533227641e7acb7c6265ba2162d2140be4a740b4fd039eddb4",
+      "generation": 1,
+      "id": "integration-f13aea6175d3fd72a8b2ab71",
+      "integrated_sha": "3294be96930a99dd045d9b4dfc9eb6f44365d2b1",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and all declared gates re-run green on the integrated HEAD.",
+      "spec_digest": "1593b7bf7dc45e4e52590de6104fba62be26035e0882cc6c429b5e3f95c9a4ad",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "d0cd402da6fce0c7863d0556b4e158f6c0ae4ac6",
+      "wave_id": "P31-I01-W29"
     },
     "integration-f1e98fed812ba4ba2180b936": {
       "base_sha": "b3f04f9056f092be81b6533b35de5c1f3f94dba8",
@@ -154184,9 +154316,9 @@
       ],
       "claim_session_id": "SES-20260904T190754.570782Z-executor-claude-94759bcd-61cc-4c4e-b6da-4351dfa30b2d",
       "claimed_at": "2026-09-04T19:07:55.267457Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-04T19:50:23.165915Z",
+      "commit": "d71e0d441a7d61b0e831655e76fac524094eeab6",
+      "commit_identity_digest": "sha256:677e9db3099ce931c448babd3adaff6009b5371976f4ccc0f8e5c76c24878dae",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-08-25T22:16:17.410152Z",
@@ -154286,13 +154418,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-08-25T22:16:17.410827Z",
-      "outcome": null,
+      "outcome": "Release preflight moved to the tag-push chokepoint: tag --push and the CI publish job both run the readiness sweep and exit non-zero on the first red signal, and --force no longer admits a dirty tree. Three gates green.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -154530,9 +154662,9 @@
       ],
       "claim_session_id": "SES-20260904T190755.900161Z-executor-claude-c497f9d4-d824-4c5a-b0bb-ecb8f791c196",
       "claimed_at": "2026-09-04T19:07:56.597030Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-04T19:51:02.573262Z",
+      "commit": "4aeb9776e322d8defff7a7e7c5df7b2f79f765be",
+      "commit_identity_digest": "sha256:30ce63832a18875039c0cafd0e8764a259f30b7b79b7cb2d745717918e8faa05",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-08-25T22:16:17.407232Z",
@@ -154629,13 +154761,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-08-25T22:16:17.407891Z",
-      "outcome": null,
+      "outcome": "The daemon state-method module is split by concern from 5286 lines into a 1392-line facade plus nine collaborators, every sibling under the cap, with the pyproject exclusion removed and the RPC registry unchanged. Three gates green.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -155963,9 +156095,9 @@
       ],
       "claim_session_id": "SES-20260904T190757.238985Z-executor-claude-00107748-c5e4-42f1-b518-0f8a1420947a",
       "claimed_at": "2026-09-04T19:07:57.912104Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-04T19:51:08.001225Z",
+      "commit": "3294be96930a99dd045d9b4dfc9eb6f44365d2b1",
+      "commit_identity_digest": "sha256:f8b03d2d433dd2db1a5dc16e19e3ff17eb0e84489e2f2d20ab7c0071ee3d1683",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap revise; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:42:36.406086Z",
@@ -155982,7 +156114,10 @@
         "src/eawf/kernel/spec",
         "tests/unit/kernel/release",
         "tests/kernel",
-        "tests/fixtures/release"
+        "tests/fixtures/release",
+        "src/eawf/kernel/release",
+        "src/eawf/workflow/verify/release_readiness.py",
+        "tests/workflow/verify/test_release_readiness.py"
       ],
       "gates": [
         {
@@ -156085,13 +156220,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-09-03T17:42:36.516135Z",
-      "outcome": null,
+      "outcome": "The dev1 gate profile binds to readiness signal rows through a validated GateBinding table that derives the required set once, with gate blocks and waiver disposition surfaced on the readiness model. Four gates green.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
