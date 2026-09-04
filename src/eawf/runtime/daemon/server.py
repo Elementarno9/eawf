@@ -90,6 +90,34 @@ DAEMON_SHUTTING_DOWN = -32009
 #: than the generic -32603 internal error a raised exception would otherwise get.
 DISPATCH_CLOSE_BLOCKED = -32011
 
+#: Methods dispatched on a worker thread instead of on the event loop.
+#:
+#: A handler that does blocking IO plus Pydantic validation without ever
+#: awaiting holds the loop for its whole duration, and while it holds the loop
+#: NO other connection's frame is read, parsed or answered -- head-of-line
+#: blocking across the whole daemon. ``state.read`` was measured at ~85 ms of
+#: loop occupancy per call, so a handful of concurrent readers push a
+#: ``daemon.ping`` past ``limits.READINESS_BUDGET_SECONDS`` and the caller
+#: concludes the daemon is absent when it is merely busy.
+#:
+#: Membership is deliberately narrow: a handler is only safe to run off the
+#: loop when it touches no loop-bound object. ``state.read`` qualifies -- it
+#: takes no lock, mutates no ``ctx`` field and publishes nothing.
+#: ``state.digest`` does NOT, despite comparable occupancy: its elapsed-update
+#: publisher does a check-then-set against a ``ctx``-resident cache that is
+#: atomic only while every caller runs on the one loop.
+OFFLOADED_METHODS: frozenset[str] = frozenset({"state.read"})
+
+#: Methods whose response is a liveness signal rather than an outcome.
+#:
+#: A probe caller that gives up and closes its socket loses nothing: the answer
+#: it missed is reconstructible by asking again. So an undeliverable probe
+#: response is expected noise, not a forensic event -- the readiness probe's
+#: abandoned round trips alone produced 1,724 warnings. Every other method
+#: carries an outcome the caller CANNOT reconstruct, which is why an
+#: undeliverable response there stays a warning.
+PROBE_METHODS: frozenset[str] = frozenset({"daemon.ping"})
+
 
 def _frame(obj: dict[str, Any]) -> bytes:
     """Serialise *obj* as a single line-delimited JSON frame.
@@ -194,6 +222,45 @@ def _parse_frame(line: bytes) -> tuple[dict[str, Any] | None, dict[str, Any] | N
     return payload, None
 
 
+def _run_handler_off_loop(
+    method: str, ctx: MethodContext, params: dict[str, Any]
+) -> dict[str, Any]:
+    """Drive one handler to completion on the calling worker thread.
+
+    The handler is a coroutine, so the thread needs a loop of its own to run
+    it on; a coroutine object is not bound to a loop until it is awaited, so
+    building it here and running it under a private loop is safe. Only
+    :data:`OFFLOADED_METHODS` reach this path, and membership there is
+    conditioned on touching nothing the daemon's own loop owns.
+    """
+    return asyncio.run(dispatch(method, ctx, params))
+
+
+async def _dispatch_method(
+    method: str,
+    ctx: MethodContext,
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    """Dispatch *method*, keeping known loop-hogging handlers off the loop.
+
+    Args:
+        method: JSON-RPC method name.
+        ctx: Server context shared across handlers.
+        params: Decoded ``params`` object.
+
+    Returns:
+        The handler's result dict.
+
+    Raises:
+        MethodNotFoundError: When *method* is not registered. Every other
+            handler exception propagates unchanged, from the worker thread as
+            well as from the loop.
+    """
+    if method not in OFFLOADED_METHODS:
+        return await dispatch(method, ctx, params)
+    return await asyncio.to_thread(_run_handler_off_loop, method, ctx, params)
+
+
 async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
     """Decode + dispatch a single JSON-RPC frame.
 
@@ -220,7 +287,7 @@ async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
     if method not in SUBSCRIBE_METHODS:
         ctx.touch_activity()
     try:
-        result = await dispatch(method, ctx, params)
+        result = await _dispatch_method(method, ctx, params)
     except MethodNotFoundError:
         return _error(req_id, METHOD_NOT_FOUND, f"method not found: {method!r}")
     except LifecycleGuardError as exc:
@@ -429,27 +496,64 @@ async def _peer_credential_ok(writer: asyncio.StreamWriter, *, expected_uid: int
     return True
 
 
+def _log_undeliverable(
+    response: dict[str, Any],
+    *,
+    connection_id: str,
+    method: str,
+    reason: str,
+) -> None:
+    """Record a response the peer will never receive, at the right volume.
+
+    Severity turns on whether the lost payload is recoverable by asking
+    again. A mutation outcome is not — a refusal the operator never saw is
+    how the W48 close loop stayed undiagnosable — so it warns. A
+    :data:`PROBE_METHODS` answer is, so it stays at debug.
+    """
+    summary = orjson.dumps(response).decode("utf-8", "replace")[:400]
+    message = (
+        f"handle_connection undeliverable-response connection={connection_id} "
+        f"method={method!r} reason={reason} response={summary!r}"
+    )
+    if method in PROBE_METHODS:
+        logger.debug(message)
+        return
+    logger.warning(message)
+
+
 async def _write_response(
+    reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
     response: dict[str, Any],
     *,
     connection_id: str,
+    method: str,
 ) -> bool:
     """Write one response frame; log it instead when the peer is gone.
 
-    A client that timed out and closed its socket must not swallow the
-    outcome silently — a refusal the operator never saw is how the W48
-    close loop stayed undiagnosable. Returns ``False`` when the peer had
-    disconnected (the caller ends the connection loop).
+    The peer-gone check runs BEFORE the write rather than catching its
+    failure: a probe caller that hit its budget and closed the socket is the
+    common case, and pushing a frame into a socket whose reader has already
+    sent EOF earns a reset for no gain. ``reader.at_eof()`` is the reliable
+    signal here — a half-closed peer leaves the writer half open, so
+    ``is_closing()`` alone stays False.
+
+    Returns ``False`` when the response could not be delivered (the caller
+    ends the connection loop).
     """
+    # Yield one turn first: when the peer left while the handler ran, its EOF
+    # is sitting in the loop's ready queue, and a single turn is what lets the
+    # transport deliver it before the check below reads it.
+    await asyncio.sleep(0)
+    if reader.at_eof() or writer.is_closing():
+        _log_undeliverable(response, connection_id=connection_id, method=method, reason="peer-gone")
+        return False
     try:
         writer.write(_frame(response))
         await writer.drain()
     except ConnectionResetError, BrokenPipeError:
-        summary = orjson.dumps(response).decode("utf-8", "replace")[:400]
-        logger.warning(
-            f"handle_connection undeliverable-response "
-            f"connection={connection_id} response={summary!r}"
+        _log_undeliverable(
+            response, connection_id=connection_id, method=method, reason="write-failed"
         )
         return False
     return True
@@ -501,7 +605,13 @@ async def handle_connection(
             response = await asyncio.shield(
                 asyncio.ensure_future(_process_frame(line.rstrip(b"\n"), ctx))
             )
-            if not await _write_response(writer, response, connection_id=connection_id):
+            if not await _write_response(
+                reader,
+                writer,
+                response,
+                connection_id=connection_id,
+                method=method,
+            ):
                 return
     except ConnectionResetError, BrokenPipeError:
         logger.debug("handle_connection peer-disconnect")

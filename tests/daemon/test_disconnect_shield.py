@@ -35,6 +35,32 @@ def _short_socket_path() -> str:
     return os.path.join(tempfile.gettempdir(), f"eawf-shield-{uuid.uuid4().hex[:8]}.sock")
 
 
+def _ping_frame() -> bytes:
+    frame = {
+        "jsonrpc": "2.0",
+        "id": "probe-1",
+        "method": "daemon.ping",
+        "params": {},
+    }
+    return orjson.dumps(frame) + b"\n"
+
+
+class _RecordingWriter:
+    """Writer stand-in that records frames instead of sending them."""
+
+    def __init__(self) -> None:
+        self.frames: list[bytes] = []
+
+    def is_closing(self) -> bool:
+        return False
+
+    def write(self, data: bytes) -> None:
+        self.frames.append(data)
+
+    async def drain(self) -> None:
+        return None
+
+
 def _mutation_frame() -> bytes:
     mutation = Mutation(
         kind=MutationKind.ROADMAP_REVISE,
@@ -142,3 +168,115 @@ def test_delivered_response_logs_nothing(tmp_path: Path, caplog: pytest.LogCaptu
     with caplog.at_level(logging.WARNING, logger="eawf.runtime.daemon.server"):
         asyncio.run(body())
     assert not any("undeliverable-response" in record.message for record in caplog.records)
+
+
+def test_abandoned_probe_leaves_no_undeliverable_warning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """CR: a readiness probe that hit its budget and closed the socket is
+    routine, not forensic — the daemon must not warn about it. The probe
+    caller loses nothing it cannot get by asking again, and the volume is
+    the point: abandoned probes alone produced 1,724 of these warnings."""
+    state_path = tmp_path / ".ea" / "state.json"
+    _write_state(state_path)
+    ctx = _build_ctx(tmp_path, state_path)
+
+    stalled = asyncio.Event()
+    release = asyncio.Event()
+    real_process = server_mod._process_frame
+
+    async def _gated_process(line: bytes, inner_ctx: Any) -> dict[str, Any]:
+        stalled.set()
+        await release.wait()
+        return await real_process(line, inner_ctx)
+
+    monkeypatch.setattr(server_mod, "_process_frame", _gated_process)
+
+    sock_path = _short_socket_path()
+
+    async def body() -> None:
+        server = await asyncio.start_unix_server(
+            lambda r, w: handle_connection(r, w, ctx), path=sock_path
+        )
+        try:
+            _reader, writer = await asyncio.open_unix_connection(sock_path)
+            writer.write(_ping_frame())
+            await writer.drain()
+            await asyncio.wait_for(stalled.wait(), timeout=5)
+
+            # The probe hits its readiness budget and gives up.
+            writer.close()
+            await writer.wait_closed()
+            release.set()
+            await asyncio.sleep(0.2)
+        finally:
+            server.close()
+            await server.wait_closed()
+            with contextlib.suppress(OSError):
+                os.unlink(sock_path)
+
+    with caplog.at_level(logging.DEBUG, logger="eawf.runtime.daemon.server"):
+        asyncio.run(body())
+
+    warnings = [
+        record
+        for record in caplog.records
+        if record.levelno >= logging.WARNING and "undeliverable-response" in record.message
+    ]
+    assert not warnings, [record.message for record in warnings]
+
+
+def test_abandoned_probe_writes_nothing_into_the_closed_socket() -> None:
+    """Boundary: the peer's EOF is checked before the write, so the daemon
+    emits nothing into a socket whose reader has already gone."""
+
+    async def body() -> tuple[bool, list[bytes]]:
+        reader = asyncio.StreamReader()
+        reader.feed_eof()
+        writer = _RecordingWriter()
+        delivered = await server_mod._write_response(
+            reader,
+            writer,  # type: ignore[arg-type]
+            {"jsonrpc": "2.0", "id": "probe-1", "result": {"pid": 1}},
+            connection_id="conn-1",
+            method="daemon.ping",
+        )
+        return delivered, writer.frames
+
+    delivered, frames = asyncio.run(body())
+
+    assert delivered is False
+    assert frames == []
+
+
+def test_abandoned_probe_severity_is_method_scoped(caplog: pytest.LogCaptureFixture) -> None:
+    """CR: the severity turns on whether the lost payload is recoverable —
+    a probe answer is, a mutation outcome is not."""
+
+    async def body(method: str) -> None:
+        reader = asyncio.StreamReader()
+        reader.feed_eof()
+        writer = _RecordingWriter()
+        await server_mod._write_response(
+            reader,
+            writer,  # type: ignore[arg-type]
+            {"jsonrpc": "2.0", "id": "x", "result": {}},
+            connection_id="conn-1",
+            method=method,
+        )
+
+    with caplog.at_level(logging.DEBUG, logger="eawf.runtime.daemon.server"):
+        asyncio.run(body("daemon.ping"))
+        probe_levels = {
+            record.levelno for record in caplog.records if "undeliverable" in record.message
+        }
+        caplog.clear()
+        asyncio.run(body("state.mutate"))
+        mutation_levels = {
+            record.levelno for record in caplog.records if "undeliverable" in record.message
+        }
+
+    assert probe_levels == {logging.DEBUG}
+    assert mutation_levels == {logging.WARNING}

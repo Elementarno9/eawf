@@ -38,6 +38,7 @@ from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.idle import IdleTimeoutWatchdog
 from eawf.runtime.daemon.limits import (
     MUTATION_HARD_LIMIT_SECONDS,
+    READINESS_BUDGET_SECONDS,
     configured_juror_wall_clock,
     mutation_hard_limit_for,
 )
@@ -602,6 +603,71 @@ def _schedule_wal_gc_sweep(ctx: MethodContext) -> asyncio.Task[None] | None:
     )
 
 
+#: Fraction of the readiness budget the loop-lag monitor samples at. Four
+#: samples per budget is enough to catch a hold that would time a probe out
+#: while keeping the monitor's own wake-ups negligible.
+LOOP_LAG_SAMPLES_PER_BUDGET: Final[int] = 4
+
+
+async def run_loop_lag_monitor(
+    stop_event: asyncio.Event,
+    *,
+    budget_seconds: float = READINESS_BUDGET_SECONDS,
+) -> int:
+    """Warn while the event loop is held past the readiness budget.
+
+    A handler that occupies the loop makes the daemon indistinguishable from
+    a dead one: no other connection's frame is read, so a readiness probe
+    times out and the caller concludes the daemon is absent. This monitor is
+    the symptom detector for that class of defect and it is deliberately
+    method-agnostic — it measures the loop, so a mutation that legitimately
+    runs for minutes while awaiting raises nothing, and a handler that runs
+    for two seconds without awaiting raises immediately.
+
+    Args:
+        stop_event: Set to end the monitor (the daemon's shutdown event).
+        budget_seconds: Lag ceiling; the same budget the readiness probe
+            waits out before declaring the daemon gone.
+
+    Returns:
+        Number of over-budget observations, for callers that assert on it.
+
+    Raises:
+        ValueError: When *budget_seconds* is not positive.
+    """
+    if budget_seconds <= 0:
+        raise ValueError(f"budget_seconds must be positive, got {budget_seconds!r}")
+    interval = budget_seconds / LOOP_LAG_SAMPLES_PER_BUDGET
+    over_budget = 0
+    while not stop_event.is_set():
+        before = time.monotonic()
+        await asyncio.sleep(interval)
+        lag = time.monotonic() - before - interval
+        if lag <= budget_seconds:
+            continue
+        over_budget += 1
+        logger.warning(
+            f"run_loop_lag_monitor loop-held lag_seconds={lag:.3f} "
+            f"budget_seconds={budget_seconds:.3f}"
+        )
+    return over_budget
+
+
+def _schedule_loop_lag_monitor(ctx: MethodContext) -> asyncio.Task[int] | None:
+    """Schedule the loop-lag monitor on the running loop.
+
+    Args:
+        ctx: Live :class:`MethodContext` with a wired ``shutdown_event``.
+
+    Returns:
+        The scheduled task, or ``None`` when the context carries no
+        shutdown event (daemonless unit-test paths).
+    """
+    if not isinstance(ctx.shutdown_event, asyncio.Event):
+        return None
+    return asyncio.create_task(run_loop_lag_monitor(ctx.shutdown_event))
+
+
 def _write_pid_file(path: Path, pid: int, started_at: str) -> None:
     """Atomically write the daemon PID file.
 
@@ -699,6 +765,7 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
     stale_wave_task = _schedule_stale_wave_sweep(ctx)
     wal_gc_task = _schedule_wal_gc_sweep(ctx)
     mutation_watchdog_task = _schedule_mutation_watchdog(ctx)
+    loop_lag_task = _schedule_loop_lag_monitor(ctx)
     from eawf.runtime.daemon.methods.close import (
         resume_durable_close_attempts,
         shutdown_close_attempts,
@@ -728,6 +795,10 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
             mutation_watchdog_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await mutation_watchdog_task
+        if loop_lag_task is not None:
+            loop_lag_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await loop_lag_task
         _shutdown_background_drives()
         server.close()
         await server.wait_closed()
@@ -777,6 +848,7 @@ async def _run_windows_server(ctx: MethodContext) -> None:
     stale_wave_task = _schedule_stale_wave_sweep(ctx)
     wal_gc_task = _schedule_wal_gc_sweep(ctx)
     mutation_watchdog_task = _schedule_mutation_watchdog(ctx)
+    loop_lag_task = _schedule_loop_lag_monitor(ctx)
     from eawf.runtime.daemon.methods.close import (
         resume_durable_close_attempts,
         shutdown_close_attempts,
@@ -806,6 +878,10 @@ async def _run_windows_server(ctx: MethodContext) -> None:
             mutation_watchdog_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await mutation_watchdog_task
+        if loop_lag_task is not None:
+            loop_lag_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await loop_lag_task
         _shutdown_background_drives()
         pipe_server.stop()
 

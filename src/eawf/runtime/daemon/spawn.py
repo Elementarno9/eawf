@@ -32,6 +32,7 @@ import sys
 import time
 from pathlib import Path
 
+from eawf.runtime.daemon.limits import READINESS_BUDGET_SECONDS
 from eawf.runtime.daemon.singleton import (
     DaemonSpawnLockTimeoutError,
     acquire_spawn_lock,
@@ -175,7 +176,7 @@ def _wait_for_socket(runtime_dir: Path, deadline: float) -> bool:
         if sock_path.exists():
             try:
                 with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
-                    probe.settimeout(0.2)
+                    probe.settimeout(READINESS_BUDGET_SECONDS)
                     probe.connect(str(sock_path))
                     return True
             except OSError:
@@ -293,15 +294,44 @@ def _result_from_response(response_bytes: bytes) -> dict[str, object] | None:
     return result if isinstance(result, dict) else None
 
 
-def _ping_daemon_once(runtime_dir: Path) -> int | None:
-    """Return the daemon PID when ``daemon.ping`` succeeds once.
+def _busy_daemon_pid(runtime_dir: Path) -> int | None:
+    """Return the PID of a daemon that accepted the connection but answered late.
+
+    Connect succeeded, so a listener exists: the daemon is PRESENT, and the
+    only thing the probe failed to learn from the wire is which PID it is.
+    The PID file answers that, and the liveness + ownership checks keep a
+    stale file from inventing a daemon that is not there.
 
     Args:
         runtime_dir: Daemon runtime directory.
 
     Returns:
-        Daemon PID from the JSON-RPC result, or ``None`` when the
-        transport is not ready yet.
+        The recorded PID when it is live and owned by this user, else
+        ``None`` — the caller then treats the daemon as unreachable, which
+        is the honest answer when its identity cannot be established.
+    """
+    pid = _read_pid_file(runtime_dir / "eawfd.pid")
+    if pid is None or not _pid_alive(pid) or not _pid_owned_by_current_uid(pid):
+        return None
+    return pid
+
+
+def _ping_daemon_once(runtime_dir: Path) -> int | None:
+    """Return the daemon PID when ``daemon.ping`` succeeds once.
+
+    A timeout on the *round trip* is not evidence of absence. A daemon busy
+    with concurrent reads answers late, and mapping that to "no daemon" is
+    what made a merely-loaded daemon look dead — and invited a redundant
+    spawn on top of the live one. Absence is only concluded from a failed
+    connect; a connected-but-slow daemon resolves through
+    :func:`_busy_daemon_pid`.
+
+    Args:
+        runtime_dir: Daemon runtime directory.
+
+    Returns:
+        Daemon PID from the JSON-RPC result, the PID of a present-but-busy
+        daemon, or ``None`` when nothing is listening.
     """
     if sys.platform == "win32":
         from eawf.runtime.daemon.windows_pipe import default_pipe_name, pipe_client_call
@@ -321,14 +351,27 @@ def _ping_daemon_once(runtime_dir: Path) -> int | None:
         return None
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
-            probe.settimeout(0.2)
-            probe.connect(str(sock_path))
+            probe.settimeout(READINESS_BUDGET_SECONDS)
+            try:
+                probe.connect(str(sock_path))
+            except OSError:
+                # Nothing is listening — a stale socket node from an unclean
+                # exit, or no daemon at all. This is the one shape that means
+                # absent.
+                return None
             probe.sendall(_daemon_ping_request())
             reader = probe.makefile("rb")
             try:
                 line = reader.readline()
             finally:
                 reader.close()
+    except TimeoutError:
+        busy_pid = _busy_daemon_pid(runtime_dir)
+        logger.info(
+            f"_ping_daemon_once status='busy' pid={busy_pid} "
+            f"budget_s={READINESS_BUDGET_SECONDS} runtime={runtime_dir.name!r}"
+        )
+        return busy_pid
     except OSError:
         return None
     if not line:

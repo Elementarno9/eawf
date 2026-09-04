@@ -40,6 +40,28 @@ COMMIT_MARGIN_SECONDS: float = 300.0
 #: answer the operator cannot act on).
 CLI_WIRE_MARGIN_SECONDS: float = 30.0
 
+#: The one budget shared by handler occupancy and daemon readiness.
+#:
+#: It answers a single question -- "how long may the daemon go without servicing
+#: a connection before a caller is entitled to conclude it is gone?" -- and both
+#: sides of that question have to use the same number:
+#:
+#: * the dispatch path may not hold the event loop longer than this, so any
+#:   handler whose blocking IO / validation approaches it is offloaded to a
+#:   worker thread (``eawf.runtime.daemon.server.OFFLOADED_METHODS``) and the
+#:   loop-lag monitor warns when something still holds it
+#:   (``eawf.runtime.daemon.main.run_loop_lag_monitor``);
+#: * the readiness probe waits exactly this long for ``daemon.ping`` before
+#:   giving up on the round trip
+#:   (``eawf.runtime.daemon.spawn._ping_daemon_once``).
+#:
+#: Two numbers drift, and the drift is what broke: the probe allowed 0.2 s while
+#: ``state.read`` alone occupied the loop for ~85 ms per call, so a daemon under
+#: concurrent read load answered late and was reported *absent* -- the operator
+#: saw a dead daemon that was merely busy. 1.0 s leaves an order of magnitude
+#: over the worst measured single-handler occupancy.
+READINESS_BUDGET_SECONDS: float = 1.0
+
 
 def mutation_hard_limit_for(juror_wall_clock_seconds: float | None) -> float:
     """Return the watchdog hard limit that accommodates *juror_wall_clock_seconds*.
@@ -109,6 +131,7 @@ __all__ = [
     "CLI_WIRE_MARGIN_SECONDS",
     "COMMIT_MARGIN_SECONDS",
     "MUTATION_HARD_LIMIT_SECONDS",
+    "READINESS_BUDGET_SECONDS",
     "cli_mutation_timeout_for",
     "configured_juror_wall_clock",
     "mutation_hard_limit_for",
