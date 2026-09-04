@@ -303,7 +303,9 @@ def test_load_lint_config_reads_table(tmp_path: Path) -> None:
 
         [tool.eawf.lint.eawf010]
         max-loc = 500
-        exclude = ["src/eawf/big.py"]
+        exclude = [
+            { path = "src/eawf/big.py", expires = "2027-01-31", reason = "awaiting a split" },
+        ]
 
         [tool.eawf.lint.eawf011]
         max-complexity = 40

@@ -162,7 +162,7 @@ def test_methods_import_graph_has_no_eawf010_exclusion() -> None:
     config = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     exclude = config["tool"]["eawf"]["lint"]["eawf010"]["exclude"]
     prefix = "src/eawf/runtime/daemon/methods/"
-    assert [path for path in exclude if path.startswith(prefix)] == []
+    assert [entry["path"] for entry in exclude if entry["path"].startswith(prefix)] == []
 
 
 def test_methods_import_graph_is_acyclic_at_module_scope() -> None:

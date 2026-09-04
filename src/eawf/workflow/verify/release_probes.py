@@ -6,7 +6,9 @@ probe registers for it, so a probe-free sweep is twelve open questions
 rather than a verdict. This module is the producer for the five facts a
 working copy can answer at tag time -- version consistency, the
 changelog section, the migration note, ancestry against the publishing
-remote, and tree cleanliness.
+remote, and tree cleanliness -- plus one fact it can only *refute*: a
+module-length exemption that has outlived its grant reds the realization
+row, but a clean check leaves that row unproven rather than green.
 
 The probes read their subject out of a frozen
 :class:`TagPreflightInputs` record instead of out of the running process
@@ -25,11 +27,19 @@ from __future__ import annotations
 import logging
 import re
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
 from functools import partial
 from pathlib import Path
 from typing import Final
 
+from eawf.platform.lint import load_lint_config
+from eawf.platform.lint.exclusion_expiry import (
+    ExclusionConfigError,
+    decision_ids_from_state,
+    expired_exclusions,
+    validate_renewals,
+)
 from eawf.workflow.verify.release_readiness import (
     ReleaseSignalContext,
     ReleaseSignalName,
@@ -66,6 +76,9 @@ class TagPreflightInputs:
         tag: Tag the version spells, e.g. ``v0.7.0.dev1``.
         package_version: ``eawf.__version__`` of the tagging checkout.
         remote: Remote whose branch the source must be reachable from.
+        today: Date the calendar-sensitive probes judge against.
+            Injected rather than read at the point of use so a sweep is
+            reproducible against a pinned day.
     """
 
     repo_root: Path
@@ -73,6 +86,7 @@ class TagPreflightInputs:
     tag: str
     package_version: str
     remote: str
+    today: date = field(default_factory=lambda: datetime.now(UTC).date())
 
     def __post_init__(self) -> None:
         """Reject inputs no probe could produce a verdict from.
@@ -117,6 +131,17 @@ def _failing(remediation: str, *evidence: str) -> ReleaseSignalOutcome:
         remediation=remediation,
         evidence_refs=tuple(evidence),
     )
+
+
+def _unproven(remediation: str) -> ReleaseSignalOutcome:
+    """Return an ``unavailable`` outcome whose *remediation* names the gap.
+
+    The shape a probe uses when it can clear one named component of a
+    signal but not the whole row. Reporting ``pass`` there would claim
+    the unmeasured components hold too, which is the one thing this
+    sweep is built not to do.
+    """
+    return ReleaseSignalOutcome(status=ReleaseSignalStatus.UNAVAILABLE, remediation=remediation)
 
 
 def _changelog_section(text: str, version: str) -> tuple[str, ...]:
@@ -289,6 +314,82 @@ def _probe_migration(
     return _passing(f"{CHANGELOG_FILENAME}:{inputs.version}:migration")
 
 
+def _probe_module_length_exclusion(
+    inputs: TagPreflightInputs, context: ReleaseSignalContext
+) -> ReleaseSignalOutcome:
+    """Report whether any module-length exemption has outlived its grant.
+
+    A grandfathered oversized module is a promise to split it later. Once
+    the grant's expiry date passes, the promise is broken and the release
+    is the wrong thing to let through silently: shipping renews the
+    exemption by inaction, which is exactly what the expiry exists to
+    prevent. The red row names every lapsed module so the operator can
+    split it, or renew the grant against a typed decision, before tagging.
+
+    The renewal escape hatch is checked here too, because the release is
+    where an unratified extension would otherwise take effect: a grant
+    renewed against a decision id that no ``Decision`` row in state.json
+    carries is an extension nobody signed, and reds the row the same way
+    a lapsed grant does.
+
+    A clean check reports ``unavailable`` rather than ``pass``: this is
+    one named component of the realization row, and the remaining
+    realization assertions still have no producer.
+
+    Args:
+        inputs: The chokepoint's inputs, naming the working copy and the
+            date the grants are judged against.
+        context: The sweep's context for this signal.
+
+    Returns:
+        A failing outcome naming each lapsed module or unratified
+        renewal, or an unavailable outcome recording that the component
+        is clean.
+
+    Raises:
+        ExclusionConfigError: When the exclusion list itself is
+            malformed, which the sweep converts into a blocked row.
+    """
+    config = load_lint_config(inputs.repo_root / "pyproject.toml")
+    try:
+        validate_renewals(
+            config.eawf010.exclusions,
+            decision_ids=decision_ids_from_state(inputs.repo_root / ".ea" / "state.json"),
+        )
+    except ExclusionConfigError as exc:
+        logger.warning(
+            f"_probe_module_length_exclusion signal={context.signal.value!r} "
+            f"unratified_renewal=1 version={inputs.version!r}"
+        )
+        return _failing(
+            f"module_length_exclusion: {exc}",
+            "module_length_exclusion:unratified-renewal",
+        )
+    expired = expired_exclusions(config.eawf010.exclusions, today=inputs.today)
+    if expired:
+        named = ", ".join(
+            f"{entry.path} (expired {entry.expires.isoformat()})" for entry in expired
+        )
+        logger.warning(
+            f"_probe_module_length_exclusion signal={context.signal.value!r} "
+            f"expired={len(expired)} version={inputs.version!r}"
+        )
+        return _failing(
+            f"module_length_exclusion: {len(expired)} EAWF010 exemption(s) outlived their grant: "
+            f"{named}; split the module, or renew the grant with a typed decision and a named "
+            f"owner, before tagging {inputs.tag}",
+            *(
+                f"module_length_exclusion:{entry.path}:expired:{entry.expires.isoformat()}"
+                for entry in expired
+            ),
+        )
+    return _unproven(
+        f"module_length_exclusion: all {len(config.eawf010.exclusions)} EAWF010 exemption(s) are "
+        f"within their grant, but the remaining realization assertions have no producer at this "
+        f"checkpoint; register one or drop the requirement"
+    )
+
+
 def build_tag_probes(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, ReleaseSignalProbe]:
     """Return the probe registry the tag chokepoint sweeps *inputs* with.
 
@@ -296,9 +397,12 @@ def build_tag_probes(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, Rele
         inputs: The chokepoint's inputs, bound into every probe.
 
     Returns:
-        A registry over the five signals a working copy can answer. The
-        other seven stay absent so the sweep reports them
-        ``unavailable`` rather than silently green.
+        A registry over the six signals a working copy can speak to. The
+        other six stay absent so the sweep reports them ``unavailable``
+        rather than silently green. The realization probe is the one
+        partial member: it can red the row on a lapsed module-length
+        exemption but never greens it, since the rest of the realization
+        assertions have no producer.
     """
     logger.info(
         f"build_tag_probes version={inputs.version!r} tag={inputs.tag!r} remote={inputs.remote!r}"
@@ -309,6 +413,7 @@ def build_tag_probes(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, Rele
         ReleaseSignalName.ANCESTRY: partial(_probe_ancestry, inputs),
         ReleaseSignalName.TREE_CLEANLINESS: partial(_probe_tree_cleanliness, inputs),
         ReleaseSignalName.MIGRATION: partial(_probe_migration, inputs),
+        ReleaseSignalName.PERFECT_REALIZATION: partial(_probe_module_length_exclusion, inputs),
     }
 
 

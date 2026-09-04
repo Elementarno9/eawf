@@ -16,6 +16,8 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from eawf.platform.lint.exclusion_expiry import ModuleExclusion, parse_exclusions
+
 # Default per-module line budget, mirrored from ``eawf.platform.lint.eawf010`` so
 # a missing ``[tool.eawf.lint.eawf010] max-loc`` key still yields the
 # canonical cap without importing the rule module at config-load time.
@@ -46,12 +48,24 @@ class Eawf010Config:
 
     Attributes:
         max_loc: Per-module physical line budget.
-        exclude: Repo-relative module paths exempt from the cap (e.g.
-            pre-existing oversized files awaiting a split).
+        exclusions: The bounded grants exempting pre-existing oversized
+            modules from the cap, in authored order. Each carries the
+            date it lapses and the reason it was given; see
+            :mod:`eawf.platform.lint.exclusion_expiry`.
     """
 
     max_loc: int = DEFAULT_MAX_LOC
-    exclude: frozenset[str] = field(default_factory=frozenset)
+    exclusions: tuple[ModuleExclusion, ...] = ()
+
+    @property
+    def exclude(self) -> frozenset[str]:
+        """Return the exempt module paths.
+
+        Projected from :attr:`exclusions` rather than stored beside it,
+        so the path set a caller filters on and the grant that justifies
+        the exemption cannot drift apart.
+        """
+        return frozenset(entry.path for entry in self.exclusions)
 
 
 @dataclass(frozen=True)
@@ -122,6 +136,12 @@ def load_lint_config(pyproject_path: Path) -> LintConfig:
     Raises:
         FileNotFoundError: if ``pyproject_path`` does not exist.
         tomllib.TOMLDecodeError: if the file is not valid TOML.
+        ExclusionConfigError: if any EAWF010 exclusion entry is not a
+            bounded grant -- a bare path string with no expiry is
+            rejected here, so an unbounded exemption fails the
+            *configuration* rather than being discovered later.
+        TypeError: if an EAWF010 exclusion entry is neither a string
+            nor a table.
     """
     data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     table = data.get("tool", {}).get("eawf", {}).get("lint", {})
@@ -129,7 +149,7 @@ def load_lint_config(pyproject_path: Path) -> LintConfig:
     raw_010 = table.get("eawf010", {})
     eawf010 = Eawf010Config(
         max_loc=int(raw_010.get("max-loc", DEFAULT_MAX_LOC)),
-        exclude=frozenset(raw_010.get("exclude", [])),
+        exclusions=parse_exclusions(raw_010.get("exclude", [])),
     )
     raw_011 = table.get("eawf011", {})
     eawf011 = Eawf011Config(

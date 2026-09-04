@@ -336,67 +336,27 @@ max-docstring-para-chars = 600
 # genuine outlier. A module drops off ``exclude`` as soon as a wave
 # touches it (un-grandfather on touch).
 max-loc = 1400
-# The registry leaf catalog stays tracked as an explicit refactor follow-up
-# instead of making EAWF010 red the full verification suite. The daemon
-# state-method router left this list once it was split by concern into the
-# ``methods/state_*.py`` collaborators, each of which validates under the
-# cap on its own. P29-I02
-# grew the roadmap CLI command group and the plan-view renderer past the cap
-# while preserving behavior; both are extract-module split followups, registered
-# here per the un-grandfather-on-touch rule until that split lands. The TUI app
-# shell was already past the cap before P29-I04, and the I04 live-view waves
-# touched it (mode-registry digit-range docstrings + the live-feed listener
-# Protocol retype) while preserving behavior, so it joins the list as an
-# extract-module split followup (B083) rather than reding the suite.
-# registry.py is a data-heavy SkillSpec/AgentSpec registry whose body
-# constants (P29-I06-W01 added the /design + /spike bodies) push it past
-# the cap; it is a declaration table, not logic, so it joins the list
-# rather than reding the suite. Drops off when a wave extracts the bodies.
-# hook.py is the diff-scoped lint dispatcher hub; P29-I07-W02 added the
-# eawf016-title-clarity command + its staged-delta helper, pushing the
-# already-large command group past the cap. Each command is a thin
-# dispatcher, so the file is split-by-command extract-module follow-up
-# work rather than a logic-density problem; it joins the list until that
-# split lands.
-# research_board.py is the cohesive Research-mode surface mid-build across
-# P29-I13 W15/W16/W17 (the n/x campaign-lifecycle keys + the Unresolved /
-# Options / Conflicts tab projections). The pure render helpers split into a
-# sibling module once the live multi-round runner lands; it joins the list as
-# an extract-module follow-up until that seam exists rather than reding the
-# suite mid-surface.
-# autopilot.py is the cohesive Autopilot-mode cockpit surface, already at the
-# cap before P30-I13. The W01 FA1 arm-flow wave wired the launch overlay +
-# fleet.drive submit path (the drive-RPC logic + ArmSpec already live in the
-# sibling arm.py overlay module) while preserving the rest of the pane, pushing
-# it past the cap. The pure frontier-render helpers split into a sibling module
-# once the cockpit surface settles; it joins the list as an extract-module
-# follow-up until that seam exists rather than reding the suite mid-surface.
-# jury_validation.py is the cohesive trust-validation reducer built across
-# P30-I09 W01-W05 (cohort + Fleiss-kappa/Brier/ECE reducer + verbosity/
-# faithfulness probes + block-authority gate). The pure metric computers split
-# into a sibling module once the trust surface settles; it joins the list as an
-# extract-module follow-up until that seam exists.
-# agent_watch.py is the cohesive Agent-watch / FA4 session-zoom surface; the
-# P30-I13-W04 zoom rewrite (raw output tail + confirm-gated per-session keys)
-# pushed it past the cap while preserving behavior. The output-tail wiring +
-# zoom render helpers split into a sibling module once the cockpit settles.
-# models.py is the canonical state-entity model module; P30 added the FleetRun /
-# FleetLane / FleetFork drive-loop models, the Track / Goal / Outcome substrate,
-# and the RiskTier / FleetForkReason enums (each confined to its own region),
-# pushing the declaration-dense module past the cap. It is a typed-model table,
-# not branching logic; split by entity-family once the substrate settles.
+# Every exemption is a *bounded grant*: a path, the date the grant lapses,
+# and the reason it was given. The two pressures compose. Un-grandfather
+# on touch stays the fast path -- a wave that edits the module drops its
+# entry immediately, long before the date. The expiry is the backstop for
+# the modules no wave touches, so an exemption is never renewed by
+# inaction. The grant covers its expiry date inclusively; past it the
+# release preflight reds. Extending one needs an explicit
+# ``renewal = { decision = "D-...", owner = "..." }`` citing a typed
+# decision recorded in state.json. Older debt carries the nearer deadline.
 exclude = [
-    "src/eawf/kernel/config/registry/leaf_catalog.py",
-    "src/eawf/kernel/state/models.py",
-    "src/eawf/observability/eval/jury_validation.py",
-    "src/eawf/surfaces/cli/commands/hook.py",
-    "src/eawf/surfaces/cli/commands/roadmap.py",
-    "src/eawf/surfaces/render/plan_view.py",
-    "src/eawf/surfaces/render/skills/registry.py",
-    "src/eawf/surfaces/tui/app.py",
-    "src/eawf/surfaces/tui/modes/agent_watch.py",
-    "src/eawf/surfaces/tui/modes/autopilot.py",
-    "src/eawf/surfaces/tui/modes/research_board.py",
+    { path = "src/eawf/kernel/config/registry/leaf_catalog.py", expires = "2027-01-31", reason = "registry leaf catalog tracked as an explicit refactor follow-up rather than reding the verification suite" },
+    { path = "src/eawf/kernel/state/models.py", expires = "2027-04-30", reason = "canonical state-entity model module; a declaration-dense typed table, not branching logic. Split by entity-family once the P30 fleet/track substrate settles" },
+    { path = "src/eawf/observability/eval/jury_validation.py", expires = "2027-04-30", reason = "cohesive trust-validation reducer (cohort + Fleiss-kappa/Brier/ECE + probes + block-authority gate). The pure metric computers split into a sibling module once the trust surface settles" },
+    { path = "src/eawf/surfaces/cli/commands/hook.py", expires = "2027-01-31", reason = "diff-scoped lint dispatcher hub; each command is a thin dispatcher, so this is split-by-command extract-module work rather than logic density" },
+    { path = "src/eawf/surfaces/cli/commands/roadmap.py", expires = "2027-01-31", reason = "roadmap CLI command group grown past the cap while preserving behavior; extract-module split follow-up" },
+    { path = "src/eawf/surfaces/render/plan_view.py", expires = "2027-01-31", reason = "plan-view renderer grown past the cap while preserving behavior; extract-module split follow-up" },
+    { path = "src/eawf/surfaces/render/skills/registry.py", expires = "2027-01-31", reason = "data-heavy SkillSpec/AgentSpec declaration table whose body constants carry the length; drops off when a wave extracts the bodies" },
+    { path = "src/eawf/surfaces/tui/app.py", expires = "2027-01-31", reason = "TUI app shell, already past the cap when the live-view waves touched it; extract-module split follow-up" },
+    { path = "src/eawf/surfaces/tui/modes/agent_watch.py", expires = "2027-04-30", reason = "cohesive agent-watch session-zoom surface; the output-tail wiring and zoom render helpers split into a sibling module once the cockpit settles" },
+    { path = "src/eawf/surfaces/tui/modes/autopilot.py", expires = "2027-04-30", reason = "cohesive autopilot cockpit surface; the pure frontier-render helpers split into a sibling module once the surface settles" },
+    { path = "src/eawf/surfaces/tui/modes/research_board.py", expires = "2027-01-31", reason = "cohesive research-mode surface mid-build; the pure render helpers split into a sibling module once the live multi-round runner lands" },
 ]
 
 [tool.eawf.lint.eawf011]
