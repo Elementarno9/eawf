@@ -18,6 +18,7 @@ from eawf.kernel.spec.common import CriterionSpec, ResponseClause, grandfather_c
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     AgentSessionStatus,
+    Confidence,
     EffortBucket,
     IterStatus,
     PhaseStatus,
@@ -29,6 +30,7 @@ from eawf.kernel.state.models import (
     AgentSession,
     CriteriaFloorWaiver,
     CurrentPointers,
+    EstimateSummary,
     Project,
     State,
 )
@@ -705,3 +707,137 @@ def test_claim_wave_uses_parent_rows_when_current_pointers_are_stale() -> None:
 
     assert claimed.status is WaveStatus.CLAIMED
     assert state.current.active_wave_ids == [wave.id]
+
+
+# ---- claim no longer seeds the derived estimate cache ------------------------
+
+
+def _operator_estimate(*, scope_id: str) -> EstimateSummary:
+    """Return an operator-authored estimate row (the kind claim must not touch)."""
+    return EstimateSummary(
+        id=f"EST-{scope_id}",
+        scope_id=scope_id,
+        expected_eu=7.0,
+        pessimistic_eu=9.0,
+        expected_minutes=210.0,
+        pessimistic_minutes=270.0,
+        display="7.0 EU",
+        reference_class="operator",
+        confidence=Confidence.HIGH,
+        current_store_record_id=f"REC-{scope_id}",
+        updated_at=datetime(2026, 5, 1, tzinfo=UTC),
+    )
+
+
+def test_claim_wave_does_not_seed_estimate_row() -> None:
+    """A successful claim adds no row to the derived estimate cache.
+
+    The bucket centroid is a pure function of ``wave.effort_bucket``, so
+    persisting it on claim grew ``state.estimates`` by one derived row per
+    claim. Asserted on the serialised state so the on-disk shape -- not just
+    the in-memory attribute -- is pinned.
+    """
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.L,
+        intent=make_intent(),
+    )
+
+    claimed = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    assert claimed.status is WaveStatus.CLAIMED
+    assert state.estimates is None
+    payload = state.model_dump(mode="json")
+    assert payload["estimates"] is None
+
+
+@pytest.mark.parametrize("bucket", [EffortBucket.XS, EffortBucket.M, EffortBucket.XL])
+def test_claim_wave_does_not_seed_estimate_row_for_any_bucket(bucket: EffortBucket) -> None:
+    """No bucket -- smallest, middling, or largest -- reinstates the seeding."""
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=bucket,
+        intent=make_intent(),
+    )
+
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    assert not (state.estimates or {})
+
+
+def test_claim_wave_preserves_operator_authored_estimates() -> None:
+    """Claiming leaves an existing operator-authored row byte-identical.
+
+    Boundary: the map is non-empty and already carries a row for the very
+    wave being claimed, so a re-seed would overwrite operator intent with a
+    bucket centroid.
+    """
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.S,
+        intent=make_intent(),
+    )
+    authored = _operator_estimate(scope_id="P01-I01-W01")
+    state.estimates = {"P01-I01-W01": authored}
+    before = authored.model_dump_json()
+
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    assert state.estimates is not None
+    assert list(state.estimates) == ["P01-I01-W01"]
+    assert state.estimates["P01-I01-W01"].model_dump_json() == before
+
+
+def test_claim_wave_idempotent_reclaim_adds_no_estimate_row() -> None:
+    """Off-by-one: a second claim of the same wave still adds no row."""
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    assert not (state.estimates or {})
+
+
+def test_claim_wave_rejected_claim_leaves_estimates_untouched() -> None:
+    """Error path: a rejected claim mutates neither status nor the cache."""
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.M,
+        intent=make_intent(),
+    )
+    state.waves["P01-I01-W01"].effort_bucket = None
+
+    with pytest.raises(LifecycleError, match="effort_bucket"):
+        claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    assert not (state.estimates or {})
+    assert state.waves["P01-I01-W01"].status is WaveStatus.PENDING

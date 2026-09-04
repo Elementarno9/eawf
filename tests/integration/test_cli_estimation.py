@@ -8,6 +8,9 @@ Drives the Typer app via :class:`typer.testing.CliRunner` against a temp
 - actual stop closes the segment with a non-zero elapsed_eu.
 - Double-open for the same (scope, session) pair is rejected with exit 4.
 - actual recover marks stale segments abandoned with the cap applied.
+- the estimate read surfaces exit cleanly on a state with no estimate rows
+  (claim no longer seeds one), reporting the no-data shape rather than a
+  fabricated zero.
 """
 
 from __future__ import annotations
@@ -483,3 +486,77 @@ def test_actual_start_jsonl_lands_when_commit_state_raises(
     assert not state.get("actuals"), (
         f"state.actuals must be empty since _commit_state aborted; got {state.get('actuals')!r}"
     )
+
+
+# ---- reads tolerate an absent / empty estimate map --------------------------
+
+
+def _write_estimates(workspace: Path, estimates: dict[str, Any] | None) -> None:
+    """Overwrite the seeded state's ``estimates`` key with *estimates*."""
+    path = workspace / ".ea" / "state.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["estimates"] = estimates
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+@pytest.mark.parametrize("estimates", [None, {}])
+def test_metrics_variance_with_no_estimates_exits_zero_with_no_data(
+    tmp_path: Path, estimates: dict[str, Any] | None
+) -> None:
+    """The variance read exits 0 and reports no data on an empty estimate map.
+
+    Wave claim stopped seeding a derived estimate row, so a healthy repo
+    carries ``estimates: null`` or ``{}``. The read must degrade to the
+    declared empty-data payload instead of erroring or printing ``0.0%``.
+    """
+    workspace = _seed_state(tmp_path)
+    _write_estimates(workspace, estimates)
+
+    result = runner.invoke(app, ["--json", "-w", str(workspace), "metrics", "variance"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["sample_count"] == 0
+    assert payload["planned_eu"] == 0.0
+    assert payload["actual_eu"] == 0.0
+    assert payload["variance_pct"] is None
+
+
+def test_metrics_variance_with_no_estimates_renders_no_data_text(tmp_path: Path) -> None:
+    """The human-facing render says "no data", not a fabricated percentage."""
+    workspace = _seed_state(tmp_path)
+    _write_estimates(workspace, {})
+
+    result = runner.invoke(app, ["-w", str(workspace), "metrics", "variance"])
+
+    assert result.exit_code == 0, result.output
+    assert "no data" in result.output
+    assert "%" not in result.output
+
+
+def test_estimate_update_with_empty_estimates_map_returns_not_found(tmp_path: Path) -> None:
+    """Error path: updating into an empty (not absent) map still exits NOT_FOUND."""
+    workspace = _seed_state(tmp_path)
+    _write_estimates(workspace, {})
+
+    result = runner.invoke(
+        app,
+        ["-w", str(workspace), "estimate", "update", "P01-I01-W01", "--source", "replan"],
+    )
+
+    assert result.exit_code == 1
+    assert "no estimate exists" in result.output
+
+
+def test_estimate_set_into_empty_map_creates_the_first_row(tmp_path: Path) -> None:
+    """Boundary: the first operator-authored row lands on an empty map."""
+    workspace = _seed_state(tmp_path)
+    _write_estimates(workspace, {})
+
+    result = runner.invoke(
+        app,
+        ["-w", str(workspace), "estimate", "set", "P01-I01-W01", "--source", "prep"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert list(_read_state(workspace)["estimates"]) == ["P01-I01-W01"]

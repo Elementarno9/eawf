@@ -37,7 +37,6 @@ from eawf.kernel.state.models import (
     Wave,
 )
 from eawf.observability.telemetry.join import _duration_ms_to_eu, _tokens_to_eu
-from eawf.workflow.estimation.buckets import default_estimate_summary
 from eawf.workflow.lifecycle._capacity import DEFAULT_MAX_PARALLEL_WAVES
 from eawf.workflow.lifecycle._claim_guards import (
     active_wave_ids,
@@ -1006,7 +1005,7 @@ def claim_wave(
     validate_transition(WAVE_TRANSITIONS, WaveStatus.PENDING, WaveStatus.CLAIMED, guard_ctx)
     # Identity gate — the last check before the first mutation, so a rejected
     # claim leaves the state byte-identical (no status flip, no claimed_at
-    # stamp, no active-wave pointer, no session index entry, no estimate row).
+    # stamp, no active-wave pointer, no session index entry).
     session = validate_claim_session(state, wave, session_id)
     validate_claim_capacity(state, wave, max_parallel_waves=max_parallel_waves)
     try:
@@ -1044,16 +1043,13 @@ def claim_wave(
     # successful claim. This both records the new claimant and repairs stale
     # pointer rows without letting a stale pointer weaken the repo-wide cap.
     state.current.active_wave_ids = active_wave_ids(state)
-    # Seed a default estimate from the wave's effort bucket so the
-    # estimate-vs-actual variance metric has a baseline to compare the
-    # close-time actual against. Skipped (no estimate) when the wave
-    # carries no bucket — there is no centroid to derive from.
-    estimate = default_estimate_summary(wave, now=datetime.now(UTC))
-    if estimate is not None:
-        if state.estimates is None:
-            state.estimates = {}
-        state.estimates[wave_id] = estimate
-        logger.info(f"claim_wave seeded default estimate wave={wave_id} eu={estimate.expected_eu}")
+    # No estimate row is seeded here. A bucket centroid is derivable from
+    # ``wave.effort_bucket`` at read time, so persisting it made
+    # ``state.estimates`` a cache of a pure function that grew by one row
+    # per claim and could go stale the moment the bucket was revised. The
+    # map now holds only operator-authored estimates (``eawf estimate
+    # set``); readers that want a bucket default call
+    # ``default_estimate_summary`` themselves.
     logger.info(f"claim_wave id={wave_id} session={session_id} out_of_order={out_of_order}")
     return wave
 

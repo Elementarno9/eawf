@@ -141,20 +141,21 @@ def test_default_estimate_summary_no_bucket_returns_none() -> None:
     assert default_estimate_summary(wave, now=datetime.now(UTC)) is None
 
 
-# ---- claim_wave seeds a default estimate ------------------------------------
+# ---- claim_wave leaves the estimate map alone -------------------------------
 
 
-def test_claim_wave_seeds_default_estimate_from_bucket() -> None:
+def test_claim_wave_does_not_seed_default_estimate_from_bucket() -> None:
+    """Claim keeps the bucket centroid derived instead of caching it.
+
+    The full contract (serialised shape, operator-row preservation, repeat
+    claims) lives in ``tests/workflow/lifecycle/test_wave_claim.py``.
+    """
     state = _empty_state()
     _seed_wave(state, effort_bucket=EffortBucket.L)
 
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
 
-    assert state.estimates is not None
-    est = state.estimates["P01-I01-W01"]
-    # L bucket centroid is 2.0 EU.
-    assert est.expected_eu == pytest.approx(2.0)
-    assert est.scope_id == "P01-I01-W01"
+    assert not (state.estimates or {})
 
 
 def test_claim_wave_no_bucket_rejects_before_estimate() -> None:
@@ -688,10 +689,17 @@ def test_metrics_variance_empty_without_measured_elapsed_eu() -> None:
     The upserted ActualSummary leaves ``elapsed_eu=0.0``; the variance
     metric sums ``actual.elapsed_eu`` so the aggregate stays at zero,
     matching the W28 invariant that wall-clock spans never feed M26.
+
+    The estimate is authored explicitly because claim no longer seeds one;
+    the planned side has to exist for the wave to contribute a sample at
+    all, and that is what makes the zero ``actual_eu`` observable.
     """
     state = _empty_state()
     _seed_wave(state, effort_bucket=EffortBucket.M)
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    estimate = default_estimate_summary(state.waves["P01-I01-W01"], now=datetime.now(UTC))
+    assert estimate is not None
+    state.estimates = {"P01-I01-W01": estimate}
     state.waves["P01-I01-W01"].opened_at = datetime.now(UTC) - timedelta(minutes=45)
     close_wave(state, wave_id="P01-I01-W01", outcome="ok")
 
