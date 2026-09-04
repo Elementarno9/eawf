@@ -18559,6 +18559,40 @@
       "status": "active",
       "superseded_by": null,
       "title": "Slice the skill catalog at dev3; the dev4 tag is the canary release"
+    },
+    "D53": {
+      "alternatives": [
+        "Port the residue and add the Windows job to the dev1 gate set",
+        "Cherry-pick the branch as is",
+        "Leave the branch untouched until 0.8"
+      ],
+      "consequences": [],
+      "created_at": "2026-09-04T12:42:52.672139Z",
+      "description": null,
+      "id": "D53",
+      "obsoleted_at": null,
+      "rationale": "The remote branch poc/windows-pipe-daemon carries two June 2026 commits over 28 files forked from v0.5.4; v0.7 is 1,130 commits ahead and a read-only merge check conflicts in 20 of those files, so it cannot be cherry-picked. A concern-by-concern audit against v0.7 finds nine of its eleven concerns already landed in production form: the named-pipe transport and streaming (six P30 waves, windows_pipe.py at 1,033 lines), the security ordering (D-WINPIPE-01), the spawn readiness budget, the daemon control verbs and client pipe transport, the TUI probe through the transport-agnostic DaemonClient, the mutation routing default, the cancel.py POSIX guards, and the parent-fsync guard in kernel/fsync.py used by all nine atomic-write sites; the ci.yaml windows job runs the win32 transport set including a poc-scenarios file on a real host. The one residue is the console-window suppression for daemon child spawns: the three runtime adapters, the sdk_baseline probe, worktree git, the spec writer, the statusline git module and the layered-config branch detection still spawn bare. W42 ports that flag with a sweep test; the branch is then deleted with the 28-file audit table in the commit body. The Windows first-user journey is proved at rc2 under REL-041.",
+      "scope_id": "P31",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Retire the Windows pipe PoC branch; port the child-spawn no-window flag"
+    },
+    "D54": {
+      "alternatives": [
+        "Ship-time thematic squash into 5-10 commits with multi-wave trailers, superseding D07",
+        "Keep the current shape of about two commits per wave",
+        "GitHub squash-merge each phase PR into one commit"
+      ],
+      "consequences": [],
+      "created_at": "2026-09-04T12:42:53.365914Z",
+      "description": null,
+      "id": "D54",
+      "obsoleted_at": null,
+      "rationale": "P30 landed 1,036 commits for 525 waves: 632 wave-prefixed, 385 state-only bookkeeping of which 245 were per-wave close records, and 447 waves had exactly one commit. For the epoch-1 phases the wave-close bookkeeping rides the wave commit (the land step amends the cherry-picked commit; the drift detector derives the SHA by subject grep) and claim-batch and iter-close bookkeeping stays one state commit per batch; the prefix lint rejects a single-wave close state subject and a second code commit per wave outside a reactive wave. That halves the count while keeping D07 (rebase-and-merge, never squash), per-wave bisectability and the SHA pin. The 5-10 thematic commits per PR the operator wants arrive by construction at dev3: packet file 50 already forbids bookkeeping commits and requires one verified delivery commit per Batch boundary; the amendment of 2026-09-04 makes the unit the vcs.integration_commit_unit leaf (batch default, task opt-out), the daemon squashes a Batch's sealed candidates before verification and before any push or close while agents commit freely inside worktrees, and rule 5 keeps the verified commit immutable. Every eawf-managed repo inherits it at its rc1 cutover.",
+      "scope_id": "P31",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Fold bookkeeping into wave commits now; batch delivery commits at dev3"
     }
   },
   "dispatch_paused": false,
@@ -34224,7 +34258,10 @@
         "P31-I01-W38",
         "P31-I01-W39",
         "P31-I01-W40",
-        "P31-I01-W41"
+        "P31-I01-W41",
+        "P31-I01-W42",
+        "P31-I01-W43",
+        "P31-I01-W44"
       ]
     },
     "P32-I01": {
@@ -35654,7 +35691,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-04T12:29:44.567718Z",
+  "updated_at": "2026-09-04T12:45:15.970162Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {},
@@ -154848,6 +154885,467 @@
         }
       ],
       "title": "Stop summing codex reasoning tokens into output tokens",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W42": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap revise; typed criteria land via spec sync",
+        "waived_at": "2026-09-04T12:43:49.959300Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "D53. Under pythonw on Windows a GUI-subsystem daemon spawning a console child without creation flags makes the OS flash a console window per child. v0.7 already carries the pipe transport, security ordering, fsync and cancel guards from poc/windows-pipe-daemon; this flag is the one residue. Add no_window_kwargs to platform/subprocess_detach.py, thread it through the eight daemon-reachable spawn sites with a sweep test, then delete the branch with the audit table in the commit body.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/platform/subprocess_detach.py",
+        "src/eawf/runtime/runtimes/claude/adapter.py",
+        "src/eawf/runtime/runtimes/codex/adapter.py",
+        "src/eawf/runtime/runtimes/opencode/adapter.py",
+        "src/eawf/runtime/runtimes/probes/sdk_baseline.py",
+        "src/eawf/runtime/worktree/git.py",
+        "src/eawf/kernel/spec/writer.py",
+        "src/eawf/runtime/runtimes/claude/statusline_modules/git.py",
+        "src/eawf/kernel/config/layered.py",
+        "tests/unit/platform"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/platform/test_subprocess_detach.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/platform/test_daemon_child_spawn_sites.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P31-I01-W42",
+      "intent": {
+        "desired_outcome": "Every daemon-reachable spawn site passes the no-window kwargs and a sweep test keeps it that way so the poc branch can be retired with its audit recorded",
+        "evidence_refs": [
+          ".ea/local/research/2026-08-04-v07-proposal/60-activity-operator-experience-and-platform.md",
+          ".ea/local/research/2026-08-04-v07-proposal/10-release-train-and-gates.md"
+        ],
+        "planned_steps": [
+          "Add no_window_kwargs beside detached_subprocess_kwargs in platform/subprocess_detach.py returning CREATE_NO_WINDOW on win32 and an empty mapping elsewhere",
+          "Thread the kwargs through the three runtime adapters and the sdk_baseline probe and worktree git and the spec writer and the statusline git module and the layered-config branch detection",
+          "Add tests/unit/platform/test_subprocess_detach.py and a sweep test tests/unit/platform/test_daemon_child_spawn_sites.py that rejects a bare spawn",
+          "Delete origin/poc/windows-pipe-daemon after the port lands and list the 28 audited files in the commit body"
+        ],
+        "priority_rationale": "It is the only concern of the June Windows branch not already on v0.7 and it is visible to every Windows operator on every wave.",
+        "problem": "Every subprocess the daemon spawns on Windows allocates a console window that flashes open and closed because the eight daemon-reachable spawn sites pass no creation flags",
+        "risks": [
+          "The adapters already pass start_new_session on POSIX so the helper must add only creationflags and never a second session flag",
+          "The sweep test must inspect call sites without executing the spawns"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-09-04T12:43:50.089112Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/platform/test_subprocess_detach.py exits 0 with a win32 case returning CREATE_NO_WINDOW and a posix case returning an empty mapping",
+          "oracle_tier": null,
+          "quality_dimension": "compatibility",
+          "required": true,
+          "response": null,
+          "text": "D53: platform/subprocess_detach.py exposes no_window_kwargs which returns creationflags CREATE_NO_WINDOW on win32 and an empty mapping on every other platform so call sites stay platform-agnostic; pytest tests/unit/platform/test_subprocess_detach.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/platform/test_daemon_child_spawn_sites.py exits 0 with all eight sites passing the flag and a bare-spawn fixture rejected",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "D53: the eight daemon-reachable spawn sites (the claude codex and opencode adapters, the sdk_baseline probe, worktree git, the spec writer git call, the statusline git module and the layered-config branch detection) pass the no-window kwargs, and a sweep test over those modules exits 0 and raises AssertionError when any of them spawns bare; pytest tests/unit/platform/test_daemon_child_spawn_sites.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Suppress console windows on daemon child spawns for Windows",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W43": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap revise; typed criteria land via spec sync",
+        "waived_at": "2026-09-04T12:43:50.753193Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The seam and repair waves carry an intent block in state (problem, desired outcome, planned steps, risks, evidence refs into the packet and spike findings) but render_dispatch_envelope never emits it, while the Decisions section dumps every decision in the store (33 rows) and the W27 prompt reaches 40 KB. Render the intent as its own section and limit the decisions to those scoped to the wave phase or cited by the wave, proven by a golden dispatch prompt.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/renderer.py",
+        "tests/integration/test_dispatch_renderer.py",
+        "tests/golden/dispatch"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_dispatch_renderer.py",
+              "-k",
+              "intent"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_dispatch_renderer.py",
+              "-k",
+              "decisions"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P31-I01-W43",
+      "intent": {
+        "desired_outcome": "Every dispatch prompt renders the wave intent with its evidence refs and only the decisions that concern the wave so the executor reads the packet rows it implements",
+        "evidence_refs": [
+          ".ea/local/research/2026-09-03-v07-finalization/13-seam-waves-notes.md"
+        ],
+        "planned_steps": [
+          "Add an Intent section to render_dispatch_envelope rendering problem and desired_outcome and planned_steps and risks and evidence_refs when the wave carries an intent",
+          "Filter the Decisions section to decisions scoped to the wave phase or cited in the wave description or intent",
+          "Add the intent and decisions cases to tests/integration/test_dispatch_renderer.py with a seam-wave golden under 20 KB"
+        ],
+        "priority_rationale": "Thirteen seam and repair waves are dispatchable now and each would otherwise run blind to the packet file it cites.",
+        "problem": "Executors of the seam waves never see the intent block or the packet references the plan attached because the dispatch renderer omits intent and floods the prompt with unrelated decisions",
+        "risks": [
+          "The memory section stays as is so the prompt size drop comes from the decisions filter alone",
+          "Golden fixtures for existing renderer tests move when the section order changes"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-09-04T12:43:50.872105Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_dispatch_renderer.py -k intent exits 0 with the five intent fields and both evidence paths present in the rendered W27 prompt",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The dispatch prompt emits an Intent section carrying problem, desired_outcome, planned_steps, risks and evidence_refs when the wave carries an intent, and emits no such section when it does not; pytest tests/integration/test_dispatch_renderer.py -k intent",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_dispatch_renderer.py -k decisions exits 0 with phase-scoped decisions only and the seam-wave golden under 20 KB",
+          "oracle_tier": null,
+          "quality_dimension": "performance_efficiency",
+          "required": true,
+          "response": null,
+          "text": "The Decisions section of the dispatch prompt emits only decisions whose scope is the wave phase or whose id the wave description or intent cites, so the rendered prompt for a seam wave validates under 20 KB against a golden fixture; pytest tests/integration/test_dispatch_renderer.py -k decisions",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Render the wave intent block and scope the decisions in dispatch",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W44": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap revise; typed criteria land via spec sync",
+        "waived_at": "2026-09-04T12:43:51.503903Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "D54. P30 landed 1,036 commits for 525 waves, 385 of them state-only bookkeeping and 245 of those per-wave close records. Make wave-close bookkeeping ride the wave commit: the flow land step amends the cherry-picked wave commit with state.json instead of a separate state commit, the prefix lint rejects a single-wave close state subject and a second code commit per wave outside a reactive wave, the rule text carries both clauses, and the drift detector accepts the amended unpinned commit.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tools/commit_prefix_lint.py",
+        "tests/unit/test_commit_prefix_lint.py",
+        "docs/rules/commit-granularity.md",
+        "src/eawf/platform/profiles/data/core.yaml",
+        "src/eawf/surfaces/render/skills/registry.py",
+        "src/eawf/workflow/lifecycle/wave_sha.py",
+        "tests/workflow/lifecycle",
+        "tests/golden"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_commit_prefix_lint.py",
+              "-k",
+              "close_rides_wave"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/golden/test_golden_agents_md.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/lifecycle/test_wave_sha_fold.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "home",
+            "size": [
+              120,
+              40
+            ],
+            "state_path": ".ea/state.json"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-04",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P31-I01-W44",
+      "intent": {
+        "desired_outcome": "One commit per wave that carries its own close bookkeeping and one state commit per claim batch so a phase PR reads as its deliverables while D07 and per-wave bisectability stay intact",
+        "evidence_refs": [
+          ".ea/local/research/2026-08-04-v07-proposal/50-delivery-integration-and-verification.md",
+          "docs/rules/agent-driven-large-phase-pr.md"
+        ],
+        "planned_steps": [
+          "Reject a single-wave close state subject and a second code commit per wave in tools/commit_prefix_lint.py with the remedy naming the wave commit and pin it in tests/unit/test_commit_prefix_lint.py",
+          "Rewrite the flow land step in the skills registry so the close bookkeeping amends the cherry-picked wave commit and add the fold clause and the one-commit-per-wave clause to core.yaml and docs/rules/commit-granularity.md then regenerate the agents_md goldens",
+          "Pin in tests/workflow/lifecycle/test_wave_sha_fold.py that detect_git_state_drift returns no drift for a closed unpinned wave whose amended commit is found by subject grep"
+        ],
+        "priority_rationale": "It halves the commit count of every epoch-1 phase from P31 on with no decision superseded and bridges to the batch delivery commits of dev3.",
+        "problem": "Every wave close lands as its own state commit so a phase PR carries almost two commits per wave and the bookkeeping outnumbers the deliverables",
+        "risks": [
+          "The amend happens after eawf wave close writes state.json so the pinned commit must stay unset and the subject grep must find the amended commit",
+          "Reactive fix waves keep their own commit so the one-per-wave rule must exempt a later wave id"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-09-04T12:43:51.609648Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/test_commit_prefix_lint.py -k close_rides_wave exits 0 with the single-wave close subject rejected and the batch subject accepted",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "D54: tools/commit_prefix_lint.py raises on a state-only subject that closes a single wave such as [P31-I01] state: close W27 with a remedy naming the wave commit, and returns for a claim-batch or iter-close state subject; pytest tests/unit/test_commit_prefix_lint.py -k close_rides_wave",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02",
+            "G-04"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/golden/test_golden_agents_md.py exits 0 with the regenerated goldens carrying both clauses",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "D54: the commit-granularity rule text in core.yaml and docs/rules matches pattern for the fold clause (wave-close bookkeeping rides the wave commit) and the one-commit-per-wave clause, the flow skill land step matches pattern for amending the cherry-picked wave commit instead of a separate state commit, and every agents_md golden validates byte for byte; pytest tests/golden/test_golden_agents_md.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/workflow/lifecycle/test_wave_sha_fold.py exits 0 with zero drifts for an amended unpinned closed wave",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "D54: detect_git_state_drift returns no drift row for a closed wave without a pinned commit whose amended wave commit is found by subject grep, so the fold does not register as closed_no_pin drift; pytest tests/workflow/lifecycle/test_wave_sha_fold.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fold wave-close bookkeeping into the wave commit and cap one per wave",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
