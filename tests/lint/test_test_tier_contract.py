@@ -15,6 +15,11 @@ its own ``EAWF_RUNTIME_DIR``.
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+import tomllib
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -25,7 +30,18 @@ from eawf.platform.lint.eawf024_test_tier_contract import (
     check_source,
     is_unit_tier_path,
 )
+from eawf.platform.lint.kind_taxonomy import (
+    GRANDFATHERED_MARKER_CONFLICTS,
+    KIND_MARKERS,
+    declared_markers,
+    kind_for_test_path,
+)
+from eawf.platform.lint.kind_taxonomy import TestKind as Kind
 from tests.conftest import REPO_EA_DIR, REPO_ROOT, RepoStateAccessError, guard_repo_ea_path
+
+# Aliased on import: a bare ``pytest_collection_modifyitems`` name in a test
+# module reads as a hook declaration rather than a symbol under test.
+from tests.conftest import pytest_collection_modifyitems as apply_kind_markers
 
 
 def test_check_source_flags_plain_subprocess_import() -> None:
@@ -220,10 +236,170 @@ def test_repo_ea_guard_allows_an_explicit_workspace(tmp_path: Path) -> None:
 
 def test_every_test_runs_under_its_own_runtime_dir() -> None:
     """The autouse ``own_runtime_dir`` guard has an isolated dir to assert on."""
-    import os
-
     configured = os.environ.get("EAWF_RUNTIME_DIR")
     assert configured, "EAWF_RUNTIME_DIR must be set for every test"
     resolved = Path(configured).resolve()
     assert REPO_EA_DIR not in resolved.parents
     assert resolved != REPO_EA_DIR
+
+
+# --- test-kind auto-marking contract ----------------------------------------
+
+
+@dataclass(frozen=True)
+class _FakeMark:
+    """The only ``pytest.Mark`` member the hook reads."""
+
+    name: str
+
+
+@dataclass
+class _FakeItem:
+    """Minimal stand-in for the three ``pytest.Item`` members the hook uses.
+
+    Attributes:
+        path: The item's file path, as ``pytest.Item.path`` supplies it.
+        markers: Marker names the file declares for itself.
+        applied: Marker names the hook applied, in application order.
+    """
+
+    path: str
+    markers: tuple[str, ...] = ()
+    applied: list[str] = field(default_factory=list)
+
+    def iter_markers(self) -> list[_FakeMark]:
+        """Return the declared markers in the shape the hook iterates."""
+        return [_FakeMark(name) for name in self.markers]
+
+    def add_marker(self, marker: str) -> None:
+        """Record a marker the hook applied."""
+        self.applied.append(marker)
+
+
+def test_auto_marker_applies_the_directory_kind() -> None:
+    item = _FakeItem(path="tests/unit/kernel/test_x.py")
+    apply_kind_markers([item])  # type: ignore[list-item]
+    assert item.applied == ["unit"]
+
+
+def test_auto_marker_skips_a_non_kind_directory() -> None:
+    item = _FakeItem(path="tests/lint/test_x.py")
+    apply_kind_markers([item])  # type: ignore[list-item]
+    assert item.applied == []
+
+
+def test_auto_marker_covers_every_kind_directory() -> None:
+    items = [_FakeItem(path=f"tests/{kind.value}/test_x.py") for kind in Kind]
+    apply_kind_markers(items)  # type: ignore[arg-type]
+    assert [item.applied for item in items] == [[kind.value] for kind in Kind]
+
+
+def test_auto_marker_on_an_empty_item_list_is_a_no_op() -> None:
+    # Boundary: a collection that produced nothing.
+    apply_kind_markers([])
+
+
+def test_auto_marker_keeps_a_matching_manual_marker() -> None:
+    item = _FakeItem(path="tests/tui/test_x.py", markers=("tui", "slow"))
+    apply_kind_markers([item])  # type: ignore[list-item]
+    assert item.applied == ["tui"]
+
+
+def test_auto_marker_raises_on_a_contradicting_manual_marker() -> None:
+    item = _FakeItem(path="tests/unit/test_x.py", markers=("integration",))
+    with pytest.raises(pytest.UsageError, match="test-kind marker conflict"):
+        apply_kind_markers([item])  # type: ignore[list-item]
+    assert item.applied == []
+
+
+def test_auto_marker_conflict_names_both_sides() -> None:
+    item = _FakeItem(path="tests/golden/test_x.py", markers=("property",))
+    with pytest.raises(pytest.UsageError, match="auto-marked 'golden'"):
+        apply_kind_markers([item])  # type: ignore[list-item]
+
+
+def test_auto_marker_honours_the_grandfathered_conflicts() -> None:
+    # A grandfathered file does not abort collection; it still receives
+    # its directory's marker alongside the contradicting manual one.
+    grandfathered = sorted(GRANDFATHERED_MARKER_CONFLICTS)[0]
+    kind = kind_for_test_path(grandfathered)
+    assert kind is not None
+    item = _FakeItem(path=grandfathered, markers=("unit",))
+    apply_kind_markers([item])  # type: ignore[list-item]
+    assert item.applied == [kind.value]
+
+
+def test_auto_marker_conflict_reports_one_row_per_offending_file() -> None:
+    items = [
+        _FakeItem(path="tests/unit/test_a.py", markers=("tui",)),
+        _FakeItem(path="tests/unit/test_a.py", markers=("tui",)),
+        _FakeItem(path="tests/unit/test_b.py", markers=("tui",)),
+    ]
+    with pytest.raises(pytest.UsageError) as excinfo:
+        apply_kind_markers(items)  # type: ignore[arg-type]
+    assert str(excinfo.value).count("auto-marked") == 2
+
+
+def test_auto_marker_kinds_are_registered_under_strict_markers() -> None:
+    """Every kind the hook applies is a registered marker, so strict mode passes."""
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    ini = tomllib.loads(pyproject)["tool"]["pytest"]["ini_options"]
+    assert "--strict-markers" in ini["addopts"]
+    assert declared_markers(pyproject) >= KIND_MARKERS
+
+
+_TMP_CONFTEST = """\
+import sys
+
+sys.path.insert(0, {repo_root!r})
+
+from tests.conftest import pytest_collection_modifyitems  # noqa: E402,F401
+"""
+
+_TMP_PYTEST_INI = """\
+[pytest]
+addopts = --strict-markers --strict-config -p no:cacheprovider
+markers =
+    unit: unit-kind tests
+    integration: integration-kind tests
+"""
+
+_TMP_CONFLICTING_TEST = """\
+import pytest
+
+
+@pytest.mark.integration
+def test_x():
+    assert True
+"""
+
+
+def test_auto_marker_conflict_exits_collection_nonzero(tmp_path: Path) -> None:
+    """A real pytest process over a contradicting file exits non-zero.
+
+    The generated project's ``conftest.py`` re-exports the repository's
+    own hook, so the exit code witnesses the production wiring rather
+    than a re-implementation of it.
+    """
+    suite = tmp_path / "suite" / "tests" / "unit"
+    suite.mkdir(parents=True)
+    (tmp_path / "pytest.ini").write_text(_TMP_PYTEST_INI, encoding="utf-8")
+    (tmp_path / "conftest.py").write_text(
+        _TMP_CONFTEST.format(repo_root=str(REPO_ROOT)), encoding="utf-8"
+    )
+    (suite / "test_conflicting.py").write_text(_TMP_CONFLICTING_TEST, encoding="utf-8")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(REPO_ROOT), *(part for part in [env.get("PYTHONPATH", "")] if part)]
+    )
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", str(tmp_path)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert proc.returncode != 0, proc.stdout
+    assert "test-kind marker conflict" in proc.stdout + proc.stderr

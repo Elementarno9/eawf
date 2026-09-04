@@ -22,6 +22,7 @@ from eawf.kernel.spec.common import (
 )
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.models import CriteriaFloorWaiver
+from eawf.platform.lint.kind_taxonomy import kind_for_test_path, marker_conflict
 
 # --- Hypothesis CI example-budget profile --------------------
 #
@@ -39,6 +40,53 @@ hypothesis.settings.register_profile("ci", hypothesis.settings(max_examples=25))
 hypothesis.settings.load_profile(
     os.environ.get("HYPOTHESIS_PROFILE") or ("ci" if os.environ.get("CI") else "dev")
 )
+
+# --- test-kind auto-marking ----------------------------------
+#
+# A test's kind is its directory: everything under ``tests/<kind>/`` wears
+# ``<kind>`` as a marker, applied here rather than by hand, so ``-m tui``
+# selects the whole TUI kind without depending on 200 authors remembering
+# a decorator. ``TestKind`` is the single declaration and every kind's
+# marker is registered in ``[tool.pytest.ini_options]``, which
+# ``--strict-markers`` then enforces.
+#
+# The reverse case -- a file that declares a DIFFERENT kind's marker than
+# its directory implies -- is a contradiction, not a preference: the file
+# is either misfiled or mislabelled, and silently honouring one side hides
+# it. Collection aborts with a usage error naming both sides. The
+# pre-taxonomy files that already disagree are grandfathered in
+# ``kind_taxonomy.GRANDFATHERED_MARKER_CONFLICTS`` so the contract binds
+# new tests without a tree-wide re-file first.
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Apply each item's directory kind as a marker; reject a contradiction.
+
+    Args:
+        items: The collected items, mutated in place.
+
+    Raises:
+        pytest.UsageError: at least one collected file declares a kind
+            marker that contradicts the kind its directory implies.
+    """
+    conflicts: dict[str, str] = {}
+    for item in items:
+        path = str(item.path)
+        kind = kind_for_test_path(path)
+        if kind is None:
+            continue
+        conflict = marker_conflict(
+            path=path,
+            marker_names=frozenset(mark.name for mark in item.iter_markers()),
+        )
+        if conflict is not None:
+            conflicts[conflict.path] = conflict.render()
+            continue
+        item.add_marker(kind.value)
+    if conflicts:
+        joined = "\n".join(conflicts[path] for path in sorted(conflicts))
+        raise pytest.UsageError(f"test-kind marker conflict:\n{joined}")
+
 
 # --- suite daemon runtime-dir isolation ----------------------
 #

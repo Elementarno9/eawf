@@ -358,6 +358,22 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
+      - id: eawf025-test-placement
+        name: eawf025-test-placement
+        entry: uv run eawf hook eawf025-test-placement
+        language: system
+        # EAWF025 over the tests/ paths THIS commit adds (git diff --cached
+        # --diff-filter=A): a new test lands under
+        # tests/<kind>/<source-package-path>/ with a declared TestKind as its
+        # first segment and a real src/eawf package as its mirror chain, and
+        # no subject is filed under two kinds at once. Diff-scoped on purpose
+        # -- the pre-taxonomy subsystem directories (tests/cli/, tests/kernel/,
+        # ...) are exempt and a whole-tree scan would red every commit. Reads
+        # the staged index itself, so no file filter -- always-run with
+        # pass_filenames off. BLOCKS: a violation fails the commit.
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
       - id: plugin-doctor-drift
         name: plugin-doctor-drift
         entry: uv run eawf hook plugin-doctor-drift

@@ -1421,6 +1421,60 @@ def eawf024_test_tier_contract(
     )
 
 
+def _staged_added_tests(*, cwd: Path) -> list[str]:
+    """Return the ``tests/`` paths this commit ADDS, per the staged diff.
+
+    EAWF025 is diff-scoped by design: the pre-taxonomy suite does not
+    mirror the source layout, so a whole-tree scan would red every
+    commit. Only newly added paths are held to the placement contract; a
+    modified or renamed file keeps whatever address it already had. A
+    failed git invocation yields an empty list (fail-open) -- the
+    authoritative backstop is the same gate on the next clean run.
+    """
+    proc = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=A", "--", "tests/"],
+        cwd=cwd,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if proc.returncode != 0:
+        return []
+    return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+
+@hook_app.command(name="eawf025-test-placement")
+def eawf025_test_placement(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+) -> None:
+    """Reject a newly added test filed outside its taxonomy address.
+
+    Reads the staged ADDED ``tests/`` set (or an explicit file list, for
+    tests) and runs the EAWF025 rule: a new test lives under
+    ``tests/<kind>/<source-package-path>/`` where the kind is a declared
+    ``TestKind`` and the mirror chain names a real package under
+    ``src/eawf/``, and no subject is filed under two kinds at once. The
+    pre-taxonomy subsystem directories are exempt. Exits 1 on a
+    violation, 0 when clean.
+    """
+    from eawf.platform.lint import eawf025_test_placement as eawf025
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    paths = files if files else _staged_added_tests(cwd=cwd)
+    violations = eawf025.check_test_paths(paths, source_packages=eawf025.source_package_paths(cwd))
+    rows = [f"  {violation.path}: {violation.render()}" for violation in violations]
+    _emit_static_lint_result(
+        hook_name="eawf025-test-placement",
+        rows=rows,
+        scanned=len(paths),
+        flags=flags,
+        blocking=True,
+    )
+
+
 def _staged_added_lines(rel: str, *, cwd: Path) -> list[tuple[int, str]]:
     """Return ``(1-based new lineno, text)`` for lines the staged diff added.
 
