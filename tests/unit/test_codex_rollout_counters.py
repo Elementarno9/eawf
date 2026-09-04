@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -12,13 +14,51 @@ from eawf.runtime.runtimes.codex.rollout_counters import (
     read_codex_rollout_counters,
 )
 
-_ROLLOUT = (
-    Path(__file__).resolve().parents[1]
-    / "fixtures"
-    / "telemetry"
-    / "codex"
-    / "rollout-2026-05-14T00-00-00-placeholder-cccc.jsonl"
-)
+_CODEX_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "telemetry" / "codex"
+
+_ROLLOUT = _CODEX_FIXTURES / "rollout-2026-05-14T00-00-00-placeholder-cccc.jsonl"
+
+
+def _fixture_token_usage_blocks() -> list[tuple[str, dict[str, Any]]]:
+    """Yield every ``*_token_usage`` block in the committed codex rollouts."""
+    blocks: list[tuple[str, dict[str, Any]]] = []
+    for path in sorted(_CODEX_FIXTURES.glob("rollout-*.jsonl")):
+        for line_no, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            payload = record.get("payload") if isinstance(record, dict) else None
+            if not isinstance(payload, dict) or payload.get("type") != "token_count":
+                continue
+            info = payload.get("info")
+            if not isinstance(info, dict):
+                continue
+            for key in ("total_token_usage", "last_token_usage"):
+                usage = info.get(key)
+                if isinstance(usage, dict):
+                    blocks.append((f"{path.name}:{line_no}:{key}", usage))
+    return blocks
+
+
+def test_codex_rollout_fixtures_hold_vendor_subset_relation() -> None:
+    """Every committed rollout must encode the vendor's real token algebra.
+
+    A fixture that instead encodes ``total = input + output + reasoning``
+    cannot adjudicate whether the reader double-counts reasoning, so the
+    relation is asserted on the fixture itself.
+    """
+    blocks = _fixture_token_usage_blocks()
+    assert blocks, "no token_count blocks found in the codex rollout fixtures"
+    for label, usage in blocks:
+        input_tokens = usage["input_tokens"]
+        output_tokens = usage["output_tokens"]
+        reasoning = usage["reasoning_output_tokens"]
+        assert usage["total_tokens"] == input_tokens + output_tokens, label
+        assert 0 < reasoning <= output_tokens, label
 
 
 def test_read_codex_rollout_counters_returns_exact_provider_classes() -> None:

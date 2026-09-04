@@ -16,6 +16,10 @@ from eawf.observability.telemetry.sources import (
     OpenCodeSessionSource,
     SessionSource,
 )
+from eawf.observability.telemetry.sources.codex_session import (
+    _CodexAccumulator,
+    _fold_token_count,
+)
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "telemetry"
 _CODEX_FIXTURES = _FIXTURES / "codex"
@@ -153,8 +157,79 @@ def test_codex_session_adopts_cumulative_token_totals() -> None:
     # Last token_count event: input=3000, cached=500, output=800, reasoning=150.
     assert session.total_input_tokens == 2500  # 3000 - 500 cached
     assert session.total_cache_read == 500
-    assert session.total_output_tokens == 950  # 800 + 150 reasoning
+    assert session.total_output_tokens == 800  # reasoning is inside output, not added
     assert session.total_cache_write == 0
+
+
+def test_codex_session_excludes_reasoning_from_output_tokens(tmp_path: Path) -> None:
+    """A vendor-shaped rollout folds to output_tokens alone, not output+reasoning."""
+    path = tmp_path / "rollout-reasoning.jsonl"
+    path.write_text(
+        '{"timestamp":"2026-09-03T00:00:00Z","type":"session_meta",'
+        '"payload":{"id":"sess-reasoning"}}\n'
+        '{"timestamp":"2026-09-03T00:00:05Z","type":"event_msg","payload":'
+        '{"type":"token_count","info":{"total_token_usage":{"input_tokens":31751,'
+        '"cached_input_tokens":0,"output_tokens":2367,"reasoning_output_tokens":413,'
+        '"total_tokens":34118}}}}\n',
+        encoding="utf-8",
+    )
+    session = next(iter(CodexSessionSource().iter_rows(path)))
+    assert session.total_output_tokens == 2_367  # not 2_367 + 413
+    assert session.total_input_tokens == 31_751
+    assert session.total_input_tokens + session.total_output_tokens == 34_118
+
+
+def test_codex_fold_records_reasoning_on_its_own_field() -> None:
+    acc = _CodexAccumulator()
+    _fold_token_count(
+        acc,
+        {
+            "type": "token_count",
+            "info": {
+                "total_token_usage": {
+                    "input_tokens": 31751,
+                    "cached_input_tokens": 0,
+                    "output_tokens": 2367,
+                    "reasoning_output_tokens": 413,
+                    "total_tokens": 34118,
+                }
+            },
+        },
+    )
+    assert acc.total_output_tokens == 2_367
+    assert acc.total_reasoning_output_tokens == 413
+
+
+def test_codex_fold_defaults_missing_reasoning_to_zero() -> None:
+    acc = _CodexAccumulator()
+    _fold_token_count(acc, {"info": {"total_token_usage": {"output_tokens": 7}}})
+    assert acc.total_output_tokens == 7
+    assert acc.total_reasoning_output_tokens == 0
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"info": None},
+        {"info": "not-a-mapping"},
+        {"info": {}},
+        {"info": {"total_token_usage": None}},
+        {"info": {"total_token_usage": [1, 2, 3]}},
+    ],
+)
+def test_codex_fold_ignores_unusable_token_payload(payload: dict[str, object]) -> None:
+    acc = _CodexAccumulator()
+    _fold_token_count(acc, payload)
+    assert acc.total_output_tokens == 0
+    assert acc.total_reasoning_output_tokens == 0
+    assert acc.total_input_tokens == 0
+    assert acc.total_cache_read == 0
+
+
+def test_codex_fold_rejects_non_mapping_payload() -> None:
+    with pytest.raises(AttributeError):
+        _fold_token_count(_CodexAccumulator(), "not-a-payload")  # type: ignore[arg-type]
 
 
 def test_codex_session_counts_turn_contexts() -> None:
@@ -180,7 +255,7 @@ def test_codex_session_skips_corrupt_line_with_warning(
         rows = list(source.iter_rows(_CODEX_CORRUPT))
     assert len(rows) == 1
     assert rows[0].session_id == "sess-placeholder-dddd"
-    assert rows[0].total_output_tokens == 120
+    assert rows[0].total_output_tokens == 120  # output=120 with reasoning=40 inside it
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1
     assert "line=2" in warnings[0].message

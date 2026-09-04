@@ -58,6 +58,7 @@ class _CodexAccumulator:
     ended_at: datetime | None = None
     total_input_tokens: int = 0
     total_output_tokens: int = 0
+    total_reasoning_output_tokens: int = 0
     total_cache_read: int = 0
     turn_count: int = 0
 
@@ -190,6 +191,12 @@ def _fold_token_count(acc: _CodexAccumulator, payload: dict[str, Any]) -> None:
     ``info.total_token_usage``; the last event therefore carries the session
     totals. We overwrite (not sum) so the fold is monotonic regardless of how
     many events the rollout emits.
+
+    ``reasoning_output_tokens`` is a *subset* of ``output_tokens``, not a
+    sibling of it: the vendor's own ``total_tokens`` equals ``input_tokens``
+    plus ``output_tokens`` on every observed rollout. It is therefore kept on
+    its own accumulator field and never added to the output total, which would
+    double-count the reasoning slice.
     """
     info = payload.get("info")
     if not isinstance(info, dict):
@@ -199,11 +206,10 @@ def _fold_token_count(acc: _CodexAccumulator, payload: dict[str, Any]) -> None:
         return
     input_tokens = _coerce_int(totals.get("input_tokens"))
     cached_input = _coerce_int(totals.get("cached_input_tokens"))
-    output_tokens = _coerce_int(totals.get("output_tokens"))
-    reasoning_tokens = _coerce_int(totals.get("reasoning_output_tokens"))
     acc.total_input_tokens = max(input_tokens - cached_input, 0)
     acc.total_cache_read = cached_input
-    acc.total_output_tokens = output_tokens + reasoning_tokens
+    acc.total_output_tokens = _coerce_int(totals.get("output_tokens"))
+    acc.total_reasoning_output_tokens = _coerce_int(totals.get("reasoning_output_tokens"))
 
 
 def _session_from_accumulator(acc: _CodexAccumulator, *, jsonl_path: Path) -> TelemetrySession:
