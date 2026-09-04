@@ -42,7 +42,14 @@ EXPECTED_AUDIT_VERBS = {
 }
 EXPECTED_INCIDENT_VERBS = {"open", "close", "view", "promote"}
 EXPECTED_DECISION_VERBS = {"add", "supersede", "list", "graph", "promote"}
-EXPECTED_ARTIFACT_VERBS = {"add", "update", "show", "validate", "verify"}
+EXPECTED_ARTIFACT_VERBS = {
+    "add",
+    "update",
+    "show",
+    "validate",
+    "verify",
+    "promote-contract",
+}
 EXPECTED_BACKLOG_VERBS = {"add", "edit", "backfill-titles", "set-priority", "close"}
 
 

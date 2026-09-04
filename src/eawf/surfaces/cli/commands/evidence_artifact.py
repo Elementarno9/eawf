@@ -149,19 +149,105 @@ def artifact_update(
     )
 
 
+@artifact_app.command("promote-contract")
+def artifact_promote_contract(
+    ctx: typer.Context,
+    contract_id: Annotated[
+        str,
+        typer.Argument(help="Measured-contract id, e.g. MCT-26081301."),
+    ],
+    scope_id: Annotated[
+        str | None,
+        typer.Option("--scope-id", help="Owning scope (defaults to project code)."),
+    ] = None,
+) -> None:
+    """Promote a measured contract onto the evidence path.
+
+    Registers the contract as an artifact so it resolves by
+    ``urn:eawf:v1:artifact:<scope>/<contract-id>``, and appends one
+    evidence (EVD) row recording the promotion. Refuses a contract whose
+    measured scale band is below the band its implementing checkpoint
+    asserts over.
+    """
+    from eawf.surfaces.cli._mutation import state_transaction
+    from eawf.workflow.evidence import measured_contract as contract_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
+
+    flags = _flags(ctx)
+    state_path = _state_path(flags)
+
+    contract = contract_evi.PREFLIGHT_CONTRACTS.get(contract_id)
+    if contract is None:
+        known = ", ".join(sorted(contract_evi.PREFLIGHT_CONTRACTS))
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"unknown measured contract {contract_id!r} (known: {known})",
+                kind="NotFound",
+            ),
+            flags=flags,
+        )
+        return
+    required_band = contract_evi.PREFLIGHT_CHECKPOINT_BANDS[contract_id]
+
+    try:
+        with state_transaction(state_path) as state:
+            resolved_scope = scope_id
+            if resolved_scope is None:
+                if state.project is None:
+                    raise cli_errors.UserError(
+                        "scope_id required when state.project is unset", kind="InvalidInput"
+                    )
+                resolved_scope = state.project.code
+            promotion = contract_evi.promote_measured_contract(
+                state,
+                contract=contract,
+                scope_id=resolved_scope,
+                required_band=required_band,
+            )
+            paths = store_paths(state_path)
+            append_jsonl(paths[StoreKind.EVENT], promotion.artifact_event)
+            append_jsonl(paths[StoreKind.EVIDENCE], promotion.evidence_envelope)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    _emit(
+        {
+            "contract_id": promotion.artifact_id,
+            "urn": promotion.urn,
+            "evidence_id": promotion.evidence.id,
+            "scale_band": promotion.contract.environment.scale_band.value,
+            "required_band": required_band.value,
+            "boundary": promotion.contract.boundary,
+            "scope_id": resolved_scope,
+        },
+        f"contract {promotion.artifact_id} promoted urn={promotion.urn} "
+        f"evidence={promotion.evidence.id}",
+        flags,
+    )
+
+
 @artifact_app.command("show")
 def artifact_show(
     ctx: typer.Context,
-    artifact_id: Annotated[str, typer.Argument(help="Artifact id")],
+    artifact_id: Annotated[
+        str,
+        typer.Argument(help="Artifact id or urn:eawf:v1:artifact:<scope>/<id>."),
+    ],
 ) -> None:
-    """Show artifact metadata."""
-    from eawf.workflow.evidence import artifact as artifact_evi
+    """Show artifact metadata.
+
+    Accepts a bare artifact id or a full artifact URN. A citation that
+    points into the gitignored spike tree is refused with the promotion
+    command rather than a bare not-found.
+    """
+    from eawf.workflow.evidence import measured_contract as contract_evi
     from eawf.workflow.evidence._io import load_state
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
     state = _run_read(flags, load_state, state_path)
-    artifact = _run_read(flags, artifact_evi.show_artifact, state, artifact_id)
+    artifact = _run_read(flags, contract_evi.resolve_contract_citation, state, artifact_id)
     payload = json.loads(artifact.model_dump_json())
     _emit(
         payload,
