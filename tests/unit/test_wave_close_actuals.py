@@ -148,7 +148,7 @@ def test_claim_wave_does_not_seed_default_estimate_from_bucket() -> None:
     """Claim keeps the bucket centroid derived instead of caching it.
 
     The full contract (serialised shape, operator-row preservation, repeat
-    claims) lives in ``tests/workflow/lifecycle/test_wave_claim.py``.
+    claims) lives in ``tests/integration/workflow/lifecycle/test_wave_claim.py``.
     """
     state = _empty_state()
     _seed_wave(state, effort_bucket=EffortBucket.L)
