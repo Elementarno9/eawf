@@ -53,6 +53,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.state.models import resolve_close_budget
 from eawf.runtime.runtimes.adapter import RuntimeSpawnError
 from eawf.runtime.runtimes.fallback import (
     FallbackAction,
@@ -69,8 +70,10 @@ logger = logging.getLogger(__name__)
 #: Default attempt ceiling for :func:`repair_until_resolved`. One initial repair
 #: re-dispatch plus up to ``DEFAULT_MAX_REPAIR_ATTEMPTS - 1`` further grounded
 #: re-dispatches. Bounded so a criterion that keeps failing terminates in a typed
-#: exhaustion rather than re-dispatching forever.
-DEFAULT_MAX_REPAIR_ATTEMPTS: int = 3
+#: exhaustion rather than re-dispatching forever. Derived from the single close
+#: budget resolver rather than pinned locally: the lane loop must not out-spend
+#: the repair generations the daemon will actually fund for the wave's close.
+DEFAULT_MAX_REPAIR_ATTEMPTS: int = resolve_close_budget().total_repair_attempts
 
 #: Default attempt ceiling for :func:`spawn_with_retry`. One initial spawn plus
 #: up to ``DEFAULT_MAX_ATTEMPTS - 1`` retries / switches. Bounded so a runtime

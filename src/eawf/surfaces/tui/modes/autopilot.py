@@ -125,6 +125,7 @@ from eawf.kernel.spec.auq_bridge import (
 )
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.ids import natural_key
+from eawf.kernel.state.models import latest_close_attempt, resolve_close_budget
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.toast_emitter import ToastSeverity, notify_result
 from eawf.surfaces.tui.widgets import sigils
@@ -219,13 +220,13 @@ LANE_CELL_CLASS: str = "autopilot-lane-cell"
 #: draining, each showing its repair counter.
 LANES_CAPTION: str = "lanes"
 
-#: Repair-attempt budget the lane cell's ``repair n/<budget>`` counter reads
-#: against -- the bounded grounded-repair loop's attempt ceiling (mirrors
-#: :data:`eawf.workflow.dispatch.retry.DEFAULT_MAX_REPAIR_ATTEMPTS`). Pinned as a
-#: local constant rather than imported so the TUI cold path never pulls the
-#: runtime dispatch stack; the cell only DISPLAYS the budget, it never enforces
-#: it (the daemon loop owns the ceiling).
-REPAIR_BUDGET: int = 3
+#: Fallback denominator of the lane cell's ``repair n/<budget>`` counter, used
+#: for a lane whose wave has no close attempt yet. Resolved from the single close
+#: budget resolver rather than pinned locally, so the number the pane displays is
+#: the number the daemon enforces. A lane whose wave HAS a live close attempt
+#: renders that attempt's remaining budget instead (see :func:`lane_cells`); the
+#: cell only DISPLAYS the budget, the daemon still owns enforcement.
+REPAIR_BUDGET: int = resolve_close_budget().total_repair_attempts
 
 #: The label the lane cell leads its repair counter with -- ``repair n/<budget>``
 #: so the operator reads how many grounded-repair attempts the lane has burned.
@@ -475,11 +476,17 @@ class LaneCellRow:
         exhausted: Whether the lane's wave has a queued ``REPAIR_EXHAUSTED``
             fork (its grounded repair budget was spent), so the cell escalates
             to the fork badge.
+        budget: The ``<budget>`` denominator of the ``repair n/<budget>``
+            counter, resolved from the wave's live close attempt through
+            :func:`~eawf.kernel.state.models.resolve_close_budget` so the
+            displayed budget IS the daemon-enforced budget. Defaults to the seed
+            budget for a wave with no close attempt yet.
     """
 
     wave_id: str
     attempt: int
     exhausted: bool
+    budget: int = REPAIR_BUDGET
 
 
 def build_frontier_items(state: State | None) -> tuple[WaveFrontierItem, ...]:
@@ -808,7 +815,32 @@ def render_ready_row(
     )
 
 
-def lane_cells(run: FleetRun | None) -> tuple[LaneCellRow, ...]:
+def lane_repair_budget(state: State | None, wave_id: str) -> int:
+    """Return the repair-counter denominator the daemon enforces for *wave_id*.
+
+    Resolves the wave's newest close attempt and reads its REMAINING repair
+    budget through the single close budget resolver
+    (:func:`~eawf.kernel.state.models.resolve_close_budget`), so the denominator
+    the lane cell prints is the one the daemon will actually fund. A wave with no
+    close attempt yet (or no bound state) falls back to the seed budget
+    :data:`REPAIR_BUDGET`.
+
+    Args:
+        state: The bound state, or ``None`` when nothing is bound yet.
+        wave_id: The lane's wave id.
+
+    Returns:
+        The number of dispatch attempts the wave's repair budget funds.
+    """
+    if state is None:
+        return REPAIR_BUDGET
+    attempt = latest_close_attempt(state, wave_id)
+    if attempt is None:
+        return REPAIR_BUDGET
+    return resolve_close_budget(attempt=attempt).total_repair_attempts
+
+
+def lane_cells(run: FleetRun | None, *, state: State | None = None) -> tuple[LaneCellRow, ...]:
     """Project a fleet run's in-flight + just-forked lanes into cell rows.
 
     Walks the persisted :attr:`~eawf.kernel.state.models.FleetRun.lanes` (the
@@ -821,8 +853,14 @@ def lane_cells(run: FleetRun | None) -> tuple[LaneCellRow, ...]:
     alone and add no lane cell. Rows are returned in natural claim order. An
     unarmed run (``None``) yields no cells (the honest-empty lanes path).
 
+    Each cell carries the repair budget the daemon enforces for its own wave
+    (:func:`lane_repair_budget`), so no two lanes share a stale global constant
+    and the displayed denominator tracks the wave's live close attempt.
+
     Args:
         run: The persisted fleet run, or ``None`` when no run is armed.
+        state: The bound state used to resolve each lane's enforced repair
+            budget; ``None`` falls every cell back to the seed budget.
 
     Returns:
         The lane-cell display rows in claim order; empty when no lane is in
@@ -835,13 +873,19 @@ def lane_cells(run: FleetRun | None) -> tuple[LaneCellRow, ...]:
     cells: dict[str, LaneCellRow] = {}
     for lane in run.lanes.values():
         cells[lane.wave_id] = LaneCellRow(
-            wave_id=lane.wave_id, attempt=lane.attempt, exhausted=False
+            wave_id=lane.wave_id,
+            attempt=lane.attempt,
+            exhausted=False,
+            budget=lane_repair_budget(state, lane.wave_id),
         )
     for fork in run.forks:
         if fork.reason is not FleetForkReason.REPAIR_EXHAUSTED:
             continue
         cells[fork.wave_id] = LaneCellRow(
-            wave_id=fork.wave_id, attempt=fork.attempt, exhausted=True
+            wave_id=fork.wave_id,
+            attempt=fork.attempt,
+            exhausted=True,
+            budget=lane_repair_budget(state, fork.wave_id),
         )
     ordered = sorted(cells.values(), key=lambda cell: natural_key(cell.wave_id))
     logger.debug(f"lane_cells lanes={len(run.lanes)} cells={len(ordered)}")
@@ -852,8 +896,10 @@ def render_lane_cell(row: LaneCellRow, *, mode: RenderMode = DEFAULT_RENDER_MODE
     """Render one in-flight (or just-forked) lane cell with its repair counter.
 
     A draining lane reads ``<wave> repair n/<budget>`` so the operator sees how
-    many grounded-repair attempts it has burned of the
-    :data:`REPAIR_BUDGET` ceiling. A lane whose wave exhausted repair and forked
+    many grounded-repair attempts it has burned of the budget the daemon
+    ENFORCES for that wave (:attr:`LaneCellRow.budget`, resolved through
+    :func:`~eawf.kernel.state.models.resolve_close_budget`) rather than a
+    display-only ceiling. A lane whose wave exhausted repair and forked
     escalates to ``<badge> <wave> fork`` (:data:`FORK_ESCALATION_LABEL`) -- it
     reads as needing attention and stays visible until the operator resolves it
     via the FA5 inbox, rather than vanishing the moment it left the lane slot.
@@ -872,7 +918,7 @@ def render_lane_cell(row: LaneCellRow, *, mode: RenderMode = DEFAULT_RENDER_MODE
         badge = _LANE_FORK_BADGE[1] if mode == sigils.ASCII_MODE else _LANE_FORK_BADGE[0]
         glyph = escape_markup(badge)
         return f"[$err]{glyph} {wave} {FORK_ESCALATION_LABEL}[/]"
-    return f"[$accent]{wave}[/] [$muted]{REPAIR_LABEL} {row.attempt}/{REPAIR_BUDGET}[/]"
+    return f"[$accent]{wave}[/] [$muted]{REPAIR_LABEL} {row.attempt}/{row.budget}[/]"
 
 
 def render_blocked_row(row: BlockedWaveRow) -> str:
@@ -2165,15 +2211,16 @@ class AutopilotModeScreen(ScopeScreen):
         """Compute the in-flight (+ just-forked) lane cells for the active run.
 
         Projects the bound state's persisted fleet run into the lane-cell rows
-        (:func:`lane_cells`) -- each carrying its ``repair n/<budget>`` counter,
-        a just-forked lane escalating to the fork badge. An unarmed run yields
-        no cells (the honest-empty lanes path).
+        (:func:`lane_cells`) -- each carrying its ``repair n/<budget>`` counter
+        against the budget the daemon enforces for that wave, a just-forked lane
+        escalating to the fork badge. An unarmed run yields no cells (the
+        honest-empty lanes path).
 
         Returns:
             The lane-cell display rows in claim order; empty when no run is
             armed or no lane is in flight / repair-forked.
         """
-        return lane_cells(self._current_fleet_run())
+        return lane_cells(self._current_fleet_run(), state=self._current_state())
 
     def _render_mode(self) -> RenderMode:
         """Return the App's active render mode, defaulting when unavailable.
@@ -2270,6 +2317,7 @@ __all__ = [
     "blocked_rows",
     "build_frontier_items",
     "lane_cells",
+    "lane_repair_budget",
     "ready_rows",
     "render_blocked_row",
     "render_cockpit_vitals",

@@ -579,6 +579,138 @@ class CloseAttempt(_FrozenStrictModel):
         return self
 
 
+#: Repair generations one durable close attempt is funded for. A blocked attempt
+#: may fork exactly this many repair generations before the close escalates to
+#: the operator (split / defer / abort). The daemon ENFORCES this number, so it
+#: is also the number every display surface must read.
+DEFAULT_CLOSE_REPAIR_BUDGET: int = 1
+
+#: Infrastructure auto-retries one durable close attempt is funded for. An
+#: attempt that failed on infrastructure rather than on evidence re-queues itself
+#: this many times before the failure becomes terminal.
+DEFAULT_CLOSE_INFRASTRUCTURE_RETRY_BUDGET: int = 1
+
+#: The two independently-exhaustible axes of a close attempt's budget. Named
+#: verbatim after the :class:`CloseAttempt` counters they bound, so a receipt
+#: reader maps an exhausted axis straight back to the persisted field.
+type CloseBudgetAxis = Literal["repair", "infrastructure_retry"]
+
+#: Every :data:`CloseBudgetAxis` value, in the order a receipt enumerates them.
+CLOSE_BUDGET_AXES: tuple[CloseBudgetAxis, ...] = ("repair", "infrastructure_retry")
+
+#: URN prefix of a close-budget receipt ref recorded on an exhausted attempt's
+#: ``artifact_refs``.
+CLOSE_BUDGET_RECEIPT_PREFIX: str = "urn:eawf:v1:close-budget"
+
+
+class CloseBudget(_FrozenStrictModel):
+    """The effective repair + infrastructure budgets for one close attempt.
+
+    The unified budget every close surface reads instead of its own literal: the
+    daemon seeds a fresh :class:`CloseAttempt` from it, the TUI lane band renders
+    it, and the CLI advises on it. Because all three resolve the same object,
+    the budget an operator SEES is by construction the budget the daemon
+    ENFORCES.
+
+    Attributes:
+        repair: Repair generations still funded (seeds / mirrors
+            :attr:`CloseAttempt.repair_budget_remaining`).
+        infrastructure_retry: Infrastructure auto-retries still funded (seeds /
+            mirrors :attr:`CloseAttempt.infrastructure_retry_budget_remaining`).
+    """
+
+    repair: Annotated[int, Field(ge=0)]
+    infrastructure_retry: Annotated[int, Field(ge=0)]
+
+    @property
+    def total_repair_attempts(self) -> int:
+        """Dispatch attempts the repair budget funds: the first plus each repair.
+
+        The denominator of the ``repair n/<budget>`` counter: an attempt that has
+        burned no repair yet is ``1/<total>``, and the counter reaches ``<total>``
+        exactly when the repair axis is spent.
+        """
+        return self.repair + 1
+
+    def remaining(self, axis: CloseBudgetAxis) -> int:
+        """Return the budget still funded on one axis.
+
+        Args:
+            axis: The budget axis to read.
+
+        Returns:
+            The remaining count on *axis*.
+
+        Raises:
+            KeyError: When *axis* is not a known :data:`CloseBudgetAxis`.
+        """
+        if axis == "repair":
+            return self.repair
+        if axis == "infrastructure_retry":
+            return self.infrastructure_retry
+        raise KeyError(f"unknown close budget axis: {axis!r}")
+
+    def exhausted_axes(self) -> tuple[CloseBudgetAxis, ...]:
+        """Return every axis whose budget is spent, in :data:`CLOSE_BUDGET_AXES` order."""
+        return tuple(axis for axis in CLOSE_BUDGET_AXES if self.remaining(axis) == 0)
+
+    def receipt_ref(self, *, attempt_id: str, axis: CloseBudgetAxis) -> str:
+        """Return the one budget receipt ref for an exhausted axis of *attempt_id*.
+
+        The ref names the attempt, the exhausted axis, and the resolver value
+        that funded it, so a reader reconstructs "how much was funded and which
+        axis ran out" from the persisted string alone. It is deterministic, which
+        is what lets the daemon append it exactly once.
+
+        Args:
+            attempt_id: The close attempt whose axis is exhausted.
+            axis: The exhausted budget axis.
+
+        Returns:
+            The ``urn:eawf:v1:close-budget:...`` receipt ref.
+
+        Raises:
+            KeyError: When *axis* is not a known :data:`CloseBudgetAxis`.
+            ValueError: When *attempt_id* is empty.
+        """
+        if not attempt_id:
+            raise ValueError("attempt_id must be a non-empty close attempt id")
+        funded = self.remaining(axis)
+        return f"{CLOSE_BUDGET_RECEIPT_PREFIX}:{attempt_id}:{axis}:{funded}"
+
+
+def resolve_close_budget(*, attempt: CloseAttempt | None = None) -> CloseBudget:
+    """Return the effective repair + infrastructure budgets for a close attempt.
+
+    The single resolver behind every close budget number in the system. Called
+    without *attempt* it returns the SEED budget the daemon stamps onto a fresh
+    :class:`CloseAttempt`; called with a live *attempt* it returns that attempt's
+    REMAINING budget. Display surfaces call the second form, so they can never
+    drift from the counters the daemon enforces.
+
+    Args:
+        attempt: The live close attempt to read remaining budget off, or ``None``
+            for the seed budget a fresh attempt starts with.
+
+    Returns:
+        The effective :class:`CloseBudget`.
+
+    Raises:
+        TypeError: When *attempt* is neither ``None`` nor a :class:`CloseAttempt`.
+    """
+    if attempt is None:
+        return CloseBudget(
+            repair=DEFAULT_CLOSE_REPAIR_BUDGET,
+            infrastructure_retry=DEFAULT_CLOSE_INFRASTRUCTURE_RETRY_BUDGET,
+        )
+    if not isinstance(attempt, CloseAttempt):
+        raise TypeError(f"attempt must be a CloseAttempt or None: {type(attempt).__name__}")
+    return CloseBudget(
+        repair=attempt.repair_budget_remaining,
+        infrastructure_retry=attempt.infrastructure_retry_budget_remaining,
+    )
+
+
 class WaveDependencyBarrier(_FrozenStrictModel):
     """Explicit start/land proof thresholds for one Wave dependency."""
 
@@ -2027,6 +2159,29 @@ class State(_StrictModel):
                     f"wave dependency binding edge {expected!r} is not declared in wave deps"
                 )
         return self
+
+
+def latest_close_attempt(state: State, wave_id: str) -> CloseAttempt | None:
+    """Return the newest close attempt generation recorded for *wave_id*.
+
+    Generation order is the authority (``requested_at`` then id break ties), so
+    the returned row is the one whose remaining budget the daemon is currently
+    enforcing. Shared by the daemon close RPCs and the display surfaces so a
+    pane never reads a superseded generation's counters.
+
+    Args:
+        state: The loaded state.
+        wave_id: The wave whose close attempts to scan.
+
+    Returns:
+        The newest :class:`CloseAttempt` for *wave_id*, or ``None`` when the wave
+        has never been submitted for close.
+    """
+    rows = [row for row in state.close_attempts.values() if row.wave_id == wave_id]
+    if not rows:
+        return None
+    rows.sort(key=lambda row: (row.generation, row.requested_at, row.id))
+    return rows[-1]
 
 
 # Importing :mod:`eawf.kernel.spec.common` triggers its module-bottom

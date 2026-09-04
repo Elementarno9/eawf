@@ -62,6 +62,7 @@ from eawf.surfaces.tui.app import (
 )
 from eawf.surfaces.tui.modes.autopilot import (
     COCKPIT_LANES_LABEL,
+    REPAIR_BUDGET,
     AutopilotModeScreen,
     LaneCellRow,
     ReadyWaveRow,
@@ -525,7 +526,7 @@ def test_lane_cell_narrow_keeps_repair_ratio_and_fork_badge() -> None:
     narrow reflow has nothing to clip off them.
     """
     draining = render_lane_cell(LaneCellRow(wave_id="P01-I01-W02", attempt=2, exhausted=False))
-    assert "2/3" in draining  # repair n/<REPAIR_BUDGET> ratio survives
+    assert f"2/{REPAIR_BUDGET}" in draining  # repair n/<budget> ratio survives
     forked = render_lane_cell(
         LaneCellRow(wave_id="P01-I01-W02", attempt=3, exhausted=True), mode="unicode"
     )

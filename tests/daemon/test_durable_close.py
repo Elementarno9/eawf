@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -19,7 +20,12 @@ from eawf.kernel.state.enums import (
     StoreKind,
     WaveIntegrationStatus,
 )
-from eawf.kernel.state.models import State
+from eawf.kernel.state.models import (
+    CLOSE_BUDGET_RECEIPT_PREFIX,
+    CloseAttempt,
+    State,
+    resolve_close_budget,
+)
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon.close_workspace import CloseWorkspaceError
 from eawf.runtime.daemon.gate_receipt_hygiene import (
@@ -43,6 +49,7 @@ from eawf.runtime.daemon.methods.close import (
 )
 from eawf.runtime.worktree import git
 from eawf.workflow.audit_dsl.models import CheckResult
+from eawf.workflow.lifecycle import LifecycleGuardError
 from eawf.workflow.lifecycle.integration import create_wave_integration
 from eawf.workflow.lifecycle.wave import close_wave
 from tests.daemon.test_close_lock_split import (
@@ -948,5 +955,214 @@ def test_blocked_attempt_has_one_bounded_resume(
                 ctx,
                 {"ref": repair_id, "repo_root": str(repo)},
             )
+
+    asyncio.run(body())
+
+
+def _budget_receipts(attempt: CloseAttempt) -> list[str]:
+    """Return every close-budget receipt ref persisted on *attempt*."""
+    return [ref for ref in attempt.artifact_refs if ref.startswith(CLOSE_BUDGET_RECEIPT_PREFIX)]
+
+
+def _receipt_logs(caplog: pytest.LogCaptureFixture) -> list[str]:
+    """Return every captured close-budget receipt log line."""
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if "close_budget_receipt" in record.getMessage()
+    ]
+
+
+def test_repair_budget_receipt_is_emitted_once_on_a_blocked_terminal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """REL-004: an exhausted repair axis persists exactly one budget receipt.
+
+    A close that terminates BLOCKED with no repair generation left names the
+    exhausted axis AND the resolver value that funded it -- once in the log and
+    once in ``artifact_refs`` -- so an operator reading either surface learns
+    which budget ran out without re-deriving it from the counters. Re-running the
+    same terminal is idempotent: the deterministic ref is never appended twice.
+    """
+    repo, state_path, ctx = _repo_with_state(tmp_path)
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.close._schedule",
+        lambda *args, **kwargs: False,
+    )
+    seeded = resolve_close_budget()
+
+    async def body() -> None:
+        submitted = await submit(
+            ctx,
+            {
+                "wave_id": _WAVE,
+                "outcome": "verified integrated revision",
+                "repo_root": str(repo),
+                "no_runtime_waiver": True,
+            },
+        )
+        attempt_id = str(submitted["attempt"]["id"])
+        state = State.model_validate_json(state_path.read_bytes())
+        assert state.close_attempts[attempt_id].repair_budget_remaining == seeded.repair
+        close_wave(state, wave_id=_WAVE, outcome="closed before guard")
+        state.current.active_wave_ids = []
+        state.close_attempts[attempt_id] = state.close_attempts[attempt_id].model_copy(
+            update={"repair_budget_remaining": 0}
+        )
+        state_path.write_text(state.model_dump_json(), encoding="utf-8")
+
+        def _guard(*_args: Any, **_kwargs: Any) -> None:
+            raise LifecycleGuardError(
+                "audit_verdict_rejected",
+                _WAVE,
+                "policy guard refused the close",
+            )
+
+        monkeypatch.setattr(
+            "eawf.runtime.daemon.methods.close.cleanup_close_workspace",
+            _guard,
+        )
+        with caplog.at_level(logging.WARNING, logger="eawf.runtime.daemon.methods.close"):
+            await _run_attempt(ctx, repo_root=repo, attempt_id=attempt_id)
+
+        blocked = State.model_validate_json(state_path.read_bytes()).close_attempts[attempt_id]
+        assert blocked.status is CloseAttemptStatus.BLOCKED
+        expected_ref = seeded.receipt_ref(attempt_id=attempt_id, axis="repair")
+        assert _budget_receipts(blocked) == [expected_ref]
+        assert expected_ref.endswith(f":repair:{seeded.repair}")
+        emitted = _receipt_logs(caplog)
+        assert len(emitted) == 1
+        assert "axis='repair'" in emitted[0]
+        assert f"funded={seeded.repair}" in emitted[0]
+
+        caplog.clear()
+        state = State.model_validate_json(state_path.read_bytes())
+        state.close_attempts[attempt_id] = state.close_attempts[attempt_id].model_copy(
+            update={
+                "status": CloseAttemptStatus.QUEUED,
+                "required_operator_actions": [],
+                "terminal_at": None,
+            }
+        )
+        state_path.write_text(state.model_dump_json(), encoding="utf-8")
+        with caplog.at_level(logging.WARNING, logger="eawf.runtime.daemon.methods.close"):
+            await _run_attempt(ctx, repo_root=repo, attempt_id=attempt_id)
+        replayed = State.model_validate_json(state_path.read_bytes()).close_attempts[attempt_id]
+        assert _budget_receipts(replayed) == [expected_ref]
+        assert _receipt_logs(caplog) == []
+
+    asyncio.run(body())
+
+
+def test_infrastructure_budget_receipt_names_the_exhausted_axis(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """REL-004: a spent infrastructure axis emits its own single receipt.
+
+    The receipt is per-axis, so a FAILED terminal that could not be auto-requeued
+    names ``infrastructure_retry`` and never the still-funded repair axis.
+    """
+    repo, state_path, ctx = _repo_with_state(tmp_path)
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.close._schedule",
+        lambda *args, **kwargs: False,
+    )
+    seeded = resolve_close_budget()
+
+    async def body() -> None:
+        submitted = await submit(
+            ctx,
+            {
+                "wave_id": _WAVE,
+                "outcome": "verified integrated revision",
+                "repo_root": str(repo),
+                "no_runtime_waiver": True,
+            },
+        )
+        attempt_id = str(submitted["attempt"]["id"])
+        state = State.model_validate_json(state_path.read_bytes())
+        assert (
+            state.close_attempts[attempt_id].infrastructure_retry_budget_remaining
+            == seeded.infrastructure_retry
+        )
+        close_wave(state, wave_id=_WAVE, outcome="closed before cleanup")
+        state.current.active_wave_ids = []
+        state.close_attempts[attempt_id] = state.close_attempts[attempt_id].model_copy(
+            update={"infrastructure_retry_budget_remaining": 0}
+        )
+        state_path.write_text(state.model_dump_json(), encoding="utf-8")
+
+        def _fail_cleanup(*_args: Any, **_kwargs: Any) -> None:
+            raise CloseWorkspaceError("cleanup failed")
+
+        monkeypatch.setattr(
+            "eawf.runtime.daemon.methods.close.cleanup_close_workspace",
+            _fail_cleanup,
+        )
+        with caplog.at_level(logging.WARNING, logger="eawf.runtime.daemon.methods.close"):
+            await _run_attempt(ctx, repo_root=repo, attempt_id=attempt_id)
+
+        failed = State.model_validate_json(state_path.read_bytes()).close_attempts[attempt_id]
+        assert failed.status is CloseAttemptStatus.FAILED
+        expected_ref = seeded.receipt_ref(
+            attempt_id=attempt_id,
+            axis="infrastructure_retry",
+        )
+        assert _budget_receipts(failed) == [expected_ref]
+        emitted = _receipt_logs(caplog)
+        assert len(emitted) == 1
+        assert "axis='infrastructure_retry'" in emitted[0]
+        assert f"funded={seeded.infrastructure_retry}" in emitted[0]
+
+    asyncio.run(body())
+
+
+def test_budget_receipt_absent_while_the_close_still_has_budget(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """REL-004 boundary: an auto-requeued failure spends nothing, so emits nothing."""
+    repo, state_path, ctx = _repo_with_state(tmp_path)
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.close._schedule",
+        lambda *args, **kwargs: False,
+    )
+
+    async def body() -> None:
+        submitted = await submit(
+            ctx,
+            {
+                "wave_id": _WAVE,
+                "outcome": "verified integrated revision",
+                "repo_root": str(repo),
+                "no_runtime_waiver": True,
+            },
+        )
+        attempt_id = str(submitted["attempt"]["id"])
+        state = State.model_validate_json(state_path.read_bytes())
+        close_wave(state, wave_id=_WAVE, outcome="closed before cleanup")
+        state.current.active_wave_ids = []
+        state_path.write_text(state.model_dump_json(), encoding="utf-8")
+
+        def _fail_cleanup(*_args: Any, **_kwargs: Any) -> None:
+            raise CloseWorkspaceError("cleanup failed")
+
+        monkeypatch.setattr(
+            "eawf.runtime.daemon.methods.close.cleanup_close_workspace",
+            _fail_cleanup,
+        )
+        with caplog.at_level(logging.WARNING, logger="eawf.runtime.daemon.methods.close"):
+            await _run_attempt(ctx, repo_root=repo, attempt_id=attempt_id)
+
+        requeued = State.model_validate_json(state_path.read_bytes()).close_attempts[attempt_id]
+        assert requeued.status is CloseAttemptStatus.QUEUED
+        assert requeued.infrastructure_retry_budget_remaining == 0
+        assert _budget_receipts(requeued) == []
+        assert _receipt_logs(caplog) == []
 
     asyncio.run(body())

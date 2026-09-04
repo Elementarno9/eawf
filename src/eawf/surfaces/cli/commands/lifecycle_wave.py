@@ -31,6 +31,7 @@ from eawf.kernel.state.ids import (
     is_iter_id,
     is_wave_id,
 )
+from eawf.kernel.state.models import latest_close_attempt, resolve_close_budget
 from eawf.kernel.state.mutations import MutationKind
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.commands.lifecycle import (
@@ -541,6 +542,31 @@ def _log_advisory_criteria(wave_id: str, readiness: CloseReadiness) -> None:
             logger.warning(
                 f"close_advisory wave={wave_id!r} criterion={view.id!r} status={view.status!r}"
             )
+
+
+def _warn_on_exhausted_close_budget(state: State, *, wave_id: str) -> None:
+    """Print one advisory per spent budget axis of the wave's live close attempt.
+
+    Reads the SAME resolver the daemon seeds from
+    (:func:`~eawf.kernel.state.models.resolve_close_budget`), so the CLI advisory,
+    the TUI lane counter, and the enforced budget can never disagree. Advisory
+    only: the daemon still owns refusal.
+
+    Args:
+        state: The loaded state.
+        wave_id: The wave being closed.
+    """
+    attempt = latest_close_attempt(state, wave_id)
+    if attempt is None:
+        return
+    seeded = resolve_close_budget()
+    for axis in resolve_close_budget(attempt=attempt).exhausted_axes():
+        print(
+            f"advisory: wave {wave_id} close budget exhausted on {axis} "
+            f"(funded {seeded.remaining(axis)}, remaining 0); "
+            f"attempt {attempt.id} needs operator action",
+            file=sys.stderr,
+        )
 
 
 def _run_daemonless_close_preflight(
@@ -1152,6 +1178,7 @@ def wave_close_cmd(
     close_mechanism_holder: list[CloseMechanism] = []
 
     def _close_preflight(state: State) -> None:
+        _warn_on_exhausted_close_budget(state, wave_id=wave_id)
         state_path = resolve_state_path(flags.workspace)
         evidence_store_dir = _store_dir(state_path)
         config_root = _config_root_for_state_path(state_path)

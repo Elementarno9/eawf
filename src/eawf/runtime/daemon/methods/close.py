@@ -25,7 +25,13 @@ from eawf.kernel.state.enums import (
     CloseOperatorAction,
     WaveStatus,
 )
-from eawf.kernel.state.models import CloseAttempt, State
+from eawf.kernel.state.models import (
+    CloseAttempt,
+    CloseBudgetAxis,
+    State,
+    latest_close_attempt,
+    resolve_close_budget,
+)
 from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.runtime.daemon.close_workspace import (
     CloseWorkspaceError,
@@ -268,11 +274,67 @@ def _attempt_id(idempotency_key: str) -> str:
 
 
 def _latest_attempt_for_wave(state: State, wave_id: str) -> CloseAttempt | None:
-    rows = [row for row in state.close_attempts.values() if row.wave_id == wave_id]
-    if not rows:
-        return None
-    rows.sort(key=lambda row: (row.generation, row.requested_at, row.id))
-    return rows[-1]
+    return latest_close_attempt(state, wave_id)
+
+
+def _budget_receipt_updates(
+    attempt: CloseAttempt,
+    *,
+    axis: CloseBudgetAxis,
+) -> dict[str, Any]:
+    """Return the ``artifact_refs`` update carrying one close-budget receipt.
+
+    Emits the receipt for an exhausted *axis* exactly once: the ref
+    (:meth:`~eawf.kernel.state.models.CloseBudget.receipt_ref`) is deterministic,
+    so an attempt that already carries it -- a resumed or replayed terminal --
+    yields an empty update rather than a duplicate row.
+
+    Args:
+        attempt: The attempt whose budget axis is exhausted.
+        axis: The exhausted budget axis.
+
+    Returns:
+        ``{"artifact_refs": [...]}`` with the receipt appended, or ``{}`` when the
+        receipt is already recorded.
+    """
+    seeded = resolve_close_budget()
+    ref = seeded.receipt_ref(attempt_id=attempt.id, axis=axis)
+    if ref in attempt.artifact_refs:
+        return {}
+    logger.warning(
+        f"close_budget_receipt attempt={attempt.id!r} wave={attempt.wave_id!r} "
+        f"axis={axis!r} funded={seeded.remaining(axis)} remaining=0 ref={ref!r}"
+    )
+    return {"artifact_refs": [*attempt.artifact_refs, ref]}
+
+
+def _exhausted_budget_axis(
+    attempt: CloseAttempt,
+    *,
+    status: CloseAttemptStatus,
+) -> CloseBudgetAxis | None:
+    """Return the budget axis this terminal spent, or ``None`` when none is spent.
+
+    A BLOCKED terminal spends the repair axis (no repair generation is left to
+    fork); a FAILED terminal that could not be auto-requeued spent the
+    infrastructure axis. Every other terminal (stale, cancelled) is not a budget
+    exhaustion at all. At most one axis is reported, which is what bounds the
+    close to exactly one receipt per terminal.
+
+    Args:
+        attempt: The attempt as persisted before this terminal is written.
+        status: The terminal status the close resolved to.
+
+    Returns:
+        The exhausted :data:`~eawf.kernel.state.models.CloseBudgetAxis`, or
+        ``None`` when this terminal spent no budget.
+    """
+    remaining = resolve_close_budget(attempt=attempt)
+    if status is CloseAttemptStatus.BLOCKED:
+        return "repair" if remaining.repair == 0 else None
+    if status is CloseAttemptStatus.FAILED:
+        return "infrastructure_retry" if remaining.infrastructure_retry == 0 else None
+    return None
 
 
 def _attempt_digest_mismatches(
@@ -442,6 +504,7 @@ def _create_attempt(
         return existing
     previous = _latest_attempt_for_wave(state, args.wave_id)
     now = datetime.now(UTC)
+    seed_budget = resolve_close_budget()
     attempt = CloseAttempt(
         id=_attempt_id(idempotency_key),
         wave_id=args.wave_id,
@@ -473,8 +536,8 @@ def _create_attempt(
         no_runtime_waiver=args.no_runtime_waiver,
         repair_wave_id=None,
         repair_generation=None,
-        repair_budget_remaining=1,
-        infrastructure_retry_budget_remaining=1,
+        repair_budget_remaining=seed_budget.repair,
+        infrastructure_retry_budget_remaining=seed_budget.infrastructure_retry,
         required_operator_actions=[],
         waiver_decision_ids=[],
         usage_receipt_ids=[],
@@ -647,7 +710,9 @@ def _create_repair_attempt(
                 "repair_wave_id": source.wave_id,
                 "repair_generation": repair_generation,
                 "repair_budget_remaining": source.repair_budget_remaining - 1,
-                "infrastructure_retry_budget_remaining": 1,
+                "infrastructure_retry_budget_remaining": (
+                    resolve_close_budget().infrastructure_retry
+                ),
                 "required_operator_actions": [],
                 "waiver_decision_ids": [],
                 "usage_receipt_ids": [],
@@ -1026,12 +1091,21 @@ async def _run_attempt(  # noqa: C901
             and current_attempt.repair_budget_remaining == 0
             else []
         )
+        # A terminal that spends a budget axis carries its receipt in the SAME
+        # commit as the terminal status, so an exhausted close can never be
+        # persisted without the receipt that explains which axis ran out.
+        budget_updates: dict[str, Any] = {}
+        if not auto_retry and current_attempt is not None:
+            exhausted_axis = _exhausted_budget_axis(current_attempt, status=status)
+            if exhausted_axis is not None:
+                budget_updates = _budget_receipt_updates(current_attempt, axis=exhausted_axis)
         try:
             _commit_attempt(
                 ctx,
                 repo_root=repo_root,
                 attempt_id=attempt_id,
                 updates={
+                    **budget_updates,
                     "status": terminal_status,
                     "failure_kind": (
                         CloseFailureKind.INFRASTRUCTURE_RETRY if auto_retry else failure_kind
