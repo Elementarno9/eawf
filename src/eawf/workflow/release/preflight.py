@@ -14,7 +14,9 @@ from datetime import datetime
 
 from eawf.kernel.spec.release import Release, ReleaseStatus
 from eawf.workflow.release.lifecycle import (
+    ReleaseDenialCode,
     ReleaseGuardContext,
+    ReleaseTransitionError,
     advance_release,
 )
 from eawf.workflow.verify.release_readiness import ReleaseReadiness
@@ -77,20 +79,48 @@ def approve_release(
             release key, or *approved_at* is naive.
         ReleaseTransitionError: With
             :attr:`~eawf.workflow.release.lifecycle.ReleaseDenialCode.RELEASE_NOT_READY`
-            when a required signal is not passing.
+            when a required signal is not passing. The message names the
+            first red gate, so the operator reads the gate they have to
+            repair rather than the row underneath it.
     """
     _assert_same_release(release, readiness)
     if approved_at.tzinfo is None:
         raise ValueError("approved_at must be timezone-aware")
     logger.info(
         f"approve_release key={release.key!r} ready={readiness.ready} "
-        f"first_red={readiness.first_red}"
+        f"first_red={readiness.first_red} first_red_gate={readiness.first_red_gate}"
     )
-    return advance_release(
-        release,
-        ReleaseStatus.APPROVED,
-        ReleaseGuardContext(gates_green=readiness.ready),
-        approval_ref=approval_ref,
+    try:
+        return advance_release(
+            release,
+            ReleaseStatus.APPROVED,
+            ReleaseGuardContext(gates_green=readiness.ready),
+            approval_ref=approval_ref,
+        )
+    except ReleaseTransitionError as exc:
+        if exc.code is not ReleaseDenialCode.RELEASE_NOT_READY:
+            raise
+        raise ReleaseTransitionError(
+            exc.code, exc.frm, exc.to, f"{exc}; {_blocker(readiness)}"
+        ) from exc
+
+
+def _blocker(readiness: ReleaseReadiness) -> str:
+    """Return the clause naming what is holding *readiness* back.
+
+    Args:
+        readiness: The sweep that denied the approval.
+
+    Returns:
+        A clause naming the first red gate, or the waiver disposition
+        when every gate is green and only waivers remain.
+    """
+    gate = readiness.first_red_gate
+    if gate is not None:
+        return f"first red gate {gate.value!r} (evidence {readiness.gate_row(gate).evidence_ref!r})"
+    return (
+        f"every gate is green; {readiness.waiver_count} waiver(s) are "
+        f"{readiness.waiver_disposition.value!r}"
     )
 
 

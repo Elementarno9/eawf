@@ -15,24 +15,49 @@ row naming the producer that has not landed yet. Neither aborts the
 sweep.
 
 The *required* subset is derived, never authored twice: it is exactly
-the rows the checkpoint's ``gates.required`` list binds, plus the rows
-the three configuration flags imply (tree cleanliness under
-``require_clean_tree``, ancestry under ``require_ancestor_of_remote``,
-credentials whenever any target is required). A second authored list
-would be free to drift from the first, so there is no such list.
+the rows the checkpoint's ``gates.required`` list binds -- through the
+gate binding table of :mod:`eawf.kernel.release.gate_binding`, which is
+the one declaration of what each gate reads -- plus the rows the three
+configuration flags imply (tree cleanliness under ``require_clean_tree``,
+ancestry under ``require_ancestor_of_remote``, credentials whenever any
+target is required). A second authored list would be free to drift from
+the first, so there is no such list.
+
+The readiness object therefore carries two blocks over one set of facts.
+The twelve **signal** rows are what the sweep established; the eight
+**gate** rows are what the profile makes of them. They are kept separate
+rather than merged because a gate settled by a proof command has no row
+to merge into, and folding it in would require inventing one.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
-from enum import StrEnum
 from typing import Annotated, Final, Literal
 
 from pydantic import ConfigDict, Field, model_validator
 
+from eawf.kernel.release.gate_binding import (
+    GateBinding,
+    GateEvidenceKind,
+    ReleaseGateRow,
+)
+from eawf.kernel.release.signals import (
+    SIGNAL_FAILURE_CODES,
+    ReleaseSignalContext,
+    ReleaseSignalFailureCode,
+    ReleaseSignalName,
+    ReleaseSignalOutcome,
+    ReleaseSignalProbe,
+    ReleaseSignalStatus,
+)
+from eawf.kernel.release.waiver import (
+    ReleaseWaiver,
+    WaiverDisposition,
+    classify_waivers,
+)
 from eawf.kernel.spec.common import _StrictModel
 from eawf.kernel.spec.release import (
     NormalizedVersionStr,
@@ -42,6 +67,8 @@ from eawf.kernel.spec.release import (
     ReleaseKeyStr,
 )
 from eawf.kernel.spec.release_config import ReleaseConfig, ReleaseGateName
+from eawf.workflow.release.producers import DEFAULT_RELEASE_PROBES
+from eawf.workflow.release.train import gate_bindings_for
 
 logger = logging.getLogger(__name__)
 
@@ -51,169 +78,17 @@ logger = logging.getLogger(__name__)
 DEFAULT_SIGNAL_TTL_SECONDS: Final[int] = 3600
 
 
-class ReleaseSignalName(StrEnum):
-    """The twelve preflight signals a release readiness object reports.
-
-    The set is train-wide and fixed: it keeps rows that no checkpoint's
-    gates can read yet, so a later checkpoint does not have to invent a
-    row when its producer lands. A row no checkpoint requires is
-    reported ``unavailable``, not omitted.
-
-    Values:
-        VERSION_CONSISTENCY: Package, plugin, lock and tag versions agree.
-        CHANGELOG: One non-empty section names migrations and limitations.
-        ANCESTRY: Source is reachable from the intended remote branch.
-        TREE_CLEANLINESS: No untracked or modified release inputs.
-        MEMBERSHIP: Every acceptance bundle is complete and exact.
-        MIGRATION: Dry-run, apply, rerun and rollback rehearsals pass.
-        ARTIFACTS: A clean rebuild reproduces the same digests.
-        DEPENDENCIES: Locked, inventoried, permitted, no blocking CVE.
-        PLATFORM: Every advertised platform passes its journey.
-        PROVIDER: Every advertised runtime passes its conformance.
-        PERFECT_REALIZATION: All realization assertions pass unwaived.
-        CREDENTIALS: Required handles are available to the daemon.
-    """
-
-    VERSION_CONSISTENCY = "version_consistency"
-    CHANGELOG = "changelog"
-    ANCESTRY = "ancestry"
-    TREE_CLEANLINESS = "tree_cleanliness"
-    MEMBERSHIP = "membership"
-    MIGRATION = "migration"
-    ARTIFACTS = "artifacts"
-    DEPENDENCIES = "dependencies"
-    PLATFORM = "platform"
-    PROVIDER = "provider"
-    PERFECT_REALIZATION = "perfect_realization"
-    CREDENTIALS = "credentials"
-
-
-class ReleaseSignalStatus(StrEnum):
-    """Outcome of one readiness signal.
-
-    Only :attr:`PASS` clears a required row. The other three are
-    distinguished because they call for different operator action: fix
-    the release, fix the checker, or wait for the producer.
-
-    Values:
-        PASS: The signal's passing condition holds.
-        FAIL: The signal ran and its condition does not hold.
-        BLOCKED: The probe could not produce a verdict (it raised).
-        UNAVAILABLE: No producer exists for this signal at this
-            checkpoint, by design.
-    """
-
-    PASS = "pass"
-    FAIL = "fail"
-    BLOCKED = "blocked"
-    UNAVAILABLE = "unavailable"
-
-
-class ReleaseSignalFailureCode(StrEnum):
-    """The named failure each signal reports when it does not pass.
-
-    Values:
-        VERSION_MISMATCH: Version consistency failed.
-        CHANGELOG_MISSING: The changelog section is absent or empty.
-        SOURCE_NOT_PUBLISHABLE: Ancestry failed.
-        DIRTY_RELEASE_TREE: Tree cleanliness failed.
-        MEMBERSHIP_UNACCEPTED: A membership bundle is unaccepted.
-        MIGRATION_UNPROVEN: A migration rehearsal leg failed.
-        ARTIFACT_NONREPRODUCIBLE: Rebuild digests diverged.
-        DEPENDENCY_GATE_FAILED: Inventory or vulnerability check failed.
-        PLATFORM_CLAIM_UNPROVEN: An advertised platform is unproven.
-        PROVIDER_CLAIM_UNPROVEN: An advertised runtime is unproven.
-        PERFECT_REALIZATION_FAILED: A realization assertion failed.
-        CREDENTIAL_UNAVAILABLE: A required handle is unavailable.
-    """
-
-    VERSION_MISMATCH = "version_mismatch"
-    CHANGELOG_MISSING = "changelog_missing"
-    SOURCE_NOT_PUBLISHABLE = "source_not_publishable"
-    DIRTY_RELEASE_TREE = "dirty_release_tree"
-    MEMBERSHIP_UNACCEPTED = "membership_unaccepted"
-    MIGRATION_UNPROVEN = "migration_unproven"
-    ARTIFACT_NONREPRODUCIBLE = "artifact_nonreproducible"
-    DEPENDENCY_GATE_FAILED = "dependency_gate_failed"
-    PLATFORM_CLAIM_UNPROVEN = "platform_claim_unproven"
-    PROVIDER_CLAIM_UNPROVEN = "provider_claim_unproven"
-    PERFECT_REALIZATION_FAILED = "perfect_realization_failed"
-    CREDENTIAL_UNAVAILABLE = "credential_unavailable"
-
-
-#: The failure code each signal reports. Total over
-#: :class:`ReleaseSignalName` -- a signal with no declared failure code
-#: could go red without naming why.
-SIGNAL_FAILURE_CODES: Final[Mapping[ReleaseSignalName, ReleaseSignalFailureCode]] = {
-    ReleaseSignalName.VERSION_CONSISTENCY: ReleaseSignalFailureCode.VERSION_MISMATCH,
-    ReleaseSignalName.CHANGELOG: ReleaseSignalFailureCode.CHANGELOG_MISSING,
-    ReleaseSignalName.ANCESTRY: ReleaseSignalFailureCode.SOURCE_NOT_PUBLISHABLE,
-    ReleaseSignalName.TREE_CLEANLINESS: ReleaseSignalFailureCode.DIRTY_RELEASE_TREE,
-    ReleaseSignalName.MEMBERSHIP: ReleaseSignalFailureCode.MEMBERSHIP_UNACCEPTED,
-    ReleaseSignalName.MIGRATION: ReleaseSignalFailureCode.MIGRATION_UNPROVEN,
-    ReleaseSignalName.ARTIFACTS: ReleaseSignalFailureCode.ARTIFACT_NONREPRODUCIBLE,
-    ReleaseSignalName.DEPENDENCIES: ReleaseSignalFailureCode.DEPENDENCY_GATE_FAILED,
-    ReleaseSignalName.PLATFORM: ReleaseSignalFailureCode.PLATFORM_CLAIM_UNPROVEN,
-    ReleaseSignalName.PROVIDER: ReleaseSignalFailureCode.PROVIDER_CLAIM_UNPROVEN,
-    ReleaseSignalName.PERFECT_REALIZATION: (ReleaseSignalFailureCode.PERFECT_REALIZATION_FAILED),
-    ReleaseSignalName.CREDENTIALS: ReleaseSignalFailureCode.CREDENTIAL_UNAVAILABLE,
-}
-
-
-#: The readiness row each declared gate name reads. Total over
-#: :class:`ReleaseGateName`; ``None`` marks a gate that reads a proof
-#: command run at the pinned revision rather than a signal row, so it
-#: contributes no row to the derived required set.
+#: The readiness row each declared ``dev1`` gate name reads, or ``None``
+#: when the gate is settled by a proof command run at the pinned
+#: revision and so contributes no row to the derived required set.
+#: Projected from the authored binding table rather than authored a
+#: second time: a component binding contributes its parent row, so
+#: ``dependency_inventory`` and ``security_review`` both land on
+#: ``dependencies``.
 GATE_SIGNAL_BINDINGS: Final[Mapping[ReleaseGateName, ReleaseSignalName | None]] = {
-    ReleaseGateName.VERSION_CONSISTENCY: ReleaseSignalName.VERSION_CONSISTENCY,
-    ReleaseGateName.CHANGELOG_ENTRY: ReleaseSignalName.CHANGELOG,
-    ReleaseGateName.DEPENDENCY_INVENTORY: ReleaseSignalName.DEPENDENCIES,
-    ReleaseGateName.SECURITY_REVIEW: ReleaseSignalName.DEPENDENCIES,
-    ReleaseGateName.ARTIFACT_REPRODUCIBILITY: ReleaseSignalName.ARTIFACTS,
-    ReleaseGateName.EPOCH1_STABILIZATION: None,
-    ReleaseGateName.TELEMETRY_PRODUCER: None,
-    ReleaseGateName.FRONT_DOOR_JOURNEY: None,
+    gate: binding.required_signal
+    for gate, binding in gate_bindings_for(ReleaseGateProfile.DEV1).items()
 }
-
-
-@dataclass(frozen=True, slots=True)
-class ReleaseSignalContext:
-    """What one probe is handed when it runs.
-
-    Attributes:
-        config: The loaded checkpoint configuration.
-        signal: Which signal the probe is being asked for.
-        observed_revision: Source revision the sweep was computed
-            against, or ``None`` before the checkpoint is pinned.
-    """
-
-    config: ReleaseConfig
-    signal: ReleaseSignalName
-    observed_revision: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class ReleaseSignalOutcome:
-    """What one probe returns.
-
-    Attributes:
-        status: The signal's verdict.
-        remediation: What the operator should do. Mandatory for any
-            non-pass verdict; a red signal with no next action is a
-            dead end.
-        evidence_refs: References backing the verdict.
-    """
-
-    status: ReleaseSignalStatus
-    remediation: str = ""
-    evidence_refs: tuple[str, ...] = field(default_factory=tuple)
-
-
-#: A probe: given a context, return one signal's outcome. Probes are
-#: injected rather than imported so the observation adapters, the
-#: dependency inventory producer and the reproducibility build can each
-#: land in their own wave without this module importing them.
-ReleaseSignalProbe = Callable[[ReleaseSignalContext], ReleaseSignalOutcome]
 
 
 class ReleaseSignalRow(_StrictModel):
@@ -287,10 +162,19 @@ class ReleaseReadiness(_StrictModel):
         gate_profile: Profile the checkpoint ran under.
         signals: Exactly one row per :class:`ReleaseSignalName`, in
             declaration order.
+        gates: One row per gate the profile admits, in the profile's
+            declaration order. A projection of the signals through the
+            binding table, not a second set of facts.
         required_signals: The derived required subset. Never authored;
             see :func:`derive_required_signals`.
         waiver_count: Gate waivers recorded against this checkpoint.
             A field beside the signals, never a thirteenth signal row.
+        waivers: The counted waivers, each naming its scope, reason and
+            protected principal. May be shorter than
+            :attr:`waiver_count`, which is itself the finding that some
+            waiver was counted with nothing attached.
+        waiver_disposition: What the counted waivers mean for readiness;
+            derived from :attr:`waivers` and :attr:`waiver_count`.
         computed_at: When the sweep ran.
         ready: Whether the checkpoint may be approved -- every required
             row passes and no waiver is outstanding.
@@ -304,8 +188,11 @@ class ReleaseReadiness(_StrictModel):
     channel: ReleaseChannel
     gate_profile: ReleaseGateProfile
     signals: Annotated[tuple[ReleaseSignalRow, ...], Field(min_length=1)]
+    gates: tuple[ReleaseGateRow, ...] = ()
     required_signals: tuple[ReleaseSignalName, ...] = ()
     waiver_count: Annotated[int, Field(ge=0)] = 0
+    waivers: tuple[ReleaseWaiver, ...] = ()
+    waiver_disposition: WaiverDisposition = WaiverDisposition.NONE
     computed_at: datetime
     ready: bool
 
@@ -315,8 +202,9 @@ class ReleaseReadiness(_StrictModel):
 
         Raises:
             ValueError: When the rows do not cover every signal exactly
-                once, a required signal has no row, or ``ready``
-                disagrees with the rows and the waiver count.
+                once, a gate is reported twice, a required signal has no
+                row, the waiver disposition disagrees with the waivers,
+                or ``ready`` disagrees with the rows and the waivers.
         """
         reported = [row.signal for row in self.signals]
         if sorted(set(reported)) != sorted(ReleaseSignalName):
@@ -326,12 +214,22 @@ class ReleaseReadiness(_StrictModel):
             )
         if len(reported) != len(set(reported)):
             raise ValueError("readiness reports a signal more than once")
+        gates = [row.gate for row in self.gates]
+        if len(gates) != len(set(gates)):
+            raise ValueError("readiness reports a gate more than once")
         undeclared = sorted(set(self.required_signals) - set(reported))
         if undeclared:
             raise ValueError(
                 f"required signals absent from the sweep: {[name.value for name in undeclared]}"
             )
-        derived_ready = self.first_red is None and self.waiver_count == 0
+        derived_disposition = classify_waivers(self.waivers, waiver_count=self.waiver_count)
+        if self.waiver_disposition is not derived_disposition:
+            raise ValueError(
+                f"waiver_disposition={self.waiver_disposition.value!r} disagrees with the "
+                f"{self.waiver_count} counted waiver(s) "
+                f"(derived {derived_disposition.value!r})"
+            )
+        derived_ready = self.first_red is None and self.waiver_disposition is WaiverDisposition.NONE
         if self.ready != derived_ready:
             raise ValueError(
                 f"ready={self.ready} disagrees with the rows "
@@ -356,6 +254,23 @@ class ReleaseReadiness(_StrictModel):
                 return row
         raise KeyError(f"readiness {self.release_key} has no row for {signal.value!r}")
 
+    def gate_row(self, gate: ReleaseGateName) -> ReleaseGateRow:
+        """Return the row reporting *gate*.
+
+        Args:
+            gate: Gate to look up.
+
+        Returns:
+            The matching row.
+
+        Raises:
+            KeyError: When the sweep reports no such gate.
+        """
+        for row in self.gates:
+            if row.gate is gate:
+                return row
+        raise KeyError(f"readiness {self.release_key} has no row for gate {gate.value!r}")
+
     @property
     def first_red(self) -> ReleaseSignalName | None:
         """Return the first required signal that is not passing.
@@ -366,6 +281,24 @@ class ReleaseReadiness(_StrictModel):
         for name in self.required_signals:
             if self.row(name).status is not ReleaseSignalStatus.PASS:
                 return name
+        return None
+
+    @property
+    def first_red_gate(self) -> ReleaseGateName | None:
+        """Return the first required gate whose bound row is not passing.
+
+        Gates are scanned in profile order, so the denial an operator
+        reads names the earliest gate they have to repair rather than an
+        arbitrary one. A gate settled by a proof command is skipped: it
+        contributes no row to the required set, so it cannot be the
+        reason a sweep is not ready, and naming it would send the
+        operator to fix something the sweep never measured.
+        """
+        for row in self.gates:
+            if not row.required or row.evidence_kind is GateEvidenceKind.PROOF_COMMAND:
+                continue
+            if row.status is not ReleaseSignalStatus.PASS:
+                return row.gate
         return None
 
 
@@ -384,10 +317,15 @@ def derive_required_signals(config: ReleaseConfig) -> tuple[ReleaseSignalName, .
     Returns:
         The required signals in :class:`ReleaseSignalName` declaration
         order, deduplicated (two gates may bind one row).
+
+    Raises:
+        GateBindingError: When the checkpoint's profile has no authored
+            binding table, or that table fails validation.
     """
+    bindings = gate_bindings_for(config.gates.profile)
     required: set[ReleaseSignalName] = set()
     for gate in config.gates.required:
-        bound = GATE_SIGNAL_BINDINGS[gate]
+        bound = bindings[gate].required_signal
         if bound is not None:
             required.add(bound)
     if config.require_clean_tree:
@@ -447,6 +385,59 @@ def _run_probe(probe: ReleaseSignalProbe, context: ReleaseSignalContext) -> Rele
         )
 
 
+def _gate_rows(
+    config: ReleaseConfig,
+    bindings: Mapping[ReleaseGateName, GateBinding],
+    rows: Sequence[ReleaseSignalRow],
+) -> tuple[ReleaseGateRow, ...]:
+    """Return one row per gate the profile admits, in profile order.
+
+    A gate bound to a row or to a component of a row inherits that row's
+    verdict: a component is a finer-grained *reading* of the row, not a
+    separately computed one, so two gates on one row report that row
+    twice rather than disagreeing. A gate bound to a proof command has
+    no row to inherit and reports ``unavailable`` naming the command,
+    which is the same shape the sweep uses for any producer that has not
+    landed.
+
+    Args:
+        config: Loaded checkpoint configuration.
+        bindings: The profile's validated binding table.
+        rows: The computed signal rows.
+
+    Returns:
+        The gate rows.
+    """
+    by_signal = {row.signal: row for row in rows}
+    required = set(config.gates.required)
+    gate_rows: list[ReleaseGateRow] = []
+    for gate, binding in bindings.items():
+        if binding.kind is GateEvidenceKind.PROOF_COMMAND:
+            assert binding.proof is not None
+            status = ReleaseSignalStatus.UNAVAILABLE
+            remediation = (
+                f"gate {gate.value!r} is settled by proof command "
+                f"{binding.proof.command_id!r}; run it at the pinned source revision "
+                f"through the gate runner and attach the receipt"
+            )
+        else:
+            assert binding.signal is not None
+            row = by_signal[binding.signal]
+            status = row.status
+            remediation = row.remediation
+        gate_rows.append(
+            ReleaseGateRow(
+                gate=gate,
+                evidence_kind=binding.kind,
+                evidence_ref=binding.evidence_ref,
+                required=gate in required,
+                status=status,
+                remediation=remediation,
+            )
+        )
+    return tuple(gate_rows)
+
+
 def compute_readiness(
     config: ReleaseConfig,
     *,
@@ -455,25 +446,35 @@ def compute_readiness(
     computed_at: datetime,
     ttl_seconds: int = DEFAULT_SIGNAL_TTL_SECONDS,
     waiver_count: int = 0,
+    waivers: Sequence[ReleaseWaiver] = (),
 ) -> ReleaseReadiness:
     """Compute every readiness signal for *config* without fail-fast.
 
     Args:
         config: Loaded checkpoint configuration.
-        probes: Producer per signal. Signals absent from the map report
-            ``unavailable``; a probe that raises reports ``blocked``.
+        probes: Producer per signal, overriding
+            :data:`~eawf.workflow.release.producers.DEFAULT_RELEASE_PROBES`.
+            Signals with no producer either way report ``unavailable``;
+            a probe that raises reports ``blocked``.
         observed_revision: Source revision the sweep is computed
             against, stamped on every row.
         computed_at: Timezone-aware UTC instant the sweep ran.
         ttl_seconds: Freshness window per row; must be positive.
         waiver_count: Gate waivers recorded against this checkpoint.
+            Defaults to the length of *waivers* when left at zero, so a
+            caller supplying the rows never has to count them too.
+        waivers: The counted waivers. A count larger than the number of
+            rows is itself the finding that a waiver was recorded with
+            no explanation.
 
     Returns:
-        A total :class:`ReleaseReadiness` with one row per signal.
+        A total :class:`ReleaseReadiness` with one row per signal and
+        one row per gate the profile admits.
 
     Raises:
         ValueError: When *ttl_seconds* is not positive, *waiver_count*
-            is negative, or *computed_at* is naive.
+            is negative, *computed_at* is naive, or *waiver_count* is
+            non-zero and disagrees with the number of *waivers*.
     """
     if ttl_seconds <= 0:
         raise ValueError(f"ttl_seconds must be positive, got {ttl_seconds}")
@@ -481,11 +482,12 @@ def compute_readiness(
         raise ValueError(f"waiver_count must not be negative, got {waiver_count}")
     if computed_at.tzinfo is None:
         raise ValueError("computed_at must be timezone-aware")
+    counted = _counted_waivers(waiver_count=waiver_count, waivers=waivers)
     registry: Mapping[ReleaseSignalName, ReleaseSignalProbe] = probes or {}
     expires_at = computed_at + timedelta(seconds=ttl_seconds)
     rows: list[ReleaseSignalRow] = []
     for signal in ReleaseSignalName:
-        probe = registry.get(signal)
+        probe = registry.get(signal) or DEFAULT_RELEASE_PROBES.get(signal)
         outcome = (
             _unavailable(signal)
             if probe is None
@@ -504,43 +506,77 @@ def compute_readiness(
                 remediation=outcome.remediation,
             )
         )
+    bindings = gate_bindings_for(config.gates.profile)
     required = derive_required_signals(config)
-    ready = _is_ready(rows, required, waiver_count)
+    disposition = classify_waivers(tuple(waivers), waiver_count=counted)
+    ready = _is_ready(rows, required, disposition)
     readiness = ReleaseReadiness(
         release_key=config.release_key,
         version=config.version,
         channel=config.channel,
         gate_profile=config.gates.profile,
         signals=tuple(rows),
+        gates=_gate_rows(config, bindings, rows),
         required_signals=required,
-        waiver_count=waiver_count,
+        waiver_count=counted,
+        waivers=tuple(waivers),
+        waiver_disposition=disposition,
         computed_at=computed_at,
         ready=ready,
     )
     logger.info(
         f"compute_readiness release_key={readiness.release_key!r} "
-        f"signals={len(readiness.signals)} required={len(required)} "
-        f"ready={ready} waiver_count={waiver_count}"
+        f"signals={len(readiness.signals)} gates={len(readiness.gates)} "
+        f"required={len(required)} ready={ready} waiver_count={counted} "
+        f"waiver_disposition={disposition.value!r}"
     )
     return readiness
+
+
+def _counted_waivers(*, waiver_count: int, waivers: Sequence[ReleaseWaiver]) -> int:
+    """Return how many waivers are counted against the checkpoint.
+
+    Args:
+        waiver_count: The caller's count; zero means "derive from the
+            rows", which keeps a caller that supplies rows from having
+            to count them too.
+        waivers: The supplied waiver rows.
+
+    Returns:
+        The effective count.
+
+    Raises:
+        ValueError: When a non-zero count is smaller than the number of
+            supplied rows, which would leave rows uncounted.
+    """
+    if waiver_count == 0:
+        return len(waivers)
+    if waiver_count < len(waivers):
+        raise ValueError(
+            f"waiver_count={waiver_count} is smaller than the {len(waivers)} waiver row(s) "
+            f"supplied; every row is a counted waiver"
+        )
+    return waiver_count
 
 
 def _is_ready(
     rows: Sequence[ReleaseSignalRow],
     required: Sequence[ReleaseSignalName],
-    waiver_count: int,
+    disposition: WaiverDisposition,
 ) -> bool:
     """Return whether every required row passes and no waiver is outstanding.
 
     Args:
         rows: The computed signal rows.
         required: The derived required subset.
-        waiver_count: Gate waivers recorded against the checkpoint.
+        disposition: What the counted waivers mean for readiness. Both
+            non-``NONE`` dispositions block: an unexplained waiver is
+            red, and an explained one still awaits acknowledgement.
 
     Returns:
         ``True`` when the checkpoint may be approved.
     """
-    if waiver_count:
+    if disposition is not WaiverDisposition.NONE:
         return False
     by_name = {row.signal: row for row in rows}
     return all(by_name[name].status is ReleaseSignalStatus.PASS for name in required)
@@ -550,6 +586,9 @@ __all__ = [
     "DEFAULT_SIGNAL_TTL_SECONDS",
     "GATE_SIGNAL_BINDINGS",
     "SIGNAL_FAILURE_CODES",
+    "GateBinding",
+    "GateEvidenceKind",
+    "ReleaseGateRow",
     "ReleaseReadiness",
     "ReleaseSignalContext",
     "ReleaseSignalFailureCode",
@@ -558,6 +597,8 @@ __all__ = [
     "ReleaseSignalProbe",
     "ReleaseSignalRow",
     "ReleaseSignalStatus",
+    "ReleaseWaiver",
+    "WaiverDisposition",
     "compute_readiness",
     "derive_required_signals",
 ]

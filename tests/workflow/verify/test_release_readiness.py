@@ -88,10 +88,16 @@ def test_release_readiness_reports_every_signal_without_probes() -> None:
     readiness = compute_readiness(_config(), computed_at=_NOW)
     assert len(readiness.signals) == len(ReleaseSignalName)
     assert [row.signal for row in readiness.signals] == list(ReleaseSignalName)
+    # The platform row is the one signal this project already produces,
+    # so it computes from the checkpoint's claims rather than reporting
+    # a missing producer.
     for row in readiness.signals:
+        if row.signal is ReleaseSignalName.PLATFORM:
+            continue
         assert row.status is ReleaseSignalStatus.UNAVAILABLE
         assert row.failure_code is SIGNAL_FAILURE_CODES[row.signal]
         assert "no producer is registered" in row.remediation
+    assert readiness.row(ReleaseSignalName.PLATFORM).status is ReleaseSignalStatus.PASS
     assert readiness.ready is False
 
 

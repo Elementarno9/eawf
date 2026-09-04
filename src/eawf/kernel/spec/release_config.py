@@ -51,6 +51,9 @@ logger = logging.getLogger(__name__)
 #: single most damaging misconfiguration this loader can catch.
 DEFAULT_DIST_TAG: Final[str] = "latest"
 
+#: Advertised platform id, e.g. ``linux-x86_64``, ``darwin-arm64``.
+PlatformIdStr = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")]
+
 
 class ReleaseConfigRejection(StrEnum):
     """Closed vocabulary for why a release configuration was rejected.
@@ -70,6 +73,8 @@ class ReleaseConfigRejection(StrEnum):
         MISSING_OBSERVATION_ADAPTER: A target declares no observation
             adapter, or names one the loader does not recognise.
         NONPOSITIVE_TIMEOUT: A target declares a timeout at or below zero.
+        DUPLICATE_PLATFORM_CLAIM: Two platform claims share a
+            ``platform_id``.
     """
 
     SCHEMA_INVALID = "schema_invalid"
@@ -82,6 +87,7 @@ class ReleaseConfigRejection(StrEnum):
     INVALID_MEMBERSHIP_CARDINALITY = "invalid_membership_cardinality"
     MISSING_OBSERVATION_ADAPTER = "missing_observation_adapter"
     NONPOSITIVE_TIMEOUT = "nonpositive_timeout"
+    DUPLICATE_PLATFORM_CLAIM = "duplicate_platform_claim"
 
 
 class ReleaseConfigError(ValueError):
@@ -199,6 +205,29 @@ class ReleaseTargetConfig(_StrictModel):
     stable_dist_tag: Annotated[str, Field(min_length=1)] | None = None
 
 
+class ReleasePlatformClaim(_StrictModel):
+    """One platform a checkpoint advertises, and the receipt proving it.
+
+    The ``real_host`` flag is the whole point of the row. A journey that
+    ran against an argv-shape stub or a masked container proves the code
+    path was *entered*, not that the platform works, and that gap is how
+    a backend stays dead on a platform while its checks stay green. A
+    claim whose receipt did not come from a real host is unproven.
+
+    Attributes:
+        platform_id: Advertised platform, e.g. ``linux-x86_64``.
+        receipt_ref: Reference to the CI receipt backing the claim.
+        real_host: Whether the receipt came from a real host of that
+            platform rather than a stub or an emulation shim.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    platform_id: PlatformIdStr
+    receipt_ref: ReferenceStr
+    real_host: bool = True
+
+
 class ReleaseGatesConfig(_StrictModel):
     """The gate profile and required gate names of a checkpoint.
 
@@ -234,6 +263,10 @@ class ReleaseConfig(_StrictModel):
         gates: Gate profile and required gate names.
         membership_refs: Milestone acceptance bundle references; empty
             at the epoch-1 checkpoints.
+        platform_claims: Platforms the checkpoint advertises, each with
+            the receipt proving its journey. Empty means the checkpoint
+            advertises no platform, which makes the ``platform``
+            readiness row ``unavailable`` rather than passing vacuously.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -248,6 +281,7 @@ class ReleaseConfig(_StrictModel):
     targets: Annotated[tuple[ReleaseTargetConfig, ...], Field(min_length=1)]
     gates: ReleaseGatesConfig
     membership_refs: tuple[ReferenceStr, ...] = ()
+    platform_claims: tuple[ReleasePlatformClaim, ...] = ()
 
     @property
     def release_key(self) -> str:
@@ -312,6 +346,26 @@ def _reject_duplicate_targets(config: ReleaseConfig) -> None:
                 f"target {target.target_id!r} is declared more than once",
             )
         seen.add(target.target_id)
+
+
+def _reject_duplicate_platform_claims(config: ReleaseConfig) -> None:
+    """Raise when two platform claims share a ``platform_id``.
+
+    Args:
+        config: Shape-validated configuration.
+
+    Raises:
+        ReleaseConfigError: With
+            :attr:`ReleaseConfigRejection.DUPLICATE_PLATFORM_CLAIM`.
+    """
+    seen: set[str] = set()
+    for claim in config.platform_claims:
+        if claim.platform_id in seen:
+            raise ReleaseConfigError(
+                ReleaseConfigRejection.DUPLICATE_PLATFORM_CLAIM,
+                f"platform {claim.platform_id!r} is claimed more than once",
+            )
+        seen.add(claim.platform_id)
 
 
 def _reject_channel_disagreement(config: ReleaseConfig) -> None:
@@ -475,6 +529,7 @@ def load_release_config(source: str | Mapping[str, Any], *, train: ReleaseTrain)
     """
     config = parse_release_config(source)
     _reject_duplicate_targets(config)
+    _reject_duplicate_platform_claims(config)
     _reject_channel_disagreement(config)
     _reject_prerelease_on_default_tag(config)
     _reject_train_disagreement(config, train)
@@ -501,12 +556,14 @@ def gate_names(required: Sequence[ReleaseGateName]) -> tuple[str, ...]:
 __all__ = [
     "DEFAULT_DIST_TAG",
     "ObservationAdapter",
+    "PlatformIdStr",
     "ReleaseArtifactKind",
     "ReleaseConfig",
     "ReleaseConfigError",
     "ReleaseConfigRejection",
     "ReleaseGateName",
     "ReleaseGatesConfig",
+    "ReleasePlatformClaim",
     "ReleaseTargetConfig",
     "gate_names",
     "load_release_config",
