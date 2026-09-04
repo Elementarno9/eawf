@@ -12885,6 +12885,21 @@
       "status": "done",
       "updated_at": "2026-09-04T16:13:01.267481Z"
     },
+    "P31-I01-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W11",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W11",
+      "model": null,
+      "scope_id": "P31-I01-W11",
+      "status": "done",
+      "updated_at": "2026-09-04T16:43:38.030256Z"
+    },
     "P31-I01-W12": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -12914,6 +12929,21 @@
       "scope_id": "P31-I01-W13",
       "status": "done",
       "updated_at": "2026-09-04T13:41:35.041022Z"
+    },
+    "P31-I01-W14": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W14",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W14",
+      "model": null,
+      "scope_id": "P31-I01-W14",
+      "status": "done",
+      "updated_at": "2026-09-04T16:43:59.366525Z"
     },
     "P31-I01-W15": {
       "actual_cost_usd": 0.0,
@@ -12959,6 +12989,36 @@
       "scope_id": "P31-I01-W17",
       "status": "done",
       "updated_at": "2026-09-04T15:35:35.278385Z"
+    },
+    "P31-I01-W21": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W21",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W21",
+      "model": null,
+      "scope_id": "P31-I01-W21",
+      "status": "done",
+      "updated_at": "2026-09-04T16:44:11.356835Z"
+    },
+    "P31-I01-W24": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W24",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W24",
+      "model": null,
+      "scope_id": "P31-I01-W24",
+      "status": "done",
+      "updated_at": "2026-09-04T16:44:17.770506Z"
     },
     "P31-I01-W34": {
       "actual_cost_usd": 0.0,
@@ -13065,6 +13125,21 @@
       "status": "done",
       "updated_at": "2026-09-04T15:36:02.550689Z"
     },
+    "P31-I01-W44": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W44",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W44",
+      "model": null,
+      "scope_id": "P31-I01-W44",
+      "status": "done",
+      "updated_at": "2026-09-04T16:44:25.987688Z"
+    },
     "P31-I01-W45": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13079,6 +13154,21 @@
       "scope_id": "P31-I01-W45",
       "status": "done",
       "updated_at": "2026-09-04T16:14:16.820395Z"
+    },
+    "P31-I01-W46": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W46",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W46",
+      "model": null,
+      "scope_id": "P31-I01-W46",
+      "status": "done",
+      "updated_at": "2026-09-04T16:42:49.858179Z"
     }
   },
   "agent_sessions": {
@@ -14368,75 +14458,75 @@
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:42:26.866877Z",
       "id": "SES-20260904T161306.312801Z-operator-claude-1c4c28ef-b076-4bcd-9e0e-007e76da5e5c",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-c12",
       "started_at": "2026-09-04T16:13:06.312801Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T161337.470260Z-operator-claude-cc817a42-f17b-41c7-8ef2-ec451bf2d752": {
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:42:26.868262Z",
       "id": "SES-20260904T161337.470260Z-operator-claude-cc817a42-f17b-41c7-8ef2-ec451bf2d752",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-c15",
       "started_at": "2026-09-04T16:13:37.470260Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T161348.438348Z-operator-claude-574b67cf-c1e6-441e-8a82-9f59ebd73c9c": {
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:42:26.868883Z",
       "id": "SES-20260904T161348.438348Z-operator-claude-574b67cf-c1e6-441e-8a82-9f59ebd73c9c",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-c34",
       "started_at": "2026-09-04T16:13:48.438348Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T161400.201606Z-operator-claude-9c4287fd-71b9-4edf-95c9-6e40af5d2a67": {
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:42:26.869476Z",
       "id": "SES-20260904T161400.201606Z-operator-claude-9c4287fd-71b9-4edf-95c9-6e40af5d2a67",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-c41",
       "started_at": "2026-09-04T16:14:00.201606Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T161410.012276Z-operator-claude-770c76e9-3554-4e10-993c-d31f48c6e247": {
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:42:26.870110Z",
       "id": "SES-20260904T161410.012276Z-operator-claude-770c76e9-3554-4e10-993c-d31f48c6e247",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-c45",
       "started_at": "2026-09-04T16:14:10.012276Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T161732.957632Z-executor-claude-a769320a-2bed-4c03-9a4b-44d7b21b04a8": {
@@ -14445,15 +14535,15 @@
       "claimed_wave_ids": [
         "P31-I01-W11"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:42:26.870656Z",
       "id": "SES-20260904T161732.957632Z-executor-claude-a769320a-2bed-4c03-9a4b-44d7b21b04a8",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W11",
       "started_at": "2026-09-04T16:17:32.957632Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T161734.309875Z-executor-claude-20447d72-441c-44a8-82bd-9283af7bf123": {
@@ -14462,15 +14552,15 @@
       "claimed_wave_ids": [
         "P31-I01-W14"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:42:26.871211Z",
       "id": "SES-20260904T161734.309875Z-executor-claude-20447d72-441c-44a8-82bd-9283af7bf123",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W14",
       "started_at": "2026-09-04T16:17:34.309875Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T161735.657460Z-executor-claude-d556c614-7d1e-45bd-a9c3-bf0125ddfffd": {
@@ -14479,15 +14569,15 @@
       "claimed_wave_ids": [
         "P31-I01-W21"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:42:26.871796Z",
       "id": "SES-20260904T161735.657460Z-executor-claude-d556c614-7d1e-45bd-a9c3-bf0125ddfffd",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W21",
       "started_at": "2026-09-04T16:17:35.657460Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T161737.004074Z-executor-claude-31ecd13b-147b-4175-80dc-625c7c9dcca1": {
@@ -14496,15 +14586,15 @@
       "claimed_wave_ids": [
         "P31-I01-W24"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:42:26.872351Z",
       "id": "SES-20260904T161737.004074Z-executor-claude-31ecd13b-147b-4175-80dc-625c7c9dcca1",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W24",
       "started_at": "2026-09-04T16:17:37.004074Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T161738.444207Z-executor-claude-d78c6dc4-1c73-47dd-be4e-cced3d5003f2": {
@@ -14513,15 +14603,15 @@
       "claimed_wave_ids": [
         "P31-I01-W44"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:42:26.872890Z",
       "id": "SES-20260904T161738.444207Z-executor-claude-d78c6dc4-1c73-47dd-be4e-cced3d5003f2",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W44",
       "started_at": "2026-09-04T16:17:38.444207Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T161739.900797Z-executor-claude-9c07448a-545a-4bf8-a7ff-7c95b9bd8fde": {
@@ -14530,13 +14620,103 @@
       "claimed_wave_ids": [
         "P31-I01-W46"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:42:26.873433Z",
       "id": "SES-20260904T161739.900797Z-executor-claude-9c07448a-545a-4bf8-a7ff-7c95b9bd8fde",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W46",
       "started_at": "2026-09-04T16:17:39.900797Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260904T164246.490796Z-operator-claude-3d84a8a0-976c-4ee2-abf3-e8560832f8f1": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-04T16:42:47.947449Z",
+      "id": "SES-20260904T164246.490796Z-operator-claude-3d84a8a0-976c-4ee2-abf3-e8560832f8f1",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-c46",
+      "started_at": "2026-09-04T16:42:46.490796Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260904T164308.032219Z-operator-claude-9c84d3ff-1356-4f0c-867d-5175f43da13a": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260904T164308.032219Z-operator-claude-9c84d3ff-1356-4f0c-867d-5175f43da13a",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-b4c1",
+      "started_at": "2026-09-04T16:43:08.032219Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260904T164338.709353Z-operator-claude-87560981-a656-4736-9b9c-718afd8b1788": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260904T164338.709353Z-operator-claude-87560981-a656-4736-9b9c-718afd8b1788",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-b4c2",
+      "started_at": "2026-09-04T16:43:38.709353Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260904T164400.058880Z-operator-claude-dacf0826-b5b9-4ba8-850d-bdf6c6c72dcf": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260904T164400.058880Z-operator-claude-dacf0826-b5b9-4ba8-850d-bdf6c6c72dcf",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-b4c3",
+      "started_at": "2026-09-04T16:44:00.058880Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260904T164412.058082Z-operator-claude-f8f6b9a9-d712-4103-908c-9b17bcb08c3c": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260904T164412.058082Z-operator-claude-f8f6b9a9-d712-4103-908c-9b17bcb08c3c",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-b4c4",
+      "started_at": "2026-09-04T16:44:12.058082Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260904T164418.465667Z-operator-claude-bc28f037-2fc4-4490-b4d8-8a270a8d01eb": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260904T164418.465667Z-operator-claude-bc28f037-2fc4-4490-b4d8-8a270a8d01eb",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-b4c5",
+      "started_at": "2026-09-04T16:44:18.465667Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -19252,26 +19432,13 @@
   },
   "current": {
     "active_session_ids": [
-      "SES-20260904T161306.312801Z-operator-claude-1c4c28ef-b076-4bcd-9e0e-007e76da5e5c",
-      "SES-20260904T161337.470260Z-operator-claude-cc817a42-f17b-41c7-8ef2-ec451bf2d752",
-      "SES-20260904T161348.438348Z-operator-claude-574b67cf-c1e6-441e-8a82-9f59ebd73c9c",
-      "SES-20260904T161400.201606Z-operator-claude-9c4287fd-71b9-4edf-95c9-6e40af5d2a67",
-      "SES-20260904T161410.012276Z-operator-claude-770c76e9-3554-4e10-993c-d31f48c6e247",
-      "SES-20260904T161732.957632Z-executor-claude-a769320a-2bed-4c03-9a4b-44d7b21b04a8",
-      "SES-20260904T161734.309875Z-executor-claude-20447d72-441c-44a8-82bd-9283af7bf123",
-      "SES-20260904T161735.657460Z-executor-claude-d556c614-7d1e-45bd-a9c3-bf0125ddfffd",
-      "SES-20260904T161737.004074Z-executor-claude-31ecd13b-147b-4175-80dc-625c7c9dcca1",
-      "SES-20260904T161738.444207Z-executor-claude-d78c6dc4-1c73-47dd-be4e-cced3d5003f2",
-      "SES-20260904T161739.900797Z-executor-claude-9c07448a-545a-4bf8-a7ff-7c95b9bd8fde"
+      "SES-20260904T164308.032219Z-operator-claude-9c84d3ff-1356-4f0c-867d-5175f43da13a",
+      "SES-20260904T164338.709353Z-operator-claude-87560981-a656-4736-9b9c-718afd8b1788",
+      "SES-20260904T164400.058880Z-operator-claude-dacf0826-b5b9-4ba8-850d-bdf6c6c72dcf",
+      "SES-20260904T164412.058082Z-operator-claude-f8f6b9a9-d712-4103-908c-9b17bcb08c3c",
+      "SES-20260904T164418.465667Z-operator-claude-bc28f037-2fc4-4490-b4d8-8a270a8d01eb"
     ],
-    "active_wave_ids": [
-      "P31-I01-W11",
-      "P31-I01-W14",
-      "P31-I01-W21",
-      "P31-I01-W24",
-      "P31-I01-W44",
-      "P31-I01-W46"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -37732,7 +37899,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-04T16:17:41.518947Z",
+  "updated_at": "2026-09-04T16:44:25.987924Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -37782,6 +37949,22 @@
     }
   },
   "wave_integrations": {
+    "integration-048efd021381fb3b70379ab2": {
+      "base_sha": "e3910e627347fc2c84e91e96592d4d9241d542ab",
+      "candidate_sha": "842632c4abc490964de16493925dbc32207354cd",
+      "created_at": "2026-09-04T16:42:35.020119Z",
+      "diff_digest": "a65545a8f7ca0a8500e2e4acdfe770d35368b374bda1be9edab84fcbf824a0f4",
+      "generation": 1,
+      "id": "integration-048efd021381fb3b70379ab2",
+      "integrated_sha": "842632c4abc490964de16493925dbc32207354cd",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and all declared gates re-run green on the integrated HEAD.",
+      "spec_digest": "e1a5a72f3afbdc37ac3708731f0988641c376aa5a0198572d4dcadf406600825",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "0d4e184bb122559e595a967b67ae4b110ecb41d8",
+      "wave_id": "P31-I01-W21"
+    },
     "integration-06eac8b1f660cdaa31bf828e": {
       "base_sha": "684566f5c07d5a2680b7e57a6fdca545e3d74390",
       "candidate_sha": "231656bf8781bd70c7b6dd0fbd37bccc797e8cde",
@@ -37845,6 +38028,22 @@
       "supersedes_id": null,
       "tree_sha": "e1845180bfe47dc6c7dfa0aab225ae05bd97e0cc",
       "wave_id": "P31-I01-W12"
+    },
+    "integration-36a2f5c719ad14a1802a1204": {
+      "base_sha": "069b69ac109d15ad7312231d73ed4496acc4761f",
+      "candidate_sha": "79a437c77620eb6ab4a4378575db416f651ff492",
+      "created_at": "2026-09-04T16:42:36.487210Z",
+      "diff_digest": "ee432ae63dbb9cabc20e92ee926a373f76ce6a246a30338f1dbaab680cd2b608",
+      "generation": 1,
+      "id": "integration-36a2f5c719ad14a1802a1204",
+      "integrated_sha": "79a437c77620eb6ab4a4378575db416f651ff492",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and all declared gates re-run green on the integrated HEAD.",
+      "spec_digest": "cb6b3f1f29b043321c92f3b61e97cc4869cda7d3ca8db42195ae95ad56b16c64",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "34f00863337312f39928a9a02d376c67eb7a9457",
+      "wave_id": "P31-I01-W44"
     },
     "integration-38dc3e930ff5c2ffd48cb1b0": {
       "base_sha": "29d7061d188184e020fb081fa8bf98da10e0049b",
@@ -37958,6 +38157,22 @@
       "tree_sha": "ecae5f48add1b1e6bec9c71543b0ddf602e74fc3",
       "wave_id": "P31-I01-W09"
     },
+    "integration-6fb0c09a727a08dd41362625": {
+      "base_sha": "842632c4abc490964de16493925dbc32207354cd",
+      "candidate_sha": "069b69ac109d15ad7312231d73ed4496acc4761f",
+      "created_at": "2026-09-04T16:42:35.750254Z",
+      "diff_digest": "59a5be552fdf358de49eda9f05b72ebb506aae8f05cce5ea1d2b2b23483a7dc2",
+      "generation": 1,
+      "id": "integration-6fb0c09a727a08dd41362625",
+      "integrated_sha": "069b69ac109d15ad7312231d73ed4496acc4761f",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and all declared gates re-run green on the integrated HEAD.",
+      "spec_digest": "8d3ec43590dcf7734f5190d8c7ac8224eb2e025cd2de0a2714719574f77be41a",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "031efa07dfeaaf593d2e5271da6f0854865706a9",
+      "wave_id": "P31-I01-W24"
+    },
     "integration-7f010b9d37affca296e09de3": {
       "base_sha": "bb9d4d81b8e4b10b0baf22ff0d65740f1297d812",
       "candidate_sha": "941e31bd7f049231e428e774fc7cfa15713659c1",
@@ -38005,6 +38220,22 @@
       "supersedes_id": "integration-b70dfdc7c103fbd6d2eb5909",
       "tree_sha": "f73776d3a9ff908b1a92f6c828bee939d20406f5",
       "wave_id": "P31-I01-W39"
+    },
+    "integration-96076f8afa0c4f77cb128677": {
+      "base_sha": "f63d70325ec2d95235c2276b2a1ae2b8adb8b0d5",
+      "candidate_sha": "e3910e627347fc2c84e91e96592d4d9241d542ab",
+      "created_at": "2026-09-04T16:42:34.298041Z",
+      "diff_digest": "a121e6b76508ee44121e523b4179da55edf6919e48e835c669a27e8c75ed2cc3",
+      "generation": 1,
+      "id": "integration-96076f8afa0c4f77cb128677",
+      "integrated_sha": "e3910e627347fc2c84e91e96592d4d9241d542ab",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and all declared gates re-run green on the integrated HEAD.",
+      "spec_digest": "846a1e0d7088248d0b25fbcb0822baf04a1600e6344de9d22ed15e07ea1fba9c",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "8327f5d4f78dff3beb934f475789e3edc66d2b81",
+      "wave_id": "P31-I01-W14"
     },
     "integration-a56602305e611c838eb2ba4c": {
       "base_sha": "f9503455070e92dc7b67405ee4a032f7d763d3b8",
@@ -38134,6 +38365,22 @@
       "tree_sha": "f73776d3a9ff908b1a92f6c828bee939d20406f5",
       "wave_id": "P31-I01-W39"
     },
+    "integration-ddf8fb79a77574f81aa4ddda": {
+      "base_sha": "43fb36bfcd0814d2522d49d4eefc42547e221cd5",
+      "candidate_sha": "f63d70325ec2d95235c2276b2a1ae2b8adb8b0d5",
+      "created_at": "2026-09-04T16:42:33.549661Z",
+      "diff_digest": "e778eb27730e47c5c451ec80e09a770077e11ab4baed5697e22c02914f1ee697",
+      "generation": 1,
+      "id": "integration-ddf8fb79a77574f81aa4ddda",
+      "integrated_sha": "f63d70325ec2d95235c2276b2a1ae2b8adb8b0d5",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and all declared gates re-run green on the integrated HEAD.",
+      "spec_digest": "4b8b412b015777c23645ed348168f571f7c153ebef9e908fd4d792f2650cc2a3",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "43b2486662f0cca9a56a11a168563831f651383a",
+      "wave_id": "P31-I01-W11"
+    },
     "integration-f1e98fed812ba4ba2180b936": {
       "base_sha": "b3f04f9056f092be81b6533b35de5c1f3f94dba8",
       "candidate_sha": "5c672387b5182fbe878db0cc3c86c861fa39fd14",
@@ -38197,6 +38444,22 @@
       "supersedes_id": null,
       "tree_sha": "6af8bdc8752f0f7a79b83595e3dd6974487e762c",
       "wave_id": "P31-I01-W42"
+    },
+    "integration-fd8eea91839a07c9c9cd252d": {
+      "base_sha": "79a437c77620eb6ab4a4378575db416f651ff492",
+      "candidate_sha": "e0c6d89e4150f73aa858e6d897be5f72a0e347f5",
+      "created_at": "2026-09-04T16:42:37.213796Z",
+      "diff_digest": "5b5507895e7221eaaca78e6799cd25409d142722c2c6af8af69f11d4a9a230f5",
+      "generation": 1,
+      "id": "integration-fd8eea91839a07c9c9cd252d",
+      "integrated_sha": "e0c6d89e4150f73aa858e6d897be5f72a0e347f5",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and all declared gates re-run green on the integrated HEAD.",
+      "spec_digest": "e94dfa3942fbe694fd3a97af71cf60d09d41ca83991fc53a13a0f5db884aaf24",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "102a03e7dac3d28fe1682d83ec1e40383318f985",
+      "wave_id": "P31-I01-W46"
     }
   },
   "waves": {
@@ -151793,9 +152056,9 @@
       ],
       "claim_session_id": "SES-20260904T161732.957632Z-executor-claude-a769320a-2bed-4c03-9a4b-44d7b21b04a8",
       "claimed_at": "2026-09-04T16:17:33.674681Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-04T16:43:38.030256Z",
+      "commit": "f63d70325ec2d95235c2276b2a1ae2b8adb8b0d5",
+      "commit_identity_digest": "sha256:5cb74ce5e5761c2cfc6dc8baebe2747b71d8a10e8601f90b33758196e3520c66",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-08-25T22:16:17.408693Z",
@@ -151890,13 +152153,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-08-25T22:16:17.409354Z",
-      "outcome": null,
+      "outcome": "The daemonless close now routes gate-bearing waves through the shared out-of-process gate runner instead of a bypass lane, and a waivers verb counts daemonless waivers at checkpoint close. Three gates green on integrated HEAD.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -152294,9 +152557,9 @@
       ],
       "claim_session_id": "SES-20260904T161734.309875Z-executor-claude-20447d72-441c-44a8-82bd-9283af7bf123",
       "claimed_at": "2026-09-04T16:17:35.037995Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-04T16:43:59.366525Z",
+      "commit": "e3910e627347fc2c84e91e96592d4d9241d542ab",
+      "commit_identity_digest": "sha256:b0fb17f28850d5da19e31a434fe4b6bfb3b9006e49d491ce2fbdc558ce5148a0",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-08-25T22:16:17.402731Z",
@@ -152393,13 +152656,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-08-25T22:16:17.403395Z",
-      "outcome": null,
+      "outcome": "State reads are offloaded off the daemon loop so an in-flight hold no longer starves unrelated calls, and one readiness budget is stated once with the probe reporting a busy daemon as present rather than absent. Three gates green.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -153625,9 +153888,9 @@
       ],
       "claim_session_id": "SES-20260904T161735.657460Z-executor-claude-d556c614-7d1e-45bd-a9c3-bf0125ddfffd",
       "claimed_at": "2026-09-04T16:17:36.361916Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-04T16:44:11.356835Z",
+      "commit": "842632c4abc490964de16493925dbc32207354cd",
+      "commit_identity_digest": "sha256:27ed35bc83e6fd7438e31a9e66d0fd2f21a715be778100abeb53de5fa0d46c20",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-08-25T22:16:17.406470Z",
@@ -153643,7 +153906,8 @@
         "src/eawf/surfaces/cli/commands/evidence_artifact.py",
         ".ea/artifacts/research",
         "tests/kernel/spec",
-        "tests/workflow/evidence"
+        "tests/workflow/evidence",
+        "tests/unit/test_evidence_cmd_inventory.py"
       ],
       "gates": [
         {
@@ -153726,13 +153990,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-08-25T22:16:17.407164Z",
-      "outcome": null,
+      "outcome": "Three measured-before-build contracts are promoted as typed strict records resolvable by artifact URN through the existing evidence path, with spike-tree citations still refused. Three gates green on integrated HEAD.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -154137,9 +154401,9 @@
       ],
       "claim_session_id": "SES-20260904T161737.004074Z-executor-claude-31ecd13b-147b-4175-80dc-625c7c9dcca1",
       "claimed_at": "2026-09-04T16:17:37.753101Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-04T16:44:17.770506Z",
+      "commit": "069b69ac109d15ad7312231d73ed4496acc4761f",
+      "commit_identity_digest": "sha256:2f2e2bd0717366c2e8262546b815fc23205519bb5d4769d5d112a912c85e74bb",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-08-25T22:16:17.407939Z",
@@ -154239,13 +154503,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-08-25T22:16:17.408621Z",
-      "outcome": null,
+      "outcome": "Test kind taxonomy landed as a single enum checked against four live surfaces, with directory-derived auto-markers aborting collection on a contradiction and a diff-scoped placement lint. Three gates green.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -157759,9 +158023,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260904T161738.444207Z-executor-claude-d78c6dc4-1c73-47dd-be4e-cced3d5003f2",
       "claimed_at": "2026-09-04T16:17:39.200482Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-04T16:44:25.987688Z",
+      "commit": "79a437c77620eb6ab4a4378575db416f651ff492",
+      "commit_identity_digest": "sha256:dfd29446bea74ff2377313fecf74e8a2b72f5cf11c6bfc1d5c40c4fcde2743d5",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap revise; typed criteria land via spec sync",
         "waived_at": "2026-09-04T12:43:51.503903Z",
@@ -157781,7 +158045,8 @@
         "src/eawf/surfaces/render/skills/registry.py",
         "src/eawf/workflow/lifecycle/wave_sha.py",
         "tests/workflow/lifecycle",
-        "tests/golden"
+        "tests/golden",
+        "AGENTS.md"
       ],
       "gates": [
         {
@@ -157883,13 +158148,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-09-04T12:43:51.609648Z",
-      "outcome": null,
+      "outcome": "Wave-close bookkeeping now folds into the wave commit with a one-commit-per-wave cap, the state: bracket exemption preserved, and an unpinned amended wave commit raising no drift row. Three gates plus affordance_parity green.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -158153,9 +158418,9 @@
       ],
       "claim_session_id": "SES-20260904T161739.900797Z-executor-claude-9c07448a-545a-4bf8-a7ff-7c95b9bd8fde",
       "claimed_at": "2026-09-04T16:17:40.792183Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-04T16:42:49.858179Z",
+      "commit": "e0c6d89e4150f73aa858e6d897be5f72a0e347f5",
+      "commit_identity_digest": "sha256:718757b8d178b12e64b3bec100fbd54a6fc4dfb6c2ab442691a503416acf9b27",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
         "waived_at": "2026-09-04T16:16:39.866327Z",
@@ -158225,13 +158490,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-09-04T16:16:40.075197Z",
-      "outcome": null,
+      "outcome": "Codex removed from REASONING_UNSETTLED_RUNTIMES so its rows are summed into the turn-cost totals; the exclusion mechanism and its counter stay live for any runtime still listed. Two gates green on integrated HEAD.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
