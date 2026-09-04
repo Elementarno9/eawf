@@ -14720,6 +14720,40 @@
       "status": "active",
       "summary": null,
       "worktree_ids": []
+    },
+    "SES-20260904T164540.991806Z-researcher-claude-a84201f3-87e2-4673-807c-be74fe7facc7": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W18"
+      ],
+      "ended_at": null,
+      "id": "SES-20260904T164540.991806Z-researcher-claude-a84201f3-87e2-4673-807c-be74fe7facc7",
+      "role": "researcher",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W18",
+      "started_at": "2026-09-04T16:45:40.991806Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260904T164542.280059Z-executor-claude-699b94f3-1c25-4964-98db-425050cb0024": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W19"
+      ],
+      "ended_at": null,
+      "id": "SES-20260904T164542.280059Z-executor-claude-699b94f3-1c25-4964-98db-425050cb0024",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W19",
+      "started_at": "2026-09-04T16:45:42.280059Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
     }
   },
   "artifacts": {
@@ -19436,9 +19470,14 @@
       "SES-20260904T164338.709353Z-operator-claude-87560981-a656-4736-9b9c-718afd8b1788",
       "SES-20260904T164400.058880Z-operator-claude-dacf0826-b5b9-4ba8-850d-bdf6c6c72dcf",
       "SES-20260904T164412.058082Z-operator-claude-f8f6b9a9-d712-4103-908c-9b17bcb08c3c",
-      "SES-20260904T164418.465667Z-operator-claude-bc28f037-2fc4-4490-b4d8-8a270a8d01eb"
+      "SES-20260904T164418.465667Z-operator-claude-bc28f037-2fc4-4490-b4d8-8a270a8d01eb",
+      "SES-20260904T164540.991806Z-researcher-claude-a84201f3-87e2-4673-807c-be74fe7facc7",
+      "SES-20260904T164542.280059Z-executor-claude-699b94f3-1c25-4964-98db-425050cb0024"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P31-I01-W18",
+      "P31-I01-W19"
+    ],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -37899,7 +37938,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-04T16:44:25.987924Z",
+  "updated_at": "2026-09-04T16:45:43.588305Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -37913,6 +37952,61 @@
       "start_fact_ref": "integration:integration-0d2bf4b2141d7db0baf3d259",
       "tree_sha": "9b3bd368c8daa7ffd96f919e70f92019c127c96e",
       "wave_id": "P31-I01-W11"
+    },
+    "P31-I01-W18::P31-I01-W08": {
+      "bound_at": "2026-09-04T16:45:41.671072Z",
+      "dep_wave_id": "P31-I01-W08",
+      "generation": 1,
+      "integrated_sha": "b3f04f9056f092be81b6533b35de5c1f3f94dba8",
+      "integration_id": "integration-ba34af1907b9e266a25a909b",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-ba34af1907b9e266a25a909b",
+      "tree_sha": "e7f96a44d58b8831793b57c85855e4c1cad42e30",
+      "wave_id": "P31-I01-W18"
+    },
+    "P31-I01-W18::P31-I01-W17": {
+      "bound_at": "2026-09-04T16:45:41.671072Z",
+      "dep_wave_id": "P31-I01-W17",
+      "generation": 1,
+      "integrated_sha": "83de370ebbe244d6338d52e5d345912932186f1c",
+      "integration_id": "integration-a9c5d677c7a0905d9912c297",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-a9c5d677c7a0905d9912c297",
+      "tree_sha": "92df7a7a7171c31b819b72d4291eefbabef70c2b",
+      "wave_id": "P31-I01-W18"
+    },
+    "P31-I01-W18::P31-I01-W34": {
+      "bound_at": "2026-09-04T16:45:41.671072Z",
+      "dep_wave_id": "P31-I01-W34",
+      "generation": 1,
+      "integrated_sha": "f784e1f3b2ac9abf72c0a0afdbc011a6e79f68f9",
+      "integration_id": "integration-b9cf3e562f83c60f9a935dd2",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-b9cf3e562f83c60f9a935dd2",
+      "tree_sha": "d4e40dcb147aa8e631d211daac3c5cd8c714baaa",
+      "wave_id": "P31-I01-W18"
+    },
+    "P31-I01-W18::P31-I01-W41": {
+      "bound_at": "2026-09-04T16:45:41.671072Z",
+      "dep_wave_id": "P31-I01-W41",
+      "generation": 1,
+      "integrated_sha": "29d7061d188184e020fb081fa8bf98da10e0049b",
+      "integration_id": "integration-f7b02f59cb46d33dcce9d33c",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-f7b02f59cb46d33dcce9d33c",
+      "tree_sha": "49ed75f154f58a668b5c3e80c1609ba914024db2",
+      "wave_id": "P31-I01-W18"
+    },
+    "P31-I01-W18::P31-I01-W46": {
+      "bound_at": "2026-09-04T16:45:41.671072Z",
+      "dep_wave_id": "P31-I01-W46",
+      "generation": 1,
+      "integrated_sha": "e0c6d89e4150f73aa858e6d897be5f72a0e347f5",
+      "integration_id": "integration-fd8eea91839a07c9c9cd252d",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-fd8eea91839a07c9c9cd252d",
+      "tree_sha": "102a03e7dac3d28fe1682d83ec1e40383318f985",
+      "wave_id": "P31-I01-W18"
     },
     "P31-I01-W34::P31-I01-W17": {
       "bound_at": "2026-09-04T15:41:07.436220Z",
@@ -153336,8 +153430,8 @@
       "blocks": [
         "P31-I01-W26"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260904T164540.991806Z-researcher-claude-a84201f3-87e2-4673-807c-be74fe7facc7",
+      "claimed_at": "2026-09-04T16:45:41.671266Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -153432,7 +153526,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -153496,8 +153590,8 @@
         "P31-I01-W26",
         "P31-I01-W25"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260904T164542.280059Z-executor-claude-699b94f3-1c25-4964-98db-425050cb0024",
+      "claimed_at": "2026-09-04T16:45:42.943992Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -153633,7 +153727,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
