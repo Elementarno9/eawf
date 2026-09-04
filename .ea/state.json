@@ -14438,6 +14438,108 @@
       "status": "active",
       "summary": null,
       "worktree_ids": []
+    },
+    "SES-20260904T161732.957632Z-executor-claude-a769320a-2bed-4c03-9a4b-44d7b21b04a8": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W11"
+      ],
+      "ended_at": null,
+      "id": "SES-20260904T161732.957632Z-executor-claude-a769320a-2bed-4c03-9a4b-44d7b21b04a8",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W11",
+      "started_at": "2026-09-04T16:17:32.957632Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260904T161734.309875Z-executor-claude-20447d72-441c-44a8-82bd-9283af7bf123": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W14"
+      ],
+      "ended_at": null,
+      "id": "SES-20260904T161734.309875Z-executor-claude-20447d72-441c-44a8-82bd-9283af7bf123",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W14",
+      "started_at": "2026-09-04T16:17:34.309875Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260904T161735.657460Z-executor-claude-d556c614-7d1e-45bd-a9c3-bf0125ddfffd": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W21"
+      ],
+      "ended_at": null,
+      "id": "SES-20260904T161735.657460Z-executor-claude-d556c614-7d1e-45bd-a9c3-bf0125ddfffd",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W21",
+      "started_at": "2026-09-04T16:17:35.657460Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260904T161737.004074Z-executor-claude-31ecd13b-147b-4175-80dc-625c7c9dcca1": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W24"
+      ],
+      "ended_at": null,
+      "id": "SES-20260904T161737.004074Z-executor-claude-31ecd13b-147b-4175-80dc-625c7c9dcca1",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W24",
+      "started_at": "2026-09-04T16:17:37.004074Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260904T161738.444207Z-executor-claude-d78c6dc4-1c73-47dd-be4e-cced3d5003f2": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W44"
+      ],
+      "ended_at": null,
+      "id": "SES-20260904T161738.444207Z-executor-claude-d78c6dc4-1c73-47dd-be4e-cced3d5003f2",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W44",
+      "started_at": "2026-09-04T16:17:38.444207Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260904T161739.900797Z-executor-claude-9c07448a-545a-4bf8-a7ff-7c95b9bd8fde": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W46"
+      ],
+      "ended_at": null,
+      "id": "SES-20260904T161739.900797Z-executor-claude-9c07448a-545a-4bf8-a7ff-7c95b9bd8fde",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W46",
+      "started_at": "2026-09-04T16:17:39.900797Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
     }
   },
   "artifacts": {
@@ -19154,9 +19256,22 @@
       "SES-20260904T161337.470260Z-operator-claude-cc817a42-f17b-41c7-8ef2-ec451bf2d752",
       "SES-20260904T161348.438348Z-operator-claude-574b67cf-c1e6-441e-8a82-9f59ebd73c9c",
       "SES-20260904T161400.201606Z-operator-claude-9c4287fd-71b9-4edf-95c9-6e40af5d2a67",
-      "SES-20260904T161410.012276Z-operator-claude-770c76e9-3554-4e10-993c-d31f48c6e247"
+      "SES-20260904T161410.012276Z-operator-claude-770c76e9-3554-4e10-993c-d31f48c6e247",
+      "SES-20260904T161732.957632Z-executor-claude-a769320a-2bed-4c03-9a4b-44d7b21b04a8",
+      "SES-20260904T161734.309875Z-executor-claude-20447d72-441c-44a8-82bd-9283af7bf123",
+      "SES-20260904T161735.657460Z-executor-claude-d556c614-7d1e-45bd-a9c3-bf0125ddfffd",
+      "SES-20260904T161737.004074Z-executor-claude-31ecd13b-147b-4175-80dc-625c7c9dcca1",
+      "SES-20260904T161738.444207Z-executor-claude-d78c6dc4-1c73-47dd-be4e-cced3d5003f2",
+      "SES-20260904T161739.900797Z-executor-claude-9c07448a-545a-4bf8-a7ff-7c95b9bd8fde"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P31-I01-W11",
+      "P31-I01-W14",
+      "P31-I01-W21",
+      "P31-I01-W24",
+      "P31-I01-W44",
+      "P31-I01-W46"
+    ],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -37617,10 +37732,21 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-04T16:17:02.199627Z",
+  "updated_at": "2026-09-04T16:17:41.518947Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
+    "P31-I01-W11::P31-I01-W10": {
+      "bound_at": "2026-09-04T16:17:33.674515Z",
+      "dep_wave_id": "P31-I01-W10",
+      "generation": 1,
+      "integrated_sha": "be1aeebef5932baa857a6e8fdb1762c6b9af7465",
+      "integration_id": "integration-0d2bf4b2141d7db0baf3d259",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-0d2bf4b2141d7db0baf3d259",
+      "tree_sha": "9b3bd368c8daa7ffd96f919e70f92019c127c96e",
+      "wave_id": "P31-I01-W11"
+    },
     "P31-I01-W34::P31-I01-W17": {
       "bound_at": "2026-09-04T15:41:07.436220Z",
       "dep_wave_id": "P31-I01-W17",
@@ -37631,6 +37757,28 @@
       "start_fact_ref": "integration:integration-a9c5d677c7a0905d9912c297",
       "tree_sha": "92df7a7a7171c31b819b72d4291eefbabef70c2b",
       "wave_id": "P31-I01-W34"
+    },
+    "P31-I01-W44::P31-I01-W45": {
+      "bound_at": "2026-09-04T16:17:39.200364Z",
+      "dep_wave_id": "P31-I01-W45",
+      "generation": 1,
+      "integrated_sha": "52d1752a0c8042c0ca1a7f11e9e208abd1eb05f9",
+      "integration_id": "integration-38dc3e930ff5c2ffd48cb1b0",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-38dc3e930ff5c2ffd48cb1b0",
+      "tree_sha": "b2320b8f43926247f85b36a6f49f226c3cabd0ff",
+      "wave_id": "P31-I01-W44"
+    },
+    "P31-I01-W46::P31-I01-W41": {
+      "bound_at": "2026-09-04T16:17:40.792090Z",
+      "dep_wave_id": "P31-I01-W41",
+      "generation": 1,
+      "integrated_sha": "29d7061d188184e020fb081fa8bf98da10e0049b",
+      "integration_id": "integration-f7b02f59cb46d33dcce9d33c",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-f7b02f59cb46d33dcce9d33c",
+      "tree_sha": "49ed75f154f58a668b5c3e80c1609ba914024db2",
+      "wave_id": "P31-I01-W46"
     }
   },
   "wave_integrations": {
@@ -151643,8 +151791,8 @@
         "P31-I01-W26",
         "P31-I01-W25"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260904T161732.957632Z-executor-claude-a769320a-2bed-4c03-9a4b-44d7b21b04a8",
+      "claimed_at": "2026-09-04T16:17:33.674681Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -151748,7 +151896,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -152144,8 +152292,8 @@
         "P31-I01-W26",
         "P31-I01-W25"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260904T161734.309875Z-executor-claude-20447d72-441c-44a8-82bd-9283af7bf123",
+      "claimed_at": "2026-09-04T16:17:35.037995Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -152251,7 +152399,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -153475,8 +153623,8 @@
         "P31-I01-W26",
         "P31-I01-W25"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260904T161735.657460Z-executor-claude-d556c614-7d1e-45bd-a9c3-bf0125ddfffd",
+      "claimed_at": "2026-09-04T16:17:36.361916Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -153584,7 +153732,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -153987,8 +154135,8 @@
         "P31-I01-W26",
         "P31-I01-W25"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260904T161737.004074Z-executor-claude-31ecd13b-147b-4175-80dc-625c7c9dcca1",
+      "claimed_at": "2026-09-04T16:17:37.753101Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -154097,7 +154245,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -157609,8 +157757,8 @@
     "P31-I01-W44": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260904T161738.444207Z-executor-claude-d78c6dc4-1c73-47dd-be4e-cced3d5003f2",
+      "claimed_at": "2026-09-04T16:17:39.200482Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -157741,7 +157889,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -158003,8 +158151,8 @@
       "blocks": [
         "P31-I01-W18"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260904T161739.900797Z-executor-claude-9c07448a-545a-4bf8-a7ff-7c95b9bd8fde",
+      "claimed_at": "2026-09-04T16:17:40.792183Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -158083,7 +158231,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
