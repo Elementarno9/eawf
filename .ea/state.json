@@ -14650,75 +14650,75 @@
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:46:34.878274Z",
       "id": "SES-20260904T164308.032219Z-operator-claude-9c84d3ff-1356-4f0c-867d-5175f43da13a",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-b4c1",
       "started_at": "2026-09-04T16:43:08.032219Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T164338.709353Z-operator-claude-87560981-a656-4736-9b9c-718afd8b1788": {
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:46:34.879421Z",
       "id": "SES-20260904T164338.709353Z-operator-claude-87560981-a656-4736-9b9c-718afd8b1788",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-b4c2",
       "started_at": "2026-09-04T16:43:38.709353Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T164400.058880Z-operator-claude-dacf0826-b5b9-4ba8-850d-bdf6c6c72dcf": {
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:46:34.880012Z",
       "id": "SES-20260904T164400.058880Z-operator-claude-dacf0826-b5b9-4ba8-850d-bdf6c6c72dcf",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-b4c3",
       "started_at": "2026-09-04T16:44:00.058880Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T164412.058082Z-operator-claude-f8f6b9a9-d712-4103-908c-9b17bcb08c3c": {
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:46:34.880582Z",
       "id": "SES-20260904T164412.058082Z-operator-claude-f8f6b9a9-d712-4103-908c-9b17bcb08c3c",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-b4c4",
       "started_at": "2026-09-04T16:44:12.058082Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T164418.465667Z-operator-claude-bc28f037-2fc4-4490-b4d8-8a270a8d01eb": {
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:46:34.881161Z",
       "id": "SES-20260904T164418.465667Z-operator-claude-bc28f037-2fc4-4490-b4d8-8a270a8d01eb",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-b4c5",
       "started_at": "2026-09-04T16:44:18.465667Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T164540.991806Z-researcher-claude-a84201f3-87e2-4673-807c-be74fe7facc7": {
@@ -14727,15 +14727,15 @@
       "claimed_wave_ids": [
         "P31-I01-W18"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:46:34.881773Z",
       "id": "SES-20260904T164540.991806Z-researcher-claude-a84201f3-87e2-4673-807c-be74fe7facc7",
       "role": "researcher",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W18",
       "started_at": "2026-09-04T16:45:40.991806Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T164542.280059Z-executor-claude-699b94f3-1c25-4964-98db-425050cb0024": {
@@ -14744,15 +14744,15 @@
       "claimed_wave_ids": [
         "P31-I01-W19"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-04T16:46:34.882381Z",
       "id": "SES-20260904T164542.280059Z-executor-claude-699b94f3-1c25-4964-98db-425050cb0024",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W19",
       "started_at": "2026-09-04T16:45:42.280059Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -15407,6 +15407,16 @@
       "uri": "repo:.ea/artifacts/research/2026-09-03-v07-finalization-brief.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-research-2026-09-03-v07-finalization-brief"
     },
+    "ART-research-2026-09-04-epoch2-state-tree-shape": {
+      "created_at": "2026-09-04T16:46:48.620305Z",
+      "id": "ART-research-2026-09-04-epoch2-state-tree-shape",
+      "kind": "research_brief",
+      "metadata": {},
+      "sha256": "596f600e178b57800a129608a4a02f084e19d99ffa53d257d3d1e69dc25a3c11",
+      "size_bytes": 11130,
+      "uri": "repo:.ea/artifacts/research/2026-09-04-epoch2-state-tree-shape.md",
+      "urn": "urn:eawf:v1:artifact:P31-I01-W13/ART-research-2026-09-04-epoch2-state-tree-shape"
+    },
     "ART-research-long-term-2026-05-16-c00-spec-index": {
       "created_at": "2026-05-18T19:17:46.268887Z",
       "id": "ART-research-long-term-2026-05-16-c00-spec-index",
@@ -15656,6 +15666,207 @@
       "size_bytes": null,
       "uri": "repo:.ea/artifacts/audits/v0.1-closeout.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-v0.1-closeout"
+    },
+    "MCT-26081301": {
+      "created_at": "2026-09-04T16:46:57.428397Z",
+      "id": "MCT-26081301",
+      "kind": "plan_spec",
+      "metadata": {
+        "boundary": "Byte-identity holds only under json.dumps(indent=2, ensure_ascii=False) plus a trailing newline; the other five dump settings probed all diverge, so a naive re-dump is not byte-identical. Measured on ONE epoch-1 population at schema_version 1.19 whose key order was already sorted everywhere and which carried zero duplicate keys and zero embedded newlines. A state exhibiting any of those three is outside the measured envelope, as is any schema_version beyond 1.19.",
+        "contract_id": "MCT-26081301",
+        "environment": {
+          "host_platform": "darwin",
+          "population": "the live epoch-1 .ea/state.json: 5,743,039 bytes across 15 collections and 10,684 JSON objects, including 1,284 wave rows and 849 actual rows",
+          "population_size": 10684,
+          "scale_band": "production",
+          "toolchain": "python 3.14.3"
+        },
+        "limits": [
+          {
+            "basis": "P5 source_bytes of .ea/state.json at schema_version 1.19",
+            "direction": "ceiling",
+            "name": "state_bytes",
+            "unit": "bytes",
+            "value": 5743039.0
+          },
+          {
+            "basis": "P6 per-collection byte census; waves is the dominant collection",
+            "direction": "ceiling",
+            "name": "largest_collection_share",
+            "unit": "percent",
+            "value": 60.096
+          },
+          {
+            "basis": "P6 largest single row, waves/P30-I25-W25",
+            "direction": "ceiling",
+            "name": "max_row_bytes",
+            "unit": "bytes",
+            "value": 25794.0
+          },
+          {
+            "basis": "P5 numbers census over 5847 float values",
+            "direction": "ceiling",
+            "name": "float_roundtrip_failures",
+            "unit": "count",
+            "value": 0.0
+          },
+          {
+            "basis": "P5 non_ascii_strings census; an importer must survive at least this many",
+            "direction": "floor",
+            "name": "non_ascii_strings_to_handle",
+            "unit": "count",
+            "value": 1243.0
+          }
+        ],
+        "observed": {
+          "actual_rows": 849,
+          "byte_identical_dump_variants": 2,
+          "collection_count": 15,
+          "dangling_refs_across_five_edges": 0,
+          "duplicate_keys_in_source": 0,
+          "embedded_newlines": 0,
+          "floats_not_round_tripping": 0,
+          "key_order_is_sorted_everywhere": true,
+          "non_ascii_strings": 1243,
+          "objects_total": 10684,
+          "schema_version": "1.19",
+          "state_bytes": 5743039,
+          "wave_rows": 1284
+        },
+        "observed_at": "2026-08-13T00:00:00+00:00",
+        "observed_at_ref": ".ea/local/spikes/2026-08-13-v07-preflight/epoch1-state-at-scale/observations.json",
+        "probe_command": "uv run python .ea/local/spikes/2026-08-13-v07-preflight/epoch1-state-at-scale/probe.py",
+        "surface": "epoch-1 state.json population that the epoch-2 importer must consume"
+      },
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:src/eawf/workflow/evidence/measured_contract.py",
+      "urn": "urn:eawf:v1:artifact:P31-I01-W21/MCT-26081301"
+    },
+    "MCT-26081302": {
+      "created_at": "2026-09-04T16:46:58.266204Z",
+      "id": "MCT-26081302",
+      "kind": "plan_spec",
+      "metadata": {
+        "boundary": "Measured from --version, --help and config-inspection paths only, with zero billed generation, so every finding is about what the CLI ADVERTISES rather than what it does when driven. Capability rows carrying no probe rule (skills, plan_mode, sub_agents, cache_control, error_class_surface) are declared-only and were not measured at all. opencode was absent from PATH, so all eight of its rows are unmeasured rather than passing. Versions are a point-in-time reading of one workstation's installs.",
+        "contract_id": "MCT-26081302",
+        "environment": {
+          "host_platform": "darwin",
+          "population": "3 declared runtimes x 8 capability rows = 24 conformance rows; 16 probed against two installed binaries and 8 unmeasured",
+          "population_size": 24,
+          "scale_band": "dev",
+          "toolchain": "python 3.14.3"
+        },
+        "limits": [
+          {
+            "basis": "drift.json installed flag across the three declared runtimes",
+            "direction": "floor",
+            "name": "runtimes_installed",
+            "unit": "count",
+            "value": 2.0
+          },
+          {
+            "basis": "drift.json DRIFT rows: session_resume on claude-code and on codex",
+            "direction": "ceiling",
+            "name": "declared_vs_observed_drift",
+            "unit": "count",
+            "value": 2.0
+          },
+          {
+            "basis": "drift.json MISSING rows: all eight opencode rows, binary absent from PATH",
+            "direction": "ceiling",
+            "name": "unmeasured_capability_rows",
+            "unit": "count",
+            "value": 8.0
+          }
+        ],
+        "observed": {
+          "capability_rows_per_runtime": 8,
+          "claude_version": "2.1.231 (Claude Code)",
+          "codex_version": "codex-cli 0.146.0",
+          "drift_rows": 2,
+          "opencode_installed": false,
+          "runtimes_declared": 3,
+          "runtimes_installed": 2,
+          "unmeasured_rows": 8
+        },
+        "observed_at": "2026-08-13T15:35:41+00:00",
+        "observed_at_ref": ".ea/local/spikes/2026-08-13-v07-preflight/cross-provider-conformance/drift.json",
+        "probe_command": "uv run python .ea/local/spikes/2026-08-13-v07-preflight/cross-provider-conformance/probe.py",
+        "surface": "installed provider runtime CLI capability surface (claude, codex, opencode)"
+      },
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:src/eawf/workflow/evidence/measured_contract.py",
+      "urn": "urn:eawf:v1:artifact:P31-I01-W21/MCT-26081302"
+    },
+    "MCT-26081303": {
+      "created_at": "2026-09-04T16:46:59.134185Z",
+      "id": "MCT-26081303",
+      "kind": "plan_spec",
+      "metadata": {
+        "boundary": "Write concurrency was measured only in an isolated scratch workspace with its own socket path and its own daemon; the live daemon's write path was never contended, so the portalock ceiling is a scratch-workspace number. Head-of-line blocking was measured against a synthetic SYNCHRONOUS handler (1 ping completed during a 1 s sync hold versus 134 during an async hold of the same length) - a mixed sync/async handler set is outside the envelope. Every latency figure comes from one workstation against one 5.7 MB state file.",
+        "contract_id": "MCT-26081303",
+        "environment": {
+          "host_platform": "darwin",
+          "population": "2,540 read RPCs across concurrency 1 to 64, plus 40 portalocker writers across concurrency 2 to 16, against one live daemon and one isolated scratch daemon",
+          "population_size": 2540,
+          "scale_band": "dev",
+          "toolchain": "python 3.14.3"
+        },
+        "limits": [
+          {
+            "basis": "read_ladder daemon.ping at c64: 1280 calls, 0 errors, p95 5.32 ms",
+            "direction": "ceiling",
+            "name": "ping_concurrency",
+            "unit": "count",
+            "value": 64.0
+          },
+          {
+            "basis": "read_ladder state.read p95 507.25 ms at c4 versus 84.41 ms at c1, a 6x knee",
+            "direction": "ceiling",
+            "name": "state_read_concurrency",
+            "unit": "count",
+            "value": 4.0
+          },
+          {
+            "basis": "portalock ladder: 0 errors through c8, then 2/12 at c12 and 6/16 at c16",
+            "direction": "ceiling",
+            "name": "portalock_writer_concurrency",
+            "unit": "count",
+            "value": 8.0
+          },
+          {
+            "basis": "worst read_ladder daemon.ping p95, measured at c64",
+            "direction": "ceiling",
+            "name": "ping_p95_ms",
+            "unit": "ms",
+            "value": 5.32
+          }
+        ],
+        "observed": {
+          "ping_errors_through_c64": 0,
+          "ping_p95_ms_at_c1": 0.22,
+          "ping_p95_ms_at_c64": 5.32,
+          "pings_during_1s_async_hold": 134,
+          "pings_during_1s_sync_hold": 1,
+          "portalock_default_timeout_s": 5.0,
+          "portalock_errors_at_c12": 2,
+          "portalock_errors_at_c16": 6,
+          "portalock_wait_p95_ms_at_c8": 3692.97,
+          "rpc_call_timeout_s": 30.0,
+          "state_read_p95_ms_at_c1": 84.41,
+          "state_read_p95_ms_at_c4": 507.25
+        },
+        "observed_at": "2026-08-13T00:00:00+00:00",
+        "observed_at_ref": ".ea/local/spikes/2026-08-13-v07-preflight/daemon-rpc-parallel/observations.jsonl",
+        "probe_command": "uv run python .ea/local/spikes/2026-08-13-v07-preflight/daemon-rpc-parallel/probe.py",
+        "surface": "eawf daemon JSON-RPC under concurrent readers and the portalocker write fallback"
+      },
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:src/eawf/workflow/evidence/measured_contract.py",
+      "urn": "urn:eawf:v1:artifact:P31-I01-W21/MCT-26081303"
     }
   },
   "audits": {
@@ -19465,15 +19676,7 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260904T164308.032219Z-operator-claude-9c84d3ff-1356-4f0c-867d-5175f43da13a",
-      "SES-20260904T164338.709353Z-operator-claude-87560981-a656-4736-9b9c-718afd8b1788",
-      "SES-20260904T164400.058880Z-operator-claude-dacf0826-b5b9-4ba8-850d-bdf6c6c72dcf",
-      "SES-20260904T164412.058082Z-operator-claude-f8f6b9a9-d712-4103-908c-9b17bcb08c3c",
-      "SES-20260904T164418.465667Z-operator-claude-bc28f037-2fc4-4490-b4d8-8a270a8d01eb",
-      "SES-20260904T164540.991806Z-researcher-claude-a84201f3-87e2-4673-807c-be74fe7facc7",
-      "SES-20260904T164542.280059Z-executor-claude-699b94f3-1c25-4964-98db-425050cb0024"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [
       "P31-I01-W18",
       "P31-I01-W19"
@@ -37938,7 +38141,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-04T16:45:43.588305Z",
+  "updated_at": "2026-09-04T16:46:59.134185Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
