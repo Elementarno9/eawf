@@ -10,7 +10,10 @@ validation so a synced criterion's tier is no longer a vaporware ``None``:
 * negative-path (raises) -- a ``JUDGED`` response with an empty ``jury_reason``
   raises ``ValueError`` at the validation binding point, and an input criterion
   carrying a non-``None`` author-set ``oracle_tier`` is rejected with
-  ``ValueError`` (the author never owns the tier).
+  ``ValueError`` (the author never owns the tier);
+* quantifier smuggling (raises) -- a ``HOLDS_FOR_ALL`` criterion carrying a
+  ``gate_ref`` is rejected when authored ``quantifier="single"``, and rejected
+  again when quantified ``forall`` away from the hypothesis locus.
 
 A malformed ``JUDGED`` clause is planted via :meth:`CriterionSpec.model_construct`
 so it bypasses the ``_judged_requires_reason`` model validator and reaches the
@@ -176,3 +179,90 @@ def test_validate_criterion_gate_refs_allow_computed_tier_rejects_mismatch() -> 
 
     with pytest.raises(ValueError, match="oracle_tier must not be author-set"):
         validate_criterion_gate_refs([criterion], [], allow_computed_tier=True)
+
+
+# --------------------------------------------------------------------------
+# Quantifier smuggling — a gated universal criterion authored as ``single``
+# --------------------------------------------------------------------------
+
+
+def test_validate_criterion_gate_refs_gated_universal_as_single_raises() -> None:
+    """A holds_for_all criterion with a gate_ref and quantifier single is rejected.
+
+    Authoring the universal verb as ``single`` would let one gate run stand in
+    for every input while the criterion reads as proven for all of them.
+    """
+    criterion = _criterion(
+        response=ResponseClause(
+            observe=ObserveVerb.HOLDS_FOR_ALL,
+            object="the invariant holds for every generated input",
+            locus=ProofLocus.CLI_EXIT,
+            quantifier="single",
+            gate_ref="command_exit_zero",
+        ),
+    )
+
+    with pytest.raises(ValueError, match="must use quantifier forall"):
+        validate_criterion_gate_refs([criterion], [])
+
+    assert criterion.oracle_tier is None
+
+
+def test_validate_criterion_gate_refs_gated_universal_forall_non_hypothesis_raises() -> None:
+    """A gated forall criterion away from the hypothesis locus is rejected here too.
+
+    Binding proof that the reordered ``assign_oracle_tier`` locus check reaches
+    the validator: the gate kind resolves, so before the fix this computed
+    T4_CONTRACT instead of raising.
+    """
+    criterion = _criterion(
+        response=ResponseClause(
+            observe=ObserveVerb.HOLDS_FOR_ALL,
+            object="the invariant holds for every generated input",
+            locus=ProofLocus.CLI_EXIT,
+            quantifier="forall",
+            gate_ref="command_exit_zero",
+        ),
+    )
+
+    with pytest.raises(ValueError, match="hypothesis"):
+        validate_criterion_gate_refs([criterion], [])
+
+    assert criterion.oracle_tier is None
+
+
+def test_validate_criterion_gate_refs_gated_universal_forall_hypothesis_computes_tier() -> None:
+    """A correctly quantified gated universal criterion still computes its gate tier."""
+    criterion = _criterion(
+        response=ResponseClause(
+            observe=ObserveVerb.HOLDS_FOR_ALL,
+            object="the invariant holds for every generated input",
+            locus=ProofLocus.HYPOTHESIS,
+            quantifier="forall",
+            gate_ref="command_exit_zero",
+        ),
+    )
+
+    validate_criterion_gate_refs([criterion], [])
+
+    assert criterion.oracle_tier is OracleTier.T4_CONTRACT
+
+
+def test_validate_criterion_gate_refs_ungated_holds_for_all_single_accepted() -> None:
+    """The smuggling check is narrow: an ungated holds_for_all row still passes.
+
+    Grandfathered criteria carry no ``gate_ref``, so the new rejection must not
+    widen into them.
+    """
+    criterion = _criterion(
+        response=ResponseClause(
+            observe=ObserveVerb.HOLDS_FOR_ALL,
+            object="the invariant holds for every generated input",
+            locus=ProofLocus.PYTEST,
+            quantifier="single",
+        ),
+    )
+
+    validate_criterion_gate_refs([criterion], [])
+
+    assert criterion.oracle_tier is OracleTier.T4_CONTRACT

@@ -399,16 +399,22 @@ def _tier_for_gate_kind(kind: str) -> OracleTier:
 def assign_oracle_tier(r: ResponseClause) -> OracleTier:
     """Total: verb -> cheapest tier; JUDGED is the only path to T6/T7.
 
+    The quantifier check precedes every tier-resolving branch. A universal
+    claim is only falsifiable by property search, so no shortcut may resolve
+    a tier for a ``forall`` clause observed away from the hypothesis locus --
+    neither a ``gate_ref`` (a single gate run cannot witness all inputs) nor a
+    ``JUDGED`` escalation (a jury cannot enumerate them either).
+
     Raises:
-        ValueError: observe==JUDGED with empty jury_reason; or
-            quantifier==forall with locus != HYPOTHESIS; or gate_ref names
+        ValueError: quantifier==forall with locus != HYPOTHESIS; or
+            observe==JUDGED with empty jury_reason; or gate_ref names
             an unknown gate kind.
     """
+    if r.quantifier == "forall" and r.locus is not ProofLocus.HYPOTHESIS:
+        raise ValueError(f"forall response must use hypothesis locus: object={r.object!r}")
     if r.gate_ref is not None:
         return _tier_for_gate_kind(r.gate_ref)
     if r.observe in _VERB_TIER:
-        if r.quantifier == "forall" and r.locus is not ProofLocus.HYPOTHESIS:
-            raise ValueError(f"forall response must use hypothesis locus: object={r.object!r}")
         return _VERB_TIER[r.observe]
     if r.observe is ObserveVerb.JUDGED:
         if not r.jury_reason:
@@ -890,6 +896,10 @@ def validate_criterion_gate_refs(
        (:func:`eawf.workflow.verify.compile.compile_gate` returns a
        non-``None`` runnable spec) -- an orphan deterministic gate that
        cannot compile would silently never falsify the criterion.
+    4. A ``HOLDS_FOR_ALL`` response carrying a ``gate_ref`` is quantified
+       ``forall``. Authoring the universal verb as ``single`` smuggles a
+       one-witness gate past the ``forall`` locus rule
+       :func:`assign_oracle_tier` enforces.
 
     Author-set tier rejection + server-side compute: the tier is owned by
     :func:`assign_oracle_tier`, never authored on input, so a non-``None``
@@ -927,7 +937,8 @@ def validate_criterion_gate_refs(
             gate references an unknown criterion id, a deterministic
             criterion's gate fails to compile, a criterion carries an
             author-set ``oracle_tier`` (a non-``None`` tier that is not an
-            accepted recompute match), or a criterion's response clause
+            accepted recompute match), a gated ``HOLDS_FOR_ALL`` clause is
+            quantified ``single``, or a criterion's response clause
             is malformed (e.g. a ``JUDGED`` clause with an empty
             ``jury_reason`` or a ``gate_ref`` naming an unknown gate kind).
     """
@@ -939,9 +950,21 @@ def validate_criterion_gate_refs(
     gate_ids = {g.id for g in gates}
 
     for criterion in criteria:
-        computed = (
-            assign_oracle_tier(criterion.response) if criterion.response is not None else None
-        )
+        response = criterion.response
+        # A universal verb authored as ``single`` while carrying a gate_ref is
+        # the quantifier-smuggling shape: the gate would score one witness and
+        # the criterion would read as proven for all of them.
+        if (
+            response is not None
+            and response.observe is ObserveVerb.HOLDS_FOR_ALL
+            and response.gate_ref is not None
+            and response.quantifier == "single"
+        ):
+            raise ValueError(
+                "gated holds_for_all criterion must use quantifier forall: "
+                f"criterion={criterion.id!r}"
+            )
+        computed = assign_oracle_tier(response) if response is not None else None
         if criterion.oracle_tier is not None and not (
             allow_computed_tier and criterion.oracle_tier == computed
         ):

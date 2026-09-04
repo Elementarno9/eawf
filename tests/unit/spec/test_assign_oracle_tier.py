@@ -15,6 +15,10 @@ Covers the typed criteria CR-1..CR-3 of the FS02 spec:
   kind routes to ``_tier_for_gate_kind``, which raises ``ValueError``
   (substring "gate kind"). A ``gate_ref`` naming a recognised kind instead
   resolves to that kind's tier.
+* ordering (raises): the ``forall``/locus check precedes every tier-resolving
+  branch, so neither a ``gate_ref`` shortcut nor a ``JUDGED`` escalation can
+  resolve a tier for a universal clause observed away from the hypothesis
+  locus.
 """
 
 from __future__ import annotations
@@ -112,6 +116,78 @@ def test_assign_oracle_tier_gate_ref_known_kind_returns_tier() -> None:
     """A gate_ref naming a recognised gate kind resolves to that kind's tier."""
     clause = _clause(ObserveVerb.RETURNS, gate_ref="file_exists")
     assert assign_oracle_tier(clause) is OracleTier.T1_STATIC
+
+
+# --------------------------------------------------------------------------
+# Ordering — the forall/locus check runs before every tier-resolving branch
+# --------------------------------------------------------------------------
+
+
+def test_assign_oracle_tier_forall_gate_ref_non_hypothesis_locus_raises() -> None:
+    """A gate_ref does not bypass the forall locus check.
+
+    The gate kind is recognised, so before the ordering fix this clause
+    resolved to T1_STATIC through the gate shortcut instead of raising.
+    """
+    clause = _clause(
+        ObserveVerb.HOLDS_FOR_ALL,
+        locus=ProofLocus.PYTEST,
+        quantifier="forall",
+        gate_ref="file_exists",
+    )
+    with pytest.raises(ValueError, match="hypothesis"):
+        assign_oracle_tier(clause)
+
+
+def test_assign_oracle_tier_forall_gate_ref_hypothesis_locus_returns_gate_tier() -> None:
+    """A gated forall clause at the hypothesis locus still resolves its gate tier."""
+    clause = _clause(
+        ObserveVerb.HOLDS_FOR_ALL,
+        locus=ProofLocus.HYPOTHESIS,
+        quantifier="forall",
+        gate_ref="file_exists",
+    )
+    assert assign_oracle_tier(clause) is OracleTier.T1_STATIC
+
+
+def test_assign_oracle_tier_forall_unknown_gate_kind_raises_locus_error_first() -> None:
+    """The locus check precedes gate-kind resolution: locus wins the error race."""
+    clause = _clause(
+        ObserveVerb.HOLDS_FOR_ALL,
+        locus=ProofLocus.PYTEST,
+        quantifier="forall",
+        gate_ref="totally-unknown-kind",
+    )
+    with pytest.raises(ValueError, match="hypothesis"):
+        assign_oracle_tier(clause)
+
+
+def test_assign_oracle_tier_forall_judged_non_hypothesis_locus_raises() -> None:
+    """A JUDGED escalation does not bypass the forall locus check either."""
+    clause = _clause(
+        ObserveVerb.JUDGED,
+        locus=ProofLocus.JURY,
+        quantifier="forall",
+        jury_reason="a jury cannot enumerate every input",
+    )
+    with pytest.raises(ValueError, match="hypothesis"):
+        assign_oracle_tier(clause)
+
+
+@pytest.mark.parametrize("verb", list(ObserveVerb))
+def test_assign_oracle_tier_forall_non_hypothesis_locus_raises_for_every_verb(
+    verb: ObserveVerb,
+) -> None:
+    """Total over the verb set: no verb resolves a tier for a misplaced forall."""
+    clause = _clause(
+        verb,
+        locus=ProofLocus.PYTEST,
+        quantifier="forall",
+        jury_reason="auditable" if verb is ObserveVerb.JUDGED else None,
+        gate_ref="file_exists",
+    )
+    with pytest.raises(ValueError, match="hypothesis"):
+        assign_oracle_tier(clause)
 
 
 # --------------------------------------------------------------------------
