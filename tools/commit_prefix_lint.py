@@ -69,6 +69,21 @@ Enforces:
    the active harness is detected; this backstop rejects commits where
    the trailer was hand-deleted).
 
+4. Wave-close bookkeeping rides the wave commit. A ``state``-typed
+   subject that closes exactly one wave — ``[P31-I01] state: close
+   W27`` — is rejected: those close records belong on that wave's own
+   commit, staged and folded in with ``git commit --amend``. A claim
+   batch, an iter close, or a phase close names no single wave and
+   stays a bare ``[P##] state:`` commit.
+
+5. One commit per wave. A commit naming a wave that already has a
+   commit reachable from ``HEAD`` is rejected. Exempt: a commit whose
+   staged paths are all on the state-bookkeeping whitelist (that IS
+   the fold amend), and the ``state`` / ``test`` types (bookkeeping and
+   the managed-golden refresh the snapshot-pairing gate forces into its
+   own paired commit). Genuinely new work appends a reactive wave and
+   commits under its own ``W##`` id.
+
 All checks run as a ``commit-msg``-stage pre-commit hook. The first
 argument is the commit-message file path (pre-commit passes it). The
 linter consults ``git diff --cached --name-only`` for staged paths.
@@ -201,6 +216,16 @@ _STATE_ONLY_PREFIXES = (".ea/store/", ".ea/specs/")
 # ``[P##-W##] docs:`` wave form, which accepts any path.
 _DOCS_BARE_PREFIXES = (".ea/artifacts/",)
 _CLAIMED_PROOF_STATUSES = frozenset({"claimed", "in_progress"})
+
+# A state subject that names exactly one wave AND a close verb is the
+# per-wave close record the fold moved onto the wave commit itself.
+_CLOSE_VERB_RE = re.compile(r"\bclos(?:e|es|ed|ing)\b", re.IGNORECASE)
+_WAVE_TOKEN_RE = re.compile(r"\bW\d{2,}\b")
+# ``state`` is the bookkeeping surface, already gated by the path whitelist;
+# ``test`` carries the managed-golden refresh that the snapshot-pairing gate
+# forces into its own paired commit (the commit-granularity exception).
+_WAVE_COMMIT_CAP_EXEMPT_TYPES = frozenset({"state", "test"})
+_WAVE_LOG_TIMEOUT_SECONDS = 20.0
 
 
 @dataclass(frozen=True)
@@ -599,6 +624,113 @@ def _check_scoped_paths(
     return None
 
 
+def _single_wave_close_rejection(subject: str, *, commit_type: str) -> tuple[int, str] | None:
+    """Reject a state subject whose summary closes exactly one wave.
+
+    Per-wave close records ride the wave commit, so the state-typed subjects
+    left over are the ones that name no single wave: a claim batch, an iter
+    close, a phase close. The bracket prefix is stripped first — the wave a
+    commit is *scoped to* is not a wave it *closes*, so
+    ``[P30-I21-W22] state: close iter + phase`` stays accepted.
+
+    Returns a ``(1, diagnostic)`` rejection naming the wave commit the records
+    belong on, else ``None``.
+    """
+    if commit_type != "state":
+        return None
+    summary = _BRACKET_SCOPE_RE.sub("", subject, count=1)
+    if not _CLOSE_VERB_RE.search(summary):
+        return None
+    waves = sorted(set(_WAVE_TOKEN_RE.findall(summary)))
+    if len(waves) != 1:
+        return None
+    return 1, (
+        f"single-wave close bookkeeping rejected: {subject!r}\n"
+        f"the close records for {waves[0]} ride that wave's own commit: stage "
+        ".ea/state.json (plus the typed stores under .ea/store/) onto the "
+        "cherry-picked wave commit and fold them in with 'git commit --amend', "
+        "instead of writing a separate state commit. A bare '[P##] state:' "
+        "commit stays correct for a claim batch, an iter close, or a phase "
+        "close — none of those names a single wave."
+    )
+
+
+def _wave_grep_terms(ref: _ScopeRef) -> list[str]:
+    """Return the fixed strings that identify *ref*'s wave in a commit message.
+
+    Both bracket spellings are covered because executors emit the long
+    ``[P##-I01-W##]`` form for I01 waves as often as the canonical short one,
+    plus the ``Eawf-Wave`` trailer the default subject style writes.
+    """
+    assert ref.wave_id is not None
+    phase, iter_token, wave_token = ref.wave_id.split("-")
+    terms = [f"[{phase}-{iter_token}-{wave_token}]"]
+    if iter_token == "I01":
+        terms.append(f"[{phase}-{wave_token}]")
+    terms.append(f"{_WAVE_TRAILER_NAME}: {ref.wave_id}")
+    return terms
+
+
+def _prior_wave_commits(terms: list[str], *, repo_root: Path | None) -> list[str]:
+    """Return SHAs reachable from ``HEAD`` whose message carries one of *terms*.
+
+    Scans ``HEAD`` only, never ``--all``: while a wave commit still lives on
+    its worktree branch it must not count as its own predecessor, or every
+    cherry-pick of it would be read as a second commit. Probe failures (git
+    missing, unborn HEAD, timeout) return an empty list, so the cap fails open
+    rather than blocking a commit it cannot reason about.
+    """
+    found: list[str] = []
+    for term in terms:
+        try:
+            proc = subprocess.run(
+                ["git", "log", "HEAD", f"--grep={term}", "-F", "--format=%H", "-n", "1"],
+                cwd=None if repo_root is None else str(repo_root),
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=_WAVE_LOG_TIMEOUT_SECONDS,
+            )
+        except OSError, subprocess.SubprocessError:
+            return []
+        if proc.returncode != 0:
+            continue
+        found.extend(line.strip() for line in proc.stdout.splitlines() if line.strip())
+    return found
+
+
+def _check_wave_commit_cap(
+    *,
+    ref: _ScopeRef | None,
+    commit_type: str,
+    staged: list[str],
+    repo_root: Path | None,
+) -> tuple[int, str] | None:
+    """Cap a wave at one commit, outside the state-bookkeeping fold amend.
+
+    Returns a ``(1, diagnostic)`` rejection when the named wave already has a
+    commit on ``HEAD`` and this one adds deliverable bytes, else ``None``.
+    """
+    if ref is None or ref.wave_id is None:
+        return None
+    if commit_type in _WAVE_COMMIT_CAP_EXEMPT_TYPES:
+        return None
+    if all(_is_state_only_path(path) for path in staged):
+        # The fold amend (and a bare reword, which stages nothing) adds no
+        # deliverable bytes: it folds close bookkeeping into the commit that
+        # already carries the wave.
+        return None
+    prior = _prior_wave_commits(_wave_grep_terms(ref), repo_root=repo_root)
+    if not prior:
+        return None
+    return 1, (
+        f"second commit for wave {ref.wave_id}: {prior[0][:12]} already carries it\n"
+        "one commit per wave: fold this change into the wave commit with "
+        "'git commit --amend', or — when it is genuinely new work — append a "
+        "reactive wave and commit it under that wave's own W## id."
+    )
+
+
 def _extract_subject(text: str) -> str:
     """Return the first non-blank, non-comment line in *text*."""
     for line in text.splitlines():
@@ -786,6 +918,52 @@ def _bracket_form_deprecation(
     return _BRACKET_FORM_DEPRECATION.format(subject=subject)
 
 
+def _check_wave_scope(
+    *,
+    subject: str,
+    text: str,
+    commit_type: str,
+    staged: list[str],
+    managed_state: Mapping[str, Any] | None,
+    state_path: Path | None,
+    repo_root: Path | None,
+    canonical_state_path: Path | None,
+) -> tuple[int, str] | None:
+    """Validate the wave a commit claims, in escalating specificity.
+
+    The two scope carriers must name the same wave; that wave must resolve in
+    managed state and be CLAIMED; and only then does the one-commit-per-wave
+    cap apply — a commit whose wave does not resolve has a more fundamental
+    problem than how many commits that wave already has.
+    """
+    subject_ref = _subject_scope_ref(subject)
+    trailer_ref = _trailer_scope_ref(text)
+    mismatch = _carrier_mismatch(subject_ref, trailer_ref)
+    if mismatch is not None:
+        return mismatch
+    refs = [
+        (origin, ref)
+        for origin, ref in (("subject", subject_ref), ("Eawf-Wave trailer", trailer_ref))
+        if ref is not None
+    ]
+    scope_error = _validate_commit_scope_refs(
+        refs,
+        managed_state=managed_state,
+        state_path=state_path,
+        repo_root=repo_root,
+        commit_type=commit_type,
+        canonical_state_path=canonical_state_path,
+    )
+    if scope_error is not None:
+        return 1, scope_error
+    return _check_wave_commit_cap(
+        ref=subject_ref if subject_ref is not None and subject_ref.wave_id else trailer_ref,
+        commit_type=commit_type,
+        staged=staged,
+        repo_root=repo_root,
+    )
+
+
 def lint(
     message_path: Path,
     staged: list[str],
@@ -795,7 +973,7 @@ def lint(
     subject_style: str | None = None,
     canonical_state_path: Path | None = None,
 ) -> tuple[int, str]:
-    """Run both checks against *message_path* + *staged* paths.
+    """Run every subject, scope, path, cap, and trailer check on one commit.
 
     Returns ``(exit_code, diagnostic)``. A non-zero code means rejection and
     the diagnostic carries the reason; a zero code with a non-empty diagnostic
@@ -831,27 +1009,22 @@ def lint(
     release_annotation = _check_release_annotation(subject)
     if release_annotation is not None:
         return release_annotation
-    subject_ref = _subject_scope_ref(subject)
-    trailer_ref = _trailer_scope_ref(text)
-    mismatch = _carrier_mismatch(subject_ref, trailer_ref)
-    if mismatch is not None:
-        return mismatch
-    refs = [
-        (origin, ref)
-        for origin, ref in (("subject", subject_ref), ("Eawf-Wave trailer", trailer_ref))
-        if ref is not None
-    ]
     commit_type = match.group("type")
-    scope_error = _validate_commit_scope_refs(
-        refs,
+    close_fold = _single_wave_close_rejection(subject, commit_type=commit_type)
+    if close_fold is not None:
+        return close_fold
+    wave_scope = _check_wave_scope(
+        subject=subject,
+        text=text,
+        commit_type=commit_type,
+        staged=staged,
         managed_state=managed_state,
         state_path=state_path,
         repo_root=repo_root,
-        commit_type=commit_type,
         canonical_state_path=canonical_state_path,
     )
-    if scope_error is not None:
-        return 1, scope_error
+    if wave_scope is not None:
+        return wave_scope
     # Bare conventional-commits (no bracket prefix) has no path whitelist;
     # bracketed forms (wave + bare state/docs) route through the
     # scoped-path check, which internally gates on commit_type / is_bare

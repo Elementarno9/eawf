@@ -22,7 +22,7 @@ description: "Run /research → /prep → /audit → /polish → /ship sequentia
    options: `continue` / `defer`. When `true`, advance without this
    flow-level pause. Protected `needs_user`, deletion, push, PR, and
    ship confirmations remain mandatory. Between a wave close and the next stage:
-   After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping (state.json + the typed stores under `.ea/store/`, e.g. audit/decision/evidence) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close. The event store (`.ea/store/event.jsonl`) is gitignored — it is the raw-stdout firehose; never `git add -f` it.
+   After EVERY `eawf wave close`, land the bookkeeping (state.json + the typed stores under `.ea/store/`, e.g. audit/decision/evidence) BEFORE dispatching the next subagent — an inline subagent's checkout can revert uncommitted state, silently dropping the close. For a single wave close that means amending the cherry-picked wave commit — stage those paths and `git commit --amend` — instead of writing a separate state commit; leave `Wave.commit` unpinned so the amended SHA stays derivable. The bare `[P<NN>] state:` commit is reserved for what names no single wave: a claim batch, an iter close, a phase close. The event store (`.ea/store/event.jsonl`) is gitignored — it is the raw-stdout firehose; never `git add -f` it.
 3. On any non-`ok` status (`blocked`, `needs_user`, `failed`,
    `partial`), short-circuit with the failing step's repair commands.
 

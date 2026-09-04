@@ -9,7 +9,7 @@ This repo is managed by eawf, an agent-driven workflow. Work nests as **phase** 
 Reality lives in ``.ea/state.json``, not here: this file carries the rules, ``eawf status`` carries the current position.
 
 <!-- END EAWF:managed id=project-orientation -->
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.11 hash=9a6aafd491fad492 -->
+<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.12 hash=0ff2ad22299d4262 -->
 ## Non-negotiable rules (core)
 
 The rules below apply to every eawf-managed project. Each rule with a non-trivial body has an expansion block immediately following.
@@ -47,7 +47,7 @@ The rules below apply to every eawf-managed project. Each rule with a non-trivia
 31. **Comment economy.** See ``comment-economy``.
 32. **Decisions are surfaced, not assumed.** See ``orchestrator-decision-surface``.
 33. **A new gate proves itself and sunsets.** See ``gate-fire-proof-sunset``.
-34. **One commit per deliverable.** See ``commit-granularity``.
+34. **One commit per wave and per deliverable.** See ``commit-granularity``.
 
 <!-- END EAWF:managed id=non-negotiable-rules -->
 <!-- BEGIN EAWF:managed id=state-vs-specs version=1.2 hash=b31103e9ebf5191f -->
@@ -268,8 +268,8 @@ Verdicts MUST use ``AgentReportVerdict`` exactly: ``pass``, ``pass-with-followup
 <!-- BEGIN EAWF:managed id=gate-fire-proof-sunset version=1.0 hash=4a0a7685adec45f5 -->
 `gate-fire-proof-sunset` — A new gate ships with a test proving it reds on a real defect, and sunsets at phase close if it never fired. Full text: [docs/rules/gate-fire-proof-sunset.md](docs/rules/gate-fire-proof-sunset.md)
 <!-- END EAWF:managed id=gate-fire-proof-sunset -->
-<!-- BEGIN EAWF:managed id=commit-granularity version=1.0 hash=ab9ee64e45965ae3 -->
-`commit-granularity` — One commit per deliverable, with its tests; a golden refresh rides the change that caused it. Full text: [docs/rules/commit-granularity.md](docs/rules/commit-granularity.md)
+<!-- BEGIN EAWF:managed id=commit-granularity version=1.1 hash=df917983dc831b9e -->
+`commit-granularity` — One commit per wave and per deliverable; wave-close bookkeeping rides the wave commit, and a golden refresh rides its cause. Full text: [docs/rules/commit-granularity.md](docs/rules/commit-granularity.md)
 <!-- END EAWF:managed id=commit-granularity -->
 <!-- BEGIN EAWF:managed id=anti-patterns version=1.2 hash=d92fc4c83b8d1338 -->
 ## Anti-patterns

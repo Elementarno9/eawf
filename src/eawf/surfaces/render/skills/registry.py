@@ -73,12 +73,17 @@ _GOTCHA_NO_EAWF_IN_WORKTREE = (
 )
 
 _GOTCHA_STATE_BOOKKEEPING = (
-    "After EVERY `eawf wave close`, commit the `[P<NN>] state:` bookkeeping "
-    "(state.json + the typed stores under `.ea/store/`, e.g. "
-    "audit/decision/evidence) BEFORE dispatching the next subagent — an "
-    "inline subagent's checkout can revert uncommitted state, silently "
-    "dropping the close. The event store (`.ea/store/event.jsonl`) is "
-    "gitignored — it is the raw-stdout firehose; never `git add -f` it."
+    "After EVERY `eawf wave close`, land the bookkeeping (state.json + the "
+    "typed stores under `.ea/store/`, e.g. audit/decision/evidence) BEFORE "
+    "dispatching the next subagent — an inline subagent's checkout can revert "
+    "uncommitted state, silently dropping the close. For a single wave close "
+    "that means amending the cherry-picked wave commit — stage those paths and "
+    "`git commit --amend` — instead of writing a separate state commit; leave "
+    "`Wave.commit` unpinned so the amended SHA stays derivable. The bare "
+    "`[P<NN>] state:` commit is reserved for what names no single wave: a claim "
+    "batch, an iter close, a phase close. The event store "
+    "(`.ea/store/event.jsonl`) is gitignored — it is the raw-stdout firehose; "
+    "never `git add -f` it."
 )
 
 _GOTCHA_FULL_TREE_GAUNTLET = (
@@ -234,7 +239,11 @@ PLANNED-queue state:
    advances — because `vcs.conventions.subject_style` defaults to
    `trailer`. The `[P<NN>-W<NN>]` prefix form still lands, with a
    deprecation warning; the `[P<NN>] state:` bookkeeping commit keeps
-   its bracket. {_GOTCHA_RECONCILE_FILE_SCOPES} Then:
+   its bracket. One wave is one commit: the close bookkeeping amends the
+   cherry-picked wave commit rather than landing as a separate state
+   commit, and a second code commit for the same wave is rejected by the
+   commit lint — append a reactive wave and commit under its own
+   `W<NN>` id instead. {_GOTCHA_RECONCILE_FILE_SCOPES} Then:
    {_GOTCHA_STATE_BOOKKEEPING}
 6. Validate the rendered plan with `eawf plan show --md`; wave tags
    and bucket roll-ups must match state.

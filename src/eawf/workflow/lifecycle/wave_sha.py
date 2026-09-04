@@ -756,7 +756,15 @@ PinClassification = tuple[DriftKind | Literal["unpinned_derivable"], str | None,
 
 
 def _classify_unpinned(candidate_shas: list[str]) -> PinClassification:
-    """Classify one closed wave with no stored commit."""
+    """Classify one closed wave with no stored commit.
+
+    Deliberately unpinned is the normal case since wave-close bookkeeping was
+    folded into the wave commit: the fold amends the cherry-picked commit to
+    carry ``state.json``, which rewrites its SHA, so any pin taken at close
+    time would immediately be stale. The single first-parent candidate that
+    ``_candidate_shas`` finds by subject prefix / ``Eawf-Wave`` trailer is the
+    amended commit, and ``unpinned_derivable`` keeps it out of the drift set.
+    """
     if len(candidate_shas) == 1:
         return "unpinned_derivable", candidate_shas[0], True
     if len(candidate_shas) > 1:
@@ -941,6 +949,11 @@ def detect_git_state_drift(
 
     Waves whose status is not CLOSED are ignored: only closed waves
     have a stable expectation about which commit anchors them.
+
+    A closed wave with no pin is NOT drift whenever the subject scan
+    still finds its commit — the shape every wave takes now that close
+    bookkeeping is folded into the wave commit by amend. Only case 3
+    (nothing in history carries the wave) is a real ``closed_no_pin``.
 
     Acknowledged historical drifts (squashed / cherry-pick-twin / lost
     commits that the operator has reviewed and accepted via

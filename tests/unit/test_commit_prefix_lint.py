@@ -31,6 +31,18 @@ def mod():
     return _load_module()
 
 
+@pytest.fixture(autouse=True)
+def _no_prior_wave_commits(mod, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default every case to a wave with no commit yet on ``HEAD``.
+
+    Without this the one-commit-per-wave cap would shell out to the real
+    repository, where fixture subjects such as ``[P14-W02]`` genuinely exist
+    on trunk — every unrelated case would start failing as history grows. The
+    cap's own cases re-patch this to model a wave that already has a commit.
+    """
+    monkeypatch.setattr(mod, "_prior_wave_commits", lambda *_a, **_kw: [])
+
+
 _CLAUDE_TRAILER = "\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n"
 _CODEX_TRAILER = "\n\nCo-Authored-By: Codex <noreply@openai.com>\n"
 
@@ -116,8 +128,13 @@ def test_accepts_bare_state_type_commit(tmp_path: Path, mod) -> None:
 
 def test_accepts_bare_state_type_commit_with_iter_component(tmp_path: Path, mod) -> None:
     """P26-W23: ``[P##-I##] state: ...`` accepted (the -CORE suffix is retired);
-    iter form valid for type=state."""
-    msg = _write_msg(tmp_path, "[P26-I02] state: close W01\n")
+    iter form valid for type=state.
+
+    D54 narrowed the summary this case may carry: the iter-scoped bracket is
+    still accepted, but a summary that closes one named wave now belongs on
+    that wave's commit, so the claim-batch summary is the accepted shape.
+    """
+    msg = _write_msg(tmp_path, "[P26-I02] state: claim the first wave batch\n")
     code, diag = mod.lint(msg, [".ea/state.json"])
     assert code == 0, diag
 
@@ -1222,3 +1239,245 @@ def test_trailer_default_main_prints_the_warning_and_exits_zero(
 
     assert exit_code == 0
     assert "deprecated bracket-prefix wave subject" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# D54 — wave-close bookkeeping rides the wave commit, one commit per wave.
+#
+# The per-wave close record used to land as its own ``[P##-I##] state: close
+# W##`` commit, which is why P30 shipped 1,036 commits for 525 waves. Both
+# halves of the fold are pinned here: the state subject that closes one named
+# wave is rejected, and a wave that already has a commit cannot take a second
+# one outside the state-only amend that folds the bookkeeping in.
+# ---------------------------------------------------------------------------
+
+_STATE_PATHS = [".ea/state.json", ".ea/store/evidence.jsonl"]
+
+
+def _prior(mod, monkeypatch: pytest.MonkeyPatch, shas: list[str]) -> list[list[str]]:
+    """Model a wave that already carries *shas*; record the grep terms used."""
+    seen: list[list[str]] = []
+
+    def _lookup(terms: list[str], **_kwargs) -> list[str]:
+        seen.append(terms)
+        return shas
+
+    monkeypatch.setattr(mod, "_prior_wave_commits", _lookup)
+    return seen
+
+
+def test_close_rides_wave_rejects_single_wave_close_state_subject(tmp_path: Path, mod) -> None:
+    """CR-01: ``[P31-I01] state: close W27`` is rejected — it rides W27's commit."""
+    msg = _write_msg(tmp_path, "[P31-I01] state: close W27\n")
+    code, diag = mod.lint(msg, _STATE_PATHS)
+    assert code == 1
+    assert "single-wave close bookkeeping rejected" in diag
+
+
+def test_close_rides_wave_remedy_names_the_wave_commit(tmp_path: Path, mod) -> None:
+    """CR-01: the remedy names the wave, its commit, and the amend that folds it."""
+    msg = _write_msg(tmp_path, "[P31-I01] state: close W27\n")
+    _code, diag = mod.lint(msg, _STATE_PATHS)
+    assert "W27" in diag
+    assert "wave commit" in diag
+    assert "git commit --amend" in diag
+
+
+def test_close_rides_wave_accepts_claim_batch_state_subject(tmp_path: Path, mod) -> None:
+    """CR-01: a claim batch names no single wave, so it stays its own commit."""
+    msg = _write_msg(tmp_path, "[P31] state: claim the fourth executable wave batch\n")
+    code, diag = mod.lint(msg, _STATE_PATHS)
+    assert code == 0, diag
+
+
+def test_close_rides_wave_accepts_batch_close_state_subject(tmp_path: Path, mod) -> None:
+    """CR-01: closing a *batch* carries a close verb but names no wave token."""
+    msg = _write_msg(tmp_path, "[P31] state: close the third executable wave batch\n")
+    code, diag = mod.lint(msg, _STATE_PATHS)
+    assert code == 0, diag
+
+
+def test_close_rides_wave_accepts_iter_close_state_subject(tmp_path: Path, mod) -> None:
+    """CR-01: the iter + phase close subject is the surviving bare-state form."""
+    msg = _write_msg(tmp_path, "[P31] state: close iter + phase (audit=A-P31)\n")
+    code, diag = mod.lint(msg, _STATE_PATHS)
+    assert code == 0, diag
+
+
+def test_close_rides_wave_accepts_multi_wave_close_state_subject(tmp_path: Path, mod) -> None:
+    """CR-01 boundary: two wave tokens is a batch, not a single-wave close."""
+    msg = _write_msg(tmp_path, "[P31-I01] state: close W27 and W28\n")
+    code, diag = mod.lint(msg, _STATE_PATHS)
+    assert code == 0, diag
+
+
+def test_close_rides_wave_ignores_the_bracket_scope_wave(tmp_path: Path, mod) -> None:
+    """CR-01 boundary: a wave-scoped bracket is not a wave the summary closes."""
+    msg = _write_msg(tmp_path, "[P30-I21-W22] state: close iter + phase (audit=A-x)\n")
+    code, diag = mod.lint(msg, _STATE_PATHS)
+    assert code == 0, diag
+
+
+def test_close_rides_wave_accepts_non_close_verb_state_subject(tmp_path: Path, mod) -> None:
+    """CR-01 boundary: appending a single wave is not closing it."""
+    msg = _write_msg(tmp_path, "[P31] state: append W45 for the trailer commit form\n")
+    code, diag = mod.lint(msg, _STATE_PATHS)
+    assert code == 0, diag
+
+
+def test_close_rides_wave_close_check_skips_non_state_types(tmp_path: Path, mod) -> None:
+    """CR-01 boundary: only ``type == 'state'`` carries close bookkeeping."""
+    msg = _write_msg(tmp_path, "[P31-W27] docs: close W27 out in the open\n")
+    code, diag = mod.lint(msg, ["docs/notes.md"])
+    assert code == 0, diag
+
+
+def test_close_rides_wave_rejects_single_wave_close_on_trailer_form(tmp_path: Path, mod) -> None:
+    """CR-01: the trailer subject style carries the same fold rule."""
+    msg = _write_msg(
+        tmp_path,
+        "state: close W27\n\nEawf-Wave: P31-I01-W27\n",
+    )
+    code, diag = mod.lint(msg, _STATE_PATHS)
+    assert code == 1
+    assert "single-wave close bookkeeping rejected" in diag
+
+
+def test_close_rides_wave_rejects_second_code_commit_for_a_wave(
+    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CR-01: a wave that already has a commit cannot take a second code commit."""
+    seen = _prior(mod, monkeypatch, ["a" * 40])
+    msg = _write_msg(tmp_path, "[P31-W27] fix: a second bite at the same wave\n")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
+    assert code == 1
+    assert "second commit for wave P31-I01-W27" in diag
+    assert "aaaaaaaaaaaa" in diag
+    assert "reactive wave" in diag
+    assert seen == [["[P31-I01-W27]", "[P31-W27]", "Eawf-Wave: P31-I01-W27"]]
+
+
+def test_close_rides_wave_accepts_the_first_commit_for_a_wave(
+    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CR-01 boundary: no prior commit for the wave -> the cap does not fire."""
+    _prior(mod, monkeypatch, [])
+    msg = _write_msg(tmp_path, "[P31-W27] fix: the one and only commit\n")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
+    assert code == 0, diag
+
+
+def test_close_rides_wave_accepts_the_state_only_fold_amend(
+    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CR-01: the amend that folds the bookkeeping in stages only state paths."""
+    _prior(mod, monkeypatch, ["a" * 40])
+    msg = _write_msg(tmp_path, "[P31-W27] fix: the wave deliverable\n")
+    code, diag = mod.lint(msg, _STATE_PATHS)
+    assert code == 0, diag
+
+
+def test_close_rides_wave_accepts_an_amend_that_stages_nothing(
+    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CR-01 boundary (empty): a reword amend stages no path and is not capped."""
+    _prior(mod, monkeypatch, ["a" * 40])
+    msg = _write_msg(tmp_path, "[P31-W27] fix: reworded subject\n")
+    code, diag = mod.lint(msg, [])
+    assert code == 0, diag
+
+
+def test_close_rides_wave_cap_exempts_the_paired_golden_refresh(
+    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CR-01: the ``test:`` golden refresh the pairing gate forces stays legal."""
+    _prior(mod, monkeypatch, ["a" * 40])
+    msg = _write_msg(tmp_path, "[P31-W27] test: repin the goldens the fix moved\n")
+    code, diag = mod.lint(msg, ["tests/golden/agents_md/core_only.md"])
+    assert code == 0, diag
+
+
+def test_close_rides_wave_cap_reads_the_wave_from_the_trailer(
+    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CR-01: with no bracket prefix the cap resolves the wave from the trailer."""
+    seen = _prior(mod, monkeypatch, ["b" * 40])
+    msg = _write_msg(tmp_path, "fix: trailer-form second bite\n\nEawf-Wave: P31-I02-W03\n")
+    code, diag = mod.lint(msg, ["src/eawf/x.py"])
+    assert code == 1
+    assert "second commit for wave P31-I02-W03" in diag
+    assert seen == [["[P31-I02-W03]", "Eawf-Wave: P31-I02-W03"]]
+
+
+def test_close_rides_wave_cap_skips_a_commit_naming_no_wave(
+    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CR-01 boundary: a phase-scoped docs commit names no wave to cap."""
+    seen = _prior(mod, monkeypatch, ["a" * 40])
+    msg = _write_msg(tmp_path, "[P31] docs: promote the finalization brief\n")
+    code, diag = mod.lint(msg, [".ea/artifacts/research/brief.md"])
+    assert code == 0, diag
+    assert seen == []
+
+
+# The autouse stub above replaces ``_prior_wave_commits`` for the lint-level
+# cases; the probe's own cases load an unstubbed module so they exercise the
+# real lookup with only ``subprocess.run`` swapped out.
+
+
+def test_close_rides_wave_prior_commits_fails_open_when_git_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CR-01 error path: an OSError from the probe yields no predecessors."""
+    probe = _load_module()
+
+    def _boom(*_args, **_kwargs):
+        raise OSError("binary not on PATH")
+
+    monkeypatch.setattr(probe.subprocess, "run", _boom)
+    assert probe._prior_wave_commits(["[P31-W27]"], repo_root=None) == []
+
+
+def test_close_rides_wave_prior_commits_fails_open_on_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CR-01 error path: a timed-out probe yields no predecessors."""
+    probe = _load_module()
+
+    def _slow(*_args, **_kwargs):
+        raise probe.subprocess.TimeoutExpired(cmd="log", timeout=1.0)
+
+    monkeypatch.setattr(probe.subprocess, "run", _slow)
+    assert probe._prior_wave_commits(["[P31-W27]"], repo_root=None) == []
+
+
+def test_close_rides_wave_prior_commits_skips_a_non_zero_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CR-01 error path: an unborn HEAD exits non-zero and contributes nothing."""
+    probe = _load_module()
+    monkeypatch.setattr(
+        probe.subprocess,
+        "run",
+        lambda *_a, **_kw: SimpleNamespace(returncode=128, stdout="", stderr="no HEAD"),
+    )
+    assert probe._prior_wave_commits(["[P31-W27]"], repo_root=None) == []
+
+
+def test_close_rides_wave_prior_commits_returns_the_matched_sha(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CR-01: a matching probe returns the SHA the diagnostic quotes."""
+    probe = _load_module()
+    monkeypatch.setattr(
+        probe.subprocess,
+        "run",
+        lambda *_a, **_kw: SimpleNamespace(returncode=0, stdout="c" * 40 + "\n", stderr=""),
+    )
+    assert probe._prior_wave_commits(["[P31-W27]"], repo_root=None) == ["c" * 40]
+
+
+def test_close_rides_wave_grep_terms_drop_the_short_form_off_i01(mod) -> None:
+    """CR-01 boundary: only I01 waves have a short bracket spelling to cover."""
+    ref = mod._ScopeRef(phase_id="P31", iter_id="P31-I02", wave_id="P31-I02-W03")
+    assert mod._wave_grep_terms(ref) == ["[P31-I02-W03]", "Eawf-Wave: P31-I02-W03"]

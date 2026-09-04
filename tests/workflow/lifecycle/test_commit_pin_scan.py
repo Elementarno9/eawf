@@ -639,9 +639,15 @@ def test_commit_prefix_lint_wave_proof_branch_unchanged(tmp_path: Path) -> None:
     assert "canonical status 'pending'" in diag
 
 
-def test_commit_prefix_lint_wave_proof_branch_accepts_claimed_wave(tmp_path: Path) -> None:
+def test_commit_prefix_lint_wave_proof_branch_accepts_claimed_wave(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The wave-proof branch still accepts a wave commit with a CLAIMED canonical wave."""
     lint = _load_commit_prefix_lint()
+    # ``[P28-I01-W02]`` is a real subject on this repo's trunk, so the D54
+    # one-commit-per-wave cap would fire on the live history and mask the
+    # wave-proof verdict this case is about.
+    monkeypatch.setattr(lint, "_prior_wave_commits", lambda *_a, **_kw: [])
     state_path = _write_checkpoint_hierarchy_state(tmp_path, wave_status="claimed")
     message = _write_commit_message(tmp_path, "[P28-I01-W02] feat: wave deliverable")
 
