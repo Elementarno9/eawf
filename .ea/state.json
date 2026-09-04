@@ -13465,15 +13465,15 @@
       "claimed_wave_ids": [
         "P31-I01-W36"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-04T12:20:39.940133Z",
       "id": "SES-20260903T175639.130305Z-executor-claude-ba981e46-d198-48fb-b629-a7b7ea469400",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W36",
       "started_at": "2026-09-03T17:56:39.130305Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -17335,9 +17335,7 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260903T175639.130305Z-executor-claude-ba981e46-d198-48fb-b629-a7b7ea469400"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [],
     "iter_id": "P31-I01",
     "phase_id": "P31",
@@ -18495,6 +18493,72 @@
       "status": "active",
       "superseded_by": null,
       "title": "Propose P33-P37 shells and apply the train hygiene defaults"
+    },
+    "D49": {
+      "alternatives": [
+        "Remeasure all eleven at dev1 with recorded benchmarks",
+        "Freeze all eleven as proposal defaults and drop the remeasure obligation",
+        "Defer the whole remeasure to dev2"
+      ],
+      "consequences": [],
+      "created_at": "2026-09-04T12:26:05.034412Z",
+      "description": null,
+      "id": "D49",
+      "obsoleted_at": null,
+      "rationale": "Packet file 00 keeps eleven numeric configuration defaults as proposal defaults until remeasured at dev1, and no P31 wave owned the remeasure, so dev1 would have closed with the obligation silently unmet. Only four of the eleven are read by a dev1 gate: release.target_timeout_seconds, release.target_retry_limit, runtime.default_wall_seconds and runtime.lost_grace_seconds. Those four get a recorded benchmark in one append wave; the other seven are annotated unmeasured in the packet rather than carried as if measured. A number labelled unmeasured is safe; a default that reads as measured is not, and eleven benchmarks nobody consumes would be substrate without a producer.",
+      "scope_id": "P31",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Benchmark the four dev1 gate-read defaults; annotate seven unmeasured"
+    },
+    "D50": {
+      "alternatives": [
+        "Keep D41's exclusion of codex rows and revisit at dev2",
+        "Amend MEAS-055 to admit the summand for the codex provider"
+      ],
+      "consequences": [],
+      "created_at": "2026-09-04T12:26:05.980222Z",
+      "description": null,
+      "id": "D50",
+      "obsoleted_at": null,
+      "rationale": "The codex telemetry source adds reasoning_output_tokens to output_tokens; packet row MEAS-055 says reasoning is a subset of output and never a summand, and the repo-authored fixtures could not adjudicate because they encode the code's assumption. Six real codex rollouts recorded on 2026-09-03 on the operator's machine (model gpt-5.6-sol) carry the vendor's own total_tokens, and in every one total_tokens equals input_tokens plus output_tokens with reasoning_output_tokens strictly inside output_tokens. MEAS-055 is right. The addition is removed and the codex fixtures regenerated in one XS wave before W18 records the dev1 baseline; D41's codex-row exclusion lifts once that wave closes.",
+      "scope_id": "P31",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Treat codex reasoning tokens as a subset of output, not a summand"
+    },
+    "D51": {
+      "alternatives": [
+        "Keep W16 as ratified and record the retirement as a backlog row",
+        "Retire the jail at dev1 and skip the fix"
+      ],
+      "consequences": [],
+      "created_at": "2026-09-04T12:26:06.883710Z",
+      "description": null,
+      "id": "D51",
+      "obsoleted_at": null,
+      "rationale": "REL-034 requires the two Linux jail fixes not to extend the self-built jail's life past the cutover retirement in V07-RUN. W16's ratified criteria only assert that the wave diff adds no new jail feature, which constrains the fix commit and nothing after it. A test that reds once the jail backend is removed converts the retirement from an intention into a tripwire, matching the gate-fire-proof-sunset rule that a sunset depending on a human remembering does not sunset. Lands as one more criterion and gate on W16 through spec sync.",
+      "scope_id": "P31",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Add a jail-expiry tripwire to the W16 Linux fix"
+    },
+    "D52": {
+      "alternatives": [
+        "Ship all twenty skills at dev4 and drive the dev3 canary by hand",
+        "Cut dev4 on the epoch-1 path and tag a separate canary-only release",
+        "Defer all four to the P33 and P34 prep"
+      ],
+      "consequences": [],
+      "created_at": "2026-09-04T12:26:07.684682Z",
+      "description": null,
+      "id": "D52",
+      "obsoleted_at": null,
+      "rationale": "Four planning questions the checkpoint outline left open. The three lifecycle skills that drive the native Task, Run, candidate and Batch path (/dispatch, /integrate, /verify) ship at dev3 with that path so the canary milestone is driven by production surfaces rather than raw RPC; the other seventeen catalog skills ship at dev4 (SKILL-043, P33 cluster C21). The 0.7.0.dev4 release is itself the REL-032 canary-milestone release, so the rehearsal contains the checkpoint it closes and no throwaway tag is cut. CLAUDE.md gains its missing disposition row: a generated, gitignored one-line import of the rendered policy projection (SURF-175). Packet decision 38 reads as an uncertified-per-runtime host fact under RULE-125, and file 64's single-projection statement now cites it in that form.",
+      "scope_id": "P33",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Slice the skill catalog at dev3; the dev4 tag is the canary release"
     }
   },
   "dispatch_paused": false,
@@ -34158,7 +34222,9 @@
         "P31-I01-W36",
         "P31-I01-W37",
         "P31-I01-W38",
-        "P31-I01-W39"
+        "P31-I01-W39",
+        "P31-I01-W40",
+        "P31-I01-W41"
       ]
     },
     "P32-I01": {
@@ -35588,7 +35654,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-03T18:16:17.844269Z",
+  "updated_at": "2026-09-04T12:29:44.567718Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {},
@@ -148586,9 +148652,9 @@
     "P31-I01-W08": {
       "agent_role": "executor",
       "blocks": [
-        "P31-I01-W18",
         "P31-I01-W26",
-        "P31-I01-W25"
+        "P31-I01-W25",
+        "P31-I01-W18"
       ],
       "claim_session_id": null,
       "claimed_at": null,
@@ -150045,6 +150111,25 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/runtime/sandbox/test_jail_expiry.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-05",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P31-I01-W16",
@@ -150121,6 +150206,22 @@
           "response": null,
           "text": "REL-034 acceptance: the Linux real-host gate passes at dev1; a CI job on ubuntu-24.04 runs the real-bwrap launch test and exits 0, and the wave diff adds no new jail feature; cli exit asserted via ci.yaml in tests/lint/test_phase_ci_gates.py",
           "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-05"
+          ],
+          "id": "CR-04",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/runtime/sandbox/test_jail_expiry.py exits 0 while the jail backend exists and fails by design once it is deleted",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "REL-034 sunset: tests/runtime/sandbox/test_jail_expiry.py exits 0 while the Linux jail backend module exists and the TMPDIR fix and the tmpfs-mask fix are reachable only through it, and raises AssertionError once the cutover removes the self-built jail per RUN-018 to RUN-020; pytest",
+          "waiver_reason": null
         }
       ],
       "title": "Fix the Linux jail defects and gate Linux as a real host",
@@ -150132,9 +150233,9 @@
       "agent_role": "executor",
       "blocks": [
         "P31-I01-W34",
-        "P31-I01-W18",
         "P31-I01-W26",
-        "P31-I01-W25"
+        "P31-I01-W25",
+        "P31-I01-W18"
       ],
       "claim_session_id": null,
       "claimed_at": null,
@@ -150358,7 +150459,8 @@
       "deps": [
         "P31-I01-W17",
         "P31-I01-W34",
-        "P31-I01-W08"
+        "P31-I01-W08",
+        "P31-I01-W41"
       ],
       "description": "REL-033 first measurement. Run eawf bench turn-cost (W34) over the W17 producer against the telemetry rows W08 enables; record the dev1 baseline under .ea/artifacts/research with fixture, harness revision, runtime/model tuple, p50, p90, the sample sizes (completed units, the 28 priced rows, unpriced rows, excluded codex rows) and the regression threshold frozen at 0.20 before any second measurement (MEAS-034); tabulate the proposal numeric defaults dev1 remeasures beside measured values.",
       "dispatch_history": [],
@@ -153349,8 +153451,8 @@
     "P31-I01-W34": {
       "agent_role": "executor",
       "blocks": [
-        "P31-I01-W18",
-        "P31-I01-W25"
+        "P31-I01-W25",
+        "P31-I01-W18"
       ],
       "claim_session_id": null,
       "claimed_at": null,
@@ -154477,6 +154579,275 @@
         }
       ],
       "title": "Make the pane focus ring visible and fix the muted contrast",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W40": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap revise; typed criteria land via spec sync",
+        "waived_at": "2026-09-04T12:29:25.717309Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "D49. Packet file 00 keeps eleven numeric configuration defaults as proposal defaults until remeasured at dev1 and no wave owned the remeasure. Produce one benchmark artifact under .ea/artifacts/research measuring the four defaults a dev1 gate reads (release target timeout and retry limit from phase-release run history; runtime wall seconds and lost-grace seconds from telemetry.db) with sample size p50 and p90 each, listing the other seven as unmeasured; then annotate the packet config contract.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/artifacts/research",
+        "tests/unit/platform/artifacts",
+        "src/eawf/platform/artifacts"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/platform/artifacts/test_dev1_config_defaults_benchmark.py",
+              "-k",
+              "measured"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/platform/artifacts/test_dev1_config_defaults_benchmark.py",
+              "-k",
+              "unmeasured"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P31-I01-W40",
+      "intent": {
+        "desired_outcome": "A benchmark artifact records measured p50 and p90 with sample size for the four defaults a dev1 gate reads and marks the other seven unmeasured so no default reads as measured without evidence",
+        "evidence_refs": [
+          ".ea/local/research/2026-08-04-v07-proposal/00-authority-scope-and-decisions.md",
+          ".ea/local/research/2026-09-03-v07-finalization/15-decision-register.md"
+        ],
+        "planned_steps": [
+          "Extract session durations and heartbeat gaps from telemetry.db and the phase-release run durations and retry counts from CI history for the four measured defaults",
+          "Write the benchmark artifact with sample size p50 and p90 per measured row and an unmeasured row per remaining default",
+          "Add tests/unit/platform/artifacts/test_dev1_config_defaults_benchmark.py validating the measured rows and the unmeasured rows and that the two sets partition the eleven",
+          "Annotate the packet configuration contract in file 00 from the artifact"
+        ],
+        "priority_rationale": "The packet rule that a quantitative gate is remeasured at the checkpoint that consumes it would otherwise be broken at the very first checkpoint.",
+        "problem": "Eleven configuration defaults are labelled proposal defaults until remeasured at dev1 and nothing remeasures them so dev1 would close with numbers that read as measured and are not",
+        "risks": [
+          "The telemetry sample carries few real runtime rows so p90 may rest on a small sample which the artifact must state",
+          "The packet lives under gitignored local research so the annotation is not reviewable in the PR and the artifact is the reviewable record"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-09-04T12:29:25.860335Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/platform/artifacts/test_dev1_config_defaults_benchmark.py -k measured exits 0 with four measured rows each carrying sample size p50 and p90",
+          "oracle_tier": null,
+          "quality_dimension": "performance_efficiency",
+          "required": true,
+          "response": null,
+          "text": "D49: the benchmark artifact under .ea/artifacts/research records, for each of the four dev1 gate-read defaults (release.target_timeout_seconds, release.target_retry_limit, runtime.default_wall_seconds, runtime.lost_grace_seconds), the sample size, p50 and p90 measured from repository telemetry, actuals and CI release-run history, and the loader validates the artifact rows; pytest tests/unit/platform/artifacts/test_dev1_config_defaults_benchmark.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/platform/artifacts/test_dev1_config_defaults_benchmark.py -k unmeasured exits 0 with seven unmeasured rows and no leaf in both sets",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "D49: the same artifact lists the seven defaults no dev1 gate reads (planning.max_revision_attempts, runtime.global_capacity, runtime.per_provider_capacity, runtime.max_task_attempts, delivery.max_repair_tasks, delivery.max_audit_cycles, activity.query_page_size) as unmeasured with their proposal value, and the test validates that the measured and unmeasured sets partition the eleven exactly; pytest tests/unit/platform/artifacts/test_dev1_config_defaults_benchmark.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Benchmark the four dev1 gate-read defaults and annotate the rest",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W41": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W18"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap revise; typed criteria land via spec sync",
+        "waived_at": "2026-09-04T12:29:26.534353Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "D50 and MEAS-055. codex_session.py folds total_output_tokens as output_tokens plus reasoning_output_tokens; six real codex rollouts show the vendor total equals input plus output with reasoning inside output, so every codex output column is inflated. Fold output_tokens alone, keep reasoning_output_tokens on its own field, regenerate the two codex fixtures with the subset relation and validate the counter tests against them. Lands before W18 records the dev1 baseline.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/observability/telemetry/sources/codex_session.py",
+        "tests/unit/test_sources_codex_opencode.py",
+        "tests/unit/test_codex_rollout_counters.py",
+        "tests/fixtures/telemetry/codex"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_sources_codex_opencode.py",
+              "-k",
+              "codex"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_codex_rollout_counters.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P31-I01-W41",
+      "intent": {
+        "desired_outcome": "The codex fold returns output_tokens alone as total_output_tokens and records reasoning_output_tokens separately and the fixtures validate the vendor subset relation",
+        "evidence_refs": [
+          ".ea/local/research/2026-08-04-v07-proposal/67-measurement-and-instrumentation.md",
+          ".ea/local/spikes/2026-09-03-measurement-reality/observations/findings.md"
+        ],
+        "planned_steps": [
+          "Change the codex fold so total_output_tokens returns output_tokens alone and reasoning_output_tokens is recorded on its own field",
+          "Regenerate the two codex rollout fixtures so total_tokens equals input_tokens plus output_tokens with non-zero reasoning inside output",
+          "Update the codex counter tests to validate the regenerated fixtures and add a fold case with non-zero reasoning"
+        ],
+        "priority_rationale": "W18 freezes the dev1 verification-cost baseline and D41 excludes codex rows only until this is settled so the fix must land first.",
+        "problem": "The codex telemetry fold adds reasoning_output_tokens to output_tokens although the vendor already counts reasoning inside output_tokens so every codex output column is inflated",
+        "risks": [
+          "Existing telemetry rows written with the inflated column stay as recorded and the artifact for W18 must state which rows predate the fix"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-09-04T12:29:26.652391Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/test_sources_codex_opencode.py -k codex exits 0 with a rollout whose reasoning tokens are non-zero folding to output_tokens alone",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "D50 and MEAS-055: the codex session fold returns total_output_tokens equal to the output_tokens of the last token_count event, never output_tokens plus reasoning_output_tokens, and records reasoning_output_tokens on its own field; pytest tests/unit/test_sources_codex_opencode.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/test_codex_rollout_counters.py exits 0 against fixtures whose total_tokens equals input_tokens plus output_tokens",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "D50: tests/unit/test_codex_rollout_counters.py exits 0 against the regenerated codex rollout fixtures under tests/fixtures/telemetry/codex, whose vendor total_tokens equals input_tokens plus output_tokens with reasoning_output_tokens non-zero and inside output_tokens; pytest",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Stop summing codex reasoning tokens into output tokens",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
