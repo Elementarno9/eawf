@@ -17,7 +17,7 @@ The wire contract has three pinned layers:
   Pydantic models for ``daemon.ping`` / ``daemon.status`` /
   ``daemon.shutdown`` carry ``extra="forbid"`` and a frozen field set.
 
-The socket-level integration suite (``tests/daemon/test_scaffolding.py``)
+The socket-level integration suite (``tests/integration/runtime/daemon/test_scaffolding.py``)
 exercises these end to end over a real UDS; this suite pins the schemas
 *structurally* so a model/field/error-code drift fails without booting a
 server.

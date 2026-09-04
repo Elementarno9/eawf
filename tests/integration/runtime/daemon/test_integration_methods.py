@@ -12,7 +12,7 @@ import pytest
 from eawf.kernel.state.enums import DependencyStage, WaveIntegrationKind
 from eawf.kernel.state.models import State, wave_dependency_key
 from eawf.runtime.daemon.methods.integration import adopt, set_dependency_barrier
-from tests.daemon.test_close_lock_split import (
+from tests.integration.runtime.daemon.test_close_lock_split import (
     _WAVE,
     _build_ctx,
     _state_payload,

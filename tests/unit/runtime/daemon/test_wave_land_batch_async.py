@@ -14,7 +14,7 @@ from eawf.kernel.state.models import State, Wave, WaveDependencyBarrier, wave_de
 from eawf.runtime.daemon.methods import close as close_methods
 from eawf.runtime.daemon.methods import state as state_methods
 from eawf.runtime.worktree.create import create_worktree
-from tests.daemon.test_close_lock_split import _build_ctx
+from tests.integration.runtime.daemon.test_close_lock_split import _build_ctx
 from tests.integration.test_wave_land import _commit_in
 from tests.integration.test_worktree_create import _claimed_state, _make_repo
 

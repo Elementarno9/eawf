@@ -12,7 +12,7 @@ persisted staged campaign:
   campaign + rounds into a typed run summary.
 
 The live ``agent.dispatch`` spawn is replaced by a fixture ``agent_end``
-producer, mirroring how :mod:`tests.daemon.test_fleet_drive` injects a spawner;
+producer, mirroring how :mod:`tests.integration.runtime.daemon.test_fleet_drive` injects a spawner;
 no live campaign is run.
 """
 

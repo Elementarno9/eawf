@@ -208,7 +208,7 @@ def _load_windows_pipe_with_fakes(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setitem(sys.modules, "winerror", types.SimpleNamespace(ERROR_MORE_DATA=234))
 
     module_path = (
-        Path(__file__).resolve().parents[2]
+        Path(__file__).resolve().parents[4]
         / "src"
         / "eawf"
         / "runtime"

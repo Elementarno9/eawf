@@ -28,8 +28,8 @@ from eawf.runtime.daemon.methods.daemon import ping
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec, GateFreshnessInput
 from eawf.workflow.audit_dsl.registry import CHECK_REGISTRY
 from eawf.workflow.audit_dsl.runner import run_checks
-from tests.daemon.test_close_lock_split import _WAVE, _build_ctx
-from tests.daemon.test_durable_close import _repo_with_state
+from tests.integration.runtime.daemon.test_close_lock_split import _WAVE, _build_ctx
+from tests.integration.runtime.daemon.test_durable_close import _repo_with_state
 
 
 def _spec() -> CheckSpec:

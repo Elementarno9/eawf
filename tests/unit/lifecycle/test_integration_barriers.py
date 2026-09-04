@@ -28,7 +28,7 @@ from eawf.workflow.lifecycle.integration import (
     require_land_dependencies,
 )
 from eawf.workflow.lifecycle.wave import LifecycleError, start_wave
-from tests.daemon.test_close_lock_split import _state_payload
+from tests.integration.runtime.daemon.test_close_lock_split import _state_payload
 
 _UPSTREAM = "P30-I23-W09"
 _DOWNSTREAM = "P30-I23-W99"

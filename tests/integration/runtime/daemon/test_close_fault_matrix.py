@@ -54,8 +54,8 @@ from eawf.workflow.lifecycle.integration import (
     latest_wave_integration,
 )
 from eawf.workflow.verify import oracle
-from tests.daemon.test_close_lock_split import _WAVE
-from tests.daemon.test_durable_close import _git, _repo_with_state
+from tests.integration.runtime.daemon.test_close_lock_split import _WAVE
+from tests.integration.runtime.daemon.test_durable_close import _git, _repo_with_state
 
 pytestmark = pytest.mark.integration
 
@@ -940,7 +940,7 @@ def _close_attempt_row() -> dict[str, Any]:
     }
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_close_failure_kind_is_the_closed_persisted_vocabulary() -> None:
     """``CloseAttempt.failure_kind`` validates against the closed enum."""
     values = {member.value for member in CloseFailureKind}
@@ -954,7 +954,7 @@ def test_close_failure_kind_is_the_closed_persisted_vocabulary() -> None:
         assert parsed.model_dump(mode="json")["failure_kind"] == member.value
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 @pytest.mark.parametrize("rejected", ["", "infrastructure", "TIMED_OUT", "timed out", 7])
 def test_close_attempt_rejects_failure_kind_outside_the_vocabulary(rejected: object) -> None:
     """Empty, near-miss, wrong-case, and wrong-type kinds all fail closed."""
@@ -962,7 +962,7 @@ def test_close_attempt_rejects_failure_kind_outside_the_vocabulary(rejected: obj
         CloseAttempt.model_validate({**_close_attempt_row(), "failure_kind": rejected})
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_failure_status_classifies_by_exception_class_not_message() -> None:
     """No lowered-substring branch survives in ``_failure_status``."""
     source = inspect.getsource(close_module._failure_status)
@@ -983,7 +983,7 @@ def test_failure_status_classifies_by_exception_class_not_message() -> None:
     )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("factory", "expected_status", "expected_kind"),
     [
@@ -1038,7 +1038,7 @@ def test_failure_status_routes_each_typed_exception(
     assert close_module._failure_status(factory()) == (expected_status, expected_kind)
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("cause", "expected_kind"),
     [

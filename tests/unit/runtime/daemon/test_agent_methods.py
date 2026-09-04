@@ -7,7 +7,7 @@ plus the inspection helpers :func:`agent.session` and the placeholder
 (via :class:`ValueError`, which the server maps to that code).
 
 The handlers are driven directly through the module-level coroutines
-— the JSON-RPC framing is exercised in :mod:`tests.daemon.test_scaffolding`.
+— the JSON-RPC framing is exercised in :mod:`tests.integration.runtime.daemon.test_scaffolding`.
 """
 
 from __future__ import annotations

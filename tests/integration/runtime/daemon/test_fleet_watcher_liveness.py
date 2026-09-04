@@ -395,7 +395,7 @@ def _role_report_body(
     }
     evidence = AgentReportEvidenceRef(
         kind="artifact",
-        ref="tests/daemon/test_fleet_watcher_liveness.py:1",
+        ref="tests/integration/runtime/daemon/test_fleet_watcher_liveness.py:1",
         note="close-ready role report",
     )
     if role is AgentSessionRole.AUDITOR:

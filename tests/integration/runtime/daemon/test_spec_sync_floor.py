@@ -54,7 +54,8 @@ _SYMMETRIC_YAML = textwrap.dedent(
     """\
     criteria:
       - id: CR-01
-        text: returns the materialised rows; pytest tests/daemon/test_spec_sync_floor.py
+        text: returns the materialised rows; pytest
+          tests/integration/runtime/daemon/test_spec_sync_floor.py
         kind: behavioral
         acceptance_style: binary
         evidence_kind: deterministic

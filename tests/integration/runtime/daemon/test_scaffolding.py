@@ -380,7 +380,7 @@ def test_serve_unix_socket_is_owner_only() -> None:
 
 def _repo_root() -> Path:
     """Return the worktree root (two levels above ``tests/daemon/``)."""
-    return Path(__file__).resolve().parents[2]
+    return Path(__file__).resolve().parents[4]
 
 
 def _check_ignored(path: str) -> bool:

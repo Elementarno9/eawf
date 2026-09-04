@@ -14,7 +14,7 @@ append-log, and the fold that turns the log into the round-loop decisions:
 
 The handlers are driven through the module-level coroutines against an on-disk
 state fixture, matching the in-process harness in
-:mod:`tests.daemon.test_research_methods`.
+:mod:`tests.unit.runtime.daemon.test_research_methods`.
 """
 
 from __future__ import annotations

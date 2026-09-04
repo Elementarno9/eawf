@@ -19,7 +19,7 @@ from eawf.kernel.state.models import (
 )
 from eawf.surfaces.cli.app import app
 from eawf.workflow.lifecycle.integration import create_wave_integration
-from tests.daemon.test_close_lock_split import _WAVE, _state_payload
+from tests.integration.runtime.daemon.test_close_lock_split import _WAVE, _state_payload
 
 _DOWNSTREAM = "P30-I23-W99"
 _SHA_A = "a" * 40

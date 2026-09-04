@@ -42,7 +42,7 @@ from eawf.kernel.state.models import State
 from eawf.runtime.daemon.limits import READINESS_BUDGET_SECONDS
 from eawf.runtime.daemon.methods import MethodContext, MethodNotFoundError
 from eawf.runtime.daemon.server import handle_connection
-from tests.daemon.test_close_lock_split import _build_ctx, _write_state
+from tests.integration.runtime.daemon.test_close_lock_split import _build_ctx, _write_state
 
 pytestmark = pytest.mark.integration
 

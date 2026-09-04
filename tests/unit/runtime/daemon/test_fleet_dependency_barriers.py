@@ -21,7 +21,7 @@ from eawf.workflow.lifecycle.integration import (
     create_wave_integration,
     mark_wave_integration_verified,
 )
-from tests.daemon.test_close_lock_split import (
+from tests.integration.runtime.daemon.test_close_lock_split import (
     _WAVE,
     _build_ctx,
     _state_payload,

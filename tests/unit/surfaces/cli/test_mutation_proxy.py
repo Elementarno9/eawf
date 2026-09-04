@@ -37,7 +37,7 @@ This suite exercises the branching contract:
 The escalation + client plumbing is monkeypatched at the module
 boundary so the real branching logic runs without spawning a real
 daemon. End-to-end against a live socket is covered in
-:mod:`tests.daemon.test_daemon_client`.
+:mod:`tests.unit.runtime.daemon.test_daemon_client`.
 """
 
 from __future__ import annotations

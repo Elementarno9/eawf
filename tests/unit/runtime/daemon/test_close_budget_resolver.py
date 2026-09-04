@@ -6,7 +6,8 @@ per-consumer budget literals:
 :class:`~eawf.kernel.state.models.CloseBudget` and
 :func:`~eawf.kernel.state.models.latest_close_attempt`. The wiring assertions
 (daemon seeding, receipt emission, TUI display) live in
-``tests/daemon/test_durable_close.py`` and ``tests/tui/test_autopilot_repair_budget.py``.
+``tests/integration/runtime/daemon/test_durable_close.py`` and
+``tests/tui/test_autopilot_repair_budget.py``.
 """
 
 from __future__ import annotations

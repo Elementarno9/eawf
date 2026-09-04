@@ -23,7 +23,7 @@ from eawf.observability.doctor.checks import (
     check_backlog_fold_parity,
     check_incident_fold_parity,
 )
-from tests.daemon.test_close_lock_split import _state_payload
+from tests.integration.runtime.daemon.test_close_lock_split import _state_payload
 
 pytestmark = pytest.mark.unit
 

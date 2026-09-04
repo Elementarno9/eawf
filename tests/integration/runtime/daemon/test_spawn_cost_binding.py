@@ -23,7 +23,7 @@ change was needed -- this file is the proof + the regression lock.
 The adapter ``spawn_session`` is ALWAYS a monkeypatched stub returning a canned
 :class:`~eawf.runtime.runtimes.adapter.SpawnResult` -- no real ``claude``
 subprocess, no network, no auth. The recording-stub pattern mirrors
-``tests/daemon/test_live_spawn_dispatch.py``.
+``tests/integration/runtime/daemon/test_live_spawn_dispatch.py``.
 """
 
 from __future__ import annotations

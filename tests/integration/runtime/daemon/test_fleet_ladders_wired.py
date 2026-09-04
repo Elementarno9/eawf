@@ -616,7 +616,7 @@ def _load_idle_gate() -> Any:
     import importlib.util
     import sys
 
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[4]
     gate_path = repo_root / "tools" / "idle_contract_gate.py"
     if str(gate_path.parent) not in sys.path:
         sys.path.insert(0, str(gate_path.parent))

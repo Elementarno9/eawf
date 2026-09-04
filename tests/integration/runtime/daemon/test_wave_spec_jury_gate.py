@@ -20,7 +20,7 @@ the same ``run_oracle`` path the cross-vendor jury rides; the close gate no
 longer reads a WaveSpec rubric or writes one per-item AUDITOR report. These
 tests therefore drive the jury through the per-runtime spawn factory rather than
 an injected per-item ballot fn, mirroring
-``tests/daemon/test_wave_cross_vendor_jury_gate.py``.
+``tests/integration/runtime/daemon/test_wave_cross_vendor_jury_gate.py``.
 
 The juror spawn is ALWAYS stubbed: the test monkeypatches ``_jury_spawn_factory``
 to return per-runtime recording stubs that replay canned auditor bodies, so NO

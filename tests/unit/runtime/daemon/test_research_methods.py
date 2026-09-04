@@ -3,7 +3,7 @@
 Covers :func:`eawf.runtime.daemon.methods.research.create_campaign` plus the
 shared :func:`persist_campaign` helper. The handler is driven directly through
 the module-level coroutine -- the JSON-RPC framing is exercised in
-:mod:`tests.daemon.test_scaffolding`; routing through a live daemon is out of
+:mod:`tests.integration.runtime.daemon.test_scaffolding`; routing through a live daemon is out of
 scope here.
 """
 

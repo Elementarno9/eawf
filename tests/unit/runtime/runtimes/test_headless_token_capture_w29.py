@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.daemon.test_spawn_cost_binding import (
+from tests.integration.runtime.daemon.test_spawn_cost_binding import (
     _CACHE_1H,
     _CACHE_5M,
     _CACHE_READ,

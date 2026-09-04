@@ -15,7 +15,7 @@ researcher session and parses each ``agent_end`` body into typed findings rows:
   whole live round drives end to end without spawning a real subprocess.
 
 The live spawn is stubbed with a recording fake + fixture ``agent_end`` bodies,
-mirroring how :mod:`tests.daemon.test_fleet_drive` injects a spawner; no live
+mirroring how :mod:`tests.integration.runtime.daemon.test_fleet_drive` injects a spawner; no live
 campaign is run here.
 """
 

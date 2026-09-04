@@ -52,7 +52,7 @@ from eawf.workflow.audit_dsl.models import CheckResult
 from eawf.workflow.lifecycle import LifecycleGuardError
 from eawf.workflow.lifecycle.integration import create_wave_integration
 from eawf.workflow.lifecycle.wave import close_wave
-from tests.daemon.test_close_lock_split import (
+from tests.integration.runtime.daemon.test_close_lock_split import (
     _WAVE,
     _build_ctx,
     _state_payload,

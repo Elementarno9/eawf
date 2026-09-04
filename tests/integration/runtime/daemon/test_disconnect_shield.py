@@ -25,7 +25,7 @@ import pytest
 import eawf.runtime.daemon.server as server_mod
 from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.runtime.daemon.server import handle_connection
-from tests.daemon.test_close_lock_split import _build_ctx, _write_state
+from tests.integration.runtime.daemon.test_close_lock_split import _build_ctx, _write_state
 
 pytestmark = pytest.mark.integration
 

@@ -28,8 +28,8 @@ evidence chain off a TEMP fixture state. It proves, in one run:
 
 The live ``agent.dispatch`` spawn is replaced by a recording stub producer +
 fixture ``agent_end`` bodies, mirroring the W01 / W03 stub pattern in
-:mod:`tests.daemon.test_research_round_runner` and
-:mod:`tests.daemon.test_research_run_rpc`; no live campaign is run and no
+:mod:`tests.unit.runtime.daemon.test_research_round_runner` and
+:mod:`tests.unit.runtime.daemon.test_research_run_rpc`; no live campaign is run and no
 real subprocess is spawned.
 """
 
@@ -133,7 +133,7 @@ def _state_payload() -> dict[str, object]:
 def _build_ctx(tmp_path: Path) -> tuple[MethodContext, Path]:
     """Build a daemon context over an on-disk temp state fixture.
 
-    Mirrors :mod:`tests.daemon.test_research_question_writer`: the canonical
+    Mirrors :mod:`tests.unit.runtime.daemon.test_research_question_writer`: the canonical
     state writer (``add_question``) needs the event path + WAL dir + bus, while
     the append-only campaign / round / operator-input stores only need the
     state path.

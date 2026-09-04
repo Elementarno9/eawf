@@ -32,7 +32,7 @@ import eawf.runtime.daemon.main as main_mod
 import eawf.runtime.daemon.server as server_mod
 import eawf.runtime.daemon.spawn as spawn_mod
 from eawf.runtime.daemon.limits import READINESS_BUDGET_SECONDS
-from tests.daemon.test_close_lock_split import _build_ctx, _write_state
+from tests.integration.runtime.daemon.test_close_lock_split import _build_ctx, _write_state
 from tests.integration.runtime.daemon.test_loop_occupancy import (
     CLIENT_TIMEOUT_SECONDS,
     client,

@@ -21,7 +21,7 @@ Three criteria from the wave spec, plus the dev-mode raw-RPC gate:
 The escalation plumbing is monkeypatched at the module boundary so the
 real branching logic runs without spinning up a real daemon process.
 End-to-end against a live socket is covered by
-:mod:`tests.daemon.test_daemon_client`.
+:mod:`tests.unit.runtime.daemon.test_daemon_client`.
 """
 
 from __future__ import annotations

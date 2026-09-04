@@ -16,7 +16,7 @@ Covers:
   layer paths.
 
 The handlers are driven through the module-level coroutines; JSON-RPC
-framing is exercised in :mod:`tests.daemon.test_scaffolding`.
+framing is exercised in :mod:`tests.integration.runtime.daemon.test_scaffolding`.
 """
 
 from __future__ import annotations

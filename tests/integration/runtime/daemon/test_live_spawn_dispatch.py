@@ -122,7 +122,7 @@ def _role_report_json(role: AgentSessionRole) -> str:
         "evidence_refs": [
             {
                 "kind": "artifact",
-                "ref": "tests/daemon/test_live_spawn_dispatch.py:1",
+                "ref": "tests/integration/runtime/daemon/test_live_spawn_dispatch.py:1",
                 "note": "CR-01",
             }
         ],

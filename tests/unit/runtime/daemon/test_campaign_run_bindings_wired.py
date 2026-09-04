@@ -186,7 +186,8 @@ def test_run_campaign_folds_claims_into_canonical_state(tmp_path: Path) -> None:
 def _load_idle_gate() -> Any:
     """Load ``tools/idle_contract_gate.py`` by path (``tools/`` is not a package).
 
-    Mirrors the loader in ``tests/daemon/test_fleet_ladders_wired.py`` so the new
+    Mirrors the loader in
+    ``tests/integration/runtime/daemon/test_fleet_ladders_wired.py`` so the new
     P30-I18 source-scan checks (``check_campaign_claim_fold_wired`` /
     ``check_campaign_carryover_prune_wired``) carry an asserting test -- the
     idle-contract meta-gate requires every newly-defined ``check_*`` contract to
@@ -195,7 +196,7 @@ def _load_idle_gate() -> Any:
     import importlib.util
     import sys
 
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[4]
     gate_path = repo_root / "tools" / "idle_contract_gate.py"
     if str(gate_path.parent) not in sys.path:
         sys.path.insert(0, str(gate_path.parent))

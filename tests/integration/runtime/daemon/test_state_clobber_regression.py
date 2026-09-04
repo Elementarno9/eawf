@@ -21,7 +21,7 @@ from eawf.kernel.state.enums import IncidentSeverity
 from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods.state import mutate
 from eawf.workflow.evidence.incident import open_incident
-from tests.daemon.test_close_lock_split import (
+from tests.integration.runtime.daemon.test_close_lock_split import (
     _WAVE,
     _build_ctx,
     _close_mutation,
