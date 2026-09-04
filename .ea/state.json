@@ -36186,7 +36186,8 @@
         "P31-I01-W42",
         "P31-I01-W43",
         "P31-I01-W44",
-        "P31-I01-W45"
+        "P31-I01-W45",
+        "P31-I01-W46"
       ]
     },
     "P32-I01": {
@@ -37616,7 +37617,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-04T16:14:16.820631Z",
+  "updated_at": "2026-09-04T16:17:02.199627Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -152938,7 +152939,8 @@
         "P31-I01-W17",
         "P31-I01-W34",
         "P31-I01-W08",
-        "P31-I01-W41"
+        "P31-I01-W41",
+        "P31-I01-W46"
       ],
       "description": "REL-033 first measurement. Run eawf bench turn-cost (W34) over the W17 producer against the telemetry rows W08 enables; record the dev1 baseline under .ea/artifacts/research with fixture, harness revision, runtime/model tuple, p50, p90, the sample sizes (completed units, the 28 priced rows, unpriced rows, excluded codex rows) and the regression threshold frozen at 0.20 before any second measurement (MEAS-034); tabulate the proposal numeric defaults dev1 remeasures beside measured values.",
       "dispatch_history": [],
@@ -157201,6 +157203,7 @@
     "P31-I01-W41": {
       "agent_role": "executor",
       "blocks": [
+        "P31-I01-W46",
         "P31-I01-W18"
       ],
       "claim_session_id": "SES-20260904T154108.648797Z-executor-claude-3c3a0492-2a3d-43df-a9b3-676c4a33f565",
@@ -157991,6 +157994,131 @@
         }
       ],
       "title": "Write the trailer commit form by default and warn on the prefix form",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W46": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W18"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-04T16:16:39.866327Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P31-I01-W41"
+      ],
+      "description": "D50 ratified codex reasoning tokens as a subset of output rather than a summand and W41 implemented it so the codex fold now reports output alone. turn_cost.py still carries codex in REASONING_UNSETTLED_RUNTIMES and drops those rows from the cost and token sums on a premise that is no longer true. Remove codex from the frozenset so its rows are summed and prove a codex run reaches the totals before W18 records the dev1 baseline.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/observability/telemetry/turn_cost.py",
+        "tests/observability/telemetry"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/observability/telemetry/test_turn_cost_pricing.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/observability/telemetry/test_turn_cost_record.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P31-I01-W46",
+      "intent": {
+        "desired_outcome": "codex runs are summed into turn-cost totals before W18 freezes the dev1 baseline",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Remove codex from REASONING_UNSETTLED_RUNTIMES in turn_cost.py|Prove build_turn_cost_record returns totals including a codex run with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "turn_cost.py excludes codex rows from the sums on a premise D50 and W41 have made false",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-09-04T16:16:40.075197Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/observability/telemetry/test_turn_cost_pricing.py exits 0 with a codex run summed into the totals and the reasoning-unsettled exclusion count at zero",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "D50 follow-through: codex no longer appears in REASONING_UNSETTLED_RUNTIMES and build_turn_cost_record returns a record whose four-class token sum and cost sums include a codex run instead of counting it as excluded; pytest tests/observability/telemetry/test_turn_cost_pricing.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/observability/telemetry/test_turn_cost_record.py exits 0 with a codex-only corpus reporting zero reasoning-unsettled exclusions",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "D50 follow-through acceptance: the record returns a reasoning-unsettled exclusion counter of zero for a corpus whose only runtime is codex and the excluded-run bookkeeping stays truthful for any runtime still listed; pytest tests/observability/telemetry/test_turn_cost_record.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Lift the codex reasoning exclusion from the turn-cost sums",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
