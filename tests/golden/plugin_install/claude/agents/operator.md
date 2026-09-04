@@ -1,7 +1,7 @@
 ---
 name: operator
 description: "Coordinates a phase by dispatching waves to specialised subagents. Should NOT touch code directly."
-tools: [Agent, TaskCreate, TaskUpdate, TaskList, TaskGet, Read, Bash, Skill]
+tools: [Agent, TaskCreate, TaskUpdate, TaskList, TaskGet, Read, Bash, Skill, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__get_symbols_overview]
 model: opus
 color: orange
 memory: true

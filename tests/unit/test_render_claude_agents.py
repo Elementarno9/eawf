@@ -23,6 +23,7 @@ import pytest
 from eawf.surfaces.render.agents import (
     AGENT_REGISTRY,
     ROLES,
+    SERENA_READ_TOOLS,
     AgentSpec,
     AgentTemplateContext,
     effective_agent_tools,
@@ -298,3 +299,90 @@ def test_grant_for_an_unrelated_role_is_ignored() -> None:
     """A grant keyed to another role contributes nothing to this render."""
     spec = next(s for s in AGENT_REGISTRY if s.role == "reviewer")
     assert effective_agent_tools(spec, {"polisher": ["PolisherOnly"]}) == spec.tools
+
+
+# --------------------------------------------------------------------------- #
+# Serena read triple: granted in the registry, never through extra_tools.
+# --------------------------------------------------------------------------- #
+
+#: Roles whose work is reading an unfamiliar tree — the operator orienting
+#: before a dispatch, the domain specialist landing in a package it did not
+#: write. Both answer "where is X defined" / "who calls X" constantly, and
+#: both are read-only about it.
+_SERENA_GRANTED_ROLES: set[str] = {"operator", "domain-specialist"}
+
+#: Native language-server tool names. A subagent frontmatter allowlist cannot
+#: reach them, so naming one would advertise an affordance the role does not
+#: have.
+_LSP_TOOL_MARKERS: tuple[str, ...] = ("LSP", "workspaceSymbol", "goToDefinition")
+
+
+def test_serena_read_triple_is_the_three_read_only_symbol_tools() -> None:
+    """The granted triple is exactly the three read-only Serena tools."""
+    assert SERENA_READ_TOOLS == (
+        "mcp__serena__find_symbol",
+        "mcp__serena__find_referencing_symbols",
+        "mcp__serena__get_symbols_overview",
+    )
+
+
+@pytest.mark.parametrize("role", sorted(_SERENA_GRANTED_ROLES))
+def test_serena_triple_reaches_the_rendered_frontmatter(role: str) -> None:
+    """Each granted role's rendered ``tools:`` line carries all three."""
+    spec = next(s for s in AGENT_REGISTRY if s.role == role)
+    rendered = _render_with(spec, effective_agent_tools(spec, {}))
+    tools_line = next(line for line in rendered.splitlines() if line.startswith("tools:"))
+
+    for tool in SERENA_READ_TOOLS:
+        assert tool in tools_line
+
+
+@pytest.mark.parametrize("spec", AGENT_REGISTRY, ids=lambda s: s.role)
+def test_serena_grant_is_registry_resident_not_config_resident(spec: AgentSpec) -> None:
+    """The grant survives an empty ``agents.extra_tools`` map.
+
+    ``agents.extra_tools`` ships empty, so a grant that lived only there is
+    stripped from every role the next time the plugin tree is rendered.
+    """
+    expected = SERENA_READ_TOOLS if spec.role in _SERENA_GRANTED_ROLES else ()
+    granted = tuple(t for t in effective_agent_tools(spec, {}) if t.startswith("mcp__serena__"))
+
+    assert granted == expected
+
+
+@pytest.mark.parametrize("spec", AGENT_REGISTRY, ids=lambda s: s.role)
+def test_serena_grant_preserves_the_declared_base_allowlist(spec: AgentSpec) -> None:
+    """The triple widens the allowlist; it never displaces a declared tool."""
+    base = [tool for tool in spec.tools if not tool.startswith("mcp__serena__")]
+
+    assert base == [t for t in spec.tools if t not in SERENA_READ_TOOLS]
+    assert len(spec.tools) == len(set(spec.tools))
+
+
+@pytest.mark.parametrize("spec", AGENT_REGISTRY, ids=lambda s: s.role)
+def test_no_role_frontmatter_emits_an_lsp_tool(spec: AgentSpec) -> None:
+    """No rendered frontmatter names a native language-server tool."""
+    rendered = _render_with(spec, effective_agent_tools(spec, {}))
+    tools_line = next(line for line in rendered.splitlines() if line.startswith("tools:"))
+
+    for marker in _LSP_TOOL_MARKERS:
+        assert marker not in tools_line
+
+
+def test_serena_triple_is_absent_from_the_ungranted_role_frontmatter() -> None:
+    """Roles outside the grant set render no ``mcp__serena__`` tool at all."""
+    for spec in AGENT_REGISTRY:
+        if spec.role in _SERENA_GRANTED_ROLES:
+            continue
+        rendered = _render_with(spec, effective_agent_tools(spec, {}))
+        assert "mcp__serena__" not in rendered.split("\n---\n", 1)[0]
+
+
+def test_researcher_body_ladder_opens_with_the_symbol_tool_rung() -> None:
+    """The researcher's verify ladder names the symbol tools on rung (a)."""
+    body = next(s for s in AGENT_REGISTRY if s.role == "researcher").body
+    ladder = body.split("## Verify-before-claim ladder", 1)[1]
+
+    assert ladder.lstrip().startswith("(a) Resolve the symbol with the symbol tools")
+    for tool in SERENA_READ_TOOLS:
+        assert tool in ladder

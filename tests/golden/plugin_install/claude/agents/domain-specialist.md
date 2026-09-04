@@ -1,7 +1,7 @@
 ---
 name: domain-specialist
 description: "Project-specific domain agent. Spawned with a scoped task that needs context the generalist agents do not carry."
-tools: [Read, Grep, Glob, Bash, Skill]
+tools: [Read, Grep, Glob, Bash, Skill, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__get_symbols_overview]
 model: opus
 color: magenta
 memory: true

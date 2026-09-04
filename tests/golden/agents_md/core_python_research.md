@@ -130,15 +130,16 @@ Agents MAY delete code, configs, or docs IF AND ONLY IF:
 Agents MUST NOT delete: schema files, golden fixtures, MIT ``LICENSE``, ``CHANGELOG.md``, or any uncommitted file. When in doubt, propose the list and wait for explicit confirmation.
 
 <!-- END EAWF:managed id=deletion-rule -->
-<!-- BEGIN EAWF:managed id=verify-before-claim version=1.1 hash=50c978e307bc060d -->
+<!-- BEGIN EAWF:managed id=verify-before-claim version=1.2 hash=635514562ed918e6 -->
 ### Verify before claiming
 
 Quantitative or behavioural claims about command I/O, schema fields, exit codes, or rendering output MUST be verified against the actual code path before assertion. The verification ladder, in order:
 
-(a) Read the source file.
-(b) ``grep`` for actual call sites in the active branch.
-(c) Inspect golden fixtures or snapshot tests.
-(d) Only then quote the behaviour.
+(a) Resolve the symbol with the symbol tools (``mcp__serena__find_symbol``, ``mcp__serena__find_referencing_symbols``, ``mcp__serena__get_symbols_overview``) — they resolve bindings, so they answer "where is X defined" and "who calls X" without the false hits and missed aliases text search returns.
+(b) Read the source file.
+(c) ``grep`` for actual call sites in the active branch — the fallback when the target is a string, a config value, or a name you do not yet know.
+(d) Inspect golden fixtures or snapshot tests.
+(e) Only then quote the behaviour.
 
 Design-intent docs (command matrix, schema inventory, ADRs) are the *design intent*; the source tree is the *implementation* — when they drift, quote the implementation. Treat doc/memory citations as a hypothesis to verify, not as ground truth.
 

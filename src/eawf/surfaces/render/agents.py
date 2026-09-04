@@ -16,6 +16,7 @@ Public API::
     AgentTemplateContext         # typed dataclass for one render call
     render_agent_md(ctx) -> str  # pure: returns the rendered markdown
     AGENT_REGISTRY               # frozen tuple of every Eä agent spec
+    SERENA_READ_TOOLS            # the read-only symbol triple granted in-registry
     effective_agent_tools(...)   # pure: base allowlist + configured extras
 """
 
@@ -54,6 +55,23 @@ ROLES: tuple[str, ...] = (
     "polisher",
     "operator",
     "domain-specialist",
+)
+
+
+# Serena's read-only symbol triple. Granted in the registry rather than
+# through ``agents.extra_tools`` because that leaf ships empty: a grant
+# that lives only in local config is stripped from every role the next
+# time ``eawf plugin install`` renders the tree. Read-only by
+# construction — none of the three mutates a file, so widening a role's
+# allowlist with them cannot widen its blast radius.
+#
+# The companion native LSP tools are deliberately absent: they are not
+# reachable from a subagent frontmatter allowlist, so naming them there
+# would advertise an affordance the role cannot use.
+SERENA_READ_TOOLS: tuple[str, ...] = (
+    "mcp__serena__find_symbol",
+    "mcp__serena__find_referencing_symbols",
+    "mcp__serena__get_symbols_overview",
 )
 
 
@@ -339,11 +357,16 @@ parent specifies otherwise.
 
 ## Verify-before-claim ladder
 
-(a) Read the source file. (b) Grep for call sites on the active branch.
-(c) Inspect golden fixtures / snapshot tests. (d) Only then quote the behaviour.
+(a) Resolve the symbol with the symbol tools; they bind, text search only matches.
+(b) Read the source file.
+(c) Grep for call sites when the target is a string, a config value, or an unknown name.
+(d) Inspect golden fixtures / snapshot tests.
+(e) Only then quote the behaviour.
 Design docs and memory notes are hypotheses to verify, never ground truth;
 when doc and source drift, quote the source.
 
+- Symbol-tool read triple: `mcp__serena__find_symbol`,
+  `mcp__serena__find_referencing_symbols`, `mcp__serena__get_symbols_overview`.
 - Every quantitative or behavioural claim carries file:line, a store URN, or an
   external URL.
 - Citations are dense [N] markers backed by a References table, never inline path soup.
@@ -773,6 +796,7 @@ AGENT_REGISTRY: tuple[AgentSpec, ...] = (
             "Read",
             "Bash",
             "Skill",
+            *SERENA_READ_TOOLS,
         ),
         model="opus",
         color="orange",
@@ -785,7 +809,7 @@ AGENT_REGISTRY: tuple[AgentSpec, ...] = (
             "Project-specific domain agent. Spawned with a scoped task"
             " that needs context the generalist agents do not carry."
         ),
-        tools=("Read", "Grep", "Glob", "Bash", "Skill"),
+        tools=("Read", "Grep", "Glob", "Bash", "Skill", *SERENA_READ_TOOLS),
         model="opus",
         color="magenta",
         memory=True,
@@ -797,6 +821,7 @@ AGENT_REGISTRY: tuple[AgentSpec, ...] = (
 __all__ = [
     "AGENT_REGISTRY",
     "ROLES",
+    "SERENA_READ_TOOLS",
     "AgentSpec",
     "AgentTemplateContext",
     "effective_agent_tools",

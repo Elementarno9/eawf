@@ -185,6 +185,24 @@ module = [
 ]
 ignore_errors = true
 
+[tool.pyright]
+# Editor-side type checking (the language server behind goToDefinition /
+# findReferences). Without this table pyright resolves neither the
+# project venv nor the editable ``src/`` layout, so it reports every
+# third-party import as unresolved and every cross-module symbol as a
+# missing attribute -- diagnostics that mypy contradicts on the same
+# tree. The noise is total rather than occasional, which trains a reader
+# to ignore the stream, and a real type error then arrives invisible.
+#
+# ``venvPath``/``venv`` point at the uv-managed ``.venv`` so third-party
+# distributions resolve; ``extraPaths`` adds the src-layout root so
+# first-party ``eawf.*`` imports resolve without depending on whether the
+# editable install's finder hook is loaded. mypy stays the blocking gate
+# (``uv run mypy src/`` on pre-push); pyright is the interactive mirror.
+venvPath = "."
+venv = ".venv"
+extraPaths = ["src"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py314"

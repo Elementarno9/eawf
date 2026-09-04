@@ -112,6 +112,13 @@ _OPENCODE_TOOL_PERMISSION_MAP: Mapping[str, tuple[str, ...]] = {
     "TaskUpdate": ("task",),
     "TaskList": ("task",),
     "TaskGet": ("task",),
+    # MCP tools carry no native OpenCode permission key: the runtime gates
+    # them through its ``mcp`` server config, not the per-agent ACL. They map
+    # to the empty tuple so a registry grant stays total here (an unmapped
+    # tool raises) without inventing an ACL key OpenCode would ignore.
+    "mcp__serena__find_symbol": (),
+    "mcp__serena__find_referencing_symbols": (),
+    "mcp__serena__get_symbols_overview": (),
 }
 _OPENCODE_TOOL_LEGACY_MAP: Mapping[str, tuple[str, ...]] = {
     "Read": ("read",),
@@ -128,6 +135,9 @@ _OPENCODE_TOOL_LEGACY_MAP: Mapping[str, tuple[str, ...]] = {
     "TaskUpdate": ("task",),
     "TaskList": ("task",),
     "TaskGet": ("task",),
+    "mcp__serena__find_symbol": (),
+    "mcp__serena__find_referencing_symbols": (),
+    "mcp__serena__get_symbols_overview": (),
 }
 _OPENCODE_READ_ALLOW_RULES: Mapping[str, str] = {
     "*": "allow",

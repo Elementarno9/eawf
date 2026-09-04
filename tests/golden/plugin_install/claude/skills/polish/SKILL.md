@@ -20,6 +20,15 @@ disable-model-invocation: true
 - `--auto-apply-safe` — explicitly auto-apply the small "safe" subset (formatting, comment phrasing) for this invocation.
 - `--category naming|docstrings|logs|errors|dead-code` — filter the sweep to one check category. Default is all categories.
 
+## Rule files this pass enforces
+
+Each sweep category has a rule file; open it before rewriting anything:
+
+- `docs/rules/naming-conventions.md` — one canonical name per concept; rename the outlier, never add a shim.
+- `docs/rules/comment-economy.md` — no restated signature, no change-log narration, no lifecycle ids.
+- `docs/rules/entity-title-naming.md` — imperative noun-phrase titles, 72 characters, no trailing period.
+- `docs/rules/code-craft-explicit-over-implicit.md` — keyword arguments at arity three, explicit returns.
+
 ## Pre-flight checklist
 
 - [ ] Scope is declared and bounded.

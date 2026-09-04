@@ -21,6 +21,15 @@ disable-model-invocation: false
 - `--level low|medium|high` — finding-confidence threshold for the pass; higher surfaces fewer, higher-confidence findings. Default `medium`; config leaf `review.default_level`.
 - `--criteria <wave-id>` — pull the named wave's success criteria into the review context so findings are graded against them. Default none.
 
+## Rule files this pass enforces
+
+Cite the rule file, never your paraphrase, so the author can check the standard:
+
+- `docs/rules/artifact-chassis.md` — Summary / References / Provenance / Scrub on every promoted artifact.
+- `docs/rules/clarity-contract.md` — the artifact reads without opening `state.json`.
+- `docs/rules/commit-granularity.md` — one deliverable per commit, its tests included.
+- `docs/rules/comment-economy.md` — a comment carries why, never a restated signature.
+
 ## Pre-flight checklist
 
 - [ ] Read the success criteria for the phase/wave the diff belongs to.

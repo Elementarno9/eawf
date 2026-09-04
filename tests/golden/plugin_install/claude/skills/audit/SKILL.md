@@ -32,6 +32,15 @@ Each success criterion is a typed `CriterionSpec` (`kernel/spec/common.Criterion
 
 Enforcement is profile-driven, not off: the model default for `verify.enforce` is `False`, but both shipped active profiles enable it, so on a live repo the daemon `wave.close` RPC EXECUTES deterministic gates (`_enforce_wave_close_gate`, enforce narrowing at `runtime/daemon/methods/state.py`), verdict-always waves spawn a real fresh-context auditor at close, the fleet clean-close path runs the same deterministic gates before close-on-behalf, and the daemonless fallback enforces verdict + deterministic gates too. The jury tier blocks only at EARNED authority (`jury_block_authority`); an uncalibrated jury veto stays advisory. Do not treat a green close as evidence unless deterministic evidence rows exist. A criterion may also name a `QualityDimension` (`kernel/spec/common.QualityDimension`) so the verdict is attributable to one ISO-25010 quality axis.
 
+## Rule files this pass enforces
+
+Grade the target against the rule file, not a remembered summary:
+
+- `docs/rules/lean-wave-verification.md` — a wave names targeted tests; the full sweep runs once per iter.
+- `docs/rules/gate-fire-proof-sunset.md` — a new gate ships with a test proving it reds, and sunsets if it never fired.
+- `docs/rules/planned-scope-revisability.md` — ACTIVE scope is append-only; CLOSED scope moves only via a reopen.
+- `docs/rules/artifact-chassis.md` — the audit artifact you emit carries the same chassis you are auditing for.
+
 ## Pre-flight checklist
 
 - [ ] The auditor must NOT have access to the parent conversation.

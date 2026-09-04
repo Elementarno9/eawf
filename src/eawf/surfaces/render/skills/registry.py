@@ -357,6 +357,19 @@ also name a `QualityDimension`
 (`kernel/spec/common.QualityDimension`) so the verdict is attributable
 to one ISO-25010 quality axis.
 
+## Rule files this pass enforces
+
+Grade the target against the rule file, not a remembered summary:
+
+- `docs/rules/lean-wave-verification.md` — a wave names targeted tests;
+  the full sweep runs once per iter.
+- `docs/rules/gate-fire-proof-sunset.md` — a new gate ships with a test
+  proving it reds, and sunsets if it never fired.
+- `docs/rules/planned-scope-revisability.md` — ACTIVE scope is
+  append-only; CLOSED scope moves only via a reopen.
+- `docs/rules/artifact-chassis.md` — the audit artifact you emit carries
+  the same chassis you are auditing for.
+
 ## Pre-flight checklist
 
 - [ ] The auditor must NOT have access to the parent conversation.
@@ -487,6 +500,19 @@ _REVIEW_BODY = """# /review
 - `--criteria <wave-id>` — pull the named wave's success criteria into
   the review context so findings are graded against them. Default none.
 
+## Rule files this pass enforces
+
+Cite the rule file, never your paraphrase, so the author can check the standard:
+
+- `docs/rules/artifact-chassis.md` — Summary / References / Provenance /
+  Scrub on every promoted artifact.
+- `docs/rules/clarity-contract.md` — the artifact reads without opening
+  `state.json`.
+- `docs/rules/commit-granularity.md` — one deliverable per commit, its
+  tests included.
+- `docs/rules/comment-economy.md` — a comment carries why, never a
+  restated signature.
+
 ## Pre-flight checklist
 
 - [ ] Read the success criteria for the phase/wave the diff belongs to.
@@ -524,6 +550,19 @@ _POLISH_BODY = """# /polish
   (formatting, comment phrasing) for this invocation.
 - `--category naming|docstrings|logs|errors|dead-code` — filter the
   sweep to one check category. Default is all categories.
+
+## Rule files this pass enforces
+
+Each sweep category has a rule file; open it before rewriting anything:
+
+- `docs/rules/naming-conventions.md` — one canonical name per concept;
+  rename the outlier, never add a shim.
+- `docs/rules/comment-economy.md` — no restated signature, no change-log
+  narration, no lifecycle ids.
+- `docs/rules/entity-title-naming.md` — imperative noun-phrase titles,
+  72 characters, no trailing period.
+- `docs/rules/code-craft-explicit-over-implicit.md` — keyword arguments
+  at arity three, explicit returns.
 
 ## Pre-flight checklist
 

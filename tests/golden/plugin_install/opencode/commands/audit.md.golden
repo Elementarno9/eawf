@@ -62,6 +62,19 @@ also name a `QualityDimension`
 (`kernel/spec/common.QualityDimension`) so the verdict is attributable
 to one ISO-25010 quality axis.
 
+## Rule files this pass enforces
+
+Grade the target against the rule file, not a remembered summary:
+
+- `docs/rules/lean-wave-verification.md` — a wave names targeted tests;
+  the full sweep runs once per iter.
+- `docs/rules/gate-fire-proof-sunset.md` — a new gate ships with a test
+  proving it reds, and sunsets if it never fired.
+- `docs/rules/planned-scope-revisability.md` — ACTIVE scope is
+  append-only; CLOSED scope moves only via a reopen.
+- `docs/rules/artifact-chassis.md` — the audit artifact you emit carries
+  the same chassis you are auditing for.
+
 ## Pre-flight checklist
 
 - [ ] The auditor must NOT have access to the parent conversation.
