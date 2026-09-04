@@ -503,6 +503,134 @@ def release_train(ctx: typer.Context) -> None:
     emit_json_or_text(payload, "\n".join(lines), flags=flags)
 
 
+def _read_json_document(path: Path, *, label: str) -> dict[str, object]:
+    """Return the JSON object at *path*.
+
+    Args:
+        path: File to read.
+        label: What the document is, for the error message.
+
+    Returns:
+        The decoded object.
+
+    Raises:
+        cli_errors.UserError: When the file cannot be read.
+        cli_errors.ValidationError: When it is not a JSON object.
+    """
+    try:
+        decoded = orjson.loads(path.read_bytes())
+    except OSError as exc:
+        raise cli_errors.UserError(f"cannot read {label}: {exc}", kind="NotFound") from exc
+    except orjson.JSONDecodeError as exc:
+        raise cli_errors.ValidationError(f"{label} is not valid JSON: {exc}") from exc
+    if not isinstance(decoded, dict):
+        raise cli_errors.ValidationError(
+            f"{label} must be a JSON object, got {type(decoded).__name__}"
+        )
+    return decoded
+
+
+@release_app.command("observe")
+def release_observe(
+    ctx: typer.Context,
+    release_key: Annotated[
+        str, typer.Argument(help="Release key to observe, e.g. REL-0.7.0.dev1.")
+    ],
+    target: Annotated[
+        str, typer.Option("--target", help="Publication target to read back, e.g. pypi.")
+    ],
+    release_file: Annotated[
+        Path,
+        typer.Option("--release", help="Path to the serialized Release record being observed."),
+    ],
+    manifest_file: Annotated[
+        Path,
+        typer.Option("--manifest", help="Path to the frozen manifest the release approved."),
+    ],
+    idempotency_key: Annotated[
+        str, typer.Option("--idempotency-key", help="Replay identity of this read-back.")
+    ],
+    response_file: Annotated[
+        Path | None,
+        typer.Option("--response", help="Recorded registry answer to judge, as JSON."),
+    ] = None,
+    effect_receipt_ref: Annotated[
+        str | None,
+        typer.Option("--effect-receipt", help="Adapter receipt for a leg that timed out."),
+    ] = None,
+) -> None:
+    """Read one publication target back and settle it against the manifest.
+
+    This is the only verb that can write ``observed_success`` or
+    ``observed_mismatch``. The adapter is the one the checkpoint's target
+    declares -- there is no fallback -- and the manifest passed here must
+    recompute to the digest the release approved, so an observation can
+    never be collected against artifacts nobody signed off.
+
+    A contradicted or missing read-back moves the release to
+    ``RECOVERING``; the matched read-back that completes the required
+    target set bakes it. A read-back that settled nothing refuses with
+    ``observation_inconclusive`` rather than guessing.
+
+    No HTTP client ships here yet, so ``--response`` is how the recorded
+    registry answer reaches the adapter. Without it the leg's reader
+    reports ``registry_unreachable`` and the verb refuses -- which is the
+    honest answer for a registry nobody queried.
+    """
+    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+    flags: GlobalFlags = ctx.obj
+    try:
+        record = _read_json_document(release_file, label="release record")
+        if record.get("key") != release_key:
+            raise cli_errors.UserError(
+                f"{release_file} holds release {record.get('key')!r}, not {release_key!r}",
+                kind="InvalidInput",
+            )
+        params: dict[str, object] = {
+            "release": record,
+            "expected_revision": record.get("revision", 0),
+            "idempotency_key": idempotency_key,
+            "target_id": target,
+            "manifest": _read_json_document(manifest_file, label="frozen manifest"),
+            "effect_receipt_ref": effect_receipt_ref,
+        }
+        if response_file is not None:
+            params["response"] = _read_json_document(response_file, label="recorded response")
+        with DaemonClient() as client:
+            result = client.call("release.observe_target", params)
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    except DaemonRpcError as exc:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"daemon rejected release.observe_target: code={exc.code} {exc.message}",
+                kind="DaemonError",
+            ),
+            flags=flags,
+        )
+        return
+    except (OSError, RuntimeError) as exc:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"daemon unavailable for release.observe_target: {exc}", kind="DaemonError"
+            ),
+            flags=flags,
+        )
+        return
+    observation = result.get("observation") or {}
+    observed = result.get("release") or {}
+    text = (
+        f"{release_key} target {target}: {observation.get('result')} "
+        f"({observation.get('code')}) -> release {observed.get('status')}\n"
+        f"  identity: {observation.get('queried_identity')}\n"
+        f"  evidence: {observation.get('evidence_ref')}\n"
+        f"  {observation.get('detail')}"
+    )
+    emit_json_or_text(result, text, flags=flags)
+
+
 @release_app.command("preflight")
 def release_preflight(
     ctx: typer.Context,

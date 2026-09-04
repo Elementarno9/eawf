@@ -1,0 +1,52 @@
+{
+  "release_key": "REL-0.7.0.dev1",
+  "schema_version": "frozen-manifest/v1",
+  "targets": {
+    "github": {
+      "artifacts": [
+        {
+          "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "filename": "RELEASE_NOTES.md",
+          "kind": "release_notes"
+        },
+        {
+          "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "filename": "SHA256SUMS",
+          "kind": "checksums"
+        },
+        {
+          "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+          "filename": "eawf-plugin-0.7.0.dev1.zip",
+          "kind": "plugin_bundle"
+        }
+      ],
+      "identity": "Elementarno9/eawf"
+    },
+    "npm": {
+      "artifacts": [
+        {
+          "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "filename": "eawf-0.7.0-dev.1.tgz",
+          "kind": "codex_plugin"
+        }
+      ],
+      "identity": "@elementarno/eawf"
+    },
+    "pypi": {
+      "artifacts": [
+        {
+          "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "filename": "eawf-0.7.0.dev1-py3-none-any.whl",
+          "kind": "wheel"
+        },
+        {
+          "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "filename": "eawf-0.7.0.dev1.tar.gz",
+          "kind": "sdist"
+        }
+      ],
+      "identity": "eawf"
+    }
+  },
+  "version": "0.7.0.dev1"
+}

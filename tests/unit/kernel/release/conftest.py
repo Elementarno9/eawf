@@ -9,8 +9,10 @@ fixture nobody ships.
 from __future__ import annotations
 
 import copy
+import json
 from collections.abc import Mapping
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -26,6 +28,12 @@ from eawf.kernel.release.signals import (
 )
 from eawf.kernel.spec.release import Release, ReleaseChannel, ReleaseStatus
 from eawf.kernel.spec.release_config import ReleaseConfig, load_release_config
+from eawf.workflow.release.observation import (
+    FrozenManifest,
+    ObservationRequest,
+    RecordedResponse,
+    observation_request,
+)
 from eawf.workflow.release.train import (
     DEV1_GATE_BINDINGS_YAML,
     DEV1_RELEASE_CONFIG_YAML,
@@ -39,6 +47,44 @@ NOW = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
 SOURCE_SHA = "a" * 40
 TREE_SHA = "b" * 40
 MANIFEST_DIGEST = f"sha256:{'c' * 64}"
+
+#: Recorded registry answers and the frozen manifest they are judged
+#: against. Committed rather than generated so a fixture drifting from
+#: what an adapter reads shows up as a diff, not as a passing test.
+OBSERVATION_FIXTURES = Path(__file__).parents[3] / "fixtures" / "release" / "observations"
+
+#: The recorded-response stem of each adapter, by target id.
+ADAPTER_STEMS: Mapping[str, str] = {
+    "pypi": "package_index",
+    "npm": "npm_registry",
+    "github": "source_host_release",
+}
+
+
+def frozen_manifest() -> FrozenManifest:
+    """Return the committed ``0.7.0.dev1`` frozen manifest."""
+    return FrozenManifest.model_validate(
+        json.loads((OBSERVATION_FIXTURES / "manifest.json").read_text(encoding="utf-8"))
+    )
+
+
+def recorded_response(target_id: str, case: str) -> RecordedResponse:
+    """Return the recorded registry answer for *target_id* in *case*.
+
+    Args:
+        target_id: Publication target whose adapter recorded it.
+        case: Fixture case stem, e.g. ``match`` or ``default-channel``.
+
+    Returns:
+        The recorded answer.
+    """
+    path = OBSERVATION_FIXTURES / f"{ADAPTER_STEMS[target_id]}-{case}.json"
+    return RecordedResponse.model_validate(json.loads(path.read_text(encoding="utf-8")))
+
+
+def read_back_request(target_id: str, *, config: ReleaseConfig | None = None) -> ObservationRequest:
+    """Return the read-back request for one configured target."""
+    return observation_request(config or dev1_config(), frozen_manifest(), target_id=target_id)
 
 
 def dev1_config(**overrides: Any) -> ReleaseConfig:

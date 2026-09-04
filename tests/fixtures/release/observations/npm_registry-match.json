@@ -1,0 +1,22 @@
+{
+  "payload": {
+    "dist-tags": {
+      "latest": "0.6.8",
+      "next": "0.7.0-dev.1"
+    },
+    "name": "@elementarno/eawf",
+    "versions": {
+      "0.7.0-dev.1": {
+        "dist": {
+          "files": [
+            {
+              "name": "eawf-0.7.0-dev.1.tgz",
+              "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "status": 200
+}

@@ -37,6 +37,7 @@ import json
 import logging
 from collections.abc import Mapping, Sequence
 from datetime import datetime
+from typing import Final
 from uuid import UUID
 
 from eawf.kernel.spec.publication import (
@@ -51,6 +52,7 @@ from eawf.workflow.release.lifecycle import (
     advance_release,
     validate_release_transition,
 )
+from eawf.workflow.release.observation import configured_target
 from eawf.workflow.release.target_machine import (
     advance_target_attempt,
     current_target_status,
@@ -67,6 +69,37 @@ logger = logging.getLogger(__name__)
 RETRYABLE_TARGET_STATUSES: frozenset[ReleaseTargetStatus] = frozenset(
     {ReleaseTargetStatus.REPORTED_FAILURE, ReleaseTargetStatus.UNKNOWN}
 )
+
+#: The results the publish and reconcile paths may write. Everything an
+#: adapter can tell you about its own call, and nothing an independent
+#: read-back would have to establish. The complement of this set inside
+#: :data:`~eawf.kernel.spec.publication.SETTLED_TARGET_STATUSES` is
+#: exactly the two ``observed_*`` statuses, which belong to
+#: :mod:`eawf.workflow.release.observe` alone.
+RECONCILABLE_TARGET_STATUSES: Final[frozenset[ReleaseTargetStatus]] = frozenset(
+    {
+        ReleaseTargetStatus.REPORTED_SUCCESS,
+        ReleaseTargetStatus.REPORTED_FAILURE,
+        ReleaseTargetStatus.UNKNOWN,
+    }
+)
+
+
+class ObserverOnlyStatusError(ValueError):
+    """A non-observation path tried to write an ``observed_*`` status.
+
+    Attributes:
+        status: The observer-only status that was attempted.
+    """
+
+    def __init__(self, status: ReleaseTargetStatus) -> None:
+        """Store the refused *status* alongside the operator message."""
+        super().__init__(
+            f"observer_only_status: {status.value!r} is written only by "
+            f"release.observe_target, from an observation receipt; reconciliation "
+            f"may write {sorted(s.value for s in RECONCILABLE_TARGET_STATUSES)}"
+        )
+        self.status = status
 
 
 def request_digest(config: ReleaseConfig, target: ReleaseTargetConfig, *, proof_digest: str) -> str:
@@ -414,57 +447,60 @@ def reconcile_target(
     operation: PublicationOperation,
     *,
     target_id: str,
-    observation_receipt_ref: str,
-    observation_matched: bool,
+    status: ReleaseTargetStatus,
     effect_receipt_ref: str | None = None,
     now: datetime,
 ) -> tuple[Release, PublicationOperation]:
-    """Settle one leg against an independent read-back.
+    """Settle one leg against what the adapter finally reported.
 
-    Reconciliation is the only verb that writes an ``observed_*``
-    status, and it does not move the release status: what a read-back
-    settles is one leg, and whether the release may now bake is a
-    separate question the verification edge answers. The release record
-    still advances a revision, because its projected target statuses
-    changed and a stale-revision caller must be refused.
+    Reconciliation writes only a *reported* result -- the adapter's own
+    word, recovered late. It is deliberately barred from the two
+    ``observed_*`` statuses
+    (:data:`RECONCILABLE_TARGET_STATUSES`): those assert an independent
+    read-back, and letting the same verb that records an adapter's claim
+    also record its verification would make an adapter the judge of its
+    own publication. Only
+    :func:`~eawf.workflow.release.observe.observe_target` writes them,
+    and only from an observation receipt.
+
+    The release status does not move here: what a late report settles is
+    one leg. The record still advances a revision, because its projected
+    target statuses changed and a stale-revision caller must be refused.
 
     Args:
         release: The record whose leg is being reconciled.
         config: Loaded checkpoint configuration naming every target.
         operation: The operation whose leg is being settled.
-        target_id: Which configured leg was read back.
-        observation_receipt_ref: The read-back receipt.
-        observation_matched: Whether the read-back matched the frozen
-            digests. ``False`` settles the leg as ``observed_mismatch``.
-        effect_receipt_ref: Effect receipt to attach when the leg timed
-            out without one and the read-back found the effect anyway.
-        now: Timezone-aware UTC instant of the read-back.
+        target_id: Which configured leg reported late.
+        status: The reported result, from
+            :data:`RECONCILABLE_TARGET_STATUSES`.
+        effect_receipt_ref: The adapter's receipt, required by the two
+            reported statuses.
+        now: Timezone-aware UTC instant of the reconciliation.
 
     Returns:
         The record with re-projected target statuses, and the operation
         with that leg settled.
 
     Raises:
+        ObserverOnlyStatusError: When *status* is an ``observed_*``
+            status, which only the observation verb may write.
         KeyError: When *target_id* is not a configured target, or the
             operation has never attempted it.
-        TargetTransitionError: When the leg cannot be observed from
+        TargetTransitionError: When the leg cannot reach *status* from
             where it stands.
         ValidationError: When the settled row violates a record
-            invariant.
+            invariant, e.g. a reported status with no effect receipt.
     """
-    target = _configured_target(config, target_id)
+    if status not in RECONCILABLE_TARGET_STATUSES:
+        raise ObserverOnlyStatusError(status)
+    target = configured_target(config, target_id)
     settled = advance_target_attempt(
         operation,
         target=target,
-        to=(
-            ReleaseTargetStatus.OBSERVED_SUCCESS
-            if observation_matched
-            else ReleaseTargetStatus.OBSERVED_MISMATCH
-        ),
+        to=status,
         now=now,
         effect_receipt_ref=effect_receipt_ref,
-        observation_receipt_ref=observation_receipt_ref,
-        observation_matched=observation_matched,
     )
     reconciled = Release.model_validate(
         release.model_copy(
@@ -476,31 +512,9 @@ def reconcile_target(
     )
     logger.info(
         f"reconcile_target key={release.key!r} target={target_id!r} "
-        f"matched={observation_matched} revision={reconciled.revision}"
+        f"status={status.value!r} revision={reconciled.revision}"
     )
     return reconciled, settled
-
-
-def _configured_target(config: ReleaseConfig, target_id: str) -> ReleaseTargetConfig:
-    """Return the configured target named *target_id*.
-
-    Args:
-        config: Loaded checkpoint configuration.
-        target_id: Target to look up.
-
-    Returns:
-        The matching target configuration.
-
-    Raises:
-        KeyError: When the checkpoint configures no such target.
-    """
-    for target in config.targets:
-        if target.target_id == target_id:
-            return target
-    raise KeyError(
-        f"checkpoint {config.release_key!r} configures no target {target_id!r}; "
-        f"configured: {[t.target_id for t in config.targets]}"
-    )
 
 
 def operation_reference(operation: PublicationOperation) -> str:
@@ -533,7 +547,9 @@ def _assert_same_release(release: Release, readiness: ReleaseReadiness) -> None:
 
 
 __all__ = [
+    "RECONCILABLE_TARGET_STATUSES",
     "RETRYABLE_TARGET_STATUSES",
+    "ObserverOnlyStatusError",
     "begin_publication",
     "begin_verification",
     "burn_release",

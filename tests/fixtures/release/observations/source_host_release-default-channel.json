@@ -1,0 +1,23 @@
+{
+  "payload": {
+    "assets": [
+      {
+        "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "name": "RELEASE_NOTES.md"
+      },
+      {
+        "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "name": "SHA256SUMS"
+      },
+      {
+        "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "name": "eawf-plugin-0.7.0.dev1.zip"
+      }
+    ],
+    "draft": false,
+    "prerelease": false,
+    "repository": "Elementarno9/eawf",
+    "tag_name": "v0.7.0.dev1"
+  },
+  "status": 200
+}

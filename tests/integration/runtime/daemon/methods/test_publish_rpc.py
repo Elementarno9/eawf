@@ -9,6 +9,12 @@ different payload answering ``idempotency_conflict``; and publish
 handing back an operation reference at once, with every leg queued
 rather than awaited, once the chokepoint preflight recomputes green.
 
+``release.reconcile`` is under test at its narrowed contract: it records
+what the adapter finally reported and refuses both ``observed_*``
+statuses with ``observer_only_status``, because an independent read-back
+is ``release.observe_target``'s job (see
+:mod:`tests.integration.runtime.release.test_observe_cli`).
+
 Handlers are driven directly through the module-level coroutines, so the
 tests need no live transport. The default signal producers do not exist
 yet (every row reports ``unavailable``), so the green path patches the
@@ -160,6 +166,29 @@ def seed_legs(
     )
 
 
+def seed_dispatch(ctx: MethodContext, result: dict[str, Any]) -> PublicationOperation:
+    """Move every leg of the published operation to in_flight.
+
+    Reconciliation settles a leg that is already dispatched, so its tests
+    seed only the dispatch and let the verb write the reported result.
+    """
+    config = dev1_config()
+    operation = PublicationOperation.model_validate(result["operation"])
+    for target in config.targets:
+        row = require_attempt(operation, target.target_id)
+        operation = advance_target_attempt(
+            operation, target=target, to=ReleaseTargetStatus.IN_FLIGHT, now=row.started_at
+        )
+    return record_operation(
+        Path(ctx.state_path),
+        operation,
+        idempotency_key="seed-dispatch-01",
+        fingerprint=request_fingerprint("test.seed", {"status": "in_flight"}),
+        recorded_at=datetime.now(UTC) + timedelta(seconds=1),
+        summary="seed dispatch",
+    )
+
+
 def recovering_payload(result: dict[str, Any]) -> dict[str, Any]:
     """Return the published record moved to RECOVERING."""
     published = Release.model_validate(result["release"])
@@ -202,7 +231,7 @@ def test_reconcile_requires_the_keying_fields(ctx: MethodContext, missing: str) 
         "expected_revision": 4,
         "idempotency_key": "reconcile-0.7.0.dev1-01",
         "target_id": "pypi",
-        "observation_receipt_ref": OBSERVATION,
+        "status": ReleaseTargetStatus.REPORTED_SUCCESS.value,
     }
     params.pop(missing)
     with pytest.raises(ValidationError):
@@ -408,13 +437,13 @@ def test_retry_target_refuses_when_no_operation_is_open(
 # --- release.reconcile ---------------------------------------------------
 
 
-def test_reconcile_settles_one_leg_as_observed(
+def test_reconcile_settles_one_leg_as_reported(
     ctx: MethodContext,
     green_probes: None,
 ) -> None:
     async def body() -> None:
         published = await publish(ctx, publish_params())
-        seed_legs(ctx, published, ReleaseTargetStatus.REPORTED_SUCCESS)
+        seed_dispatch(ctx, published)
         result = await reconcile(
             ctx,
             {
@@ -422,26 +451,28 @@ def test_reconcile_settles_one_leg_as_observed(
                 "expected_revision": Release.model_validate(published["release"]).revision,
                 "idempotency_key": "reconcile-0.7.0.dev1-01",
                 "target_id": "pypi",
-                "observation_receipt_ref": OBSERVATION,
+                "status": ReleaseTargetStatus.REPORTED_SUCCESS.value,
+                "effect_receipt_ref": EFFECT,
             },
         )
         operation = PublicationOperation.model_validate(result["operation"])
         row = require_attempt(operation, "pypi")
-        assert row.status is ReleaseTargetStatus.OBSERVED_SUCCESS
-        assert row.observation_receipt_ref == OBSERVATION
+        assert row.status is ReleaseTargetStatus.REPORTED_SUCCESS
+        assert row.effect_receipt_ref == EFFECT
+        assert row.observation_receipt_ref is None
         reconciled = Release.model_validate(result["release"])
-        assert reconciled.target_statuses["pypi"] is ReleaseTargetStatus.OBSERVED_SUCCESS
+        assert reconciled.target_statuses["pypi"] is ReleaseTargetStatus.REPORTED_SUCCESS
 
     _run(body)
 
 
-def test_reconcile_records_a_mismatch_without_claiming_success(
+def test_reconcile_records_a_failure_without_claiming_success(
     ctx: MethodContext,
     green_probes: None,
 ) -> None:
     async def body() -> None:
         published = await publish(ctx, publish_params())
-        seed_legs(ctx, published, ReleaseTargetStatus.REPORTED_SUCCESS)
+        seed_dispatch(ctx, published)
         result = await reconcile(
             ctx,
             {
@@ -449,12 +480,66 @@ def test_reconcile_records_a_mismatch_without_claiming_success(
                 "expected_revision": Release.model_validate(published["release"]).revision,
                 "idempotency_key": "reconcile-0.7.0.dev1-02",
                 "target_id": "pypi",
-                "observation_receipt_ref": OBSERVATION,
-                "observation_matched": False,
+                "status": ReleaseTargetStatus.REPORTED_FAILURE.value,
+                "effect_receipt_ref": EFFECT,
             },
         )
         operation = PublicationOperation.model_validate(result["operation"])
-        assert require_attempt(operation, "pypi").status is ReleaseTargetStatus.OBSERVED_MISMATCH
+        assert require_attempt(operation, "pypi").status is ReleaseTargetStatus.REPORTED_FAILURE
+
+    _run(body)
+
+
+@pytest.mark.parametrize(
+    "status",
+    (
+        ReleaseTargetStatus.OBSERVED_SUCCESS.value,
+        ReleaseTargetStatus.OBSERVED_MISMATCH.value,
+    ),
+)
+def test_reconcile_refuses_to_write_an_observed_status(
+    ctx: MethodContext,
+    green_probes: None,
+    status: str,
+) -> None:
+    async def body() -> None:
+        published = await publish(ctx, publish_params())
+        seed_legs(ctx, published, ReleaseTargetStatus.REPORTED_SUCCESS)
+        with pytest.raises(DaemonValidationError, match="observer_only_status"):
+            await reconcile(
+                ctx,
+                {
+                    "release": published["release"],
+                    "expected_revision": Release.model_validate(published["release"]).revision,
+                    "idempotency_key": f"reconcile-observed-{status}",
+                    "target_id": "pypi",
+                    "status": status,
+                },
+            )
+
+    _run(body)
+
+
+def test_reconcile_no_longer_accepts_an_observation_receipt(
+    ctx: MethodContext,
+    green_probes: None,
+) -> None:
+    async def body() -> None:
+        published = await publish(ctx, publish_params())
+        seed_dispatch(ctx, published)
+        with pytest.raises(ValidationError, match="observation_receipt_ref"):
+            await reconcile(
+                ctx,
+                {
+                    "release": published["release"],
+                    "expected_revision": Release.model_validate(published["release"]).revision,
+                    "idempotency_key": "reconcile-0.7.0.dev1-05",
+                    "target_id": "pypi",
+                    "status": ReleaseTargetStatus.REPORTED_SUCCESS.value,
+                    "effect_receipt_ref": EFFECT,
+                    "observation_receipt_ref": OBSERVATION,
+                },
+            )
 
     _run(body)
 
@@ -465,7 +550,7 @@ def test_reconcile_refuses_an_unconfigured_target(
 ) -> None:
     async def body() -> None:
         published = await publish(ctx, publish_params())
-        seed_legs(ctx, published, ReleaseTargetStatus.REPORTED_SUCCESS)
+        seed_dispatch(ctx, published)
         with pytest.raises(DaemonValidationError, match="configures no target"):
             await reconcile(
                 ctx,
@@ -474,7 +559,8 @@ def test_reconcile_refuses_an_unconfigured_target(
                     "expected_revision": Release.model_validate(published["release"]).revision,
                     "idempotency_key": "reconcile-0.7.0.dev1-03",
                     "target_id": "crates",
-                    "observation_receipt_ref": OBSERVATION,
+                    "status": ReleaseTargetStatus.REPORTED_SUCCESS.value,
+                    "effect_receipt_ref": EFFECT,
                 },
             )
 
@@ -484,7 +570,7 @@ def test_reconcile_refuses_an_unconfigured_target(
 def test_reconcile_refuses_a_stale_revision(ctx: MethodContext, green_probes: None) -> None:
     async def body() -> None:
         published = await publish(ctx, publish_params())
-        seed_legs(ctx, published, ReleaseTargetStatus.REPORTED_SUCCESS)
+        seed_dispatch(ctx, published)
         with pytest.raises(DaemonValidationError, match="stale_release_revision"):
             await reconcile(
                 ctx,
@@ -493,7 +579,8 @@ def test_reconcile_refuses_a_stale_revision(ctx: MethodContext, green_probes: No
                     "expected_revision": 99,
                     "idempotency_key": "reconcile-0.7.0.dev1-04",
                     "target_id": "pypi",
-                    "observation_receipt_ref": OBSERVATION,
+                    "status": ReleaseTargetStatus.REPORTED_SUCCESS.value,
+                    "effect_receipt_ref": EFFECT,
                 },
             )
 

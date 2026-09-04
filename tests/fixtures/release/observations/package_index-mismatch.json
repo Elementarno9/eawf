@@ -1,0 +1,25 @@
+{
+  "payload": {
+    "info": {
+      "name": "eawf",
+      "version": "0.7.0.dev1"
+    },
+    "urls": [
+      {
+        "digests": {
+          "sha256": "9999999999999999999999999999999999999999999999999999999999999999"
+        },
+        "filename": "eawf-0.7.0.dev1-py3-none-any.whl",
+        "packagetype": "bdist_wheel"
+      },
+      {
+        "digests": {
+          "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "filename": "eawf-0.7.0.dev1.tar.gz",
+        "packagetype": "sdist"
+      }
+    ]
+  },
+  "status": 200
+}

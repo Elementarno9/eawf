@@ -13110,6 +13110,21 @@
       "status": "done",
       "updated_at": "2026-09-04T20:22:37.650870Z"
     },
+    "P31-I01-W28": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W28",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W28",
+      "model": null,
+      "scope_id": "P31-I01-W28",
+      "status": "done",
+      "updated_at": "2026-09-04T20:52:44.854782Z"
+    },
     "P31-I01-W29": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -15227,15 +15242,47 @@
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-04T20:52:38.383122Z",
       "id": "SES-20260904T204541.838333Z-operator-claude-7cc3fa3a-6acd-4496-8441-3d2e3d860c33",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-c38",
       "started_at": "2026-09-04T20:45:41.838333Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260904T205209.804715Z-executor-claude-82d1b961-515f-494d-8849-a8f1d74f09bf": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W28"
+      ],
+      "ended_at": "2026-09-04T20:52:38.384294Z",
+      "id": "SES-20260904T205209.804715Z-executor-claude-82d1b961-515f-494d-8849-a8f1d74f09bf",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W28",
+      "started_at": "2026-09-04T20:52:09.804715Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260904T205236.799954Z-operator-claude-e5bc5031-6fad-4ee1-8095-2e7391250af7": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-04T20:52:38.384951Z",
+      "id": "SES-20260904T205236.799954Z-operator-claude-e5bc5031-6fad-4ee1-8095-2e7391250af7",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-c28",
+      "started_at": "2026-09-04T20:52:36.799954Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -20159,12 +20206,8 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260904T204541.838333Z-operator-claude-7cc3fa3a-6acd-4496-8441-3d2e3d860c33"
-    ],
-    "active_wave_ids": [
-      "P31-I01-W28"
-    ],
+    "active_session_ids": [],
+    "active_wave_ids": [],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -38625,7 +38668,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-04T20:46:15.481623Z",
+  "updated_at": "2026-09-04T20:53:40.989618Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -39249,6 +39292,22 @@
       "supersedes_id": null,
       "tree_sha": "e9dd5ad40ef76ff45a1a50fc0e53352f224d18d9",
       "wave_id": "P31-I01-W43"
+    },
+    "integration-ad7202607128d32f599080c5": {
+      "base_sha": "0331476dcb043a811a724de4502d9478fa848829",
+      "candidate_sha": "0f302580bfa3d01ef90eabd6a15daf8e29934261",
+      "created_at": "2026-09-04T20:52:24.186879Z",
+      "diff_digest": "34d9637371c49e0591b6649aec0109e22fb43c37dd1a6d70a1e9493578d042a5",
+      "generation": 1,
+      "id": "integration-ad7202607128d32f599080c5",
+      "integrated_sha": "0f302580bfa3d01ef90eabd6a15daf8e29934261",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and all four declared gates, including the repaired G-04 path, re-run green on the integrated HEAD.",
+      "spec_digest": "78289788ba956396e29d09861bd8b580d3a9eb4bc4b7e2997d088d95e9c1f66a",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "ac59d9429646c520bd8e4c0cca8ef0d4fc6289c0",
+      "wave_id": "P31-I01-W28"
     },
     "integration-b1f7e9e5a3aa05fbac8eef87": {
       "base_sha": "77e8a50dee205b2c477ed83a77ce4e2c038328e1",
@@ -156311,11 +156370,11 @@
         "P31-I01-W33",
         "P31-I01-W25"
       ],
-      "claim_session_id": "SES-20260904T202347.063788Z-executor-claude-bc52015b-6b50-4b47-a769-d14e154ddb6d",
+      "claim_session_id": "SES-20260904T205209.804715Z-executor-claude-82d1b961-515f-494d-8849-a8f1d74f09bf",
       "claimed_at": "2026-09-04T20:23:47.742114Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-04T20:52:44.854782Z",
+      "commit": "97f5289f567ddfb362fe967ba0d4399f163e97cb",
+      "commit_identity_digest": "sha256:eb91ee8b961a9b958464143d845ca0a634f11461cabb66cab3d2a0835f94c32d",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap revise; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:42:35.708422Z",
@@ -156333,7 +156392,8 @@
         "src/eawf/surfaces/cli/commands/release.py",
         "tests/unit/kernel/release",
         "tests/integration/runtime/release",
-        "tests/fixtures/release"
+        "tests/fixtures/release",
+        "tests/integration/runtime/daemon/methods"
       ],
       "gates": [
         {
@@ -156399,7 +156459,7 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/runtime/release/test_observe_cli.py"
+              "tests/integration/runtime/daemon/methods/test_observe_cli.py"
             ],
             "scope": "all",
             "timeout_class": "quick"
@@ -156437,13 +156497,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-09-03T17:42:35.819742Z",
-      "outcome": null,
+      "outcome": "Three observation adapters land with observer-only terminal writes: observe_target records an outcome without advancing the publication machine, reconcile refuses observed statuses, and a prerelease on a default channel routes to recovery. Four gates green including the repaired G-04 path.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -156501,12 +156561,12 @@
           ],
           "id": "CR-04",
           "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/integration/runtime/release/test_observe_cli.py exits 0 with the observation emitted and the undeclared adapter rejected at load",
+          "measurable_signal": "uv run pytest tests/integration/runtime/daemon/methods/test_observe_cli.py exits 0 with the observation emitted and the undeclared adapter rejected at load",
           "oracle_tier": null,
           "quality_dimension": "operability",
           "required": true,
           "response": null,
-          "text": "eawf release observe REL-<version> --target <id> emits the observation and VERIFYING to RECOVERING fires on a missing or contradictory one; the adapter is chosen from ReleaseTargetStatus.observe_adapter and an undeclared adapter raises at load, never a runtime fallback; pytest tests/integration/runtime/release/test_observe_cli.py",
+          "text": "eawf release observe REL-<version> --target <id> emits the observation and VERIFYING to RECOVERING fires on a missing or contradictory one; the adapter is chosen from ReleaseTargetStatus.observe_adapter and an undeclared adapter raises at load, never a runtime fallback; pytest tests/integration/runtime/daemon/methods/test_observe_cli.py",
           "waiver_reason": null
         }
       ],
@@ -156805,7 +156865,7 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/runtime/release/test_reproducible_build.py"
+              "tests/integration/runtime/daemon/methods/test_reproducible_build.py"
             ],
             "scope": "all",
             "timeout_class": "quick"
@@ -156845,7 +156905,7 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/runtime/release/test_pipeline_live.py",
+              "tests/integration/runtime/daemon/methods/test_pipeline_live.py",
               "-k",
               "inventory_artifacts"
             ],
@@ -156933,12 +156993,12 @@
           ],
           "id": "CR-03",
           "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/integration/runtime/release/test_reproducible_build.py exits 0 with equal digests passing and the mutated build returning artifact_nonreproducible",
+          "measurable_signal": "uv run pytest tests/integration/runtime/daemon/methods/test_reproducible_build.py exits 0 with equal digests passing and the mutated build returning artifact_nonreproducible",
           "oracle_tier": null,
           "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "The artifacts signal passes only on a receipt from two clean builds with SOURCE_DATE_EPOCH pinned to the source commit whose wheel and sdist digests agree and match the inventory recomputed before upload; a second build with one mutated file returns artifact_nonreproducible naming the artifact; pytest tests/integration/runtime/release/test_reproducible_build.py",
+          "text": "The artifacts signal passes only on a receipt from two clean builds with SOURCE_DATE_EPOCH pinned to the source commit whose wheel and sdist digests agree and match the inventory recomputed before upload; a second build with one mutated file returns artifact_nonreproducible naming the artifact; pytest tests/integration/runtime/daemon/methods/test_reproducible_build.py",
           "waiver_reason": null
         },
         {
@@ -157205,7 +157265,7 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/runtime/release/test_crash_boundaries.py"
+              "tests/integration/runtime/daemon/methods/test_crash_boundaries.py"
             ],
             "scope": "all",
             "timeout_class": "quick"
@@ -157224,7 +157284,7 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/runtime/release/test_ambiguous_outcome.py"
+              "tests/integration/runtime/daemon/methods/test_ambiguous_outcome.py"
             ],
             "scope": "all",
             "timeout_class": "quick"
@@ -157243,7 +157303,7 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/runtime/release/test_boundary_totality.py"
+              "tests/integration/runtime/daemon/methods/test_boundary_totality.py"
             ],
             "scope": "all",
             "timeout_class": "quick"
@@ -157262,7 +157322,7 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/runtime/release/test_existing_artifact.py"
+              "tests/integration/runtime/daemon/methods/test_existing_artifact.py"
             ],
             "scope": "all",
             "timeout_class": "quick"
@@ -157314,12 +157374,12 @@
           ],
           "id": "CR-01",
           "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/integration/runtime/release/test_crash_boundaries.py exits 0 with zero duplicate external calls across every registered boundary",
+          "measurable_signal": "uv run pytest tests/integration/runtime/daemon/methods/test_crash_boundaries.py exits 0 with zero duplicate external calls across every registered boundary",
           "oracle_tier": null,
           "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "REL-024: for every registered boundary a crash injected before the durable write leaves no effect and a crash injected after it leaves exactly one; resume from the ledger completes the leg with no duplicate external call, proven by a counting fake adapter that returns the call count; pytest tests/integration/runtime/release/test_crash_boundaries.py",
+          "text": "REL-024: for every registered boundary a crash injected before the durable write leaves no effect and a crash injected after it leaves exactly one; resume from the ledger completes the leg with no duplicate external call, proven by a counting fake adapter that returns the call count; pytest tests/integration/runtime/daemon/methods/test_crash_boundaries.py",
           "waiver_reason": null
         },
         {
@@ -157330,12 +157390,12 @@
           ],
           "id": "CR-02",
           "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/integration/runtime/release/test_ambiguous_outcome.py exits 0 with the elapsed deadline resolving only by observation",
+          "measurable_signal": "uv run pytest tests/integration/runtime/daemon/methods/test_ambiguous_outcome.py exits 0 with the elapsed deadline resolving only by observation",
           "oracle_tier": null,
           "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "An adapter deadline elapsing with no final result transitions to unknown, never to reported_failure; an observation after the timeout resolves it to observed_success or observed_mismatch, a tick at deadline equality is still in_flight, and a retry from unknown is bounded by retry_limit; pytest tests/integration/runtime/release/test_ambiguous_outcome.py",
+          "text": "An adapter deadline elapsing with no final result transitions to unknown, never to reported_failure; an observation after the timeout resolves it to observed_success or observed_mismatch, a tick at deadline equality is still in_flight, and a retry from unknown is bounded by retry_limit; pytest tests/integration/runtime/daemon/methods/test_ambiguous_outcome.py",
           "waiver_reason": null
         },
         {
@@ -157346,12 +157406,12 @@
           ],
           "id": "CR-03",
           "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/integration/runtime/release/test_boundary_totality.py exits 0 with the seeded undecorated write site detected",
+          "measurable_signal": "uv run pytest tests/integration/runtime/daemon/methods/test_boundary_totality.py exits 0 with the seeded undecorated write site detected",
           "oracle_tier": null,
           "quality_dimension": "maintainability",
           "required": true,
           "response": null,
-          "text": "The boundary set is total: every durable write site in the release reducer and publisher carries a boundary id from the registry, and a scan of the package raises on a seeded undecorated write site; pytest tests/integration/runtime/release/test_boundary_totality.py",
+          "text": "The boundary set is total: every durable write site in the release reducer and publisher carries a boundary id from the registry, and a scan of the package raises on a seeded undecorated write site; pytest tests/integration/runtime/daemon/methods/test_boundary_totality.py",
           "waiver_reason": null
         },
         {
@@ -157362,12 +157422,12 @@
           ],
           "id": "CR-04",
           "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/integration/runtime/release/test_existing_artifact.py exits 0 with identical artifacts observed_success and mismatched ones in RECOVERING",
+          "measurable_signal": "uv run pytest tests/integration/runtime/daemon/methods/test_existing_artifact.py exits 0 with identical artifacts observed_success and mismatched ones in RECOVERING",
           "oracle_tier": null,
           "quality_dimension": "safety",
           "required": true,
           "response": null,
-          "text": "The already-existing-artifact cases in 10 pass: an identical artifact already on the target is observed_success without a second upload, a mismatched one is observed_mismatch and transitions to RECOVERING, and the first and last retry hit the limit exactly; pytest tests/integration/runtime/release/test_existing_artifact.py",
+          "text": "The already-existing-artifact cases in 10 pass: an identical artifact already on the target is observed_success without a second upload, a mismatched one is observed_mismatch and transitions to RECOVERING, and the first and last retry hit the limit exactly; pytest tests/integration/runtime/daemon/methods/test_existing_artifact.py",
           "waiver_reason": null
         }
       ],
@@ -157670,7 +157730,7 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/runtime/release/test_reconcile_receipts.py"
+              "tests/integration/runtime/daemon/methods/test_reconcile_receipts.py"
             ],
             "scope": "all",
             "timeout_class": "quick"
@@ -157776,12 +157836,12 @@
           ],
           "id": "CR-03",
           "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/integration/runtime/release/test_reconcile_receipts.py exits 0 with recorded receipts reconciled to reported states only",
+          "measurable_signal": "uv run pytest tests/integration/runtime/daemon/methods/test_reconcile_receipts.py exits 0 with recorded receipts reconciled to reported states only",
           "oracle_tier": null,
           "quality_dimension": "reliability",
           "required": true,
           "response": null,
-          "text": "Every publish job uploads publication-receipt-<target>.json with target_id, version, artifact digests, job conclusion and run id; release.reconcile downloads the receipts for the tag runs and returns reported_success, reported_failure or unknown per target, never an observed state; pytest tests/integration/runtime/release/test_reconcile_receipts.py over recorded receipts",
+          "text": "Every publish job uploads publication-receipt-<target>.json with target_id, version, artifact digests, job conclusion and run id; release.reconcile downloads the receipts for the tag runs and returns reported_success, reported_failure or unknown per target, never an observed state; pytest tests/integration/runtime/daemon/methods/test_reconcile_receipts.py over recorded receipts",
           "waiver_reason": null
         },
         {

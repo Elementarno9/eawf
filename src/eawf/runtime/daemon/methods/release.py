@@ -11,16 +11,23 @@ JSON. Three methods land here:
 * ``release.approve`` -- the approval guard, which denies
   ``release_not_ready`` naming the first red signal.
 
-Three more verbs carry external effect and are keyed differently:
-``release.publish``, ``release.retry_target`` and ``release.reconcile``
-each require an ``expected_revision`` (compare-and-swap against the
-record the caller holds) and an ``idempotency_key`` (replay identity in
-the durable ledger). The first three verbs stay pure -- a readiness
-sweep can be run against a proposed record before anything is
-persisted; the last three append to
+Four more verbs touch an external registry and are keyed differently:
+``release.publish``, ``release.retry_target``, ``release.reconcile`` and
+``release.observe_target`` each require an ``expected_revision``
+(compare-and-swap against the record the caller holds) and an
+``idempotency_key`` (replay identity in the durable ledger). The first
+three verbs stay pure -- a readiness sweep can be run against a proposed
+record before anything is persisted; the last four append to
 ``<state_dir>/store/release.jsonl`` through
 :mod:`eawf.workflow.release.ledger`, because a verb that touches an
 external registry has to remember what it already did.
+
+``release.reconcile`` and ``release.observe_target`` are deliberately
+separate verbs rather than one with a flag. Reconciliation records what
+the adapter finally said about its own call; observation records what an
+independent read-back found. Only the second may write an ``observed_*``
+status, and only from an observation receipt, so no adapter is ever the
+judge of its own publication.
 """
 
 from __future__ import annotations
@@ -37,6 +44,7 @@ from eawf.kernel.spec.publication import PublicationOperation
 from eawf.kernel.spec.release import (
     Release,
     ReleaseCheckpoint,
+    ReleaseTargetStatus,
     validate_release_against_train,
 )
 from eawf.kernel.spec.release_config import (
@@ -45,6 +53,7 @@ from eawf.kernel.spec.release_config import (
     load_release_config,
 )
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
+from eawf.workflow.release.adapters import observe_publication
 from eawf.workflow.release.ledger import (
     IdempotencyConflictError,
     StaleReleaseRevisionError,
@@ -55,6 +64,13 @@ from eawf.workflow.release.ledger import (
     request_fingerprint,
 )
 from eawf.workflow.release.lifecycle import ReleaseTransitionError
+from eawf.workflow.release.observation import (
+    FrozenManifest,
+    RecordedResponse,
+    assert_manifest_binds,
+    observation_request,
+)
+from eawf.workflow.release.observe import observe_target
 from eawf.workflow.release.preflight import approve_release, record_preflight_result
 from eawf.workflow.release.publication import (
     begin_publication,
@@ -359,17 +375,37 @@ class ReconcileParams(_PublicationParams):
     """Params for :func:`reconcile`.
 
     Attributes:
-        target_id: The leg that was independently read back.
-        observation_receipt_ref: The read-back receipt.
-        observation_matched: Whether the read-back matched the frozen
-            digests.
-        effect_receipt_ref: Effect receipt the read-back recovered for a
-            leg that timed out without one.
+        target_id: The leg whose adapter reported late.
+        status: The reported result. Only ``reported_success``,
+            ``reported_failure`` and ``unknown`` are accepted; the two
+            ``observed_*`` statuses belong to :func:`observe`.
+        effect_receipt_ref: The adapter's receipt, required by the two
+            reported statuses.
     """
 
     target_id: str
-    observation_receipt_ref: str
-    observation_matched: bool = True
+    status: ReleaseTargetStatus
+    effect_receipt_ref: str | None = None
+
+
+class ObserveTargetParams(_PublicationParams):
+    """Params for :func:`observe`.
+
+    Attributes:
+        target_id: The leg to read back.
+        manifest: Serialized frozen manifest. Its recomputed digest must
+            be the one the release approved, so an observation cannot be
+            collected against a manifest nobody signed off.
+        response: A recorded registry answer already in hand. ``None``
+            asks the leg's reader, which reports ``registry_unreachable``
+            until a live client ships.
+        effect_receipt_ref: The adapter's receipt, for observing a leg
+            that timed out without one.
+    """
+
+    target_id: str
+    manifest: dict[str, Any]
+    response: dict[str, Any] | None = None
     effect_receipt_ref: str | None = None
 
 
@@ -631,20 +667,25 @@ async def retry_target(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
 
 @register("release.reconcile")
 async def reconcile(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Settle one leg against an independent read-back.
+    """Settle one leg against what its adapter finally reported.
+
+    Reconciliation records the adapter's own late word and nothing more.
+    It cannot write either ``observed_*`` status -- that takes an
+    independent read-back, which is :func:`observe`.
 
     Args:
         ctx: Server context; supplies the state root the ledger lives in.
         params: JSON-RPC params per :class:`ReconcileParams`.
 
     Returns:
-        The operation reference, the operation with that leg observed,
+        The operation reference, the operation with that leg settled,
         the re-projected record and whether this was a replay.
 
     Raises:
         DaemonValidationError: On a stale revision, an idempotency
-            conflict, an unconfigured or unattempted target, or a leg
-            that cannot be observed from where it stands.
+            conflict, an unconfigured or unattempted target, a leg that
+            cannot reach the reported status from where it stands, or an
+            observer-only status (``observer_only_status``).
     """
     args = ReconcileParams.model_validate(params)
     state_path = _require_state_path(ctx)
@@ -663,8 +704,7 @@ async def reconcile(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any
             config,
             operation,
             target_id=args.target_id,
-            observation_receipt_ref=args.observation_receipt_ref,
-            observation_matched=args.observation_matched,
+            status=args.status,
             effect_receipt_ref=args.effect_receipt_ref,
             now=now,
         )
@@ -683,15 +723,101 @@ async def reconcile(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any
     return _receipt(recorded, reconciled, replayed=False)
 
 
+@register("release.observe_target")
+async def observe(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Read one leg back and settle it against the frozen manifest.
+
+    This is the only verb that writes ``observed_success`` or
+    ``observed_mismatch``. The adapter is resolved from the target's
+    declared ``observe_adapter`` -- there is no fallback -- and the
+    manifest offered as the comparison basis must recompute to the
+    digest the release approved.
+
+    A contradicted or missing read-back routes the record to
+    ``RECOVERING``; the matched read-back that completes the required set
+    bakes it. An inconclusive read-back writes nothing and answers
+    ``observation_inconclusive``.
+
+    Args:
+        ctx: Server context; supplies the state root the ledger lives in.
+        params: JSON-RPC params per :class:`ObserveTargetParams`.
+
+    Returns:
+        The operation reference, the operation with that leg observed,
+        the routed record, the replay flag, and the observation itself
+        (``None`` on a replay, which returns the original receipt rather
+        than re-judging the registry).
+
+    Raises:
+        DaemonValidationError: On a stale revision, an idempotency
+            conflict, a manifest that does not bind, an unconfigured or
+            unattempted target, an inconclusive read-back, or a denied
+            release or target transition.
+    """
+    args = ObserveTargetParams.model_validate(params)
+    state_path = _require_state_path(ctx)
+    release = _validated_release(args.release)
+    fingerprint = _fingerprint("release.observe_target", params)
+    replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
+    if replayed is not None:
+        return {**_receipt(replayed, release, replayed=True), "observation": None}
+    _assert_revision(release, args.expected_revision)
+    config = _resolve_config(release.version)
+    operation = _open_operation(state_path, release)
+    now = datetime.now(UTC)
+    try:
+        manifest = FrozenManifest.model_validate(args.manifest)
+        assert_manifest_binds(release, manifest)
+        observation = observe_publication(
+            observation_request(config, manifest, target_id=args.target_id),
+            response=None
+            if args.response is None
+            else RecordedResponse.model_validate(args.response),
+            observed_at=now,
+        )
+        observed, settled = observe_target(
+            release,
+            config,
+            operation,
+            observation=observation,
+            now=now,
+            effect_receipt_ref=args.effect_receipt_ref,
+        )
+    except ReleaseTransitionError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
+    except TargetTransitionError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
+    except (KeyError, ValidationError, ValueError) as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    recorded = record_operation(
+        state_path,
+        settled,
+        idempotency_key=args.idempotency_key,
+        fingerprint=fingerprint,
+        recorded_at=now,
+        summary=f"observe {release.key} target {args.target_id}: {observation.code.value}",
+    )
+    logger.info(
+        f"observe key={release.key!r} target={args.target_id!r} "
+        f"code={observation.code.value!r} status={observed.status.value!r}"
+    )
+    return {
+        **_receipt(recorded, observed, replayed=False),
+        "observation": observation.model_dump(mode="json"),
+    }
+
+
 __all__ = [
     "ApproveParams",
     "ComputeReadinessParams",
+    "ObserveTargetParams",
     "PublishParams",
     "ReconcileParams",
     "RetryTargetParams",
     "ShowParams",
     "approve",
     "compute_readiness_method",
+    "observe",
     "publish",
     "reconcile",
     "retry_target",
