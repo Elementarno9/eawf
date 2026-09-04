@@ -28,6 +28,8 @@ from eawf.surfaces.render.plan_view import (
 _GOLDEN_STATE_PATH = (
     Path(__file__).resolve().parents[1]
     / "golden"
+    / "surfaces"
+    / "render"
     / "plan_view"
     / "core_python_research"
     / "state.json"

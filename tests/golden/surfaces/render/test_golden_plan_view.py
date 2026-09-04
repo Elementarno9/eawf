@@ -20,7 +20,10 @@ import pytest
 from eawf.kernel.state.models import State
 from eawf.surfaces.render.plan_view import build_view, render_json, render_markdown
 
-_FIXTURE_DIR: Path = Path(__file__).parent
+#: The committed fixture combos keep their own sub-directory: the test module
+#: mirrors the package it renders, the bytes stay grouped under one name the
+#: snapshot inventory can address.
+_FIXTURE_DIR: Path = Path(__file__).parent / "plan_view"
 
 _REGEN_HINT = """
 To regenerate after a deliberate renderer change:
@@ -33,7 +36,7 @@ To regenerate after a deliberate renderer change:
     from eawf.kernel.state.models import State
 
     for combo in ('core_only', 'core_python', 'core_python_research'):
-        d = Path('tests/golden/plan_view') / combo
+        d = Path('tests/golden/surfaces/render/plan_view') / combo
         state = State.model_validate(orjson.loads((d / 'state.json').read_bytes()))
         # iter id pinned to P05-I01 across all fixtures
         view = build_view(state, 'P05-I01')

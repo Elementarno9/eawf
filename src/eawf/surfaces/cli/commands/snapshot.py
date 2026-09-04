@@ -90,8 +90,8 @@ SNAPSHOT_SURFACES: dict[str, SnapshotSurface] = {
         ),
         SnapshotSurface(
             kind="plan_view",
-            golden_dir="tests/golden/plan_view",
-            regen_target="tests/golden/plan_view/test_golden_plan_view.py",
+            golden_dir="tests/golden/surfaces/render/plan_view",
+            regen_target="tests/golden/surfaces/render/test_golden_plan_view.py",
             description="`eawf wave list` ASCII render per fixture (small/medium/large).",
         ),
         SnapshotSurface(
@@ -132,8 +132,8 @@ SNAPSHOT_SURFACES: dict[str, SnapshotSurface] = {
         ),
         SnapshotSurface(
             kind="scenarios",
-            golden_dir="tests/golden/scenarios",
-            regen_target="tests/golden/scenarios/test_scenarios.py",
+            golden_dir="tests/golden/surfaces/cli/scenarios",
+            regen_target="tests/golden/surfaces/cli/test_scenarios.py",
             description="End-to-end lifecycle goldens (fresh repo, enrich, full flow).",
         ),
         SnapshotSurface(
