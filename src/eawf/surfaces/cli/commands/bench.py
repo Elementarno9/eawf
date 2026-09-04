@@ -14,18 +14,30 @@ Verbs:
   (``after >= before * (1 + threshold)``); exits ``2`` on regression.
 - ``eawf bench fixture seed`` — write the deterministic corpus files for
   one size (re-seeding is byte-identical).
+- ``eawf bench turn-cost`` — render the wall-clock + cost record per
+  completed unit of work, and optionally check it against a recorded
+  baseline.
 
 Exit codes:
 
-- ``0`` — success / no regression.
-- ``1`` (``USER_ERROR``) — bad size / harness / unreadable input.
-- ``2`` (``VALIDATION_ERROR``) — ``compare`` detected a regression.
+- ``0`` — success / no regression / nothing measurable.
+- ``1`` (``USER_ERROR``) — bad size / harness / unreadable input, and the
+  ``turn-cost`` refusals: an unknown fixture, a ``--check`` with nothing to
+  measure, and a baseline that is not comparable to the current record.
+- ``2`` (``VALIDATION_ERROR``) — ``compare`` or ``turn-cost --check``
+  detected a regression.
+
+The two non-zero ``turn-cost --check`` codes are deliberately distinct: a
+``2`` says the measurement moved, a ``1`` says the two artifacts were never
+comparable. Collapsing them would let a stale baseline read as a
+performance regression (or, worse, invite a silent rebaseline).
 """
 
 from __future__ import annotations
 
 import logging
 import platform
+from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -39,6 +51,11 @@ from eawf.surfaces.cli.output import emit_json_or_text
 
 if TYPE_CHECKING:
     from eawf.observability.bench.harness import BenchResult
+    from eawf.observability.bench.turn_cost import (
+        CorpusResolution,
+        TurnCostComparison,
+    )
+    from eawf.observability.telemetry.turn_cost import TurnCostRecord
 
 logger = logging.getLogger(__name__)
 
@@ -214,6 +231,111 @@ def bench_compare(
     _ = BenchResult
 
 
+@bench_app.command("turn-cost")
+def bench_turn_cost(
+    ctx: typer.Context,
+    fixture: Annotated[
+        str,
+        typer.Option(
+            "--fixture",
+            help="Corpus to measure: 'live' (state + telemetry cache) or a seeded fixture id.",
+        ),
+    ] = "live",
+    check: Annotated[
+        bool,
+        typer.Option("--check", help="Compare the record against --baseline instead of rendering."),
+    ] = False,
+    baseline: Annotated[
+        Path | None,
+        typer.Option("--baseline", help="Baseline artifact to check against (requires --check)."),
+    ] = None,
+    write_baseline: Annotated[
+        Path | None,
+        typer.Option("--write-baseline", help="Write the measured record out as a baseline."),
+    ] = None,
+    threshold: Annotated[
+        float,
+        typer.Option(
+            "--threshold",
+            help="Tolerance recorded into --write-baseline (fraction, e.g. 0.10).",
+        ),
+    ] = 0.10,
+) -> None:
+    """Render wall clock + cost per completed unit of work, or check it.
+
+    Without ``--check`` this renders the record for the selected corpus.
+    With ``--check --baseline <path>`` it instead compares the record's p90
+    wall clock and p90 cost against the baseline, under the threshold the
+    baseline artifact itself recorded, and exits ``2`` when either crosses.
+
+    A baseline measured from a different fixture, harness revision, runtime
+    or model is refused with ``comparison_invalid`` (exit ``1``) naming the
+    differing fields — never compared, and never silently replaced.
+
+    Raises:
+        typer.Exit: ``1`` on a flag/artifact refusal, ``2`` on a regression.
+    """
+    from eawf.observability.bench.turn_cost import (
+        TurnCostVerdict,
+        baseline_from_record,
+        build_corpus_record,
+        compare_turn_cost,
+        load_baseline,
+    )
+    from eawf.observability.bench.turn_cost import write_baseline as write_baseline_artifact
+
+    flags: GlobalFlags = ctx.obj
+    if check and baseline is None:
+        cli_errors.emit_error(
+            cli_errors.UserError("--check requires --baseline <path>"), flags=flags
+        )
+    if baseline is not None and not check:
+        cli_errors.emit_error(
+            cli_errors.UserError("--baseline is only read under --check"), flags=flags
+        )
+    if threshold < 0:
+        cli_errors.emit_error(
+            cli_errors.UserError(f"--threshold must be >= 0, got {threshold}"), flags=flags
+        )
+
+    resolution = _resolve_turn_cost_corpus(flags, fixture=fixture)
+    if resolution.corpus is None:
+        _emit_turn_cost_empty(flags, resolution, fixture=fixture, check=check)
+        return
+
+    record = build_corpus_record(resolution.corpus)
+    if write_baseline is not None:
+        write_baseline_artifact(
+            baseline_from_record(record, threshold=Decimal(str(threshold))),
+            write_baseline,
+        )
+
+    if baseline is None:
+        _emit_turn_cost_record(flags, record, skipped=resolution.skipped_session_count)
+        return
+
+    try:
+        recorded = load_baseline(baseline)
+    except (FileNotFoundError, ValueError) as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc)), flags=flags)
+
+    comparison = compare_turn_cost(baseline=recorded, record=record)
+    if comparison.verdict is TurnCostVerdict.COMPARISON_INVALID:
+        fields = ", ".join(comparison.mismatched_fields)
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"comparison_invalid: baseline {baseline} differs from the current "
+                f"record on {fields} — re-measure the baseline, do not rebaseline"
+            ),
+            flags=flags,
+            data=comparison.model_dump(mode="json"),
+        )
+
+    _emit_turn_cost_check(flags, comparison, record=record)
+    if comparison.verdict is TurnCostVerdict.REGRESSED:
+        raise typer.Exit(code=exit_codes.VALIDATION_ERROR)
+
+
 @fixture_app.command("seed")
 def fixture_seed(
     ctx: typer.Context,
@@ -265,6 +387,169 @@ def _resolve_path(flags: GlobalFlags, rel: Path) -> Path:
     if flags.workspace is not None:
         return flags.workspace / rel
     return rel
+
+
+def _resolve_turn_cost_corpus(flags: GlobalFlags, *, fixture: str) -> CorpusResolution:
+    """Resolve the corpus *fixture* names, seeded or live.
+
+    Args:
+        flags: The resolved global CLI flags.
+        fixture: ``"live"`` or a seeded fixture id.
+
+    Returns:
+        The resolution, whose ``corpus`` is ``None`` when nothing is
+        measurable.
+
+    Raises:
+        typer.Exit: ``1`` when *fixture* is not a known seeded fixture.
+    """
+    from eawf.observability.bench.turn_cost import (
+        LIVE_FIXTURE_ID,
+        CorpusResolution,
+        seed_turn_cost_corpus,
+    )
+
+    if fixture == LIVE_FIXTURE_ID:
+        return _resolve_live_turn_cost_corpus(flags)
+    try:
+        corpus = seed_turn_cost_corpus(fixture)
+    except ValueError as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc)), flags=flags)
+    return CorpusResolution(corpus=corpus, skipped_session_count=0, reason=None)
+
+
+def _resolve_live_turn_cost_corpus(flags: GlobalFlags) -> CorpusResolution:
+    """Join the projected telemetry sessions onto the closed waves in state.
+
+    The telemetry cache is read but never created. Opening a store through
+    ``init_schema`` writes ``telemetry.db`` as a side effect, and a bench
+    render must not be the thing that starts collecting for an operator who
+    never opted in — so a missing cache resolves to "nothing measured"
+    instead. Its existence is itself the evidence that telemetry was
+    enabled, which is why no separate opt-in check is repeated here.
+
+    Args:
+        flags: The resolved global CLI flags.
+
+    Returns:
+        The live corpus resolution.
+
+    Raises:
+        typer.Exit: ``1`` when the state path or file cannot be read.
+    """
+    from eawf.observability.bench.turn_cost import CorpusResolution, collect_live_corpus
+    from eawf.observability.telemetry.models import TelemetrySession
+    from eawf.observability.telemetry.store import metrics_db_path, open_store
+    from eawf.surfaces.cli.scope import resolve_state_path
+
+    try:
+        state_path = resolve_state_path(flags.workspace)
+    except FileNotFoundError as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
+
+    db_path = metrics_db_path(state_path)
+    if not db_path.exists():
+        return CorpusResolution(
+            corpus=None,
+            skipped_session_count=0,
+            reason="no telemetry cache projected yet; run `eawf metrics rebuild` first",
+        )
+
+    from eawf.kernel.config.layered import get_dotted, merge_config
+    from eawf.workflow.evidence._io import load_state
+
+    try:
+        state = load_state(state_path)
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+
+    merged, _sources = merge_config(repo=state_path.parent.parent)
+    db_kind = str(get_dotted(merged, "telemetry.db_kind"))
+    store = open_store(db_kind, db_path)  # type: ignore[arg-type]
+    try:
+        store.init_schema()
+        rows = store.fetch_all("telemetry_sessions", TelemetrySession)
+    finally:
+        store.close()
+    sessions = [row for row in rows if isinstance(row, TelemetrySession)]
+    return collect_live_corpus(state=state, sessions=sessions)
+
+
+def _emit_turn_cost_empty(
+    flags: GlobalFlags,
+    resolution: CorpusResolution,
+    *,
+    fixture: str,
+    check: bool,
+) -> None:
+    """Emit the honest "nothing measured" outcome.
+
+    Under ``--check`` this is a refusal rather than a pass: a check that
+    silently succeeds because there was nothing to measure is a false green.
+
+    Raises:
+        typer.Exit: ``1`` when *check* is set.
+    """
+    payload: dict[str, object] = {
+        "measured": False,
+        "fixture": fixture,
+        "reason": resolution.reason,
+        "skipped_session_count": resolution.skipped_session_count,
+    }
+    if check:
+        cli_errors.emit_error(
+            cli_errors.UserError(f"cannot check turn-cost: {resolution.reason}"),
+            flags=flags,
+            data=payload,
+        )
+    emit_json_or_text(payload, f"turn-cost: nothing measured ({resolution.reason})", flags=flags)
+
+
+def _emit_turn_cost_record(flags: GlobalFlags, record: TurnCostRecord, *, skipped: int) -> None:
+    """Render one turn-cost record."""
+    payload: dict[str, object] = {
+        "measured": True,
+        "record": record.model_dump(mode="json"),
+        "skipped_session_count": skipped,
+    }
+    lines = [
+        f"turn-cost: fixture={record.fixture_id} harness={record.harness_revision} "
+        f"runtime={record.runtime} model={record.model}",
+        f"  units: {record.unit_count}",
+        f"  wall clock: p50={record.p50_wall_clock_ms} ms p90={record.p90_wall_clock_ms} ms",
+        f"  cost: p50={record.p50_cost_usd} USD p90={record.p90_cost_usd} USD",
+        f"  verification: {record.verification_cost_usd} USD "
+        f"execution: {record.execution_cost_usd} USD",
+        f"  excluded: unattributed={record.unattributed_run_count} "
+        f"unpriced={record.unpriced_run_count}",
+    ]
+    emit_json_or_text(payload, "\n".join(lines), flags=flags)
+
+
+def _emit_turn_cost_check(
+    flags: GlobalFlags,
+    comparison: TurnCostComparison,
+    *,
+    record: TurnCostRecord,
+) -> None:
+    """Render one baseline check outcome (never the invalid-comparison one)."""
+    from eawf.observability.bench.turn_cost import TurnCostVerdict
+
+    payload: dict[str, object] = {
+        "check": comparison.model_dump(mode="json"),
+        "record": record.model_dump(mode="json"),
+    }
+    regressed = comparison.verdict is TurnCostVerdict.REGRESSED
+    lines = [
+        f"turn-cost check: {'REGRESSED' if regressed else 'ok'} "
+        f"(verdict={comparison.verdict.value} threshold={comparison.threshold})",
+        f"{'!!' if comparison.wall_clock_regressed else '  '} p90 wall clock: "
+        f"{comparison.baseline_p90_wall_clock_ms} -> "
+        f"{comparison.candidate_p90_wall_clock_ms} ms",
+        f"{'!!' if comparison.cost_regressed else '  '} p90 cost: "
+        f"{comparison.baseline_p90_cost_usd} -> {comparison.candidate_p90_cost_usd} USD",
+    ]
+    emit_json_or_text(payload, "\n".join(lines), flags=flags)
 
 
 def _load_results(path: Path) -> list[BenchResult]:
