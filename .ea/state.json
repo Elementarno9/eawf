@@ -13155,6 +13155,36 @@
       "status": "done",
       "updated_at": "2026-09-03T17:57:38.796270Z"
     },
+    "P31-I01-W37": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W37",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W37",
+      "model": null,
+      "scope_id": "P31-I01-W37",
+      "status": "done",
+      "updated_at": "2026-09-04T20:45:41.049302Z"
+    },
+    "P31-I01-W38": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W38",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W38",
+      "model": null,
+      "scope_id": "P31-I01-W38",
+      "status": "done",
+      "updated_at": "2026-09-04T20:46:15.481292Z"
+    },
     "P31-I01-W39": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -15116,15 +15146,15 @@
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-04T20:45:21.665490Z",
       "id": "SES-20260904T202231.938883Z-operator-claude-5f09f9b9-5572-4851-bb75-7299c868eadb",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-c27",
       "started_at": "2026-09-04T20:22:31.938883Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T202347.063788Z-executor-claude-bc52015b-6b50-4b47-a769-d14e154ddb6d": {
@@ -15133,15 +15163,15 @@
       "claimed_wave_ids": [
         "P31-I01-W28"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-04T20:45:21.667051Z",
       "id": "SES-20260904T202347.063788Z-executor-claude-bc52015b-6b50-4b47-a769-d14e154ddb6d",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W28",
       "started_at": "2026-09-04T20:23:47.063788Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T202348.369037Z-executor-claude-b1c056e3-ad4e-4516-bd83-6ac6df8d41bc": {
@@ -15150,15 +15180,15 @@
       "claimed_wave_ids": [
         "P31-I01-W37"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-04T20:45:21.667689Z",
       "id": "SES-20260904T202348.369037Z-executor-claude-b1c056e3-ad4e-4516-bd83-6ac6df8d41bc",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W37",
       "started_at": "2026-09-04T20:23:48.369037Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260904T202349.690842Z-executor-claude-9907d155-52b1-48d6-b85c-ec6b067de135": {
@@ -15167,13 +15197,43 @@
       "claimed_wave_ids": [
         "P31-I01-W38"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-04T20:45:21.668278Z",
       "id": "SES-20260904T202349.690842Z-executor-claude-9907d155-52b1-48d6-b85c-ec6b067de135",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W38",
       "started_at": "2026-09-04T20:23:49.690842Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260904T204536.126426Z-operator-claude-2ebc62cf-6bc9-4b62-b77e-04db81dbbb87": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-04T20:45:37.672643Z",
+      "id": "SES-20260904T204536.126426Z-operator-claude-2ebc62cf-6bc9-4b62-b77e-04db81dbbb87",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-c37",
+      "started_at": "2026-09-04T20:45:36.126426Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260904T204541.838333Z-operator-claude-7cc3fa3a-6acd-4496-8441-3d2e3d860c33": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260904T204541.838333Z-operator-claude-7cc3fa3a-6acd-4496-8441-3d2e3d860c33",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-c38",
+      "started_at": "2026-09-04T20:45:41.838333Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -20100,15 +20160,10 @@
   },
   "current": {
     "active_session_ids": [
-      "SES-20260904T202231.938883Z-operator-claude-5f09f9b9-5572-4851-bb75-7299c868eadb",
-      "SES-20260904T202347.063788Z-executor-claude-bc52015b-6b50-4b47-a769-d14e154ddb6d",
-      "SES-20260904T202348.369037Z-executor-claude-b1c056e3-ad4e-4516-bd83-6ac6df8d41bc",
-      "SES-20260904T202349.690842Z-executor-claude-9907d155-52b1-48d6-b85c-ec6b067de135"
+      "SES-20260904T204541.838333Z-operator-claude-7cc3fa3a-6acd-4496-8441-3d2e3d860c33"
     ],
     "active_wave_ids": [
-      "P31-I01-W28",
-      "P31-I01-W37",
-      "P31-I01-W38"
+      "P31-I01-W28"
     ],
     "iter_id": "P31-I01",
     "phase_id": "P31",
@@ -38570,7 +38625,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-04T20:23:51.047706Z",
+  "updated_at": "2026-09-04T20:46:15.481623Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -39003,6 +39058,22 @@
       "tree_sha": "ecae5f48add1b1e6bec9c71543b0ddf602e74fc3",
       "wave_id": "P31-I01-W09"
     },
+    "integration-57b85990ed6c6952c7f49809": {
+      "base_sha": "cb976a58e3b99e2513935605e5c4dd24dd454a32",
+      "candidate_sha": "f086638c66734ce5e9f92770f14877f0c755f280",
+      "created_at": "2026-09-04T20:45:28.175197Z",
+      "diff_digest": "a55b96dbd45831caafeb05bac3c21c294540eb0077ebfc4ce7b1a9f11cf47b5f",
+      "generation": 1,
+      "id": "integration-57b85990ed6c6952c7f49809",
+      "integrated_sha": "f086638c66734ce5e9f92770f14877f0c755f280",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and all declared gates re-run green on the integrated HEAD.",
+      "spec_digest": "e34d604ef9102d98f76566c3fafd1a8baca772f2969a439e17e4ba884d43b462",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "2c7f902a0292865962c848d54bdfda8fe07587f5",
+      "wave_id": "P31-I01-W38"
+    },
     "integration-6fb0c09a727a08dd41362625": {
       "base_sha": "842632c4abc490964de16493925dbc32207354cd",
       "candidate_sha": "069b69ac109d15ad7312231d73ed4496acc4761f",
@@ -39050,6 +39121,22 @@
       "supersedes_id": "integration-48fb1c4d28a2b7f903fcb6ec",
       "tree_sha": "03f21a00cc161ca55ec2fbb7254021037ed87438",
       "wave_id": "P31-I01-W16"
+    },
+    "integration-8cde7bf1f13659509ed9cdac": {
+      "base_sha": "bc83d818d4717e643fca004e5e346dd8e0958846",
+      "candidate_sha": "cb976a58e3b99e2513935605e5c4dd24dd454a32",
+      "created_at": "2026-09-04T20:45:27.347290Z",
+      "diff_digest": "21c21bdf8a270894a110a2c67a0ebbdac298789dcd29f106841966f78e4683ad",
+      "generation": 1,
+      "id": "integration-8cde7bf1f13659509ed9cdac",
+      "integrated_sha": "cb976a58e3b99e2513935605e5c4dd24dd454a32",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and all declared gates re-run green on the integrated HEAD.",
+      "spec_digest": "8bf73e9524d29cddbb03fe5b44ed224e99d0d7f9d94cd36fdd17fa629b1d8fdc",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "24a366d6b42721e3f0e01ce927596c8f731b973d",
+      "wave_id": "P31-I01-W37"
     },
     "integration-8f5fd836d61e950cd17b0133": {
       "base_sha": "5c672387b5182fbe878db0cc3c86c861fa39fd14",
@@ -157855,9 +157942,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260904T202348.369037Z-executor-claude-b1c056e3-ad4e-4516-bd83-6ac6df8d41bc",
       "claimed_at": "2026-09-04T20:23:49.065043Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-04T20:45:41.049302Z",
+      "commit": "cb976a58e3b99e2513935605e5c4dd24dd454a32",
+      "commit_identity_digest": "sha256:9efb1f930f6d86161a733dff5888eee6832009ef382c218a93efd754bdce0224",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap revise; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:42:45.203086Z",
@@ -157958,13 +158045,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-09-03T17:42:45.311448Z",
-      "outcome": null,
+      "outcome": "Criterion gate references now resolve at the plan-time floor in both directions: a dangling gate_ids entry and a gate naming a criterion that omits it are both rejected at the sync boundary, unwaivably. Three gates green.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -158025,9 +158112,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260904T202349.690842Z-executor-claude-9907d155-52b1-48d6-b85c-ec6b067de135",
       "claimed_at": "2026-09-04T20:23:50.383860Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-04T20:46:15.481292Z",
+      "commit": "f086638c66734ce5e9f92770f14877f0c755f280",
+      "commit_identity_digest": "sha256:689d2080a0b4ade425d2886bfa41828bc6ec90e1f2c390b2a9766a788ddea837",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap revise; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:42:45.901585Z",
@@ -158045,7 +158132,8 @@
         "tools",
         "tests/golden",
         "tests/unit",
-        "tests/lint"
+        "tests/lint",
+        "src/eawf/runtime/runtimes/opencode/plugin_install.py"
       ],
       "gates": [
         {
@@ -158166,13 +158254,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-09-03T17:42:46.014210Z",
-      "outcome": null,
+      "outcome": "Pyright now resolves the project venv and src path, the Serena symbol tools are granted through the registry with LSP kept out of role frontmatter, and the verification ladder cites the rules docs. Four gates plus affordance_parity green.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
