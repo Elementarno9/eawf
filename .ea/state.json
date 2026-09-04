@@ -34261,7 +34261,8 @@
         "P31-I01-W41",
         "P31-I01-W42",
         "P31-I01-W43",
-        "P31-I01-W44"
+        "P31-I01-W44",
+        "P31-I01-W45"
       ]
     },
     "P32-I01": {
@@ -35691,7 +35692,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-04T12:45:15.970162Z",
+  "updated_at": "2026-09-04T12:53:43.320734Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {},
@@ -155173,7 +155174,9 @@
         "waived_at": "2026-09-04T12:43:51.503903Z",
         "waived_by": null
       },
-      "deps": [],
+      "deps": [
+        "P31-I01-W45"
+      ],
       "description": "D54. P30 landed 1,036 commits for 525 waves, 385 of them state-only bookkeeping and 245 of those per-wave close records. Make wave-close bookkeeping ride the wave commit: the flow land step amends the cherry-picked wave commit with state.json instead of a separate state commit, the prefix lint rejects a single-wave close state subject and a second code commit per wave outside a reactive wave, the rule text carries both clauses, and the drift detector accepts the amended unpinned commit.",
       "dispatch_history": [],
       "effort_bucket": "S",
@@ -155346,6 +155349,200 @@
         }
       ],
       "title": "Fold wave-close bookkeeping into the wave commit and cap one per wave",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W45": {
+      "agent_role": "executor",
+      "blocks": [
+        "P31-I01-W44"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "staged by roadmap revise; typed criteria land via spec sync",
+        "waived_at": "2026-09-04T12:53:41.166465Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "LINT-005, LINT-007 and AUTH-051 (D48). The trailer commit grammar is built (vcs.conventions.subject_style with values bracket and trailer, the Eawf-Wave trailer read by the prefix lint and the drift detector) but the default is still bracket, so every 0.7 commit is written in the form the packet deprecates. Flip the default to trailer, make the prefix form warn instead of pass silently, teach the flow land step and the rule text to write the Eawf-Wave trailer, and regenerate the goldens.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/config/schema.py",
+        "src/eawf/kernel/config/defaults.py",
+        "src/eawf/kernel/config/registry/leaf_catalog.py",
+        "tools/commit_prefix_lint.py",
+        "tests/unit/test_commit_prefix_lint.py",
+        "tests/unit/kernel/config",
+        "docs/rules/commit-prefix.md",
+        "src/eawf/platform/profiles/data/core.yaml",
+        "src/eawf/surfaces/render/skills/registry.py",
+        "tests/golden"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/config/test_subject_style_default.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_commit_prefix_lint.py",
+              "-k",
+              "trailer_default"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/golden/test_golden_agents_md.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "home",
+            "size": [
+              120,
+              40
+            ],
+            "state_path": ".ea/state.json"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-04",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P31-I01-W45",
+      "intent": {
+        "desired_outcome": "A fresh repository and this one write conventional subjects with the Eawf-Wave trailer by default while the prefix form is read with a warning through 0.7.x and the rules and goldens say so",
+        "evidence_refs": [
+          ".ea/local/research/2026-08-04-v07-proposal/72-lint-suite-and-code-policy.md",
+          ".ea/local/research/2026-08-04-v07-proposal/00-authority-scope-and-decisions.md"
+        ],
+        "planned_steps": [
+          "Flip the subject_style default to trailer in schema.py and defaults.py and the leaf catalog and pin it in tests/unit/kernel/config/test_subject_style_default.py",
+          "Make tools/commit_prefix_lint.py warn on a prefix-form subject and reject a trailer-less conventional subject with tests under -k trailer_default",
+          "Rewrite the commit-prefix rule text in core.yaml and docs/rules and the flow land step to write the Eawf-Wave trailer and regenerate the agents_md goldens"
+        ],
+        "priority_rationale": "Every commit of dev1 is otherwise written in the deprecated form and W44 would author its fold rules against a grammar the packet retires.",
+        "problem": "AUTH-051 makes the whole 0.7 line the overlap in which both commit grammars are read and only the trailer form is written yet the shipped default still writes the prefix form and nothing warns",
+        "risks": [
+          "Bare state subjects have no wave so they stay bracketed and must keep passing",
+          "The reclose staging test and the release workflow parse subjects and must accept both forms"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-09-04T12:53:41.301544Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/config/test_subject_style_default.py exits 0 with the resolved default equal to trailer",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "LINT-005 and AUTH-051: the layered configuration loaded for a repository with no vcs override returns subject_style trailer, and the leaf catalog row for vcs.conventions.subject_style validates with default trailer; pytest tests/unit/kernel/config/test_subject_style_default.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/test_commit_prefix_lint.py -k trailer_default exits 0 with the prefix form warned and the trailer-less conventional subject rejected",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "LINT-007: tools/commit_prefix_lint.py exits 0 with a deprecation warning on a prefix-form wave subject and raises on a trailer-style conventional subject that carries no Eawf-Wave trailer, while a bracketed state subject still exits 0; pytest tests/unit/test_commit_prefix_lint.py -k trailer_default",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03",
+            "G-04"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/golden/test_golden_agents_md.py exits 0 with the regenerated goldens naming the trailer form",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "The commit-prefix rule text in core.yaml and docs/rules and the flow skill land step match pattern for the trailer form with the Eawf-Wave trailer as the written form, and every agents_md golden validates byte for byte; pytest tests/golden/test_golden_agents_md.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Write the trailer commit form by default and warn on the prefix form",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
