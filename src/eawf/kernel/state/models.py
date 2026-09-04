@@ -30,6 +30,7 @@ from eawf.kernel.state.enums import (
     BacklogStatus,
     ClaimStatus,
     CloseAttemptStatus,
+    CloseFailureKind,
     CloseOperatorAction,
     Confidence,
     DecisionStatus,
@@ -542,7 +543,7 @@ class CloseAttempt(_FrozenStrictModel):
     waiver_decision_ids: list[IdStr] = Field(default_factory=list)
     usage_receipt_ids: list[IdStr] = Field(default_factory=list)
     artifact_refs: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
-    failure_kind: Annotated[str, Field(min_length=1, max_length=100)] | None = None
+    failure_kind: CloseFailureKind | None = None
     failure_detail_ref: Annotated[str, Field(min_length=1, max_length=500)] | None = None
     invalidation_causes: list[Annotated[str, Field(min_length=1, max_length=500)]] = Field(
         default_factory=list

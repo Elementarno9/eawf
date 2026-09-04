@@ -759,16 +759,13 @@
         "failure_kind": {
           "anyOf": [
             {
-              "maxLength": 100,
-              "minLength": 1,
-              "type": "string"
+              "$ref": "#/$defs/CloseFailureKind"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Failure Kind"
+          "default": null
         },
         "gate_manifest_digest": {
           "maxLength": 128,
@@ -1047,6 +1044,24 @@
         "cancelled"
       ],
       "title": "CloseAttemptStatus",
+      "type": "string"
+    },
+    "CloseFailureKind": {
+      "description": "Closed vocabulary for why a durable close attempt left its happy path.\n\nThe close worker routes exception CLASSES onto exactly one member, so\nthe persisted kind no longer drifts when an operator-facing message is\nreworded.\n\n:attr:`VERIFICATION_BLOCKED` and :attr:`INFRASTRUCTURE_FAILURE` are the\npre-vocabulary spellings of :attr:`WORK_REJECTED` / :attr:`HARNESS_FAULT`.\nNo classifier writes them any more; they stay accepted so state written\nbefore the vocabulary closed still loads without a schema migration.",
+      "enum": [
+        "timed_out",
+        "harness_fault",
+        "work_rejected",
+        "operator_cancelled",
+        "policy_blocked",
+        "stale_input",
+        "infrastructure_retry",
+        "daemon_shutdown",
+        "daemon_restart_resume",
+        "verification_blocked",
+        "infrastructure_failure"
+      ],
+      "title": "CloseFailureKind",
       "type": "string"
     },
     "CloseOperatorAction": {

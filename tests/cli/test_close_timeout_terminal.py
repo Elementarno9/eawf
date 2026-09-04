@@ -28,11 +28,13 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
-from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.enums import CloseFailureKind, StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.store.paths import store_path
+from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli._mutation import close_event_extras, resolve_close_mechanism
 from eawf.surfaces.cli.app import app
+from eawf.surfaces.cli.commands.lifecycle import _close_failure_kind
 from tests._session_helpers import seed_active_session_on_disk
 from tests.conftest import make_claim_criterion
 
@@ -231,6 +233,11 @@ def test_close_rpc_timeout_is_terminal_no_state_write(
     assert res.exit_code == 4, res.output
     assert "timed out" in res.output
     assert _WAVE_ID in res.output
+    # The rendered envelope names the typed close failure kind, so an operator
+    # reading the CLI sees the same vocabulary the daemon persists.
+    assert "failure_kind" in res.output
+    assert CloseFailureKind.TIMED_OUT.value in res.output
+    assert "infrastructure_failure" not in res.output
     # No in-process retry: the wave never flipped to CLOSED and no close event
     # landed.
     assert _read_wave_status(workspace) == "claimed"
@@ -267,6 +274,9 @@ def test_transport_failure_does_not_fall_back_to_synchronous_close(
 
     assert res.exit_code == 4, res.output
     assert "connection reset" in res.output
+    # A transport drop is harness breakage, not a timeout.
+    assert CloseFailureKind.HARNESS_FAULT.value in res.output
+    assert CloseFailureKind.TIMED_OUT.value not in res.output
     assert _read_wave_status(workspace) == "claimed"
     assert _close_events(workspace) == []
 
@@ -289,6 +299,34 @@ def test_resolve_close_mechanism_transport_fallback_wins() -> None:
 def test_resolve_close_mechanism_default_is_daemon() -> None:
     """Boundary: the default (no transport fallback, no daemonless env) is ``"daemon"``."""
     assert resolve_close_mechanism(gate_bearing=True, waived=False) == "daemon"
+
+
+def test_close_failure_kind_reads_a_direct_timeout() -> None:
+    """Boundary: the exception itself is the timeout, with no chain to walk."""
+    assert _close_failure_kind(TimeoutError("read timed out")) is CloseFailureKind.TIMED_OUT
+
+
+def test_close_failure_kind_walks_a_wrapped_timeout() -> None:
+    """The CLI wrapper hides the timeout on ``__cause__``; the chain finds it."""
+    inner = TimeoutError("close RPC read timed out")
+    wrapped = cli_errors.DaemonUnreachable("daemon unavailable for close.submit")
+    wrapped.__cause__ = inner
+    outer = cli_errors.DaemonMutationIndeterminate("close RPC timed out")
+    outer.__cause__ = wrapped
+    assert _close_failure_kind(outer) is CloseFailureKind.TIMED_OUT
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        RuntimeError("connection reset mid-write"),
+        OSError("socket closed"),
+        cli_errors.DaemonUnreachable("daemon is down"),
+    ],
+)
+def test_close_failure_kind_defaults_to_harness_fault(exc: BaseException) -> None:
+    """Error path: a non-timeout chain never claims a timeout."""
+    assert _close_failure_kind(exc) is CloseFailureKind.HARNESS_FAULT
 
 
 def test_close_event_extras_transport_fallback_preserves_base() -> None:

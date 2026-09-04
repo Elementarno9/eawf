@@ -7,8 +7,10 @@ import contextlib
 import hashlib
 import logging
 import platform
+import subprocess
 import sys
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -19,6 +21,7 @@ from eawf import __version__
 from eawf.kernel.state.enums import (
     AuditRequirement,
     CloseAttemptStatus,
+    CloseFailureKind,
     CloseOperatorAction,
     WaveStatus,
 )
@@ -55,6 +58,7 @@ from eawf.runtime.daemon.methods.close_evidence import (
     reusable_pass_gate_ids as reusable_pass_gate_ids,
 )
 from eawf.workflow.dispatch.verdict import verdict_requirement
+from eawf.workflow.lifecycle import LifecycleGuardError
 from eawf.workflow.lifecycle.integration import (
     latest_wave_integration,
     mark_wave_integration_verified,
@@ -86,6 +90,58 @@ _RESUMABLE_STATUSES = frozenset(
 _INTERRUPTED_STATUSES = _RESUMABLE_STATUSES - {CloseAttemptStatus.FAILED}
 _CLOSE_TASKS: dict[tuple[Path, str], asyncio.Task[None]] = {}
 _SHUTTING_DOWN: bool = False
+
+
+class CloseAttemptError(ValueError):
+    """One close-worker fault that names its own durable outcome.
+
+    Carrying the outcome on the class is what lets the worker route a
+    failure without reading its message: the raise site is the only place
+    that actually knows why the close stopped, so it states the fact once
+    and every consumer reads it typed.
+
+    Subclasses :class:`ValueError` so the JSON-RPC frame handler keeps
+    mapping a refused close onto ``-32602 invalid_params`` exactly as it
+    did when these paths raised a bare ``ValueError``.
+    """
+
+    attempt_status: CloseAttemptStatus = CloseAttemptStatus.FAILED
+    failure_kind: CloseFailureKind = CloseFailureKind.HARNESS_FAULT
+
+    def __init__(self, message: str, *, causes: Sequence[str] = ()) -> None:
+        super().__init__(message)
+        self.causes: list[str] = list(causes)
+
+
+class CloseStaleInputError(CloseAttemptError):
+    """Frozen close inputs no longer match live authority."""
+
+    attempt_status = CloseAttemptStatus.STALE
+    failure_kind = CloseFailureKind.STALE_INPUT
+
+
+class CloseWorkRejectedError(CloseAttemptError):
+    """The wave's own evidence failed the close verification gate."""
+
+    attempt_status = CloseAttemptStatus.BLOCKED
+    failure_kind = CloseFailureKind.WORK_REJECTED
+
+
+class ClosePolicyBlockedError(CloseAttemptError):
+    """A lifecycle policy guard refused the close before judging the work."""
+
+    attempt_status = CloseAttemptStatus.BLOCKED
+    failure_kind = CloseFailureKind.POLICY_BLOCKED
+
+
+class CloseTimedOutError(CloseAttemptError):
+    """A close stage exceeded its wall-clock budget."""
+
+    failure_kind = CloseFailureKind.TIMED_OUT
+
+
+class CloseHarnessError(CloseAttemptError):
+    """The close harness itself broke; the wave's work was never judged."""
 
 
 class CloseSubmitParams(BaseModel):
@@ -635,13 +691,75 @@ def _failure_ref(repo_root: Path, attempt_id: str, detail: str) -> str:
     return relative.as_posix()
 
 
-def _failure_status(detail: str) -> tuple[CloseAttemptStatus, str]:
-    lowered = detail.lower()
-    if "stale" in lowered or "tree mismatch" in lowered or "worktree is dirty" in lowered:
-        return CloseAttemptStatus.STALE, "stale_input"
-    if "validation_failed" in lowered or "blocked close" in lowered or "refused" in lowered:
-        return CloseAttemptStatus.BLOCKED, "verification_blocked"
-    return CloseAttemptStatus.FAILED, "infrastructure_failure"
+def _failure_status(exc: BaseException) -> tuple[CloseAttemptStatus, CloseFailureKind]:
+    """Route one worker exception onto its durable status and failure kind.
+
+    Classification reads the exception CLASS and nothing else. Messages are
+    operator prose that moves whenever the wording improves, so keying the
+    persisted vocabulary off substrings made an unrelated copy edit able to
+    silently re-file a stale close as an infrastructure failure.
+    """
+    if isinstance(exc, CloseAttemptError):
+        return exc.attempt_status, exc.failure_kind
+    if isinstance(exc, TimeoutError):
+        return CloseAttemptStatus.FAILED, CloseFailureKind.TIMED_OUT
+    if isinstance(exc, LifecycleGuardError):
+        return CloseAttemptStatus.BLOCKED, CloseFailureKind.POLICY_BLOCKED
+    return CloseAttemptStatus.FAILED, CloseFailureKind.HARNESS_FAULT
+
+
+def _workspace_fault(exc: CloseWorkspaceError) -> CloseAttemptError:
+    """Type one close-workspace failure from its chained OS-level cause.
+
+    ``prepare_close_workspace`` reports harness breakage (git refused to
+    start, git ran out of time) and genuine revision drift through a single
+    error type; the chained cause is the only typed signal that tells them
+    apart, and only drift makes the attempt's frozen inputs untrustworthy.
+    """
+    cause = exc.__cause__
+    if isinstance(cause, subprocess.TimeoutExpired):
+        return CloseTimedOutError(str(exc))
+    if isinstance(cause, OSError):
+        return CloseHarnessError(str(exc))
+    return CloseStaleInputError(str(exc))
+
+
+def _mutation_fault(
+    ctx: MethodContext,
+    *,
+    repo_root: Path,
+    attempt_id: str,
+    exc: ValueError,
+) -> CloseAttemptError:
+    """Type one refused ``WAVE_CLOSE`` from live authority, not its message.
+
+    A guard-coded lifecycle rejection is a policy block. Otherwise the
+    attempt is stale exactly when its frozen inputs no longer match live
+    authority, or when the refusal fired at APPLYING: past READY the only
+    remaining refusal is the apply-time CAS, which fires solely on drift.
+    Anything earlier is the wave's own evidence being rejected.
+    """
+    if isinstance(exc.__cause__, LifecycleGuardError):
+        return ClosePolicyBlockedError(str(exc))
+    try:
+        state = _load_state(ctx, repo_root)
+    except OSError, ValueError:
+        return CloseHarnessError(str(exc))
+    attempt = state.close_attempts.get(attempt_id)
+    if attempt is None:
+        return CloseStaleInputError(
+            str(exc), causes=[f"close attempt {attempt_id!r} no longer exists"]
+        )
+    causes = _attempt_invalidation_causes(
+        state,
+        repo_root=repo_root,
+        attempt=attempt,
+    )
+    if causes:
+        return CloseStaleInputError(str(exc), causes=causes)
+    if attempt.status is CloseAttemptStatus.APPLYING:
+        return CloseStaleInputError(str(exc), causes=[str(exc)])
+    return CloseWorkRejectedError(str(exc))
 
 
 def transition_attempt_stage(
@@ -680,8 +798,9 @@ def mark_attempt_ready(
         wave = state.waves.get(attempt.wave_id)
         current_payload = wave.model_dump(mode="json") if wave is not None else None
         if current_payload != expected_wave_payload:
-            raise ValueError(
-                f"close attempt stale: wave {attempt.wave_id!r} changed during preflight"
+            raise CloseStaleInputError(
+                f"close attempt stale: wave {attempt.wave_id!r} changed during preflight",
+                causes=[f"wave {attempt.wave_id!r} changed during preflight"],
             )
         causes = _attempt_invalidation_causes(
             state,
@@ -689,7 +808,7 @@ def mark_attempt_ready(
             attempt=attempt,
         )
         if causes:
-            raise ValueError(f"close attempt stale: {'; '.join(causes)}")
+            raise CloseStaleInputError(f"close attempt stale: {'; '.join(causes)}", causes=causes)
         mark_wave_integration_verified(state, integration_id=attempt.integration_id)
         payload = attempt.model_dump(mode="json")
         payload.update(
@@ -758,7 +877,7 @@ async def _run_attempt(  # noqa: C901
             attempt=attempt,
         )
         if causes:
-            raise CloseWorkspaceError(f"close attempt stale: {'; '.join(causes)}")
+            raise CloseStaleInputError(f"close attempt stale: {'; '.join(causes)}", causes=causes)
         _commit_attempt(
             ctx,
             repo_root=repo_root,
@@ -769,13 +888,16 @@ async def _run_attempt(  # noqa: C901
             },
             command="close.transition",
         )
-        workspace = await asyncio.to_thread(
-            prepare_close_workspace,
-            repo_root,
-            attempt_id=attempt.id,
-            commit_ref=attempt.integrated_sha,
-            expected_tree_sha=attempt.tree_sha,
-        )
+        try:
+            workspace = await asyncio.to_thread(
+                prepare_close_workspace,
+                repo_root,
+                attempt_id=attempt.id,
+                commit_ref=attempt.integrated_sha,
+                expected_tree_sha=attempt.tree_sha,
+            )
+        except CloseWorkspaceError as exc:
+            raise _workspace_fault(exc) from exc
         workspace_created = True
         from eawf.runtime.daemon.methods.state import mutate as state_mutate
 
@@ -795,13 +917,23 @@ async def _run_attempt(  # noqa: C901
                 "no_runtime_waiver": attempt.no_runtime_waiver,
             },
         )
-        result = await state_mutate(
-            ctx,
-            {
-                "mutation": mutation.model_dump(mode="json"),
-                "repo_root": str(repo_root),
-            },
-        )
+        try:
+            result = await state_mutate(
+                ctx,
+                {
+                    "mutation": mutation.model_dump(mode="json"),
+                    "repo_root": str(repo_root),
+                },
+            )
+        except CloseAttemptError:
+            raise
+        except ValueError as exc:
+            raise _mutation_fault(
+                ctx,
+                repo_root=repo_root,
+                attempt_id=attempt.id,
+                exc=exc,
+            ) from exc
         event = result.get("event") or {}
         event_id = event.get("id")
         if workspace_created:
@@ -857,14 +989,19 @@ async def _run_attempt(  # noqa: C901
                 updates={
                     "status": cancelled_status,
                     "terminal_at": (None if _SHUTTING_DOWN else datetime.now(UTC)),
-                    "failure_kind": ("daemon_shutdown" if _SHUTTING_DOWN else "operator_cancelled"),
+                    "failure_kind": (
+                        CloseFailureKind.DAEMON_SHUTDOWN
+                        if _SHUTTING_DOWN
+                        else CloseFailureKind.OPERATOR_CANCELLED
+                    ),
                 },
                 command="close.interrupted" if _SHUTTING_DOWN else "close.cancelled",
             )
         raise
     except Exception as exc:
         detail = f"{type(exc).__name__}: {exc!s}"
-        status, failure_kind = _failure_status(detail)
+        status, failure_kind = _failure_status(exc)
+        typed_causes = exc.causes if isinstance(exc, CloseAttemptError) else []
         failure_ref = _failure_ref(repo_root, attempt_id, detail)
         logger.exception(
             f"_run_attempt failure=exception attempt={attempt_id!r} "
@@ -896,9 +1033,13 @@ async def _run_attempt(  # noqa: C901
                 attempt_id=attempt_id,
                 updates={
                     "status": terminal_status,
-                    "failure_kind": ("infrastructure_retry" if auto_retry else failure_kind),
+                    "failure_kind": (
+                        CloseFailureKind.INFRASTRUCTURE_RETRY if auto_retry else failure_kind
+                    ),
                     "failure_detail_ref": failure_ref,
-                    "invalidation_causes": [detail] if status is CloseAttemptStatus.STALE else [],
+                    "invalidation_causes": (
+                        (typed_causes or [detail]) if status is CloseAttemptStatus.STALE else []
+                    ),
                     "required_operator_actions": required_operator_actions,
                     "terminal_at": None if auto_retry else datetime.now(UTC),
                     "infrastructure_retry_budget_remaining": (
@@ -1063,7 +1204,7 @@ async def cancel(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             attempt_id=attempt.id,
             updates={
                 "status": CloseAttemptStatus.CANCELLED,
-                "failure_kind": "operator_cancelled",
+                "failure_kind": CloseFailureKind.OPERATOR_CANCELLED,
                 "failure_detail_ref": (
                     _failure_ref(repo_root, attempt.id, args.reason) if args.reason else None
                 ),
@@ -1101,7 +1242,7 @@ def resume_durable_close_attempts(ctx: MethodContext) -> int:
                 updates={
                     "status": CloseAttemptStatus.QUEUED,
                     "terminal_at": None,
-                    "failure_kind": "daemon_restart_resume",
+                    "failure_kind": CloseFailureKind.DAEMON_RESTART_RESUME,
                 },
                 command="close.restart_resume",
             )
@@ -1129,6 +1270,12 @@ async def shutdown_close_attempts() -> None:
 
 
 __all__ = [
+    "CloseAttemptError",
+    "CloseHarnessError",
+    "ClosePolicyBlockedError",
+    "CloseStaleInputError",
+    "CloseTimedOutError",
+    "CloseWorkRejectedError",
     "cancel",
     "resume",
     "resume_durable_close_attempts",

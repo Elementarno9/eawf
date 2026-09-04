@@ -19,6 +19,7 @@ that module is listed with its members.
 | `CampaignStatus` | `active`, `converged`, `cancelled` |
 | `ClaimStatus` | `open`, `supported`, `refuted`, `superseded` |
 | `CloseAttemptStatus` | `queued`, `preparing`, `checking`, `auditing`, `ready`, `applying`, `closed`, `blocked`, `stale`, `failed`, `cancelled` |
+| `CloseFailureKind` | `timed_out`, `harness_fault`, `work_rejected`, `operator_cancelled`, `policy_blocked`, `stale_input`, `infrastructure_retry`, `daemon_shutdown`, `daemon_restart_resume`, `verification_blocked`, `infrastructure_failure` |
 | `CloseOperatorAction` | `split`, `defer`, `abort` |
 | `Confidence` | `high`, `medium`, `low` |
 | `DecisionStatus` | `active`, `superseded`, `reversed`, `obsolete` |

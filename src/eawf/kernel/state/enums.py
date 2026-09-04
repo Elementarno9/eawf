@@ -149,6 +149,32 @@ class CloseAttemptStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class CloseFailureKind(StrEnum):
+    """Closed vocabulary for why a durable close attempt left its happy path.
+
+    The close worker routes exception CLASSES onto exactly one member, so
+    the persisted kind no longer drifts when an operator-facing message is
+    reworded.
+
+    :attr:`VERIFICATION_BLOCKED` and :attr:`INFRASTRUCTURE_FAILURE` are the
+    pre-vocabulary spellings of :attr:`WORK_REJECTED` / :attr:`HARNESS_FAULT`.
+    No classifier writes them any more; they stay accepted so state written
+    before the vocabulary closed still loads without a schema migration.
+    """
+
+    TIMED_OUT = "timed_out"
+    HARNESS_FAULT = "harness_fault"
+    WORK_REJECTED = "work_rejected"
+    OPERATOR_CANCELLED = "operator_cancelled"
+    POLICY_BLOCKED = "policy_blocked"
+    STALE_INPUT = "stale_input"
+    INFRASTRUCTURE_RETRY = "infrastructure_retry"
+    DAEMON_SHUTDOWN = "daemon_shutdown"
+    DAEMON_RESTART_RESUME = "daemon_restart_resume"
+    VERIFICATION_BLOCKED = "verification_blocked"
+    INFRASTRUCTURE_FAILURE = "infrastructure_failure"
+
+
 class CloseOperatorAction(StrEnum):
     """Operator choices exposed after the bounded close repair is exhausted."""
 

@@ -72,6 +72,7 @@ import typer
 
 from eawf.kernel.migrations import current_target_version
 from eawf.kernel.state.enums import (
+    CloseFailureKind,
     ScopeKind,
 )
 from eawf.kernel.state.ids import (
@@ -323,6 +324,24 @@ def _resolve_commit_sha(ref: str) -> str:
     return sha
 
 
+def _close_failure_kind(exc: BaseException) -> CloseFailureKind:
+    """Type one CLI-side close failure from the exception chain.
+
+    The close RPC helpers fold every transport fault onto one
+    :class:`~eawf.surfaces.cli.errors.DaemonUnreachable`, so the original
+    ``TimeoutError`` only survives on ``__cause__``. Walking the chain keeps
+    the operator-facing kind identical to the one the daemon would persist
+    for the same fault instead of flattening a timeout into generic
+    harness breakage.
+    """
+    seen: BaseException | None = exc
+    while seen is not None:
+        if isinstance(seen, TimeoutError):
+            return CloseFailureKind.TIMED_OUT
+        seen = seen.__cause__
+    return CloseFailureKind.HARNESS_FAULT
+
+
 def _wave_close_via_daemon(
     *,
     flags: GlobalFlags,
@@ -412,6 +431,10 @@ def _wave_close_via_daemon(
                 "running in the daemon; re-check with 'eawf wave show' before retrying"
             ),
             flags=flags,
+            data={
+                "wave": wave_id,
+                "failure_kind": _close_failure_kind(exc).value,
+            },
         )
         return True  # emit_error raised typer.Exit; kept for the return type
     except (RuntimeError, OSError) as exc:
@@ -473,7 +496,14 @@ def _wave_close_async_via_daemon(
                 flags=flags,
             )
     except cli_errors.CliError as exc:
-        cli_errors.emit_error(exc, flags=flags)
+        cli_errors.emit_error(
+            exc,
+            flags=flags,
+            data={
+                "wave": wave_id,
+                "failure_kind": _close_failure_kind(exc).value,
+            },
+        )
         return True
 
     emit_json_or_text(result, render_close_status(result), flags=flags)

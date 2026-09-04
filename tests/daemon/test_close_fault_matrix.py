@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import re
+import subprocess
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,23 +14,27 @@ from typing import Any
 
 import orjson
 import pytest
+from pydantic import ValidationError as PydanticValidationError
 
 from eawf.kernel.spec.common import CriterionSpec, GateSpec
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     CloseAttemptStatus,
+    CloseFailureKind,
     DependencyStage,
     EffortBucket,
     StoreKind,
     WaveStatus,
 )
 from eawf.kernel.state.models import (
+    CloseAttempt,
     State,
     Wave,
     WaveDependencyBarrier,
     wave_dependency_key,
 )
 from eawf.kernel.store.paths import store_path
+from eawf.runtime.daemon.close_workspace import CloseWorkspaceError
 from eawf.runtime.daemon.methods import close as close_module
 from eawf.runtime.daemon.methods.close import (
     _attempt_invalidation_causes,
@@ -41,6 +47,7 @@ from eawf.runtime.worktree import git
 from eawf.workflow.agent_report.rollup import iter_agent_reports
 from eawf.workflow.audit_dsl import registry
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
+from eawf.workflow.lifecycle import LifecycleGuardError
 from eawf.workflow.lifecycle.integration import (
     bind_start_dependencies,
     create_wave_integration,
@@ -848,3 +855,332 @@ def test_ready_restart_fails_closed_on_invalid_bound_auditor_proof(
     assert set(final.close_attempts) == {attempt_id}
     assert gate_executions == ["G-MATRIX"]
     assert auditor.calls == 1
+
+
+# --- REL-003: one typed close failure vocabulary ---------------------------
+
+
+_REQUIRED_FAILURE_KINDS = {
+    "timed_out",
+    "harness_fault",
+    "work_rejected",
+    "operator_cancelled",
+    "policy_blocked",
+}
+
+
+def _close_attempt_row() -> dict[str, Any]:
+    """One minimal schema-valid ``CloseAttempt`` payload."""
+    sha = "a" * 40
+    digest = "b" * 64
+    stamp = "2026-07-28T12:00:00Z"
+    return {
+        "id": "CA-01",
+        "wave_id": "P01-I01-W01",
+        "outcome": "verified exact integrated revision",
+        "tokens_consumed": None,
+        "generation": 1,
+        "supersedes_id": None,
+        "status": "queued",
+        "integration_id": "WI-01",
+        "candidate_sha": sha,
+        "integrated_sha": sha,
+        "tree_sha": sha,
+        "wave_revision_digest": digest,
+        "spec_digest": digest,
+        "criteria_digest": digest,
+        "gate_manifest_digest": digest,
+        "policy_digest": digest,
+        "runner_environment_digest": digest,
+        "dependency_binding_digest": digest,
+        "required_gate_ids": ["G-01"],
+        "gate_receipt_ids": [],
+        "audit_requirement": "required",
+        "audit_report_id": None,
+        "no_runtime_waiver": False,
+        "repair_wave_id": None,
+        "repair_generation": None,
+        "repair_budget_remaining": 1,
+        "infrastructure_retry_budget_remaining": 1,
+        "required_operator_actions": [],
+        "waiver_decision_ids": [],
+        "usage_receipt_ids": [],
+        "artifact_refs": [],
+        "failure_kind": None,
+        "failure_detail_ref": None,
+        "invalidation_causes": [],
+        "requested_at": stamp,
+        "started_at": None,
+        "updated_at": stamp,
+        "terminal_at": None,
+        "idempotency_key": "close:P01-I01-W01:1",
+        "apply_event_id": None,
+    }
+
+
+@pytest.mark.unit
+def test_close_failure_kind_is_the_closed_persisted_vocabulary() -> None:
+    """``CloseAttempt.failure_kind`` validates against the closed enum."""
+    values = {member.value for member in CloseFailureKind}
+    assert values >= _REQUIRED_FAILURE_KINDS
+
+    row = _close_attempt_row()
+    assert CloseAttempt.model_validate(row).failure_kind is None
+    for member in CloseFailureKind:
+        parsed = CloseAttempt.model_validate({**row, "failure_kind": member.value})
+        assert parsed.failure_kind is member
+        assert parsed.model_dump(mode="json")["failure_kind"] == member.value
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("rejected", ["", "infrastructure", "TIMED_OUT", "timed out", 7])
+def test_close_attempt_rejects_failure_kind_outside_the_vocabulary(rejected: object) -> None:
+    """Empty, near-miss, wrong-case, and wrong-type kinds all fail closed."""
+    with pytest.raises(PydanticValidationError):
+        CloseAttempt.model_validate({**_close_attempt_row(), "failure_kind": rejected})
+
+
+@pytest.mark.unit
+def test_failure_status_classifies_by_exception_class_not_message() -> None:
+    """No lowered-substring branch survives in ``_failure_status``."""
+    source = inspect.getsource(close_module._failure_status)
+    assert "lowered" not in source
+    assert ".lower()" not in source
+    assert " in detail" not in source
+    assert source.count("isinstance") >= 3
+
+    # Same prose, opposite classes: only the class may decide the kind.
+    prose = "close attempt stale: validation_failed refused"
+    assert close_module._failure_status(close_module.CloseHarnessError(prose)) == (
+        CloseAttemptStatus.FAILED,
+        CloseFailureKind.HARNESS_FAULT,
+    )
+    assert close_module._failure_status(close_module.CloseWorkRejectedError(prose)) == (
+        CloseAttemptStatus.BLOCKED,
+        CloseFailureKind.WORK_REJECTED,
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("factory", "expected_status", "expected_kind"),
+    [
+        (
+            lambda: close_module.CloseTimedOutError("gate wall clock exceeded"),
+            CloseAttemptStatus.FAILED,
+            CloseFailureKind.TIMED_OUT,
+        ),
+        (
+            lambda: TimeoutError("close stage exceeded its budget"),
+            CloseAttemptStatus.FAILED,
+            CloseFailureKind.TIMED_OUT,
+        ),
+        (
+            lambda: close_module.CloseHarnessError("worktree harness broke"),
+            CloseAttemptStatus.FAILED,
+            CloseFailureKind.HARNESS_FAULT,
+        ),
+        (
+            lambda: RuntimeError("unclassified harness breakage"),
+            CloseAttemptStatus.FAILED,
+            CloseFailureKind.HARNESS_FAULT,
+        ),
+        (
+            lambda: close_module.CloseWorkRejectedError("gate G-MATRIX failed"),
+            CloseAttemptStatus.BLOCKED,
+            CloseFailureKind.WORK_REJECTED,
+        ),
+        (
+            lambda: close_module.ClosePolicyBlockedError("waivers are disabled"),
+            CloseAttemptStatus.BLOCKED,
+            CloseFailureKind.POLICY_BLOCKED,
+        ),
+        (
+            lambda: LifecycleGuardError("waiver_mode_disabled", _WAVE, "waivers are disabled"),
+            CloseAttemptStatus.BLOCKED,
+            CloseFailureKind.POLICY_BLOCKED,
+        ),
+        (
+            lambda: close_module.CloseStaleInputError("close attempt stale: drift"),
+            CloseAttemptStatus.STALE,
+            CloseFailureKind.STALE_INPUT,
+        ),
+    ],
+)
+def test_failure_status_routes_each_typed_exception(
+    factory: Any,
+    expected_status: CloseAttemptStatus,
+    expected_kind: CloseFailureKind,
+) -> None:
+    """Every routed exception class lands on exactly one durable outcome."""
+    assert close_module._failure_status(factory()) == (expected_status, expected_kind)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("cause", "expected_kind"),
+    [
+        (subprocess.TimeoutExpired(cmd="git", timeout=1.0), CloseFailureKind.TIMED_OUT),
+        (OSError("git is not installed"), CloseFailureKind.HARNESS_FAULT),
+        (None, CloseFailureKind.STALE_INPUT),
+    ],
+)
+def test_workspace_fault_types_from_the_chained_cause(
+    cause: BaseException | None,
+    expected_kind: CloseFailureKind,
+) -> None:
+    """One workspace error type splits by cause, never by its message."""
+    error = CloseWorkspaceError("close tree mismatch: expected 'a', resolved 'b'")
+    error.__cause__ = cause
+    assert close_module._workspace_fault(error).failure_kind is expected_kind
+
+
+def _submit_unscheduled(
+    ctx: Any,
+    *,
+    repo: Path,
+    state_path: Path,
+    retry_budget: int,
+) -> str:
+    """Create one durable attempt without letting the worker start."""
+
+    async def _body() -> str:
+        submitted = await submit(
+            ctx,
+            {
+                "wave_id": _WAVE,
+                "outcome": "verified integrated revision",
+                "repo_root": str(repo),
+                "no_runtime_waiver": True,
+            },
+        )
+        return str(submitted["attempt"]["id"])
+
+    attempt_id = asyncio.run(_body())
+    state = State.model_validate_json(state_path.read_bytes())
+    state.close_attempts[attempt_id] = state.close_attempts[attempt_id].model_copy(
+        update={"infrastructure_retry_budget_remaining": retry_budget}
+    )
+    state_path.write_text(state.model_dump_json(), encoding="utf-8")
+    return attempt_id
+
+
+def _persisted_attempt_row(state_path: Path, attempt_id: str) -> dict[str, Any]:
+    """Read one close-attempt row straight out of ``state.json``."""
+    payload = orjson.loads(state_path.read_bytes())
+    return dict(payload["close_attempts"][attempt_id])
+
+
+@pytest.mark.parametrize(
+    ("factory", "expected_status", "expected_kind"),
+    [
+        (
+            lambda: close_module.CloseTimedOutError("close prepare exceeded its budget"),
+            CloseAttemptStatus.FAILED,
+            CloseFailureKind.TIMED_OUT,
+        ),
+        (
+            lambda: RuntimeError("close harness broke before any gate ran"),
+            CloseAttemptStatus.FAILED,
+            CloseFailureKind.HARNESS_FAULT,
+        ),
+        (
+            lambda: close_module.CloseWorkRejectedError("gate G-MATRIX failed"),
+            CloseAttemptStatus.BLOCKED,
+            CloseFailureKind.WORK_REJECTED,
+        ),
+        (
+            lambda: LifecycleGuardError("waiver_mode_disabled", _WAVE, "waivers are disabled"),
+            CloseAttemptStatus.BLOCKED,
+            CloseFailureKind.POLICY_BLOCKED,
+        ),
+        (
+            lambda: close_module.CloseStaleInputError(
+                "close attempt stale: drift",
+                causes=["integration generation changed"],
+            ),
+            CloseAttemptStatus.STALE,
+            CloseFailureKind.STALE_INPUT,
+        ),
+    ],
+)
+def test_typed_worker_fault_persists_its_exact_failure_kind(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    factory: Any,
+    expected_status: CloseAttemptStatus,
+    expected_kind: CloseFailureKind,
+) -> None:
+    """Each typed exception reaches ``state.json`` as its own failure kind."""
+    repo, state_path, ctx = _repo_with_state(tmp_path)
+    monkeypatch.setattr(close_module, "_schedule", lambda *_args, **_kwargs: False)
+    close_module._SHUTTING_DOWN = False
+    attempt_id = _submit_unscheduled(ctx, repo=repo, state_path=state_path, retry_budget=0)
+
+    def _raise(*_args: Any, **_kwargs: Any) -> None:
+        raise factory()
+
+    monkeypatch.setattr(close_module, "prepare_close_workspace", _raise)
+    asyncio.run(close_module._run_attempt(ctx, repo_root=repo, attempt_id=attempt_id))
+
+    row = _persisted_attempt_row(state_path, attempt_id)
+    assert row["status"] == expected_status.value
+    assert row["failure_kind"] == expected_kind.value
+    assert row["failure_detail_ref"]
+    if expected_status is CloseAttemptStatus.STALE:
+        assert row["invalidation_causes"] == ["integration generation changed"]
+    else:
+        assert row["invalidation_causes"] == []
+    final = State.model_validate_json(state_path.read_bytes())
+    assert final.waves[_WAVE].status is WaveStatus.CLAIMED
+
+
+def test_operator_cancel_persists_operator_cancelled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The cancel RPC is the only producer of ``operator_cancelled``."""
+    repo, state_path, ctx = _repo_with_state(tmp_path)
+    monkeypatch.setattr(close_module, "_schedule", lambda *_args, **_kwargs: False)
+    close_module._SHUTTING_DOWN = False
+    attempt_id = _submit_unscheduled(ctx, repo=repo, state_path=state_path, retry_budget=1)
+
+    async def _cancel() -> dict[str, Any]:
+        return await close_module.cancel(
+            ctx,
+            {
+                "ref": attempt_id,
+                "repo_root": str(repo),
+                "reason": "operator aborted the close",
+            },
+        )
+
+    result = asyncio.run(_cancel())
+
+    assert result["attempt"]["status"] == CloseAttemptStatus.CANCELLED.value
+    row = _persisted_attempt_row(state_path, attempt_id)
+    assert row["failure_kind"] == CloseFailureKind.OPERATOR_CANCELLED.value
+    assert row["terminal_at"] is not None
+
+
+def test_harness_fault_still_spends_the_infrastructure_retry_budget(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Boundary: a retryable harness fault re-queues instead of going terminal."""
+    repo, state_path, ctx = _repo_with_state(tmp_path)
+    monkeypatch.setattr(close_module, "_schedule", lambda *_args, **_kwargs: False)
+    close_module._SHUTTING_DOWN = False
+    attempt_id = _submit_unscheduled(ctx, repo=repo, state_path=state_path, retry_budget=1)
+
+    def _raise(*_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError("close harness broke")
+
+    monkeypatch.setattr(close_module, "prepare_close_workspace", _raise)
+    asyncio.run(close_module._run_attempt(ctx, repo_root=repo, attempt_id=attempt_id))
+
+    row = _persisted_attempt_row(state_path, attempt_id)
+    assert row["status"] == CloseAttemptStatus.QUEUED.value
+    assert row["failure_kind"] == CloseFailureKind.INFRASTRUCTURE_RETRY.value
+    assert row["infrastructure_retry_budget_remaining"] == 0
+    assert row["terminal_at"] is None
