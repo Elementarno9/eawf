@@ -28,6 +28,13 @@ the adapter finally said about its own call; observation records what an
 independent read-back found. Only the second may write an ``observed_*``
 status, and only from an observation receipt, so no adapter is ever the
 judge of its own publication.
+
+Two ladder verbs sit beside them. ``release.create`` opens a checkpoint's
+DRAFT record only once every measured contract the checkpoint asserts
+over is promoted (:mod:`eawf.workflow.release.admission`), and
+``release.advance_train`` walks the ladder forward only from a finished
+checkpoint whose gate receipts still bind its exact source
+(:mod:`eawf.workflow.release.advance`).
 """
 
 from __future__ import annotations
@@ -52,8 +59,21 @@ from eawf.kernel.spec.release_config import (
     ReleaseConfigError,
     load_release_config,
 )
+from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
+from eawf.surfaces.cli.errors import CliError, UserError
+from eawf.workflow.evidence._io import load_state
 from eawf.workflow.release.adapters import observe_publication
+from eawf.workflow.release.admission import (
+    create_checkpoint_release,
+    required_contract_ids,
+)
+from eawf.workflow.release.advance import (
+    CheckpointGateReceipt,
+    TrainAdvanceError,
+    advance_train,
+    render_train_ladder,
+)
 from eawf.workflow.release.ledger import (
     IdempotencyConflictError,
     StaleReleaseRevisionError,
@@ -807,16 +827,175 @@ async def observe(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+class CreateParams(BaseModel):
+    """Params for :func:`create`.
+
+    Attributes:
+        version: Normalized checkpoint version to open, e.g.
+            ``0.7.0.dev2``.
+        membership_refs: Milestone acceptance bundles, for the rungs that
+            require them.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    version: str
+    membership_refs: list[str] = Field(default_factory=list)
+
+
+class AdvanceTrainParams(BaseModel):
+    """Params for :func:`advance`.
+
+    Attributes:
+        release: Serialized record standing at the open checkpoint.
+        receipts: The open checkpoint's gate receipts, each binding its
+            source and manifest.
+        membership_refs: Milestone acceptance bundles for the rung being
+            opened.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    release: dict[str, Any]
+    receipts: list[dict[str, Any]] = Field(default_factory=list)
+    membership_refs: list[str] = Field(default_factory=list)
+
+
+def _require_state(ctx: MethodContext) -> State:
+    """Return the daemon's typed state, or refuse the verb.
+
+    Args:
+        ctx: Server context.
+
+    Returns:
+        The loaded :class:`~eawf.kernel.state.models.State`.
+
+    Raises:
+        DaemonValidationError: When the daemon runs without on-disk
+            state, or the state on disk does not validate. A checkpoint
+            admitted against state nobody could read would be admitted
+            against nothing.
+    """
+    if ctx.state_path is None:
+        raise DaemonValidationError(
+            "validation_failed: release.create requires an on-disk state root"
+        )
+    try:
+        return load_state(Path(ctx.state_path))
+    except CliError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+
+
+@register("release.create")
+async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Open the DRAFT record of one checkpoint, after measured admission.
+
+    A checkpoint the admission table covers may not be created until
+    every measured contract backing it is promoted and resolvable. The
+    refusal names the single contract that is missing plus the command
+    that promotes it, so the operator's next action is in the error.
+
+    Args:
+        ctx: Server context; supplies the state the citations resolve
+            against.
+        params: JSON-RPC params per :class:`CreateParams`.
+
+    Returns:
+        The serialized DRAFT record plus the contract ids that admitted
+        it.
+
+    Raises:
+        DaemonValidationError: With ``measured_contract_missing`` when a
+            required contract is not promoted, or when the train
+            declares no such rung.
+    """
+    args = CreateParams.model_validate(params)
+    state = _require_state(ctx)
+    try:
+        record = create_checkpoint_release(
+            state,
+            train=V07_TRAIN,
+            version=args.version,
+            uid=uuid4(),
+            membership_refs=tuple(args.membership_refs),
+        )
+    except UserError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc.kind}: {exc}") from exc
+    except (KeyError, ValidationError, ValueError) as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    logger.info(f"create key={record.key!r} version={args.version!r}")
+    return {
+        "release": record.model_dump(mode="json"),
+        "measured_contracts": list(required_contract_ids(args.version)),
+    }
+
+
+@register("release.advance_train")
+async def advance(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Walk the train onto its next rung, or refuse and change nothing.
+
+    The index moves only from a ``baked`` or ``released`` checkpoint
+    whose every required gate receipt still binds its exact source and
+    manifest. The closing record is returned unchanged beside the new
+    DRAFT record, so the caller can assert the prior rung was not
+    rewritten.
+
+    Args:
+        ctx: Server context; unused, the advance is a pure projection
+            over the records the caller supplies.
+        params: JSON-RPC params per :class:`AdvanceTrainParams`.
+
+    Returns:
+        The rendered ladder at the new index, the opened DRAFT record,
+        the unchanged closing record and the validated receipt refs.
+
+    Raises:
+        DaemonValidationError: With the named denial
+            (``checkpoint_not_terminal``, ``prerequisite_receipt_stale``,
+            ...) when the advance is refused.
+    """
+    args = AdvanceTrainParams.model_validate(params)
+    current = _validated_release(args.release)
+    config = _resolve_config(current.version)
+    try:
+        receipts = [CheckpointGateReceipt.model_validate(row) for row in args.receipts]
+        result = advance_train(
+            V07_TRAIN,
+            current=current,
+            config=config,
+            receipts=receipts,
+            now=datetime.now(UTC),
+            next_uid=uuid4(),
+            membership_refs=tuple(args.membership_refs),
+        )
+    except TrainAdvanceError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
+    except (ValidationError, ValueError) as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    logger.info(
+        f"advance closed={result.closed.key!r} opened={result.opened.key!r} "
+        f"index={result.train.current_checkpoint_index}"
+    )
+    return {
+        "train": render_train_ladder(result.train),
+        "closed": result.closed.model_dump(mode="json"),
+        "opened": result.opened.model_dump(mode="json"),
+        "receipt_refs": list(result.receipt_refs),
+    }
+
+
 __all__ = [
+    "AdvanceTrainParams",
     "ApproveParams",
     "ComputeReadinessParams",
+    "CreateParams",
     "ObserveTargetParams",
     "PublishParams",
     "ReconcileParams",
     "RetryTargetParams",
     "ShowParams",
+    "advance",
     "approve",
     "compute_readiness_method",
+    "create",
     "observe",
     "publish",
     "reconcile",

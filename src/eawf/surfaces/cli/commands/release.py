@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -480,27 +481,33 @@ def release_notes(
     emit_json_or_text(payload, body, flags=flags)
 
 
-@release_app.command("train")
-def release_train(ctx: typer.Context) -> None:
-    """Render the release-train ladder and the checkpoint currently open."""
+train_app = typer.Typer(
+    name="train",
+    help="Inspect the release-train ladder and the checkpoint it has open.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+release_app.add_typer(train_app)
+
+
+@train_app.command("show")
+def release_train_show(
+    ctx: typer.Context,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Shorthand for the global --json flag."),
+    ] = False,
+) -> None:
+    """Render the ladder, the open index and each checkpoint's status."""
+    from eawf.workflow.release.advance import render_train_ladder, render_train_ladder_text
     from eawf.workflow.release.train import V07_TRAIN
 
     flags: GlobalFlags = ctx.obj
-    payload = {
-        "train_id": V07_TRAIN.train_id,
-        "target_version": V07_TRAIN.target_version,
-        "current_checkpoint_index": V07_TRAIN.current_checkpoint_index,
-        "checkpoints": [rung.model_dump(mode="json") for rung in V07_TRAIN.checkpoints],
-    }
-    lines = [f"{V07_TRAIN.train_id} -> {V07_TRAIN.target_version}"]
-    for index, rung in enumerate(V07_TRAIN.checkpoints):
-        marker = "*" if index == V07_TRAIN.current_checkpoint_index else " "
-        lines.append(
-            f" {marker} {rung.release_key}  epoch={rung.authority_epoch} "
-            f"profile={rung.gate_profile.value} "
-            f"membership={'required' if rung.requires_membership else 'forbidden'}"
-        )
-    emit_json_or_text(payload, "\n".join(lines), flags=flags)
+    if json_output:
+        flags = replace(flags, json_output=True)
+    emit_json_or_text(
+        render_train_ladder(V07_TRAIN), render_train_ladder_text(V07_TRAIN), flags=flags
+    )
 
 
 def _read_json_document(path: Path, *, label: str) -> dict[str, object]:
