@@ -13,6 +13,10 @@ Covers the three load-bearing guarantees of P27-W27:
   under the ``[tool.eawf.bundle] wheel_max_bytes`` ceiling. Skipped
   cleanly when the build environment is unavailable; the assertions are
   real whenever the wheel builds.
+- **npm dist-tag derivation** — ``dist_tag_for_version`` routes every
+  prerelease to ``next`` and only a final release to ``latest``, so the
+  plugin-release publish cannot hand a prerelease to the default
+  ``npm install``.
 """
 
 from __future__ import annotations
@@ -29,6 +33,11 @@ from typing import Any
 import pytest
 
 import eawf
+from eawf.platform.install.dist_tag import (
+    DIST_TAG_LATEST,
+    DIST_TAG_NEXT,
+    dist_tag_for_version,
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _VERSION_FILE = _REPO_ROOT / "src" / "eawf" / "_version.py"
@@ -344,3 +353,42 @@ def test_cancel_io_ex_argtypes_set_once_at_module_load() -> None:
 
     assert windows_pipe._CancelIoEx.argtypes == [ctypes.c_void_p, ctypes.c_void_p]
     assert windows_pipe._CancelIoEx.restype is ctypes.c_bool
+
+
+# --- npm dist-tag derivation ------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "version",
+    ["0.7.0a1", "0.7.0b2", "0.7.0rc1", "0.7.0.dev1", "0.7.0rc1.dev4", "0a1", "1.0rc9"],
+)
+def test_dist_tag_for_version_routes_prereleases_to_next(version: str) -> None:
+    """Any pre-release or ``.dev`` build publishes under the opt-in channel."""
+    assert dist_tag_for_version(version) == DIST_TAG_NEXT == "next"
+
+
+@pytest.mark.parametrize("version", ["0.7.0", "1.0", "1", "0.7.0.post1", "10.20.30"])
+def test_dist_tag_for_version_routes_stable_to_latest(version: str) -> None:
+    """A final release (post-releases included) owns the default install."""
+    assert dist_tag_for_version(version) == DIST_TAG_LATEST == "latest"
+
+
+@pytest.mark.parametrize(
+    "version",
+    ["", " ", "0.7.0 ", "v0.7.0", "0.7.0dev1", "0.7.0.dev", "0.7.0rc", "0.7.0-rc1", "latest"],
+)
+def test_dist_tag_for_version_rejects_unparsable_versions(version: str) -> None:
+    """An unclassifiable version raises rather than defaulting to ``latest``."""
+    with pytest.raises(ValueError, match="unsupported version string"):
+        dist_tag_for_version(version)
+
+
+def test_dist_tag_for_version_rejects_non_string() -> None:
+    """A non-``str`` version is a caller bug, not a version-grammar miss."""
+    with pytest.raises(TypeError, match="version must be a str"):
+        dist_tag_for_version(None)  # type: ignore[arg-type]
+
+
+def test_dist_tag_for_version_classifies_the_shipped_version() -> None:
+    """The version this repo ships resolves to exactly one of the two tags."""
+    assert dist_tag_for_version(eawf.__version__) in {DIST_TAG_LATEST, DIST_TAG_NEXT}

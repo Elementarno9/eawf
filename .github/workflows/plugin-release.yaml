@@ -6,10 +6,13 @@ name: Plugin Release
 #
 #   * Claude — the rendered ``.claude-plugin/`` tree is published to npm as
 #     the ``@elementarno/eawf`` package (the ``.claude-plugin/marketplace.json``
-#     pointer references ``{"source": "npm", "package": "@elementarno/eawf"}``).
-#   * Codex  — the rendered ``plugins/eawf/`` sub-tree is force-written to a
+#     pointer references ``{"source": "npm", "package": "@elementarno/eawf"}``)
+#     under a version-derived dist-tag, so a prerelease never becomes the
+#     default install.
+#   * Codex  — the rendered ``plugins/eawf/`` sub-tree is appended to a
 #     dedicated ``plugins-dist`` branch (the ref the Codex ``git-subdir``
-#     pointer references at ``path: ./plugins/eawf``, ``ref: plugins-dist``).
+#     pointer references at ``path: ./plugins/eawf``, ``ref: plugins-dist``),
+#     both at the pointer path and under a retained per-version path.
 #
 # The render step calls the packager library directly (``uv run python``)
 # rather than ``eawf plugin package`` because the CLI does not expose the
@@ -49,6 +52,7 @@ jobs:
     timeout-minutes: 20
     outputs:
       version: ${{ steps.version.outputs.version }}
+      dist_tag: ${{ steps.version.outputs.dist_tag }}
     steps:
       - name: Checkout tag
         uses: actions/checkout@v4
@@ -64,16 +68,22 @@ jobs:
       - name: Sync (frozen)
         run: uv sync --frozen
 
-      - name: Resolve plugin version
+      - name: Resolve plugin version + npm dist-tag
         id: version
         # Derive the published version from the package itself so the npm
         # artifact + plugin manifests match the source-of-truth
         # ``eawf.__version__`` (which W03 couples to the tag at release).
+        # The dist-tag is derived from that same version by the library
+        # helper: prereleases land on ``next``, stable releases on
+        # ``latest``. An unclassifiable version raises and reds the job
+        # rather than defaulting a prerelease onto ``latest``.
         run: |
           set -euo pipefail
           version="$(uv run python -c 'import eawf; print(eawf.__version__)')"
+          dist_tag="$(uv run python -c 'import eawf; from eawf.platform.install.dist_tag import dist_tag_for_version; print(dist_tag_for_version(eawf.__version__))')"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "resolved plugin version: $version"
+          echo "dist_tag=$dist_tag" >> "$GITHUB_OUTPUT"
+          echo "resolved plugin version: $version (npm dist-tag: $dist_tag)"
 
       - name: Render published plugin trees (claude=npm, codex=git-subdir)
         # The CLI ``eawf plugin package`` always emits the LOCAL source
@@ -322,12 +332,21 @@ jobs:
           PY
 
       - name: Publish to npm
+        # ``npm publish`` with no ``--tag`` writes ``latest``, which would
+        # make a prerelease the default install for every new user. Pass
+        # the dist-tag derived from the version in package-validate so a
+        # prerelease is reachable only via an explicit ``@next``.
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST_TAG: ${{ needs.package-validate.outputs.dist_tag }}
         run: |
           set -euo pipefail
+          if [ -z "${DIST_TAG}" ]; then
+            echo "refusing to publish: dist-tag not resolved by package-validate" >&2
+            exit 1
+          fi
           cd build/eawf-plugin
-          npm publish --access public
+          npm publish --access public --tag "${DIST_TAG}"
 
   publish-codex-branch:
     name: Publish Codex tree to plugins-dist branch
@@ -336,7 +355,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
-      contents: write # force-push the rendered tree to plugins-dist
+      contents: write # append the rendered tree to plugins-dist
     steps:
       - name: Download rendered trees
         uses: actions/download-artifact@v4
@@ -344,13 +363,20 @@ jobs:
           name: plugin-trees
           path: build/
 
-      - name: Force-write rendered Codex tree to plugins-dist branch
+      - name: Append rendered Codex tree to plugins-dist branch
         # The Codex git-subdir pointer references ``path: ./plugins/eawf``,
-        # ``ref: plugins-dist``. Lay the rendered ``plugins/eawf/`` sub-tree
-        # at the branch root so the pointer resolves, then force-push an
-        # orphan commit (the branch is a published-artifact mirror, not a
-        # development branch, so a single squashed snapshot per release is
-        # the intended shape). Uses the built-in ``GITHUB_TOKEN``.
+        # ``ref: plugins-dist``, so the rendered sub-tree is laid at the
+        # branch root for the moving "newest release" pointer AND copied to
+        # a retained ``versions/<version>/plugins/eawf`` path.
+        #
+        # The publish commits ON TOP of the existing branch and pushes
+        # without ``--force``: the previous orphan + force-push shape erased
+        # every prior version on each release, so an operator who needed to
+        # pin or roll back to the last-known-good Codex plugin had no ref
+        # left to point at. Keeping the history (and the per-version paths)
+        # makes every published version addressable, and a non-force push
+        # also refuses to clobber a concurrent publish. Uses the built-in
+        # ``GITHUB_TOKEN``.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PLUGIN_VERSION: ${{ needs.package-validate.outputs.version }}
@@ -358,31 +384,52 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          src="build/eawf-codex-marketplace/plugins/eawf"
+          src="$(pwd)/build/eawf-codex-marketplace/plugins/eawf"
+          market="$(pwd)/build/eawf-codex-marketplace/.agents/plugins/marketplace.json"
           if [ ! -d "$src" ]; then
             echo "rendered codex sub-tree missing: $src" >&2
             exit 1
           fi
 
           work="$(mktemp -d)"
-          mkdir -p "$work/plugins/eawf"
-          cp -R "$src/." "$work/plugins/eawf/"
-          # Carry the marketplace manifest too so the branch is a complete
-          # self-hosted catalog snapshot.
-          mkdir -p "$work/.agents/plugins"
-          cp build/eawf-codex-marketplace/.agents/plugins/marketplace.json \
-            "$work/.agents/plugins/marketplace.json"
-
           cd "$work"
           git init -q
-          git checkout -q --orphan plugins-dist
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git remote add origin \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git"
+
+          # Build on the published history when the branch exists; the very
+          # first publish starts it.
+          if git fetch -q origin plugins-dist; then
+            git checkout -q -B plugins-dist FETCH_HEAD
+          else
+            git checkout -q -b plugins-dist
+          fi
+
+          version_path="versions/${PLUGIN_VERSION}"
+          if [ -e "$version_path" ]; then
+            echo "refusing to republish: ${version_path} already on plugins-dist" >&2
+            exit 1
+          fi
+
+          # Retained per-version snapshot (the rollback target).
+          mkdir -p "$version_path/plugins/eawf" "$version_path/.agents/plugins"
+          cp -R "$src/." "$version_path/plugins/eawf/"
+          cp "$market" "$version_path/.agents/plugins/marketplace.json"
+
+          # Moving pointer paths the git-subdir source resolves against.
+          rm -rf plugins/eawf
+          mkdir -p plugins/eawf .agents/plugins
+          cp -R "$src/." plugins/eawf/
+          cp "$market" .agents/plugins/marketplace.json
+
+          # ``-f``: the branch is a rendered-artifact mirror, so nothing in it
+          # is ever legitimately ignored — an ambient excludes file that hides
+          # ``.agents/`` would otherwise publish a silently incomplete tree.
+          git add -A -f
           git commit -q -m "Publish Codex plugin tree for ${TAG} (version ${PLUGIN_VERSION})"
-          git push -q --force \
-            "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git" \
-            plugins-dist
+          git push -q origin plugins-dist
 
   release-notes:
     name: Publish plugin release notes
@@ -413,6 +460,7 @@ jobs:
             echo
             echo "- Claude: \`npm install @elementarno/eawf@${PLUGIN_VERSION}\` (or \`/plugin install eawf@eawf\` after \`marketplace add\`)."
             echo "- Codex: rendered tree on the \`plugins-dist\` branch (\`git-subdir\` pointer at \`./plugins/eawf\`)."
+            echo "- Codex (pin / rollback): the same tree is retained at \`versions/${PLUGIN_VERSION}/plugins/eawf\` on \`plugins-dist\`."
           } > plugin-notes.md
 
           if gh release view "$TAG" >/dev/null 2>&1; then
