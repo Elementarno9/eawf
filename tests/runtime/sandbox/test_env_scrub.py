@@ -19,13 +19,16 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 from pathlib import Path
 
 import pytest
 
 from eawf.runtime.runtimes.claude import adapter as claude_adapter
 from eawf.runtime.runtimes.claude.adapter import ClaudeAdapter
-from eawf.runtime.sandbox.env_scrub import build_child_env, resolve_binary_dir
+from eawf.runtime.sandbox import env_scrub
+from eawf.runtime.sandbox.env_scrub import build_child_env, pinned_tmpdir, resolve_binary_dir
+from eawf.runtime.sandbox.jail import build_jail_argv, build_seatbelt_profile
 
 _PINNED_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 
@@ -230,20 +233,102 @@ def test_resolve_binary_dir_none_when_binary_absent(monkeypatch: pytest.MonkeyPa
 
 
 # ---------------------------------------------------------------------------
-# TMPDIR: pinned to an allowed write subpath, never the parent Darwin temp
+# TMPDIR: pinned per platform to a temp dir that EXISTS and the jail allows
+# writes to -- never the parent per-user temp
 # ---------------------------------------------------------------------------
 
 
-def test_build_child_env_pins_tmpdir_to_allowed_temp() -> None:
-    """TMPDIR is pinned to /private/tmp; the parent Darwin per-user temp is dropped.
+@pytest.mark.parametrize(
+    ("platform", "expected"),
+    [
+        ("linux", "/tmp"),
+        ("darwin", "/private/tmp"),
+        # Any other POSIX id takes the portable /tmp, never the Darwin path.
+        ("freebsd14", "/tmp"),
+        ("", "/tmp"),
+    ],
+)
+def test_pinned_tmpdir_resolves_the_platforms_own_temp(platform: str, expected: str) -> None:
+    """The pin is per-platform: /private/tmp is macOS-only, /tmp elsewhere.
 
-    W37: a sandboxed CLI stages runtime sockets / PATH aliases under $TMPDIR;
-    the FS jail confines writes, so TMPDIR must point at an allowed subpath
-    (keeps the jail from having to open the broad /private/var/folders tree).
+    REL-034: the pin used to be the macOS ``/private/tmp`` on EVERY platform,
+    so a Linux child got a $TMPDIR that does not exist on its host and every
+    temp write it staged there failed.
     """
+    assert pinned_tmpdir(platform) == expected
+
+
+def test_pinned_tmpdir_is_none_on_windows() -> None:
+    """Windows has no FS jail and no POSIX TMPDIR, so it gets no pin at all."""
+    assert pinned_tmpdir("win32") is None
+
+
+def test_pinned_tmpdir_exists_on_this_host() -> None:
+    """The pin for the RUNNING platform is a directory that actually exists.
+
+    The whole point of the pin is a $TMPDIR the child can stage into; a path
+    that is absent on the host is the REL-034 defect itself.
+    """
+    resolved = pinned_tmpdir(sys.platform)
+    assert resolved is not None
+    assert Path(resolved).is_dir()
+
+
+def test_build_child_env_pins_tmpdir_to_the_linux_temp_on_linux(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On Linux the child's TMPDIR is /tmp, not the macOS /private/tmp."""
+    monkeypatch.setattr(env_scrub.sys, "platform", "linux")
+    base = {**_FULL_BASE_ENV, "TMPDIR": "/var/folders/xx/abc/T/"}
+    env = build_child_env("codex", base_env=base)
+    assert env["TMPDIR"] == "/tmp"
+
+
+def test_build_child_env_pins_tmpdir_to_the_darwin_temp_on_macos(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On macOS TMPDIR stays /private/tmp; the parent Darwin per-user temp is dropped.
+
+    A sandboxed CLI stages runtime sockets / PATH aliases under $TMPDIR; the
+    FS jail confines writes, so TMPDIR must point at an allowed subpath (it
+    keeps the jail from opening the broad /private/var/folders tree).
+    """
+    monkeypatch.setattr(env_scrub.sys, "platform", "darwin")
     base = {**_FULL_BASE_ENV, "TMPDIR": "/var/folders/xx/abc/T/"}
     env = build_child_env("codex", base_env=base)
     assert env["TMPDIR"] == "/private/tmp"
+
+
+def test_build_child_env_omits_tmpdir_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows gets no TMPDIR pin: a POSIX path there names nothing."""
+    monkeypatch.setattr(env_scrub.sys, "platform", "win32")
+    base = {**_FULL_BASE_ENV, "TMPDIR": "parent-windows-temp"}
+    env = build_child_env("codex", base_env=base)
+    assert "TMPDIR" not in env
+
+
+def test_pinned_tmpdir_is_write_allowed_by_the_linux_jail_policy(tmp_path: Path) -> None:
+    """The Linux jail mounts a WRITABLE tmpfs at exactly the pinned TMPDIR.
+
+    The pin and the jail's write policy come from one resolver, so they
+    cannot drift: a $TMPDIR the bwrap policy leaves read-only is a child
+    whose every temp write fails.
+    """
+    root = tmp_path / "repo"
+    cwd = root / "worktree"
+    cwd.mkdir(parents=True)
+    argv = build_jail_argv("codex", cwd=cwd, root=root, platform="linux", home=tmp_path)
+    tmpfs_targets = [argv[i + 1] for i, token in enumerate(argv) if token == "--tmpfs"]
+    assert pinned_tmpdir("linux") in tmpfs_targets
+
+
+def test_pinned_tmpdir_is_write_allowed_by_the_darwin_jail_policy(tmp_path: Path) -> None:
+    """The seatbelt profile write-allows exactly the pinned macOS TMPDIR."""
+    root = tmp_path / "repo"
+    cwd = root / "worktree"
+    cwd.mkdir(parents=True)
+    profile = build_seatbelt_profile(cwd=cwd, runtime="codex", home=tmp_path)
+    assert f'(allow file-write* (subpath "{pinned_tmpdir("darwin")}"))' in profile
 
 
 # ---------------------------------------------------------------------------

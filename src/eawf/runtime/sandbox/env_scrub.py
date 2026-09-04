@@ -14,6 +14,8 @@ Public API:
 
 - :func:`build_child_env` -- returns the scrubbed env dict to hand to the
   subprocess ``env=`` kwarg.
+- :func:`pinned_tmpdir` -- the per-platform ``TMPDIR`` pin, shared with the
+  FS jail so the pinned path and the jail's write policy cannot drift.
 
 The shared floor (every lane) keeps ``HOME``, a PINNED ``PATH`` floor
 (never the parent ``PATH``), ``LANG`` / ``LC_*`` (defaulting to
@@ -34,6 +36,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import sys
 from collections.abc import Mapping
 
 logger = logging.getLogger(__name__)
@@ -51,13 +54,19 @@ _OPENCODE_RUNTIME: str = "opencode"
 #: child.
 _PINNED_PATH: str = "/usr/bin:/bin:/usr/sbin:/sbin"
 
-#: The PINNED TMPDIR. The parent ``TMPDIR`` (the macOS Darwin per-user temp
-#: ``/private/var/folders/...``) is deliberately NOT passed through: the FS
-#: jail confines writes to ``/private/tmp`` + ``/private/var/tmp`` + cwd, so a
-#: sandboxed CLI that stages runtime sockets / PATH aliases under ``$TMPDIR``
-#: must point at an allowed write subpath. Pinning it here lets the jail keep
+#: The PINNED TMPDIR, per platform. The parent ``TMPDIR`` (on macOS the
+#: Darwin per-user temp ``/private/var/folders/...``) is deliberately NOT
+#: passed through: the FS jail confines writes, so a sandboxed CLI that
+#: stages runtime sockets / PATH aliases under ``$TMPDIR`` must point at a
+#: path the jail policy allows writes to. Pinning it here lets the jail keep
 #: write confinement tight (no broad ``/private/var/folders`` allow).
-_PINNED_TMPDIR: str = "/private/tmp"
+#:
+#: The pin is PER-PLATFORM because the paths are not portable: macOS's real
+#: temp dir is ``/private/tmp`` (``/tmp`` is a symlink to it), while on Linux
+#: ``/private/tmp`` does not exist at all -- pinning it there hands the child
+#: a ``$TMPDIR`` that no write can land in.
+_PINNED_TMPDIR_DARWIN: str = "/private/tmp"
+_PINNED_TMPDIR_POSIX: str = "/tmp"
 
 #: Locale default seeded when the base env carries no ``LANG``.
 _DEFAULT_LANG: str = "C.UTF-8"
@@ -102,6 +111,33 @@ _CODEX_AUTH_PREFIXES: tuple[str, ...] = ("OPENAI_",)
 #: credentials are dropped by omission.
 _OPENCODE_AUTH_EXACT: frozenset[str] = frozenset()
 _OPENCODE_AUTH_PREFIXES: tuple[str, ...] = ("OPENCODE_",)
+
+
+def pinned_tmpdir(platform: str) -> str | None:
+    """Return the ``TMPDIR`` a jailed child is pinned to on *platform*.
+
+    The single source of truth shared by the env scrub (which seeds the
+    child's ``TMPDIR``) and the FS jail (which must permit writes to that
+    same path): a pin the jail policy does not allow writes to is a child
+    whose every temp write fails, and the two drifting apart is exactly the
+    defect this resolver exists to prevent.
+
+    Args:
+        platform: The :data:`sys.platform` string to resolve for
+            (``"darwin"`` / ``"linux"`` / ``"win32"`` / any other POSIX id).
+
+    Returns:
+        ``/private/tmp`` on macOS (its real temp dir; ``/tmp`` is only a
+        symlink to it), ``/tmp`` on Linux and every other POSIX platform,
+        and ``None`` on Windows -- which has no FS jail and reads ``TEMP`` /
+        ``TMP`` rather than the POSIX ``TMPDIR``, so pinning a POSIX path
+        there would hand the child a directory that cannot exist.
+    """
+    if platform == "win32":
+        return None
+    if platform == "darwin":
+        return _PINNED_TMPDIR_DARWIN
+    return _PINNED_TMPDIR_POSIX
 
 
 def _lane_allowlist(runtime: str) -> tuple[frozenset[str], tuple[str, ...]]:
@@ -163,7 +199,9 @@ def build_child_env(
     Returns:
         A fresh ``dict`` of the scrubbed child environment. Always carries
         a pinned ``PATH`` and a ``LANG`` (defaulted to ``C.UTF-8`` when
-        the base env has none), even from an empty *base_env*.
+        the base env has none), even from an empty *base_env*, plus a
+        ``TMPDIR`` pinned via :func:`pinned_tmpdir` on every platform that
+        has one (all but Windows).
 
     Raises:
         ValueError: When *runtime* is not a known auth lane.
@@ -191,10 +229,13 @@ def build_child_env(
     # Floor LANG is seeded with a default when the parent has none.
     child["LANG"] = source.get("LANG", _DEFAULT_LANG)
 
-    # Floor TMPDIR is PINNED to an allowed write subpath -- never the parent
-    # Darwin per-user temp -- so a sandboxed CLI's temp staging stays inside
-    # the FS jail's write confinement.
-    child["TMPDIR"] = _PINNED_TMPDIR
+    # Floor TMPDIR is PINNED to a write subpath the jail policy allows on
+    # THIS platform -- never the parent per-user temp -- so a sandboxed CLI's
+    # temp staging stays inside the FS jail's write confinement. Windows has
+    # no jail (and no POSIX TMPDIR), so it gets no pin at all.
+    tmpdir = pinned_tmpdir(sys.platform)
+    if tmpdir is not None:
+        child["TMPDIR"] = tmpdir
 
     # Floor locale carry-through (LC_*) + the lane's auth families, both
     # matched by prefix.
@@ -251,4 +292,4 @@ def resolve_binary_dir(binary: str) -> str | None:
     return os.path.dirname(os.path.abspath(resolved))
 
 
-__all__ = ["build_child_env", "resolve_binary_dir"]
+__all__ = ["build_child_env", "pinned_tmpdir", "resolve_binary_dir"]

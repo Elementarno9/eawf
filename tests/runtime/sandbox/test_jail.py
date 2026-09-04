@@ -46,6 +46,7 @@ import pytest
 from eawf.runtime.runtimes.claude import adapter as claude_adapter
 from eawf.runtime.runtimes.claude.adapter import ClaudeAdapter
 from eawf.runtime.sandbox.cwd_guard import CwdGuardError
+from eawf.runtime.sandbox.env_scrub import pinned_tmpdir
 from eawf.runtime.sandbox.jail import (
     JailUnavailableOnWindowsError,
     build_jail_argv,
@@ -80,6 +81,39 @@ _CRED_DENY_DIRS: tuple[str, ...] = (
     ".docker",
     ".gnupg",
 )
+
+
+#: The cred-deny entries that are DIRECTORIES on a real host (tmpfs-masked)
+#: and the ones that are FILES (masked by a null-device bind instead --
+#: ``--tmpfs`` cannot cover a regular file).
+_CRED_DENY_FILES: tuple[str, ...] = (".npmrc", ".pypirc")
+_CRED_DENY_SUBDIRS: tuple[str, ...] = tuple(
+    rel for rel in _CRED_DENY_DIRS if rel not in _CRED_DENY_FILES
+)
+
+#: The real-bwrap launch tests run ONLY on Linux with ``bwrap`` actually
+#: present: they execute the kernel's namespace/mount enforcement, so they
+#: must skip everywhere else (this macOS dev host, a Linux without the
+#: binary) instead of failing. The ubuntu-24.04 ``linux-jail`` CI job
+#: installs bubblewrap so they EXECUTE there.
+_bwrap_unavailable = sys.platform != "linux" or shutil.which("bwrap") is None
+_REQUIRE_BWRAP = pytest.mark.skipif(
+    _bwrap_unavailable,
+    reason="real bubblewrap launch smoke needs Linux + bwrap on PATH",
+)
+
+
+def _materialise_cred_paths(home: Path) -> None:
+    """Create every cross-tool cred path under *home* as its real shape.
+
+    The Linux backend masks only what EXISTS (bwrap cannot create a mount
+    point inside the read-only root bind), so a test that asserts the masks
+    must first put the dirs / files on disk the way a real host has them.
+    """
+    for rel in _CRED_DENY_SUBDIRS:
+        (home / rel).mkdir(parents=True, exist_ok=True)
+    for rel in _CRED_DENY_FILES:
+        (home / rel).write_text("placeholder\n", encoding="utf-8")
 
 
 def _repo_with_cwd(tmp_path: Path) -> tuple[Path, Path]:
@@ -175,14 +209,208 @@ def test_build_jail_argv_linux_preserves_pgid_no_new_session(tmp_path: Path) -> 
 
 
 def test_build_jail_argv_linux_masks_every_cred_dir(tmp_path: Path) -> None:
-    """Every cross-tool cred dir is tmpfs-masked inside the Linux jail."""
+    """Every PRESENT cross-tool cred path is masked inside the Linux jail.
+
+    A cred DIRECTORY is covered by an empty tmpfs; a cred FILE (.npmrc /
+    .pypirc) is covered by a bind of the null device, since ``--tmpfs``
+    cannot mount over a regular file.
+    """
+    root, cwd = _repo_with_cwd(tmp_path)
+    _materialise_cred_paths(tmp_path)
+    argv = build_jail_argv(_CLAUDE, cwd=cwd, root=root, platform="linux", home=tmp_path)
+    tmpfs_targets = [argv[i + 1] for i, token in enumerate(argv) if token == "--tmpfs"]
+    null_masked = [
+        argv[i + 2]
+        for i, token in enumerate(argv)
+        if token == "--ro-bind" and argv[i + 1] == "/dev/null"
+    ]
+    for rel in _CRED_DENY_SUBDIRS:
+        assert str((tmp_path / rel).resolve()) in tmpfs_targets
+    for rel in _CRED_DENY_FILES:
+        assert str((tmp_path / rel).resolve()) in null_masked
+
+
+def test_build_jail_argv_linux_skips_masks_for_absent_cred_dirs(tmp_path: Path) -> None:
+    """REL-034: an ABSENT cred dir is not masked -- masking it kills the launch.
+
+    bwrap has to create each mount point, and the read-only root bind makes
+    that ``mkdir`` fail with EROFS, so an unconditional mask over a cred dir
+    the host does not have aborts bwrap before the child ever runs. Nothing
+    under HOME exists here, so no cred mask may be emitted at all.
+    """
+    root, cwd = _repo_with_cwd(tmp_path)
+    home = tmp_path / "empty-home"
+    home.mkdir()
+    argv = build_jail_argv(_CLAUDE, cwd=cwd, root=root, platform="linux", home=home)
+    tmpfs_targets = [argv[i + 1] for i, token in enumerate(argv) if token == "--tmpfs"]
+    for rel in _CRED_DENY_DIRS:
+        assert str((home / rel).resolve()) not in tmpfs_targets
+    # Only the pinned-TMPDIR tmpfs survives.
+    assert tmpfs_targets == [pinned_tmpdir("linux")]
+
+
+def test_build_jail_argv_linux_mounts_writable_tmpfs_at_pinned_tmpdir(tmp_path: Path) -> None:
+    """REL-034: the jail mounts a writable tmpfs at the env scrub's pinned TMPDIR.
+
+    The read-only root bind leaves the host temp dir unwritable, so without
+    this the child's pinned ``$TMPDIR`` is a read-only path and every socket
+    / PATH alias the CLI stages there fails.
+    """
     root, cwd = _repo_with_cwd(tmp_path)
     argv = build_jail_argv(_CLAUDE, cwd=cwd, root=root, platform="linux", home=tmp_path)
-    joined = " ".join(argv)
-    for rel in _CRED_DENY_DIRS:
-        masked = str((tmp_path / rel).resolve())
-        assert "--tmpfs" in argv
-        assert masked in joined
+    tmpfs_targets = [argv[i + 1] for i, token in enumerate(argv) if token == "--tmpfs"]
+    assert pinned_tmpdir("linux") in tmpfs_targets
+
+
+def test_build_jail_argv_linux_mounts_tmpfs_before_the_cwd_bind(tmp_path: Path) -> None:
+    """The TMPDIR tmpfs precedes the cwd bind so a cwd under /tmp survives it.
+
+    bwrap applies mounts in argv order: a tmpfs mounted at /tmp AFTER the
+    worktree bind would shadow a worktree that lives under /tmp (every CI
+    checkout in a temp dir), leaving the child confined to an empty tree.
+    """
+    root, cwd = _repo_with_cwd(tmp_path)
+    argv = build_jail_argv(_CLAUDE, cwd=cwd, root=root, platform="linux", home=tmp_path)
+    tmpfs_idx = next(
+        i for i, token in enumerate(argv) if token == "--tmpfs" and argv[i + 1] == "/tmp"
+    )
+    bind_idx = next(
+        i for i, token in enumerate(argv) if token == "--bind" and argv[i + 1] == str(cwd.resolve())
+    )
+    assert tmpfs_idx < bind_idx
+
+
+# ---------------------------------------------------------------------------
+# Linux semantics smoke: a REAL bwrap launch on a Linux host
+# ---------------------------------------------------------------------------
+
+
+@_REQUIRE_BWRAP
+def test_bwrap_jail_linux_launch_runs_a_trivial_command(tmp_path: Path) -> None:
+    """REL-034: a trivial jailed command LAUNCHES and exits 0 on a Linux host.
+
+    The argv-shape tests above cannot see a launch abort: bwrap validated
+    the old prefix's mounts at run time and died before the child ran, so
+    the jail was dead on Linux while every unit test stayed green. This
+    executes the production prefix against real bubblewrap, which is the
+    only oracle for "the jail actually launches".
+    """
+    root, cwd = _repo_with_cwd(tmp_path)
+    home = cwd / "home"
+    _materialise_cred_paths(home)
+    prefix = build_jail_argv(_CLAUDE, cwd=cwd, root=root, platform="linux", home=home)
+    assert prefix[0] == "bwrap"
+
+    launched = subprocess.run(
+        [*prefix, "/bin/true"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert launched.returncode == 0, (
+        f"jailed launch should exit 0; rc={launched.returncode} stderr={launched.stderr!r}"
+    )
+
+
+@_REQUIRE_BWRAP
+def test_bwrap_jail_linux_launch_enforces_write_and_cred_policy(tmp_path: Path) -> None:
+    """The launched Linux jail confines writes and masks the cred paths.
+
+    Proves the fix did not buy the launch by giving up confinement: a write
+    inside the cwd lands on the host, a write outside it never does, the
+    pinned ``$TMPDIR`` is writable but private, and both cred shapes (a
+    masked DIRECTORY and a masked FILE) read empty inside the jail.
+    """
+    root, cwd = _repo_with_cwd(tmp_path)
+    home = cwd / "home"
+    _materialise_cred_paths(home)
+    (home / ".aws" / "credentials").write_text("placeholder-cred\n", encoding="utf-8")
+    prefix = build_jail_argv(_CLAUDE, cwd=cwd, root=root, platform="linux", home=home)
+
+    allowed_target = cwd / "allowed.txt"
+    denied_target = root / "outside.txt"
+    tmp_probe = f"{pinned_tmpdir('linux')}/eawf-jail-probe.txt"
+
+    allowed = subprocess.run(
+        [*prefix, "/bin/sh", "-c", f"echo hi > {allowed_target}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert allowed.returncode == 0, f"cwd write should pass; stderr={allowed.stderr!r}"
+    assert allowed_target.read_text().strip() == "hi"
+
+    subprocess.run(
+        [*prefix, "/bin/sh", "-c", f"echo nope > {denied_target}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert not denied_target.exists(), "a write outside the cwd must never reach the host"
+
+    temp_write = subprocess.run(
+        [*prefix, "/bin/sh", "-c", f"echo tmp-ok > {tmp_probe} && cat {tmp_probe}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert temp_write.returncode == 0, f"pinned TMPDIR must be writable; {temp_write.stderr!r}"
+    assert temp_write.stdout.strip() == "tmp-ok"
+    assert not Path(tmp_probe).exists(), "the jail's temp is private, not the host's"
+
+    masked_file = subprocess.run(
+        [*prefix, "/bin/sh", "-c", f"cat {home / '.npmrc'}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert masked_file.returncode == 0
+    assert masked_file.stdout == "", "a masked cred FILE must read as empty"
+
+    masked_dir = subprocess.run(
+        [*prefix, "/bin/sh", "-c", f"cat {home / '.aws' / 'credentials'}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert masked_dir.returncode != 0, "a masked cred DIR must hide its contents"
+    assert masked_dir.stdout == ""
+
+
+@_REQUIRE_BWRAP
+def test_bwrap_jail_linux_launch_fails_when_masking_an_absent_dir(tmp_path: Path) -> None:
+    """Regression guard: the pre-fix unconditional mask aborts the launch.
+
+    Feeding bwrap the SAME shape with a tmpfs over a path that does not
+    exist under the read-only root makes it fail to create the mount point
+    and exit non-zero before any child runs. This pins WHY the mask had to
+    become conditional -- and reds again if the ``exists`` filter is
+    dropped.
+    """
+    absent = "/eawf-absent-cred-dir"
+    assert not Path(absent).exists()
+    broken = subprocess.run(
+        [
+            "bwrap",
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--proc",
+            "/proc",
+            "--tmpfs",
+            absent,
+            "--unshare-pid",
+            "--die-with-parent",
+            "/bin/true",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert broken.returncode != 0, "masking an absent path must abort the launch"
+    assert "eawf-absent-cred-dir" in broken.stderr or "Read-only" in broken.stderr
 
 
 # ---------------------------------------------------------------------------
@@ -498,8 +726,9 @@ def test_build_seatbelt_profile_unknown_runtime_raises(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("platform", ["linux", "darwin"])
 def test_jail_denies_every_cross_tool_cred_dir(platform: str, tmp_path: Path) -> None:
-    """Every cross-tool cred dir is denied on both platforms."""
+    """Every cross-tool cred dir present on the host is denied on both platforms."""
     root, cwd = _repo_with_cwd(tmp_path)
+    _materialise_cred_paths(tmp_path)
     argv = build_jail_argv(_CLAUDE, cwd=cwd, root=root, platform=platform, home=tmp_path)
     joined = " ".join(argv)
     for rel in _CRED_DENY_DIRS:

@@ -9,6 +9,11 @@ they fire only on a ``v*`` tag push, so a defect in them is discovered by
 the users it already shipped to. Both assert on the workflow source
 instead, and each ships a companion test that feeds the checker a
 synthetic defective workflow to prove the gate reds.
+
+The Linux real-host jail gate joins the same family from the other end: it
+guards a job that must EXIST at all, because the sandbox's Linux backend is
+otherwise exercised only by argv shape on hosts without bubblewrap -- a
+prefix bwrap refuses to mount then reads as green.
 """
 
 from __future__ import annotations
@@ -26,6 +31,7 @@ pytestmark = pytest.mark.unit
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _PLUGIN_RELEASE = _REPO_ROOT / ".github" / "workflows" / "plugin-release.yaml"
+_CI = _REPO_ROOT / ".github" / "workflows" / "ci.yaml"
 
 
 def test_coverage_gate_config_parses_and_classifies() -> None:
@@ -198,4 +204,105 @@ def test_codex_history_gate_reds_on_a_missing_publish_step() -> None:
     defective = yaml.safe_load("jobs:\n  publish-codex-branch:\n    steps: []\n")
     assert codex_history_violations(defective) == [
         "publish-codex-branch has no plugins-dist publish step"
+    ]
+
+
+# --- Linux real-host jail gate ----------------------------------------------
+
+
+def _load_ci() -> dict[str, Any]:
+    """Parse ``.github/workflows/ci.yaml``."""
+    workflow: dict[str, Any] = yaml.safe_load(_CI.read_text(encoding="utf-8"))
+    return workflow
+
+
+def linux_real_host_violations(workflow: dict[str, Any]) -> list[str]:
+    """Report every way *workflow* could stop proving the jail launches on Linux.
+
+    The Linux bubblewrap backend has no host that exercises it by default:
+    the developer machines are macOS and the CI test matrix carries no
+    bwrap, so every real-jail case skips and only the argv SHAPE is checked.
+    A prefix bwrap refuses to mount then reads as green while the jail is
+    dead. The gate below keeps a real-host job in the workflow.
+
+    Args:
+        workflow: The parsed CI workflow.
+
+    Returns:
+        One human-readable problem per violation; empty when the real-host
+        job is present, unconditional, on ubuntu-24.04, installing real
+        bubblewrap, and running the launch + sunset tests.
+    """
+    problems: list[str] = []
+    job = workflow.get("jobs", {}).get("linux-jail")
+    if job is None:
+        return ["ci.yaml declares no 'linux-jail' job"]
+
+    if job.get("runs-on") != "ubuntu-24.04":
+        problems.append("the linux-jail job does not run on ubuntu-24.04")
+    if job.get("if") is not None:
+        problems.append("the linux-jail job is conditional, so the launch can go unproven")
+
+    install = _find_step(job, "bubblewrap")
+    if install is None or "apt-get install" not in str(install.get("run", "")):
+        problems.append("the linux-jail job installs no real bubblewrap")
+
+    launch = _find_step(job, "pytest")
+    if launch is None:
+        problems.append("the linux-jail job runs no pytest step")
+        return problems
+
+    run = str(launch.get("run", ""))
+    for path in (
+        "tests/runtime/sandbox/test_jail.py",
+        "tests/runtime/sandbox/test_jail_expiry.py",
+    ):
+        if path not in run:
+            problems.append(f"the linux-jail job does not run {path}")
+    return problems
+
+
+def test_ci_proves_the_jail_launches_on_a_linux_real_host() -> None:
+    """The live CI workflow launches the jail against real bwrap on ubuntu-24.04."""
+    assert linux_real_host_violations(_load_ci()) == []
+
+
+def test_linux_real_host_job_runs_a_guarded_launch_test() -> None:
+    """The launch cases the job runs exist and skip cleanly off a bwrap host."""
+    source = (_REPO_ROOT / "tests" / "runtime" / "sandbox" / "test_jail.py").read_text(
+        encoding="utf-8"
+    )
+    assert "def test_bwrap_jail_linux_launch_" in source
+    assert 'shutil.which("bwrap")' in source
+    assert "pytest.mark.skipif" in source
+
+
+def test_linux_real_host_gate_reds_on_a_bwrap_free_job() -> None:
+    """The gate fires on the real defect: a job that never installs bubblewrap.
+
+    Without the install the launch tests skip and the job passes while
+    proving nothing -- the exact failure mode this gate exists to catch.
+    """
+    defective = yaml.safe_load(
+        """
+        jobs:
+          linux-jail:
+            runs-on: macos-26
+            if: github.event_name == 'pull_request'
+            steps:
+              - name: Pytest (sandbox)
+                run: uv run pytest tests/runtime/sandbox/test_jail.py
+        """
+    )
+    problems = linux_real_host_violations(defective)
+    assert any("bubblewrap" in problem for problem in problems), problems
+    assert any("ubuntu-24.04" in problem for problem in problems), problems
+    assert any("conditional" in problem for problem in problems), problems
+    assert any("test_jail_expiry.py" in problem for problem in problems), problems
+
+
+def test_linux_real_host_gate_reds_on_a_missing_job() -> None:
+    """A workflow with no linux-jail job at all is itself the violation."""
+    assert linux_real_host_violations(yaml.safe_load("jobs: {}\n")) == [
+        "ci.yaml declares no 'linux-jail' job"
     ]

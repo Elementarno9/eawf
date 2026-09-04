@@ -7,9 +7,12 @@ and denied read of cross-tool credential dirs (``~/.aws``, ``~/.ssh``,
 module builds the OS-native container around that child:
 
 - **Linux** -- a ``bwrap`` (bubblewrap) argv PREFIX: a read-only bind of
-  the root, a single read-write bind of the validated cwd, ``--unshare-pid``
-  with ``--die-with-parent`` (BOTH required -- bubblewrap issue #529), and
-  tmpfs masks over the cross-tool credential dirs.
+  the root, a writable tmpfs at the pinned ``$TMPDIR``, a single read-write
+  bind of the validated cwd, ``--unshare-pid`` with ``--die-with-parent``
+  (BOTH required -- bubblewrap issue #529), and masks over the cross-tool
+  credential dirs that are PRESENT on the host (bwrap cannot create a
+  missing mount point inside the read-only root, so masking an absent path
+  aborts the launch).
 - **macOS** -- a ``sandbox-exec -p <profile>`` argv PREFIX over a generated
   seatbelt profile (``(deny default)`` + ``(allow process*)`` + a
   read allowlist that denies the cross-tool cred dirs + an
@@ -58,6 +61,7 @@ from pathlib import Path
 
 from eawf.runtime.sandbox.cwd_guard import assert_cwd_inside
 from eawf.runtime.sandbox.egress_proxy import SandboxError
+from eawf.runtime.sandbox.env_scrub import pinned_tmpdir
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +104,13 @@ _CLAUDE_OWN_CRED: str = ".claude/.credentials.json"  # pragma: allowlist secret
 #: directory holds the keychain DB; ``/private/var/db/mds`` backs the
 #: keychain/securityd metadata lookups.
 _KEYCHAIN_READ_SUBPATHS: tuple[str, ...] = ("Library/Keychains",)
+
+#: The empty-file mask source for the Linux backend. ``--tmpfs`` can only
+#: cover a DIRECTORY, so the file-shaped entries of :data:`_CRED_DENY_DIRS`
+#: (``.npmrc`` / ``.pypirc``) are masked by binding the null device over
+#: them instead -- they then read as empty inside the jail rather than
+#: aborting the launch with a "not a directory" mount failure.
+_NULL_DEVICE: str = "/dev/null"
 
 
 class JailUnavailableOnWindowsError(SandboxError):
@@ -293,7 +304,7 @@ def build_seatbelt_profile(*, cwd: Path, runtime: str, home: Path | None = None)
     # Confine writes to the worktree cwd + the pinned-TMPDIR temp areas; still
     # no broad $HOME or /private/var/folders write.
     lines.append(f'(allow file-write* (subpath "{cwd_abs}"))')
-    lines.append('(allow file-write* (subpath "/private/tmp"))')
+    lines.append(f'(allow file-write* (subpath "{pinned_tmpdir("darwin")}"))')
     lines.append('(allow file-write* (subpath "/private/var/tmp"))')
 
     # Device nodes: git + countless shell tools redirect to /dev/null (and read
@@ -310,38 +321,66 @@ def build_seatbelt_profile(*, cwd: Path, runtime: str, home: Path | None = None)
 def _build_linux_argv(*, cwd: Path, runtime: str, home: Path) -> list[str]:
     """Build the bubblewrap argv prefix for the jailed child.
 
-    Read-only-binds the root, read-write-binds the validated cwd, masks
-    the cross-tool cred dirs with tmpfs, and sets ``--unshare-pid`` +
-    ``--die-with-parent`` TOGETHER (both required for the reap to cascade
-    into grandchildren -- bubblewrap #529). Emits NO ``--new-session`` so
-    bwrap stays in the daemon-set process group (the outer setsid already
-    covers TIOCSTI).
+    Read-only-binds the root, mounts a writable tmpfs at the pinned
+    ``$TMPDIR``, read-write-binds the validated cwd, masks the cross-tool
+    cred dirs, and sets ``--unshare-pid`` + ``--die-with-parent`` TOGETHER
+    (both required for the reap to cascade into grandchildren -- bubblewrap
+    #529). Emits NO ``--new-session`` so bwrap stays in the daemon-set
+    process group (the outer setsid already covers TIOCSTI).
+
+    Two ordering / shape constraints keep bwrap from ABORTING the launch
+    (it exits non-zero before the child ever runs, so a violation leaves a
+    dead jail rather than a weak one):
+
+    - every mount point must already exist, because the read-only root bind
+      leaves bwrap unable to ``mkdir`` one. So a cred dir is masked only
+      when it is present on the host, and the mask shape follows the
+      entry's type: ``--tmpfs`` over a directory, a null-device bind over a
+      file.
+    - the ``$TMPDIR`` tmpfs is mounted BEFORE the cwd bind, so a worktree
+      that happens to live under the temp root is not shadowed by it.
     """
     cwd_abs = cwd.resolve(strict=False)
+    # The one source of truth the env scrub also seeds TMPDIR from, so the
+    # child's $TMPDIR and the jail's writable temp mount are the same path
+    # by construction. Linux always has a pin; the None (Windows) case
+    # cannot reach here because the caller already refused Windows.
+    tmpdir = pinned_tmpdir("linux")
     argv: list[str] = [
         "bwrap",
         # Read-only view of the whole root...
         "--ro-bind",
         "/",
         "/",
-        # ...with a single writable bind of the worktree cwd.
-        "--bind",
-        os.fspath(cwd_abs),
-        os.fspath(cwd_abs),
         "--dev",
         "/dev",
         "--proc",
         "/proc",
+        # ...a private writable temp at the pinned $TMPDIR (the read-only
+        # root leaves the real temp dir unwritable, which strands every
+        # temp write the sandboxed CLI stages there)...
+        "--tmpfs",
+        str(tmpdir),
+        # ...and a single writable bind of the worktree cwd, AFTER the
+        # tmpfs so a cwd under the temp root survives it.
+        "--bind",
+        os.fspath(cwd_abs),
+        os.fspath(cwd_abs),
         # Reap-critical pair: BOTH required (bubblewrap #529).
         "--unshare-pid",
         "--die-with-parent",
     ]
 
-    # Mask each cross-tool cred dir with an empty tmpfs so its contents are
-    # unreadable inside the jail.
+    # Mask each cross-tool cred dir that EXISTS so its contents are
+    # unreadable inside the jail. An absent path is skipped: bwrap would
+    # have to create the mount point inside the read-only root bind, which
+    # fails with EROFS and kills the launch outright.
     for rel in _CRED_DENY_DIRS:
         cred_path = (home / rel).resolve(strict=False)
-        argv += ["--tmpfs", os.fspath(cred_path)]
+        if cred_path.is_dir():
+            argv += ["--tmpfs", os.fspath(cred_path)]
+        elif cred_path.is_file():
+            argv += ["--ro-bind", _NULL_DEVICE, os.fspath(cred_path)]
 
     # Re-expose the agent's OWN state dir READ-WRITE after the tmpfs masks so
     # the carve-out wins over the deny: the runtime stages session scratch

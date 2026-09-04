@@ -163,6 +163,54 @@ jobs:
       - name: Snapshot pairing gate
         run: uv run python tools/snapshot_pairing_gate.py "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
 
+  linux-jail:
+    name: Linux jail real-bwrap launch
+    # The `test` matrix runs on hosts WITHOUT bubblewrap, so every real-jail
+    # case skips there and the Linux backend is only ever checked by argv
+    # shape. That is how a prefix that bwrap refuses to launch (a tmpfs mask
+    # over an absent cred dir, a $TMPDIR pinned to a macOS-only path) stayed
+    # green while the jail was dead on Linux. This job installs real
+    # bubblewrap so the launch tests EXECUTE against the kernel.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Install bubblewrap
+        # bwrap needs an unprivileged user namespace; Ubuntu 24.04 restricts
+        # those by default via AppArmor, so the sysctl is relaxed for the job
+        # (best-effort: on a runner image that already permits it the write
+        # fails harmlessly). The version echo makes the installed binary
+        # visible in the log when a launch assertion fails.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          bwrap --version
+
+      - name: Pytest (real-bwrap jail launch)
+        # Serial (-n0) and coverage-free: this is the focused sandbox gate,
+        # not a suite re-run. The whole sandbox set runs so the argv-shape,
+        # env-scrub TMPDIR and sunset cases are checked on the same host that
+        # executes the real launch.
+        run: >
+          uv run pytest -n0 --no-cov
+          tests/runtime/sandbox/test_jail.py
+          tests/runtime/sandbox/test_jail_expiry.py
+          tests/runtime/sandbox/test_env_scrub.py
+
   prose-gate:
     name: Layer-2 prose gate (strict)
     # The fail-closed half of the validate_prose chokepoint (doc-clarity
