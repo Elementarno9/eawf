@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from collections import Counter
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal
 
 from eawf.kernel.spec.common import CriterionSpec
@@ -40,6 +41,7 @@ from eawf.observability.metrics.odr import (
     iter_odr_advisory,
     pulse_refuses_dispatch,
 )
+from eawf.runtime.vcs.checkpoint import checkpoint_commit_blocker
 from eawf.workflow.estimation.buckets import wave_estimate_eu
 from eawf.workflow.lifecycle._audit_acceptance import (
     AUDIT_MINOR_BACKLOG_TRIAGE,
@@ -236,6 +238,8 @@ def close_iter(
     iter_id: str,
     audit_id: str,
     checkpoint: CheckpointBlock | None = None,
+    checkpoint_commit: str | None = None,
+    project_root: Path | None = None,
     odr_floor: float = DEFAULT_ODR_FLOOR,
     odr_blocking: bool = False,
     require_audit_accepted: bool = False,
@@ -261,6 +265,16 @@ def close_iter(
             mode a drift pulse that detects a thin wave refuses the close so
             the next dispatch cannot proceed against unreconciled drift; in
             ``optimistic`` mode the pulse is advisory and never stalls.
+        checkpoint_commit: Optional checkpoint commit ref marking the close.
+            When *project_root* resolves ``vcs.checkpoint_requires_commit``
+            to ``True`` the ref must name a commit that exists, otherwise
+            the close is refused. A batched iter close lands its waves under
+            one ``state:`` bookkeeping commit, so the cadence verifies that
+            single checkpoint and never a per-wave pin.
+        project_root: Repository root supplying the checkpoint cadence leaf
+            and the git history the ref is verified against. ``None`` leaves
+            the cadence inert -- with no repository in hand there is no
+            history to answer whether the checkpoint commit exists.
         odr_floor: The Oracle-Determinism-Ratio floor read from
             :attr:`~eawf.platform.profiles.models.VerifyBlock.odr_floor`.
             Defaults to :data:`~eawf.observability.metrics.odr.DEFAULT_ODR_FLOOR`
@@ -280,7 +294,8 @@ def close_iter(
 
     Raises:
         LifecycleError: when the iter is unknown, the close edge is illegal,
-            child waves are still open, a ``barrier``-mode drift pulse detects
+            child waves are still open, the checkpoint cadence rejects
+            *checkpoint_commit*, a ``barrier``-mode drift pulse detects
             criteria-vs-plan drift over the iter's closed waves, or the closed
             waves' ODR is below *odr_floor* while *odr_blocking* is set.
     """
@@ -305,6 +320,13 @@ def close_iter(
         raise LifecycleError(
             f"iter {iter_id!r} has open waves: {sorted(open_waves, key=natural_key)}"
         )
+    checkpoint_blocker = checkpoint_commit_blocker(
+        scope_id=iter_id,
+        checkpoint_commit=checkpoint_commit,
+        repo_root=project_root,
+    )
+    if checkpoint_blocker is not None:
+        raise LifecycleError(checkpoint_blocker)
     audit_warnings = (
         _validate_iter_close_audit(state, iter_id=iter_id, audit_id=audit_id)
         if require_audit_accepted

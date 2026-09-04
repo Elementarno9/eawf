@@ -25,6 +25,8 @@ The suite has three planes:
 
 from __future__ import annotations
 
+import os
+import subprocess
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -360,6 +362,111 @@ def test_iter_close_proxies_to_daemon_when_up(
     assert _CapturingClient.call_count == 1
     assert _CapturingClient.last_kind is MutationKind.ITER_CLOSE
     assert _CapturingClient.last_params == {"iter_id": "P01-I01", "audit_id": "AUD-1"}
+
+
+def _seed_checkpoint_repo(workspace: Path, *, requires_commit: bool) -> str:
+    """Init a repo at *workspace*, pin the cadence leaf, return the seed commit SHA."""
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "T",
+        "GIT_AUTHOR_EMAIL": "t@example.com",
+        "GIT_COMMITTER_NAME": "T",
+        "GIT_COMMITTER_EMAIL": "t@example.com",
+        "GIT_CONFIG_GLOBAL": str(workspace / "gitconfig"),
+        "GIT_CONFIG_SYSTEM": str(workspace / "gitconfig-system"),
+    }
+
+    def _vcs(*args: str) -> str:
+        out = subprocess.run(
+            ["git", "-C", str(workspace), *args],
+            capture_output=True,
+            text=True,
+            check=True,
+            env=env,
+        )
+        return out.stdout.strip()
+
+    _vcs("init", "--initial-branch=main")
+    (workspace / "seed.txt").write_text("seed\n", encoding="utf-8")
+    _vcs("add", "seed.txt")
+    _vcs("commit", "-m", "[P01] state: seed checkpoint")
+    flag = "true" if requires_commit else "false"
+    (workspace / ".ea" / "config.yaml").write_text(
+        f"vcs:\n  checkpoint_requires_commit: {flag}\n", encoding="utf-8"
+    )
+    return _vcs("rev-parse", "HEAD")
+
+
+def _close_only_wave(workspace: Path) -> None:
+    """Close the bootstrap wave so ``P01-I01`` has no open children."""
+    assert runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S-1"]).exit_code == 0
+    assert runner.invoke(app, ["wave", "close", "P01-I01-W01", "--outcome", "done"]).exit_code == 0
+
+
+def test_iter_close_under_checkpoint_cadence_proxies_to_daemon_when_up(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The cadence gates the close but the daemon still owns the write.
+
+    ``vcs.checkpoint_requires_commit`` is on and the close names a real
+    checkpoint commit, so the pre-flight clears and ``iter close`` marshals
+    one ITER_CLOSE across the wire. The local ``state.json`` stays
+    byte-for-byte unchanged: no direct write happens outside the daemon.
+    """
+    _bootstrap_to_pending_wave(workspace)
+    _close_only_wave(workspace)
+    sha = _seed_checkpoint_repo(workspace, requires_commit=True)
+    _enable_proxy(monkeypatch, client=_CapturingClient)
+    _CapturingClient.last_kind = None
+    _CapturingClient.call_count = 0
+    state_before = _state_path(workspace).read_bytes()
+
+    res = runner.invoke(app, ["iter", "close", "P01-I01", "--audit", "AUD-1", "--checkpoint", sha])
+
+    assert res.exit_code == 0, res.stdout
+    assert _CapturingClient.call_count == 1
+    assert _CapturingClient.last_kind is MutationKind.ITER_CLOSE
+    assert _CapturingClient.last_scope_id == "P01-I01"
+    assert _state_path(workspace).read_bytes() == state_before
+
+
+def test_iter_close_under_checkpoint_cadence_refuses_unknown_commit(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A checkpoint ref naming no commit is refused before any wire traffic."""
+    _bootstrap_to_pending_wave(workspace)
+    _close_only_wave(workspace)
+    _seed_checkpoint_repo(workspace, requires_commit=True)
+    _enable_proxy(monkeypatch, client=_CapturingClient)
+    _CapturingClient.last_kind = None
+    _CapturingClient.call_count = 0
+    state_before = _state_path(workspace).read_bytes()
+
+    res = runner.invoke(
+        app, ["iter", "close", "P01-I01", "--audit", "AUD-1", "--checkpoint", "0" * 40]
+    )
+
+    assert res.exit_code != 0
+    assert _CapturingClient.call_count == 0
+    assert _state_path(workspace).read_bytes() == state_before
+    assert _read_state(workspace)["iters"]["P01-I01"]["status"] == "active"
+
+
+def test_iter_close_under_checkpoint_cadence_falls_back_to_portalocker(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Daemon down: the WAL-backed portalocker fallback carries the gated close."""
+    _bootstrap_to_pending_wave(workspace)
+    _close_only_wave(workspace)
+    sha = _seed_checkpoint_repo(workspace, requires_commit=True)
+    _enable_proxy(monkeypatch, client=_DownClient)
+
+    res = runner.invoke(app, ["iter", "close", "P01-I01", "--audit", "AUD-1", "--checkpoint", sha])
+
+    assert res.exit_code == 0, res.stdout
+    assert _read_state(workspace)["iters"]["P01-I01"]["status"] == "closed"
+    assert list(_wal_dir(workspace).glob("*.fsynced.json"))
+    assert "iter close" in _event_commands(workspace)
 
 
 def test_track_add_proxies_to_daemon_when_up(

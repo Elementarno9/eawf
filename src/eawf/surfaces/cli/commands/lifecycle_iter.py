@@ -29,6 +29,7 @@ from eawf.kernel.state.ids import is_iter_id, is_phase_id, is_project_code
 from eawf.kernel.state.mutations import MutationKind
 from eawf.kernel.state.urn import build as build_urn
 from eawf.runtime.lock import portalock
+from eawf.runtime.vcs.checkpoint import checkpoint_commit_blocker
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.commands.lifecycle import (
     _append_event,
@@ -54,6 +55,12 @@ logger = logging.getLogger(__name__)
 def _wrap_no_return(_value: object) -> None:
     """Adapter so transition helpers can be passed directly to ``mutate=``."""
     return None
+
+
+def _iter_close_project_root(flags: GlobalFlags) -> Path:
+    """Resolve the repo root supplying the iter-close checkpoint cadence."""
+    state_path = resolve_state_path(flags.workspace)
+    return state_path.parent.parent if state_path.parent.name == ".ea" else state_path.parent
 
 
 # ---- Project handlers -------------------------------------------------------
@@ -621,6 +628,10 @@ def iter_close_cmd(
     ctx: typer.Context,
     iter_id: Annotated[str, typer.Argument(help="Iter ID to close.")],
     audit: Annotated[str, typer.Option("--audit", help="Audit ID providing closure evidence.")],
+    checkpoint: Annotated[
+        str | None,
+        typer.Option("--checkpoint", help="Optional checkpoint commit ref marking the close."),
+    ] = None,
     archive_specs: Annotated[
         bool,
         typer.Option(
@@ -635,6 +646,12 @@ def iter_close_cmd(
     spec under the iter is git-removed, its cache row flipped to ``ARCHIVED``,
     and its blob SHA recorded so ``eawf spec show <urn> --from-git`` recovers
     the body. Without the flag the specs stay untouched.
+
+    ``--checkpoint`` names the commit marking the close. Under
+    ``vcs.checkpoint_requires_commit`` the ref must name a commit that
+    exists; the pre-flight below refuses before any wire traffic so the
+    daemon-proxy path is gated too, and ``close_iter`` re-checks under the
+    write lock for the in-process path.
     """
     from eawf.workflow.lifecycle._audit_acceptance import AUDIT_MINOR_BACKLOG_TRIAGE
     from eawf.workflow.lifecycle.transitions import close_iter
@@ -646,6 +663,15 @@ def iter_close_cmd(
             cli_errors.UserError(f"invalid iter id: {iter_id!r}", kind="InvalidInput"),
             flags=flags,
         )
+        return
+    project_root = _iter_close_project_root(flags)
+    checkpoint_blocker = checkpoint_commit_blocker(
+        scope_id=iter_id,
+        checkpoint_commit=checkpoint,
+        repo_root=project_root,
+    )
+    if checkpoint_blocker is not None:
+        cli_errors.emit_error(cli_errors.ValidationError(checkpoint_blocker), flags=flags)
         return
     mutation_warnings: list[str] = []
 
@@ -664,6 +690,8 @@ def iter_close_cmd(
             state,
             iter_id=iter_id,
             audit_id=audit,
+            checkpoint_commit=checkpoint,
+            project_root=config_root,
             require_audit_accepted=bool(
                 verify_block is not None and verify_block.require_iter_audit_accepted
             ),
@@ -692,12 +720,13 @@ def iter_close_cmd(
     _run_mutation(
         ctx,
         command="iter close",
-        args={"id": iter_id, "audit": audit},
+        args={"id": iter_id, "audit": audit, "checkpoint": checkpoint},
         scope_id=iter_id,
         text_factory=_text,
         envelope=lambda: {
             "iter": iter_id,
             "audit": audit,
+            "checkpoint": checkpoint,
             "warnings": list(mutation_warnings),
         },
         mutate=_mutator,

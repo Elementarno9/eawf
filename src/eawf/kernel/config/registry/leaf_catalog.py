@@ -1624,6 +1624,7 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "telemetry.enabled": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
     "ui.glyphs": "eawf.surfaces.tui.app._persisted_glyphs",
     "ui.theme": "eawf.surfaces.tui.app._persisted_theme",
+    "vcs.checkpoint_requires_commit": ("eawf.runtime.vcs.checkpoint.resolve_checkpoint_cadence"),
     "vcs.conventions.release.cadence": (
         "eawf.runtime.vcs.coauthor.requires_phase_release_preflight"
     ),

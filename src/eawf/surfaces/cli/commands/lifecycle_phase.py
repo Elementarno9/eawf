@@ -195,6 +195,7 @@ def phase_close_cmd(
             audit_id=audit,
             require_audit=True,
             require_release_preflight=require_release_preflight,
+            checkpoint_commit=checkpoint,
             project_root=project_root,
         )
     except LifecycleError as exc:
@@ -683,13 +684,15 @@ def _phase_prepare_close_checklist(
     audit_id: str | None = None,
     require_audit: bool = False,
     require_release_preflight: bool = False,
+    checkpoint_commit: str | None = None,
     project_root: Path | None = None,
 ) -> dict[str, Any]:
     """Compute a structured pre-close checklist for *phase_id*.
 
-    Items: open iters, open waves, audit linkage, waves missing commit/outcome.
-    The handler renders ``ok=True`` only when every blocking item resolves to
-    empty.
+    Items: open iters, open waves, audit linkage, waves missing commit/outcome,
+    and -- when the close names one -- the checkpoint commit the cadence
+    verifies. The handler renders ``ok=True`` only when every blocking item
+    resolves to empty.
     """
     from eawf.workflow.lifecycle.transitions import (
         LifecycleError,
@@ -754,6 +757,7 @@ def _phase_prepare_close_checklist(
         audit_id=audit_id,
         require_audit=require_audit,
         require_release_preflight=require_release_preflight,
+        checkpoint_commit=checkpoint_commit,
         project_root=project_root,
     )
     checklist["close_readiness_ready"] = readiness.ready

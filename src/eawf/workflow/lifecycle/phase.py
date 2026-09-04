@@ -31,6 +31,7 @@ from eawf.observability.metrics.odr import (
     WavePlanRow,
     drift_budget_pulse,
 )
+from eawf.runtime.vcs.checkpoint import checkpoint_commit_blocker
 from eawf.workflow.estimation.buckets import wave_estimate_eu
 from eawf.workflow.lifecycle._audit_acceptance import (
     AuditAcceptanceIssue,
@@ -658,6 +659,7 @@ def phase_close_readiness(
     require_audit: bool = False,
     include_structure: bool = True,
     require_release_preflight: bool = False,
+    checkpoint_commit: str | None = None,
     project_root: Path | None = None,
 ) -> CloseReadiness:
     """Return phase-level close readiness derived from state.
@@ -667,6 +669,12 @@ def phase_close_readiness(
     that wave close already uses. The helper is read-only and does not
     persist evidence; the audit row named by *audit_id* is the evidence
     anchor.
+
+    When the close names a *checkpoint_commit* and *project_root* resolves
+    ``vcs.checkpoint_requires_commit`` to ``True``, a ``checkpoint-commit``
+    criterion fails until that single ref names a real commit. A phase close
+    batches many waves under one ``state:`` bookkeeping commit, so the
+    cadence verifies that checkpoint and never a per-wave pin.
 
     Raises:
         LifecycleError: when *phase_id* is unknown.
@@ -715,6 +723,16 @@ def phase_close_readiness(
         if release_warning is not None:
             warnings.append(release_warning)
 
+    if checkpoint_commit is not None:
+        checkpoint_warning = checkpoint_commit_blocker(
+            scope_id=phase_id,
+            checkpoint_commit=checkpoint_commit,
+            repo_root=project_root,
+        )
+        criteria.append(_phase_close_view("checkpoint-commit", passed=checkpoint_warning is None))
+        if checkpoint_warning is not None:
+            warnings.append(checkpoint_warning)
+
     ready = all(view.status in ("pass", "waived") for view in criteria)
     return CloseReadiness(
         ready=ready,
@@ -735,6 +753,7 @@ def _validate_phase_closable(
     phase_id: str,
     audit_id: str,
     require_release_preflight: bool = False,
+    checkpoint_commit: str | None = None,
     project_root: Path | None = None,
 ) -> Phase:
     """Run the close-phase gates and return the closable phase.
@@ -742,8 +761,9 @@ def _validate_phase_closable(
     Raises:
         LifecycleError: when *phase_id* is unknown, the phase is not in a
             closable status, child iters are still open, no wave is closed,
-            a CLOSED child iter is missing its audit, or a single-wave phase
-            lacks its scope-collapse decision.
+            a CLOSED child iter is missing its audit, the checkpoint cadence
+            rejects *checkpoint_commit*, or a single-wave phase lacks its
+            scope-collapse decision.
     """
     phase = state.phases.get(phase_id)
     if phase is None:
@@ -754,6 +774,7 @@ def _validate_phase_closable(
         audit_id=audit_id,
         require_audit=True,
         require_release_preflight=require_release_preflight,
+        checkpoint_commit=checkpoint_commit,
         project_root=project_root,
     )
     if not readiness.ready:
@@ -785,21 +806,25 @@ def close_phase(
     only in the CLI pre-flight) so they hold atomically under the write lock
     on both the daemon-proxy and in-process paths.
 
-    The ``checkpoint`` argument is recorded in the lifecycle event but does
-    not currently mutate the phase record — that field will land in Phase 3
-    when the audit-link table is introduced.
+    The ``checkpoint`` argument is the checkpoint commit ref marking the
+    close. It is recorded in the lifecycle event but does not mutate the
+    phase record; when *project_root* resolves
+    ``vcs.checkpoint_requires_commit`` to ``True`` the ref must name a commit
+    that exists or the close is refused.
 
     Raises:
         LifecycleError: when *phase_id* is unknown, the phase is not in a
             closable status, child iters are still open, no wave is closed,
-            a CLOSED child iter is missing its audit, or a single-wave phase
-            lacks its scope-collapse decision.
+            a CLOSED child iter is missing its audit, the checkpoint cadence
+            rejects *checkpoint*, or a single-wave phase lacks its
+            scope-collapse decision.
     """
     phase = _validate_phase_closable(
         state,
         phase_id=phase_id,
         audit_id=audit_id,
         require_release_preflight=require_release_preflight,
+        checkpoint_commit=checkpoint,
         project_root=project_root,
     )
     phase.status = PhaseStatus.CLOSED
