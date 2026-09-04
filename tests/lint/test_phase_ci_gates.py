@@ -1067,3 +1067,71 @@ def test_release_annotation_dev_gate_reds_on_the_prerelease_only_grammar() -> No
     subject = "[P31] state: close iter + phase (release=v0.7.0.dev1)"
     assert stale.search(subject) is None
     assert _annotation_pattern().search(subject) is not None
+
+
+# --- test paths named by the build config still exist -----------------------
+
+#: Every config that hard-codes a ``tests/`` path: the CI workflow's pytest
+#: legs, the local recipes that mirror them, ruff's per-file ignores and the
+#: managed-golden globs, and the hook file filters.
+_TEST_PATH_CONFIGS: tuple[str, ...] = (
+    ".github/workflows/ci.yaml",
+    "justfile",
+    "pyproject.toml",
+    ".pre-commit-config.yaml",
+)
+
+#: A ``tests/`` path as these configs spell one: slash-separated segments of
+#: word characters, dots and dashes, stopping at the first quote, whitespace
+#: or shell metacharacter. Backslashes are admitted because two of the four
+#: configs spell a path inside a regex (``settings\.json``); the caller
+#: strips them, along with a trailing glob slash.
+_TEST_PATH_RE = re.compile(r"tests/[\w./\\-]*[\w/]")
+
+
+def _configured_test_paths() -> dict[str, set[str]]:
+    """Return the ``tests/`` paths each build config names, by config file."""
+    found: dict[str, set[str]] = {}
+    for name in _TEST_PATH_CONFIGS:
+        text = (_REPO_ROOT / name).read_text(encoding="utf-8")
+        found[name] = {
+            match.group(0).replace("\\", "").rstrip("/") for match in _TEST_PATH_RE.finditer(text)
+        }
+    return found
+
+
+def _move_commit_ci_orphans(configured: dict[str, set[str]]) -> list[str]:
+    """Return one row per configured ``tests/`` path that is not on disk."""
+    return sorted(
+        f"{name} names {path}, which does not exist"
+        for name, paths in configured.items()
+        for path in paths
+        if not (_REPO_ROOT / path).exists()
+    )
+
+
+def test_move_commit_ci_paths_all_resolve_on_disk() -> None:
+    """Every ``tests/`` path the build config names exists.
+
+    A directory move orphans a hard-coded path silently: the CI step still
+    runs, pytest reports "no tests ran", and the job goes green having
+    proved nothing. This gate is the reason a move commit must carry its
+    path-rule updates rather than leave them to a follow-up.
+    """
+    assert _move_commit_ci_orphans(_configured_test_paths()) == []
+
+
+def test_move_commit_ci_gate_reds_on_an_orphaned_path() -> None:
+    """The gate fires on the real defect: a path left behind by a move."""
+    orphans = _move_commit_ci_orphans({"justfile": {"tests/runtimes/test_metering.py"}})
+    assert orphans == ["justfile names tests/runtimes/test_metering.py, which does not exist"]
+
+
+def test_move_commit_ci_covers_every_config_that_hardcodes_a_test_path() -> None:
+    """Each scanned config really does name at least one ``tests/`` path.
+
+    Boundary: a config that stops naming test paths (or is renamed) would
+    otherwise make this gate silently vacuous for that file.
+    """
+    configured = _configured_test_paths()
+    assert sorted(name for name, paths in configured.items() if not paths) == []

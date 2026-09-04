@@ -13095,6 +13095,21 @@
       "status": "done",
       "updated_at": "2026-09-04T16:44:17.770506Z"
     },
+    "P31-I01-W25": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W25",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W25",
+      "model": null,
+      "scope_id": "P31-I01-W25",
+      "status": "done",
+      "updated_at": "2026-09-05T00:12:33.559958Z"
+    },
     "P31-I01-W27": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -15479,15 +15494,30 @@
       "claimed_wave_ids": [
         "P31-I01-W25"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-05T00:03:35.718754Z",
       "id": "SES-20260904T214940.256579Z-executor-claude-c263f076-9a2b-42d5-b65a-77e5be3735d5",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W25",
       "started_at": "2026-09-04T21:49:40.256579Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260905T001112.330358Z-operator-claude-92fc1ddd-a882-4b61-89c9-6638e6b57726": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-05T00:11:13.923794Z",
+      "id": "SES-20260905T001112.330358Z-operator-claude-92fc1ddd-a882-4b61-89c9-6638e6b57726",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-c25",
+      "started_at": "2026-09-05T00:11:12.330358Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -20411,12 +20441,8 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260904T214940.256579Z-executor-claude-c263f076-9a2b-42d5-b65a-77e5be3735d5"
-    ],
-    "active_wave_ids": [
-      "P31-I01-W25"
-    ],
+    "active_session_ids": [],
+    "active_wave_ids": [],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -38877,7 +38903,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-04T21:49:41.584310Z",
+  "updated_at": "2026-09-05T00:12:48.129314Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -39994,6 +40020,22 @@
       "supersedes_id": null,
       "tree_sha": "9d42316476a14f7c3c0d0f1b5321fa5b74395fdc",
       "wave_id": "P31-I01-W03"
+    },
+    "integration-b70bb180291c42c39772cdca": {
+      "base_sha": "528ef0aae38a9af841d42a08ae5730db2a201c53",
+      "candidate_sha": "72e986dde3235ac2517ffa4621509571cfd5b69f",
+      "created_at": "2026-09-05T00:03:46.937428Z",
+      "diff_digest": "c6d3907e23e2c70d5e42495f15933a1400cfb71ac3368fc3143567298fa60c6d",
+      "generation": 1,
+      "id": "integration-b70bb180291c42c39772cdca",
+      "integrated_sha": "72e986dde3235ac2517ffa4621509571cfd5b69f",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor across fourteen commits, one per retired test directory; ancestry verified on feature/eawf-v0.7 and the placement and CI-path gates re-run green on the integrated HEAD.",
+      "spec_digest": "e7fd88fefe8d7516e322132fa37ff6b27c47cb0b01bf297e6f11e53dc5f317bf",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "81dbcbe67c21400fdd5a0ed39b95916321525140",
+      "wave_id": "P31-I01-W25"
     },
     "integration-b70dfdc7c103fbd6d2eb5909": {
       "base_sha": "5c672387b5182fbe878db0cc3c86c861fa39fd14",
@@ -156363,9 +156405,9 @@
       ],
       "claim_session_id": "SES-20260904T214940.256579Z-executor-claude-c263f076-9a2b-42d5-b65a-77e5be3735d5",
       "claimed_at": "2026-09-04T21:49:40.957204Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-05T00:12:33.559958Z",
+      "commit": "528ef0aae38a9af841d42a08ae5730db2a201c53",
+      "commit_identity_digest": "sha256:c4b8f222a4f0556f50801291de1cd0cd85eca1eb56c1bed856e4c5343016c99e",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-08-25T22:16:17.411625Z",
@@ -156411,7 +156453,8 @@
         "pyproject.toml",
         ".github/workflows/ci.yaml",
         "justfile",
-        ".pre-commit-config.yaml"
+        ".pre-commit-config.yaml",
+        "src/eawf/surfaces/cli/commands/snapshot.py"
       ],
       "gates": [
         {
@@ -156531,13 +156574,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-08-25T22:16:17.412323Z",
-      "outcome": null,
+      "outcome": "The test tree collapses from 23 top-level directories to 13, one home per subject, across fourteen commits moving one directory each so every step stays bisectable. Placement and CI-path gates green; the full-suite gate is unmet only on failures that predate the move.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
