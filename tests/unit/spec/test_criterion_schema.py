@@ -13,6 +13,9 @@ Covers the typed criteria CR-1..CR-4 of the FS01 spec:
   dimension) still validates after the QualityDimension relocation.
 * CR-4 (holds_for_all, hypothesis): JSON round-trip identity over a
   Hypothesis strategy that builds valid CriterionSpec instances.
+* REL-002 (raises, contract): the scope-agreement ceiling -- universal
+  prose paired with a single-witness gate fails at ``model_validate``,
+  while a widened proof or narrowed prose passes.
 """
 
 from __future__ import annotations
@@ -23,12 +26,14 @@ from hypothesis import strategies as st
 from pydantic import ValidationError
 
 from eawf.kernel.spec.common import (
+    UNIVERSAL_SCOPE_TOKENS,
     CriterionSpec,
     ObserveVerb,
     OracleTier,
     ProofLocus,
     QualityDimension,
     ResponseClause,
+    _claims_universal_scope,
 )
 from eawf.kernel.spec.wave import QualityDimension as WaveQualityDimension
 from eawf.kernel.spec.wave import WaveBehavior
@@ -191,6 +196,132 @@ def test_wave_behavior_operability_dimension_still_validates() -> None:
 def test_wave_behavior_imports_relocated_dimension() -> None:
     """wave.QualityDimension is the same object relocated into common."""
     assert WaveQualityDimension is QualityDimension
+
+
+# --------------------------------------------------------------------------- #
+# REL-002 — the scope-agreement ceiling.
+# --------------------------------------------------------------------------- #
+def _scoped_criterion(
+    *,
+    text: str,
+    kind: str = "behavioral",
+    gate_ref: str | None = "regex_in_file",
+    quantifier: str = "single",
+    locus: ProofLocus = ProofLocus.SOURCE,
+    with_response: bool = True,
+) -> CriterionSpec:
+    """Build a criterion whose prose breadth and proof breadth are both dialled."""
+    response = (
+        ResponseClause(
+            observe=ObserveVerb.VALIDATES,
+            object="the handler input",
+            locus=locus,
+            quantifier=quantifier,  # type: ignore[arg-type]
+            gate_ref=gate_ref,
+        )
+        if with_response
+        else None
+    )
+    return CriterionSpec(
+        id="CR-SCOPE",
+        text=text,
+        kind=kind,
+        acceptance_style="binary",
+        evidence_kind="deterministic",
+        gate_ids=["GATE-01"],
+        quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
+        measurable_signal="the handler rejects an unknown key at the boundary",
+        response=response,
+    )
+
+
+def test_criterion_spec_universal_prose_with_single_site_gate_raises() -> None:
+    """Universal prose proved by a one-file grep fails at model_validate."""
+    with pytest.raises(ValidationError, match="fails scope agreement"):
+        _scoped_criterion(text="every handler validates its own input")
+
+
+def test_criterion_spec_scope_agreement_error_names_the_criterion_id() -> None:
+    """The rejection quotes the criterion id so a plan author can find the row."""
+    with pytest.raises(ValidationError, match="CR-SCOPE"):
+        _scoped_criterion(text="all handlers validates their own input")
+
+
+@pytest.mark.parametrize("token", list(UNIVERSAL_SCOPE_TOKENS))
+def test_criterion_spec_each_universal_token_trips_scope_agreement(token: str) -> None:
+    """Every member of the closed universal-token set widens the claim."""
+    with pytest.raises(ValidationError, match="fails scope agreement"):
+        _scoped_criterion(text=f"the loader {token} rejects an unknown key")
+
+
+def test_criterion_spec_universal_prose_with_set_scanning_gate_validates() -> None:
+    """Widening the proof to a set-scanning gate restores agreement."""
+    criterion = _scoped_criterion(
+        text="every handler validates its own input",
+        gate_ref="criterion_in_diff",
+    )
+    assert criterion.response is not None
+    assert criterion.response.gate_ref == "criterion_in_diff"
+
+
+def test_criterion_spec_universal_prose_with_forall_clause_validates() -> None:
+    """A forall clause at the hypothesis locus is a universal proof, so it agrees."""
+    criterion = _scoped_criterion(
+        text="every handler validates its own input",
+        quantifier="forall",
+        locus=ProofLocus.HYPOTHESIS,
+    )
+    assert criterion.response is not None
+    assert criterion.response.quantifier == "forall"
+
+
+def test_criterion_spec_narrow_prose_with_single_site_gate_validates() -> None:
+    """A single-site claim proved by a single-site gate is the agreeing case."""
+    criterion = _scoped_criterion(text="the loader validates one unknown key")
+    assert criterion.text == "the loader validates one unknown key"
+
+
+def test_criterion_spec_universal_prose_without_response_validates() -> None:
+    """No response clause means no proof breadth to disagree with (empty case)."""
+    criterion = _scoped_criterion(
+        text="every handler validates its own input",
+        with_response=False,
+    )
+    assert criterion.response is None
+
+
+def test_criterion_spec_scope_agreement_exempts_grandfathered_kind() -> None:
+    """A legacy row carries a synthesised clause, so the ceiling does not apply."""
+    criterion = _scoped_criterion(
+        text="every handler validates its own input",
+        kind="legacy",
+    )
+    assert criterion.kind == "legacy"
+
+
+def test_criterion_spec_scope_agreement_exempts_converted_kind() -> None:
+    """A converter-built row is machine-authored prose, so it is exempt too."""
+    criterion = _scoped_criterion(
+        text="every handler validates its own input",
+        kind="converted",
+    )
+    assert criterion.kind == "converted"
+
+
+@pytest.mark.parametrize("word", ["overall", "anywhere", "alleged", "nevermore"])
+def test_claims_universal_scope_ignores_substring_matches(word: str) -> None:
+    """Word-boundary anchoring keeps ``overall`` from reading as ``all``."""
+    assert _claims_universal_scope(f"the loader validates the {word} case") is False
+
+
+def test_claims_universal_scope_empty_text() -> None:
+    """Empty prose claims nothing (boundary: empty)."""
+    assert _claims_universal_scope("") is False
+
+
+def test_claims_universal_scope_is_case_insensitive() -> None:
+    """A sentence-leading ``Every`` still reads as a universal claim."""
+    assert _claims_universal_scope("Every handler validates its input") is True
 
 
 # --------------------------------------------------------------------------- #

@@ -423,6 +423,98 @@ def assign_oracle_tier(r: ResponseClause) -> OracleTier:
     raise ValueError(f"unhandled observe verb: {r.observe!r}")
 
 
+#: Prose tokens that widen a criterion's claim to a whole population rather
+#: than one witness ("every wave", "all gates", "never rejects"). The set is
+#: closed and word-boundary matched so ``overall`` does not read as ``all``.
+UNIVERSAL_SCOPE_TOKENS: tuple[str, ...] = (
+    "all",
+    "always",
+    "any",
+    "each",
+    "every",
+    "never",
+)
+
+_UNIVERSAL_SCOPE_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(token) for token in UNIVERSAL_SCOPE_TOKENS) + r")\b",
+    re.IGNORECASE,
+)
+
+#: Gate kinds whose oracle inspects exactly ONE site -- one path, one field,
+#: one citation. A universal claim cannot be falsified by reading a single
+#: site, so pairing one of these with universal prose is the scope
+#: disagreement the ceiling rejects. Every other kind in
+#: :data:`_GATE_KIND_TIER` scans a set (a diff, a glob, a transition table, a
+#: command's whole exit surface) and can therefore witness a population claim.
+SINGLE_SITE_GATE_KINDS: frozenset[str] = frozenset(
+    {
+        "citation_resolves",
+        "file_exists",
+        "regex_in_file",
+        "schema_validate",
+        "state_field_equals",
+    }
+)
+
+#: Declared ceiling on observation clauses per criterion. A criterion asserts
+#: ONE observable thing; past this many the row is a wave agenda wearing a
+#: criterion's shape, and no single gate verdict can mean "it held". The
+#: number is authored policy, not a derived bound.
+MAX_OBSERVATION_CLAUSES = 5
+
+# Observation-verb surface forms derived from :class:`ObserveVerb` itself, so
+# the counter cannot drift from the enum: each member contributes its
+# underscore value (``holds_for_all``) and its natural-prose spelling (``holds
+# for all``). Sorted longest-first so the alternation prefers the longer form.
+_OBSERVATION_SURFACES: tuple[str, ...] = tuple(
+    sorted(
+        {surface for verb in ObserveVerb for surface in (verb.value, verb.value.replace("_", " "))},
+        key=len,
+        reverse=True,
+    )
+)
+
+_OBSERVATION_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(surface) for surface in _OBSERVATION_SURFACES) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def _count_observation_clauses(text: str) -> int:
+    """Return how many observation clauses *text* asserts.
+
+    One clause = one recognised :class:`ObserveVerb` surface form. Counting
+    verbs rather than sentences means punctuation style does not change the
+    answer: ``returns 200 and emits a log line`` is two observations whether
+    the author separated them with ``and``, a semicolon, or a newline.
+
+    Args:
+        text: The criterion text to scan.
+
+    Returns:
+        The number of observation-verb occurrences, ``0`` when the text
+        asserts nothing the :class:`ObserveVerb` vocabulary recognises.
+    """
+    return len(_OBSERVATION_RE.findall(text))
+
+
+def _claims_universal_scope(text: str) -> bool:
+    """Return whether *text* makes a population-wide rather than single claim.
+
+    The prose-side half of the scope-agreement ceiling: a criterion saying
+    "every handler validates its input" claims something about a set, so a
+    single-witness oracle cannot falsify it.
+
+    Args:
+        text: The criterion text to scan.
+
+    Returns:
+        ``True`` when a :data:`UNIVERSAL_SCOPE_TOKENS` member appears as a
+        whole word.
+    """
+    return _UNIVERSAL_SCOPE_RE.search(text) is not None
+
+
 class CriterionSpec(_StrictModel):
     """One success-criterion row attached to a wave / iter / phase.
 
@@ -467,6 +559,61 @@ class CriterionSpec(_StrictModel):
         ):
             raise ValueError("judged response requires jury_reason")
         return self
+
+    @model_validator(mode="after")
+    def _bounded_observation_complexity(self) -> CriterionSpec:
+        """Cap how many things one authored criterion may observe.
+
+        The typed floor only sets minima (a 20-char ``measurable_signal``, a
+        gate on a deterministic row), so an author could clear it with a
+        criterion that bundles a whole wave's worth of assertions -- and a
+        single gate verdict over that row means nothing. This is the matching
+        ceiling.
+
+        Raises:
+            ValueError: when the text asserts more than
+                :data:`MAX_OBSERVATION_CLAUSES` observation clauses.
+        """
+        if self.kind in (GRANDFATHERED_KIND, CONVERTED_KIND):
+            return self
+        clauses = _count_observation_clauses(self.text)
+        if clauses > MAX_OBSERVATION_CLAUSES:
+            raise ValueError(
+                f"criterion {self.id!r} exceeds the observation-clause ceiling: "
+                f"{clauses} clauses > {MAX_OBSERVATION_CLAUSES}; split it into "
+                "one criterion per observation"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _scope_agreement(self) -> CriterionSpec:
+        """Reject a population-wide claim proved by a single-site oracle.
+
+        The prose and the proof must claim the same breadth. Text saying
+        "every X" paired with a ``single``-quantifier clause pinned to a
+        one-site gate kind is a criterion that passes while most of what it
+        asserts stays unobserved. Either narrow the prose to the site the gate
+        reads, or widen the proof (a set-scanning gate kind, or a ``forall``
+        clause at the hypothesis locus).
+
+        Raises:
+            ValueError: when universal prose is paired with a single-witness
+                proof over a :data:`SINGLE_SITE_GATE_KINDS` gate.
+        """
+        if self.kind in (GRANDFATHERED_KIND, CONVERTED_KIND):
+            return self
+        response = self.response
+        if response is None or response.quantifier != "single":
+            return self
+        if response.gate_ref not in SINGLE_SITE_GATE_KINDS:
+            return self
+        if not _claims_universal_scope(self.text):
+            return self
+        raise ValueError(
+            f"criterion {self.id!r} fails scope agreement: text claims universal "
+            f"scope but the proof is a single-witness {response.gate_ref!r} gate; "
+            "narrow the text or widen the gate"
+        )
 
 
 #: Sentinel ``kind`` for a criterion synthesised from a free-form legacy

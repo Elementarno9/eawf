@@ -6,6 +6,11 @@ P28-I01-W03 :class:`CriterionSpec` / :class:`GateSpec` strict models
 plus the ``CriterionEvidenceKind`` Literal (deterministic / jury /
 attested) the readiness compute and compile-gate will
 consume.
+
+The REL-002 bounded-complexity ceiling is covered here too: a criterion
+may assert at most ``MAX_OBSERVATION_CLAUSES`` observation clauses, and
+the pre-existing 20-char ``measurable_signal`` floor still holds beneath
+it.
 """
 
 from __future__ import annotations
@@ -16,11 +21,13 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.spec.common import (
+    MAX_OBSERVATION_CLAUSES,
     CriterionEvidenceKind,
     CriterionSpec,
     EvidenceKind,
     EvidenceRef,
     GateSpec,
+    _count_observation_clauses,
 )
 from eawf.kernel.store.kinds.agent_report import AgentReportEvidenceRef
 
@@ -317,6 +324,72 @@ def test_criterion_spec_rejects_missing_required_field() -> None:
             }
         )
     assert "acceptance_style" in str(exc_info.value)
+
+
+# CriterionSpec — bounded observation-clause ceiling --------------------
+
+
+def _observations(count: int) -> str:
+    """Return criterion prose asserting exactly *count* observation clauses."""
+    verbs = ["returns", "raises", "emits", "exits", "validates", "renders_token"]
+    assert count <= len(verbs), "extend the verb pool to assert more clauses"
+    return " and ".join(f"{verb} the documented value" for verb in verbs[:count])
+
+
+def test_count_observation_clauses_empty_text() -> None:
+    """Empty prose asserts nothing (boundary: empty)."""
+    assert _count_observation_clauses("") == 0
+
+
+def test_count_observation_clauses_single_verb() -> None:
+    """One recognised verb is one clause (boundary: single)."""
+    assert _count_observation_clauses("returns 200 for a valid request") == 1
+
+
+def test_count_observation_clauses_counts_natural_prose_spelling() -> None:
+    """``holds for all`` counts the same as the ``holds_for_all`` enum value."""
+    assert _count_observation_clauses("holds for all inputs") == 1
+    assert _count_observation_clauses("holds_for_all inputs") == 1
+
+
+def test_count_observation_clauses_ignores_unrecognised_words() -> None:
+    """Prose carrying no ObserveVerb surface form asserts nothing observable."""
+    assert _count_observation_clauses("the widget is nice to look at") == 0
+
+
+def test_criterion_spec_accepts_exactly_the_observation_ceiling() -> None:
+    """A criterion at exactly MAX_OBSERVATION_CLAUSES validates (off-by-one)."""
+    crit = _criterion(text=_observations(MAX_OBSERVATION_CLAUSES))
+    assert _count_observation_clauses(crit.text) == MAX_OBSERVATION_CLAUSES
+
+
+def test_criterion_spec_rejects_text_over_the_observation_ceiling() -> None:
+    """One clause past the ceiling raises, naming the id and the ceiling."""
+    with pytest.raises(ValidationError) as exc_info:
+        _criterion(text=_observations(MAX_OBSERVATION_CLAUSES + 1))
+    rendered = str(exc_info.value)
+    assert "observation-clause ceiling" in rendered
+    assert "C1" in rendered
+
+
+@pytest.mark.parametrize("kind", ["legacy", "converted"])
+def test_criterion_spec_observation_ceiling_exempts_synthesised_kinds(kind: str) -> None:
+    """Machine-synthesised rows wrap operator prose verbatim, so they are exempt."""
+    crit = _criterion(text=_observations(MAX_OBSERVATION_CLAUSES + 1), kind=kind)
+    assert crit.kind == kind
+
+
+def test_criterion_spec_measurable_signal_floor_holds_under_the_ceiling() -> None:
+    """The 20-char floor still rejects a short signal (boundary: one short)."""
+    with pytest.raises(ValidationError) as exc_info:
+        _criterion(measurable_signal="x" * 19)
+    assert "measurable_signal" in str(exc_info.value)
+
+
+def test_criterion_spec_measurable_signal_at_floor_accepted() -> None:
+    """A signal at exactly 20 chars clears the floor (boundary: at limit)."""
+    crit = _criterion(measurable_signal="x" * 20)
+    assert len(crit.measurable_signal) == 20
 
 
 # GateSpec — happy path -------------------------------------------------

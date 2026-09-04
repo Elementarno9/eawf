@@ -249,6 +249,79 @@ iters:
     assert "P22-I01" not in state["iters"]
 
 
+def _scope_agreement_plan(*, gate_ref: str) -> str:
+    """Return a one-wave roadmap plan whose criterion claims universal scope."""
+    return f"""
+schema_version: "1.0"
+kind: RoadmapPlan
+phase:
+  id: P23
+  title: Scope agreement plan
+iters:
+  - id: P23-I01
+    title: First iter
+    waves:
+      - id: P23-I01-W01
+        title: "Only wave"
+        file_scopes:
+          - src/a
+        success_criteria:
+          - id: CR-SCOPE
+            text: every handler validates its own input
+            kind: behavioral
+            acceptance_style: binary
+            evidence_kind: deterministic
+            gate_ids:
+              - GATE-01
+            quality_dimension: functional_suitability
+            measurable_signal: the handler rejects an unknown key at the boundary
+            response:
+              observe: validates
+              object: the handler input
+              locus: source
+              gate_ref: {gate_ref}
+        effort_bucket: S
+        intent:
+          problem: the wave needs staging
+          desired_outcome: the wave is planned
+          priority_rationale: stage the only wave
+""".lstrip()
+
+
+def test_roadmap_propose_from_plan_scope_agreement_violation_rejected(
+    workspace: Path,
+) -> None:
+    """A universal claim gated by a one-file grep exits non-zero, naming the row."""
+    plan_path = workspace / "scope-agreement-plan.yaml"
+    plan_path.write_text(_scope_agreement_plan(gate_ref="regex_in_file"), encoding="utf-8")
+
+    res = runner.invoke(app, ["roadmap", "propose", "--from-plan", str(plan_path)])
+
+    assert res.exit_code != 0
+    combined = res.output + (res.stderr or "")
+    assert "invalid roadmap plan" in combined
+    assert "CR-SCOPE" in combined
+    assert "scope agreement" in combined
+    state = _read_state(workspace)
+    assert "P23" not in state["phases"]
+    assert "P23-I01" not in state["iters"]
+
+
+def test_roadmap_propose_from_plan_scope_agreement_widened_gate_accepted(
+    workspace: Path,
+) -> None:
+    """The same universal claim stages cleanly once the gate scans a set."""
+    plan_path = workspace / "scope-agreement-ok-plan.yaml"
+    plan_path.write_text(_scope_agreement_plan(gate_ref="criterion_in_diff"), encoding="utf-8")
+
+    res = runner.invoke(app, ["--json", "roadmap", "propose", "--from-plan", str(plan_path)])
+
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["phases"]["P23"]["status"] == "planned"
+    assert state["waves"]["P23-I01-W01"]["success_criteria"][0]["id"] == "CR-SCOPE"
+
+
 def test_roadmap_propose_duplicate_phase_rejected(workspace: Path) -> None:
     runner.invoke(
         app,
