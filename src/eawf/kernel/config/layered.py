@@ -48,6 +48,7 @@ from typing import Any
 
 from eawf.kernel.config.defaults import built_in_defaults
 from eawf.kernel.config.loader import load_yaml_layer
+from eawf.platform.subprocess_detach import no_window_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +155,7 @@ def detect_current_branch(repo: Path | None) -> str | None:
             text=True,
             timeout=2.0,
             check=False,
+            **no_window_kwargs(),
         )
     except (OSError, subprocess.SubprocessError) as exc:
         logger.debug(f"detect_current_branch error repo={repo} err={exc!r}")

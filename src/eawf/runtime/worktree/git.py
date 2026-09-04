@@ -31,6 +31,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.surfaces.cli import errors as cli_errors
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,7 @@ def _run(
             text=True,
             check=False,
             timeout=timeout,
+            **no_window_kwargs(),
         )
     except subprocess.TimeoutExpired as exc:
         raise cli_errors.StateConflict(

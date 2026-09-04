@@ -14,6 +14,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.surfaces.render.statusline import StatuslineSegment
 
 logger = logging.getLogger(__name__)
@@ -42,13 +43,17 @@ def _git_cwd_for(state_path: Path | None) -> Path:
 def _run_git(args: list[str], cwd: Path) -> str | None:
     """Return stripped git stdout, or ``None`` on any failure."""
     try:
-        proc = subprocess.run(
+        # Annotated explicitly: splatting a ``dict[str, Any]`` of kwargs drops
+        # subprocess.run to its widest overload, so the ``text=True`` -> str
+        # result type has to be restated for the caller.
+        proc: subprocess.CompletedProcess[str] = subprocess.run(
             ["git", *args],
             cwd=cwd,
             check=True,
             capture_output=True,
             text=True,
             timeout=_GIT_TIMEOUT,
+            **no_window_kwargs(),
         )
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as exc:
         logger.debug(f"_run_git git-command-failed args={' '.join(args)!r} error={exc}")

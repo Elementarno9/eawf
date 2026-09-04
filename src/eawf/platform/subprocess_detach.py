@@ -26,6 +26,17 @@ The kwargs are deliberately minimal -- they carry ONLY the detach knobs.
 Callers keep threading ``stdin=subprocess.DEVNULL`` + ``capture_output=True``
 themselves so the dead-stdin isolation and output-capture intent stay visible
 at each call site.
+
+:func:`no_window_kwargs` is the console-only half of the same win32 story, for
+children the daemon spawns rather than the TUI. Under ``pythonw`` the daemon
+runs on the GUI subsystem with no console of its own, so every console-
+subsystem child (``git``, a vendor CLI) makes the OS allocate -- and flash --
+a fresh console window. ``CREATE_NO_WINDOW`` suppresses that allocation. The
+detach helper is wrong for these sites: on POSIX it would additionally move
+the child into a new session, which the adapters manage themselves and the
+short-lived ``git`` probes do not want. So the console helper returns an EMPTY
+mapping off win32, which makes ``**no_window_kwargs()`` a literal no-op on
+POSIX and keeps every call site platform-agnostic.
 """
 
 from __future__ import annotations
@@ -33,6 +44,15 @@ from __future__ import annotations
 import subprocess
 import sys
 from typing import Any
+
+CREATE_NO_WINDOW: int = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+"""The win32 ``CREATE_NO_WINDOW`` creation flag; ``0`` where it is absent.
+
+Resolved through :func:`getattr` so importing this module on POSIX -- whose
+stdlib ``subprocess`` carries no win32 creation flags -- never raises. The
+``0`` fallback is never actually splatted: both helpers below gate the flag
+behind a ``sys.platform == "win32"`` test.
+"""
 
 
 def detached_subprocess_kwargs() -> dict[str, Any]:
@@ -51,8 +71,35 @@ def detached_subprocess_kwargs() -> dict[str, Any]:
         the splat is a no-op rather than a syntax requirement.
     """
     if sys.platform == "win32":
-        return {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)}
+        return {"creationflags": CREATE_NO_WINDOW}
     return {"start_new_session": True}
 
 
-__all__ = ["detached_subprocess_kwargs"]
+def no_window_kwargs() -> dict[str, Any]:
+    """Return the console-suppression kwargs for a daemon-spawned child.
+
+    On win32 this is ``{"creationflags": CREATE_NO_WINDOW}`` so a console-
+    subsystem child spawned by a GUI-subsystem (``pythonw``) daemon never
+    allocates -- and therefore never flashes -- a console window. On every
+    other platform it is an EMPTY mapping, because no other platform has the
+    concept: splatting it there adds nothing and changes no behaviour.
+
+    Unlike :func:`detached_subprocess_kwargs` this helper carries NO POSIX
+    knob. Session detachment is a separate decision each call site already
+    owns (the vendor adapters set ``start_new_session`` themselves so their
+    cancel path can signal a whole process group), and forcing it onto the
+    short-lived ``git`` probes would change their POSIX semantics for a
+    win32-only cosmetic fix.
+
+    Returns:
+        A kwargs dict to splat into ``subprocess.run`` /
+        ``subprocess.Popen`` / :func:`asyncio.create_subprocess_exec`.
+        Empty off win32, so the splat is a no-op rather than a branch at
+        every call site.
+    """
+    if sys.platform == "win32":
+        return {"creationflags": CREATE_NO_WINDOW}
+    return {}
+
+
+__all__ = ["CREATE_NO_WINDOW", "detached_subprocess_kwargs", "no_window_kwargs"]

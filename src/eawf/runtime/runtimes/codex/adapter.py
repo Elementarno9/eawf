@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING
 
 from eawf.kernel.state.enums import MeasurementQuality, MeasurementStatus
 from eawf.kernel.state.models import SessionAttempt, Wave
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.runtimes.adapter import (
     ErrorClass,
     RuntimeAdapter,
@@ -1039,6 +1040,7 @@ class CodexAdapter:
                 start_new_session=True,
                 cwd=cwd,
                 env=child_env,
+                **no_window_kwargs(),
             )
             pid = proc.pid
             logger.info(f"spawn_session runtime={self.id!r} pid={pid} model={model!r}")

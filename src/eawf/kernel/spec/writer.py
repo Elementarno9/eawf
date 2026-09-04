@@ -38,6 +38,7 @@ from eawf.kernel.spec.cache import (
 from eawf.kernel.state.ids import RE_ITER, RE_PHASE, RE_WAVE
 from eawf.kernel.state.urn import build as build_urn
 from eawf.kernel.state.writer import atomic_write_json_locked
+from eawf.platform.subprocess_detach import no_window_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +191,7 @@ def git_rm_spec(
             capture_output=True,
             text=True,
             check=False,
+            **no_window_kwargs(),
         )
     except OSError as exc:
         raise ValueError(f"git rm failed: {exc}") from exc
