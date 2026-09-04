@@ -65,7 +65,7 @@ _KEYPRESS_SAMPLES: int = 100
 
 #: Representative repo fixture (the perf reference state for the band).
 _REPO_STATE = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[3]
     / "fixtures"
     / "states"
     / "valid"

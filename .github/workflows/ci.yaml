@@ -62,7 +62,7 @@ jobs:
         # Coverage is collected on the ubuntu leg only: the ${{ }} expression
         # appends the --cov flags on ubuntu and an empty string on macOS, so
         # the macOS leg runs the identical suite without coverage.
-        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/tui ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-report=xml --cov-fail-under=0' || '' }}
+        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-report=xml --cov-fail-under=0' || '' }}
       - name: Pytest (TUI render snapshots)
         # Four workers, not serial: each test builds its own event loop and
         # offscreen driver inside app.run_test(), so there is no shared
@@ -75,7 +75,7 @@ jobs:
       - name: Pytest (serial perf timing)
         # Stays serial on purpose: these assert p99 latency, so a contended
         # machine changes the number being measured.
-        run: uv run pytest -n0 tests/perf/tui ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report=xml --cov-fail-under=0' || '' }}
+        run: uv run pytest -n0 tests/perf/surfaces/tui ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report=xml --cov-fail-under=0' || '' }}
 
       - name: Telemetry sync (REL-009)
         # Telemetry ingestion is on by default, so CI must prove the sync

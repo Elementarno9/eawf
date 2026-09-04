@@ -45,7 +45,7 @@ test mode="fast" base="origin/main":
     trap 'rm -rf "$EAWF_RUNTIME_DIR"' EXIT
     case "{{mode}}" in
       fast)
-        EAWF_SKIP_PERF=1 uv run pytest -n auto -m "not e2e and not eval" --ignore=tests/snapshots/tui --ignore=tests/perf/tui
+        EAWF_SKIP_PERF=1 uv run pytest -n auto -m "not e2e and not eval" --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui
         uv run pytest -n 4 tests/snapshots/tui
         ;;
       ci)
@@ -56,9 +56,9 @@ test mode="fast" base="origin/main":
           cov_parallel=""
           cov_serial=""
         fi
-        uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/tui $cov_parallel
+        uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui $cov_parallel
         uv run pytest -n 4 tests/snapshots/tui $cov_serial
-        uv run pytest -n0 tests/perf/tui $cov_serial
+        uv run pytest -n0 tests/perf/surfaces/tui $cov_serial
         ;;
       changed)
         scope="$(uv run python tools/changed_scope.py --base "{{base}}" --existing-only)"
@@ -84,9 +84,9 @@ test-all:
     EAWF_RUNTIME_DIR="$(mktemp -d "${TMPDIR:-/tmp}/eawf-rt.XXXXXX")"
     export EAWF_RUNTIME_DIR
     trap 'rm -rf "$EAWF_RUNTIME_DIR"' EXIT
-    uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/tui
+    uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui
     uv run pytest -n 4 tests/snapshots/tui
-    uv run pytest -n0 tests/perf/tui
+    uv run pytest -n0 tests/perf/surfaces/tui
 
 # TUI render snapshots (4 workers) + perf timing budget (serial: it measures
 # latency, so a contended machine changes the number under test).
@@ -97,4 +97,4 @@ test-tui:
     export EAWF_RUNTIME_DIR
     trap 'rm -rf "$EAWF_RUNTIME_DIR"' EXIT
     uv run pytest -n 4 tests/snapshots/tui
-    uv run pytest -n0 tests/perf/tui
+    uv run pytest -n0 tests/perf/surfaces/tui

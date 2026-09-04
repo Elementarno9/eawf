@@ -28,7 +28,7 @@ This suite has two gates:
   ``import eawf.surfaces.cli.app`` subprocess wall time under a generous ceiling
   (~2.5x the observed post-fix best). Guarded by ``EAWF_SKIP_PERF=1``
   for local dev on a busy machine, mirroring
-  ``tests/perf/tui/test_perf_budget.py``.
+  ``tests/perf/surfaces/tui/test_perf_budget.py``.
 
 One residual is deliberately *not* in :data:`FORBIDDEN_MODULES`
 because it lives in shared CLI infra (out of scope for the
