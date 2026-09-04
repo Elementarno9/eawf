@@ -38,6 +38,10 @@ from eawf.runtime.daemon.close_workspace import (
     cleanup_close_workspace,
     prepare_close_workspace,
 )
+from eawf.runtime.daemon.gate_execution import (
+    GateExecutionContext,
+    durable_gate_context,
+)
 from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.daemon.methods.close_evidence import (
     _commit_attempt as _commit_attempt,
@@ -983,13 +987,21 @@ async def _run_attempt(  # noqa: C901
             },
         )
         try:
-            result = await state_mutate(
-                ctx,
-                {
-                    "mutation": mutation.model_dump(mode="json"),
-                    "repo_root": str(repo_root),
-                },
-            )
+            # Binds the durable identity the gate runner claims under, so the
+            # deterministic tier below this await executes out of process.
+            with durable_gate_context(
+                GateExecutionContext(
+                    state_path=_state_path(ctx, repo_root),
+                    attempt_id=attempt.id,
+                )
+            ):
+                result = await state_mutate(
+                    ctx,
+                    {
+                        "mutation": mutation.model_dump(mode="json"),
+                        "repo_root": str(repo_root),
+                    },
+                )
         except CloseAttemptError:
             raise
         except ValueError as exc:

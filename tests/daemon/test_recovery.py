@@ -8,6 +8,8 @@ twice on the same state yields the same report on the second pass).
 
 from __future__ import annotations
 
+import os
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -16,6 +18,8 @@ import pytest
 
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.paths import store_path
+from eawf.runtime.daemon import gate_execution
 from eawf.runtime.daemon.recovery import ReplayReport, replay_wal
 from eawf.runtime.daemon.wal import (
     WalRecord,
@@ -24,6 +28,7 @@ from eawf.runtime.daemon.wal import (
     mark_applied,
     write_pending,
 )
+from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
 
 pytestmark = pytest.mark.unit
 
@@ -409,3 +414,74 @@ def test_replay_wal_routes_stamped_record_to_its_own_root(tmp_path: Path) -> Non
     # the stamped row lands in its own repo's log and nowhere else.
     assert _read_event_ids(boot_events) == ["env-legacy"]
     assert _read_event_ids(other_events) == ["env-stamped"]
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="SIGKILL is POSIX-only; Windows crash isolation is a separate probe",
+)
+def test_orphan_claim_from_a_crashed_child_never_reruns_the_gate(tmp_path: Path) -> None:
+    """Recovery after a crashed gate child is indeterminate, not a rerun.
+
+    The gate records that it ran, then hard-kills its own runner. The claim the
+    dead child wrote before executing is the only durable trace, so the next
+    execution of the SAME freshness key must refuse to re-execute and report
+    indeterminate — an operator resume is the only way forward. Re-running here
+    would be the silent-double-execution bug the claim exists to prevent.
+    """
+    state_path = tmp_path / ".ea" / "state.json"
+    state_path.parent.mkdir(parents=True)
+    marker = tmp_path / "gate-runs.log"
+    spec = CheckSpec(
+        kind="command_exit_zero",
+        name="G-ORPHAN",
+        args={
+            "argv": [
+                sys.executable,
+                "-c",
+                (
+                    "import os, signal, sys\n"
+                    "open(sys.argv[1], 'a').write('ran\\n')\n"
+                    "os.kill(os.getppid(), signal.SIGKILL)\n"
+                ),
+                str(marker),
+            ],
+            "scope": "all",
+        },
+    )
+    context = gate_execution.GateExecutionContext(state_path=state_path, attempt_id="CA-11")
+
+    def _run() -> CheckResult:
+        return gate_execution.run_gate_out_of_process(
+            spec,
+            cwd=tmp_path,
+            context=context,
+            criterion_id="CR-01",
+            gate_id="G-ORPHAN",
+        )
+
+    with pytest.raises(gate_execution.GateChildCrashError):
+        _run()
+
+    assert marker.read_text(encoding="utf-8") == "ran\n"
+    claim_files = sorted((state_path.parent / "local" / "gate-claims").glob("*.json"))
+    assert len(claim_files) == 1
+    orphan = orjson.loads(claim_files[0].read_bytes())
+    assert orphan["attempt_id"] == "CA-11"
+    assert orphan["gate_id"] == "G-ORPHAN"
+    assert orphan["receipt_id"] is None
+    assert orphan["result_payload"] is None
+    assert orphan["completed_at"] is None
+    assert not store_path(state_path, StoreKind.GATE_RECEIPT).is_file()
+
+    recovered = _run()
+
+    assert recovered.status == "blocked"
+    assert recovered.passed is False
+    assert recovered.started_at is None
+    assert "without terminal receipt" in (recovered.details or "")
+    assert marker.read_text(encoding="utf-8") == "ran\n", (
+        "the orphaned claim was re-executed — a crashed gate must never rerun "
+        "without an operator resume"
+    )
+    assert orjson.loads(claim_files[0].read_bytes()) == orphan

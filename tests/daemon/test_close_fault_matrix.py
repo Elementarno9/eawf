@@ -34,6 +34,7 @@ from eawf.kernel.state.models import (
     wave_dependency_key,
 )
 from eawf.kernel.store.paths import store_path
+from eawf.runtime.daemon import gate_execution
 from eawf.runtime.daemon.close_workspace import CloseWorkspaceError
 from eawf.runtime.daemon.methods import close as close_module
 from eawf.runtime.daemon.methods.close import (
@@ -45,7 +46,6 @@ from eawf.runtime.daemon.methods.close import (
 from eawf.runtime.runtimes.adapter import SpawnResult
 from eawf.runtime.worktree import git
 from eawf.workflow.agent_report.rollup import iter_agent_reports
-from eawf.workflow.audit_dsl import registry
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
 from eawf.workflow.lifecycle import LifecycleGuardError
 from eawf.workflow.lifecycle.integration import (
@@ -170,14 +170,36 @@ def _configure_real_fault_matrix(
         encoding="utf-8",
     )
 
+    # The gate itself executes in a child interpreter, so the counter sits at
+    # the out-of-process seam; an in-process registry patch would never be
+    # reached. The child claims its freshness key immediately before executing
+    # and reuses a terminal receipt without claiming, so a NEW claim file is
+    # the exact signal that the gate really ran rather than replayed.
     gate_executions: list[str] = []
-    real_gate = registry.CHECK_REGISTRY["file_exists"]
+    real_runner = gate_execution.run_gate_out_of_process
 
-    def _counted_gate(spec: CheckSpec, cwd: Path) -> CheckResult:
-        gate_executions.append(spec.name)
-        return real_gate(spec, cwd)
+    def _counted_runner(
+        spec: CheckSpec,
+        *,
+        cwd: Path,
+        context: gate_execution.GateExecutionContext,
+        criterion_id: str,
+        gate_id: str,
+    ) -> CheckResult:
+        claims = context.state_path.parent / "local" / "gate-claims"
+        before = set(claims.glob("*.json")) if claims.is_dir() else set()
+        result = real_runner(
+            spec,
+            cwd=cwd,
+            context=context,
+            criterion_id=criterion_id,
+            gate_id=gate_id,
+        )
+        if set(claims.glob("*.json")) - before:
+            gate_executions.append(spec.name)
+        return result
 
-    monkeypatch.setitem(registry.CHECK_REGISTRY, "file_exists", _counted_gate)
+    monkeypatch.setattr(gate_execution, "run_gate_out_of_process", _counted_runner)
     auditor = _MatrixAuditorSpawn()
 
     def _spawn_factory(

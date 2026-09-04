@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
+import sys
 import time
 import uuid
 from collections.abc import Callable, Coroutine
@@ -401,3 +403,87 @@ def test_concurrent_mutate_completes_while_close_preflight_runs(
     assert sibling_wall["wall"] < 2.0, (
         f"concurrent mutate took {sibling_wall['wall']:.2f}s — starved by the close hold"
     )
+
+
+def _child_spec(name: str, argv: list[str]) -> Any:
+    """A deterministic command gate whose argv the caller dictates."""
+    from eawf.workflow.audit_dsl.models import CheckSpec
+
+    return CheckSpec(
+        kind="command_exit_zero",
+        name=name,
+        args={"argv": argv, "scope": "all"},
+    )
+
+
+def test_close_gate_runs_out_of_process_and_returns_the_child_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CR-04: the durable close gate runner spawns a child and holds no lock.
+
+    The gate's own argv prints its parent pid — that IS the gate runner. If the
+    runner were the daemon (``asyncio.to_thread`` in-process), the printed pid
+    would be this process's. The claim is written from inside the child, so the
+    parent takes NO ``portalock`` at all while the gate runs.
+    """
+    from eawf.runtime.daemon import gate_execution
+    from eawf.runtime.lock import portalock
+
+    state_path = tmp_path / ".ea" / "state.json"
+    _write_state(state_path)
+    context = gate_execution.GateExecutionContext(state_path=state_path, attempt_id="CA-01")
+    spec = _child_spec(
+        "G-CHILD",
+        [sys.executable, "-c", "import os; print(f'runner_pid={os.getppid()}')"],
+    )
+    recorder = _LockHoldRecorder(portalock.acquire)
+    monkeypatch.setattr(portalock, "acquire", recorder)
+
+    result = gate_execution.run_gate_out_of_process(
+        spec,
+        cwd=tmp_path,
+        context=context,
+        criterion_id="CR-01",
+        gate_id="G-CHILD",
+    )
+
+    assert result.passed is True
+    assert recorder.acquired_at == [], (
+        "the parent acquired a lock while the gate ran — the heavy gate is "
+        "back inside the daemon's lock hold"
+    )
+    match = re.search(r"runner_pid=(\d+)", result.stdout_tail or "")
+    assert match is not None, f"gate output carried no runner pid: {result.stdout_tail!r}"
+    assert int(match.group(1)) != os.getpid(), (
+        "the gate ran inside this process — a hard-exiting gate would take the daemon down"
+    )
+    # The returned result is the one the CHILD produced: its freshness key is
+    # the key the child durably claimed under before it executed.
+    assert result.freshness_key is not None
+    claim = orjson.loads(
+        gate_execution.claim_path(
+            state_path,
+            attempt_id="CA-01",
+            freshness_key=result.freshness_key,
+        ).read_bytes()
+    )
+    assert claim["attempt_id"] == "CA-01"
+    assert claim["gate_id"] == "G-CHILD"
+
+
+def test_close_gate_child_reports_a_typed_arg_error_as_value_error(tmp_path: Path) -> None:
+    """A malformed gate spec fails the same way it does in process."""
+    from eawf.runtime.daemon import gate_execution
+
+    state_path = tmp_path / ".ea" / "state.json"
+    _write_state(state_path)
+    context = gate_execution.GateExecutionContext(state_path=state_path, attempt_id="CA-01")
+
+    with pytest.raises(ValueError, match="invalid args"):
+        gate_execution.run_gate_out_of_process(
+            _child_spec("G-BAD", []),
+            cwd=tmp_path,
+            context=context,
+            criterion_id="CR-01",
+            gate_id="G-BAD",
+        )

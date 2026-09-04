@@ -170,6 +170,13 @@ async def _run_deterministic_gates(  # noqa: C901
     require_all_deterministic: bool,
 ) -> OracleResult | None:
     """Run ordered deterministic gates and return the first decisive result."""
+    from eawf.runtime.daemon.gate_execution import (
+        GateChildCrashError,
+        current_gate_context,
+        run_gate_out_of_process,
+    )
+
+    gate_context = current_gate_context()
     last_pass: OracleResult | None = None
     for gate in ordered:
         tier = _gate_sort_key(gate)
@@ -197,12 +204,27 @@ async def _run_deterministic_gates(  # noqa: C901
                 )
             if spec is None:
                 continue
-            if before_gate_execute is None:
+            if gate_context is not None:
+                # A durable close runs its heavy gates in a child interpreter.
+                # A check kind that hard-exits would otherwise kill the daemon
+                # and every other in-flight close with it; the child also owns
+                # its own claim, so a crash leaves an orphaned claim rather
+                # than a silently rerunnable gate.
+                result = await asyncio.to_thread(
+                    run_gate_out_of_process,
+                    spec,
+                    cwd=repo_root,
+                    context=gate_context,
+                    criterion_id=criterion.id,
+                    gate_id=gate.id,
+                )
+            elif before_gate_execute is None:
                 results = await asyncio.to_thread(
                     run_checks,
                     [spec],
                     cwd=repo_root,
                 )
+                result = results[0]
             else:
                 before_execute = partial(
                     before_gate_execute,
@@ -215,7 +237,12 @@ async def _run_deterministic_gates(  # noqa: C901
                     cwd=repo_root,
                     before_execute=before_execute,
                 )
-            result = results[0]
+                result = results[0]
+        except GateChildCrashError:
+            # A crashed runner proved nothing about the wave, so it must not be
+            # recorded as a gate verdict; it surfaces as a harness fault that
+            # re-queues the attempt for resume.
+            raise
         except Exception as exc:
             logger.warning(
                 f"run_oracle status=gate-blocked criterion={criterion.id!r} "
