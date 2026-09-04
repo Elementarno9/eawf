@@ -13,6 +13,16 @@ name: Plugin Release
 #     dedicated ``plugins-dist`` branch (the ref the Codex ``git-subdir``
 #     pointer references at ``path: ./plugins/eawf``, ``ref: plugins-dist``),
 #     both at the pointer path and under a retained per-version path.
+#   * Source host — the tag's release object carries the three artifact
+#     kinds the ``github`` publication target declares (release notes, a
+#     ``SHA256SUMS`` file over every dist and plugin artifact, and the
+#     plugin bundle), flagged ``prerelease`` on a dev or rc channel so a
+#     checkpoint is never advertised as the latest release.
+#
+# Each publish job leaves a ``publication-receipt-<target>.json`` behind
+# whatever its conclusion: the runner is gone by the time the release
+# ledger asks what happened, so ``release.reconcile`` reads the receipt
+# rather than interrogating the leg.
 #
 # The render step calls the packager library directly (``uv run python``)
 # rather than ``eawf plugin package`` because the CLI does not expose the
@@ -53,6 +63,8 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       dist_tag: ${{ steps.version.outputs.dist_tag }}
+      npm_version: ${{ steps.version.outputs.npm_version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - name: Checkout tag
         uses: actions/checkout@v4
@@ -68,22 +80,45 @@ jobs:
       - name: Sync (frozen)
         run: uv sync --frozen
 
-      - name: Resolve plugin version + npm dist-tag
+      - name: Resolve plugin version, npm dist-tag and npm version
         id: version
         # Derive the published version from the package itself so the npm
         # artifact + plugin manifests match the source-of-truth
         # ``eawf.__version__`` (which W03 couples to the tag at release).
-        # The dist-tag is derived from that same version by the library
-        # helper: prereleases land on ``next``, stable releases on
-        # ``latest``. An unclassifiable version raises and reds the job
-        # rather than defaulting a prerelease onto ``latest``.
+        # Everything else is derived from that one string by the library
+        # helpers, so the four outputs cannot disagree about which
+        # checkpoint is being published:
+        #
+        #   * ``dist_tag`` -- prereleases land on ``next``, stable
+        #     releases on ``latest``, so a prerelease never becomes the
+        #     default ``npm install``.
+        #   * ``npm_version`` -- npm speaks SemVer and rejects
+        #     ``0.7.0.dev1`` outright, so the package is published as
+        #     ``0.7.0-dev.1``.
+        #   * ``prerelease`` -- the source-host release flag, read off
+        #     the dist-tag rather than re-derived, because "publishes to
+        #     the opt-in npm channel" and "is not the latest release on
+        #     the source host" are the same fact about the channel.
+        #
+        # An unclassifiable version raises in either helper and reds the
+        # job rather than defaulting a prerelease onto ``latest``.
         run: |
           set -euo pipefail
-          version="$(uv run python -c 'import eawf; print(eawf.__version__)')"
-          dist_tag="$(uv run python -c 'import eawf; from eawf.platform.install.dist_tag import dist_tag_for_version; print(dist_tag_for_version(eawf.__version__))')"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "dist_tag=$dist_tag" >> "$GITHUB_OUTPUT"
-          echo "resolved plugin version: $version (npm dist-tag: $dist_tag)"
+          uv run python - >> "$GITHUB_OUTPUT" <<'PY'
+          import eawf
+          from eawf.platform.install.dist_tag import (
+              DIST_TAG_NEXT,
+              dist_tag_for_version,
+              npm_version_for,
+          )
+
+          version = eawf.__version__
+          dist_tag = dist_tag_for_version(version)
+          print(f"version={version}")
+          print(f"dist_tag={dist_tag}")
+          print(f"npm_version={npm_version_for(version)}")
+          print(f"prerelease={'true' if dist_tag == DIST_TAG_NEXT else 'false'}")
+          PY
 
       - name: Render published plugin trees (claude=npm, codex=git-subdir)
         # The CLI ``eawf plugin package`` always emits the LOCAL source
@@ -292,9 +327,12 @@ jobs:
         # ``@elementarno/eawf`` (matching the npm-source pointer
         # ``package: "@elementarno/eawf"`` — scoped because the registry
         # rejects the bare ``eawf`` name as too similar to an existing one)
-        # at the resolved version, bundling the whole rendered tree.
+        # at the npm spelling of the resolved version. npm's grammar is
+        # SemVer, which has no PEP 440 ``.devN`` segment: publishing
+        # ``0.7.0.dev1`` is rejected by the registry, so the manifest
+        # carries the ``0.7.0-dev.1`` form the library derives.
         env:
-          PLUGIN_VERSION: ${{ needs.package-validate.outputs.version }}
+          PLUGIN_VERSION: ${{ needs.package-validate.outputs.npm_version }}
         run: |
           set -euo pipefail
           cd build/eawf-plugin
@@ -336,6 +374,12 @@ jobs:
         # make a prerelease the default install for every new user. Pass
         # the dist-tag derived from the version in package-validate so a
         # prerelease is reachable only via an explicit ``@next``.
+        #
+        # The tarball is packed first and published by path rather than
+        # from the working directory, so the bytes the receipt below
+        # digests are the exact bytes the registry received. Digesting a
+        # tree and publishing a repack of it proves nothing.
+        id: npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DIST_TAG: ${{ needs.package-validate.outputs.dist_tag }}
@@ -346,7 +390,57 @@ jobs:
             exit 1
           fi
           cd build/eawf-plugin
-          npm publish --access public --tag "${DIST_TAG}"
+          tarball="$(npm pack --silent)"
+          echo "tarball=build/eawf-plugin/${tarball}" >> "$GITHUB_OUTPUT"
+          npm publish "${tarball}" --access public --tag "${DIST_TAG}"
+
+      - name: Write the npm publication receipt
+        # Written whether the publish succeeded or not, and whatever the
+        # runner concluded: the ledger's job is to learn what happened,
+        # and a receipt that only exists on success teaches it nothing
+        # about the case it needs help with. ``release.reconcile`` maps
+        # ``job_conclusion`` onto reported_success / reported_failure /
+        # unknown -- never an observed state, which takes a read-back.
+        if: always()
+        env:
+          TARGET_ID: npm
+          RECEIPT_VERSION: ${{ needs.package-validate.outputs.npm_version }}
+          JOB_CONCLUSION: ${{ job.status }}
+          RUN_ID: ${{ github.run_id }}
+          ARTIFACT_PATHS: ${{ steps.npm.outputs.tarball }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          target_id = os.environ["TARGET_ID"]
+          paths = [Path(p) for p in os.environ["ARTIFACT_PATHS"].split() if p]
+          digests = {
+              path.name: f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+              for path in paths
+              if path.is_file()
+          }
+          receipt = {
+              "target_id": target_id,
+              "version": os.environ["RECEIPT_VERSION"],
+              "artifact_digests": digests,
+              "job_conclusion": os.environ["JOB_CONCLUSION"],
+              "run_id": os.environ["RUN_ID"],
+          }
+          out = Path(f"publication-receipt-{target_id}.json")
+          out.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(out.read_text(encoding="utf-8"))
+          PY
+
+      - name: Upload the npm publication receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publication-receipt-npm
+          path: publication-receipt-npm.json
 
   publish-codex-branch:
     name: Publish Codex tree to plugins-dist branch
@@ -431,40 +525,182 @@ jobs:
           git commit -q -m "Publish Codex plugin tree for ${TAG} (version ${PLUGIN_VERSION})"
           git push -q origin plugins-dist
 
-  release-notes:
-    name: Publish plugin release notes
+  publish-source-host:
+    name: Publish source-host release assets
     needs: [package-validate, publish-claude-npm, publish-codex-branch]
+    # The third publication leg. The ``github`` target of the checkpoint
+    # configuration declares three artifact kinds -- ``release_notes``,
+    # ``checksums`` and ``plugin_bundle`` -- and the source-host
+    # observation adapter reads the published release object back
+    # asset-by-asset against the frozen manifest. So this job is not
+    # "notes, plus some files": it is the leg whose absence leaves the
+    # release record unable to reach VERIFYING.
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
-      contents: write # gh release create
+      contents: write # gh release create / edit / upload
+      actions: read # read the Release workflow's dist artifact for this SHA
     steps:
       - name: Checkout tag
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Synthesize + attach plugin release notes
-        # Mirrors phase-release.yaml's notes step. Best-effort: appends a
-        # plugin-distribution section to the existing tag release (created
-        # by phase-release.yaml) or creates one if absent.
+      - name: Download rendered trees
+        uses: actions/download-artifact@v4
+        with:
+          name: plugin-trees
+          path: build/
+
+      - name: Download the dist artifact from the Release run
+        # The checksums file covers every artifact the tag publishes, and
+        # the wheel + sdist are built by release.yaml, in a different
+        # workflow run. Same head SHA, so the run is found the way
+        # ``require-green-ci`` finds the CI run; the wait loop exists
+        # because the two workflows start together and release.yaml's
+        # build job may still be uploading.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          deadline=$(( SECONDS + 900 ))
+          while :; do
+            run_id="$(
+              gh api "repos/${REPO}/actions/workflows/release.yaml/runs?head_sha=${SHA}&per_page=1" \
+                --jq '.workflow_runs[0].id // empty'
+            )"
+            if [ -n "${run_id}" ] && gh run download "${run_id}" --repo "${REPO}" \
+                 --name dist --dir dist 2>/dev/null; then
+              echo "downloaded dist from release.yaml run ${run_id}"
+              break
+            fi
+            if [ "${SECONDS}" -ge "${deadline}" ]; then
+              echo "refusing to publish: no dist artifact for ${SHA} after 15 min" >&2
+              exit 1
+            fi
+            echo "waiting for release.yaml to upload dist for ${SHA:0:10}"
+            sleep 30
+          done
+          ls -l dist/
+
+      - name: Assemble release notes, checksums and the plugin bundle
+        # The three asset filenames come from
+        # ``eawf.workflow.release.source_host_assets``, which is also
+        # what the observation adapter compares against -- one home for
+        # the strings, so a rename cannot land on only one side.
+        #
+        # The bundle is a tarball rather than a zip because the rendered
+        # plugin tree carries executable hooks and dotdirs, and tar keeps
+        # both modes and names intact.
+        env:
+          PLUGIN_VERSION: ${{ needs.package-validate.outputs.version }}
+          NPM_VERSION: ${{ needs.package-validate.outputs.npm_version }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          bundle="eawf-plugin-${PLUGIN_VERSION}.tar.gz"
+          tar -czf "${bundle}" -C build/eawf-plugin .
+          {
+            echo "## Plugin distribution"
+            echo
+            echo "- Claude: \`npm install @elementarno/eawf@${NPM_VERSION}\` (or \`/plugin install eawf@eawf\` after \`marketplace add\`)."
+            echo "- Codex: rendered tree on the \`plugins-dist\` branch (\`git-subdir\` pointer at \`./plugins/eawf\`)."
+            echo "- Codex (pin / rollback): the same tree is retained at \`versions/${PLUGIN_VERSION}/plugins/eawf\` on \`plugins-dist\`."
+            echo
+            echo "## Verifying the artifacts"
+            echo
+            echo "\`SHA256SUMS\` covers every wheel, sdist and plugin bundle attached to ${TAG}."
+            echo "Download it beside the artifacts and run \`sha256sum -c SHA256SUMS\`."
+          } > RELEASE_NOTES.md
+          sha256sum dist/* "${bundle}" | sed 's| .*/| |' > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create or edit the tag release with every declared asset
+        # ``gh release create`` fails when the release already exists and
+        # ``edit`` fails when it does not, and either can be true here:
+        # phase-release.yaml creates the release for a phase-close merge,
+        # while a hand-pushed tag has none. Hence create-or-edit.
+        #
+        # ``--prerelease`` is the source-host half of REL-016: a host
+        # advertises the newest non-prerelease release as *the* release,
+        # so a dev or rc checkpoint published without the flag lands on
+        # the stable default channel exactly as an npm ``latest`` would.
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
           PLUGIN_VERSION: ${{ needs.package-validate.outputs.version }}
+          PRERELEASE: ${{ needs.package-validate.outputs.prerelease }}
         run: |
           set -euo pipefail
-          {
-            echo "## Plugin distribution"
-            echo
-            echo "- Claude: \`npm install @elementarno/eawf@${PLUGIN_VERSION}\` (or \`/plugin install eawf@eawf\` after \`marketplace add\`)."
-            echo "- Codex: rendered tree on the \`plugins-dist\` branch (\`git-subdir\` pointer at \`./plugins/eawf\`)."
-            echo "- Codex (pin / rollback): the same tree is retained at \`versions/${PLUGIN_VERSION}/plugins/eawf\` on \`plugins-dist\`."
-          } > plugin-notes.md
-
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --notes-file plugin-notes.md
+          bundle="eawf-plugin-${PLUGIN_VERSION}.tar.gz"
+          if [ "${PRERELEASE}" = "true" ]; then
+            flag="--prerelease"
           else
-            gh release create "$TAG" --title "$TAG" --notes-file plugin-notes.md
+            flag="--latest"
           fi
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release edit "${TAG}" --notes-file RELEASE_NOTES.md "${flag}"
+          else
+            gh release create "${TAG}" --title "${TAG}" --notes-file RELEASE_NOTES.md "${flag}"
+          fi
+          gh release upload "${TAG}" \
+            RELEASE_NOTES.md \
+            SHA256SUMS \
+            "${bundle}" \
+            --clobber
+
+      - name: Write the source-host publication receipt
+        # Written whether the publish succeeded or not, and whatever the
+        # runner concluded: the ledger's job is to learn what happened,
+        # and a receipt that only exists on success teaches it nothing
+        # about the case it needs help with. ``release.reconcile`` maps
+        # ``job_conclusion`` onto reported_success / reported_failure /
+        # unknown -- never an observed state, which takes a read-back.
+        if: always()
+        env:
+          TARGET_ID: github
+          RECEIPT_VERSION: ${{ needs.package-validate.outputs.version }}
+          JOB_CONCLUSION: ${{ job.status }}
+          RUN_ID: ${{ github.run_id }}
+          PLUGIN_VERSION: ${{ needs.package-validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          target_id = os.environ["TARGET_ID"]
+          version = os.environ["PLUGIN_VERSION"]
+          paths = [
+              Path("RELEASE_NOTES.md"),
+              Path("SHA256SUMS"),
+              Path(f"eawf-plugin-{version}.tar.gz"),
+          ]
+          digests = {
+              path.name: f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+              for path in paths
+              if path.is_file()
+          }
+          receipt = {
+              "target_id": target_id,
+              "version": os.environ["RECEIPT_VERSION"],
+              "artifact_digests": digests,
+              "job_conclusion": os.environ["JOB_CONCLUSION"],
+              "run_id": os.environ["RUN_ID"],
+          }
+          out = Path(f"publication-receipt-{target_id}.json")
+          out.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(out.read_text(encoding="utf-8"))
+          PY
+
+      - name: Upload the source-host publication receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publication-receipt-github
+          path: publication-receipt-github.json

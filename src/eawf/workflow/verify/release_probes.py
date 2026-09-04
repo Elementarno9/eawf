@@ -33,6 +33,7 @@ from functools import partial
 from pathlib import Path
 from typing import Final
 
+from eawf.platform.install.dist_tag import npm_version_for
 from eawf.platform.lint import load_lint_config
 from eawf.platform.lint.exclusion_expiry import (
     ExclusionConfigError,
@@ -230,13 +231,21 @@ def _probe_version_consistency(
 ) -> ReleaseSignalOutcome:
     """Report whether the tag, the request, the package and the config agree.
 
+    The evidence carries a fifth spelling the operator cannot see
+    anywhere else: npm rejects PEP 440, so the npm leg publishes
+    ``0.7.0.dev1`` as ``0.7.0-dev.1``, and a row that named only the
+    PyPI form would leave the reader guessing what the registry will
+    actually carry. A version with no npm spelling never reaches a
+    passing row -- the mapping raises, and the sweep reds the signal.
+
     Args:
         inputs: The chokepoint's inputs.
         context: The sweep's context; its configuration carries the
             checkpoint version the tag claims to cut.
 
     Returns:
-        Passing when all four spellings of the version match.
+        Passing when all four spellings of the version match, evidenced
+        by the configured version and its npm channel spelling.
     """
     configured = context.config.version
     mismatches: list[str] = []
@@ -251,7 +260,7 @@ def _probe_version_consistency(
             f"version sources disagree ({'; '.join(mismatches)}); bump the version module "
             f"or tag the checkpoint the configuration declares"
         )
-    return _passing(f"version:{configured}")
+    return _passing(f"version:{configured}", f"npm-version:{npm_version_for(configured)}")
 
 
 def _probe_changelog(

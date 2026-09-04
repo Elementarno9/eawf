@@ -45,13 +45,14 @@ from pathlib import Path
 from typing import Annotated, Any
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from eawf.kernel.spec.publication import PublicationOperation
 from eawf.kernel.spec.release import (
     Release,
     ReleaseCheckpoint,
     ReleaseTargetStatus,
+    semver_equivalent,
     validate_release_against_train,
 )
 from eawf.kernel.spec.release_config import (
@@ -97,6 +98,11 @@ from eawf.workflow.release.publication import (
     operation_reference,
     reconcile_target,
     retry_publication,
+)
+from eawf.workflow.release.publication_receipt import (
+    PublicationReceipt,
+    load_receipt,
+    reported_status,
 )
 from eawf.workflow.release.target_machine import TargetTransitionError
 from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
@@ -394,18 +400,47 @@ class RetryTargetParams(_PublicationParams):
 class ReconcileParams(_PublicationParams):
     """Params for :func:`reconcile`.
 
+    The reported result arrives one of two ways and never both. A
+    ``status`` is the operator asserting what the leg did; a ``receipt``
+    is the publish job's own downloaded
+    :class:`~eawf.workflow.release.publication_receipt.PublicationReceipt`,
+    which the verb maps onto a status itself. Accepting both would let a
+    caller attach a green receipt to a failure claim, and the ledger
+    would keep the claim.
+
     Attributes:
         target_id: The leg whose adapter reported late.
-        status: The reported result. Only ``reported_success``,
+        status: The asserted result. Only ``reported_success``,
             ``reported_failure`` and ``unknown`` are accepted; the two
             ``observed_*`` statuses belong to :func:`observe`.
+        receipt: The downloaded publication receipt, whose
+            ``job_conclusion`` decides the status instead.
         effect_receipt_ref: The adapter's receipt, required by the two
-            reported statuses.
+            reported statuses. Derived from *receipt* when omitted.
     """
 
     target_id: str
-    status: ReleaseTargetStatus
+    status: ReleaseTargetStatus | None = None
+    receipt: dict[str, Any] | None = None
     effect_receipt_ref: str | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_result_source(self) -> ReconcileParams:
+        """Refuse a call carrying neither result source, or both.
+
+        Returns:
+            The validated params.
+
+        Raises:
+            ValueError: When ``status`` and ``receipt`` are both set or
+                both absent.
+        """
+        if (self.status is None) == (self.receipt is None):
+            raise ValueError(
+                "reconcile takes exactly one of 'status' (the asserted result) or "
+                "'receipt' (the publish job's own, which decides the status)"
+            )
+        return self
 
 
 class ObserveTargetParams(_PublicationParams):
@@ -685,13 +720,63 @@ async def retry_target(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
     return _receipt(recorded, republished, replayed=False)
 
 
+def _receipt_result(
+    args: ReconcileParams,
+    release: Release,
+) -> tuple[ReleaseTargetStatus, str | None]:
+    """Return the status and effect receipt *args* settles the leg with.
+
+    A supplied ``status`` passes through unchanged. A supplied
+    ``receipt`` is validated, bound to the leg and the version it claims
+    to be about, and then mapped -- so the only three statuses a receipt
+    can produce are the reported ones, and neither ``observed_*`` status
+    is reachable through this door at all.
+
+    Args:
+        args: The validated reconcile params.
+        release: The record the leg belongs to.
+
+    Returns:
+        The status to write, and the effect-receipt locator. A receipt
+        with no explicit locator supplies its own, pointing at the run
+        that produced it.
+
+    Raises:
+        ValueError: When the receipt does not validate, names another
+            leg, or reports a version this checkpoint does not publish
+            under either of its two spellings.
+    """
+    if args.status is not None:
+        return args.status, args.effect_receipt_ref
+    receipt: PublicationReceipt = load_receipt(args.receipt)
+    if receipt.target_id != args.target_id:
+        raise ValueError(
+            f"publication receipt reports target {receipt.target_id!r}, not {args.target_id!r}"
+        )
+    published_as = {release.version, semver_equivalent(release.version)}
+    if receipt.version not in published_as:
+        raise ValueError(
+            f"publication receipt reports version {receipt.version!r}; "
+            f"{release.key} publishes {sorted(published_as)}"
+        )
+    locator = args.effect_receipt_ref or f"receipt://{receipt.target_id}/run/{receipt.run_id}"
+    return reported_status(receipt), locator
+
+
 @register("release.reconcile")
 async def reconcile(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Settle one leg against what its adapter finally reported.
+    """Settle one leg against what its publish job finally reported.
 
-    Reconciliation records the adapter's own late word and nothing more.
-    It cannot write either ``observed_*`` status -- that takes an
+    Reconciliation records the publisher's own late word and nothing
+    more. It cannot write either ``observed_*`` status -- that takes an
     independent read-back, which is :func:`observe`.
+
+    The word arrives either as an operator-asserted ``status`` or as the
+    publish job's downloaded ``receipt``. The receipt path is the one
+    the pipeline uses: each publish job uploads
+    ``publication-receipt-<target>.json``, the caller downloads the
+    tag's run artifacts, and the ``job_conclusion`` inside decides
+    between ``reported_success``, ``reported_failure`` and ``unknown``.
 
     Args:
         ctx: Server context; supplies the state root the ledger lives in.
@@ -703,9 +788,11 @@ async def reconcile(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any
 
     Raises:
         DaemonValidationError: On a stale revision, an idempotency
-            conflict, an unconfigured or unattempted target, a leg that
-            cannot reach the reported status from where it stands, or an
-            observer-only status (``observer_only_status``).
+            conflict, an unconfigured or unattempted target, a receipt
+            that does not validate or belongs to another leg or
+            version, a leg that cannot reach the reported status from
+            where it stands, or an observer-only status
+            (``observer_only_status``).
     """
     args = ReconcileParams.model_validate(params)
     state_path = _require_state_path(ctx)
@@ -719,13 +806,14 @@ async def reconcile(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any
     operation = _open_operation(state_path, release)
     now = datetime.now(UTC)
     try:
+        status, effect_receipt_ref = _receipt_result(args, release)
         reconciled, settled = reconcile_target(
             release,
             config,
             operation,
             target_id=args.target_id,
-            status=args.status,
-            effect_receipt_ref=args.effect_receipt_ref,
+            status=status,
+            effect_receipt_ref=effect_receipt_ref,
             now=now,
         )
     except TargetTransitionError as exc:

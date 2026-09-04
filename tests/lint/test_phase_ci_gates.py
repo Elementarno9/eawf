@@ -27,7 +27,9 @@ from typing import Any
 import pytest
 import yaml
 
+from eawf.workflow.release.publication_receipt import receipt_filename
 from eawf.workflow.release.receipts import RECEIPT_FILENAMES
+from eawf.workflow.release.source_host_assets import source_host_assets
 
 pytestmark = pytest.mark.unit
 
@@ -35,6 +37,13 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _PLUGIN_RELEASE = _REPO_ROOT / ".github" / "workflows" / "plugin-release.yaml"
 _CI = _REPO_ROOT / ".github" / "workflows" / "ci.yaml"
 _RELEASE = _REPO_ROOT / ".github" / "workflows" / "release.yaml"
+_PHASE_RELEASE = _REPO_ROOT / ".github" / "workflows" / "phase-release.yaml"
+
+#: The shell expansion the source-host job names the published version
+#: with. Substituting it into the library's asset names yields the exact
+#: strings the workflow must carry, so the gate compares the workflow
+#: against the library rather than against a second copy of the names.
+_VERSION_EXPANSION = "${PLUGIN_VERSION}"
 
 
 def test_coverage_gate_config_parses_and_classifies() -> None:
@@ -717,3 +726,344 @@ def test_inventory_job_gate_reds_on_a_missing_job() -> None:
     assert inventory_job_violations(yaml.safe_load("jobs: {}\n")) == [
         "release.yaml declares no 'inventory-and-reproducibility' job"
     ]
+
+
+# --- source-host release assets ---------------------------------------------
+
+
+def _load_phase_release() -> dict[str, Any]:
+    """Parse ``.github/workflows/phase-release.yaml``."""
+    workflow: dict[str, Any] = yaml.safe_load(_PHASE_RELEASE.read_text(encoding="utf-8"))
+    return workflow
+
+
+def _expected_source_host_assets() -> tuple[str, ...]:
+    """Return the three asset filenames the workflow must name, in order."""
+    assets = source_host_assets(_VERSION_EXPANSION)
+    return tuple(assets[kind] for kind in sorted(assets, key=lambda kind: kind.value))
+
+
+def source_host_asset_violations(workflow: dict[str, Any]) -> list[str]:
+    """Report every way *workflow* could publish an incomplete tag release.
+
+    The ``github`` target declares three artifact kinds, and the
+    source-host observation adapter reads the published release object
+    back asset-by-asset against the frozen manifest. A leg that attaches
+    two of the three publishes fine and then observes as a digest
+    mismatch, which reads like a tampered artifact rather than a missing
+    upload -- so the shape is asserted here, on the source, rather than
+    discovered on a live tag.
+
+    The prerelease flag is the same class of defect one level up: a
+    source host advertises the newest non-prerelease release as *the*
+    release, so a dev or rc checkpoint published without the flag lands
+    on the stable default channel exactly as an npm ``latest`` would.
+
+    Args:
+        workflow: The parsed plugin-release workflow.
+
+    Returns:
+        One human-readable problem per violation; empty when the job
+        exists, runs on a tag push, assembles and uploads all three
+        declared assets, and sets the prerelease flag off the channel.
+    """
+    job = workflow.get("jobs", {}).get("publish-source-host")
+    if job is None:
+        return ["plugin-release.yaml declares no 'publish-source-host' job"]
+    problems = _source_host_job_shape(job)
+    source = "\n".join(str(step.get("run", "")) for step in job.get("steps", []))
+    problems += [
+        f"the source-host leg never names the {filename!r} asset"
+        for filename in _expected_source_host_assets()
+        if filename not in source
+    ]
+    return problems + _source_host_release_step(job)
+
+
+def _source_host_job_shape(job: dict[str, Any]) -> list[str]:
+    """Report the ways the job could exist yet never run, or never fail."""
+    problems: list[str] = []
+    if job.get("runs-on") != "ubuntu-24.04":
+        problems.append("the publish-source-host job does not run on ubuntu-24.04")
+    condition = str(job.get("if", ""))
+    if condition and "refs/tags/v" not in condition:
+        problems.append("the publish-source-host job's condition can skip it on a tag push")
+    if any(step.get("continue-on-error") for step in job.get("steps", [])):
+        problems.append("a publish-source-host step is continue-on-error, so a failure passes")
+    return problems
+
+
+def _source_host_release_step(job: dict[str, Any]) -> list[str]:
+    """Report the ways the release-writing step could publish a bare release."""
+    upload = _find_step(job, "tag release")
+    if upload is None:
+        return ["publish-source-host has no step that creates or edits the tag release"]
+    problems: list[str] = []
+    run = str(upload.get("run", ""))
+    if "gh release create" not in run or "gh release edit" not in run:
+        problems.append("the source-host leg does not create-or-edit the tag release")
+    if "gh release upload" not in run:
+        problems.append("the source-host leg attaches no assets to the tag release")
+    if "--prerelease" not in run:
+        problems.append("the source-host leg never flags a prerelease checkpoint")
+    if "needs.package-validate.outputs.prerelease" not in str(upload.get("env", {})):
+        problems.append("the prerelease flag is not wired from the resolved channel")
+    return problems
+
+
+def test_source_host_assets_are_attached_to_the_tag_release() -> None:
+    """The live workflow attaches all three declared assets under the flag."""
+    assert source_host_asset_violations(_load_plugin_release()) == []
+
+
+def test_source_host_assets_gate_reds_on_a_notes_only_release() -> None:
+    """The gate fires on the real defect: notes published, artifacts dropped.
+
+    The synthetic job also drops the prerelease flag, swallows the exit
+    code and pins the wrong runner -- the other ways a job can look like
+    this gate's subject while publishing an unverifiable release.
+    """
+    defective = yaml.safe_load(
+        """
+        jobs:
+          publish-source-host:
+            runs-on: macos-26
+            if: github.event_name == 'pull_request'
+            steps:
+              - name: Publish the tag release
+                continue-on-error: true
+                run: |
+                  echo notes > RELEASE_NOTES.md
+                  gh release create "$TAG" --notes-file RELEASE_NOTES.md
+        """
+    )
+    problems = source_host_asset_violations(defective)
+    assert any("'SHA256SUMS' asset" in problem for problem in problems), problems
+    assert any("eawf-plugin-" in problem for problem in problems), problems
+    assert any("never flags a prerelease" in problem for problem in problems), problems
+    assert any("attaches no assets" in problem for problem in problems), problems
+    assert any("continue-on-error" in problem for problem in problems), problems
+    assert any("ubuntu-24.04" in problem for problem in problems), problems
+
+
+def test_source_host_assets_gate_reds_on_a_missing_job() -> None:
+    """A plugin-release workflow with no source-host leg is the violation."""
+    assert source_host_asset_violations(yaml.safe_load("jobs: {}\n")) == [
+        "plugin-release.yaml declares no 'publish-source-host' job"
+    ]
+
+
+def test_source_host_assets_cover_every_kind_the_github_target_declares() -> None:
+    """The three names the gate checks are the three kinds the config asserts."""
+    assets = source_host_assets("0.7.0.dev1")
+    assert {kind.value for kind in assets} == {"release_notes", "checksums", "plugin_bundle"}
+    assert set(assets.values()) == {
+        "RELEASE_NOTES.md",
+        "SHA256SUMS",
+        "eawf-plugin-0.7.0.dev1.tar.gz",
+    }
+
+
+# --- publication receipts ----------------------------------------------------
+
+
+#: Publish job -> the workflow it lives in and the leg it publishes.
+_PUBLISH_JOBS: dict[str, tuple[Path, str]] = {
+    "publish-pypi": (_RELEASE, "pypi"),
+    "publish-claude-npm": (_PLUGIN_RELEASE, "npm"),
+    "publish-source-host": (_PLUGIN_RELEASE, "github"),
+}
+
+
+def publication_receipt_violations(
+    workflow: dict[str, Any],
+    job_name: str,
+    target_id: str,
+) -> list[str]:
+    """Report every way *job_name* could publish without leaving a receipt.
+
+    The publisher is the pipeline, not the daemon: the runner is gone by
+    the time the ledger asks what happened, so a leg that does not write
+    its own word down settles as ``unknown`` forever and stays retryable
+    against a publication that may well have succeeded.
+
+    Args:
+        workflow: The parsed workflow carrying the job.
+        job_name: The publish job under inspection.
+        target_id: The configured leg it publishes.
+
+    Returns:
+        One human-readable problem per violation; empty when the job
+        writes the receipt the library names, uploads it under the same
+        name, and does both even when the publish itself failed.
+    """
+    problems: list[str] = []
+    job = workflow.get("jobs", {}).get(job_name)
+    if job is None:
+        return [f"the workflow declares no {job_name!r} job"]
+
+    filename = receipt_filename(target_id)
+    steps: list[dict[str, Any]] = job.get("steps", [])
+    writers = [step for step in steps if "publication-receipt-" in str(step.get("run", ""))]
+    if not writers:
+        problems.append(f"{job_name} writes no {filename!r}")
+    elif not all(str(step.get("if", "")) == "always()" for step in writers):
+        problems.append(f"{job_name} skips its receipt when the publish fails")
+
+    for field in ("target_id", "artifact_digests", "job_conclusion", "run_id"):
+        if not any(field in str(step.get("run", "")) for step in writers):
+            problems.append(f"the {target_id!r} receipt records no {field!r}")
+
+    uploads = {
+        str((step.get("with") or {}).get("name", "")): step
+        for step in steps
+        if str(step.get("uses", "")).startswith("actions/upload-artifact")
+    }
+    artifact = f"publication-receipt-{target_id}"
+    if artifact not in uploads:
+        problems.append(f"{job_name} uploads no {artifact!r} artifact")
+    else:
+        step = uploads[artifact]
+        if str((step.get("with") or {}).get("path", "")) != filename:
+            problems.append(f"the {artifact!r} artifact does not upload {filename!r}")
+        if str(step.get("if", "")) != "always()":
+            problems.append(f"{job_name} skips the receipt upload when the publish fails")
+    return problems
+
+
+@pytest.mark.parametrize(
+    ("job_name", "target_id"),
+    [(job, leg) for job, (_path, leg) in _PUBLISH_JOBS.items()],
+)
+def test_every_publish_job_uploads_a_publication_receipt(job_name: str, target_id: str) -> None:
+    """All three live publish jobs leave the receipt reconciliation reads."""
+    path = _PUBLISH_JOBS[job_name][0]
+    workflow: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert publication_receipt_violations(workflow, job_name, target_id) == []
+
+
+def test_publication_receipt_gate_reds_on_a_success_only_receipt() -> None:
+    """The gate fires on the real defect: a receipt written only when green.
+
+    A publish that failed is exactly the case reconciliation exists for,
+    so a receipt gated on success leaves the ledger blind where it most
+    needs sight. The synthetic job also drops the run id and never
+    uploads the file.
+    """
+    defective = yaml.safe_load(
+        """
+        jobs:
+          publish-pypi:
+            steps:
+              - name: Write the receipt
+                run: |
+                  echo '{"target_id": "pypi", "artifact_digests": {},
+                  "job_conclusion": "ok"}' > publication-receipt-pypi.json
+        """
+    )
+    problems = publication_receipt_violations(defective, "publish-pypi", "pypi")
+    assert any("skips its receipt when the publish fails" in p for p in problems), problems
+    assert any("records no 'run_id'" in p for p in problems), problems
+    assert any("uploads no 'publication-receipt-pypi'" in p for p in problems), problems
+
+
+def test_publication_receipt_gate_reds_on_a_receiptless_publish() -> None:
+    """A publish job that writes nothing down settles as unknown forever."""
+    defective = yaml.safe_load(
+        """
+        jobs:
+          publish-claude-npm:
+            steps:
+              - name: Publish to npm
+                run: npm publish --tag next
+        """
+    )
+    problems = publication_receipt_violations(defective, "publish-claude-npm", "npm")
+    assert "publish-claude-npm writes no 'publication-receipt-npm.json'" in problems
+
+
+def test_publication_receipt_gate_reds_on_a_missing_job() -> None:
+    """A workflow with no publish job at all is itself the violation."""
+    assert publication_receipt_violations(yaml.safe_load("jobs: {}\n"), "publish-pypi", "pypi") == [
+        "the workflow declares no 'publish-pypi' job"
+    ]
+
+
+# --- phase-release annotation grammar ----------------------------------------
+
+
+def _annotation_pattern() -> re.Pattern[str]:
+    """Return the release-annotation regex phase-release.yaml actually runs.
+
+    Extracted from the workflow source rather than restated here: a
+    pattern the test spells for itself proves the test's grammar, not
+    the pipeline's.
+
+    Returns:
+        The compiled pattern.
+
+    Raises:
+        AssertionError: When the annotation step carries no regex.
+    """
+    job = _load_phase_release()["jobs"]["phase-release"]
+    step = _find_step(job, "release annotation")
+    assert step is not None, "phase-release.yaml has no annotation-extracting step"
+    match = re.search(r'r"(\\\(release=.+?)"', str(step.get("run", "")))
+    assert match is not None, "the annotation step carries no release= regex"
+    return re.compile(match.group(1))
+
+
+@pytest.mark.parametrize(
+    ("subject", "tag"),
+    [
+        ("[P31] state: close iter + phase (release=v0.7.0.dev1)", "v0.7.0.dev1"),
+        ("[P31] state: close iter + phase (release=v0.7.0.dev12)", "v0.7.0.dev12"),
+        ("[P32] state: close iter + phase (release=v0.7.0rc1)", "v0.7.0rc1"),
+        ("[P33] state: close iter + phase (release=v0.7.0)", "v0.7.0"),
+        ("[P30] state: close iter + phase (release=v0.6.9a1)", "v0.6.9a1"),
+        ("[P30] state: close iter + phase (release=v0.6.9b2)", "v0.6.9b2"),
+    ],
+)
+def test_release_annotation_dev_segments_are_accepted(subject: str, tag: str) -> None:
+    """The live grammar tags every checkpoint the v0.7 train walks through."""
+    match = _annotation_pattern().search(subject)
+    assert match is not None, subject
+    assert match.group(1) == tag
+
+
+@pytest.mark.parametrize(
+    "subject",
+    [
+        "[P31] state: close iter + phase",
+        "[P31] state: close iter + phase (release=0.7.0.dev1)",
+        "[P31] state: close iter + phase (release=v0.7.dev1)",
+        "[P31] state: close iter + phase (release=v0.7.0.dev)",
+    ],
+)
+def test_release_annotation_dev_grammar_rejects_a_malformed_annotation(subject: str) -> None:
+    """A subject that names no well-formed tag must not tag anything."""
+    assert _annotation_pattern().search(subject) is None
+
+
+def test_release_annotation_dev_version_check_compares_normalised_forms() -> None:
+    """The version-source step normalises both sides before comparing them."""
+    job = _load_phase_release()["jobs"]["phase-release"]
+    step = _find_step(job, "version source")
+    assert step is not None, "phase-release.yaml has no version-source verification step"
+    run = str(step.get("run", ""))
+    assert "def normalise(" in run
+    assert "normalise(actual) != normalise(expected)" in run
+
+
+def test_release_annotation_dev_gate_reds_on_the_prerelease_only_grammar() -> None:
+    """The gate fires on the real defect: the grammar that stopped at ``rcN``.
+
+    That regex is what shipped before the v0.7 train needed dev
+    checkpoints, and its failure mode is silent -- a dev-checkpoint merge
+    reads as "no release annotation" and the phase ships untagged rather
+    than reding anything.
+    """
+    stale = re.compile(r"\(release=(v\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?)\)")
+    subject = "[P31] state: close iter + phase (release=v0.7.0.dev1)"
+    assert stale.search(subject) is None
+    assert _annotation_pattern().search(subject) is not None

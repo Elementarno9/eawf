@@ -309,3 +309,52 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
+
+      - name: Write the PyPI publication receipt
+        # The publisher is this pipeline, not the daemon: the runner is
+        # gone by the time anyone asks what happened, so the leg writes
+        # its own word down before it exits. ``release.reconcile`` maps
+        # ``job_conclusion`` onto reported_success / reported_failure /
+        # unknown -- never an observed state, which takes an independent
+        # read-back. Written on failure too, because the failing case is
+        # the one the ledger needs help with.
+        if: always()
+        env:
+          TARGET_ID: pypi
+          RECEIPT_VERSION: ${{ github.ref_name }}
+          JOB_CONCLUSION: ${{ job.status }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          target_id = os.environ["TARGET_ID"]
+          digests = {
+              path.name: f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+              for path in sorted(Path("dist").glob("*"))
+              if path.is_file()
+          }
+          receipt = {
+              "target_id": target_id,
+              # The tag is ``v0.7.0.dev1``; the checkpoint is what
+              # follows the ``v``, which is the spelling PyPI carries.
+              "version": os.environ["RECEIPT_VERSION"].removeprefix("v"),
+              "artifact_digests": digests,
+              "job_conclusion": os.environ["JOB_CONCLUSION"],
+              "run_id": os.environ["RUN_ID"],
+          }
+          out = Path(f"publication-receipt-{target_id}.json")
+          out.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(out.read_text(encoding="utf-8"))
+          PY
+
+      - name: Upload the PyPI publication receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publication-receipt-pypi
+          path: publication-receipt-pypi.json

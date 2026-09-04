@@ -40,11 +40,20 @@ import pytest
 import yaml
 
 import eawf
+from eawf.kernel.release.signals import (
+    ReleaseSignalContext,
+    ReleaseSignalName,
+    ReleaseSignalStatus,
+)
+from eawf.kernel.spec.release_config import load_release_config
 from eawf.platform.install.dist_tag import (
     DIST_TAG_LATEST,
     DIST_TAG_NEXT,
     dist_tag_for_version,
+    npm_version_for,
 )
+from eawf.workflow.release.train import DEV1_RELEASE_CONFIG_YAML, V07_TRAIN
+from eawf.workflow.verify.release_probes import TagPreflightInputs, build_tag_probes
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _VERSION_FILE = _REPO_ROOT / "src" / "eawf" / "_version.py"
@@ -401,6 +410,95 @@ def test_dist_tag_for_version_rejects_non_string() -> None:
 def test_dist_tag_for_version_classifies_the_shipped_version() -> None:
     """The version this repo ships resolves to exactly one of the two tags."""
     assert dist_tag_for_version(eawf.__version__) in {DIST_TAG_LATEST, DIST_TAG_NEXT}
+
+
+# --- npm version spelling ---------------------------------------------------
+#
+# npm speaks SemVer and rejects PEP 440 outright, so the checkpoint PyPI
+# carries as ``0.7.0.dev1`` reaches the registry as ``0.7.0-dev.1``. Two
+# callers need that spelling: the plugin-release publish step, which
+# writes it into the synthesized ``package.json``, and the
+# version-consistency readiness row, which reports it so the operator
+# can see what each channel will actually receive.
+
+
+@pytest.mark.parametrize(
+    ("version", "npm_version"),
+    [
+        ("0.7.0.dev1", "0.7.0-dev.1"),
+        ("0.7.0rc1", "0.7.0-rc.1"),
+        ("0.7.0", "0.7.0"),
+        ("0.7.0.dev0", "0.7.0-dev.0"),
+        ("0.7.0.dev10", "0.7.0-dev.10"),
+        ("0.7.0a1", "0.7.0-a.1"),
+        ("0.7.0b2", "0.7.0-b.2"),
+        ("1", "1"),
+        ("1.0", "1.0"),
+        ("10.20.30", "10.20.30"),
+        ("0.7.0rc01", "0.7.0-rc.1"),
+    ],
+)
+def test_npm_version_for_spells_the_semver_form(version: str, npm_version: str) -> None:
+    """Every publishable spelling maps onto the one npm will accept."""
+    assert npm_version_for(version) == npm_version
+
+
+@pytest.mark.parametrize(
+    "version",
+    ["", " ", "0.7.0 ", "v0.7.0", "0.7.0dev1", "0.7.0.dev", "0.7.0rc", "0.7.0-rc1", "latest"],
+)
+def test_npm_version_for_rejects_unparsable_versions(version: str) -> None:
+    """A version the pipeline cannot classify is not one it may name."""
+    with pytest.raises(ValueError, match="unsupported version string"):
+        npm_version_for(version)
+
+
+@pytest.mark.parametrize("version", ["0.7.0.post1", "1.0.post12"])
+def test_npm_version_for_rejects_a_post_release(version: str) -> None:
+    """SemVer sorts ``0.7.0-post.1`` below the ``0.7.0`` it supersedes."""
+    with pytest.raises(ValueError, match="no npm version for post-release"):
+        npm_version_for(version)
+
+
+@pytest.mark.parametrize("version", ["0.7.0rc1.dev4", "0.7.0a1.dev1"])
+def test_npm_version_for_rejects_a_dev_build_of_a_prerelease(version: str) -> None:
+    """SemVer sorts a dev build of rc1 above rc1; PEP 440 sorts it below."""
+    with pytest.raises(ValueError, match="no npm version for"):
+        npm_version_for(version)
+
+
+def test_npm_version_for_rejects_non_string() -> None:
+    """A non-``str`` version is a caller bug, not a version-grammar miss."""
+    with pytest.raises(TypeError, match="version must be a str"):
+        npm_version_for(None)  # type: ignore[arg-type]
+
+
+def test_npm_version_for_names_the_shipped_version() -> None:
+    """The version this repo ships has an npm spelling the publish can use."""
+    assert npm_version_for(eawf.__version__)
+
+
+def test_version_consistency_row_reports_the_npm_channel_spelling() -> None:
+    """The readiness row names both spellings, so neither channel is a guess."""
+    config = load_release_config(DEV1_RELEASE_CONFIG_YAML, train=V07_TRAIN)
+    inputs = TagPreflightInputs(
+        repo_root=_REPO_ROOT,
+        version=config.version,
+        tag=f"v{config.version}",
+        package_version=config.version,
+        remote="origin",
+    )
+    probe = build_tag_probes(inputs)[ReleaseSignalName.VERSION_CONSISTENCY]
+    outcome = probe(
+        ReleaseSignalContext(
+            config=config,
+            signal=ReleaseSignalName.VERSION_CONSISTENCY,
+            observed_revision=None,
+        )
+    )
+    assert outcome.status is ReleaseSignalStatus.PASS
+    assert f"npm-version:{npm_version_for(config.version)}" in outcome.evidence_refs
+    assert "npm-version:0.7.0-dev.1" in outcome.evidence_refs
 
 
 # --- Support classification -------------------------------------------------

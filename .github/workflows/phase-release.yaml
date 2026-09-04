@@ -34,6 +34,11 @@ jobs:
 
       - name: Extract release annotation
         id: annotation
+        # The annotation grammar carries PEP 440 dev segments as well as
+        # the a / b / rc prereleases: the v0.7 train ships ``0.7.0.dev1``
+        # through ``0.7.0.dev4`` before its first release candidate, and
+        # a regex that stopped at ``rcN`` would read every dev-checkpoint
+        # merge as "no release annotation" and silently skip the tag.
         env:
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
@@ -44,7 +49,9 @@ jobs:
           import sys
 
           subject = sys.argv[1]
-          match = re.search(r"\(release=(v\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?)\)", subject)
+          match = re.search(
+              r"\(release=(v\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?(?:\.dev\d+)?)\)", subject
+          )
           if match is None:
               print("release_required=false")
               raise SystemExit(0)
@@ -59,25 +66,45 @@ jobs:
 
       - name: Verify version source matches annotation
         if: steps.annotation.outputs.release_required == 'true'
+        # Compares the NORMALISED forms rather than the raw strings. PEP
+        # 440 spells one version several ways -- ``0.7.0-dev1``,
+        # ``0.7.0_DEV1`` and ``0.7.0.dev1`` are the same release, and
+        # ``0.7.0.dev01`` is the same as ``0.7.0.dev1`` -- so a literal
+        # comparison can red a tag whose source module agrees with it.
+        # Normalising both sides is the only comparison that answers the
+        # question actually being asked: do these name one version?
         env:
           EXPECTED_VERSION: ${{ steps.annotation.outputs.version }}
         run: |
           set -euo pipefail
-          actual="$(python - <<'PY'
+          python - "$EXPECTED_VERSION" <<'PY'
           import re
+          import sys
           from pathlib import Path
 
+
+          def normalise(version: str) -> str:
+              """Return the canonical PEP 440 spelling of *version*."""
+              text = version.strip().lower().removeprefix("v")
+              text = re.sub(r"[-_.]+", ".", text)
+              text = re.sub(r"\.(a|b|rc|dev)", r"\1", text)
+              text = re.sub(r"(a|b|rc|dev)\.?0*(\d+)", r"\1\2", text)
+              return text.replace("dev", ".dev")
+
+
+          expected = sys.argv[1]
           text = Path("src/eawf/_version.py").read_text(encoding="utf-8")
           match = re.search(r'^__version__\s*=\s*"([^"]+)"', text, flags=re.MULTILINE)
           if match is None:
               raise SystemExit("no __version__ assignment in src/eawf/_version.py")
-          print(match.group(1))
+          actual = match.group(1)
+          if normalise(actual) != normalise(expected):
+              raise SystemExit(
+                  f"version mismatch: annotation={expected} ({normalise(expected)}) "
+                  f"source={actual} ({normalise(actual)})"
+              )
+          print(f"version source agrees with the annotation: {normalise(actual)}")
           PY
-          )"
-          if [ "$actual" != "$EXPECTED_VERSION" ]; then
-            echo "version mismatch: annotation=$EXPECTED_VERSION source=$actual" >&2
-            exit 1
-          fi
 
       - name: Create annotated tag
         if: steps.annotation.outputs.release_required == 'true'
