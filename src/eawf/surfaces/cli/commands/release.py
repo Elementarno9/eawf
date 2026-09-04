@@ -227,4 +227,90 @@ def release_notes(
     emit_json_or_text(payload, body, flags=flags)
 
 
+@release_app.command("train")
+def release_train(ctx: typer.Context) -> None:
+    """Render the release-train ladder and the checkpoint currently open."""
+    from eawf.workflow.release.train import V07_TRAIN
+
+    flags: GlobalFlags = ctx.obj
+    payload = {
+        "train_id": V07_TRAIN.train_id,
+        "target_version": V07_TRAIN.target_version,
+        "current_checkpoint_index": V07_TRAIN.current_checkpoint_index,
+        "checkpoints": [rung.model_dump(mode="json") for rung in V07_TRAIN.checkpoints],
+    }
+    lines = [f"{V07_TRAIN.train_id} -> {V07_TRAIN.target_version}"]
+    for index, rung in enumerate(V07_TRAIN.checkpoints):
+        marker = "*" if index == V07_TRAIN.current_checkpoint_index else " "
+        lines.append(
+            f" {marker} {rung.release_key}  epoch={rung.authority_epoch} "
+            f"profile={rung.gate_profile.value} "
+            f"membership={'required' if rung.requires_membership else 'forbidden'}"
+        )
+    emit_json_or_text(payload, "\n".join(lines), flags=flags)
+
+
+@release_app.command("preflight")
+def release_preflight(
+    ctx: typer.Context,
+    version: Annotated[str, typer.Argument(help="Checkpoint version, e.g. 0.7.0.dev1.")],
+    source: Annotated[
+        str | None,
+        typer.Option("--source", help="Source revision the sweep is computed against."),
+    ] = None,
+    waiver_count: Annotated[
+        int,
+        typer.Option("--waiver-count", help="Gate waivers recorded against the checkpoint."),
+    ] = 0,
+) -> None:
+    """Compute every release readiness signal for one checkpoint.
+
+    The sweep never fail-fasts: all twelve signals are reported on every
+    run, so one pass shows the whole repair list rather than the first
+    red row. Signals whose producer has not landed yet report
+    ``unavailable`` and name the gap.
+    """
+    from datetime import UTC, datetime
+
+    from eawf.kernel.spec.release_config import ReleaseConfigError, load_release_config
+    from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
+    from eawf.workflow.verify.release_readiness import compute_readiness
+
+    flags: GlobalFlags = ctx.obj
+    try:
+        config = load_release_config(checkpoint_config_yaml(version), train=V07_TRAIN)
+    except KeyError:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"no release configuration authored for {version!r}", kind="NotFound"
+            ),
+            flags=flags,
+        )
+        return
+    except ReleaseConfigError as exc:
+        cli_errors.emit_error(cli_errors.ValidationError(f"{exc.code.value}: {exc}"), flags=flags)
+        return
+    try:
+        readiness = compute_readiness(
+            config,
+            observed_revision=source,
+            computed_at=datetime.now(UTC),
+            waiver_count=waiver_count,
+        )
+    except ValueError as exc:
+        cli_errors.emit_error(cli_errors.ValidationError(str(exc)), flags=flags)
+        return
+    required = set(readiness.required_signals)
+    lines = [
+        f"{readiness.release_key}  profile={readiness.gate_profile.value}  "
+        f"ready={readiness.ready}  waivers={readiness.waiver_count}"
+    ]
+    for row in readiness.signals:
+        flag = "REQ" if row.signal in required else "   "
+        lines.append(f" {flag} {row.signal.value:<20} {row.status.value}")
+    if readiness.first_red is not None:
+        lines.append(f"first red: {readiness.first_red.value}")
+    emit_json_or_text(readiness.model_dump(mode="json"), "\n".join(lines), flags=flags)
+
+
 __all__ = ["release_app"]
