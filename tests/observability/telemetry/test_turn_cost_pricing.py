@@ -3,9 +3,11 @@
 Two independent filters guard the cost sums. A row with no price source is
 counted as unpriced and never summed as zero, because "cost nothing" and
 "cost unknown" are different facts and collapsing them understates spend.
-A row from a runtime whose reported output tokens already absorb reasoning
-tokens is flagged and excluded, because its token total is not comparable
-with the runtimes that report the two separately.
+A row from a runtime that reports reasoning tokens as a summand on top of
+output is flagged and excluded, because its token total is not comparable
+with the runtimes that report reasoning inside output. No supported runtime
+does that, so the filter matches nothing and a codex row sums like any
+other.
 """
 
 from __future__ import annotations
@@ -141,19 +143,26 @@ def test_reasoning_tokens_alone_contribute_nothing_to_the_total() -> None:
     assert record.token_total == 0
 
 
-def test_codex_rows_are_flagged_unsettled_and_excluded() -> None:
-    """A codex row is counted, flagged and kept out of the sums."""
+def test_codex_rows_are_summed_into_the_cost_and_token_totals() -> None:
+    """Codex reports reasoning inside output, so its rows are summable."""
     record = _build(
         [
             _run("run-claude", cost_usd="0.40", input_tokens=100),
-            _run("run-codex", runtime="codex", cost_usd="5.00", input_tokens=999),
+            _run(
+                "run-codex",
+                runtime="codex",
+                cost_usd="5.00",
+                input_tokens=999,
+                output_tokens=30,
+                reasoning_tokens=20,
+            ),
         ]
     )
 
-    assert record.reasoning_summand_unsettled is True
-    assert record.reasoning_summand_unsettled_run_count == 1
-    assert record.execution_cost_usd == Decimal("0.40")
-    assert record.token_total == 100
+    assert record.reasoning_summand_unsettled is False
+    assert record.reasoning_summand_unsettled_run_count == 0
+    assert record.execution_cost_usd == Decimal("5.40")
+    assert record.token_total == 1_129
 
 
 def test_record_is_not_flagged_when_no_unsettled_runtime_appears() -> None:
@@ -164,8 +173,8 @@ def test_record_is_not_flagged_when_no_unsettled_runtime_appears() -> None:
     assert record.reasoning_summand_unsettled_run_count == 0
 
 
-def test_unsettled_row_is_not_double_counted_as_unpriced() -> None:
-    """The exclusion ladder puts each run in exactly one bucket."""
+def test_unpriced_codex_row_is_counted_as_unpriced_not_unsettled() -> None:
+    """With codex lifted, an unpriced codex row falls to the next rung."""
     record = _build(
         [
             _run("run-claude", cost_usd="0.40"),
@@ -173,10 +182,12 @@ def test_unsettled_row_is_not_double_counted_as_unpriced() -> None:
         ]
     )
 
-    assert record.reasoning_summand_unsettled_run_count == 1
-    assert record.unpriced_run_count == 0
+    assert record.reasoning_summand_unsettled_run_count == 0
+    assert record.unpriced_run_count == 1
+    assert record.execution_cost_usd == Decimal("0.40")
 
 
-def test_unsettled_runtime_set_names_codex() -> None:
+def test_unsettled_runtime_set_no_longer_names_codex() -> None:
     """The exclusion set is the single declared source of the runtime list."""
-    assert set(REASONING_UNSETTLED_RUNTIMES) == {"codex"}
+    assert "codex" not in REASONING_UNSETTLED_RUNTIMES
+    assert frozenset() == REASONING_UNSETTLED_RUNTIMES

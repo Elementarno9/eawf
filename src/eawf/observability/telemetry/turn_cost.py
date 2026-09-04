@@ -17,9 +17,9 @@ Three exclusion rules apply to the runs inside a unit, in this order:
    dropped from both cost sums. A run with no role at all raises instead
    of being charged to execution.
 2. A run on a runtime whose reasoning-token accounting is unsettled is
-   counted and dropped. The runtime folds reasoning tokens into its
-   reported output total, so its rows cannot be compared against runtimes
-   that report the two separately until a vendor rollout settles it.
+   counted and dropped. No supported runtime is listed today, so the rule
+   is an escape hatch held ready for a runtime that reports reasoning
+   tokens as a summand on top of its output total rather than inside it.
 3. A run with no ``price_source`` is counted as unpriced and dropped. It is
    never summed as zero, because a zero-cost row and an unpriced row are
    different facts and averaging them together understates real spend.
@@ -55,12 +55,15 @@ __all__ = [
 ]
 
 
-REASONING_UNSETTLED_RUNTIMES: frozenset[str] = frozenset({"codex"})
-"""Runtimes whose reported output tokens already absorb reasoning tokens.
+REASONING_UNSETTLED_RUNTIMES: frozenset[str] = frozenset()
+"""Runtimes that report reasoning tokens as a summand on top of output.
 
-Rows from these runtimes are flagged and excluded from the cost and token
-sums; the counts still surface on the record so the exclusion is visible
-rather than silent.
+Such a row's token total is not comparable with a runtime that reports
+reasoning as a subset of output, so it is flagged and excluded from the
+cost and token sums; the counts still surface on the record so the
+exclusion is visible rather than silent. The set is empty because every
+supported runtime reports the subset form; the filter is kept so listing
+the next runtime that does not is a one-line change.
 """
 
 
