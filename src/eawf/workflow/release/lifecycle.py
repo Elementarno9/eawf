@@ -30,6 +30,7 @@ from enum import StrEnum
 from typing import Final
 
 from eawf.kernel.spec.release import Release, ReleaseStatus
+from eawf.workflow.release.boundaries import PublicationBoundary, durable_boundary
 
 logger = logging.getLogger(__name__)
 
@@ -359,6 +360,7 @@ def validate_release_transition(
         )
 
 
+@durable_boundary(PublicationBoundary.TRANSITION_APPLY)
 def advance_release(
     release: Release,
     to: ReleaseStatus,

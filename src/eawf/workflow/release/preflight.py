@@ -13,6 +13,7 @@ import logging
 from datetime import datetime
 
 from eawf.kernel.spec.release import Release, ReleaseStatus
+from eawf.workflow.release.boundaries import PublicationBoundary, durable_boundary
 from eawf.workflow.release.lifecycle import (
     ReleaseDenialCode,
     ReleaseGuardContext,
@@ -24,6 +25,7 @@ from eawf.workflow.verify.release_readiness import ReleaseReadiness
 logger = logging.getLogger(__name__)
 
 
+@durable_boundary(PublicationBoundary.TRANSITION_APPLY)
 def record_preflight_result(release: Release, readiness: ReleaseReadiness) -> Release:
     """Return the record the *readiness* sweep puts *release* into.
 
@@ -52,6 +54,7 @@ def record_preflight_result(release: Release, readiness: ReleaseReadiness) -> Re
     return advance_release(release, ReleaseStatus.PREFLIGHT_FAILED)
 
 
+@durable_boundary(PublicationBoundary.TRANSITION_APPLY)
 def approve_release(
     release: Release,
     readiness: ReleaseReadiness,

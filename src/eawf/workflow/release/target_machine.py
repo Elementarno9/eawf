@@ -44,6 +44,7 @@ from eawf.kernel.spec.publication import (
 )
 from eawf.kernel.spec.release import ReleaseTargetStatus
 from eawf.kernel.spec.release_config import ReleaseTargetConfig
+from eawf.workflow.release.boundaries import PublicationBoundary, durable_boundary
 
 logger = logging.getLogger(__name__)
 
@@ -348,6 +349,7 @@ def deadline_elapsed(
     return now >= row.deadline_at
 
 
+@durable_boundary(PublicationBoundary.TARGET_DISPATCH)
 def open_target_attempt(
     operation: PublicationOperation,
     *,
@@ -411,6 +413,10 @@ def open_target_attempt(
     return validated
 
 
+@durable_boundary(
+    PublicationBoundary.EFFECT_RECEIPT_WRITE,
+    PublicationBoundary.OBSERVATION_RECEIPT_WRITE,
+)
 def advance_target_attempt(
     operation: PublicationOperation,
     *,

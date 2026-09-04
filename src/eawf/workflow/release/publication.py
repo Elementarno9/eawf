@@ -47,6 +47,7 @@ from eawf.kernel.spec.publication import (
 )
 from eawf.kernel.spec.release import Release, ReleaseStatus, ReleaseTargetStatus
 from eawf.kernel.spec.release_config import ReleaseConfig, ReleaseTargetConfig
+from eawf.workflow.release.boundaries import PublicationBoundary, durable_boundary
 from eawf.workflow.release.lifecycle import (
     ReleaseGuardContext,
     advance_release,
@@ -209,6 +210,11 @@ def recovery_exhausted(config: ReleaseConfig, operation: PublicationOperation) -
     return not retryable_targets(config, operation)
 
 
+@durable_boundary(
+    PublicationBoundary.OPERATION_OPEN,
+    PublicationBoundary.TARGET_DISPATCH,
+    PublicationBoundary.TRANSITION_APPLY,
+)
 def begin_publication(
     release: Release,
     config: ReleaseConfig,
@@ -289,6 +295,7 @@ def begin_publication(
     return published, operation
 
 
+@durable_boundary(PublicationBoundary.TRANSITION_APPLY)
 def begin_verification(
     release: Release,
     config: ReleaseConfig,
@@ -317,6 +324,7 @@ def begin_verification(
     )
 
 
+@durable_boundary(PublicationBoundary.TARGET_DISPATCH, PublicationBoundary.TRANSITION_APPLY)
 def retry_publication(
     release: Release,
     config: ReleaseConfig,
@@ -394,6 +402,7 @@ def retry_publication(
     return republished, retried
 
 
+@durable_boundary(PublicationBoundary.TRANSITION_APPLY)
 def burn_release(
     release: Release,
     config: ReleaseConfig,
@@ -441,6 +450,7 @@ def burn_release(
     return burned, abandoned
 
 
+@durable_boundary(PublicationBoundary.EFFECT_RECEIPT_WRITE)
 def reconcile_target(
     release: Release,
     config: ReleaseConfig,

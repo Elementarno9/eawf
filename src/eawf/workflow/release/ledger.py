@@ -40,6 +40,7 @@ from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.paths import store_path
+from eawf.workflow.release.boundaries import PublicationBoundary, durable_boundary
 
 logger = logging.getLogger(__name__)
 
@@ -267,6 +268,12 @@ def current_operation(state_path: Path, release_ref: str) -> PublicationOperatio
     return max(candidates, key=lambda snapshot: snapshot.revision)
 
 
+@durable_boundary(
+    PublicationBoundary.OPERATION_OPEN,
+    PublicationBoundary.TARGET_DISPATCH,
+    PublicationBoundary.EFFECT_RECEIPT_WRITE,
+    PublicationBoundary.OBSERVATION_RECEIPT_WRITE,
+)
 def record_operation(
     state_path: Path,
     operation: PublicationOperation,

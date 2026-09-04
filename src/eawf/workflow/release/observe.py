@@ -51,6 +51,7 @@ from eawf.kernel.spec.release import (
     is_prerelease,
 )
 from eawf.kernel.spec.release_config import ReleaseConfig
+from eawf.workflow.release.boundaries import PublicationBoundary, durable_boundary
 from eawf.workflow.release.lifecycle import ReleaseGuardContext, advance_release
 from eawf.workflow.release.observation import (
     ObservationResult,
@@ -119,6 +120,7 @@ def required_targets_observed(config: ReleaseConfig, operation: PublicationOpera
     )
 
 
+@durable_boundary(PublicationBoundary.OBSERVATION_RECEIPT_WRITE)
 def observe_target(
     release: Release,
     config: ReleaseConfig,
@@ -179,6 +181,7 @@ def observe_target(
     return routed, settled
 
 
+@durable_boundary(PublicationBoundary.TRANSITION_APPLY)
 def route_after_observation(
     release: Release,
     config: ReleaseConfig,
@@ -224,6 +227,7 @@ def route_after_observation(
     )
 
 
+@durable_boundary(PublicationBoundary.TRANSITION_APPLY)
 def bake_release(
     release: Release,
     config: ReleaseConfig,
