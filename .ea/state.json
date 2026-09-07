@@ -15724,6 +15724,23 @@
       "status": "stale",
       "summary": "orphaned by daemon restart",
       "worktree_ids": []
+    },
+    "SES-20260907T132124.173192Z-executor-claude-d545de89-8689-45e3-aace-d5ea2fdc4a52": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W49"
+      ],
+      "ended_at": null,
+      "id": "SES-20260907T132124.173192Z-executor-claude-d545de89-8689-45e3-aace-d5ea2fdc4a52",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W49",
+      "started_at": "2026-09-07T13:21:24.173192Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
     }
   },
   "artifacts": {
@@ -20646,8 +20663,12 @@
     }
   },
   "current": {
-    "active_session_ids": [],
-    "active_wave_ids": [],
+    "active_session_ids": [
+      "SES-20260907T132124.173192Z-executor-claude-d545de89-8689-45e3-aace-d5ea2fdc4a52"
+    ],
+    "active_wave_ids": [
+      "P31-I01-W49"
+    ],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -37680,7 +37701,8 @@
         "P31-I01-W45",
         "P31-I01-W46",
         "P31-I01-W47",
-        "P31-I01-W48"
+        "P31-I01-W48",
+        "P31-I01-W49"
       ]
     },
     "P32-I01": {
@@ -39112,7 +39134,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T13:18:04.323925Z",
+  "updated_at": "2026-09-07T13:21:25.562100Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -161051,8 +161073,8 @@
       "claim_session_id": "SES-20260907T125741.052778Z-executor-claude-6de35f75-2c9e-4412-a1af-c4388e618001",
       "claimed_at": "2026-09-07T12:57:41.830948Z",
       "closed_at": "2026-09-07T13:07:46.309866Z",
-      "commit": "832afd95ceaac048b7093bafe5d8088b03a6c06c",
-      "commit_identity_digest": "sha256:63665d29becd18abbbe4b13a81bbfddc4d561f6d71b6f47f746cb08d48c30866",
+      "commit": "2f6bcf11c4c5052b03493d4967db3936c092de13",
+      "commit_identity_digest": "sha256:d50573799dbe763f5eadb8c9f60098f9771900fa9bdddde24cd61c549cde2941",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
         "waived_at": "2026-09-07T12:57:26.486179Z",
@@ -161199,6 +161221,129 @@
         }
       ],
       "title": "Repair three coupling breaks this phase introduced",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W49": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260907T132124.173192Z-executor-claude-d545de89-8689-45e3-aace-d5ea2fdc4a52",
+      "claimed_at": "2026-09-07T13:21:24.891965Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-07T13:21:11.641719Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Two pre-merge fixes an independent review found. The waiver acknowledgement tier W26 built is unreachable: no release RPC parameter carries waiver rows or acknowledgements, so any counted waiver classifies unexplained and blocks approval with no way to clear it. Separately the idle-surface report counts files mentioning a name rather than call sites, so a helper called only inside its own module reports idle; that inflates the count and is steering scheduling decisions wrongly.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/release.py",
+        "tools/idle_surface_report.py",
+        "tests/unit/test_idle_surface_report.py",
+        "tests/integration/runtime/daemon/methods"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/daemon/methods/test_waiver_params.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_idle_surface_report.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P31-I01-W49",
+      "intent": {
+        "desired_outcome": "waiver rows reach compute_readiness from the RPC surface and the idle count reflects real call sites",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Thread waiver rows and acknowledgements through the release RPC params into compute_readiness|Count call sites in the idle-surface report and re-derive the ceiling"
+        ],
+        "priority_rationale": null,
+        "problem": "The waiver acknowledgement tier is unreachable and the idle-surface metric counts files rather than call sites",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-09-07T13:21:11.786459Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/runtime/daemon/methods/test_waiver_params.py exits 0 with an explained waiver reaching awaiting_acknowledgement and an acknowledged one reaching ready",
+          "oracle_tier": null,
+          "quality_dimension": "operability",
+          "required": true,
+          "response": null,
+          "text": "The waiver acknowledgement tier is reachable from the release RPC surface: release.compute_readiness and release.approve accept waiver rows and acknowledgements as parameters and pass them to compute_readiness, so a counted waiver whose rows are supplied returns awaiting_acknowledgement rather than unexplained and an acknowledgement transitions the checkpoint to ready; pytest tests/integration/runtime/daemon/methods/test_waiver_params.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/test_idle_surface_report.py exits 0 with a same-module-called helper absent from the idle set and the ceiling re-derived from the corrected count",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "The idle-surface report counts call sites rather than files mentioning a name: a public function called only inside its own defining module no longer returns as idle, and the tool raises no false row for such a helper; pytest tests/unit/test_idle_surface_report.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Reach the waiver tier and count idle surfaces by call site",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
