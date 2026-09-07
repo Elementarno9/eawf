@@ -128,6 +128,7 @@ release:
       observe_adapter: npm_registry
       prerelease_dist_tag: next
       stable_dist_tag: latest
+      credential_handle: NPM_TOKEN
       timeout_seconds: 1800
       retry_limit: 2
     - target_id: github

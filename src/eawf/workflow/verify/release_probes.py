@@ -25,6 +25,7 @@ reporting ``unavailable`` -- an unproven signal, not a passing one.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import subprocess
 from dataclasses import dataclass, field
@@ -399,6 +400,54 @@ def _probe_module_length_exclusion(
     )
 
 
+def _probe_credentials(
+    inputs: TagPreflightInputs, context: ReleaseSignalContext
+) -> ReleaseSignalOutcome:
+    """Report whether every declared publication handle is held here.
+
+    Only targets that declare a ``credential_handle`` are checked. A
+    target without one holds no handle by construction -- PyPI trusted
+    publishing exchanges an OIDC token at publish time, GitHub releases
+    ride the ambient workflow token -- so there is nothing to look for
+    and claiming otherwise would red on a target that is fine.
+
+    Presence is all that is checked, never the value: a handle that is
+    set but wrong fails at publish, which no pre-publish sweep can
+    foresee without spending the credential. The failure this catches is
+    the cheap and common one -- the handle is not wired into the
+    environment running the publish at all.
+
+    Args:
+        inputs: The chokepoint's inputs (unused; a handle is a property
+            of the environment, not of the checkout).
+        context: The sweep's per-signal context, read for the
+            checkpoint's declared targets.
+
+    Returns:
+        Passing when every required target's declared handle is set and
+        non-empty; failing and naming the handles that are not.
+    """
+    del inputs
+    declared = tuple(
+        (target.target_id, target.credential_handle)
+        for target in context.config.targets
+        if target.required and target.credential_handle is not None
+    )
+    if not declared:
+        return _passing("credentials:no-handle-bearing-target")
+    missing = tuple(
+        f"{target_id}:{handle}" for target_id, handle in declared if not os.environ.get(handle, "")
+    )
+    if missing:
+        return _failing(
+            f"{len(missing)} publication handle(s) not set in this environment: "
+            f"{', '.join(missing)}; export them before sweeping, or run the sweep where "
+            f"the publish runs",
+            *(f"credential-missing:{ref}" for ref in missing),
+        )
+    return _passing(*(f"credential-present:{target_id}:{handle}" for target_id, handle in declared))
+
+
 def build_tag_probes(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, ReleaseSignalProbe]:
     """Return the probe registry the tag chokepoint sweeps *inputs* with.
 
@@ -423,6 +472,7 @@ def build_tag_probes(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, Rele
         ReleaseSignalName.TREE_CLEANLINESS: partial(_probe_tree_cleanliness, inputs),
         ReleaseSignalName.MIGRATION: partial(_probe_migration, inputs),
         ReleaseSignalName.PERFECT_REALIZATION: partial(_probe_module_length_exclusion, inputs),
+        ReleaseSignalName.CREDENTIALS: partial(_probe_credentials, inputs),
     }
 
 

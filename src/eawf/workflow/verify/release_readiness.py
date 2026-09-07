@@ -417,8 +417,17 @@ def derive_required_signals(config: ReleaseConfig) -> tuple[ReleaseSignalName, .
     The subset is a function of one authored surface: the rows bound by
     ``gates.required``, plus tree cleanliness when ``require_clean_tree``
     is set, plus ancestry when ``require_ancestor_of_remote`` is set,
-    plus credentials when any target is required. There is deliberately
-    no second authored list to drift from this derivation.
+    plus credentials when a required target declares a
+    ``credential_handle``. There is deliberately no second authored list
+    to drift from this derivation.
+
+    Credentials keys off the declared handle rather than off the mere
+    presence of a required target: the row asserts that a required
+    handle is available, which is unanswerable for a target that holds
+    no handle at all. PyPI trusted publishing exchanges an OIDC token at
+    publish time and the GitHub release rides the ambient workflow
+    token, so requiring the row for those made the sweep permanently
+    unready rather than more careful.
 
     Args:
         config: Loaded checkpoint configuration.
@@ -441,7 +450,7 @@ def derive_required_signals(config: ReleaseConfig) -> tuple[ReleaseSignalName, .
         required.add(ReleaseSignalName.TREE_CLEANLINESS)
     if config.require_ancestor_of_remote:
         required.add(ReleaseSignalName.ANCESTRY)
-    if config.required_target_ids:
+    if any(target.required and target.credential_handle is not None for target in config.targets):
         required.add(ReleaseSignalName.CREDENTIALS)
     return tuple(name for name in ReleaseSignalName if name in required)
 

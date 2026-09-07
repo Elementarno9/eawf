@@ -298,11 +298,46 @@ def test_tag_preflight_probes_pass_on_a_publishable_checkout(tmp_path: Path) -> 
 
 
 def test_tag_preflight_leaves_producerless_signals_unavailable(tmp_path: Path) -> None:
-    """A signal with no producer stays unproven rather than reading green."""
+    """A signal with no producer stays unproven rather than reading green.
+
+    ``credentials`` is no longer in this set: it has a producer, so an
+    absent handle is a FAIL it can name rather than a gap it cannot see.
+    """
     statuses = _sweep(_ready_inputs(_init_published_repo(tmp_path)))
     assert statuses[ReleaseSignalName.DEPENDENCIES] is ReleaseSignalStatus.UNAVAILABLE
     assert statuses[ReleaseSignalName.ARTIFACTS] is ReleaseSignalStatus.UNAVAILABLE
-    assert statuses[ReleaseSignalName.CREDENTIALS] is ReleaseSignalStatus.UNAVAILABLE
+
+
+def test_tag_preflight_credentials_reds_when_the_declared_handle_is_unset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unset publication handle is a FAIL, not an absent producer.
+
+    The distinction matters: UNAVAILABLE says nobody can answer, and the
+    operator waits for a producer. FAIL says the answer is no, and the
+    operator exports the handle.
+    """
+    monkeypatch.delenv("NPM_TOKEN", raising=False)
+    statuses = _sweep(_ready_inputs(_init_published_repo(tmp_path)))
+    assert statuses[ReleaseSignalName.CREDENTIALS] is ReleaseSignalStatus.FAIL
+
+
+def test_tag_preflight_credentials_passes_when_the_declared_handle_is_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The handle being present clears the row; its value is never read."""
+    monkeypatch.setenv("NPM_TOKEN", "presence-is-all-that-is-checked")
+    statuses = _sweep(_ready_inputs(_init_published_repo(tmp_path)))
+    assert statuses[ReleaseSignalName.CREDENTIALS] is ReleaseSignalStatus.PASS
+
+
+def test_tag_preflight_credentials_ignores_an_empty_handle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An empty handle is unset: a blank secret authenticates nothing."""
+    monkeypatch.setenv("NPM_TOKEN", "")
+    statuses = _sweep(_ready_inputs(_init_published_repo(tmp_path)))
+    assert statuses[ReleaseSignalName.CREDENTIALS] is ReleaseSignalStatus.FAIL
 
 
 def test_tag_preflight_tree_cleanliness_reds_on_one_uncommitted_path(tmp_path: Path) -> None:

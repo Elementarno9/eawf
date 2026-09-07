@@ -115,6 +115,35 @@ def test_credentials_drop_when_no_target_is_required(config: ReleaseConfig) -> N
     assert ReleaseSignalName.CREDENTIALS not in required
 
 
+def test_credentials_drop_when_no_required_target_declares_a_handle(
+    config: ReleaseConfig,
+) -> None:
+    """A required target that holds no handle does not derive the row.
+
+    PyPI trusted publishing and the GitHub release authenticate without
+    holding anything the sweep could look for, so deriving "a required
+    handle is available" from their mere presence asked a question with
+    no answer and left the checkpoint permanently unready.
+    """
+    handleless = [
+        dict(target.model_dump(mode="json"), credential_handle=None) for target in config.targets
+    ]
+    required = set(derive_required_signals(dev1_config(targets=handleless)))
+    assert ReleaseSignalName.CREDENTIALS not in required
+
+
+def test_credentials_derive_from_one_handle_bearing_required_target(
+    config: ReleaseConfig,
+) -> None:
+    """One required target declaring a handle is enough to derive the row."""
+    targets = [
+        dict(target.model_dump(mode="json"), credential_handle=None) for target in config.targets
+    ]
+    targets[0] = dict(targets[0], required=True, credential_handle="SOME_TOKEN")
+    required = set(derive_required_signals(dev1_config(targets=targets)))
+    assert ReleaseSignalName.CREDENTIALS in required
+
+
 def test_a_single_required_gate_derives_a_single_row() -> None:
     required = derive_required_signals(
         dev1_config(

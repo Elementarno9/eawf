@@ -136,7 +136,14 @@ jobs:
     # is published. Scoped to the tag push because the tag is what it
     # sweeps; a `workflow_dispatch` dry-run skips it and cannot publish
     # either.
+    #
+    # `needs:` the receipt producer and downloads its three artifacts:
+    # the `artifacts` and `dependencies` rows are read back off
+    # `dist/release-receipts/`, so without them the sweep reports both
+    # `unavailable` and — since only `pass` clears a required row —
+    # could never green, which made `publish-pypi` unreachable.
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [inventory-and-reproducibility]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -157,10 +164,24 @@ jobs:
       - name: Sync (frozen)
         run: uv sync --frozen
 
+      - name: Download the release receipts
+        # Into the path the sweep reads: `RECEIPT_DIRNAME` is
+        # `dist/release-receipts`, and each artifact carries one file.
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "{dependency-manifest,vulnerability-report,reproducible-build-receipt}"
+          path: dist/release-receipts
+          merge-multiple: true
+
       - name: eawf release preflight for the pushed tag
         env:
           TAG: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
+          # The `credentials` row asserts each required target's declared
+          # handle is set where the publish runs. Only npm declares one;
+          # PyPI holds no handle (OIDC) and the GitHub release rides the
+          # ambient token.
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           uv run eawf release preflight "${TAG#v}" --source "${SHA}"
