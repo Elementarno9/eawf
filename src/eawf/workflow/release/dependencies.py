@@ -334,6 +334,7 @@ class ReleaseDependencyManifest(_StrictModel):
     lock_digest: Annotated[str, Field(pattern=_DIGEST_PATTERN)]
     packages: Annotated[tuple[LockedPackage, ...], Field(min_length=1)]
     imported_distributions: tuple[str, ...] = ()
+    locked_distributions: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def _rows_are_unique_and_ordered(self) -> ReleaseDependencyManifest:
@@ -353,8 +354,20 @@ class ReleaseDependencyManifest(_StrictModel):
 
     @property
     def names(self) -> frozenset[str]:
-        """Return the normalized name of every locked package."""
+        """Return the normalized name of every inventoried package."""
         return frozenset(package.name for package in self.packages)
+
+    @property
+    def locked(self) -> frozenset[str]:
+        """Return every distribution the lock carries, inventoried or not.
+
+        An unlocked-import finding asks whether the lock carries a
+        distribution at all, which is a different question from whether
+        the release ships it. Scoping the inventory to shipped packages
+        must not turn a locked development dependency into a missing
+        one.
+        """
+        return frozenset(self.locked_distributions) or self.names
 
     @property
     def forbidden(self) -> tuple[LockedPackage, ...]:
@@ -548,6 +561,10 @@ def build_dependency_manifest(
     digest = compute_lock_digest(lock_text)
     by_name = {normalized_name(name): value for name, value in licenses.items()}
     packages: list[LockedPackage] = []
+    # Every distribution the lock carries, recorded before the shipped
+    # filter runs: an unlocked-import finding asks what the lock has, not
+    # what the release ships.
+    locked: list[str] = []
     for row in _package_rows(lock_text):
         name = row.get("name")
         version = row.get("version")
@@ -561,6 +578,8 @@ def build_dependency_manifest(
         # Inventory only what a published install delivers. A license
         # gate on the artifact should describe the artifact; the dev and
         # docs trees are never in it, so their metadata binds nobody.
+        if isinstance(name, str) and isinstance(version, str):
+            locked.append(normalized_name(name))
         if shipped is not None and isinstance(name, str) and normalized_name(name) not in shipped:
             continue
         if not isinstance(name, str) or not isinstance(version, str):
@@ -582,6 +601,7 @@ def build_dependency_manifest(
         lock_digest=digest,
         packages=tuple(sorted(packages, key=lambda package: package.name)),
         imported_distributions=tuple(sorted({normalized_name(n) for n in imported_distributions})),
+        locked_distributions=tuple(sorted(set(locked))),
     )
     logger.info(
         f"build_dependency_manifest packages={len(manifest.packages)} "
@@ -611,7 +631,7 @@ class DependencyInventoryInputs:
 def _unlocked_imports(manifest: ReleaseDependencyManifest) -> tuple[str, ...]:
     """Return the imported distributions the manifest does not lock."""
     imported = {normalized_name(name) for name in manifest.imported_distributions}
-    return tuple(sorted(imported - manifest.names))
+    return tuple(sorted(imported - manifest.locked))
 
 
 def _red(

@@ -26,6 +26,7 @@ import argparse
 import ast
 import logging
 import sys
+import tomllib
 from collections.abc import Iterable, Sequence
 from importlib.metadata import distributions, packages_distributions
 from pathlib import Path
@@ -126,6 +127,40 @@ def _top_level_imports(source: str) -> set[str]:
     return roots
 
 
+def _authored_import_map(repo_root: Path) -> tuple[dict[str, str], frozenset[str]]:
+    """Return the module-to-distribution map and optional imports pyproject declares.
+
+    ``[tool.deptry.package_module_name_map]`` already records the
+    distributions whose import name differs from their package name, and
+    ``per_rule_ignores.DEP001`` already records the import-guarded
+    optional ones. Reading the authored answer beats re-deriving it from
+    the running environment: ``packages_distributions()`` can only map a
+    module that is installed, so a Windows-only distribution is
+    unmappable on the Linux runner and the same source yields a
+    different verdict per host.
+
+    Args:
+        repo_root: Checkout whose ``pyproject.toml`` is read.
+
+    Returns:
+        Module name -> distribution name, and the set of distributions
+        declared optional. Both empty when the file is absent or
+        declares neither.
+    """
+    manifest = repo_root / "pyproject.toml"
+    if not manifest.is_file():
+        return {}, frozenset()
+    deptry = tomllib.loads(manifest.read_text(encoding="utf-8")).get("tool", {}).get("deptry", {})
+    modules: dict[str, str] = {}
+    for distribution, provided in (deptry.get("package_module_name_map") or {}).items():
+        names = [provided] if isinstance(provided, str) else provided
+        for module in names:
+            if isinstance(module, str):
+                modules[module] = normalized_name(distribution)
+    optional = (deptry.get("per_rule_ignores") or {}).get("DEP001") or []
+    return modules, frozenset(normalized_name(name) for name in optional if isinstance(name, str))
+
+
 def imported_distributions(repo_root: Path, *, first_party: str = "eawf") -> tuple[str, ...]:
     """Return the third-party distributions the source package imports.
 
@@ -139,6 +174,7 @@ def imported_distributions(repo_root: Path, *, first_party: str = "eawf") -> tup
         import of something nobody installed shows up as unlocked rather
         than vanishing.
     """
+    authored, optional = _authored_import_map(repo_root)
     provided = packages_distributions()
     roots: set[str] = set()
     for path in sorted((repo_root / SOURCE_PACKAGE).rglob("*.py")):
@@ -146,8 +182,14 @@ def imported_distributions(repo_root: Path, *, first_party: str = "eawf") -> tup
     third_party = roots - set(sys.stdlib_module_names) - {first_party, "__future__"}
     names: set[str] = set()
     for module in third_party:
+        if module in authored:
+            names.add(authored[module])
+            continue
         names.update(normalized_name(dist) for dist in provided.get(module, [module]))
-    return tuple(sorted(names))
+    # An import the project declares optional is not a missing dependency:
+    # it is guarded at its call site and the install is expected to work
+    # without it.
+    return tuple(sorted(names - optional))
 
 
 def produce_dependency_manifest(repo_root: Path) -> ReleaseDependencyManifest:

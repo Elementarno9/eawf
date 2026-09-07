@@ -34,6 +34,7 @@ from eawf.workflow.release.dependencies import (
     LicenseDisposition,
     LockedPackage,
     ReleaseDependencyManifest,
+    _unlocked_imports,
     build_dependency_manifest,
     classify_license,
     compute_lock_digest,
@@ -580,3 +581,37 @@ def test_scoping_still_reds_a_forbidden_runtime_license() -> None:
     )
     forbidden = {row.name for row in manifest.forbidden}
     assert forbidden == {"click"}
+
+
+def test_unlocked_asks_what_the_lock_carries_not_what_ships() -> None:
+    """Scoping the inventory must not invent a missing dependency.
+
+    An unlocked-import finding means the source imports a distribution
+    the lock does not carry. A development dependency is in the lock and
+    simply is not shipped, so narrowing the licence inventory to shipped
+    packages must not turn it into a missing one.
+    """
+    manifest = build_dependency_manifest(
+        _SCOPED_LOCK,
+        licenses={},
+        imported_distributions=("pytest",),
+        shipped=shipped_distributions(_SCOPED_LOCK),
+    )
+    assert "pytest" not in manifest.names
+    assert "pytest" in manifest.locked
+    assert _unlocked_imports(manifest) == ()
+
+
+def test_unlocked_still_reds_an_import_the_lock_lacks() -> None:
+    """The check keeps its teeth: a genuinely absent distribution is found.
+
+    This is the failure it exists for -- source importing something no
+    install will provide, which ships a wheel that raises on use.
+    """
+    manifest = build_dependency_manifest(
+        _SCOPED_LOCK,
+        licenses={},
+        imported_distributions=("nowhere-to-be-found",),
+        shipped=shipped_distributions(_SCOPED_LOCK),
+    )
+    assert _unlocked_imports(manifest) == ("nowhere-to-be-found",)
