@@ -37949,7 +37949,8 @@
         "P32-I01-W28",
         "P32-I01-W29",
         "P32-I01-W30",
-        "P32-I01-W31"
+        "P32-I01-W31",
+        "P32-I01-W32"
       ]
     },
     "P33-I01": {
@@ -39341,7 +39342,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T13:38:19.823619Z",
+  "updated_at": "2026-09-07T13:56:20.791478Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -166311,6 +166312,72 @@
         }
       ],
       "title": "Derive telemetry session rows from the event log",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W32": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion; typed criteria land at phase prep via spec sync",
+        "waived_at": "2026-09-07T13:56:20.678080Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "B121 and INC-P31-12, verified on this branch. The audit-DSL command gate builds child_env as the full parent environment at registry.py:685 and never calls validate_gate_argv, though that validator and build_child_env both already exist. The audit skill builds its CheckSpec from free-form agent-supplied directives. P31 widened the reach: gate_execution.py:478 routes the out-of-process close child through the same runner. B049 duplicates this and should be dropped in favour of it.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/audit_dsl",
+        "src/eawf/runtime/sandbox",
+        "tests/unit/workflow/audit_dsl",
+        "tests/integration/runtime/sandbox"
+      ],
+      "gates": [],
+      "id": "P32-I01-W32",
+      "intent": {
+        "desired_outcome": "gate argv is validated against the allowlist and the child environment is scrubbed",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Call validate_gate_argv in the check builder|Build the child environment through build_child_env|Prove a crafted argv is rejected and credentials absent from the child with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "An audit-DSL command gate runs an unvalidated argv with the full parent environment",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-07T13:56:20.791196Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Validate audit-DSL gate argv and scrub the child environment",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
