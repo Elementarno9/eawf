@@ -1063,6 +1063,32 @@ def test_phase_release_workflow_version_source_regex_reads_060() -> None:
     assert captured.group(1) == "0.6.0"
 
 
+def test_workflow_release_extraction_re_is_in_lockstep_with_the_workflow(mod) -> None:
+    """The lint's mirrored annotation regex equals the workflow's own literal.
+
+    The constant documents itself as a byte-for-byte copy, but nothing asserted
+    it. The copy drifted: the workflow gained a ``.devN`` group for the v0.7
+    dev-checkpoint train and the mirror did not, so the lint rejected the very
+    annotation the workflow was widened to tag and no dev checkpoint could
+    close. Comparing the two literals is the only assertion that keeps the
+    documented lockstep true.
+    """
+    assert _workflow_release_regex().pattern == mod._WORKFLOW_RELEASE_EXTRACTION_RE
+
+
+@pytest.mark.parametrize("version", ["v0.7.0.dev1", "v0.7.0.dev4", "v0.7.0rc1", "v1.0.0"])
+def test_check_release_annotation_accepts_dev_checkpoint_subject(mod, version: str) -> None:
+    """A dev-checkpoint annotation rides the phase-close subject unrejected.
+
+    ``0.7.0.dev1`` through ``0.7.0.dev4`` are real published checkpoints of the
+    v0.7 release train, so a lint that stops at ``rcN`` blocks four consecutive
+    phase closes. The release-candidate and final spellings are carried in the
+    same parametrize so widening for ``dev`` cannot silently narrow them.
+    """
+    subject = f"[P31] state: close iter + phase (audit=A-P31-CLOSEOUT) (release={version})"
+    assert mod._check_release_annotation(subject) is None
+
+
 # ---------------------------------------------------------------------------
 # Trailer-as-default subject style.
 #

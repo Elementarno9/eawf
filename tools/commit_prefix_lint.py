@@ -162,7 +162,7 @@ _FULL_WAVE_SCOPE_RE = re.compile(
     r"(?:-(?P<iter>I(?!00)\d{2,}))?"
     r"-(?P<wave>W(?!00)\d{2,})$"
 )
-_RELEASE_ANNOTATION_RE = re.compile(r"\(release=v(?P<version>\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?)\)")
+_RELEASE_ANNOTATION_RE: re.Pattern[str]  # bound below, from the workflow mirror.
 # Fires on ANY ``release=`` substring, not just the standalone
 # ``(release=`` paren group. The .github/workflows/phase-release.yaml
 # extraction regex only tags when the annotation is its own paren group,
@@ -170,9 +170,18 @@ _RELEASE_ANNOTATION_RE = re.compile(r"\(release=v(?P<version>\d+\.\d+\.\d+(?:a\d
 # malformation — would silently zero the tag + PyPI + npm publish. Detecting
 # the broader signal lets the lint reject that shape before it lands.
 _RELEASE_ANNOTATION_SIGNAL_RE = re.compile(r"release=")
-# Byte-for-byte copy of the phase-release.yaml:46 extraction regex, kept as a
+# Byte-for-byte copy of the phase-release.yaml extraction regex, kept as a
 # module constant so the reject diagnostic and the workflow stay in lockstep.
-_WORKFLOW_RELEASE_EXTRACTION_RE = r"\(release=(v\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?)\)"
+# The lockstep is enforced by a test that reads the workflow, because drifting
+# it silently is the exact failure it exists to prevent: a narrower copy here
+# rejects an annotation the workflow would have tagged, so the phase cannot
+# close, while a wider copy admits one the workflow would skip.
+_WORKFLOW_RELEASE_EXTRACTION_RE = r"\(release=(v\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?(?:\.dev\d+)?)\)"
+# The acceptance check compiles the mirror rather than restating it. A second
+# hand-written copy is what drifted: the checker rejected a shape the workflow
+# accepted, which is a rejection that cannot be right by construction, since
+# the workflow is the thing the check exists to predict.
+_RELEASE_ANNOTATION_RE = re.compile(_WORKFLOW_RELEASE_EXTRACTION_RE)
 _SUBJECT_STYLE_BRACKET = "bracket"
 _SUBJECT_STYLE_TRAILER = "trailer"
 # Mirrors ``vcs.conventions.subject_style`` in src/eawf/kernel/config/defaults.py.
