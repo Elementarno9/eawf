@@ -37999,7 +37999,8 @@
         "P32-I01-W29",
         "P32-I01-W30",
         "P32-I01-W31",
-        "P32-I01-W32"
+        "P32-I01-W32",
+        "P32-I01-W33"
       ]
     },
     "P33-I01": {
@@ -39391,7 +39392,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T14:13:00.337183Z",
+  "updated_at": "2026-09-07T14:20:50.848265Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -161643,8 +161644,8 @@
       "claim_session_id": "SES-20260907T133548.925756Z-executor-claude-c7967328-5337-49e5-91d8-7fe45a0c8ce2",
       "claimed_at": "2026-09-07T13:35:49.728735Z",
       "closed_at": "2026-09-07T14:12:52.399444Z",
-      "commit": "b3e26eb41800724314f11eb13a2da07cc364ece3",
-      "commit_identity_digest": "sha256:6677c1390e28247a0b66164c3449f616a364d75ccfb0d9bff1f103895b092578",
+      "commit": "cc5bfa5543c8d4237ce98c06362df6c3b54c087f",
+      "commit_identity_digest": "sha256:6984f3d389e3fc1c581de1bb516be81ce915d35662261f2f8a3bfdacda112ca3",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
         "waived_at": "2026-09-07T13:35:35.699938Z",
@@ -166443,6 +166444,71 @@
         }
       ],
       "title": "Validate audit-DSL gate argv and scrub the child environment",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W33": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion; typed criteria land at phase prep via spec sync",
+        "waived_at": "2026-09-07T14:20:50.693334Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "INC-P31-13. The bundle_data hatch hook writes src/eawf/_data in place during any uv run, and that path is also force-included, so a later uv build --wheel adds the same archive member twice and exits 2. Proven environmental rather than a source regression: exporting the parent and child commits with git archive into clean directories builds both successfully. The collision is latent in the packaging configuration, so any checkout where a build hook has run in place reds three packaging tests.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "pyproject.toml",
+        "tools/bundle_data.py",
+        "tests/integration/test_packaging.py"
+      ],
+      "gates": [],
+      "id": "P32-I01-W33",
+      "intent": {
+        "desired_outcome": "a wheel builds cleanly whether or not the hook has run before",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Stop the force-include overlapping the package glob|Prove a repeat wheel build succeeds with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "A wheel build fails whenever the data-bundling hook has already written its output in place",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-07T14:20:50.847961Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Stop the wheel force-include colliding with the package glob",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
