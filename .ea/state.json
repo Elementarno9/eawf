@@ -13409,6 +13409,21 @@
       "scope_id": "P31-I01-W46",
       "status": "done",
       "updated_at": "2026-09-04T16:42:49.858179Z"
+    },
+    "P31-I01-W47": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W47",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W47",
+      "model": null,
+      "scope_id": "P31-I01-W47",
+      "status": "done",
+      "updated_at": "2026-09-07T12:38:21.144576Z"
     }
   },
   "agent_sessions": {
@@ -15637,15 +15652,30 @@
       "claimed_wave_ids": [
         "P31-I01-W47"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-07T12:33:16.291457Z",
       "id": "SES-20260907T115019.216649Z-executor-claude-6a55b9ea-6a2f-4285-ac33-5f2e6d61550e",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W47",
       "started_at": "2026-09-07T11:50:19.216649Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260907T123322.390994Z-operator-claude-d51f78ae-c930-4396-8449-15c94d344236": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-07T12:38:15.803578Z",
+      "id": "SES-20260907T123322.390994Z-operator-claude-d51f78ae-c930-4396-8449-15c94d344236",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-c47",
+      "started_at": "2026-09-07T12:33:22.390994Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -20569,12 +20599,8 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260907T115019.216649Z-executor-claude-6a55b9ea-6a2f-4285-ac33-5f2e6d61550e"
-    ],
-    "active_wave_ids": [
-      "P31-I01-W47"
-    ],
+    "active_session_ids": [],
+    "active_wave_ids": [],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -39036,7 +39062,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T11:50:20.681581Z",
+  "updated_at": "2026-09-07T12:38:40.726652Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -40434,6 +40460,22 @@
       "supersedes_id": null,
       "tree_sha": "ac59d9429646c520bd8e4c0cca8ef0d4fc6289c0",
       "wave_id": "P31-I01-W28"
+    },
+    "integration-ae393136dc4ac3241ea80be3": {
+      "base_sha": "04f82a3b9711eaeb7e66586e8b7d664ab33845af",
+      "candidate_sha": "66e476b4319ea94a7d4a95a42ac4030389e3da9f",
+      "created_at": "2026-09-07T12:33:21.270797Z",
+      "diff_digest": "16c862f4bf27b639a1f6442741f94c87a7939504593458b54bd946842b7f26b4",
+      "generation": 1,
+      "id": "integration-ae393136dc4ac3241ea80be3",
+      "integrated_sha": "66e476b4319ea94a7d4a95a42ac4030389e3da9f",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and both declared gates re-run green on the integrated HEAD.",
+      "spec_digest": "06aac8557bed637e3cf865089abed6a8aecc841de1387db1d20fb51223698948",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "a4902984ebe24243ced197b268aac2a1f3fc8346",
+      "wave_id": "P31-I01-W47"
     },
     "integration-b1f7e9e5a3aa05fbac8eef87": {
       "base_sha": "77e8a50dee205b2c477ed83a77ce4e2c038328e1",
@@ -160819,9 +160861,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260907T115019.216649Z-executor-claude-6a55b9ea-6a2f-4285-ac33-5f2e6d61550e",
       "claimed_at": "2026-09-07T11:48:34.337450Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-07T12:38:21.144576Z",
+      "commit": "f16be81a8c2c33f7aeb8f1f2e8b6818495f3a6b4",
+      "commit_identity_digest": "sha256:5431f96a68765d81c4973410ff37f2da0459a225a2cad4108282a1adb5997093",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
         "waived_at": "2026-09-07T11:48:21.339061Z",
@@ -160891,13 +160933,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-09-07T11:48:21.556678Z",
-      "outcome": null,
+      "outcome": "The two consumer-registry drifts this phase introduced are repaired and the autogen reference tree matches a fresh regeneration; the pair exits 0 at 58 passed and the autogen suite at 20 passed.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",

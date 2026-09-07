@@ -91,9 +91,12 @@ def test_session_end_capture_hook_invokes_runtime_capture_rpc() -> None:
 
     results = runner.run_event(_event(_runtime_payload()))
 
-    assert [result.name for result in results] == ["runtime.capture"]
+    # SESSION_END carries two registered hooks: the capture RPC and the
+    # sibling end-of-session stamp, which runs off the same exit event.
+    assert [result.name for result in results] == ["runtime.capture", "session.end_stamp"]
     assert results[0].block is False
     assert results[0].output == "runtime.capture ok"
+    assert results[1].block is False
     assert client.calls == [
         (
             "runtime.capture",
@@ -134,16 +137,26 @@ def test_session_end_capture_hook_without_counters_makes_no_rpc_call() -> None:
     assert results[0].output == "runtime.capture skipped: no usable counters"
 
 
-def test_session_end_capture_hook_daemon_error_is_non_blocking() -> None:
+def test_session_end_capture_hook_daemon_error_is_non_blocking(tmp_path: Path) -> None:
     runner = HookRunner()
-    register_runtime_capture_hooks(runner, daemon_client_factory=_FailingClient)
+    # An empty repo root keeps the sibling end-stamp hook off the real
+    # workspace state, so its result is a function of this event alone.
+    register_runtime_capture_hooks(
+        runner,
+        daemon_client_factory=_FailingClient,
+        repo_root=tmp_path,
+    )
 
     results = runner.run_event(_event(_runtime_payload()))
 
-    assert len(results) == 1
+    assert len(results) == 2
     assert results[0].block is False
     assert "runtime.capture" in results[0].output
     assert "unavailable" in results[0].output
+    # A dead daemon must not turn the sibling stamp into a blocking failure.
+    assert results[1].name == "session.end_stamp"
+    assert results[1].block is False
+    assert results[1].output == "session.end_stamp skipped: no live session resolved"
 
 
 def test_codex_session_start_binds_provider_session() -> None:

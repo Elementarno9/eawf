@@ -49,6 +49,7 @@ Manage artifacts (add / show / verify).
 | Verb | Summary |
 |---|---|
 | `add` | Register a durable artifact. |
+| `promote-contract` | Promote a measured contract onto the evidence path. |
 | `show` | Show artifact metadata. |
 | `update` | Update mutable fields on a registered artifact. |
 | `validate` | Validate one markdown artifact body. |
@@ -109,6 +110,7 @@ Perf bench harness — seed corpora, time harnesses, flag regressions.
 | `compare` | Flag any harness that regressed past the per-OS threshold. |
 | `list` | List every fixture size x harness in the catalog. |
 | `run` | Seed a corpus in-memory and time each harness against it. |
+| `turn-cost` | Render wall clock + cost per completed unit of work, or check it. |
 
 ### `eawf calibrate`
 
@@ -292,6 +294,7 @@ Dispatch hook events through the Eä hook runner.
 | `eawf019-math-facets` | Reject math-explainer claims missing a facet, an unresolved citation, or a dead gate. |
 | `eawf023-artifact-placement` | Reject misplaced or date-stem-less artifacts under ``.ea/artifacts/``. |
 | `eawf024-test-tier-contract` | Reject non-unit imports in the ``tests/unit/`` tier. |
+| `eawf025-test-placement` | Reject a newly added test filed outside its taxonomy address. |
 | `email-leak-lint` | Reject email addresses outside the canonical author/no-reply allowlist. |
 | `log-format-lint` | Run the EAWF001 log-format rule over changed library modules. |
 | `path-leak-lint` | Reject home-directory path literals (macOS, Windows, and Linux home roots). |
@@ -467,6 +470,8 @@ Tag releases and render release notes / changelog reports.
 |---|---|
 | `changelog` | Mine the current ``CHANGELOG.md`` unreleased section. |
 | `notes` | Render a scrubbed release-notes draft. |
+| `observe` | Read one publication target back and settle it against the manifest. |
+| `preflight` | Compute every release readiness signal for one checkpoint. |
 | `tag` | Create the ``v<version>`` release tag and (with ``--push``) trigger the pipeline. |
 
 ### `eawf repo`
@@ -638,6 +643,7 @@ Wave lifecycle (plan, claim, close, fail, graph, next-ready).
 | `show` | Inspect a wave. ``--commit`` prints SHA; ``--dispatch-prompt`` prints prompt. |
 | `update` | Mutate a PENDING/CLAIMED wave's ``file_scopes``. |
 | `verify-commits` | Verify (and optionally repair) every CLOSED wave's commit SHA pin. |
+| `waivers` | Count the daemonless close waivers recorded in this workspace. |
 
 ### `eawf wiki`
 
