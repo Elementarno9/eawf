@@ -11,6 +11,16 @@ JSON. Three methods land here:
 * ``release.approve`` -- the approval guard, which denies
   ``release_not_ready`` naming the first red signal.
 
+A counted waiver is only ever explained by the rows the caller supplies,
+so ``release.compute_readiness`` and ``release.publish`` both carry
+``waivers`` and ``acknowledgements`` beside the bare ``waiver_count``.
+Without the rows every counted waiver classifies ``unexplained``, which
+is red and not acknowledgeable, and the acknowledgement tier is
+unreachable from the RPC surface. ``release.approve`` takes no separate
+acknowledgement list: the block it honours is the one inside the
+``readiness`` it binds, so an acknowledgement enters the receipt in
+exactly one place and cannot drift between the sweep and the approval.
+
 Four more verbs touch an external registry and are keyed differently:
 ``release.publish``, ``release.retry_target``, ``release.reconcile`` and
 ``release.observe_target`` each require an ``expected_revision``
@@ -47,6 +57,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from eawf.kernel.release.waiver import ReleaseWaiver
 from eawf.kernel.spec.publication import PublicationOperation
 from eawf.kernel.spec.release import (
     Release,
@@ -109,6 +120,7 @@ from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
 from eawf.workflow.verify.release_readiness import (
     DEFAULT_SIGNAL_TTL_SECONDS,
     ReleaseReadiness,
+    WaiverAcknowledgement,
     compute_readiness,
 )
 
@@ -135,6 +147,15 @@ class ComputeReadinessParams(BaseModel):
         observed_revision: Source revision the sweep is computed against.
         ttl_seconds: Freshness window stamped on each row.
         waiver_count: Gate waivers recorded against the checkpoint.
+            Left at zero it is derived from :attr:`waivers`, so a caller
+            supplying the rows never has to count them too.
+        waivers: The counted waiver rows, each naming its scope, reason
+            and protected principal. Without them a counted waiver has
+            no explanation attached and classifies ``unexplained``,
+            which no acknowledgement can clear.
+        acknowledgements: Operator acceptances of the counted waivers.
+            An explained waiver holds the sweep at
+            ``awaiting_acknowledgement`` until one names it.
         release: Optional serialized candidate record. When supplied,
             the handler also reports the status the sweep result moves
             it into.
@@ -145,6 +166,8 @@ class ComputeReadinessParams(BaseModel):
     observed_revision: str | None = None
     ttl_seconds: int = DEFAULT_SIGNAL_TTL_SECONDS
     waiver_count: int = 0
+    waivers: tuple[ReleaseWaiver, ...] = ()
+    acknowledgements: tuple[WaiverAcknowledgement, ...] = ()
     release: dict[str, Any] | None = None
 
 
@@ -262,6 +285,8 @@ async def compute_readiness_method(ctx: MethodContext, params: dict[str, Any]) -
             computed_at=datetime.now(UTC),
             ttl_seconds=args.ttl_seconds,
             waiver_count=args.waiver_count,
+            waivers=args.waivers,
+            acknowledgements=args.acknowledgements,
         )
     except ValueError as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
@@ -375,6 +400,12 @@ class PublishParams(_PublicationParams):
         observed_revision: Source revision the chokepoint sweep runs at.
         ttl_seconds: Freshness window stamped on each readiness row.
         waiver_count: Gate waivers recorded against the checkpoint.
+        waivers: The counted waiver rows. Carried here as well as at
+            approval because the chokepoint recomputes the sweep from
+            scratch: a waiver the approval acknowledged but the
+            chokepoint never sees would red the publication it cleared.
+        acknowledgements: The operator acceptances the approval bound,
+            replayed into the recomputed sweep for the same reason.
     """
 
     approved_manifest_digest: str
@@ -382,6 +413,8 @@ class PublishParams(_PublicationParams):
     observed_revision: str | None = None
     ttl_seconds: int = DEFAULT_SIGNAL_TTL_SECONDS
     waiver_count: int = 0
+    waivers: tuple[ReleaseWaiver, ...] = ()
+    acknowledgements: tuple[WaiverAcknowledgement, ...] = ()
 
 
 class RetryTargetParams(_PublicationParams):
@@ -638,6 +671,8 @@ async def publish(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             computed_at=now,
             ttl_seconds=args.ttl_seconds,
             waiver_count=args.waiver_count,
+            waivers=args.waivers,
+            acknowledgements=args.acknowledgements,
         )
         published, operation = begin_publication(
             release,

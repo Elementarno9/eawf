@@ -8,7 +8,7 @@ writes no rows.
 Usage::
 
     uv run python tools/idle_surface_report.py
-    uv run python tools/idle_surface_report.py --ceiling 525
+    uv run python tools/idle_surface_report.py --ceiling 202
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from __future__ import annotations
 import argparse
 import ast
 import collections
-import re
 import sys
 from pathlib import Path
 
@@ -31,8 +30,6 @@ _FRAMEWORK_DECORATORS: tuple[str, ...] = (
     "validator",
     "property",
 )
-
-_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 def _decorator_path(node: ast.expr) -> str:
@@ -57,33 +54,59 @@ def _framework_owned(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     )
 
 
-def find_idle_functions(source_root: Path) -> list[tuple[str, Path]]:
-    """Return ``(name, defining_file)`` for public functions no sibling names.
+def _reference_counts(tree: ast.AST) -> collections.Counter[str]:
+    """Count every load-context use of a name anywhere under *tree*.
 
-    A name mentioned in exactly one file under *source_root* is mentioned only
-    where it is defined: no caller, no re-export, no type annotation elsewhere.
-    Names defined more than once are skipped — the mention count cannot be
+    Attribute access is counted under the attribute name, so a qualified
+    ``module.render()`` reaches the ``render`` definition the same way a bare
+    ``render()`` does. Import aliases and ``__all__`` strings are deliberately
+    not references: re-exporting a function is not calling it, and treating a
+    re-export as a caller is what would let dead surface hide behind a package
+    ``__init__``.
+    """
+    counts: collections.Counter[str] = collections.Counter()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            counts[node.id] += 1
+        elif isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
+            counts[node.attr] += 1
+    return counts
+
+
+def find_idle_functions(source_root: Path) -> list[tuple[str, Path]]:
+    """Return ``(name, defining_file)`` for public functions nothing calls.
+
+    A name is idle when no call site names it anywhere under *source_root*
+    outside the body of its own definition. Counting *sites* rather than
+    *files mentioning the name* is what makes a helper called only inside its
+    own defining module non-idle; the file-level proxy reported every such
+    helper, because its definition and its caller share one file.
+
+    References from within the function's own body do not count: a recursive
+    call is not evidence that anything reaches the function.
+
+    Names defined more than once are skipped — the reference count cannot be
     attributed to one definition.
     """
-    identifiers_by_file: dict[Path, set[str]] = {}
     definitions: dict[str, list[Path]] = collections.defaultdict(list)
+    references: collections.Counter[str] = collections.Counter()
+    self_references: collections.Counter[str] = collections.Counter()
 
     for path in sorted(source_root.rglob("*.py")):
-        text = path.read_text(encoding="utf-8")
-        identifiers_by_file[path] = set(_IDENTIFIER.findall(text))
-        for node in ast.parse(text).body:
-            is_function = isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
-            if is_function and not node.name.startswith("_") and not _framework_owned(node):
-                definitions[node.name].append(path)
-
-    mentions: collections.Counter[str] = collections.Counter()
-    for identifiers in identifiers_by_file.values():
-        mentions.update(identifiers)
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        references.update(_reference_counts(tree))
+        for node in tree.body:
+            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            if node.name.startswith("_") or _framework_owned(node):
+                continue
+            definitions[node.name].append(path)
+            self_references[node.name] += _reference_counts(node)[node.name]
 
     return sorted(
         (name, paths[0])
         for name, paths in definitions.items()
-        if len(paths) == 1 and mentions[name] == 1
+        if len(paths) == 1 and references[name] - self_references[name] == 0
     )
 
 

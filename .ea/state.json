@@ -13439,6 +13439,21 @@
       "scope_id": "P31-I01-W48",
       "status": "done",
       "updated_at": "2026-09-07T13:07:46.309866Z"
+    },
+    "P31-I01-W49": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W49",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W49",
+      "model": null,
+      "scope_id": "P31-I01-W49",
+      "status": "done",
+      "updated_at": "2026-09-07T13:33:39.927421Z"
     }
   },
   "agent_sessions": {
@@ -15731,15 +15746,30 @@
       "claimed_wave_ids": [
         "P31-I01-W49"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-07T13:32:48.452643Z",
       "id": "SES-20260907T132124.173192Z-executor-claude-d545de89-8689-45e3-aace-d5ea2fdc4a52",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W49",
       "started_at": "2026-09-07T13:21:24.173192Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260907T133333.119061Z-operator-claude-c73adb2b-2516-48d0-a59c-2125420ac86b": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-07T13:33:34.854982Z",
+      "id": "SES-20260907T133333.119061Z-operator-claude-c73adb2b-2516-48d0-a59c-2125420ac86b",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-c49",
+      "started_at": "2026-09-07T13:33:33.119061Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -20663,12 +20693,8 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260907T132124.173192Z-executor-claude-d545de89-8689-45e3-aace-d5ea2fdc4a52"
-    ],
-    "active_wave_ids": [
-      "P31-I01-W49"
-    ],
+    "active_session_ids": [],
+    "active_wave_ids": [],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -35153,6 +35179,62 @@
       "severity": "medium",
       "status": "open",
       "title": "Test suites contaminated live state via the shared daemon"
+    },
+    "INC-P31-01": {
+      "cause": "unknown",
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "description": null,
+      "id": "INC-P31-01",
+      "opened_at": "2026-09-07T13:32:53.464472Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "P31",
+      "severity": "high",
+      "status": "open",
+      "title": "Generated markdown hard-wraps and reds the strict prose gate"
+    },
+    "INC-P31-02": {
+      "cause": "unknown",
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "description": null,
+      "id": "INC-P31-02",
+      "opened_at": "2026-09-07T13:32:54.346720Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "P31",
+      "severity": "high",
+      "status": "open",
+      "title": "Recorded gate argv unrunnable after the test-tree collapse"
+    },
+    "INC-P31-03": {
+      "cause": "unknown",
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "description": null,
+      "id": "INC-P31-03",
+      "opened_at": "2026-09-07T13:32:55.238283Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "P31",
+      "severity": "high",
+      "status": "open",
+      "title": "Two required gates cannot fail on any tree"
+    },
+    "INC-P31-04": {
+      "cause": "unknown",
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "description": null,
+      "id": "INC-P31-04",
+      "opened_at": "2026-09-07T13:32:56.096078Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "P31",
+      "severity": "high",
+      "status": "open",
+      "title": "Verification history is not reconstructable from the store"
     }
   },
   "indexes": {},
@@ -39134,7 +39216,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T13:21:25.562100Z",
+  "updated_at": "2026-09-07T13:33:39.927654Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -40340,6 +40422,22 @@
       "supersedes_id": null,
       "tree_sha": "ecae5f48add1b1e6bec9c71543b0ddf602e74fc3",
       "wave_id": "P31-I01-W09"
+    },
+    "integration-566fee107509139947e225f8": {
+      "base_sha": "14bd044a91b8603063e154e03f2f7012bba4c9cf",
+      "candidate_sha": "e84c2b321e70ba059576587d0707d73969b02516",
+      "created_at": "2026-09-07T13:33:31.901682Z",
+      "diff_digest": "fce2bba24de122cc40752adeb369ebe63353c9617d3d1db37d8fb2920125a1ee",
+      "generation": 1,
+      "id": "integration-566fee107509139947e225f8",
+      "integrated_sha": "e84c2b321e70ba059576587d0707d73969b02516",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and both declared gates re-run green on the integrated HEAD.",
+      "spec_digest": "f6a2f726fc0768e367bf42346c1a105ebc171c6ce393493b6d621cd0e26ea717",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "0bbf1b0fe595bf6d2479309e1b71c42a677dcff7",
+      "wave_id": "P31-I01-W49"
     },
     "integration-57b85990ed6c6952c7f49809": {
       "base_sha": "cb976a58e3b99e2513935605e5c4dd24dd454a32",
@@ -161230,9 +161328,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260907T132124.173192Z-executor-claude-d545de89-8689-45e3-aace-d5ea2fdc4a52",
       "claimed_at": "2026-09-07T13:21:24.891965Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-07T13:33:39.927421Z",
+      "commit": "e84c2b321e70ba059576587d0707d73969b02516",
+      "commit_identity_digest": "sha256:11b78b0d763eb2085a8bd272c4bf2d516d48cd14a217187d510041a2c0e4be01",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
         "waived_at": "2026-09-07T13:21:11.641719Z",
@@ -161302,13 +161400,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-09-07T13:21:11.786459Z",
-      "outcome": null,
+      "outcome": "Waiver rows and acknowledgements now reach compute_readiness from the release RPC surface, so an explained waiver reaches awaiting_acknowledgement and an acknowledged one reaches ready. The idle-surface report counts call sites rather than files mentioning a name; the corrected measurement is 202 and the ceiling is re-pinned there. Both gates green.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
