@@ -214,6 +214,12 @@ def test_build_jail_argv_linux_masks_every_cred_dir(tmp_path: Path) -> None:
     A cred DIRECTORY is covered by an empty tmpfs; a cred FILE (.npmrc /
     .pypirc) is covered by a bind of the null device, since ``--tmpfs``
     cannot mount over a regular file.
+
+    The device bind must be ``--dev-bind``: ``--ro-bind`` mounts ``nodev``,
+    so the mask lands and the launch survives but the read fails EACCES
+    instead of returning empty. Asserting the exact flag is the only way an
+    argv-shape test can catch that, since both spellings produce an
+    identically-shaped argv.
     """
     root, cwd = _repo_with_cwd(tmp_path)
     _materialise_cred_paths(tmp_path)
@@ -222,8 +228,11 @@ def test_build_jail_argv_linux_masks_every_cred_dir(tmp_path: Path) -> None:
     null_masked = [
         argv[i + 2]
         for i, token in enumerate(argv)
-        if token == "--ro-bind" and argv[i + 1] == "/dev/null"
+        if token == "--dev-bind" and argv[i + 1] == "/dev/null"
     ]
+    assert not any(
+        token == "--ro-bind" and argv[i + 1] == "/dev/null" for i, token in enumerate(argv)
+    ), "a read-only bind mounts nodev, so the null-device mask reads EACCES rather than empty"
     for rel in _CRED_DENY_SUBDIRS:
         assert str((tmp_path / rel).resolve()) in tmpfs_targets
     for rel in _CRED_DENY_FILES:

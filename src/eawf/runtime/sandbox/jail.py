@@ -112,6 +112,19 @@ _KEYCHAIN_READ_SUBPATHS: tuple[str, ...] = ("Library/Keychains",)
 #: aborting the launch with a "not a directory" mount failure.
 _NULL_DEVICE: str = "/dev/null"
 
+#: The bwrap flag the null-device mask MUST use. ``--ro-bind`` mounts
+#: ``nodev``, so a device node bound through it cannot be opened: the mask
+#: lands, the launch survives, and the read fails EACCES instead of
+#: returning empty. ``--dev-bind`` is the documented variant that permits
+#: device access. That distinction is invisible to an argv-shape assertion
+#: and only appears against a real kernel, which is why the mask read as
+#: empty in every unit test and denied on the first real-bwrap run.
+#:
+#: The bind is read-write because bwrap offers no read-only device bind.
+#: That grants nothing: a write to ``/dev/null`` is discarded by
+#: definition, and the host credential stays shadowed underneath.
+_NULL_DEVICE_BIND_FLAG: str = "--dev-bind"
+
 
 class JailUnavailableOnWindowsError(SandboxError):
     """Raised when an OS filesystem jail is requested on Windows.
@@ -335,8 +348,9 @@ def _build_linux_argv(*, cwd: Path, runtime: str, home: Path) -> list[str]:
     - every mount point must already exist, because the read-only root bind
       leaves bwrap unable to ``mkdir`` one. So a cred dir is masked only
       when it is present on the host, and the mask shape follows the
-      entry's type: ``--tmpfs`` over a directory, a null-device bind over a
-      file.
+      entry's type: ``--tmpfs`` over a directory, a null-device
+      ``--dev-bind`` over a file (see :data:`_NULL_DEVICE_BIND_FLAG` for
+      why the read-only bind cannot carry a device node).
     - the ``$TMPDIR`` tmpfs is mounted BEFORE the cwd bind, so a worktree
       that happens to live under the temp root is not shadowed by it.
     """
@@ -380,7 +394,7 @@ def _build_linux_argv(*, cwd: Path, runtime: str, home: Path) -> list[str]:
         if cred_path.is_dir():
             argv += ["--tmpfs", os.fspath(cred_path)]
         elif cred_path.is_file():
-            argv += ["--ro-bind", _NULL_DEVICE, os.fspath(cred_path)]
+            argv += [_NULL_DEVICE_BIND_FLAG, _NULL_DEVICE, os.fspath(cred_path)]
 
     # Re-expose the agent's OWN state dir READ-WRITE after the tmpfs masks so
     # the carve-out wins over the deny: the runtime stages session scratch
