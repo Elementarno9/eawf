@@ -15588,13 +15588,45 @@
       "claimed_wave_ids": [
         "P31-I01-W47"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-07T11:48:55.042941Z",
       "id": "SES-20260907T114833.604180Z-executor-claude-6e935818-c9f6-447c-be0f-d6f67686cd33",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W47",
       "started_at": "2026-09-07T11:48:33.604180Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260907T114919.251917Z-executor-claude-a76e8430-d365-4ca0-a5b2-6e8e24dd469d": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W47"
+      ],
+      "ended_at": null,
+      "id": "SES-20260907T114919.251917Z-executor-claude-a76e8430-d365-4ca0-a5b2-6e8e24dd469d",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W47",
+      "started_at": "2026-09-07T11:49:19.251917Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260907T114952.273676Z-executor-claude-35b9ad5d-c86e-45af-be6f-9df7e1b2ef36": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260907T114952.273676Z-executor-claude-35b9ad5d-c86e-45af-be6f-9df7e1b2ef36",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W47b",
+      "started_at": "2026-09-07T11:49:52.273676Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -20521,11 +20553,10 @@
   },
   "current": {
     "active_session_ids": [
-      "SES-20260907T114833.604180Z-executor-claude-6e935818-c9f6-447c-be0f-d6f67686cd33"
+      "SES-20260907T114919.251917Z-executor-claude-a76e8430-d365-4ca0-a5b2-6e8e24dd469d",
+      "SES-20260907T114952.273676Z-executor-claude-35b9ad5d-c86e-45af-be6f-9df7e1b2ef36"
     ],
-    "active_wave_ids": [
-      "P31-I01-W47"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -38987,7 +39018,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T11:48:35.024031Z",
+  "updated_at": "2026-09-07T11:49:53.522426Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -160768,7 +160799,7 @@
     "P31-I01-W47": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": "SES-20260907T114833.604180Z-executor-claude-6e935818-c9f6-447c-be0f-d6f67686cd33",
+      "claim_session_id": null,
       "claimed_at": "2026-09-07T11:48:34.337450Z",
       "closed_at": null,
       "commit": null,
@@ -160787,7 +160818,47 @@
         "tests/unit/test_runtime_capture_hook.py",
         "docs/reference/autogen"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_layered_config.py",
+              "tests/unit/test_runtime_capture_hook.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_docs_autogen.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P31-I01-W47",
       "intent": {
         "desired_outcome": "the three residue failures exit 0 so the suite reflects only inherited debt",
@@ -160808,20 +160879,38 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "pending",
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "polish placeholder replaced immediately by a typed spec sync",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/test_layered_config.py tests/unit/test_runtime_capture_hook.py exits 0",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "maintainability",
           "required": true,
           "response": null,
-          "text": "polish placeholder replaced immediately by a typed spec sync",
+          "text": "Polish: the two consumer-registry drifts this phase introduced are repaired; the pair exits 0 once the vcs.checkpoint_requires_commit leaf is registered in the expected consumer set and the session.end_stamp RPC is expected by the runtime-capture hook test; pytest tests/unit/test_layered_config.py tests/unit/test_runtime_capture_hook.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_docs_autogen.py exits 0 with no autogen drift row",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "Polish: the committed autogen reference tree matches a fresh regeneration after the five CLI verbs this phase added; test_committed_autogen_tree_matches_regeneration exits 0; pytest tests/integration/test_docs_autogen.py",
           "waiver_reason": null
         }
       ],
