@@ -13469,6 +13469,21 @@
       "scope_id": "P31-I01-W50",
       "status": "done",
       "updated_at": "2026-09-07T14:12:52.399444Z"
+    },
+    "P31-I01-W51": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W51",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W51",
+      "model": null,
+      "scope_id": "P31-I01-W51",
+      "status": "done",
+      "updated_at": "2026-09-07T14:27:53.056168Z"
     }
   },
   "agent_sessions": {
@@ -15825,15 +15840,30 @@
       "claimed_wave_ids": [
         "P31-I01-W51"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-07T14:27:43.370805Z",
       "id": "SES-20260907T142250.273002Z-executor-claude-4b2d62a3-c8cd-49b0-bc45-a860f4fd4ef0",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W51",
       "started_at": "2026-09-07T14:22:50.273002Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260907T142749.703781Z-operator-claude-b8bf7da6-0be8-4378-94ca-c704df820f84": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-07T14:27:51.416793Z",
+      "id": "SES-20260907T142749.703781Z-operator-claude-b8bf7da6-0be8-4378-94ca-c704df820f84",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-c51",
+      "started_at": "2026-09-07T14:27:49.703781Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -20778,12 +20808,8 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260907T142250.273002Z-executor-claude-4b2d62a3-c8cd-49b0-bc45-a860f4fd4ef0"
-    ],
-    "active_wave_ids": [
-      "P31-I01-W51"
-    ],
+    "active_session_ids": [],
+    "active_wave_ids": [],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -39414,7 +39440,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T14:22:51.787241Z",
+  "updated_at": "2026-09-07T14:27:53.056845Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -40988,6 +41014,22 @@
       "supersedes_id": null,
       "tree_sha": "6a558fec3bc7fa1ad3e34eccb3a550640986f549",
       "wave_id": "P31-I01-W30"
+    },
+    "integration-c9197175986f89b7984c831a": {
+      "base_sha": "a7922d49c6d72d44a1435dfe8b24310662b8d43b",
+      "candidate_sha": "cfe16e877c17e3c99e89ffaf9f131efa6482fa40",
+      "created_at": "2026-09-07T14:27:48.494134Z",
+      "diff_digest": "c99c73069338fcf37494c6c6ac1824fca70514ab9d891f962ff302def84f01ed",
+      "generation": 1,
+      "id": "integration-c9197175986f89b7984c831a",
+      "integrated_sha": "cfe16e877c17e3c99e89ffaf9f131efa6482fa40",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and its declared gate re-run green on the integrated HEAD.",
+      "spec_digest": "82b55452fb7c70a1833590ef75468183c135ef9a3a86afc577a4f83b42880a54",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "fec4da10cbb7cac5a51170acd187dc55340ef7f5",
+      "wave_id": "P31-I01-W51"
     },
     "integration-d27bb5b185bc28a8842309e3": {
       "base_sha": "63e3c63b4b3519fd528a26cd9303d7984199355a",
@@ -161793,9 +161835,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260907T142250.273002Z-executor-claude-4b2d62a3-c8cd-49b0-bc45-a860f4fd4ef0",
       "claimed_at": "2026-09-07T14:22:51.062111Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-07T14:27:53.056168Z",
+      "commit": "cfe16e877c17e3c99e89ffaf9f131efa6482fa40",
+      "commit_identity_digest": "sha256:80fec70a11a0b9dd297888a03730f71157dbb4d17997f0fe09a3109110bc3ec4",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
         "waived_at": "2026-09-07T14:22:36.577044Z",
@@ -161843,13 +161885,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-09-07T14:22:36.787368Z",
-      "outcome": null,
+      "outcome": "The repo census no longer counts a pending wave stray when its phase is planned, so a staged roadmap passes while a wave orphaned under a closed phase still reds. Gate green; the helper also fails closed on a missing phase row.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",

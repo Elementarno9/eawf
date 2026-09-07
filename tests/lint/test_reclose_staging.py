@@ -71,6 +71,29 @@ _RECLOSE_WAVE = "P30-I26-W23"
 _SUPERSEDED_RECLOSE_WAVE = "P30-I21-W22"
 
 
+def _stray_pending_waves(state: dict) -> list[str]:
+    """The PENDING waves that no live plan accounts for.
+
+    A PENDING wave is accounted for when it is the re-close vehicle, when it
+    sits in the ACTIVE iter, or when its phase is still PLANNED. The phase is
+    read off the ``P<NN>`` prefix that a wave id and its iter id share, and a
+    wave whose phase has no row at all stays stray so the census fails closed.
+    """
+    active_iter = state["current"].get("iter_id")
+    phases = state["phases"]
+    stray: list[str] = []
+    for wave_id, wave in state["waves"].items():
+        if wave.get("status") != "pending":
+            continue
+        if wave_id == _RECLOSE_WAVE or wave.get("iter_id") == active_iter:
+            continue
+        phase_id = (wave.get("iter_id") or wave_id).split("-", 1)[0]
+        if (phases.get(phase_id) or {}).get("status") == "planned":
+            continue
+        stray.append(wave_id)
+    return stray
+
+
 def test_repo_census_has_no_stray_pending_waves() -> None:
     """CR-02 (I26 reconcile): the re-close wave carries the close; no stray PENDING wave.
 
@@ -85,8 +108,14 @@ def test_repo_census_has_no_stray_pending_waves() -> None:
     catches a phase closed out from under its own re-close vehicle. The superseded
     P30-I21-W22 must already be CLOSED.
 
-    The second half is unchanged: no PENDING wave is *stray* -- that is, outside
-    the re-close wave and the ACTIVE iter.
+    The second half is unchanged in spirit: no PENDING wave is *stray*. What
+    counts as stray is narrower than "outside the ACTIVE iter", because a staged
+    roadmap IS a PLANNED phase full of PENDING waves -- ``roadmap propose`` plus
+    ``roadmap apply`` produce exactly that shape, so a bare iter comparison
+    reddens the census for following the documented procedure. A PENDING wave
+    under a PLANNED phase is therefore legitimate; one under a phase that is
+    neither PLANNED nor the ACTIVE iter is an orphan and still reddens. Do not
+    re-tighten this back to a bare iter comparison.
     """
     state = _state()
     active_iter = state["current"].get("iter_id")
@@ -101,13 +130,73 @@ def test_repo_census_has_no_stray_pending_waves() -> None:
         )
     else:
         assert reclose_status == "closed", "the phase closed without closing its re-close wave"
-    pending = [wave_id for wave_id, wave in waves.items() if wave.get("status") == "pending"]
-    stray = [
-        wave_id
-        for wave_id in pending
-        if wave_id != _RECLOSE_WAVE and waves[wave_id].get("iter_id") != active_iter
-    ]
-    assert not stray, f"stray PENDING waves outside the ACTIVE repair iter {active_iter!r}: {stray}"
+    stray = _stray_pending_waves(state)
+    assert not stray, (
+        f"stray PENDING waves outside the ACTIVE iter {active_iter!r} "
+        f"and outside every PLANNED phase: {stray}"
+    )
+
+
+def test_stray_pending_waves_flags_an_orphan_under_a_settled_phase() -> None:
+    """The narrowed invariant still reds on the defect the census was written for.
+
+    Three PENDING waves are accounted for -- the ACTIVE iter's own, a staged
+    PLANNED phase's, and the re-close vehicle -- while the fourth hangs off a
+    CLOSED phase with nothing to run it.
+    """
+    fixture = {
+        "current": {"iter_id": "P31-I01"},
+        "phases": {
+            "P30": {"status": "closed"},
+            "P31": {"status": "active"},
+            "P32": {"status": "planned"},
+        },
+        "waves": {
+            "P31-I01-W51": {"iter_id": "P31-I01", "status": "pending"},
+            "P32-I01-W01": {"iter_id": "P32-I01", "status": "pending"},
+            _RECLOSE_WAVE: {"iter_id": "P30-I26", "status": "pending"},
+            "P30-I26-W91": {"iter_id": "P30-I26", "status": "pending"},
+            "P30-I26-W92": {"iter_id": "P30-I26", "status": "closed"},
+        },
+    }
+    assert _stray_pending_waves(fixture) == ["P30-I26-W91"]
+
+
+@pytest.mark.parametrize(
+    ("waves", "expected"),
+    [
+        pytest.param({}, [], id="empty"),
+        pytest.param(
+            {"P32-I01-W01": {"iter_id": "P32-I01", "status": "pending"}},
+            [],
+            id="single-planned-phase",
+        ),
+        pytest.param(
+            {"P99-I01-W01": {"iter_id": "P99-I01", "status": "pending"}},
+            ["P99-I01-W01"],
+            id="phase-row-missing-fails-closed",
+        ),
+        pytest.param(
+            {"P30-I26-W91": {"status": "pending"}},
+            ["P30-I26-W91"],
+            id="iter-id-absent-falls-back-to-wave-prefix",
+        ),
+    ],
+)
+def test_stray_pending_waves_edges(waves: dict, expected: list[str]) -> None:
+    """Empty, single, an unknown phase, and a wave carrying no ``iter_id``."""
+    state = {
+        "current": {"iter_id": "P31-I01"},
+        "phases": {"P30": {"status": "closed"}, "P32": {"status": "planned"}},
+        "waves": waves,
+    }
+    assert _stray_pending_waves(state) == expected
+
+
+def test_stray_pending_waves_rejects_a_state_without_phases() -> None:
+    """A mis-shaped state raises instead of reporting a reassuring empty list."""
+    with pytest.raises(KeyError, match="phases"):
+        _stray_pending_waves({"current": {"iter_id": "P31-I01"}, "waves": {}})
 
 
 def test_changelog_carries_the_release_section() -> None:
