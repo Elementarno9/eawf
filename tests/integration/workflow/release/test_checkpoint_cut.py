@@ -13,10 +13,13 @@ evidence about this build.
 **No external effect.** Reaching APPROVED publishes nothing. The
 approved record leaves every publication target ``not_started``, carries
 no publication operation reference, and binds a manifest digest the
-post-merge bake can reuse as its proof digest without re-pinning. The
-absence of the ``v0.7.0.dev1`` tag -- locally and on the publishing
-remote -- is asserted here rather than assumed, because the tag push
-*is* the publication decision.
+post-merge bake can reuse as its proof digest without re-pinning.
+Because the tag push *is* the publication decision, that it does not
+happen is asserted here rather than assumed -- as the local and remote
+views of the ``v0.7.0.dev1`` tag being unchanged ACROSS the approve
+call, not as the tag being absent from the world. The absence form was
+tried first and was wrong: it holds only until the checkpoint actually
+ships, then reds permanently on the release it was written to guard.
 
 **The gap.** Three required rows (``artifacts``, ``dependencies``,
 ``credentials``) cannot be greened by anything a working copy runs: the
@@ -419,16 +422,38 @@ def test_approved_no_effect_binds_a_proof_digest_the_bake_can_reuse() -> None:
     assert published.source_sha == approved.source_sha
 
 
-def test_approved_no_effect_leaves_no_local_tag() -> None:
-    listing = _git("tag", "--list", DEV1_TAG)
-    assert listing.returncode == 0, listing.stderr
-    assert listing.stdout.strip() == ""
+def test_approved_creates_no_local_tag() -> None:
+    """Approving leaves the local tag list byte-identical.
+
+    Pinned as invariance ACROSS the approve call rather than as the tag's
+    absence. The checkpoint publishes for real once the phase merges, and
+    from that moment an absence assertion measures whether the release has
+    happened rather than whether approving causes it -- it reds on success,
+    which is the one outcome it must not punish.
+    """
+    before = _git("tag", "--list")
+    assert before.returncode == 0, before.stderr
+    approve_release(pinned_candidate(), green_sweep(), approval_ref=APPROVAL_REF, approved_at=NOW)
+    after = _git("tag", "--list")
+    assert after.returncode == 0, after.stderr
+    assert after.stdout == before.stdout
 
 
-def test_approved_no_effect_leaves_no_tag_on_the_publishing_remote() -> None:
+def test_approved_creates_no_tag_on_the_publishing_remote() -> None:
+    """Approving pushes nothing: the remote's view of the tag is unchanged.
+
+    The tag push IS the publication decision, so the claim worth pinning is
+    that reaching APPROVED does not perform it. Stated, like its local
+    sibling, as invariance across the call, so a genuinely published
+    checkpoint does not turn this red.
+    """
     if _git("remote", "get-url", PUBLISHING_REMOTE).returncode != 0:
         pytest.skip(f"no {PUBLISHING_REMOTE!r} remote configured in this checkout")
-    listing = _git("ls-remote", "--tags", PUBLISHING_REMOTE, f"refs/tags/{DEV1_TAG}")
-    if listing.returncode != 0:
-        pytest.skip(f"{PUBLISHING_REMOTE!r} is unreachable: {listing.stderr.strip()}")
-    assert listing.stdout.strip() == ""
+    before = _git("ls-remote", "--tags", PUBLISHING_REMOTE, f"refs/tags/{DEV1_TAG}")
+    if before.returncode != 0:
+        pytest.skip(f"{PUBLISHING_REMOTE!r} is unreachable: {before.stderr.strip()}")
+    approve_release(pinned_candidate(), green_sweep(), approval_ref=APPROVAL_REF, approved_at=NOW)
+    after = _git("ls-remote", "--tags", PUBLISHING_REMOTE, f"refs/tags/{DEV1_TAG}")
+    if after.returncode != 0:
+        pytest.skip(f"{PUBLISHING_REMOTE!r} is unreachable: {after.stderr.strip()}")
+    assert after.stdout == before.stdout
