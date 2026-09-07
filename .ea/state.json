@@ -15677,6 +15677,23 @@
       "status": "stale",
       "summary": "orphaned by daemon restart",
       "worktree_ids": []
+    },
+    "SES-20260907T125741.052778Z-executor-claude-6de35f75-2c9e-4412-a1af-c4388e618001": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W48"
+      ],
+      "ended_at": null,
+      "id": "SES-20260907T125741.052778Z-executor-claude-6de35f75-2c9e-4412-a1af-c4388e618001",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W48",
+      "started_at": "2026-09-07T12:57:41.052778Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
     }
   },
   "artifacts": {
@@ -20599,8 +20616,12 @@
     }
   },
   "current": {
-    "active_session_ids": [],
-    "active_wave_ids": [],
+    "active_session_ids": [
+      "SES-20260907T125741.052778Z-executor-claude-6de35f75-2c9e-4412-a1af-c4388e618001"
+    ],
+    "active_wave_ids": [
+      "P31-I01-W48"
+    ],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -37632,7 +37653,8 @@
         "P31-I01-W44",
         "P31-I01-W45",
         "P31-I01-W46",
-        "P31-I01-W47"
+        "P31-I01-W47",
+        "P31-I01-W48"
       ]
     },
     "P32-I01": {
@@ -39062,7 +39084,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T12:38:40.726652Z",
+  "updated_at": "2026-09-07T12:57:49.404363Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -160862,8 +160884,8 @@
       "claim_session_id": "SES-20260907T115019.216649Z-executor-claude-6a55b9ea-6a2f-4285-ac33-5f2e6d61550e",
       "claimed_at": "2026-09-07T11:48:34.337450Z",
       "closed_at": "2026-09-07T12:38:21.144576Z",
-      "commit": "f16be81a8c2c33f7aeb8f1f2e8b6818495f3a6b4",
-      "commit_identity_digest": "sha256:5431f96a68765d81c4973410ff37f2da0459a225a2cad4108282a1adb5997093",
+      "commit": "2e87305595a3606dbf20440a2d280c6bdd98cfdd",
+      "commit_identity_digest": "sha256:2b3f1161580ea0c121f87890f1d84a4f2b3d94f5ec34b5b24bc6ff800b8e4a89",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
         "waived_at": "2026-09-07T11:48:21.339061Z",
@@ -160975,6 +160997,164 @@
         }
       ],
       "title": "Repair the consumer-registry drift and refresh the autogen tree",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W48": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260907T125741.052778Z-executor-claude-6de35f75-2c9e-4412-a1af-c4388e618001",
+      "claimed_at": "2026-09-07T12:57:41.830948Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-07T12:57:26.486179Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "A fresh-context audit found three failures caused by waves in this phase, not inherited. W35 reflowed the phase-release workflow so its annotation regex no longer matches the single-line literal its test greps. W22 split the daemon state module and moved the warn-once anchor flag without repointing its test. W43 changed the dispatch renderer without refreshing the two research-role goldens, which rule 34 requires to ride the causing change.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/unit/test_commit_prefix_lint.py",
+        "tests/integration/test_daemon_cross_repo_anchor.py",
+        "tests/golden/dispatch",
+        "tests/integration/test_plugin_doctor_strict.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_commit_prefix_lint.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_daemon_cross_repo_anchor.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_plugin_doctor_strict.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P31-I01-W48",
+      "intent": {
+        "desired_outcome": "the three coupling breaks exit 0 so the suite reflects only genuine external debt",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Make the annotation-regex test tolerate the reflowed workflow|Repoint the anchor test at the moved symbol|Refresh the two research-role dispatch goldens"
+        ],
+        "priority_rationale": null,
+        "problem": "Three test failures were introduced by waves in this phase and wrongly recorded as inherited",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-09-07T12:57:26.722373Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/test_commit_prefix_lint.py exits 0 with all three annotation-regex tests passing",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "The phase-release annotation regex stays reachable from its test after the workflow was reflowed; tests/unit/test_commit_prefix_lint.py exits 0 with the workflow literal located whether re.search sits on one line or several; pytest tests/unit/test_commit_prefix_lint.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_daemon_cross_repo_anchor.py exits 0",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "The cross-repo anchor test names the warn-once flag at the home the daemon module split gave it; tests/integration/test_daemon_cross_repo_anchor.py exits 0 with no AttributeError on the moved symbol; pytest tests/integration/test_daemon_cross_repo_anchor.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/test_plugin_doctor_strict.py exits 0 with both research-role dispatch goldens matching",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "The two research-role dispatch goldens match the renderer that changed under them, so the golden refresh rides its cause; tests/integration/test_plugin_doctor_strict.py exits 0 with cc_research and codex_research matching; pytest tests/integration/test_plugin_doctor_strict.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Repair three coupling breaks this phase introduced",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
