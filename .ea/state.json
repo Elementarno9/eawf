@@ -15865,6 +15865,23 @@
       "status": "stale",
       "summary": "orphaned by daemon restart",
       "worktree_ids": []
+    },
+    "SES-20260907T145305.170534Z-executor-claude-54cf4026-e919-488a-8486-012b99efe08d": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W52"
+      ],
+      "ended_at": null,
+      "id": "SES-20260907T145305.170534Z-executor-claude-54cf4026-e919-488a-8486-012b99efe08d",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W52",
+      "started_at": "2026-09-07T14:53:05.170534Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
     }
   },
   "artifacts": {
@@ -19498,14 +19515,24 @@
       "closed_at": null,
       "commit": null,
       "created_at": "2026-07-13T23:16:09.575618Z",
-      "description": "The repo opted into odr_blocking at P30-I23-W25 and the daemon iter-close path threads the flag, yet P30-I24 closed with an ODR of 0.000 and 0 of its 11 required criteria typed. Either that close bypassed the daemon (the daemonless portalocker fallback defaults odr_blocking to False) or the threading did not fire. A gate that a close can walk around is not a gate. Establish which happened and shut the path, then drain I24's criteria.",
+      "description": "Answered during the P31 closeout: the first disjunct holds. The CLI in-process portalocker fallback calls close_iter without odr_floor or odr_blocking, so it takes the odr_blocking=False default; the daemon path threads both from the verify block. The gate enforces or not purely by daemon reachability. Remaining work: shut the path (scoped as P32-I01-W34) and drain I24's 11 legacy criteria, which the existing convert-legacy handles since they carry no gate bindings.",
       "id": "B108",
-      "intent": null,
+      "intent": {
+        "desired_outcome": "The fallback close arms the gate identically to the daemon path and P30-I24's criteria are drained",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Pass the verify block ODR dials into the fallback close_iter call under P32-I01-W34|Drain P30-I24 with eawf spec convert-legacy"
+        ],
+        "priority_rationale": null,
+        "problem": "The iter-close ODR gate is enforced on the daemon path and silently advisory on the portalocker fallback path",
+        "risks": [],
+        "source_brief_ids": []
+      },
       "priority": "P1",
       "resolution": null,
       "scope_id": "P30",
       "status": "open",
-      "title": "Find out how P30-I24 closed with an ODR of zero while the gate was armed"
+      "title": "Arm the ODR gate on the iter-close fallback path and drain I24"
     },
     "B109": {
       "closed_at": null,
@@ -20851,8 +20878,12 @@
     }
   },
   "current": {
-    "active_session_ids": [],
-    "active_wave_ids": [],
+    "active_session_ids": [
+      "SES-20260907T145305.170534Z-executor-claude-54cf4026-e919-488a-8486-012b99efe08d"
+    ],
+    "active_wave_ids": [
+      "P31-I01-W52"
+    ],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -38092,7 +38123,8 @@
         "P32-I01-W30",
         "P32-I01-W31",
         "P32-I01-W32",
-        "P32-I01-W33"
+        "P32-I01-W33",
+        "P32-I01-W34"
       ]
     },
     "P33-I01": {
@@ -39484,7 +39516,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T14:51:44.137338Z",
+  "updated_at": "2026-09-07T14:59:42.467746Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -161962,8 +161994,8 @@
     "P31-I01-W52": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260907T145305.170534Z-executor-claude-54cf4026-e919-488a-8486-012b99efe08d",
+      "claimed_at": "2026-09-07T14:53:11.821524Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -162043,7 +162075,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -166842,6 +166874,72 @@
         }
       ],
       "title": "Stop the wheel force-include colliding with the package glob",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W34": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced by a typed spec sync when P32 prep dispatches this wave",
+        "waived_at": "2026-09-07T14:58:50.028190Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "close_iter defaults odr_blocking to False. The daemon path overrides it from the repo verify block via thread_iter_close_verify_params, but the CLI in-process portalocker fallback calls close_iter without odr_floor or odr_blocking despite already holding the verify block for require_iter_audit_accepted. The gate therefore enforces or does not purely by whether the daemon was reachable, and the fallback is the sanctioned CI, one-shot and recovery path. Likely the real mechanism behind B108.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/lifecycle_iter.py",
+        "tests/unit/surfaces/cli/test_lifecycle_iter_close.py"
+      ],
+      "gates": [],
+      "id": "P32-I01-W34",
+      "intent": {
+        "desired_outcome": "The fallback close passes the verify block ODR dials so the gate enforces identically on both paths",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Pass odr_floor and odr_blocking from the loaded verify block into the fallback close_iter call|Prove a sub-floor iter close raises through the fallback mutator"
+        ],
+        "priority_rationale": "A gate whose strength depends on process topology gives green closes that prove nothing, and B108 is open against a symptom of it",
+        "problem": "The iter-close ODR gate is enforced on the daemon path and silently advisory on the portalocker fallback path",
+        "risks": [
+          "Arming the gate on the fallback path may red existing CI or recovery closes that relied on the advisory default"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-07T14:58:50.159667Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Placeholder criterion replaced by a typed spec sync during P32 prep",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Placeholder criterion replaced by a typed spec sync during P32 prep",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Arm the ODR gate on the iter-close fallback path",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
