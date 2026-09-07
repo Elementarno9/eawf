@@ -463,3 +463,46 @@ def test_dependencies_probe_refuses_a_malformed_receipt(tmp_path: Path) -> None:
     path.write_text(json.dumps({"lock_digest": "not-a-digest"}), encoding="utf-8")
     with pytest.raises(ValueError, match="does not validate"):
         dependencies_probe(_context(), repo_root=tmp_path)
+
+
+def test_classify_license_accepts_non_canonical_spellings() -> None:
+    """Real metadata spells permissive licenses many ways.
+
+    Package metadata is hand-written and predates PEP 639, so the same
+    license arrives as "BSD", "Apache 2.0" or "Mozilla Public License
+    2.0 (MPL 2.0)". Normalising here keeps the allowlist canonical SPDX
+    instead of an ever-growing set of observed strings. Every id below
+    was read off a real distribution in this project's own lock.
+    """
+    for declared in (
+        "BSD",
+        "BSD License",
+        "Apache 2.0",
+        "Apache Software License",
+        "ISC License",
+        "MIT License",
+        "Mozilla Public License 2.0 (MPL 2.0)",
+    ):
+        assert classify_license(declared) is LicenseDisposition.ALLOWED, declared
+
+
+def test_classify_license_reads_spdx_or_as_a_choice() -> None:
+    """``A OR B`` offers a choice, so one permitted operand suffices."""
+    assert classify_license("Apache-2.0 OR BSD-2-Clause") is LicenseDisposition.ALLOWED
+    assert classify_license("MIT OR GPL-3.0-only") is LicenseDisposition.ALLOWED
+
+
+def test_classify_license_reads_spdx_and_as_a_conjunction() -> None:
+    """``A AND B`` imposes both, so every operand must be permitted."""
+    assert classify_license("MPL-2.0 AND (Apache-2.0 OR MIT)") is LicenseDisposition.ALLOWED
+    assert classify_license("MIT AND GPL-3.0-only") is LicenseDisposition.FORBIDDEN
+
+
+def test_classify_license_still_refuses_copyleft_and_unknown() -> None:
+    """The gate keeps its teeth: normalisation widened spelling, not policy.
+
+    A classifier lenient enough to accept every spelling is worthless if
+    it also waves through what the allowlist exists to stop.
+    """
+    for declared in ("GPL-3.0-only", "AGPL-3.0", "UNKNOWN", "SSPL-1.0"):
+        assert classify_license(declared) is LicenseDisposition.FORBIDDEN, declared

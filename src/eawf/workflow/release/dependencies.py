@@ -169,6 +169,81 @@ def normalized_name(name: str) -> str:
     return _SEPARATOR_RUN.sub("-", name).strip().lower()
 
 
+#: Non-canonical license spellings seen in real distribution metadata,
+#: mapped to the SPDX id they mean. Package metadata is written by hand
+#: and predates PEP 639, so the same license arrives as "BSD", "Apache
+#: 2.0" or "Mozilla Public License 2.0 (MPL 2.0)". Normalising here
+#: keeps :data:`DEFAULT_LICENSE_ALLOWLIST` canonical SPDX rather than a
+#: growing set of observed strings.
+#:
+#: A bare family name resolves to the family's usual member: "BSD"
+#: without a clause count is BSD-3-Clause in every case observed here.
+#: That is an assumption, and it is why the map is explicit and small
+#: rather than a fuzzy match.
+_LICENSE_ALIASES: Final[Mapping[str, str]] = {
+    "APACHE 2.0": "APACHE-2.0",
+    "APACHE SOFTWARE LICENSE": "APACHE-2.0",
+    "BSD": "BSD-3-CLAUSE",
+    "BSD LICENSE": "BSD-3-CLAUSE",
+    "ISC LICENSE": "ISC",
+    "MIT LICENSE": "MIT",
+    "MOZILLA PUBLIC LICENSE 2.0 (MPL 2.0)": "MPL-2.0",
+    "THE UNLICENSE (UNLICENSE)": "UNLICENSE",
+}
+
+#: Matches an SPDX expression operator, so a compound declaration can be
+#: split into the ids it combines.
+_SPDX_OPERATOR = re.compile(r"\s+(AND|OR)\s+")
+
+
+def _canonical_license(declared: str) -> str:
+    """Return the SPDX id *declared* names, upper-cased.
+
+    Args:
+        declared: One license identifier, in any spelling.
+
+    Returns:
+        The canonical upper-case id, or the upper-cased input when no
+        alias applies.
+    """
+    # Alias first, parens second: an operand from a split expression
+    # arrives as "(Apache-2.0" and needs the bracket gone, but a whole
+    # declaration can legitimately contain one -- "Mozilla Public
+    # License 2.0 (MPL 2.0)" -- and stripping that first would destroy
+    # the very string the alias map keys on.
+    upper = declared.strip().upper()
+    if upper in _LICENSE_ALIASES:
+        return _LICENSE_ALIASES[upper]
+    bare = upper.strip("()").strip()
+    return _LICENSE_ALIASES.get(bare, bare)
+
+
+def _expression_is_permitted(declared: str, permitted: frozenset[str]) -> bool:
+    """Return whether the SPDX expression *declared* clears *permitted*.
+
+    ``A OR B`` offers a choice, so one permitted operand is enough.
+    ``A AND B`` imposes both, so every operand must be permitted. The
+    two are evaluated separately rather than by precedence: a mixed
+    expression like ``MPL-2.0 AND (Apache-2.0 OR MIT)`` is permitted
+    only when every id it names is, which is the conservative reading
+    and the correct one whenever the whole set is allowlisted.
+
+    Args:
+        declared: The expression as the package declares it.
+        permitted: Upper-case allowlisted ids.
+
+    Returns:
+        Whether the expression is permitted.
+    """
+    parts = [part for part in _SPDX_OPERATOR.split(declared) if part not in {"AND", "OR"}]
+    ids = [_canonical_license(part) for part in parts if part.strip()]
+    if not ids:
+        return False
+    if " AND " in declared.upper():
+        return all(entry in permitted for entry in ids)
+    return any(entry in permitted for entry in ids)
+
+
 def classify_license(
     license_id: str,
     *,
@@ -193,12 +268,12 @@ def classify_license(
     declared = license_id.strip()
     if not declared:
         return LicenseDisposition.UNDECLARED
-    permitted = {entry.upper() for entry in allowlist}
-    return (
-        LicenseDisposition.ALLOWED
-        if declared.upper() in permitted
-        else LicenseDisposition.FORBIDDEN
-    )
+    permitted = frozenset(entry.upper() for entry in allowlist)
+    if _canonical_license(declared) in permitted:
+        return LicenseDisposition.ALLOWED
+    if _expression_is_permitted(declared, permitted):
+        return LicenseDisposition.ALLOWED
+    return LicenseDisposition.FORBIDDEN
 
 
 class LockedPackage(_StrictModel):
