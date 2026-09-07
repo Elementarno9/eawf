@@ -176,6 +176,45 @@ def test_build_dependency_manifest_rejects_a_package_without_a_version() -> None
         build_dependency_manifest('[[package]]\nname = "typer"\n', licenses={})
 
 
+def test_build_dependency_manifest_skips_the_editable_workspace_package() -> None:
+    """The project itself is not a dependency of itself.
+
+    uv locks the released project with an editable source and no version,
+    because its version is whatever the working tree says. Requiring one
+    reds the producer on every real lock, which is what kept the
+    dependency receipt from ever being written.
+    """
+    lock = (
+        '[[package]]\nname = "eawf"\nsource = { editable = "." }\n\n'
+        '[[package]]\nname = "typer"\nversion = "0.25.1"\n'
+        'source = { registry = "https://pypi.org/simple" }\n'
+    )
+    manifest = build_dependency_manifest(lock, licenses={})
+    assert [package.name for package in manifest.packages] == ["typer"]
+
+
+def test_build_dependency_manifest_skips_a_virtual_workspace_package() -> None:
+    """A virtual workspace member is locked the same way and skipped too."""
+    lock = (
+        '[[package]]\nname = "eawf-workspace"\nsource = { virtual = "." }\n\n'
+        '[[package]]\nname = "typer"\nversion = "0.25.1"\n'
+        'source = { registry = "https://pypi.org/simple" }\n'
+    )
+    manifest = build_dependency_manifest(lock, licenses={})
+    assert [package.name for package in manifest.packages] == ["typer"]
+
+
+def test_build_dependency_manifest_still_rejects_a_versionless_registry_package() -> None:
+    """The skip is narrow: only an editable/virtual source excuses no version.
+
+    A registry distribution with no resolved version is a broken lock, and
+    silently dropping it would understate what the release ships.
+    """
+    lock = '[[package]]\nname = "typer"\nsource = { registry = "https://pypi.org/simple" }\n'
+    with pytest.raises(ValueError, match="no name/version"):
+        build_dependency_manifest(lock, licenses={})
+
+
 def test_build_dependency_manifest_rejects_a_non_string_lock() -> None:
     """The lock arrives as decoded text; bytes are a caller bug."""
     with pytest.raises(TypeError, match="lock_text must be str"):

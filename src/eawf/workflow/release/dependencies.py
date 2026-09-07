@@ -323,6 +323,26 @@ def compute_lock_digest(lock_text: str) -> str:
     return f"sha256:{hashlib.sha256(normalized.encode('utf-8')).hexdigest()}"
 
 
+def _is_workspace_source(row: Mapping[str, object]) -> bool:
+    """Return whether *row* locks a local workspace member, not a dependency.
+
+    uv locks the project itself (and any workspace member) with an
+    ``editable`` or ``virtual`` source and no version -- there is no
+    resolved version to record, because the version is whatever the
+    working tree says. Every third-party distribution carries one.
+
+    Args:
+        row: One raw ``[[package]]`` table.
+
+    Returns:
+        ``True`` when the table's source is editable or virtual.
+    """
+    source = row.get("source")
+    if not isinstance(source, Mapping):
+        return False
+    return "editable" in source or "virtual" in source
+
+
 def _package_rows(lock_text: str) -> Sequence[Mapping[str, object]]:
     """Return the ``[[package]]`` tables of *lock_text*.
 
@@ -388,6 +408,13 @@ def build_dependency_manifest(
     for row in _package_rows(lock_text):
         name = row.get("name")
         version = row.get("version")
+        # The project itself is locked as an editable source with no
+        # version. It is what the release publishes, not a dependency the
+        # release ships, and `version_consistency` already pins its
+        # version -- inventorying it would invent a row and, because the
+        # version is absent, red the whole producer on every real lock.
+        if isinstance(name, str) and version is None and _is_workspace_source(row):
+            continue
         if not isinstance(name, str) or not isinstance(version, str):
             raise ValueError(
                 f"{LOCK_FILENAME} carries a [[package]] table with no name/version "
