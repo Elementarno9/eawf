@@ -36,6 +36,7 @@ from eawf.workflow.release.dependencies import (
     ReleaseDependencyManifest,
     build_dependency_manifest,
     normalized_name,
+    shipped_distributions,
 )
 from eawf.workflow.release.receipts import write_receipt
 from eawf.workflow.release.reproducibility import (
@@ -162,10 +163,12 @@ def produce_dependency_manifest(repo_root: Path) -> ReleaseDependencyManifest:
         FileNotFoundError: When the checkout carries no lock file.
     """
     lock = repo_root / LOCK_FILENAME
+    lock_text = lock.read_text(encoding="utf-8")
     manifest = build_dependency_manifest(
-        lock.read_text(encoding="utf-8"),
+        lock_text,
         licenses=installed_licenses(),
         imported_distributions=imported_distributions(repo_root),
+        shipped=shipped_distributions(lock_text),
     )
     logger.info(
         f"produce_dependency_manifest packages={len(manifest.packages)} "

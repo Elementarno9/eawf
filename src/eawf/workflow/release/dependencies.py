@@ -445,12 +445,80 @@ def _package_rows(lock_text: str) -> Sequence[Mapping[str, object]]:
     return [row for row in rows if isinstance(row, Mapping)]
 
 
+def _dependency_names(row: Mapping[str, object]) -> list[str]:
+    """Return every distribution one lock row depends on, extras included.
+
+    ``dev-dependencies`` is a separate key and is deliberately not read:
+    a development group is in no published artifact.
+
+    Args:
+        row: One raw ``[[package]]`` table.
+
+    Returns:
+        Normalized names, in lock order, possibly with repeats.
+    """
+    groups: list[object] = [row.get("dependencies")]
+    extras = row.get("optional-dependencies")
+    if isinstance(extras, Mapping):
+        groups.extend(extras.values())
+    names: list[str] = []
+    for group in groups:
+        if not isinstance(group, list):
+            continue
+        names.extend(
+            normalized_name(str(entry["name"]))
+            for entry in group
+            if isinstance(entry, Mapping) and entry.get("name")
+        )
+    return names
+
+
+def shipped_distributions(lock_text: str) -> frozenset[str]:
+    """Return the distributions a published install can actually receive.
+
+    The closure starts at the workspace root's runtime dependencies plus
+    every declared extra -- an extra is part of the published surface,
+    because ``pip install eawf[docs]`` really does deliver it -- and
+    walks each package's own dependencies. Development groups are
+    excluded: they are never in any artifact a user installs, so their
+    metadata cannot create an obligation for anyone.
+
+    Args:
+        lock_text: Contents of ``uv.lock``.
+
+    Returns:
+        Normalized names of the reachable distributions. Empty when the
+        lock declares no workspace root, which lets a caller tell "no
+        root to scope from" apart from "root ships nothing".
+
+    Raises:
+        ValueError: When the lock is not valid TOML or declares no
+            packages.
+    """
+    rows = {normalized_name(str(row.get("name", ""))): row for row in _package_rows(lock_text)}
+    roots = [row for row in rows.values() if _is_workspace_source(row)]
+    if not roots:
+        return frozenset()
+    frontier = [name for root in roots for name in _dependency_names(root)]
+    seen: set[str] = set()
+    while frontier:
+        name = frontier.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        row = rows.get(name)
+        if row is not None:
+            frontier.extend(_dependency_names(row))
+    return frozenset(seen)
+
+
 def build_dependency_manifest(
     lock_text: str,
     *,
     licenses: Mapping[str, str],
     imported_distributions: Sequence[str] = (),
     allowlist: frozenset[str] = DEFAULT_LICENSE_ALLOWLIST,
+    shipped: frozenset[str] | None = None,
 ) -> ReleaseDependencyManifest:
     """Return the inventory *lock_text* and *licenses* describe.
 
@@ -489,6 +557,11 @@ def build_dependency_manifest(
         # version -- inventorying it would invent a row and, because the
         # version is absent, red the whole producer on every real lock.
         if isinstance(name, str) and version is None and _is_workspace_source(row):
+            continue
+        # Inventory only what a published install delivers. A license
+        # gate on the artifact should describe the artifact; the dev and
+        # docs trees are never in it, so their metadata binds nobody.
+        if shipped is not None and isinstance(name, str) and normalized_name(name) not in shipped:
             continue
         if not isinstance(name, str) or not isinstance(version, str):
             raise ValueError(

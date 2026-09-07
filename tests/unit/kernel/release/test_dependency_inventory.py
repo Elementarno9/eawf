@@ -39,6 +39,7 @@ from eawf.workflow.release.dependencies import (
     compute_lock_digest,
     inventory_component,
     normalized_name,
+    shipped_distributions,
 )
 from eawf.workflow.release.producers import (
     DEFAULT_RELEASE_PROBES,
@@ -506,3 +507,76 @@ def test_classify_license_still_refuses_copyleft_and_unknown() -> None:
     """
     for declared in ("GPL-3.0-only", "AGPL-3.0", "UNKNOWN", "SSPL-1.0"):
         assert classify_license(declared) is LicenseDisposition.FORBIDDEN, declared
+
+
+_SCOPED_LOCK = (
+    '[[package]]\nname = "eawf"\nsource = { editable = "." }\n'
+    'dependencies = [{ name = "click" }]\n'
+    '[package.optional-dependencies]\ndocs = [{ name = "mkdocs" }]\n'
+    '[package.dev-dependencies]\ndev = [{ name = "pytest" }]\n\n'
+    '[[package]]\nname = "click"\nversion = "8.3.0"\n'
+    'source = { registry = "https://pypi.org/simple" }\n'
+    'dependencies = [{ name = "colorama" }]\n\n'
+    '[[package]]\nname = "colorama"\nversion = "0.4.6"\n'
+    'source = { registry = "https://pypi.org/simple" }\n\n'
+    '[[package]]\nname = "mkdocs"\nversion = "1.6.0"\n'
+    'source = { registry = "https://pypi.org/simple" }\n\n'
+    '[[package]]\nname = "pytest"\nversion = "8.3.0"\n'
+    'source = { registry = "https://pypi.org/simple" }\n'
+)
+
+
+def test_shipped_distributions_excludes_development_groups() -> None:
+    """A dev dependency is in no artifact a user installs.
+
+    Its metadata therefore binds nobody, and auditing it only produces
+    findings about tools that never leave this repository.
+    """
+    shipped = shipped_distributions(_SCOPED_LOCK)
+    assert "pytest" not in shipped
+
+
+def test_shipped_distributions_includes_extras_and_transitive_deps() -> None:
+    """An extra is published surface: ``pip install eawf[docs]`` delivers it.
+
+    The walk is transitive, so a dependency of a dependency counts too.
+    """
+    shipped = shipped_distributions(_SCOPED_LOCK)
+    assert {"click", "colorama", "mkdocs"} <= shipped
+
+
+def test_shipped_distributions_is_empty_without_a_workspace_root() -> None:
+    """No root means nothing to scope from, which is not "ships nothing".
+
+    Returning empty lets the caller tell the two apart and decline to
+    filter rather than silently inventorying an empty manifest.
+    """
+    lock = (
+        '[[package]]\nname = "click"\nversion = "8.3.0"\n'
+        'source = { registry = "https://pypi.org/simple" }\n'
+    )
+    assert shipped_distributions(lock) == frozenset()
+
+
+def test_build_dependency_manifest_scopes_to_shipped_when_asked() -> None:
+    """The manifest carries only what the release actually distributes."""
+    manifest = build_dependency_manifest(
+        _SCOPED_LOCK, licenses={}, shipped=shipped_distributions(_SCOPED_LOCK)
+    )
+    assert [row.name for row in manifest.packages] == ["click", "colorama", "mkdocs"]
+
+
+def test_scoping_still_reds_a_forbidden_runtime_license() -> None:
+    """Narrowing the audit must not blunt it.
+
+    Scoping exists to drop dependencies nobody receives, not to make the
+    gate easier to pass. A copyleft license on a package the wheel really
+    ships is exactly what this gate is for, and it must still be found.
+    """
+    manifest = build_dependency_manifest(
+        _SCOPED_LOCK,
+        licenses={"click": "GPL-3.0-only"},
+        shipped=shipped_distributions(_SCOPED_LOCK),
+    )
+    forbidden = {row.name for row in manifest.forbidden}
+    assert forbidden == {"click"}
