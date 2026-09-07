@@ -15778,15 +15778,15 @@
       "claimed_wave_ids": [
         "P31-I01-W50"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-07T13:36:51.454368Z",
       "id": "SES-20260907T133548.925756Z-executor-claude-c7967328-5337-49e5-91d8-7fe45a0c8ce2",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W50",
       "started_at": "2026-09-07T13:35:48.925756Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -20710,9 +20710,7 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260907T133548.925756Z-executor-claude-c7967328-5337-49e5-91d8-7fe45a0c8ce2"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [
       "P31-I01-W50"
     ],
@@ -37944,7 +37942,13 @@
         "P32-I01-W21",
         "P32-I01-W22",
         "P32-I01-W23",
-        "P32-I01-W24"
+        "P32-I01-W24",
+        "P32-I01-W25",
+        "P32-I01-W26",
+        "P32-I01-W27",
+        "P32-I01-W28",
+        "P32-I01-W29",
+        "P32-I01-W30"
       ]
     },
     "P33-I01": {
@@ -39336,7 +39340,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T13:35:50.451079Z",
+  "updated_at": "2026-09-07T13:37:26.334512Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -165846,6 +165850,401 @@
         }
       ],
       "title": "Cut the 0.7.0.dev1 checkpoint to APPROVED on merged main",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W25": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion; typed criteria land at phase prep via spec sync",
+        "waived_at": "2026-09-07T13:36:56.498099Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "INC-P31-02. Fifty recorded gate argv across twenty six closed P31 waves name test paths that the P31 test-tree collapse retired, so re-running a closed wave's gates as recorded exits rc=4. No wave-level or iter-level reopen verb exists, so they cannot be repaired in place; spec sync requires a PENDING wave. A translation map exists but the record itself stays wrong.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/spec.py",
+        "src/eawf/workflow/lifecycle",
+        "src/eawf/surfaces/cli/commands",
+        "tests/integration/workflow/lifecycle"
+      ],
+      "gates": [],
+      "id": "P32-I01-W25",
+      "intent": {
+        "desired_outcome": "a closed wave's gate argv can be repointed under an audited mutation so its verification stays re-runnable",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add a bounded repoint path for a closed wave's gate argv|Prove a repointed gate re-runs green with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "Recorded gates on closed waves cannot be repaired when a later wave moves the tree beneath them",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-07T13:36:56.624471Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Make a closed wave's recorded gates repointable after a tree move",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W26": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion; typed criteria land at phase prep via spec sync",
+        "waived_at": "2026-09-07T13:36:57.393109Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "INC-P31-03 and INC-P31-04. Two P31 gates are required and blocking yet cannot fail on any tree: a git log invocation, and a release tag dry run that skips the readiness sweep because the sweep is gated on push. Separately the store holds close-attempt rows for only nineteen of forty eight closed waves and the affordance parity runs persist nothing, so the verification history of most of the phase cannot be reconstructed from state.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/verify",
+        "src/eawf/runtime/daemon/methods",
+        "src/eawf/kernel/spec",
+        "tests/integration/workflow/verify"
+      ],
+      "gates": [],
+      "id": "P32-I01-W26",
+      "intent": {
+        "desired_outcome": "every required gate can red on a real defect and every close persists a receipt",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Replace the two unfalsifiable gate argv with checks that can red|Persist a receipt for every gate a close executes|Prove both with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "Two required gates cannot fail and most closes leave no reconstructable verification record",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-07T13:36:57.511787Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Replace the gates that cannot fail and persist a receipt per close",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W27": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion; typed criteria land at phase prep via spec sync",
+        "waived_at": "2026-09-07T13:36:58.202858Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "INC-P31-08. During P31 a close gate compiled to a broad floor pack and the daemon ran it in process against the live runtime directory. Those suites exercise the daemon's own RPCs, so they flipped the live dispatch pause flag and drove the production dispatch path, which spawned a real agent that edited the main checkout and left work staged. P31-W10 moved gates to child processes but the child still inherits the runtime directory, so the exposure remains.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/gate_execution.py",
+        "src/eawf/runtime/daemon/methods",
+        "tests/integration/runtime/daemon"
+      ],
+      "gates": [],
+      "id": "P32-I01-W27",
+      "intent": {
+        "desired_outcome": "gate execution binds an isolated runtime directory so a gate suite can never reach the live ledger",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Bind gate execution to an isolated runtime directory seeded from a snapshot|Prove live state is byte identical after a state mutating gate with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "A close gate can reach live project state and drive the real dispatch path",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-07T13:36:58.321578Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Isolate close-gate execution from the live runtime directory",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W28": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion; typed criteria land at phase prep via spec sync",
+        "waived_at": "2026-09-07T13:37:24.574949Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "INC-P31-05, INC-P31-09 and INC-P31-10. Nine release RPC verbs are registered but only observe target has a caller, so the bulk of the release subsystem is substrate with no producer. A PR review judged this scheduled work in progress rather than a defect, and noted that wiring a CLI usually surfaces parameter shape mistakes. The same subsystem carries four near colliding concept pairs and files seven release behaviour tests under the kernel mirror.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/release.py",
+        "src/eawf/workflow/release",
+        "tests/unit/workflow/release",
+        "tests/integration/surfaces/cli"
+      ],
+      "gates": [],
+      "id": "P32-I01-W28",
+      "intent": {
+        "desired_outcome": "each release verb is reachable from a surface an operator uses and each concept has one canonical name",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Wire the remaining release verbs to the CLI|Rename the colliding receipt producer and observation pairs|Refile the release behaviour tests under their real mirror"
+        ],
+        "priority_rationale": null,
+        "problem": "Most release verbs have no operator surface and the subsystem carries colliding concept names",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-07T13:37:24.712463Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Give the release verbs an operator surface and settle their names",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W29": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion; typed criteria land at phase prep via spec sync",
+        "waived_at": "2026-09-07T13:37:25.413468Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "INC-P31-06. The agent watch surface reads output chunk envelopes whose only producer fires when the daemon itself spawns a runtime and pipes its stream. A session created by an external orchestrator therefore shows a correct row with no stream behind it, and the pane renders honest empty for the whole run. The terminal report path already ingests an external agent end report, so the gap is the streaming half rather than a missing seam.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/hook.py",
+        "src/eawf/runtime/daemon/dispatch_runner.py",
+        "src/eawf/surfaces/tui/modes",
+        "tests/integration/surfaces"
+      ],
+      "gates": [],
+      "id": "P32-I01-W29",
+      "intent": {
+        "desired_outcome": "an external orchestrator can forward output events that the watch surface renders",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Extend the hook ingestion seam to an agent output event|Prove a forwarded chunk reaches the watch reader with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "The watch surface is blind to any session the daemon did not spawn itself",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-07T13:37:25.529191Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Emit agent output events for externally dispatched sessions",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W30": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion; typed criteria land at phase prep via spec sync",
+        "waived_at": "2026-09-07T13:37:26.211804Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "INC-P31-11. The commit prefix lint caps a wave at one commit by grepping the log, so it cannot distinguish an amend from a second commit and its own remediation text is unfollowable whenever the amend adds deliverable bytes; three P31 waves hit this and worked around it with a soft reset. Separately the anchor fallback warn once flag exists twice, in the daemon state context and in config, and the config copy carries no regression test so the same symbol move break can recur there silently.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tools/commit_prefix_lint.py",
+        "src/eawf/kernel/config",
+        "tests/unit",
+        "tests/integration"
+      ],
+      "gates": [],
+      "id": "P32-I01-W30",
+      "intent": {
+        "desired_outcome": "an amend that adds bytes is accepted and both warn-once flags carry a regression test",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Teach the wave commit cap to recognise an amend|Add a regression test for the config warn-once flag"
+        ],
+        "priority_rationale": null,
+        "problem": "The commit lint rejects a legitimate amend and a duplicated warn-once flag is untested",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-07T13:37:26.334164Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Repair the commit lint amend path and the duplicated warn-once flag",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
