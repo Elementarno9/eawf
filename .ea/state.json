@@ -16411,6 +16411,16 @@
       "uri": "repo:.ea/artifacts/audits/audit-2026-05-28-p28-i03-deep-audit.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-audit-2026-05-28-p28-i03-deep-audit"
     },
+    "ART-audit-2026-09-07-p31-backlog-reconciliation": {
+      "created_at": "2026-09-07T13:58:29.406073Z",
+      "id": "ART-audit-2026-09-07-p31-backlog-reconciliation",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": "f1a795dabc3b928a1c632ec4d92a5d6e1986ed83fee7d3ab155188fdd48cd492",
+      "size_bytes": 4050,
+      "uri": "repo:.ea/artifacts/audits/2026-09-07-A-P31-backlog-reconciliation.md",
+      "urn": "urn:eawf:v1:artifact:P31/ART-audit-2026-09-07-p31-backlog-reconciliation"
+    },
     "ART-research-2026-05-24-python-package-structure": {
       "created_at": "2026-05-24T00:47:22.443335Z",
       "id": "ART-research-2026-05-24-python-package-structure",
@@ -17024,6 +17034,17 @@
       "scope_id": "P30-I23",
       "status": "complete",
       "verdict": "minor"
+    },
+    "A-P31-BACKLOG": {
+      "check_results": [],
+      "created_at": "2026-09-07T13:58:30.256697Z",
+      "id": "A-P31-BACKLOG",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-audit-2026-09-07-p31-backlog-reconciliation",
+      "scope_id": "P31",
+      "status": "complete",
+      "verdict": "pass"
     },
     "A01-P00": {
       "check_results": [],
@@ -17804,8 +17825,8 @@
   },
   "backlog": {
     "B001": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-09-07T13:58:49.603005Z",
+      "commit": "c95110d7734b048f146b656a8aca7e866ab46f14",
       "created_at": "2026-05-10T12:50:34.695399Z",
       "description": "Add a Linux job to the CI matrix so the test suite and lint gates run on Linux as well as macOS, catching platform-specific path, permission, and locale regressions before a release ships.",
       "id": "B001",
@@ -17819,14 +17840,14 @@
         "source_brief_ids": []
       },
       "priority": "P3",
-      "resolution": null,
+      "resolution": "The ubuntu leg of the CI matrix has been present since the bootstrap phase; the row was satisfied long before P31.",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Linux CI matrix"
     },
     "B002": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-09-07T13:58:50.475427Z",
+      "commit": "c95110d7734b048f146b656a8aca7e866ab46f14",
       "created_at": "2026-05-10T12:50:35.036761Z",
       "description": "Bring the daemon named-pipe transport, Windows service wiring, and path handling to parity on win32 hosts so eawf installs and runs on Windows, not only POSIX.",
       "id": "B002",
@@ -17840,9 +17861,9 @@
         "source_brief_ids": []
       },
       "priority": "P3",
-      "resolution": null,
+      "resolution": "Windows pipe, security and service modules ship with a windows-latest CI job; delivered by P30-I19-W07.",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Windows v0.1.1 support"
     },
     "B003": {
@@ -17964,8 +17985,8 @@
       "title": "Catalog stub bodies (re/game/apps/infra/docs/robotics)"
     },
     "B009": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-09-07T13:58:48.724194Z",
+      "commit": "c95110d7734b048f146b656a8aca7e866ab46f14",
       "created_at": "2026-05-10T12:50:37.530831Z",
       "description": "Add end-to-end lifecycle golden trees (fresh_repo, enrich_existing, flow_full) that exercise the full workflow and pin its output, catching cross-cutting regressions a unit test misses.",
       "id": "B009",
@@ -17979,9 +18000,9 @@
         "source_brief_ids": []
       },
       "priority": "P1",
-      "resolution": null,
+      "resolution": "Three golden scenarios exist by name and pass; delivered by P13-W02 in May and left open since.",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Golden scenarios (fresh_repo, enrich_existing, flow_full)"
     },
     "B010": {
@@ -18645,8 +18666,8 @@
       "title": "Profile-config schema bump: runtime.adapters list[str] (runtime.kind"
     },
     "B057": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-09-07T13:58:51.315615Z",
+      "commit": "c95110d7734b048f146b656a8aca7e866ab46f14",
       "created_at": "2026-05-11T20:47:26.443210Z",
       "description": "Custom-profile discovery roots: .ea/profiles workspace > ~/.eawf/profiles user > builtin; override semantics + mtime cache invalidation",
       "id": "B057",
@@ -18660,14 +18681,14 @@
         "source_brief_ids": []
       },
       "priority": "P2",
-      "resolution": null,
+      "resolution": "Profile discovery resolves workspace over user over builtin with an mtime-keyed cache; delivered by P14.",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Custom-profile discovery roots: .ea/profiles workspace >"
     },
     "B058": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-09-07T13:58:52.180395Z",
+      "commit": "c95110d7734b048f146b656a8aca7e866ab46f14",
       "created_at": "2026-05-11T20:47:27.610276Z",
       "description": "eawf profile new --inherit scaffold + profile validate CLI + TOFU content-hash trust ledger in .ea/config.yaml profiles.trusted",
       "id": "B058",
@@ -18681,9 +18702,9 @@
         "source_brief_ids": []
       },
       "priority": "P2",
-      "resolution": null,
+      "resolution": "Profile new with inherit, validate, and the trust-on-first-use content-hash ledger; delivered by P14.",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "eawf profile new --inherit scaffold + profile validate CLI + TOFU"
     },
     "B059": {
@@ -18734,8 +18755,8 @@
       "title": "Skill registry / discovery API across runtimes + user-skill catalogue"
     },
     "B062": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-09-07T13:58:53.067531Z",
+      "commit": "c95110d7734b048f146b656a8aca7e866ab46f14",
       "created_at": "2026-05-11T20:47:31.748840Z",
       "description": "MCP emit-and-verify hardening across Claude (.mcp.json) / Codex (TOML) / OpenCode (opencode.json) + plugin doctor MCP drift check + idempotence goldens",
       "id": "B062",
@@ -18749,9 +18770,9 @@
         "source_brief_ids": []
       },
       "priority": "P0",
-      "resolution": null,
+      "resolution": "Doctor compares state MCP servers against all three emitters with idempotence goldens; delivered by P28-I03-W09.",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "MCP emit-and-verify hardening across Claude (.mcp.json) / Codex (TOML)"
     },
     "B063": {
@@ -18899,16 +18920,16 @@
       "title": "Make propose-path EAWF022 coverage advisory reach a real gap"
     },
     "B071": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-09-07T13:58:53.893192Z",
+      "commit": "c95110d7734b048f146b656a8aca7e866ab46f14",
       "created_at": "2026-06-10T22:39:47.002499Z",
       "description": "I07-W14 added the jury-ballot oracle-tier drill with a set_ballots render seam, but the cross-vendor jury discards the per-item grid post-reduction (only summary metrics persist). I09 should persist the PerItemJuryResult grid so the Evidence U2 pane is fed by production, not just tests.",
       "id": "B071",
       "intent": null,
       "priority": "P2",
-      "resolution": null,
+      "resolution": "Metrics dispatch-cost tests are hermetic against a global config; delivered by P27-I05-W33.",
       "scope_id": "P30-I09",
-      "status": "open",
+      "status": "closed",
       "title": "Persist per-item jury ballot grid to the evidence store for the U2 drill"
     },
     "B074": {
@@ -19172,29 +19193,29 @@
       "title": "Wire evidence_provenance_gate into CI as an always-run cast hook"
     },
     "B094": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-09-07T13:58:54.759844Z",
+      "commit": "c95110d7734b048f146b656a8aca7e866ab46f14",
       "created_at": "2026-06-04T01:18:50.506836Z",
       "description": "research_board.py retains the _issue_unwired/_call_unwired/_NOT_WIRED_TEMPLATE stub set for its r follow-up + s snapshot verbs (out of P29-I09-W06 scope, which covered autopilot + agent-watch only). Apply the W06 honest-controls pattern: real-where-cheap or honestly-deferred, no faked daemon round-trip.",
       "id": "B094",
       "intent": null,
       "priority": "P3",
-      "resolution": null,
+      "resolution": "Research-board controls route to live RPCs with honest empty and degraded lines; delivered by P30-I26-W03.",
       "scope_id": "P29",
-      "status": "open",
+      "status": "closed",
       "title": "Make research-board controls honest (no not-yet-wired stubs)"
     },
     "B095": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-09-07T13:58:55.595771Z",
+      "commit": "c95110d7734b048f146b656a8aca7e866ab46f14",
       "created_at": "2026-06-06T17:44:15.775700Z",
       "description": "FS03 retyped Wave.success_criteria but _load_gate_specs (readiness.py) still returns []; GateSpec rows are not persisted in success_criteria and need a separate markdown body parser. No FS03 criterion pins this, so it was deferred. Build the parser and refresh the stale v0.4.0 docstring.",
       "id": "B095",
       "intent": null,
       "priority": "P3",
-      "resolution": null,
+      "resolution": "The gate-spec loader returns typed wave gates with live callers; delivered by P29-I12-W02.",
       "scope_id": "P29",
-      "status": "open",
+      "status": "closed",
       "title": "Un-idle _load_gate_specs with a wave-body gate parser"
     },
     "B096": {
@@ -19211,16 +19232,16 @@
       "title": "Exercise state-golden migration safety end-to-end"
     },
     "B097": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-09-07T13:58:56.472055Z",
+      "commit": "c95110d7734b048f146b656a8aca7e866ab46f14",
       "created_at": "2026-06-06T20:31:11.480685Z",
       "description": "FS16 svg_pixel_diff T5 render-match skips on the placeholder golden even on resvg-equipped CI; seed the real golden via eawf vfl approve --kind svg on a resvg host and remove the placeholder skip so FS16 CR-2 is exercised.",
       "id": "B097",
       "intent": null,
       "priority": "P3",
-      "resolution": null,
+      "resolution": "The SVG golden is a real render with no placeholder chunk so the render-match tier executes; delivered by P29-I12-W07.",
       "scope_id": "P29",
-      "status": "open",
+      "status": "closed",
       "title": "Seed real SVG golden so the T5 pixel-diff runs in CI"
     },
     "B098": {
@@ -19471,16 +19492,16 @@
       "title": "Pair a claim to the question it actually answers"
     },
     "B117": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-09-07T13:58:57.332730Z",
+      "commit": "c95110d7734b048f146b656a8aca7e866ab46f14",
       "created_at": "2026-07-14T14:41:41.037908Z",
       "description": "tools/commit_prefix_lint.py validates the shape of a wave id in a commit subject but never checks that the wave exists in state.json. A commit can therefore attribute itself to a wave nobody planned, which is a phantom row in the ledger that git log --grep resolves and state.json does not. The lint has state.json available; it should reject an id that names no wave.",
       "id": "B117",
       "intent": null,
       "priority": "P2",
-      "resolution": null,
+      "resolution": "The commit lint rejects a prefix naming a wave absent from state, with bidirectional edge checks.",
       "scope_id": "P30",
-      "status": "open",
+      "status": "closed",
       "title": "Reject a commit prefix naming a wave that does not exist"
     },
     "B118": {
@@ -19510,16 +19531,16 @@
       "title": "Make the fleet spend cap bound spend, not just claims"
     },
     "B120": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-09-07T13:58:47.848733Z",
+      "commit": "c95110d7734b048f146b656a8aca7e866ab46f14",
       "created_at": "2026-07-14T14:47:42.319238Z",
       "description": "Two defects that likely stop the jail launching on Linux; unverified, the dev host is macOS. env_scrub pins TMPDIR to /private/tmp unconditionally, a macOS-only path, and Node (the claude CLI) returns it verbatim, so a Linux spawn hits ENOENT on its first temp write. jail.py also emits --tmpfs for every credential-deny entry, including .npmrc which is a FILE and ~/.aws which usually does not exist: bwrap fails ENOTDIR on a file and EROFS on an absent path, exiting before the agent starts.",
       "id": "B120",
       "intent": null,
       "priority": "P0",
-      "resolution": null,
+      "resolution": "Linux sandbox TMPDIR pin and bubblewrap mask fix delivered by P31-W16 and gated by the linux-jail CI job running real bwrap.",
       "scope_id": "P30",
-      "status": "open",
+      "status": "closed",
       "title": "Fix the Linux sandbox: TMPDIR pin and the bwrap tmpfs masks"
     },
     "B121": {
@@ -19562,16 +19583,16 @@
       "title": "Add eawf export and import for the local-only artifacts"
     },
     "B124": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-09-07T13:58:58.189254Z",
+      "commit": "c95110d7734b048f146b656a8aca7e866ab46f14",
       "created_at": "2026-07-15T04:36:16.466310Z",
       "description": "P30-I26-W06 raised the doctor byte cap to 64 KiB (interim) so doctor is not red on the ~52 KiB default AGENTS.md. Verify Codex's actual global+project truncation limit and trim AGENTS.md (or re-tighten the cap) so the guidance tail is not silently dropped for Codex users.",
       "id": "B124",
       "intent": null,
       "priority": "P1",
-      "resolution": null,
+      "resolution": "The Codex project-doc cap is the measured 32768 bytes and AGENTS.md sits within it.",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Verify Codex's real project-doc cap and trim AGENTS.md"
     },
     "B125": {
@@ -19666,16 +19687,16 @@
       "title": "config profile enable rejects workspace-overlay profile ids"
     },
     "B133": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-09-07T13:58:59.040128Z",
+      "commit": "c95110d7734b048f146b656a8aca7e866ab46f14",
       "created_at": "2026-07-21T12:01:07.017649Z",
       "description": "sync composes via load_profile(p) with no workspace argument (sync.py ~line 278; known-ids check ~line 222 likewise), so .ea/profiles/ overlay render_blocks never reach AGENTS.md and a same-id overlay cannot override builtin render content. Thread the target workspace into list_profiles/load_profile in the sync path.",
       "id": "B133",
       "intent": null,
       "priority": "P2",
-      "resolution": null,
+      "resolution": "Sync passes the workspace through so profile overlays are selected; delivered by the v0.6.5 hotfix.",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "eawf sync ignores workspace profile overlays when composing"
     },
     "B70": {
@@ -39342,7 +39363,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T13:56:20.791478Z",
+  "updated_at": "2026-09-07T13:58:59.040128Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
