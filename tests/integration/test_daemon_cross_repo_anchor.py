@@ -55,8 +55,7 @@ from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
-from eawf.runtime.daemon.methods import MethodContext
-from eawf.runtime.daemon.methods import state as state_methods
+from eawf.runtime.daemon.methods import MethodContext, state_context
 from eawf.runtime.daemon.server import serve_unix
 from eawf.surfaces.cli._daemon_client import DaemonClient
 
@@ -273,8 +272,8 @@ def test_state_read_without_repo_root_falls_back_and_warns_once(
     server, _repo_a, _repo_b = harness
     # Reset the module-level one-shot flag for an isolated assertion;
     # other tests in the suite may have flipped it already.
-    monkeypatch.setattr(state_methods, "_ANCHOR_FALLBACK_WARN_EMITTED", False)
-    caplog.set_level(logging.WARNING, logger="eawf.runtime.daemon.methods.state")
+    monkeypatch.setattr(state_context, "_ANCHOR_FALLBACK_WARN_EMITTED", False)
+    caplog.set_level(logging.WARNING, logger="eawf.runtime.daemon.methods.state_context")
 
     with DaemonClient(
         runtime_dir=server.runtime_dir,

@@ -838,14 +838,7 @@ def test_phase_release_workflow_regex_captures_v060_tag_and_version() -> None:
     test reads the regex out of the YAML so the workflow and this assertion
     stay coupled.
     """
-    import re
-
-    workflow = (_REPO_ROOT / ".github" / "workflows" / "phase-release.yaml").read_text(
-        encoding="utf-8"
-    )
-    pattern_match = re.search(r'match = re\.search\(r"([^"]+)", subject\)', workflow)
-    assert pattern_match is not None, "annotation regex literal not found in phase-release.yaml"
-    annotation_re = re.compile(pattern_match.group(1))
+    annotation_re = _workflow_release_regex()
 
     subject = "[P30] state: close iter + phase (audit=A50-P30) (release=v0.6.0)"
     captured = annotation_re.search(subject)
@@ -874,8 +867,20 @@ _W22_SUBJECT_WAVE = (
 _W22_SUBJECT_FUSED = "[P30] state: close iter + phase (audit=A-P30-I22-ship, release=v0.6.0)"
 
 
+#: Locates the ``(release=v...)`` extraction regex inside
+#: ``.github/workflows/phase-release.yaml``. The ``\s*`` runs absorb line
+#: breaks so a formatter rewrapping that ``re.search(...)`` call across
+#: several lines cannot sever the coupling; the assertions here pin the
+#: regex the workflow runs, not the workflow's line breaks. Requiring the
+#: ``subject`` argument keeps it off the version-extraction ``re.search``
+#: later in the same workflow, which reads ``text`` instead.
+_WORKFLOW_ANNOTATION_RE: re.Pattern[str] = re.compile(
+    r'match = re\.search\(\s*r"([^"]+)",\s*subject\s*,?\s*\)'
+)
+
+
 def _workflow_release_regex() -> re.Pattern[str]:
-    """Return the phase-release.yaml:46 extraction regex, read from the YAML.
+    """Return the phase-release.yaml annotation-extraction regex, read from the YAML.
 
     Reads the literal out of the workflow so the dry-run assertions stay
     coupled to the exact regex the release automation runs.
@@ -883,9 +888,68 @@ def _workflow_release_regex() -> re.Pattern[str]:
     workflow = (_REPO_ROOT / ".github" / "workflows" / "phase-release.yaml").read_text(
         encoding="utf-8"
     )
-    pattern_match = re.search(r'match = re\.search\(r"([^"]+)", subject\)', workflow)
+    pattern_match = _WORKFLOW_ANNOTATION_RE.search(workflow)
     assert pattern_match is not None, "annotation regex literal not found in phase-release.yaml"
     return re.compile(pattern_match.group(1))
+
+
+#: Annotation regex body for the formatting-tolerance fixtures. Carries no
+#: ``"`` so it round-trips through the extractor's ``[^"]+`` capture group.
+_ANNOTATION_LITERAL = r"\(release=(v\d+\.\d+\.\d+)\)"
+
+_SINGLE_LINE_CALL = f'          match = re.search(r"{_ANNOTATION_LITERAL}", subject)\n'
+
+_REFLOWED_CALL = (
+    f'          match = re.search(\n              r"{_ANNOTATION_LITERAL}", subject\n          )\n'
+)
+
+_REFLOWED_TRAILING_COMMA_CALL = (
+    "          match = re.search(\n"
+    f'              r"{_ANNOTATION_LITERAL}",\n'
+    "              subject,\n"
+    "          )\n"
+)
+
+#: The sibling ``re.search`` in the same workflow that parses ``__version__``.
+_VERSION_EXTRACTION_CALL = r"""
+          match = re.search(r'^__version__\s*=\s*"([^"]+)"', text, flags=re.MULTILINE)
+"""
+
+
+@pytest.mark.parametrize(
+    ("shape", "snippet"),
+    [
+        ("single_line", _SINGLE_LINE_CALL),
+        ("reflowed", _REFLOWED_CALL),
+        ("reflowed_trailing_comma", _REFLOWED_TRAILING_COMMA_CALL),
+    ],
+)
+def test_workflow_annotation_re_tolerates_call_formatting(shape: str, snippet: str) -> None:
+    """The extractor reads the workflow literal under any line breaking.
+
+    A formatter rewrapping the workflow's ``re.search(...)`` call across
+    several lines must not sever the coupling: these assertions pin the
+    regex the release automation runs, not the YAML's line breaks. Every
+    formatting of the same call therefore yields the same captured pattern.
+    """
+    found = _WORKFLOW_ANNOTATION_RE.search(snippet)
+    assert found is not None, f"{shape} form not located"
+    assert found.group(1) == _ANNOTATION_LITERAL
+
+
+def test_workflow_annotation_re_ignores_version_extraction_call() -> None:
+    """The extractor skips the sibling ``re.search`` that parses __version__.
+
+    That call binds ``text`` rather than ``subject`` and quotes its pattern
+    with ``'``; matching it would hand the release assertions a regex that
+    never sees a commit subject.
+    """
+    assert _WORKFLOW_ANNOTATION_RE.search(_VERSION_EXTRACTION_CALL) is None
+
+
+def test_workflow_annotation_re_finds_nothing_in_empty_workflow() -> None:
+    """An empty workflow yields no match rather than a bogus capture."""
+    assert _WORKFLOW_ANNOTATION_RE.search("") is None
 
 
 def test_check_release_annotation_rejects_fused_shape(mod) -> None:

@@ -13424,6 +13424,21 @@
       "scope_id": "P31-I01-W47",
       "status": "done",
       "updated_at": "2026-09-07T12:38:21.144576Z"
+    },
+    "P31-I01-W48": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W48",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W48",
+      "model": null,
+      "scope_id": "P31-I01-W48",
+      "status": "done",
+      "updated_at": "2026-09-07T13:07:46.309866Z"
     }
   },
   "agent_sessions": {
@@ -15684,15 +15699,30 @@
       "claimed_wave_ids": [
         "P31-I01-W48"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-07T12:58:23.036780Z",
       "id": "SES-20260907T125741.052778Z-executor-claude-6de35f75-2c9e-4412-a1af-c4388e618001",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W48",
       "started_at": "2026-09-07T12:57:41.052778Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260907T130736.559169Z-operator-claude-26790d7b-8719-45cb-bde8-9fa089d8c9b8": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-07T13:07:38.419589Z",
+      "id": "SES-20260907T130736.559169Z-operator-claude-26790d7b-8719-45cb-bde8-9fa089d8c9b8",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-c48",
+      "started_at": "2026-09-07T13:07:36.559169Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -20616,12 +20646,8 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260907T125741.052778Z-executor-claude-6de35f75-2c9e-4412-a1af-c4388e618001"
-    ],
-    "active_wave_ids": [
-      "P31-I01-W48"
-    ],
+    "active_session_ids": [],
+    "active_wave_ids": [],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -37692,7 +37718,9 @@
         "P32-I01-W19",
         "P32-I01-W20",
         "P32-I01-W21",
-        "P32-I01-W22"
+        "P32-I01-W22",
+        "P32-I01-W23",
+        "P32-I01-W24"
       ]
     },
     "P33-I01": {
@@ -39084,7 +39112,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T12:57:49.404363Z",
+  "updated_at": "2026-09-07T13:18:04.323925Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -40082,6 +40110,22 @@
       "supersedes_id": null,
       "tree_sha": "354f40926319214ab129137c1cd23b4b872b3d5b",
       "wave_id": "P31-I01-W20"
+    },
+    "integration-25a7364896236aa6c43e2b57": {
+      "base_sha": "ec7ef8733a22554328679dbf2a88211e62e9bd16",
+      "candidate_sha": "245cbd75f4c97a0f1e2699c80de8c0cbfff981f3",
+      "created_at": "2026-09-07T13:07:35.310312Z",
+      "diff_digest": "4c6c9fe647caee9247ff349240459675bf8db97dd226ecfeaaf22cf66e2abf0a",
+      "generation": 1,
+      "id": "integration-25a7364896236aa6c43e2b57",
+      "integrated_sha": "245cbd75f4c97a0f1e2699c80de8c0cbfff981f3",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and all three declared gates re-run green on the integrated HEAD.",
+      "spec_digest": "3bdb7e00a400c949355e4879f5ddb3a06d62201eee86838b17b0b639a45e35dd",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "affb7dcb4d4ebf9301bff66a148a6bd45503576b",
+      "wave_id": "P31-I01-W48"
     },
     "integration-29a3c9a28d5ca7621d30983b": {
       "base_sha": "698eec5f67ccf24d096ecf65f98dda723d4cb198",
@@ -161006,9 +161050,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260907T125741.052778Z-executor-claude-6de35f75-2c9e-4412-a1af-c4388e618001",
       "claimed_at": "2026-09-07T12:57:41.830948Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-07T13:07:46.309866Z",
+      "commit": "832afd95ceaac048b7093bafe5d8088b03a6c06c",
+      "commit_identity_digest": "sha256:63665d29becd18abbbe4b13a81bbfddc4d561f6d71b6f47f746cb08d48c30866",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
         "waived_at": "2026-09-07T12:57:26.486179Z",
@@ -161097,13 +161141,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-09-07T12:57:26.722373Z",
-      "outcome": null,
+      "outcome": "Three coupling breaks this phase introduced are repaired: the annotation-regex test now tolerates either workflow formatting, the anchor test names the flag at its post-split home, and the two research dispatch goldens match the ladder that changed under them. Three gates green.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -161174,7 +161218,9 @@
         "waived_at": "2026-09-03T17:58:45.106700Z",
         "waived_by": null
       },
-      "deps": [],
+      "deps": [
+        "P32-I01-W24"
+      ],
       "description": "Post-merge operator wave and the opening wave of the dev2 phase; no code lands here. On the merged main source release.publish moves REL-0.7.0.dev1 from APPROVED to PUBLISHING and pushes the tag through the P31-W20 chokepoint; the P31-W35 pipeline legs run; release.reconcile records each leg; release.observe reads pypi, npm under next and the source-host release back through the P31-W28 adapters; VERIFYING reaches BAKED; the P31-W31 train advance admits dev2.",
       "dispatch_history": [],
       "effort_bucket": "M",
@@ -165092,6 +165138,223 @@
         }
       ],
       "title": "Keep the console chassis replay running as a living fixture",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W23": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W24"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-07T13:17:30.527641Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "P31 left the credentials readiness signal with no producer in any wave, so it reports unavailable. It is a required signal whenever a checkpoint configuration declares required targets, which the dev1 configuration does, so the dev1 sweep cannot reach ready without it. P32-W01 presumes an APPROVED checkpoint and therefore presumes this producer exists.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/release/producers.py",
+        "src/eawf/kernel/release",
+        "tests/unit/kernel/release"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/release/test_credentials_probe.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W23",
+      "intent": {
+        "desired_outcome": "credentials returns a real pass or fail for a checkpoint declaring required targets",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add a credentials probe and register it in the release probe map|Prove it returns pass with handles present and fail naming each absent target with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "The credentials readiness signal has no producer, so the dev1 sweep cannot reach ready",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-07T13:17:30.651172Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_credentials_probe.py exits 0 with a present-handle case passing and an absent-handle case failing by name",
+          "oracle_tier": null,
+          "quality_dimension": "operability",
+          "required": true,
+          "response": null,
+          "text": "The credentials readiness signal has a producer: compute_readiness returns a credentials outcome that is pass or fail rather than unavailable for a checkpoint whose configuration declares required targets, and the outcome names each target whose handle is absent; pytest tests/unit/kernel/release/test_credentials_probe.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add the credentials readiness producer for required targets",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W24": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W01"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-07T13:17:52.853120Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W23"
+      ],
+      "description": "P31-W26 could not reach APPROVED before the merge: ancestry passes only once HEAD is an ancestor of main, artifacts and dependencies read receipts only the release workflow produces, and credentials had no producer. No Release record was persisted, so state carries no releases collection at all. P32-W01 opens by moving REL-0.7.0.dev1 from APPROVED to PUBLISHING and therefore presumes a record this phase must first create.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/release",
+        "src/eawf/runtime/daemon/methods/release.py",
+        "tests/integration/workflow/release"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_dev1_approved_on_main.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_dev1_approved_on_main.py",
+              "-k",
+              "sweep_green"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W24",
+      "intent": {
+        "desired_outcome": "the dev1 Release record exists at APPROVED on merged main with a green required sweep",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Create and persist the dev1 Release record on the merged source|Prove the sweep returns pass for every required signal with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "No Release record exists, so P32-W01 presumes an APPROVED checkpoint that was never cut",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-07T13:17:52.999393Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_dev1_approved_on_main.py exits 0 with the persisted record at status APPROVED and an approval proof_digest equal to the manifest digest",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "On the merged main source the 0.7.0.dev1 Release record exists and transitions to APPROVED: release.create persists the record under its store kind and release.approve moves it to APPROVED with every required dev1 signal passing, so state validates a releases collection carrying the record; pytest tests/integration/workflow/release/test_dev1_approved_on_main.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_dev1_approved_on_main.py -k sweep_green exits 0 with no required signal unavailable",
+          "oracle_tier": null,
+          "quality_dimension": "operability",
+          "required": true,
+          "response": null,
+          "text": "The readiness sweep that admitted the approval is recorded: eawf release preflight for the checkpoint exits 0 and every required signal returns pass, with ancestry satisfied by the merged source and artifacts and dependencies satisfied by the pipeline receipts; cli exit asserted in the same pytest",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Cut the 0.7.0.dev1 checkpoint to APPROVED on merged main",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
