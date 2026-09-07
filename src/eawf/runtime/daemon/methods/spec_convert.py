@@ -12,6 +12,12 @@ Every ``kind == legacy`` criterion row under the scope is pushed through
 measurability lint applied per converted row; a row that cannot be made
 measurable is REFUSED and stays legacy with a named reason (no silent
 lossy conversion).
+
+The same pass also RETROFITS an already-typed row that binds a real gate but
+authored no response clause: the clause is derived from the bound gate
+(:func:`eawf.kernel.spec.common.response_from_gate`) so the criterion's
+``oracle_tier`` stops reading as unproven. A retrofit keeps the row's authored
+``kind`` -- only the missing clause is supplied.
 """
 
 from __future__ import annotations
@@ -30,6 +36,7 @@ from eawf.kernel.spec.common import (
     CriterionSpec,
     GateSpec,
     convert_legacy_criterion,
+    response_from_gate,
     validate_criterion_gate_refs,
 )
 from eawf.kernel.state.enums import StoreKind
@@ -78,13 +85,18 @@ class ConvertLegacyParams(BaseModel):
 
 
 class ConvertRowReport(BaseModel):
-    """One per-criterion row of the conversion report."""
+    """One per-criterion row of the conversion report.
+
+    ``retrofitted`` is the third disposition: the row was already typed and
+    keeps its authored ``kind``; only its missing response clause (and the
+    ``oracle_tier`` computed from it) was supplied.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     wave_id: str
     criterion_id: str
-    disposition: Literal["converted", "refused"]
+    disposition: Literal["converted", "refused", "retrofitted"]
     reason: str | None = None
     gate_kind: str | None = None
 
@@ -98,12 +110,26 @@ class SpecConvertLegacyResult(BaseModel):
     scope_id: str
     dry_run: bool
     converted_count: int
+    retrofit_count: int
     refused_count: int
     rows: list[dict[str, Any]]
     before_version: str | None
     after_version: str | None
     envelope: dict[str, Any] | None
     idempotent_replay: bool = False
+
+
+def _count_disposition(rows: list[ConvertRowReport], disposition: str) -> int:
+    """Count the report rows carrying *disposition*.
+
+    Args:
+        rows: The per-criterion report rows.
+        disposition: The disposition to count.
+
+    Returns:
+        How many rows carry that disposition.
+    """
+    return sum(1 for row in rows if row.disposition == disposition)
 
 
 def _waves_for_convert_scope(state: Any, scope_id: str, kind: str) -> list[str]:
@@ -142,13 +168,18 @@ def _convert_wave_rows(
     with a named reason instead of being lossily converted. The converted row
     keeps its original criterion id so downstream references stay stable.
 
+    A second pass then retrofits the already-typed rows that bind a gate but
+    carry no response clause (:func:`_retrofit_untiered_rows`), so a wave can
+    be both converted and retrofitted in one transaction.
+
     Args:
         wave: The state wave row under conversion.
 
     Returns:
         ``(criteria, gates, reports)``: the wave's full post-conversion
-        criteria list (non-legacy rows untouched), the full gates list
-        (converted gates appended), and one report row per legacy criterion.
+        criteria list (rows neither converted nor retrofitted untouched), the
+        full gates list (converted gates appended), and one report row per
+        legacy or retrofitted criterion.
     """
     reports: list[ConvertRowReport] = []
     new_criteria: list[CriterionSpec] = list(wave.success_criteria)
@@ -217,7 +248,82 @@ def _convert_wave_rows(
                 gate_kind=gate.kind,
             )
         )
+
+    reports.extend(_retrofit_untiered_rows(wave, criteria=new_criteria, gates=new_gates))
     return new_criteria, new_gates, reports
+
+
+def _retrofit_untiered_rows(
+    wave: Any,
+    *,
+    criteria: list[CriterionSpec],
+    gates: list[GateSpec],
+) -> list[ConvertRowReport]:
+    """Supply the missing response clause on already-typed, gated rows.
+
+    A criterion authored before the response clause was mandatory binds a real
+    gate yet carries ``response is None``, so
+    :func:`~eawf.kernel.spec.common.validate_criterion_gate_refs` never
+    computes its ``oracle_tier`` and every determinism metric counts the row as
+    unproven. This derives the clause from the bound gate and lets the
+    validator compute the tier from it.
+
+    The row's authored ``kind`` is PRESERVED: stamping ``converted`` would
+    disable the observation-complexity and scope-agreement validators that the
+    typed row legitimately passes. *criteria* is mutated in place for each
+    retrofitted row; a validation failure leaves every row untouched and
+    reports the refusal instead.
+
+    Args:
+        wave: The state wave row under conversion.
+        criteria: The wave's post-conversion criteria list, mutated in place.
+        gates: The wave's post-conversion gate rows the clauses derive from.
+
+    Returns:
+        One report row per retrofit attempt (``retrofitted`` on success,
+        ``refused`` with the validation reason otherwise); empty when no row
+        needs a clause.
+    """
+    staged: dict[int, CriterionSpec] = {}
+    gate_refs: dict[int, str | None] = {}
+    for index, criterion in enumerate(criteria):
+        derived = response_from_gate(criterion, gates)
+        if derived is not None:
+            staged[index] = criterion.model_copy(update={"response": derived})
+            gate_refs[index] = derived.gate_ref
+    if not staged:
+        return []
+
+    # Validate over a copy of the WHOLE row set: the cross-reference legs need
+    # every criterion each gate points back at, and the tier compute writes in
+    # place, so untouched rows are copied rather than lent to the validator.
+    candidate = [staged.get(index, row.model_copy()) for index, row in enumerate(criteria)]
+    try:
+        validate_criterion_gate_refs(candidate, gates, allow_computed_tier=True)
+    except ValueError as exc:
+        return [
+            ConvertRowReport(
+                wave_id=wave.id,
+                criterion_id=criteria[index].id,
+                disposition="refused",
+                reason=f"tier retrofit validation failed: {exc}",
+            )
+            for index in sorted(staged)
+        ]
+
+    reports: list[ConvertRowReport] = []
+    for index in sorted(staged):
+        retrofitted = candidate[index]
+        criteria[index] = retrofitted
+        reports.append(
+            ConvertRowReport(
+                wave_id=wave.id,
+                criterion_id=retrofitted.id,
+                disposition="retrofitted",
+                gate_kind=gate_refs[index],
+            )
+        )
+    return reports
 
 
 def _convert_one_row(
@@ -291,6 +397,11 @@ async def convert_legacy(ctx: MethodContext, params: dict[str, Any]) -> dict[str
     be made measurable is REFUSED and stays legacy with a named reason (no
     silent lossy conversion). Converted rows carry ``kind == converted``
     with a falsifying blocking gate attached.
+
+    The pass also RETROFITS already-typed rows that bind a gate but authored
+    no response clause: the clause is derived from the bound gate so the
+    ``oracle_tier`` can be computed. Such a row KEEPS its authored ``kind``
+    and is reported under its own ``retrofit_count``.
 
     Unlike ``spec.sync`` this mutation deliberately accepts NON-PENDING
     waves: the drain corpus is historical (closed) waves whose criteria were
@@ -429,7 +540,9 @@ def _apply_convert_legacy_locked(
         wave.success_criteria = criteria
         wave.gates = gates
 
-    converted_count = sum(1 for row in rows if row.disposition == "converted")
+    converted_count = _count_disposition(rows, "converted")
+    retrofit_count = _count_disposition(rows, "retrofitted")
+    refused_count = _count_disposition(rows, "refused")
     touched = len(staged_waves)
     if touched == 0:
         return _convert_result(
@@ -444,7 +557,8 @@ def _apply_convert_legacy_locked(
     envelope = _build_convert_legacy_envelope(
         scope_id=args.scope_id,
         converted_count=converted_count,
-        refused_count=len(rows) - converted_count,
+        retrofit_count=retrofit_count,
+        refused_count=refused_count,
         waves_touched=touched,
         before_version=before_version,
         after_version=after_version,
@@ -466,7 +580,7 @@ def _apply_convert_legacy_locked(
     _publish(ctx, envelope)
     logger.info(
         f"convert_legacy ok scope_id={args.scope_id} converted={converted_count} "
-        f"refused={len(rows) - converted_count} waves={touched} "
+        f"retrofitted={retrofit_count} refused={refused_count} waves={touched} "
         f"before={before_version} after={after_version}"
     )
     return _convert_result(
@@ -487,13 +601,13 @@ def _convert_result(
     envelope: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Assemble the :class:`SpecConvertLegacyResult` payload dict."""
-    converted_count = sum(1 for row in rows if row.disposition == "converted")
     return SpecConvertLegacyResult(
         operation="convert_legacy",
         scope_id=args.scope_id,
         dry_run=args.dry_run,
-        converted_count=converted_count,
-        refused_count=len(rows) - converted_count,
+        converted_count=_count_disposition(rows, "converted"),
+        retrofit_count=_count_disposition(rows, "retrofitted"),
+        refused_count=_count_disposition(rows, "refused"),
         rows=[row.model_dump(mode="json") for row in rows],
         before_version=before,
         after_version=after,
@@ -505,6 +619,7 @@ def _build_convert_legacy_envelope(
     *,
     scope_id: str,
     converted_count: int,
+    retrofit_count: int,
     refused_count: int,
     waves_touched: int,
     before_version: str,
@@ -514,7 +629,7 @@ def _build_convert_legacy_envelope(
     now = datetime.now(UTC)
     summary = (
         f"spec.convert_legacy scope={scope_id} converted={converted_count} "
-        f"refused={refused_count} waves={waves_touched}"
+        f"retrofitted={retrofit_count} refused={refused_count} waves={waves_touched}"
     )
     payload = EventPayload(
         timestamp=now,
@@ -528,6 +643,7 @@ def _build_convert_legacy_envelope(
         message=summary,
         extras={
             "converted_count": converted_count,
+            "retrofit_count": retrofit_count,
             "refused_count": refused_count,
             "waves_touched": waves_touched,
         },

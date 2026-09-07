@@ -15,7 +15,10 @@ measurability lint applied per converted row. Coverage:
   and carries a named EAWF021 reason; a wave with no ``file_scopes``
   refuses every row with a named reason;
 * boundary: an unknown wave scope raises; a scope with no legacy rows
-  reports zero rows and writes nothing.
+  reports zero rows and writes nothing;
+* retrofit: an already-typed row that binds a gate but authored no
+  response clause gets the clause derived + its ``oracle_tier``
+  computed, while KEEPING its authored ``kind``.
 
 The handler is driven directly through the module-level coroutine so the
 tests need no live UDS transport.
@@ -34,7 +37,7 @@ import orjson
 import pytest
 
 from eawf import __version__
-from eawf.kernel.spec.common import CONVERTED_KIND, GRANDFATHERED_KIND
+from eawf.kernel.spec.common import CONVERTED_KIND, GRANDFATHERED_KIND, OracleTier
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.store.paths import store_path
@@ -72,10 +75,42 @@ def _legacy_criterion(index: int, text: str) -> dict[str, Any]:
     }
 
 
+def _untiered_criterion() -> dict[str, Any]:
+    """An already-typed row binding a gate but carrying no response clause.
+
+    The corpus the tier retrofit exists for: ``kind`` is authored (not
+    ``legacy``), the gate is real, but ``response`` is ``None`` so nothing ever
+    computed the row's ``oracle_tier``.
+    """
+    return {
+        "id": "CR-01",
+        "text": "the converter derives a response clause from the bound gate",
+        "kind": "deterministic",
+        "acceptance_style": "binary",
+        "evidence_kind": "deterministic",
+        "gate_ids": ["GATE-01"],
+        "quality_dimension": "functional_suitability",
+        "measurable_signal": "the retrofitted row carries a computed oracle tier",
+    }
+
+
+def _exit_zero_gate() -> dict[str, Any]:
+    """A ``command_exit_zero`` gate row bound to :func:`_untiered_criterion`."""
+    return {
+        "id": "GATE-01",
+        "criterion_id": "CR-01",
+        "kind": "command_exit_zero",
+        "args": {"argv": ["pytest", "-q"]},
+        "policy": "block",
+        "cadence": "every-wave",
+    }
+
+
 def _state_payload(
     *,
     criteria: list[dict[str, Any]],
     file_scopes: list[str] | None = None,
+    gates: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """A minimal valid State with one CLOSED wave carrying *criteria*."""
     scopes = file_scopes if file_scopes is not None else ["src/eawf/surfaces/render/units.py"]
@@ -131,7 +166,7 @@ def _state_payload(
                 "status": "closed",
                 "file_scopes": scopes,
                 "success_criteria": criteria,
-                "gates": [],
+                "gates": gates if gates is not None else [],
                 "effort_bucket": "S",
                 "agent_role": "executor",
                 "opened_at": _T0.isoformat(),
@@ -360,6 +395,96 @@ def test_convert_legacy_unknown_wave_scope_raises(tmp_path: Path) -> None:
             )
 
     _run(body)
+
+
+def test_convert_legacy_retrofits_untiered_typed_row_keeping_its_kind(tmp_path: Path) -> None:
+    """A gated typed row with no response clause gets one derived + tiered.
+
+    The row is NOT a conversion: its authored ``kind`` survives, because
+    stamping ``converted`` would disable the observation-complexity and
+    scope-agreement validators the typed row legitimately passes.
+    """
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    state_path = repo_root / ".ea" / "state.json"
+    _write_state(
+        state_path,
+        _state_payload(criteria=[_untiered_criterion()], gates=[_exit_zero_gate()]),
+    )
+    ctx = _build_ctx(tmp_path, state_path)
+
+    async def body() -> None:
+        result = await convert_legacy(
+            ctx,
+            {"scope_id": _WAVE_ID, "repo_root": str(repo_root)},
+        )
+        assert result["converted_count"] == 0
+        assert result["retrofit_count"] == 1
+        assert result["refused_count"] == 0
+        assert result["rows"][0]["disposition"] == "retrofitted"
+        assert result["rows"][0]["gate_kind"] == "command_exit_zero"
+        assert result["envelope"] is not None
+
+    _run(body)
+    wave = _load_wave(state_path)
+    criterion = wave.success_criteria[0]
+    assert criterion.kind == "deterministic"
+    assert criterion.response is not None
+    assert criterion.response.gate_ref == "command_exit_zero"
+    assert criterion.oracle_tier is OracleTier.T4_CONTRACT
+    assert len(wave.gates) == 1
+
+
+def test_convert_legacy_dry_run_reports_retrofit_without_writing(tmp_path: Path) -> None:
+    """--dry-run reports the would-retrofit set and leaves the state bytes alone."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    state_path = repo_root / ".ea" / "state.json"
+    _write_state(
+        state_path,
+        _state_payload(criteria=[_untiered_criterion()], gates=[_exit_zero_gate()]),
+    )
+    before_bytes = state_path.read_bytes()
+    ctx = _build_ctx(tmp_path, state_path)
+
+    async def body() -> None:
+        result = await convert_legacy(
+            ctx,
+            {"scope_id": _WAVE_ID, "dry_run": True, "repo_root": str(repo_root)},
+        )
+        assert result["retrofit_count"] == 1
+        assert result["envelope"] is None
+
+    _run(body)
+    assert state_path.read_bytes() == before_bytes
+    assert _load_wave(state_path).success_criteria[0].oracle_tier is None
+
+
+def test_convert_legacy_refuses_retrofit_when_cross_references_break(tmp_path: Path) -> None:
+    """A retrofit that fails validation refuses the row and writes nothing."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    state_path = repo_root / ".ea" / "state.json"
+    dangling = _exit_zero_gate() | {"criterion_id": "CR-99"}
+    _write_state(
+        state_path,
+        _state_payload(criteria=[_untiered_criterion()], gates=[dangling]),
+    )
+    before_bytes = state_path.read_bytes()
+    ctx = _build_ctx(tmp_path, state_path)
+
+    async def body() -> None:
+        result = await convert_legacy(
+            ctx,
+            {"scope_id": _WAVE_ID, "repo_root": str(repo_root)},
+        )
+        assert result["retrofit_count"] == 0
+        assert result["refused_count"] == 1
+        assert "tier retrofit validation failed" in result["rows"][0]["reason"]
+
+    _run(body)
+    assert state_path.read_bytes() == before_bytes
+    assert _load_wave(state_path).success_criteria[0].response is None
 
 
 def test_convert_legacy_scope_without_legacy_rows_writes_nothing(tmp_path: Path) -> None:

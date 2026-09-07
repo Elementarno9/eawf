@@ -94,20 +94,23 @@ def _emit_sync_result(payload: dict[str, Any], *, flags: GlobalFlags) -> None:
 def _emit_convert_legacy_result(payload: dict[str, Any], *, flags: GlobalFlags) -> None:
     """Emit the ``spec.convert_legacy`` per-row report as JSON or text.
 
-    One line per legacy criterion: converted rows name the attached gate
-    kind, refused rows carry their named reason so the operator can
-    hand-author the criterion instead.
+    One line per reported criterion: converted and retrofitted rows name the
+    gate kind their oracle tier resolves from, refused rows carry their named
+    reason so the operator can hand-author the criterion instead.
     """
     mode = "dry-run" if payload.get("dry_run") else "applied"
     lines = [
         f"convert-legacy {mode} scope={payload.get('scope_id')!r} "
-        f"converted={payload.get('converted_count')} refused={payload.get('refused_count')}"
+        f"converted={payload.get('converted_count')} "
+        f"retrofitted={payload.get('retrofit_count')} "
+        f"refused={payload.get('refused_count')}"
     ]
     for row in payload.get("rows", []):
-        if row.get("disposition") == "converted":
+        disposition = row.get("disposition")
+        if disposition in ("converted", "retrofitted"):
             lines.append(
                 f"  {row.get('wave_id')} {row.get('criterion_id')}: "
-                f"converted gate={row.get('gate_kind')}"
+                f"{disposition} gate={row.get('gate_kind')}"
             )
         else:
             lines.append(

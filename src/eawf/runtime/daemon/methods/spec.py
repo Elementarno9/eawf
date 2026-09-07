@@ -51,6 +51,7 @@ from eawf.kernel.spec import writer as spec_writer
 from eawf.kernel.spec.common import (
     CriterionSpec,
     GateSpec,
+    response_from_gate,
     validate_criterion_gate_refs,
 )
 from eawf.kernel.spec.promotion import (
@@ -1137,6 +1138,14 @@ def _apply_sync_locked(
     )
     if measurability or coverage:
         raise DaemonValidationError(render_lint_findings(measurability, coverage))
+
+    # A gated criterion that authored no response clause would land untiered,
+    # so derive the clause from its cheapest bound gate first: the validator
+    # below computes the tier from the clause, and only from the clause.
+    for index, criterion in enumerate(criteria):
+        derived = response_from_gate(criterion, gates)
+        if derived is not None:
+            criteria[index] = criterion.model_copy(update={"response": derived})
 
     # Referential integrity (criterion.gate_ids <-> gate.criterion_id,
     # deterministic-gate compile) BEFORE any in-place mutation so a malformed

@@ -396,6 +396,34 @@ def _tier_for_gate_kind(kind: str) -> OracleTier:
     return tier
 
 
+#: Gate KIND -> the ``(observe, locus)`` pair a DERIVED response clause wears
+#: when a criterion binds that gate but authored no clause of its own. The key
+#: set mirrors :data:`_GATE_KIND_TIER` exactly, so every gate kind that has a
+#: tier also has a derivable clause shape. Two verbs are deliberately absent
+#: from the value space: ``HOLDS_FOR_ALL`` (a gated universal clause must be
+#: quantified ``forall`` at the hypothesis locus, which a derived single-witness
+#: clause is not) and ``JUDGED`` (it demands a ``jury_reason`` and resolves to
+#: the judgment tiers -- the opposite of deriving a cheap deterministic tier).
+_GATE_KIND_RESPONSE: dict[str, tuple[ObserveVerb, ProofLocus]] = {
+    "file_exists": (ObserveVerb.FILE_MATCHES, ProofLocus.SOURCE),
+    "path_glob_nonempty": (ObserveVerb.FILE_MATCHES, ProofLocus.SOURCE),
+    "regex_in_file": (ObserveVerb.MATCHES_PATTERN, ProofLocus.SOURCE),
+    "schema_validate": (ObserveVerb.VALIDATES, ProofLocus.SCHEMA),
+    "citation_resolves": (ObserveVerb.VALIDATES, ProofLocus.SOURCE),
+    "criterion_in_diff": (ObserveVerb.FILE_MATCHES, ProofLocus.SOURCE),
+    "state_field_equals": (ObserveVerb.VALIDATES, ProofLocus.STATE_JSON),
+    "transition_coverage": (ObserveVerb.TRANSITIONS_TO, ProofLocus.STATE_JSON),
+    "affordance_parity": (ObserveVerb.RENDERS_TOKEN, ProofLocus.TUI_SNAPSHOT),
+    "svg_well_formed": (ObserveVerb.VALIDATES, ProofLocus.SCHEMA),
+    "tui_flow": (ObserveVerb.TRIGGERS_ACTION, ProofLocus.TUI_PILOT),
+    "journal_chain": (ObserveVerb.EMITS, ProofLocus.LOG_CAPTURE),
+    "command_exit_zero": (ObserveVerb.EXITS, ProofLocus.PYTEST),
+    "verify_implements": (ObserveVerb.RETURNS, ProofLocus.PYTEST),
+    "svg_pixel_diff": (ObserveVerb.FILE_MATCHES, ProofLocus.GOLDEN),
+    "mockup_golden_diff": (ObserveVerb.FILE_MATCHES, ProofLocus.GOLDEN),
+}
+
+
 def assign_oracle_tier(r: ResponseClause) -> OracleTier:
     """Total: verb -> cheapest tier; JUDGED is the only path to T6/T7.
 
@@ -421,6 +449,65 @@ def assign_oracle_tier(r: ResponseClause) -> OracleTier:
             raise ValueError("judged response requires jury_reason (auditable fallthrough)")
         return OracleTier.T6_APPROVAL if r.locus is ProofLocus.HUMAN else OracleTier.T7_JURY
     raise ValueError(f"unhandled observe verb: {r.observe!r}")
+
+
+def response_from_gate(criterion: CriterionSpec, gates: list[GateSpec]) -> ResponseClause | None:
+    """Derive a response clause for a gated criterion that authored none.
+
+    A criterion whose ``response`` is ``None`` never reaches the tier compute
+    in :func:`validate_criterion_gate_refs`, so its ``oracle_tier`` stays
+    ``None`` and every determinism metric reads it as unproven -- even when the
+    row binds a real falsifying gate. This closes that gap: the bound gate
+    already names the cheapest oracle that can falsify the row, so the clause
+    is reconstructible from it rather than needing an author.
+
+    The derived clause names the CHEAPEST bound gate's kind as its
+    ``gate_ref`` (ties broken by ``gate_ids`` order), which is exactly what
+    :func:`assign_oracle_tier` reads to resolve the tier. It is always a
+    ``single``-quantifier clause: one gate run witnesses one site.
+
+    A bound gate whose kind is in :data:`SINGLE_SITE_GATE_KINDS` is skipped
+    when the criterion text claims universal scope, because the
+    :meth:`CriterionSpec._scope_agreement` validator rejects that pairing --
+    deriving it would build a row that no longer round-trips through state
+    validation. When every bound gate is skipped this way the function derives
+    nothing rather than emitting an unloadable row.
+
+    Args:
+        criterion: The criterion to derive a clause for. An authored
+            ``response`` is never overwritten.
+        gates: The candidate gate rows ``criterion.gate_ids`` resolve against;
+            unresolvable ids are ignored.
+
+    Returns:
+        The derived :class:`ResponseClause`, or ``None`` when the criterion
+        already carries one or binds no usable gate.
+
+    Raises:
+        ValueError: When the chosen gate's kind is not a recognised gate kind.
+    """
+    if criterion.response is not None:
+        return None
+    gate_by_id = {gate.id: gate for gate in gates}
+    bound = [gate_by_id[ref] for ref in criterion.gate_ids if ref in gate_by_id]
+    if _claims_universal_scope(criterion.text):
+        bound = [gate for gate in bound if gate.kind not in SINGLE_SITE_GATE_KINDS]
+    if not bound:
+        return None
+    cheapest = min(bound, key=lambda gate: _tier_for_gate_kind(gate.kind))
+    shape = _GATE_KIND_RESPONSE.get(cheapest.kind)
+    if shape is None:
+        raise ValueError(f"unknown gate kind: {cheapest.kind!r}")
+    observe, locus = shape
+    return ResponseClause(
+        observe=observe,
+        object=criterion.measurable_signal[:200],
+        locus=locus,
+        expected=None,
+        quantifier="single",
+        gate_ref=cheapest.kind,
+        jury_reason=None,
+    )
 
 
 #: Prose tokens that widen a criterion's claim to a whole population rather
