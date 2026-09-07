@@ -25,10 +25,13 @@ def test_version_json_envelope_round_trips() -> None:
     payload = json.loads(result.stdout)
     # The surfaced version is composed: an editable checkout (the test
     # tree) carries a PEP 440 ``+dev.g<sha>`` local segment, a wheel build
-    # carries the bare base. Assert the PEP 440 *base version* matches the
-    # single source (eawf.__version__) so the test stays green on both
-    # paths and across a release bump.
-    assert Version(payload["version"]).base_version == eawf.__version__
+    # carries the bare base. Assert the PEP 440 *public* version -- the
+    # release identity with only the local segment dropped -- matches the
+    # single source (eawf.__version__), so the test stays green on both
+    # paths and across a bump onto a prerelease. ``base_version`` would
+    # not: it also strips the ``.devN`` / ``rcN`` segment, so it reads
+    # ``0.7.0`` for a ``0.7.0.dev1`` checkout and compares unequal.
+    assert Version(payload["version"]).public == eawf.__version__
 
 
 def test_unknown_command_exits_with_code_2() -> None:

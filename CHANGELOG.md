@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.7.0.dev1]
+
+This is the first development checkpoint of the v0.7.0 release train. It is published to prove the release machinery end to end, not as a stable release: the limitations below name exactly what is unproven at this rung.
+
+### Added
+- **Typed release records and the v0.7.0 release train.** A `Release` record carries one checkpoint's identity, pinned source, manifest digest, per-target publication state and lifecycle status; a `ReleaseTrain` declares the ordered ladder of checkpoints that walks the line to stable. The publication side ships as a separate operation-and-attempt ledger with observer-only writes: an adapter's own success report can never bake a release, only an independent read-back through the target's declared adapter can. Every state move that could land mid-crash runs behind a registered durable boundary, so an interrupted publication resumes from a recorded position instead of a guess.
+- **A twelve-signal release preflight bound to eight named dev1 gates.** The sweep never fail-fasts -- every signal gets a row on every run, so one pass shows the whole repair list rather than the first red row. A signal with no producer reports `unavailable` naming the gap, and a probe that raises reports `blocked`; neither is ever reported as green. The eight gates the dev1 profile declares are a projection of those rows through one authored binding table, so what a gate reads is declared once. `eawf release tag --push` is gated on the same sweep, and the release workflow runs it again before the publish job, so a hand-pushed tag meets it too.
+- **Dependency-inventory and reproducible-artifact receipts, produced in CI and read back.** Neither fact can be computed by a sweep: one needs a resolved environment to read licenses and an advisory database to query, the other needs two clean builds. Both are written by the `inventory-and-reproducibility` job and read back from committed receipt locations, so a missing receipt leaves its row `unavailable` naming the job rather than passing on an absent check.
+- **Turn-cost telemetry with a recorded baseline.** Telemetry ingestion is enabled and the session end is stamped at process exit, a turn-cost record and completed-unit producer land beside it, and `eawf bench turn-cost` checks a run against the recorded dev1 verification-cost baseline and threshold.
+- **A test kind taxonomy with placement and tier lints.** A test's address is now `tests/<kind>/<source-package-path>/`, mirroring the source package it exercises, and each subject has exactly one home under exactly one kind. A companion lint rejects a `tests/unit/` module that imports `subprocess`, `textual` or `CliRunner` -- a heavier test wearing the unit tier's label.
+- **Heavy close gates run out of process, and the bypass lane is closed.** A gate that crashes the interpreter no longer takes the close with it, and every remaining path to a cleared gate goes through the shared gate runner, so an override surfaces as a waiver rather than as a silent pass.
+- **Module-length exemptions carry expiry dates.** A grandfathered oversized module is a promise to split it later; the grant now states when, the release preflight reds on a lapsed one, and a renewal that names no ratified decision id reds the same way.
+
+### Changed
+- **The repair and infrastructure retry budgets are one typed record.** Two independently tracked counters became one `CloseBudget` with a named axis per exhaustion, so a close that ran out of attempts says which axis ran out.
+- **Close failures are a typed vocabulary derived from the exceptions that raise them.** The failure kind is recorded on the attempt rather than reconstructed from a message.
+- **Wave-close bookkeeping rides the wave commit.** The state mutation a wave close performs is folded into that wave's own commit as a trailer, so a wave is one commit rather than a commit plus a bookkeeping follow-up.
+- **The daemon state-method module is split by concern** into apply, close, events and spec modules, each under the module-length ceiling.
+- **Derived estimate-cache rows are no longer seeded.** A cache row is written when it is computed, not pre-planted for a computation that may never run.
+
+### Fixed
+- **The gated-criterion quantifier bypass.** A criterion whose gate list was quantified over an empty set classified as satisfied; it now classifies as ungated and blocks.
+- **Criterion scope agreement and complexity ceilings.** A criterion naming a scope its wave does not own, or nesting past the ceiling, is refused at plan time instead of at close.
+- **Codex reasoning tokens are no longer summed into output tokens**, so a reasoning-heavy turn no longer reports several times its real output cost.
+- **The Linux jail launches and is gated on a real host.** The bwrap journey ran against an argv-shape stub, which looks identical to a journey that ran; it now runs on a real host and the platform claim records that it did.
+- **Daemon reads are off the event loop** and the close-readiness budget is unified, so a slow read no longer stalls unrelated RPC traffic.
+- **Runtime errors from the stream the vendors write are classified** rather than surfacing as an untyped transport failure.
+- **The npm dist-tag is derived from the channel** instead of authored per publish, and the Codex plugin keeps its version history across installs.
+- **The front door works and platform support is classified.** The install path a newcomer takes was broken; it is repaired, and each advertised platform now states whether its evidence came from a real host.
+- **Console windows no longer flash on daemon child spawns** on Windows.
+- **Criterion gate references resolve at the plan-time floor**, and `eawf` and `just` are admitted as gate argv heads.
+- **The TUI splits primary from accent and lifts muted contrast**, so two distinct roles stop rendering as one colour.
+
+### Migration
+- **None required.** No persisted state schema changed in this checkpoint: `.ea/state.json` keeps its schema version, existing repositories load unchanged, and no migration step runs on upgrade. The epoch-2 state-tree target shape was ratified as a written target in this phase, not applied -- the migration that reshapes the tree lands at a later checkpoint of this train.
+
+### Limitations
+- **Four of the eight dev1 gates cannot be settled from a working copy alone.** `dependency_inventory`, `security_review` and `artifact_reproducibility` read receipts the `inventory-and-reproducibility` CI job writes on a tag run, so a local sweep reports them `unavailable`; `credentials` has no producer at this checkpoint at all and is required only because the dev1 configuration declares three required publication targets.
+- **The `ancestry` signal passes only after the checkpoint commit is an ancestor of `origin/main`.** A sweep run on the phase branch before its pull request merges reds this row by design.
+- **The three proof-command gates are settled by running their argv, not by the sweep.** `epoch1_stabilization`, `telemetry_producer` and `front_door_journey` report `unavailable` in a sweep because it never runs them; each is cleared by running its command at the pinned source revision and attaching the receipt.
+- **Nothing has been published at this checkpoint.** No `v0.7.0.dev1` tag exists locally or on the remote, every publication target is `not_started`, and no publication operation has opened.
+
 ## [0.6.8]
 
 ### Added

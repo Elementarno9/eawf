@@ -13110,6 +13110,21 @@
       "status": "done",
       "updated_at": "2026-09-05T00:12:33.559958Z"
     },
+    "P31-I01-W26": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W26",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W26",
+      "model": null,
+      "scope_id": "P31-I01-W26",
+      "status": "done",
+      "updated_at": "2026-09-07T11:47:11.061213Z"
+    },
     "P31-I01-W27": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -15526,15 +15541,45 @@
       "claimed_wave_ids": [
         "P31-I01-W26"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-07T11:47:01.932394Z",
       "id": "SES-20260907T111458.259988Z-executor-claude-63a9f6ea-d319-4df6-b14b-5ab64ad20fdd",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P31-I01-W26",
       "started_at": "2026-09-07T11:14:58.259988Z",
-      "status": "active",
-      "summary": null,
+      "status": "closed",
+      "summary": "W26 claim recorded; session no longer needed for the parent close",
+      "worktree_ids": []
+    },
+    "SES-20260907T114650.385115Z-operator-claude-57da5680-2688-486d-b70f-9b683e036599": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-07T11:47:04.311690Z",
+      "id": "SES-20260907T114650.385115Z-operator-claude-57da5680-2688-486d-b70f-9b683e036599",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-c26",
+      "started_at": "2026-09-07T11:46:50.385115Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260907T114702.613428Z-operator-claude-ace94327-7de0-4d34-9a9f-d6a77ab3a225": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-07T11:47:04.313143Z",
+      "id": "SES-20260907T114702.613428Z-operator-claude-ace94327-7de0-4d34-9a9f-d6a77ab3a225",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-c26b",
+      "started_at": "2026-09-07T11:47:02.613428Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -20458,12 +20503,8 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260907T111458.259988Z-executor-claude-63a9f6ea-d319-4df6-b14b-5ab64ad20fdd"
-    ],
-    "active_wave_ids": [
-      "P31-I01-W26"
-    ],
+    "active_session_ids": [],
+    "active_wave_ids": [],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -38924,7 +38965,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T11:14:59.579366Z",
+  "updated_at": "2026-09-07T11:47:11.061516Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -156976,9 +157017,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260907T111458.259988Z-executor-claude-63a9f6ea-d319-4df6-b14b-5ab64ad20fdd",
       "claimed_at": "2026-09-07T11:14:58.952007Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-07T11:47:11.061213Z",
+      "commit": "40cabead9867d1b621fdf24d7111016958ea435c",
+      "commit_identity_digest": "sha256:832cfb1b0a839519377de3e449576c9e7bec77ccba57abe9ce2317d3a17778db",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-08-25T22:16:17.412447Z",
@@ -157130,13 +157171,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-08-25T22:16:17.413151Z",
-      "outcome": null,
+      "outcome": "Version and changelog now agree at 0.7.0.dev1 and both signals pass, waiver acknowledgement is wired into the ready derivation, and the wave ends with no tag locally or on the remote. CR-01 is not met: ancestry is post-merge and artifacts, dependencies and credentials have no producer reachable before CI.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",

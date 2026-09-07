@@ -91,6 +91,86 @@ GATE_SIGNAL_BINDINGS: Final[Mapping[ReleaseGateName, ReleaseSignalName | None]] 
 }
 
 
+class WaiverAcknowledgement(_StrictModel):
+    """One operator's acceptance of a counted waiver, carried in the receipt.
+
+    A fully explained waiver set is not red -- it is reported *for
+    acknowledgement*, and blocks approval until the operator states, in
+    the readiness receipt itself, which protection they are accepting
+    the loss of. That statement is this record.
+
+    The acknowledgement repeats the waiver's ``scope`` and
+    ``protected_principal`` rather than pointing at a row index: an
+    index survives a reordering of the waiver block, so it would go on
+    reading as acknowledged while naming a different protection.
+
+    Attributes:
+        scope: The waived scope, matching a counted waiver's ``scope``.
+        protected_principal: The protection being accepted as lost,
+            matching that waiver's ``protected_principal``.
+        acknowledged_by: Who accepted the loss.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    scope: Annotated[str, Field(min_length=1)]
+    protected_principal: Annotated[str, Field(min_length=1)]
+    acknowledged_by: Annotated[str, Field(min_length=1)]
+
+    @property
+    def waived(self) -> tuple[str, str]:
+        """Return the ``(scope, protected_principal)`` pair this covers."""
+        return (self.scope, self.protected_principal)
+
+
+def _unacknowledged_waivers(
+    waivers: Sequence[ReleaseWaiver],
+    acknowledgements: Sequence[WaiverAcknowledgement],
+    disposition: WaiverDisposition,
+) -> tuple[ReleaseWaiver, ...]:
+    """Return the counted waivers no acknowledgement covers.
+
+    Empty for every disposition but
+    :attr:`~eawf.kernel.release.waiver.WaiverDisposition.AWAITING_ACKNOWLEDGEMENT`:
+    nothing is counted under ``NONE``, and an ``UNEXPLAINED`` set is not
+    acknowledgeable at all, so listing its rows here would suggest an
+    acknowledgement could clear them.
+
+    Args:
+        waivers: The counted waiver rows.
+        acknowledgements: The acknowledgements the receipt carries.
+        disposition: What the counted waivers mean for readiness.
+
+    Returns:
+        The waivers still awaiting an acknowledgement, in row order.
+    """
+    if disposition is not WaiverDisposition.AWAITING_ACKNOWLEDGEMENT:
+        return ()
+    covered = {ack.waived for ack in acknowledgements}
+    return tuple(
+        waiver for waiver in waivers if (waiver.scope, waiver.protected_principal) not in covered
+    )
+
+
+def _waivers_cleared(disposition: WaiverDisposition, outstanding: Sequence[ReleaseWaiver]) -> bool:
+    """Return whether the waiver block leaves the checkpoint approvable.
+
+    Args:
+        disposition: What the counted waivers mean for readiness.
+        outstanding: The waivers no acknowledgement covers.
+
+    Returns:
+        ``True`` when nothing is counted, or when every counted waiver
+        is explained and acknowledged. An ``UNEXPLAINED`` set is never
+        cleared: there is nothing to acknowledge.
+    """
+    if disposition is WaiverDisposition.NONE:
+        return True
+    if disposition is WaiverDisposition.UNEXPLAINED:
+        return False
+    return not outstanding
+
+
 class ReleaseSignalRow(_StrictModel):
     """One signal's row in a :class:`ReleaseReadiness` object.
 
@@ -175,6 +255,9 @@ class ReleaseReadiness(_StrictModel):
             waiver was counted with nothing attached.
         waiver_disposition: What the counted waivers mean for readiness;
             derived from :attr:`waivers` and :attr:`waiver_count`.
+        waiver_acknowledgements: The operator acceptances this receipt
+            carries. Each must name a counted waiver; an explained
+            waiver blocks approval until one covers it.
         computed_at: When the sweep ran.
         ready: Whether the checkpoint may be approved -- every required
             row passes and no waiver is outstanding.
@@ -193,6 +276,7 @@ class ReleaseReadiness(_StrictModel):
     waiver_count: Annotated[int, Field(ge=0)] = 0
     waivers: tuple[ReleaseWaiver, ...] = ()
     waiver_disposition: WaiverDisposition = WaiverDisposition.NONE
+    waiver_acknowledgements: tuple[WaiverAcknowledgement, ...] = ()
     computed_at: datetime
     ready: bool
 
@@ -204,7 +288,8 @@ class ReleaseReadiness(_StrictModel):
             ValueError: When the rows do not cover every signal exactly
                 once, a gate is reported twice, a required signal has no
                 row, the waiver disposition disagrees with the waivers,
-                or ``ready`` disagrees with the rows and the waivers.
+                an acknowledgement names no counted waiver, or ``ready``
+                disagrees with the rows and the waivers.
         """
         reported = [row.signal for row in self.signals]
         if sorted(set(reported)) != sorted(ReleaseSignalName):
@@ -229,13 +314,37 @@ class ReleaseReadiness(_StrictModel):
                 f"{self.waiver_count} counted waiver(s) "
                 f"(derived {derived_disposition.value!r})"
             )
-        derived_ready = self.first_red is None and self.waiver_disposition is WaiverDisposition.NONE
+        counted = {(waiver.scope, waiver.protected_principal) for waiver in self.waivers}
+        dangling = sorted(
+            f"{ack.scope}/{ack.protected_principal}"
+            for ack in self.waiver_acknowledgements
+            if ack.waived not in counted
+        )
+        if dangling:
+            raise ValueError(
+                f"waiver acknowledgement(s) name no counted waiver: {dangling}; "
+                f"an acknowledgement of nothing accepts no loss"
+            )
+        derived_ready = self.first_red is None and self.waivers_cleared
         if self.ready != derived_ready:
             raise ValueError(
                 f"ready={self.ready} disagrees with the rows "
-                f"(first_red={self.first_red}, waiver_count={self.waiver_count})"
+                f"(first_red={self.first_red}, waiver_count={self.waiver_count}, "
+                f"unacknowledged={len(self.unacknowledged_waivers)})"
             )
         return self
+
+    @property
+    def unacknowledged_waivers(self) -> tuple[ReleaseWaiver, ...]:
+        """Return the counted waivers this receipt carries no acknowledgement for."""
+        return _unacknowledged_waivers(
+            self.waivers, self.waiver_acknowledgements, self.waiver_disposition
+        )
+
+    @property
+    def waivers_cleared(self) -> bool:
+        """Return whether the waiver block leaves the checkpoint approvable."""
+        return _waivers_cleared(self.waiver_disposition, self.unacknowledged_waivers)
 
     def row(self, signal: ReleaseSignalName) -> ReleaseSignalRow:
         """Return the row reporting *signal*.
@@ -447,6 +556,7 @@ def compute_readiness(
     ttl_seconds: int = DEFAULT_SIGNAL_TTL_SECONDS,
     waiver_count: int = 0,
     waivers: Sequence[ReleaseWaiver] = (),
+    acknowledgements: Sequence[WaiverAcknowledgement] = (),
 ) -> ReleaseReadiness:
     """Compute every readiness signal for *config* without fail-fast.
 
@@ -466,6 +576,9 @@ def compute_readiness(
         waivers: The counted waivers. A count larger than the number of
             rows is itself the finding that a waiver was recorded with
             no explanation.
+        acknowledgements: Operator acceptances to carry in the receipt.
+            An explained waiver blocks approval until one names it; an
+            acknowledgement naming no counted waiver is refused.
 
     Returns:
         A total :class:`ReleaseReadiness` with one row per signal and
@@ -473,8 +586,9 @@ def compute_readiness(
 
     Raises:
         ValueError: When *ttl_seconds* is not positive, *waiver_count*
-            is negative, *computed_at* is naive, or *waiver_count* is
-            non-zero and disagrees with the number of *waivers*.
+            is negative, *computed_at* is naive, *waiver_count* is
+            non-zero and disagrees with the number of *waivers*, or an
+            acknowledgement names no counted waiver.
     """
     if ttl_seconds <= 0:
         raise ValueError(f"ttl_seconds must be positive, got {ttl_seconds}")
@@ -509,7 +623,8 @@ def compute_readiness(
     bindings = gate_bindings_for(config.gates.profile)
     required = derive_required_signals(config)
     disposition = classify_waivers(tuple(waivers), waiver_count=counted)
-    ready = _is_ready(rows, required, disposition)
+    outstanding = _unacknowledged_waivers(waivers, acknowledgements, disposition)
+    ready = _is_ready(rows, required, disposition, outstanding)
     readiness = ReleaseReadiness(
         release_key=config.release_key,
         version=config.version,
@@ -521,6 +636,7 @@ def compute_readiness(
         waiver_count=counted,
         waivers=tuple(waivers),
         waiver_disposition=disposition,
+        waiver_acknowledgements=tuple(acknowledgements),
         computed_at=computed_at,
         ready=ready,
     )
@@ -528,7 +644,8 @@ def compute_readiness(
         f"compute_readiness release_key={readiness.release_key!r} "
         f"signals={len(readiness.signals)} gates={len(readiness.gates)} "
         f"required={len(required)} ready={ready} waiver_count={counted} "
-        f"waiver_disposition={disposition.value!r}"
+        f"waiver_disposition={disposition.value!r} "
+        f"unacknowledged={len(outstanding)}"
     )
     return readiness
 
@@ -563,20 +680,23 @@ def _is_ready(
     rows: Sequence[ReleaseSignalRow],
     required: Sequence[ReleaseSignalName],
     disposition: WaiverDisposition,
+    outstanding: Sequence[ReleaseWaiver],
 ) -> bool:
     """Return whether every required row passes and no waiver is outstanding.
 
     Args:
         rows: The computed signal rows.
         required: The derived required subset.
-        disposition: What the counted waivers mean for readiness. Both
-            non-``NONE`` dispositions block: an unexplained waiver is
-            red, and an explained one still awaits acknowledgement.
+        disposition: What the counted waivers mean for readiness. An
+            unexplained set is red and cannot be acknowledged.
+        outstanding: The explained waivers no acknowledgement covers;
+            each blocks until the operator accepts the loss in the
+            receipt.
 
     Returns:
         ``True`` when the checkpoint may be approved.
     """
-    if disposition is not WaiverDisposition.NONE:
+    if not _waivers_cleared(disposition, outstanding):
         return False
     by_name = {row.signal: row for row in rows}
     return all(by_name[name].status is ReleaseSignalStatus.PASS for name in required)
@@ -598,6 +718,7 @@ __all__ = [
     "ReleaseSignalRow",
     "ReleaseSignalStatus",
     "ReleaseWaiver",
+    "WaiverAcknowledgement",
     "WaiverDisposition",
     "compute_readiness",
     "derive_required_signals",

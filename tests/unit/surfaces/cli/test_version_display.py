@@ -261,10 +261,18 @@ def test_compose_display_version_wheel_path_returns_clean_base(
 
 
 def test_compose_display_version_default_base_is_package_version() -> None:
-    """The default base argument is the stored ``__version__`` (0.6.8)."""
+    """The default base argument is bound to the stored ``__version__``.
+
+    Asserted through the signature rather than against a version
+    literal: a literal turns every release bump into an unrelated red,
+    which trains the bumper to edit the assertion instead of reading it.
+    """
+    import inspect
+
     from eawf import __version__
 
-    assert __version__ == "0.6.8"
+    default = inspect.signature(compose_display_version).parameters["base"].default
+    assert default == __version__
 
 
 def test_compose_display_version_missing_sha_falls_back_to_base(
