@@ -17144,6 +17144,28 @@
       "status": "complete",
       "verdict": "minor"
     },
+    "A-P31-I01-CLOSEOUT": {
+      "check_results": [],
+      "created_at": "2026-09-07T14:39:25.516112Z",
+      "id": "A-P31-I01-CLOSEOUT",
+      "integrity_results": [],
+      "kind": "ship-gate",
+      "report_artifact_id": "ART-audit-2026-09-07-p31-closeout",
+      "scope_id": "P31-I01",
+      "status": "complete",
+      "verdict": "minor"
+    },
+    "A-P31-I01-EVAL": {
+      "check_results": [],
+      "created_at": "2026-09-07T14:39:33.603230Z",
+      "id": "A-P31-I01-EVAL",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-audit-2026-09-07-p31-closeout",
+      "scope_id": "P31-I01",
+      "status": "complete",
+      "verdict": "minor"
+    },
     "A01-P00": {
       "check_results": [],
       "created_at": "2026-05-10T12:49:57.714684Z",
@@ -22089,7 +22111,7 @@
       "title": "Fold bookkeeping into wave commits now; batch delivery commits at dev3"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -38020,7 +38042,8 @@
         "P31-I01-W48",
         "P31-I01-W49",
         "P31-I01-W50",
-        "P31-I01-W51"
+        "P31-I01-W51",
+        "P31-I01-W52"
       ]
     },
     "P32-I01": {
@@ -39461,7 +39484,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T14:36:25.587961Z",
+  "updated_at": "2026-09-07T14:51:44.137338Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -161932,6 +161955,146 @@
         }
       ],
       "title": "Let a planned phase stage pending waves without a stray census row",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W52": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-07T14:50:57.344469Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "A deterministic criterion that binds a gate but omits a response clause never reaches the tier computer in validate_criterion_gate_refs, so its oracle_tier stays null and the iter-close ODR gate scores it as judgment-backed. P31-I01 carries 152 such rows and scores 0.000 against the 0.800 floor; P32-I01 has 75 more staged. Derive the clause from the bound gate kind at sync time and retrofit the existing rows through the converter.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/spec/common.py",
+        "src/eawf/runtime/daemon/methods/spec.py",
+        "src/eawf/runtime/daemon/methods/spec_convert.py",
+        "tests/unit/kernel/spec/test_response_from_gate.py",
+        "tests/integration/runtime/daemon/test_spec_convert_legacy.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/spec/test_response_from_gate.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/daemon/test_spec_convert_legacy.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P31-I01-W52",
+      "intent": {
+        "desired_outcome": "A criterion that binds a gate carries a derived response clause and a computed tier, and the existing untiered rows are retrofitted",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Derive a response clause from the bound gate kind when a gated criterion omits one|Retrofit the untiered gated rows already in state through the converter"
+        ],
+        "priority_rationale": "The iter-close ODR gate refuses P31-I01 until these rows carry a tier, and P32-I01 has the same shape staged",
+        "problem": "A gated criterion with no response clause skips the tier computer, so oracle_tier stays null and the ODR gate reads it as judgment-backed",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-09-07T14:50:57.474385Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/unit/kernel/spec/test_response_from_gate.py exits 0 with the derivation red before the change and green after",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "a response clause derived from the bound gate kind on a criterion that omits one",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A gated criterion that omits an authored response clause is materialised with a clause derived from its bound gate kind, so the tier computer in validate_criterion_gate_refs fills its oracle_tier instead of leaving it null; pytest tests/unit/kernel/spec/test_response_from_gate.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/integration/runtime/daemon/test_spec_convert_legacy.py exits 0 with a retrofit case over a closed wave",
+          "oracle_tier": 4,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "a retrofitted response clause and computed tier on a closed wave's gated criterion",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The converter retrofits a criterion that already carries a typed kind and a bound gate but no response clause, so the untiered rows on a closed wave gain a computed oracle_tier; pytest tests/integration/runtime/daemon/test_spec_convert_legacy.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Derive a criterion response clause from its bound gate",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
