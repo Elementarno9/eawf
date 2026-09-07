@@ -15771,6 +15771,23 @@
       "status": "stale",
       "summary": "orphaned by daemon restart",
       "worktree_ids": []
+    },
+    "SES-20260907T133548.925756Z-executor-claude-c7967328-5337-49e5-91d8-7fe45a0c8ce2": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W50"
+      ],
+      "ended_at": null,
+      "id": "SES-20260907T133548.925756Z-executor-claude-c7967328-5337-49e5-91d8-7fe45a0c8ce2",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W50",
+      "started_at": "2026-09-07T13:35:48.925756Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
     }
   },
   "artifacts": {
@@ -20693,8 +20710,12 @@
     }
   },
   "current": {
-    "active_session_ids": [],
-    "active_wave_ids": [],
+    "active_session_ids": [
+      "SES-20260907T133548.925756Z-executor-claude-c7967328-5337-49e5-91d8-7fe45a0c8ce2"
+    ],
+    "active_wave_ids": [
+      "P31-I01-W50"
+    ],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -35235,6 +35256,104 @@
       "severity": "high",
       "status": "open",
       "title": "Verification history is not reconstructable from the store"
+    },
+    "INC-P31-05": {
+      "cause": "unknown",
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "description": null,
+      "id": "INC-P31-05",
+      "opened_at": "2026-09-07T13:34:02.475953Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "P31",
+      "severity": "medium",
+      "status": "open",
+      "title": "Release RPC verbs ship without an operator surface"
+    },
+    "INC-P31-06": {
+      "cause": "unknown",
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "description": null,
+      "id": "INC-P31-06",
+      "opened_at": "2026-09-07T13:34:03.258234Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "P31",
+      "severity": "medium",
+      "status": "open",
+      "title": "Agent output events are absent for harness-dispatched sessions"
+    },
+    "INC-P31-07": {
+      "cause": "unknown",
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "description": null,
+      "id": "INC-P31-07",
+      "opened_at": "2026-09-07T13:34:04.032698Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "P31",
+      "severity": "medium",
+      "status": "open",
+      "title": "Telemetry store derives no session rows from the event log"
+    },
+    "INC-P31-08": {
+      "cause": "unknown",
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "description": null,
+      "id": "INC-P31-08",
+      "opened_at": "2026-09-07T13:34:04.832173Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "P31",
+      "severity": "high",
+      "status": "open",
+      "title": "Close-gate execution can reach live state and drive real dispatch"
+    },
+    "INC-P31-09": {
+      "cause": "unknown",
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "description": null,
+      "id": "INC-P31-09",
+      "opened_at": "2026-09-07T13:34:05.651419Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "P31",
+      "severity": "medium",
+      "status": "open",
+      "title": "Release subsystem carries four near-colliding concept names"
+    },
+    "INC-P31-10": {
+      "cause": "unknown",
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "description": null,
+      "id": "INC-P31-10",
+      "opened_at": "2026-09-07T13:34:06.432278Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "P31",
+      "severity": "low",
+      "status": "open",
+      "title": "Release behaviour tests are filed under the kernel mirror"
+    },
+    "INC-P31-11": {
+      "cause": "unknown",
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "description": null,
+      "id": "INC-P31-11",
+      "opened_at": "2026-09-07T13:34:07.245599Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "P31",
+      "severity": "medium",
+      "status": "open",
+      "title": "Commit lint cannot distinguish an amend from a second wave commit"
     }
   },
   "indexes": {},
@@ -37784,7 +37903,8 @@
         "P31-I01-W46",
         "P31-I01-W47",
         "P31-I01-W48",
-        "P31-I01-W49"
+        "P31-I01-W49",
+        "P31-I01-W50"
       ]
     },
     "P32-I01": {
@@ -39216,7 +39336,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T13:33:39.927654Z",
+  "updated_at": "2026-09-07T13:35:50.451079Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -161329,8 +161449,8 @@
       "claim_session_id": "SES-20260907T132124.173192Z-executor-claude-d545de89-8689-45e3-aace-d5ea2fdc4a52",
       "claimed_at": "2026-09-07T13:21:24.891965Z",
       "closed_at": "2026-09-07T13:33:39.927421Z",
-      "commit": "e84c2b321e70ba059576587d0707d73969b02516",
-      "commit_identity_digest": "sha256:11b78b0d763eb2085a8bd272c4bf2d516d48cd14a217187d510041a2c0e4be01",
+      "commit": "174b0e19e992dffe3667821d1afbbe221b906b6b",
+      "commit_identity_digest": "sha256:b3378ff0c37cdb1d40f9a78956441455557be5e1a77fdd53dee78df1813816ca",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
         "waived_at": "2026-09-07T13:21:11.641719Z",
@@ -161442,6 +161562,134 @@
         }
       ],
       "title": "Reach the waiver tier and count idle surfaces by call site",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W50": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260907T133548.925756Z-executor-claude-c7967328-5337-49e5-91d8-7fe45a0c8ce2",
+      "claimed_at": "2026-09-07T13:35:49.728735Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-07T13:35:35.699938Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The strict prose gate reds this branch with 2322 findings. Eighty five are deterministic and always blocking: sixty one are historical changelog paragraphs hard-wrapped before the no-manual-wrap rule existed and surfaced because the checkpoint section touched the file, and twenty three sit in generated pages whose generator wraps prose. The rest are Vale spelling against a forty nine line vocabulary that never grew with the project. Fix the generators at source rather than the rendered bytes.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        ".vale",
+        ".vale.ini",
+        "CHANGELOG.md",
+        "src/eawf/platform/docs",
+        "src/eawf/surfaces/render",
+        "docs/reference/autogen",
+        "docs/rules",
+        "tests/lint",
+        "tests/golden"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_prose_gate_clean.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_generated_prose_unwrapped.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P31-I01-W50",
+      "intent": {
+        "desired_outcome": "the prose gate exits 0 over the branch-changed markdown with generators emitting unwrapped prose",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Stop the generators wrapping prose and regenerate their pages|Unwrap the historical changelog paragraphs|Curate the Vale vocabulary and prove the gate exits 0 with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "The strict prose gate reds the branch on inherited wrapping, generator output and an uncurated vocabulary",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-09-07T13:35:35.852141Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_prose_gate_clean.py exits 0 with zero EAWF013, EAWF014 and EAWF017 findings over the branch-changed markdown set",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "The strict prose gate exits 0 over every markdown file this branch changes: eawf hook validate-prose --strict returns no deterministic finding, with generated pages emitting unwrapped paragraphs and the historical changelog entries unwrapped; cli exit asserted in pytest tests/lint/test_prose_gate_clean.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_generated_prose_unwrapped.py exits 0 with a freshly rendered page carrying no wrapped paragraph",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "The generators no longer author manually wrapped prose: rendering the autogen reference pages and the plugin agent bodies emits one line per paragraph, so a regenerated page validates against the no-manual-wrap rule rather than needing a hand fix; pytest tests/lint/test_generated_prose_unwrapped.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Clear the strict prose gate at its sources",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
