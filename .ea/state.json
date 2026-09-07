@@ -37948,7 +37948,8 @@
         "P32-I01-W27",
         "P32-I01-W28",
         "P32-I01-W29",
-        "P32-I01-W30"
+        "P32-I01-W30",
+        "P32-I01-W31"
       ]
     },
     "P33-I01": {
@@ -39340,7 +39341,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T13:37:26.334512Z",
+  "updated_at": "2026-09-07T13:38:19.823619Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -166245,6 +166246,71 @@
         }
       ],
       "title": "Repair the commit lint amend path and the duplicated warn-once flag",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W31": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion; typed criteria land at phase prep via spec sync",
+        "waived_at": "2026-09-07T13:38:19.680016Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "INC-P31-07. The telemetry store derives no session rows: a rebuild over the event log reports zero sessions and the dispatch cost table does not exist, so the projection and exporter are correct over an empty corpus. P31 enabled ingestion and surfaced session duration, but the producer turning session close events into typed rows needs an event payload schema bump, which is why the enabling wave could not carry it.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/observability/telemetry",
+        "tests/unit/observability/telemetry",
+        "tests/integration/observability"
+      ],
+      "gates": [],
+      "id": "P32-I01-W31",
+      "intent": {
+        "desired_outcome": "a rebuild over the event log yields typed session rows with correct durations",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Derive session rows from session close events behind an event payload schema bump|Prove a rebuild over a fixture log yields a non zero session count with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "The telemetry store derives no session rows so every store-sourced measurement is empty",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-07T13:38:19.823229Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Derive telemetry session rows from the event log",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
