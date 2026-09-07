@@ -15818,6 +15818,23 @@
       "status": "stale",
       "summary": "orphaned by daemon restart",
       "worktree_ids": []
+    },
+    "SES-20260907T142250.273002Z-executor-claude-4b2d62a3-c8cd-49b0-bc45-a860f4fd4ef0": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W51"
+      ],
+      "ended_at": null,
+      "id": "SES-20260907T142250.273002Z-executor-claude-4b2d62a3-c8cd-49b0-bc45-a860f4fd4ef0",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W51",
+      "started_at": "2026-09-07T14:22:50.273002Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
     }
   },
   "artifacts": {
@@ -20761,8 +20778,12 @@
     }
   },
   "current": {
-    "active_session_ids": [],
-    "active_wave_ids": [],
+    "active_session_ids": [
+      "SES-20260907T142250.273002Z-executor-claude-4b2d62a3-c8cd-49b0-bc45-a860f4fd4ef0"
+    ],
+    "active_wave_ids": [
+      "P31-I01-W51"
+    ],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -37951,7 +37972,8 @@
         "P31-I01-W47",
         "P31-I01-W48",
         "P31-I01-W49",
-        "P31-I01-W50"
+        "P31-I01-W50",
+        "P31-I01-W51"
       ]
     },
     "P32-I01": {
@@ -39392,7 +39414,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T14:20:50.848265Z",
+  "updated_at": "2026-09-07T14:22:51.787241Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -161762,6 +161784,91 @@
         }
       ],
       "title": "Clear the strict prose gate at its sources",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W51": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260907T142250.273002Z-executor-claude-4b2d62a3-c8cd-49b0-bc45-a860f4fd4ef0",
+      "claimed_at": "2026-09-07T14:22:51.062111Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-07T14:22:36.577044Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The repo census counts a pending wave stray whenever it sits outside the active iter, which forbids staging a roadmap ahead. The project's own roadmap procedure produces exactly that: propose and apply leave a planned phase carrying pending waves. P32 has thirty three such waves, so the census reds on correct roadmap state. Narrow the invariant to waves whose phase is neither planned nor the active iter, which still catches a genuinely orphaned wave.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/lint/test_reclose_staging.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_reclose_staging.py"
+            ],
+            "scope": "all",
+            "timeout_class": "quick"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P31-I01-W51",
+      "intent": {
+        "desired_outcome": "a staged planned phase passes the census while a genuinely orphaned wave still reds it",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Narrow the stray predicate to exclude waves under a planned phase|Prove a staged phase passes and an orphaned wave reds with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "The repo census reds whenever a planned phase stages pending waves ahead of the active iter",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-09-07T14:22:36.787368Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "deterministic",
+          "measurable_signal": "uv run pytest tests/lint/test_reclose_staging.py exits 0 with a staged planned phase present and reds for a genuinely orphaned pending wave",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "A pending wave belonging to a planned phase is not counted stray: the repo census returns no stray row while a future phase is staged ahead, and still raises for a pending wave under a phase that is neither planned nor the active iter; pytest tests/lint/test_reclose_staging.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Let a planned phase stage pending waves without a stray census row",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
