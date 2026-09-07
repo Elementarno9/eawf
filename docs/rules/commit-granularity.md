@@ -1,13 +1,13 @@
 <!-- Generated from the eawf profile render block `commit-granularity`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=commit-granularity version=1.1 hash=5b918f609f9fb472 -->
+<!-- BEGIN EAWF:managed id=commit-granularity version=1.1 hash=31758738811bc8fd -->
 # `commit-granularity`
 
 One commit per wave and per deliverable; wave-close bookkeeping rides the wave commit, and a golden refresh rides its cause.
 
 ### Rationale
 
-Commit count is not progress. A deliverable split across a dozen commits — code here, its test there, the golden it invalidated three commits later — cannot be reviewed as a unit or reverted as one, and ``git bisect`` lands mid-change on a tree that never worked. The opposite failure, one commit for an entire phase, is equally unreadable. The unit that works is the deliverable. P30 made the cost concrete: 1,036 commits for 525 waves, 385 of them state-only bookkeeping and 245 of those a per-wave close record — a reviewer opening the phase PR read twice as much bookkeeping as delivery.
+Commit count is not progress. A deliverable split across a dozen commits — code here, its test there, the golden it invalidated three commits later — cannot be reviewed as a unit or reverted as one, and ``git bisect`` lands mid-change on a tree that never worked. The opposite failure, one commit for an entire phase, is equally unreadable. The unit that builds and passes its tests is the deliverable. P30 made the cost concrete: 1,036 commits for 525 waves, 385 of them state-only bookkeeping and 245 of those a per-wave close record — a reviewer opening the phase PR read twice as much bookkeeping as delivery.
 
 
 ### Mechanism

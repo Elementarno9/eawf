@@ -5,27 +5,33 @@ the live plugin tree and assert byte-equality. A failure here means
 the renderer drifted — either a template, a registry entry, or a
 sibling renderer changed.
 
-To regenerate the fixture (intentional drift):
+To regenerate the fixture (intentional drift). Render into a tmp dir and
+redirect the global config layer the way :mod:`tests.conftest` does:
+``install_plugin`` otherwise resolves ``agents.extra_tools`` from the live
+layered config and bakes the regenerating machine's own tool grants into the
+fixture, which reds this test everywhere else.
 
 .. code-block:: bash
 
     rtk uv run python - <<'PY'
-    import shutil
+    import shutil, tempfile
     from pathlib import Path
+    from eawf.kernel.config import layered
     from eawf.runtime.runtimes.claude.plugin_install import install_plugin
 
-    src = Path("build/eawf-plugin-render")
-    if src.exists():
-        shutil.rmtree(src)
-    src.mkdir(parents=True)
-    install_plugin(src, persist_manifest=False)
-    golden = Path("tests/golden/plugin_install/claude")
-    if golden.exists():
-        shutil.rmtree(golden)
-    shutil.copytree(src / ".claude", golden)
-    Path("tests/golden/plugin_install/claude.mcp.json").write_bytes(
-        (src / ".mcp.json").read_bytes()
-    )
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        layered.global_config_path = lambda: root / "absent-global-config.yaml"
+        src = root / "render"
+        src.mkdir()
+        install_plugin(src, persist_manifest=False)
+        golden = Path("tests/golden/plugin_install/claude")
+        if golden.exists():
+            shutil.rmtree(golden)
+        shutil.copytree(src / ".claude", golden)
+        Path("tests/golden/plugin_install/claude.mcp.json").write_bytes(
+            (src / ".mcp.json").read_bytes()
+        )
     PY
 
 Mirrors :file:`tests/golden/test_golden_agents_md.py`'s

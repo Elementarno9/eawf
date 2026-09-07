@@ -13454,6 +13454,21 @@
       "scope_id": "P31-I01-W49",
       "status": "done",
       "updated_at": "2026-09-07T13:33:39.927421Z"
+    },
+    "P31-I01-W50": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P31-I01-W50",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P31-I01-W50",
+      "model": null,
+      "scope_id": "P31-I01-W50",
+      "status": "done",
+      "updated_at": "2026-09-07T14:12:52.399444Z"
     }
   },
   "agent_sessions": {
@@ -15785,6 +15800,21 @@
       "runtime_session_id": null,
       "scope_id": "P31-I01-W50",
       "started_at": "2026-09-07T13:35:48.925756Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260907T141247.267932Z-operator-claude-b3d3430d-813d-4d98-9ef4-2ececbbc8301": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-07T14:12:49.028437Z",
+      "id": "SES-20260907T141247.267932Z-operator-claude-b3d3430d-813d-4d98-9ef4-2ececbbc8301",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-c50",
+      "started_at": "2026-09-07T14:12:47.267932Z",
       "status": "stale",
       "summary": "orphaned by daemon restart",
       "worktree_ids": []
@@ -20732,9 +20762,7 @@
   },
   "current": {
     "active_session_ids": [],
-    "active_wave_ids": [
-      "P31-I01-W50"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -39363,7 +39391,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T13:58:59.040128Z",
+  "updated_at": "2026-09-07T14:13:00.337183Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -40425,6 +40453,22 @@
       "supersedes_id": null,
       "tree_sha": "e1845180bfe47dc6c7dfa0aab225ae05bd97e0cc",
       "wave_id": "P31-I01-W12"
+    },
+    "integration-34f94e2ed9c42f3c5b5ee83f": {
+      "base_sha": "b49a72902985a7a6628cebd7ca9f397f0103531a",
+      "candidate_sha": "59693c7270274fa13fd5f5037572696925c3c892",
+      "created_at": "2026-09-07T14:12:46.024053Z",
+      "diff_digest": "7cb8ad6f412fd9022fa29b47c8ee4393f07c796f34e74000112a3707959045c1",
+      "generation": 1,
+      "id": "integration-34f94e2ed9c42f3c5b5ee83f",
+      "integrated_sha": "59693c7270274fa13fd5f5037572696925c3c892",
+      "kind": "adopt",
+      "reason": "Cherry-picked from a harness-dispatched worktree executor; ancestry verified on feature/eawf-v0.7 and both declared gates re-run green on the integrated HEAD, with the strict prose gate clean over all 51 changed markdown files.",
+      "spec_digest": "4d22c050037568fab52343e9252c43d509a773dcdad58045db5d58ff68e27f97",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "042cef9afb9063f3e123b076402fb419f65a483a",
+      "wave_id": "P31-I01-W50"
     },
     "integration-36a2f5c719ad14a1802a1204": {
       "base_sha": "069b69ac109d15ad7312231d73ed4496acc4761f",
@@ -161598,9 +161642,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260907T133548.925756Z-executor-claude-c7967328-5337-49e5-91d8-7fe45a0c8ce2",
       "claimed_at": "2026-09-07T13:35:49.728735Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-07T14:12:52.399444Z",
+      "commit": "b3e26eb41800724314f11eb13a2da07cc364ece3",
+      "commit_identity_digest": "sha256:6677c1390e28247a0b66164c3449f616a364d75ccfb0d9bff1f103895b092578",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
         "waived_at": "2026-09-07T13:35:35.699938Z",
@@ -161675,13 +161719,13 @@
       },
       "iter_id": "P31-I01",
       "opened_at": "2026-09-07T13:35:35.852141Z",
-      "outcome": null,
+      "outcome": "The strict prose gate is clean over all 51 markdown files the branch changes, down from 2322 findings. The generators emit one line per paragraph so a regenerated page needs no hand fix, the historical changelog paragraphs are unwrapped verbatim, and the Vale vocabulary is curated to 156 entries rather than mass-suppressed. Both gates green.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",

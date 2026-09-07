@@ -2,7 +2,7 @@
 
 ## Summary
 
-Sixty backlog rows stood open at the close of phase P31. A read-only investigation verified each against the tree at branch `feature/eawf-v0.7` rather than against wave descriptions. Fourteen rows are satisfied by code that exists and works today and can be closed. Four are covered by a planned P32 wave, three of them only partially. Forty-two are orphaned: no planned wave covers them and nothing in the roadmap references them.
+Sixty backlog rows stood open at the close of phase P31. A read-only investigation verified each against the tree at branch `feature/eawf-v0.7` rather than against wave descriptions. Fourteen rows are satisfied by code that ships on this branch and passes its own tests, so they can be closed. Four are covered by a planned P32 wave, three of them only partially. Forty-two are orphaned: no planned wave covers them and nothing in the roadmap references them.
 
 The dominant finding is not any individual row. It is that **the backlog and the roadmap are separate structures in the same state file with no linkage between them**, so delivering what a row asks for does not close the row. P32's thirty-one waves were authored from the P31 incident rows and the epoch-2 migration specification; the backlog was never consulted. The two ledgers have never met.
 

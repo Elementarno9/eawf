@@ -1,8 +1,6 @@
 # eawf error codes
 
-Auto-generated from `eawf.surfaces.cli.error_codes:ErrorCode`. Each cause-level
-member folds onto exactly one of the five exit buckets via
-`ErrorCode.exit_code`.
+Auto-generated from `eawf.surfaces.cli.error_codes:ErrorCode`. Each cause-level member folds onto exactly one of the five exit buckets via `ErrorCode.exit_code`.
 
 | Error code | Exit bucket | Exit code |
 |---|---|---|

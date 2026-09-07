@@ -1,8 +1,6 @@
 # Eä JSON Schema reference
 
-Auto-generated from the canonical Pydantic models. The full JSON
-Schema of each model is dumped to a sibling `.schema.json` file by
-`eawf schema dump`; this page summarises the top-level properties.
+Auto-generated from the canonical Pydantic models. The full JSON Schema of each model is dumped to a sibling `.schema.json` file by `eawf schema dump`; this page summarises the top-level properties.
 
 ## `State`
 

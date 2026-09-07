@@ -11,7 +11,6 @@ in the sibling :mod:`eawf.surfaces.render.skills.registry`; the package
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass, field
 from importlib.resources import files
 from typing import TYPE_CHECKING
@@ -19,6 +18,7 @@ from typing import TYPE_CHECKING
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from eawf.surfaces.render.frontmatter import yaml_scalar
+from eawf.surfaces.render.unwrap import unwrap_markdown_paragraphs
 
 if TYPE_CHECKING:
     from eawf.platform.lint.validate_prose import ProseReport
@@ -28,7 +28,6 @@ logger = logging.getLogger(__name__)
 
 _TEMPLATE_NAME: str = "SKILL.md.j2"
 _TEMPLATES_PACKAGE: str = "eawf.platform.templates.claude"
-_LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
 
 
 @dataclass(frozen=True)
@@ -98,74 +97,6 @@ def _load_environment() -> Environment:
     return env
 
 
-def _is_fence(line: str) -> bool:
-    """Return whether *line* opens or closes a Markdown fence."""
-    stripped = line.strip()
-    return stripped.startswith(("```", "~~~"))
-
-
-def _is_structural_markdown(line: str) -> bool:
-    """Return whether *line* should remain a standalone Markdown line."""
-    stripped = line.strip()
-    if not stripped:
-        return True
-    if stripped.startswith(("#", ">", "|", "<!--", "::")):
-        return True
-    if _LIST_ITEM_RE.match(line):
-        return True
-    return _is_fence(line)
-
-
-def _can_join_to_previous_list_line(previous: str, current: str) -> bool:
-    """Return whether *current* is a continuation of a list item."""
-    if not current.startswith(" "):
-        return False
-    stripped = current.strip()
-    if not stripped or _is_structural_markdown(current):
-        return False
-    return bool(_LIST_ITEM_RE.match(previous))
-
-
-def _unwrap_skill_body(body: str) -> str:
-    """Collapse hard-wrapped prose while preserving Markdown structure."""
-    output: list[str] = []
-    paragraph: list[str] = []
-    in_fence = False
-
-    def flush_paragraph() -> None:
-        if paragraph:
-            output.append(" ".join(paragraph))
-            paragraph.clear()
-
-    for raw_line in body.rstrip("\n").splitlines():
-        line = raw_line.rstrip()
-        stripped = line.strip()
-
-        if _is_fence(line):
-            flush_paragraph()
-            output.append(line)
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            output.append(line)
-            continue
-        if not stripped:
-            flush_paragraph()
-            output.append("")
-            continue
-        if output and _can_join_to_previous_list_line(output[-1], line):
-            output[-1] = f"{output[-1]} {stripped}"
-            continue
-        if _is_structural_markdown(line):
-            flush_paragraph()
-            output.append(line)
-            continue
-        paragraph.append(stripped)
-
-    flush_paragraph()
-    return "\n".join(output)
-
-
 def prose_check_rendered(text: str) -> ProseReport:
     """Run the Layer-2 prose chokepoint over rendered Markdown, fail-open.
 
@@ -222,7 +153,7 @@ def render_skill_md(ctx: SkillTemplateContext) -> str:
         argument_hint=ctx.argument_hint,
         user_invocable=ctx.user_invocable,
         disable_model_invocation=ctx.disable_model_invocation,
-        body=_unwrap_skill_body(ctx.body),
+        body=unwrap_markdown_paragraphs(ctx.body),
     )
     if not rendered.endswith("\n"):
         rendered = rendered + "\n"

@@ -6,7 +6,7 @@ Rendered as `.claude/agents/<role>.md`.
 
 # Domain specialist
 
-You handle a project-specific domain (e.g. quant research, web ops, data ingestion). You are spawned with a tightly-scoped task that requires domain context the generalist agents do not carry.
+You handle a project-specific domain (e.g. quant research, web ops, data ingestion). You are spawned with a tightly scoped task that requires domain context the generalist agents do not carry.
 
 ## v0.4 cross-links
 

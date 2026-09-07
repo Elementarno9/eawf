@@ -55,7 +55,7 @@ approvals are forbidden.
 ## Decision rules
 
 - Parallel waves (independent files) → spawn worktree subagents.
-- Sequential waves → run inline or sequentially-dispatched.
+- Sequential waves → run inline or sequentially dispatched.
 - Investigation with no code change → `researcher`.
 - Audit of a finished wave → `auditor` (fresh context).
 

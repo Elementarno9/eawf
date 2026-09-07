@@ -236,8 +236,8 @@ def cli_page() -> GeneratedPage:
     lines: list[str] = [
         "# eawf CLI reference",
         "",
-        "Auto-generated from `eawf.surfaces.cli.app:app`. Every top-level command and",
-        "sub-group verb registered on the root Typer app is listed below; do",
+        "Auto-generated from `eawf.surfaces.cli.app:app`. Every top-level command "
+        "and sub-group verb registered on the root Typer app is listed below; do "
         "not hand-edit — regenerate via `eawf doc verify --strict`.",
         "",
         "## Top-level commands",
@@ -301,8 +301,8 @@ def skills_page() -> GeneratedPage:
     lines: list[str] = [
         "# eawf skill catalog",
         "",
-        "Auto-generated from `eawf.surfaces.render.skills:SKILL_REGISTRY`. Each row is",
-        "an Eä skill the runtime can install as a slash command.",
+        "Auto-generated from `eawf.surfaces.render.skills:SKILL_REGISTRY`. Each row "
+        "is an Eä skill the runtime can install as a slash command.",
         "",
         "| Skill | User-invocable | Argument hint | Description |",
         "|---|---|---|---|",
@@ -326,8 +326,8 @@ def schema_page() -> GeneratedPage:
     lines: list[str] = [
         "# Eä JSON Schema reference",
         "",
-        "Auto-generated from the canonical Pydantic models. The full JSON",
-        "Schema of each model is dumped to a sibling `.schema.json` file by",
+        "Auto-generated from the canonical Pydantic models. The full JSON Schema "
+        "of each model is dumped to a sibling `.schema.json` file by "
         "`eawf schema dump`; this page summarises the top-level properties.",
         "",
     ]
@@ -374,7 +374,7 @@ def enums_page() -> GeneratedPage:
     lines: list[str] = [
         "# eawf state enums",
         "",
-        "Auto-generated from `eawf.kernel.state.enums`. Every `StrEnum` defined in",
+        "Auto-generated from `eawf.kernel.state.enums`. Every `StrEnum` defined in "
         "that module is listed with its members.",
         "",
         "| Class | Values |",
@@ -395,8 +395,8 @@ def error_codes_page() -> GeneratedPage:
     lines: list[str] = [
         "# eawf error codes",
         "",
-        "Auto-generated from `eawf.surfaces.cli.error_codes:ErrorCode`. Each cause-level",
-        "member folds onto exactly one of the five exit buckets via",
+        "Auto-generated from `eawf.surfaces.cli.error_codes:ErrorCode`. Each "
+        "cause-level member folds onto exactly one of the five exit buckets via "
         "`ErrorCode.exit_code`.",
         "",
         "| Error code | Exit bucket | Exit code |",
@@ -418,8 +418,8 @@ def exit_codes_page() -> GeneratedPage:
     lines: list[str] = [
         "# eawf exit codes",
         "",
-        "Auto-generated from `eawf.surfaces.cli.exit_codes`. The canonical five-bucket",
-        "surface every CLI handler exits with.",
+        "Auto-generated from `eawf.surfaces.cli.exit_codes`. The canonical "
+        "five-bucket surface every CLI handler exits with.",
         "",
         "| Code | Name |",
         "|---|---|",
@@ -446,7 +446,7 @@ def index_page() -> GeneratedPage:
     lines: list[str] = [
         "# Auto-generated reference",
         "",
-        "These pages are regenerated from the live source tree by",
+        "These pages are regenerated from the live source tree by "
         "`eawf doc verify --strict`. Do not hand-edit — a drift diff fails CI.",
         "",
         "- [CLI reference](cli.md)",

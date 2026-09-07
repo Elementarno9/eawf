@@ -33,6 +33,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from eawf.kernel.config.schema import ALL_ROLES
 from eawf.surfaces.render.frontmatter import yaml_scalar
+from eawf.surfaces.render.unwrap import unwrap_markdown_paragraphs
 
 logger = logging.getLogger(__name__)
 
@@ -288,10 +289,14 @@ def render_agent_md(ctx: AgentTemplateContext) -> str:
     Returns:
         The rendered markdown text. The frontmatter shape mirrors the
         hand-written ``.claude/agents/<role>.md`` placeholders so the
-        renderer-vs-handwritten swap is byte-clean.
+        renderer-vs-handwritten swap is byte-clean. Prose paragraphs are
+        emitted one line each: the body literals are hard-wrapped to fit the
+        source line-length budget, and the no-manual-wrap rule applies to the
+        rendered artifact, so the wrap is undone on the way out.
     """
     env = _load_environment()
     template = env.get_template(_TEMPLATE_NAME)
+    contract = ctx.output_contract or _typed_output_contract(ctx.role)
     rendered = template.render(
         role=ctx.role,
         description=ctx.description,
@@ -299,8 +304,8 @@ def render_agent_md(ctx: AgentTemplateContext) -> str:
         model=ctx.model,
         color=ctx.color,
         memory=ctx.memory,
-        body=ctx.body.rstrip("\n"),
-        output_contract=(ctx.output_contract or _typed_output_contract(ctx.role)).rstrip("\n"),
+        body=unwrap_markdown_paragraphs(ctx.body).rstrip("\n"),
+        output_contract=unwrap_markdown_paragraphs(contract).rstrip("\n"),
     )
     if not rendered.endswith("\n"):
         rendered = rendered + "\n"
@@ -640,7 +645,7 @@ approvals are forbidden.
 ## Decision rules
 
 - Parallel waves (independent files) → spawn worktree subagents.
-- Sequential waves → run inline or sequentially-dispatched.
+- Sequential waves → run inline or sequentially dispatched.
 - Investigation with no code change → `researcher`.
 - Audit of a finished wave → `auditor` (fresh context).
 
@@ -678,7 +683,7 @@ shipped, waves remaining, and the next planned dispatch.
 _DOMAIN_SPECIALIST_BODY = """# Domain specialist
 
 You handle a project-specific domain (e.g. quant research, web ops,
-data ingestion). You are spawned with a tightly-scoped task that
+data ingestion). You are spawned with a tightly scoped task that
 requires domain context the generalist agents do not carry.
 
 ## v0.4 cross-links
