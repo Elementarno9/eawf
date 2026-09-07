@@ -15581,6 +15581,23 @@
       "status": "stale",
       "summary": "orphaned by daemon restart",
       "worktree_ids": []
+    },
+    "SES-20260907T114833.604180Z-executor-claude-6e935818-c9f6-447c-be0f-d6f67686cd33": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P31-I01-W47"
+      ],
+      "ended_at": null,
+      "id": "SES-20260907T114833.604180Z-executor-claude-6e935818-c9f6-447c-be0f-d6f67686cd33",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P31-I01-W47",
+      "started_at": "2026-09-07T11:48:33.604180Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
     }
   },
   "artifacts": {
@@ -20503,8 +20520,12 @@
     }
   },
   "current": {
-    "active_session_ids": [],
-    "active_wave_ids": [],
+    "active_session_ids": [
+      "SES-20260907T114833.604180Z-executor-claude-6e935818-c9f6-447c-be0f-d6f67686cd33"
+    ],
+    "active_wave_ids": [
+      "P31-I01-W47"
+    ],
     "iter_id": "P31-I01",
     "phase_id": "P31",
     "project_code": "EAWF",
@@ -37535,7 +37556,8 @@
         "P31-I01-W43",
         "P31-I01-W44",
         "P31-I01-W45",
-        "P31-I01-W46"
+        "P31-I01-W46",
+        "P31-I01-W47"
       ]
     },
     "P32-I01": {
@@ -38965,7 +38987,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T11:47:11.061516Z",
+  "updated_at": "2026-09-07T11:48:35.024031Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -157018,8 +157040,8 @@
       "claim_session_id": "SES-20260907T111458.259988Z-executor-claude-63a9f6ea-d319-4df6-b14b-5ab64ad20fdd",
       "claimed_at": "2026-09-07T11:14:58.952007Z",
       "closed_at": "2026-09-07T11:47:11.061213Z",
-      "commit": "40cabead9867d1b621fdf24d7111016958ea435c",
-      "commit_identity_digest": "sha256:832cfb1b0a839519377de3e449576c9e7bec77ccba57abe9ce2317d3a17778db",
+      "commit": "442a627380a397495578233c9e18ef8a1fd0772d",
+      "commit_identity_digest": "sha256:da28a7242918cbe72e214fc95b911b923a685cfc4b54b27fcb58cae93c19203b",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-08-25T22:16:17.412447Z",
@@ -160739,6 +160761,71 @@
         }
       ],
       "title": "Lift the codex reasoning exclusion from the turn-cost sums",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P31-I01-W47": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260907T114833.604180Z-executor-claude-6e935818-c9f6-447c-be0f-d6f67686cd33",
+      "claimed_at": "2026-09-07T11:48:34.337450Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-07T11:48:21.339061Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Two test-facing drifts this phase introduced and one stale generated page. W07 added the vcs.checkpoint_requires_commit config leaf without registering it in the test's expected consumer set; W08 added a session.end_stamp RPC the runtime-capture hook test does not expect. Separately five CLI verbs landed across W20, W21, W28, W31 and W34 without the autogen reference page following. All three are mechanical repairs of this phase's own residue.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/unit/test_layered_config.py",
+        "tests/unit/test_runtime_capture_hook.py",
+        "docs/reference/autogen"
+      ],
+      "gates": [],
+      "id": "P31-I01-W47",
+      "intent": {
+        "desired_outcome": "the three residue failures exit 0 so the suite reflects only inherited debt",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Register the vcs leaf and the session.end_stamp RPC in their expected sets|Regenerate the autogen reference tree with schema dump"
+        ],
+        "priority_rationale": null,
+        "problem": "This phase introduced two consumer-registry drifts and left the autogen reference page stale",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P31-I01",
+      "opened_at": "2026-09-07T11:48:21.556678Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "polish placeholder replaced immediately by a typed spec sync",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "polish placeholder replaced immediately by a typed spec sync",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Repair the consumer-registry drift and refresh the autogen tree",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
