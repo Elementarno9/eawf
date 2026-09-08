@@ -20,6 +20,7 @@ from eawf.kernel.migration.epoch2.allowlist import LegacySymbolAllowlist
 from eawf.kernel.migration.epoch2.backlog import BACKLOG_CLASSIFIER_RULE, obsolescence_rule
 from eawf.kernel.migration.epoch2.criteria import criteria_rule_payload
 from eawf.kernel.migration.epoch2.dispositions import disposition_rule_payload
+from eawf.kernel.migration.epoch2.rows import row_contract_payload
 from eawf.kernel.migration.epoch2.rules import (
     MappingRuleVersion,
     build_rule_version,
@@ -36,6 +37,7 @@ def totality_rule_payload() -> dict[str, Any]:
         "dispositions": disposition_rule_payload(),
         "status": status_rule_payload(),
         "criteria": criteria_rule_payload(),
+        "rows": row_contract_payload(),
     }
 
 

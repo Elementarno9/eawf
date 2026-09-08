@@ -42,3 +42,67 @@ class MigrationFabricationDetectedError(MigrationRuleError):
     """
 
     code: ClassVar[str] = "migration_fabrication_detected"
+
+
+class MigrationSourceUnreadableError(MigrationRuleError):
+    """A declared read surface is missing or cannot be parsed at all.
+
+    The census is total over the source, so an absent surface is not an
+    empty one: a snapshot that cannot present every declared surface
+    would under-report the corpus and silently shrink the import.
+    """
+
+    code: ClassVar[str] = "migration_source_unreadable"
+
+
+class MigrationSourceMutatedError(MigrationRuleError):
+    """A read surface changed bytes after the barrier was taken.
+
+    Everything downstream of the barrier is computed from one pinned
+    revision of the source. A surface that moves underneath it makes the
+    census describe a corpus that no longer exists.
+    """
+
+    code: ClassVar[str] = "migration_source_mutated"
+
+
+class MigrationDuplicateKeyError(MigrationRuleError):
+    """The source document carries the same object key twice.
+
+    A JSON parser keeps the last occurrence, so a duplicate key silently
+    discards rows. The census refuses the document instead of importing
+    whichever half the parser happened to keep.
+    """
+
+    code: ClassVar[str] = "migration_duplicate_key"
+
+
+class MigrationCollectionOmittedError(MigrationRuleError):
+    """A collection with a declared disposition is absent from the source.
+
+    Absent is not empty. A collection nobody can count is a collection
+    whose fate the cutover cannot prove, so the plan fails.
+    """
+
+    code: ClassVar[str] = "migration_collection_omitted"
+
+
+class MigrationCollectionUnknownError(MigrationRuleError):
+    """The source carries a collection no disposition row declares.
+
+    An undeclared collection is one nobody decided the fate of; letting
+    it through would drift past the cutover unimported and unrecorded.
+    """
+
+    code: ClassVar[str] = "migration_collection_unknown"
+
+
+class MigrationRowValidationError(MigrationRuleError):
+    """One or more source rows violate the schema declared for them.
+
+    Every offending row is named in the message. A malformed row is a
+    plan failure rather than a skip, because a skipped row is a row the
+    target census can never reconcile against the source census.
+    """
+
+    code: ClassVar[str] = "migration_row_validation"
