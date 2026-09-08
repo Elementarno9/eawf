@@ -1,0 +1,1593 @@
+{
+ "scope": "eawf-core",
+ "revision": 41208,
+ "tracks": [
+  {
+   "id": "Runtime",
+   "runs": 18,
+   "needs": 3,
+   "prog": "~14 of 18 tasks",
+   "as": "14:02",
+   "milestones": [
+    {
+     "id": "MLS-0001",
+     "name": "Replay-safe activity",
+     "state": "ACTIVE",
+     "batches": 2,
+     "due": "W30"
+    },
+    {
+     "id": "MLS-0003",
+     "name": "Escape ledger",
+     "state": "ACTIVE",
+     "batches": 0,
+     "due": "W32"
+    },
+    {
+     "id": "MLS-0000",
+     "name": "Event normalizer",
+     "state": "COMPLETED",
+     "batches": 3,
+     "due": "—"
+    }
+   ]
+  },
+  {
+   "id": "Trust",
+   "runs": 6,
+   "needs": 0,
+   "prog": "~4 of 7 tasks",
+   "as": "14:02",
+   "milestones": [
+    {
+     "id": "MLS-0004",
+     "name": "Escape-ledger",
+     "state": "ACCEPTANCE_REVIEW",
+     "batches": 3,
+     "due": "W29"
+    }
+   ]
+  },
+  {
+   "id": "Research",
+   "runs": 2,
+   "needs": 0,
+   "prog": "≈2 of 5 tasks",
+   "as": "13:58",
+   "milestones": [
+    {
+     "id": "CAM-0001",
+     "name": "Provider drift",
+     "state": "REVIEW",
+     "batches": 0,
+     "due": "W30"
+    }
+   ]
+  }
+ ],
+ "fleet": [
+  {
+   "run": "RUN-538453eb",
+   "task": "EAWF-0042 Bound replay",
+   "state": "WAIT-PERM",
+   "reason": "needs permission",
+   "as": "14:02",
+   "prov": "claude",
+   "bucket": "perm"
+  },
+  {
+   "run": "RUN-f1bbcd9c",
+   "task": "EAWF-0043 Seal ledger",
+   "state": "WAIT-PERM",
+   "reason": "needs permission",
+   "as": "14:02",
+   "prov": "codex",
+   "bucket": "perm"
+  },
+  {
+   "run": "RUN-cc623ab9",
+   "task": "EAWF-0044 Retire shim",
+   "state": "WAIT-USER",
+   "reason": "needs your answer",
+   "as": "14:02",
+   "prov": "codex",
+   "bucket": "perm"
+  },
+  {
+   "run": "RUN-a708a7d6",
+   "task": "EAWF-0047 Digest guard",
+   "state": "SUSPENDED",
+   "reason": "control outcome unknown",
+   "as": "13:58",
+   "prov": "claude",
+   "bucket": "unknown"
+  },
+  {
+   "run": "RUN-be1e085a",
+   "task": "EAWF-0051 Coalesce",
+   "state": "LOST",
+   "reason": "stopped responding",
+   "as": "14:01",
+   "prov": "claude",
+   "bucket": "lost"
+  },
+  {
+   "run": "RUN-5c558210",
+   "task": "EAWF-0053 Window trim",
+   "state": "LOST",
+   "reason": "stopped responding",
+   "as": "13:59",
+   "prov": "codex",
+   "bucket": "lost"
+  },
+  {
+   "run": "RUN-98c47577",
+   "task": "EAWF-0052 Replay guard",
+   "state": "FAILED",
+   "reason": "final report rejected",
+   "as": "14:01",
+   "prov": "codex",
+   "bucket": "failed"
+  },
+  {
+   "run": "RUN-d53368de",
+   "task": "EAWF-0054 Ledger audit",
+   "state": "RUNNING",
+   "reason": "integrating",
+   "as": "14:02",
+   "prov": "claude",
+   "bucket": "checking"
+  },
+  {
+   "run": "RUN-736ae294",
+   "task": "EAWF-0063 Seal check",
+   "state": "RUNNING",
+   "reason": "checking",
+   "as": "14:02",
+   "prov": "codex",
+   "bucket": "checking"
+  },
+  {
+   "run": "RUN-11a25c4a",
+   "task": "EAWF-0064 Digest verify",
+   "state": "RUNNING",
+   "reason": "checking",
+   "as": "14:02",
+   "prov": "claude",
+   "bucket": "checking"
+  },
+  {
+   "run": "RUN-afd9d5fb",
+   "task": "EAWF-0065 Merge probe",
+   "state": "RUNNING",
+   "reason": "integrating",
+   "as": "14:02",
+   "prov": "codex",
+   "bucket": "checking"
+  },
+  {
+   "run": "RUN-28b7bcce",
+   "task": "EAWF-0055 Normalize",
+   "state": "RUNNING",
+   "reason": "run active",
+   "as": "14:02",
+   "prov": "claude",
+   "bucket": "running"
+  },
+  {
+   "run": "RUN-c6ef367f",
+   "task": "EAWF-0056 Bound window",
+   "state": "RUNNING",
+   "reason": "run active",
+   "as": "14:02",
+   "prov": "claude",
+   "bucket": "running"
+  },
+  {
+   "run": "RUN-6526b035",
+   "task": "EAWF-0057 Escape audit",
+   "state": "QUEUED",
+   "reason": "waiting for a slot",
+   "as": "14:02",
+   "prov": "codex",
+   "bucket": "running"
+  },
+  {
+   "run": "RUN-035e29eb",
+   "task": "EAWF-0058 Ledger seal",
+   "state": "RUNNING",
+   "reason": "run active",
+   "as": "14:02",
+   "prov": "claude",
+   "bucket": "running"
+  },
+  {
+   "run": "RUN-a195a39c",
+   "task": "EAWF-0059 Digest check",
+   "state": "RUNNING",
+   "reason": "run active",
+   "as": "14:02",
+   "prov": "codex",
+   "bucket": "running"
+  },
+  {
+   "run": "RUN-3fcd1d52",
+   "task": "EAWF-0060 Wave shim",
+   "state": "RUNNING",
+   "reason": "run active",
+   "as": "14:02",
+   "prov": "claude",
+   "bucket": "running"
+  },
+  {
+   "run": "RUN-de049703",
+   "task": "EAWF-0061 Snapshot",
+   "state": "QUEUED",
+   "reason": "waiting for a slot",
+   "as": "14:02",
+   "prov": "codex",
+   "bucket": "running"
+  },
+  {
+   "run": "RUN-7c3c10b9",
+   "task": "EAWF-0062 Compaction",
+   "state": "RUNNING",
+   "reason": "run active",
+   "as": "14:02",
+   "prov": "claude",
+   "bucket": "running"
+  },
+  {
+   "run": "RUN-1a738a6f",
+   "task": "EAWF-0066 Kind mapper",
+   "state": "RUNNING",
+   "reason": "run active",
+   "as": "14:02",
+   "prov": "codex",
+   "bucket": "running"
+  },
+  {
+   "run": "RUN-b8ab0420",
+   "task": "EAWF-0067 Alias table",
+   "state": "RUNNING",
+   "reason": "run active",
+   "as": "14:02",
+   "prov": "claude",
+   "bucket": "running"
+  },
+  {
+   "run": "RUN-56e27dd6",
+   "task": "EAWF-0068 Retention pass",
+   "state": "RUNNING",
+   "reason": "run active",
+   "as": "14:01",
+   "prov": "codex",
+   "bucket": "running"
+  },
+  {
+   "run": "RUN-f519f787",
+   "task": "EAWF-0069 Index rebuild",
+   "state": "RUNNING",
+   "reason": "run active",
+   "as": "14:01",
+   "prov": "claude",
+   "bucket": "running"
+  },
+  {
+   "run": "RUN-9351713d",
+   "task": "EAWF-0070 Cursor probe",
+   "state": "RUNNING",
+   "reason": "run active",
+   "as": "14:01",
+   "prov": "codex",
+   "bucket": "running"
+  },
+  {
+   "run": "RUN-3c6ef367",
+   "task": "EAWF-0071 Event normalize",
+   "state": "SUCCEEDED",
+   "reason": "final report accepted",
+   "as": "13:52",
+   "prov": "claude",
+   "bucket": "recent"
+  },
+  {
+   "run": "RUN-daa66d18",
+   "task": "EAWF-0072 Shim retire",
+   "state": "SUCCEEDED",
+   "reason": "final report accepted",
+   "as": "13:50",
+   "prov": "codex",
+   "bucket": "recent"
+  }
+ ],
+ "buckets": [
+  {
+   "key": "perm",
+   "label": "needs operator"
+  },
+  {
+   "key": "unknown",
+   "label": "unknown control outcome"
+  },
+  {
+   "key": "lost",
+   "label": "lost or stale"
+  },
+  {
+   "key": "failed",
+   "label": "failed"
+  },
+  {
+   "key": "checking",
+   "label": "checking or integrating"
+  },
+  {
+   "key": "running",
+   "label": "running"
+  },
+  {
+   "key": "recent",
+   "label": "terminal recent"
+  }
+ ],
+ "xbuckets": [
+  {
+   "key": "failed",
+   "label": "failed"
+  },
+  {
+   "key": "lost",
+   "label": "lost"
+  },
+  {
+   "key": "needs",
+   "label": "needs operator",
+   "sub": [
+    {
+     "key": "needs.permission",
+     "label": "permission"
+    },
+    {
+     "key": "needs.answer",
+     "label": "answer"
+    },
+    {
+     "key": "needs.readiness",
+     "label": "readiness"
+    }
+   ]
+  },
+  {
+   "key": "stalled",
+   "label": "stalled"
+  },
+  {
+   "key": "over",
+   "label": "over budget"
+  },
+  {
+   "key": "rejected",
+   "label": "rejected"
+  },
+  {
+   "key": "active",
+   "label": "active"
+  },
+  {
+   "key": "queued",
+   "label": "queued"
+  }
+ ],
+ "attention": [
+  {
+   "id": "ACT-0031",
+   "notDeny": "the run stays inside BAT-0002 and writes nothing outside it",
+   "notSnooze": "it stays open for you and for every other principal",
+   "notResolve": "the permission is neither granted nor refused",
+   "track": "Runtime",
+   "bucket": "needs.permission",
+   "state": "OPEN",
+   "ledger": [],
+   "text": "RUN-538453eb wants to write outside its batch",
+   "due": "due 4m",
+   "kind": "permission · you are the only eligible answer",
+   "effects": "The run may write one file outside BAT-0002.",
+   "not": "It does not widen any other run’s authority."
+  },
+  {
+   "id": "ACT-0032",
+   "notDeny": "the run does not get your reply and keeps waiting",
+   "notSnooze": "it stays open — the question is not answered by hiding it",
+   "notResolve": "the question is closed as handled, not answered",
+   "track": "Runtime",
+   "bucket": "needs.answer",
+   "state": "OPEN",
+   "ledger": [],
+   "text": "EAWF-0042 needs your answer",
+   "due": "open",
+   "kind": "question · no deadline set",
+   "effects": "the run proceeds with your reply",
+   "not": "no other run is waiting on this"
+  },
+  {
+   "id": "ACT-0033",
+   "notDeny": "the authority stays invalid and no merge is possible",
+   "notSnooze": "it stays open — the invalidation does not expire",
+   "notResolve": "the invalidation is acknowledged, not repaired",
+   "track": "Runtime",
+   "bucket": "needs.readiness",
+   "state": "OPEN",
+   "ledger": [],
+   "text": "BAT-0003 merge authority no longer valid",
+   "due": "due –",
+   "kind": "readiness · the shared branch moved after you authorized",
+   "effects": "re-authorizing binds to the current head",
+   "not": "it does not re-run any check"
+  },
+  {
+   "id": "ACT-0034",
+   "notDeny": "the run stays lost and is not resumed or closed",
+   "notSnooze": "it stays open — recovery is still owed",
+   "notResolve": "recovery is closed without resuming the run",
+   "track": "Trust",
+   "bucket": "lost",
+   "state": "OPEN",
+   "ledger": [],
+   "text": "RUN-be1e085a stopped responding · resume or let go",
+   "due": "due –",
+   "kind": "last heartbeat 14:01 · no final report",
+   "effects": "resume waits for the same run",
+   "not": "neither choice guesses what happened"
+  },
+  {
+   "id": "ACT-0035",
+   "notDeny": "nothing changes — a notice cannot be denied",
+   "notSnooze": "the run is not stopped and its estimate is not raised",
+   "notResolve": "it does not stop the run or change its budget",
+   "track": "Research",
+   "bucket": "over",
+   "state": "OPEN",
+   "ledger": [],
+   "text": "RUN-3fcd1d52 past its 45m estimate; still running",
+   "due": "—",
+   "kind": "notice · never blocks, never auto-opens",
+   "effects": "nothing — this is a notice",
+   "not": "it did not pause anything"
+  }
+ ],
+ "timeline": [
+  [
+   "10:00:04",
+   "¶ message · completed",
+   "Inspected the normalizer",
+   "P1"
+  ],
+  [
+   "10:00:41",
+   "› tool · started",
+   "Applying a bounded patch",
+   "P1"
+  ],
+  [
+   "10:01:12",
+   "± file · changed",
+   "Updated one candidate file",
+   "P0"
+  ],
+  [
+   "10:02:03",
+   "? question · opened",
+   "Which shim may be retired?",
+   "P0"
+  ],
+  [
+   "",
+   "~ heartbeat",
+   "",
+   "P2"
+  ],
+  [
+   "",
+   "progress ×212 · 29s",
+   "",
+   "P2"
+  ],
+  [
+   "10:18:31",
+   "› tool · completed",
+   "Patch applied, 1 file",
+   "P1"
+  ],
+  [
+   "10:18:44",
+   "¶ message · started",
+   "Summarising the change",
+   "P1"
+  ]
+ ],
+ "actions": {
+  "scope.home": [
+   [
+    "n",
+    "new draft",
+    "yes",
+    "",
+    "control",
+    "a DRAFT task is added to this track’s backlog",
+    "it is not dispatched and has no owner yet"
+   ],
+   [
+    "p",
+    "pin outcome",
+    "yes",
+    "",
+    "",
+    "this track sorts first for you",
+    "no other principal’s order changes"
+   ],
+   [
+    "y",
+    "copy scope URN",
+    "yes",
+    "",
+    "",
+    "the stable URN goes to your clipboard",
+    "nothing in the workspace is read or changed"
+   ],
+   [
+    "w",
+    "switch workspace",
+    "yes",
+    "",
+    "control",
+    "the console re-attaches to another registered root",
+    "no run is stopped, paused or reassigned"
+   ],
+   [
+    "r",
+    "retire track",
+    "no",
+    "the track has 2 batches in flight",
+    "admin",
+    "",
+    ""
+   ]
+  ],
+  "activity": [
+   [
+    "f",
+    "follow",
+    "yes",
+    "",
+    "",
+    "new rows arrive at the top as they change",
+    "the sort and your selection stay put"
+   ],
+   [
+    "p",
+    "pause display",
+    "yes",
+    "",
+    "",
+    "the window stops updating and counts what it held back",
+    "no run is paused — only this display"
+   ],
+   [
+    "s",
+    "sort",
+    "yes",
+    "",
+    "",
+    "the window re-orders by the column you pick",
+    "fleet-wide counts are unaffected"
+   ],
+   [
+    "*",
+    "select all shown",
+    "yes",
+    "",
+    "control",
+    "every run in the focused bucket joins the selection",
+    "nothing is dispatched or cancelled by selecting"
+   ],
+   [
+    "n",
+    "reconcile selected",
+    "no",
+    "no control outcome is unknown here",
+    "control",
+    "",
+    ""
+   ],
+   [
+    "c",
+    "cancel selected",
+    "no",
+    "nothing is selected",
+    "control",
+    "",
+    ""
+   ]
+  ],
+  "run.detail": [
+   [
+    "l",
+    "open transcript",
+    "yes",
+    "",
+    "",
+    "",
+    "",
+    "light",
+    "transcript"
+   ],
+   [
+    "b",
+    "open branch and PR",
+    "yes",
+    "",
+    "",
+    "",
+    "",
+    "light",
+    "git.pr"
+   ],
+   [
+    "m",
+    "open cost ceiling",
+    "yes",
+    "",
+    "",
+    "",
+    "",
+    "light",
+    "cost.ceiling"
+   ],
+   [
+    "s",
+    "steer",
+    "yes",
+    "",
+    "",
+    "a steering note is delivered to the running agent",
+    "it does not stop the run or change its task"
+   ],
+   [
+    "n",
+    "interrupt",
+    "yes",
+    "",
+    "control",
+    "the run stops at its next safe point",
+    "the task stays claimed and can be resumed"
+   ],
+   [
+    "c",
+    "cancel",
+    "yes",
+    "",
+    "control",
+    "the run ends and closes as CANCELLED",
+    "the task is not failed and no batch is touched"
+   ],
+   [
+    "t",
+    "retry",
+    "no",
+    "the run has not ended",
+    "control",
+    "",
+    ""
+   ],
+   [
+    "f",
+    "fork",
+    "no",
+    "requires a terminal run",
+    "control",
+    "",
+    ""
+   ],
+   [
+    "p",
+    "purge events",
+    "no",
+    "not certified for your class",
+    "admin",
+    "",
+    ""
+   ]
+  ],
+  "batch.detail": [
+   [
+    "m",
+    "authorize merge",
+    "no",
+    "checks incomplete · 3 of 4 passed",
+    "merge",
+    "",
+    ""
+   ],
+   [
+    "i",
+    "integrate task",
+    "yes",
+    "",
+    "control",
+    "the selected task joins this batch at head a1f4c9e",
+    "no other task changes and no check re-runs"
+   ],
+   [
+    "r",
+    "request repair",
+    "yes",
+    "",
+    "control",
+    "the batch enters CHANGES_REQUIRED with your reason",
+    "nothing already merged is reverted"
+   ],
+   [
+    "c",
+    "cancel batch",
+    "yes",
+    "",
+    "control",
+    "the batch closes and its tasks return to PLANNED",
+    "no completed work is undone"
+   ],
+   [
+    "n",
+    "reconcile",
+    "no",
+    "no control is outstanding",
+    "control",
+    "",
+    ""
+   ]
+  ],
+  "attention": [
+   [
+    "a",
+    "answer",
+    "yes",
+    "",
+    "answer",
+    "",
+    ""
+   ],
+   [
+    "x",
+    "deny",
+    "yes",
+    "",
+    "answer",
+    "",
+    ""
+   ],
+   [
+    "z",
+    "snooze",
+    "yes",
+    "",
+    "answer",
+    "",
+    ""
+   ],
+   [
+    "@",
+    "assign",
+    "no",
+    "you are the only principal",
+    "answer",
+    "",
+    ""
+   ],
+   [
+    "v",
+    "resolve",
+    "yes",
+    "",
+    "answer",
+    "",
+    ""
+   ]
+  ],
+  "track": [
+   [
+    "n",
+    "new milestone",
+    "yes",
+    "",
+    "control",
+    "a PLANNED milestone joins this track",
+    "it is not scheduled and holds no batches yet"
+   ],
+   [
+    "b",
+    "open batch",
+    "no",
+    "WIP is 3 of 3 batches",
+    "control",
+    "",
+    ""
+   ],
+   [
+    "p",
+    "pause dispatch",
+    "yes",
+    "",
+    "control",
+    "no new run starts in this track",
+    "runs already executing continue"
+   ],
+   [
+    "r",
+    "retire track",
+    "no",
+    "the track has 2 batches in flight",
+    "admin",
+    "",
+    ""
+   ]
+  ],
+  "task.detail": [
+   [
+    "e",
+    "dispatch",
+    "no",
+    "not planned · already ready",
+    "control",
+    "",
+    ""
+   ],
+   [
+    "i",
+    "integrate",
+    "yes",
+    "",
+    "control",
+    "the task joins BAT-0001 at head a1f4c9e",
+    "no check re-runs and no other task moves"
+   ],
+   [
+    "t",
+    "retry",
+    "no",
+    "the task has not failed",
+    "control",
+    "",
+    ""
+   ],
+   [
+    "y",
+    "copy task URN",
+    "yes",
+    "",
+    "",
+    "the stable URN goes to your clipboard",
+    "nothing is read or changed"
+   ]
+  ],
+  "release": [
+   [
+    "a",
+    "approve",
+    "no",
+    "1 member is not accepted",
+    "approve",
+    "",
+    ""
+   ],
+   [
+    "p",
+    "publish",
+    "no",
+    "approval is incomplete",
+    "publish",
+    "",
+    ""
+   ],
+   [
+    "m",
+    "edit membership",
+    "yes",
+    "",
+    "control",
+    "the selected milestone leaves this release",
+    "the milestone itself is unchanged"
+   ],
+   [
+    "y",
+    "copy release URN",
+    "yes",
+    "",
+    "",
+    "the stable URN goes to your clipboard",
+    "nothing is published by copying it"
+   ]
+  ],
+  "timeline": [
+   [
+    "d",
+    "explain dependency",
+    "yes",
+    "",
+    "",
+    "the blocking edge is named in full",
+    "no date moves"
+   ],
+   [
+    "t",
+    "today",
+    "yes",
+    "",
+    "",
+    "the horizon recentres on W29",
+    "the pan position is the only thing that changes"
+   ],
+   [
+    "m",
+    "propose date",
+    "no",
+    "MLS-0012 has no owner",
+    "control",
+    "",
+    ""
+   ]
+  ],
+  "backlog": [
+   [
+    "m",
+    "promote",
+    "no",
+    "no criteria, owner or batch",
+    "control",
+    "",
+    ""
+   ],
+   [
+    "d",
+    "defer",
+    "yes",
+    "",
+    "control",
+    "the draft moves to DEFERRED with your reason",
+    "it is not dropped and keeps its place in the queue"
+   ],
+   [
+    "x",
+    "drop",
+    "yes",
+    "",
+    "control",
+    "the draft is closed and leaves the backlog",
+    "no task or batch is affected"
+   ]
+  ],
+  "campaign": [
+   [
+    "p",
+    "promote finding",
+    "yes",
+    "",
+    "control",
+    "the finding becomes available to a milestone",
+    "the campaign does not close and its bounds are unchanged"
+   ],
+   [
+    "e",
+    "extend bounds",
+    "no",
+    "checkpoint not reached",
+    "control",
+    "",
+    ""
+   ],
+   [
+    "x",
+    "drop campaign",
+    "yes",
+    "",
+    "control",
+    "the campaign closes as DROPPED",
+    "promoted findings stay promoted"
+   ]
+  ],
+  "history": [
+   [
+    "d",
+    "open field diff",
+    "yes",
+    "",
+    "",
+    "",
+    "",
+    "light",
+    "history.diff"
+   ],
+   [
+    "y",
+    "copy value",
+    "yes",
+    "",
+    "",
+    "the fact and its revision go to your clipboard",
+    "nothing is read or changed",
+    "light"
+   ],
+   [
+    "Y",
+    "copy URN",
+    "yes",
+    "",
+    "",
+    "the stable URN goes to your clipboard",
+    "the URN survives moves and retirement",
+    "light"
+   ],
+   [
+    "o",
+    "open target",
+    "no",
+    "purged · nothing to open",
+    "",
+    "",
+    ""
+   ]
+  ],
+  "settings": [
+   [
+    "e",
+    "edit",
+    "yes",
+    "",
+    "control",
+    "the requested value changes at the session layer",
+    "the project ceiling still wins if it is lower"
+   ],
+   [
+    "r",
+    "reset to inherited",
+    "yes",
+    "",
+    "control",
+    "the session request is removed",
+    "the effective value may not change at all"
+   ],
+   [
+    "c",
+    "request capability",
+    "no",
+    "needs a workspace owner",
+    "admin",
+    "",
+    ""
+   ]
+  ],
+  "milestone": [
+   [
+    "v",
+    "open trust record",
+    "yes",
+    "",
+    "",
+    "",
+    "",
+    "light",
+    "trust"
+   ],
+   [
+    "a",
+    "accept",
+    "no",
+    "1 of 4 criteria unproven",
+    "accept",
+    "",
+    ""
+   ],
+   [
+    "r",
+    "request repair",
+    "yes",
+    "",
+    "control",
+    "the milestone returns to ACTIVE with your reason",
+    "the sealed digest stays addressable"
+   ],
+   [
+    "y",
+    "copy digest",
+    "yes",
+    "",
+    "",
+    "digest 7c1f…a94 goes to your clipboard",
+    "nothing is accepted by copying it"
+   ]
+  ]
+ },
+ "states": {
+  "connection": [
+   "LIVE",
+   "LIVE / PARTIAL",
+   "REPLAYING",
+   "GAP DETECTED",
+   "SNAPSHOT LOADING",
+   "OFFLINE SNAPSHOT",
+   "DEGRADED"
+  ],
+  "reads": {
+   "LIVE": "full — every aggregate is complete",
+   "LIVE / PARTIAL": "complete where labelled; partial aggregates say so",
+   "REPLAYING": "cached facts plus replay progress",
+   "GAP DETECTED": "no all / none / complete claim for the range",
+   "SNAPSHOT LOADING": "the previous revision, labelled with its own age",
+   "OFFLINE SNAPSHOT": "inspect, navigate and copy all work",
+   "DEGRADED": "everything except cost, which renders ∅ unavailable"
+  },
+  "refuse": {
+   "SNAPSHOT REQUIRED": "there is no usable revision — the frame names the repair, not a retry",
+   "LIVE": "",
+   "LIVE / PARTIAL": "the aggregate is incomplete",
+   "REPLAYING": "a replay is in progress",
+   "GAP DETECTED": "reconcile the gap first",
+   "SNAPSHOT LOADING": "the snapshot is still loading",
+   "OFFLINE SNAPSHOT": "the daemon cannot be reached",
+   "DEGRADED": "not in the certified-safe subset"
+  },
+  "muts": {
+   "LIVE": "allowed by action and capability policy",
+   "LIVE / PARTIAL": "only actions unrelated to the incomplete aggregates",
+   "REPLAYING": "exact-revision actions disabled",
+   "GAP DETECTED": "reconcile first",
+   "SNAPSHOT LOADING": "disabled while in flight",
+   "OFFLINE SNAPSHOT": "gone — absent rather than present-and-failing",
+   "DEGRADED": "the certified-safe subset only"
+  },
+  "glyph": {
+   "DISCONNECTED": "◌",
+   "SNAPSHOT REQUIRED": "◇",
+   "LIVE": "●",
+   "LIVE / PARTIAL": "◑",
+   "REPLAYING": "►",
+   "GAP DETECTED": "▲",
+   "SNAPSHOT LOADING": "◈",
+   "OFFLINE SNAPSHOT": "▪",
+   "DEGRADED": "◐"
+  }
+ },
+ "entry": [
+  {
+   "id": "resolving",
+   "exit": "cancel",
+   "state": "RESOLVING",
+   "glyph": "◈",
+   "title": "Attaching to this workspace",
+   "panes": [
+    [
+     "STEP",
+     "registered root           matched · eawf"
+    ],
+    [
+     "",
+     "workspace                 resolving"
+    ],
+    [
+     "",
+     "project membership        waiting on workspace"
+    ],
+    [
+     "",
+     "daemon                    not contacted yet"
+    ]
+   ],
+   "tail": [
+    "elapsed                   ~0.4s",
+    "",
+    "Nothing has been read and nothing has been changed."
+   ],
+   "keys": [
+    [
+     "Esc",
+     "cancel · not attached"
+    ]
+   ],
+   "paths": []
+  },
+  {
+   "id": "ambiguous",
+   "exit": "cancel",
+   "state": "NOT ATTACHED",
+   "glyph": "◌",
+   "title": "This root belongs to more than one workspace — pick one",
+   "cols": [
+    [
+     "CANDIDATES",
+     28
+    ],
+    [
+     "PROJECT",
+     15
+    ],
+    [
+     "REGISTERED",
+     14
+    ],
+    [
+     "LAST SESSION",
+     16
+    ]
+   ],
+   "rows": [
+    [
+     "eawf-core",
+     "runtime",
+     "Jul 2",
+     "14:02 today"
+    ],
+    [
+     "eawf-research",
+     "research",
+     "Jul 11",
+     "3 days ago"
+    ],
+    [
+     "eawf-sandbox",
+     "sandbox",
+     "Jul 14",
+     "never"
+    ]
+   ],
+   "tail": [
+    "Your pick is remembered for this session only.",
+    "Pass --workspace to make it permanent."
+   ],
+   "keys": [
+    [
+     "↑↓",
+     "candidate"
+    ],
+    [
+     "Enter",
+     "attach"
+    ],
+    [
+     "Esc",
+     "cancel · not attached"
+    ]
+   ],
+   "paths": []
+  },
+  {
+   "id": "failed",
+   "exit": "terminal",
+   "state": "NOT ATTACHED",
+   "glyph": "◌",
+   "title": "This folder is not a registered workspace root",
+   "panes": [
+    [
+     "REASON",
+     "The console only attaches to an exact registered root. Parent"
+    ],
+    [
+     "",
+     "folders are never scanned, and membership is never assumed."
+    ]
+   ],
+   "tail": [
+    "eawf workspace register .   register this folder as a root",
+    "eawf workspace list         show the roots already registered",
+    "",
+    "exit 4 · nothing was read, nothing was changed"
+   ],
+   "keys": [
+    [
+     "Enter",
+     "copy the register command"
+    ],
+    [
+     "Esc",
+     "quit · exit 4"
+    ]
+   ],
+   "paths": []
+  },
+  {
+   "id": "migration",
+   "exit": "terminal",
+   "state": "MIGRATION REQUIRED",
+   "glyph": "▲",
+   "title": "This workspace still holds the previous generation of state",
+   "panes": [
+    [
+     "MIGRATION",
+     "state generation          1  →  2"
+    ],
+    [
+     "",
+     "entities to carry         412"
+    ],
+    [
+     "",
+     "estimated duration        ≈6m"
+    ],
+    [
+     "",
+     "backup size               ~1.2 GB"
+    ]
+   ],
+   "paths": [
+    [
+     "dry run",
+     "report only · changes nothing"
+    ],
+    [
+     "backup",
+     "written before anything is applied"
+    ],
+    [
+     "apply",
+     "requires the dry run to have passed"
+    ],
+    [
+     "rollback",
+     "restores the backup · available after apply"
+    ]
+   ],
+   "tail": [
+    "Every normal command is refused until this finishes.",
+    "exit 4"
+   ],
+   "keys": [
+    [
+     "↑↓",
+     "path"
+    ],
+    [
+     "Enter",
+     "show the exact command"
+    ],
+    [
+     "Esc",
+     "quit · exit 4"
+    ]
+   ]
+  },
+  {
+   "id": "interrupted",
+   "exit": "terminal",
+   "state": "MIGRATION REQUIRED",
+   "glyph": "▲",
+   "title": "A migration stopped part-way — the previous generation still rules",
+   "panes": [
+    [
+     "JOURNAL",
+     "stopped at                step 3 of 7 · 14:02:11"
+    ],
+    [
+     "",
+     "reason                    the process ended before selection"
+    ],
+    [
+     "",
+     "authoritative now         generation 1 · unchanged"
+    ],
+    [
+     "",
+     "partial generation 2      present · not selected"
+    ]
+   ],
+   "pathsLabel": "WHAT YOU CAN DO",
+   "pathsNote": "either one, not both",
+   "pathsOrdered": false,
+   "paths": [
+    [
+     "resume",
+     "continue from step 3 using the journal"
+    ],
+    [
+     "discard",
+     "remove the partial generation 2"
+    ]
+   ],
+   "tail": [
+    "Both generations are never written at once. Generation 1 stays",
+    "authoritative until a selection is made."
+   ],
+   "keys": [
+    [
+     "↑↓",
+     "choice"
+    ],
+    [
+     "Enter",
+     "show the exact command"
+    ],
+    [
+     "Esc",
+     "quit · exit 4"
+    ]
+   ]
+  },
+  {
+   "id": "schema",
+   "exit": "terminal",
+   "state": "SCHEMA UNSUPPORTED",
+   "glyph": "▲",
+   "title": "This workspace was written by a newer console",
+   "panes": [
+    [
+     "SCHEMA",
+     "workspace writes          v3"
+    ],
+    [
+     "",
+     "this console reads        up to v2"
+    ],
+    [
+     "",
+     "compatible                no"
+    ]
+   ],
+   "tail": [
+    "Reading is refused, but a read-only export of the last known",
+    "state can be written for inspection elsewhere.",
+    "eawf export --read-only   write the export",
+    "",
+    "Upgrading the console is the only way to attach.",
+    "exit 4"
+   ],
+   "keys": [
+    [
+     "Enter",
+     "copy the export command"
+    ],
+    [
+     "Esc",
+     "quit · exit 4"
+    ]
+   ],
+   "paths": []
+  },
+  {
+   "id": "offline",
+   "exit": "session",
+   "state": "OFFLINE SNAPSHOT",
+   "glyph": "◌",
+   "title": "Scope home · attached to the last known revision",
+   "cols": [
+    [
+     "OUTCOMES",
+     28
+    ],
+    [
+     "RUNS",
+     8
+    ],
+    [
+     "NEEDS YOU",
+     12
+    ],
+    [
+     "AS OF",
+     9
+    ]
+   ],
+   "rows": [
+    [
+     "Runtime",
+     "18",
+     "3",
+     "14:02"
+    ],
+    [
+     "Trust",
+     "6",
+     "–",
+     "14:02"
+    ],
+    [
+     "Research",
+     "2",
+     "–",
+     "13:58"
+    ]
+   ],
+   "tail": [
+    "Everything here is a snapshot. Nothing is arriving, and no count",
+    "can be called complete for the time since 14:02.",
+    "Inspecting, moving around and copying all work.",
+    "Controls are gone until the daemon answers again."
+   ],
+   "keys": [
+    [
+     "↑↓",
+     "outcome"
+    ],
+    [
+     "Enter",
+     "drill"
+    ],
+    [
+     "i",
+     "inspect"
+    ],
+    [
+     "Esc",
+     "attach read-only"
+    ]
+   ],
+   "paths": []
+  },
+  {
+   "id": "onboarding",
+   "exit": "cancel",
+   "state": "SNAPSHOT LOADING",
+   "glyph": "◈",
+   "title": "First run · four things to establish before a session exists",
+   "cols": [
+    [
+     "STEP",
+     20
+    ],
+    [
+     "STATE",
+     18
+    ],
+    [
+     "WHY IT IS NEEDED",
+     30
+    ]
+   ],
+   "rows": [
+    [
+     "1 workspace",
+     "not chosen",
+     "every entity hangs off one"
+    ],
+    [
+     "2 provider",
+     "not authorised",
+     "no agent runs without it"
+    ],
+    [
+     "3 sandbox",
+     "default policy",
+     "what an agent may touch"
+    ],
+    [
+     "4 first task",
+     "optional",
+     "you may attach and watch"
+    ]
+   ],
+   "tail": [
+    "Two workspaces were resolved from this directory:",
+    "  eawf-core   41,208 events · last seen 14:02",
+    "  eawf-docs      312 events · last seen 09:41",
+    "",
+    "No migration is applied and no agent is started here.",
+    "s skips a step and says what stays unavailable because of it."
+   ],
+   "keys": [
+    [
+     "↑↓",
+     "step"
+    ],
+    [
+     "Enter",
+     "do it"
+    ],
+    [
+     "s",
+     "skip"
+    ],
+    [
+     "Esc",
+     "exit"
+    ]
+   ],
+   "paths": []
+  }
+ ]
+}

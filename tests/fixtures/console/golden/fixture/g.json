@@ -1,0 +1,1285 @@
+{
+ "CHIP": {
+  "ok": "\u0001",
+  "wn": "\u0002",
+  "er": "\u0003",
+  "info": "\u0004",
+  "dm": "\u0005"
+ },
+ "EV_RUNGS": [
+  {
+   "n": "1 probe",
+   "sev": "ok",
+   "out": "pass",
+   "checked": "every recorded event, replayed once",
+   "over": "41,208 events",
+   "as": "13:12",
+   "check": "replay every recorded event and compare the order it arrives in",
+   "found": [
+    "Ordering preserved · 0 inversions.",
+    "41,208 of 41,208 events compared"
+   ],
+   "when": "13:12 · conformance runner"
+  },
+  {
+   "n": "2 canary",
+   "sev": "ok",
+   "out": "pass",
+   "checked": "one live run against its own log",
+   "over": "RUN-538453eb",
+   "as": "13:31",
+   "check": "Replay one live run against its own log while it is still running.",
+   "found": [
+    "Ordering preserved · 0 inversions.",
+    "6,102 acked events compared"
+   ],
+   "when": "13:31 · conformance runner"
+  },
+  {
+   "n": "3 replicate",
+   "sev": "info",
+   "out": "? unknown",
+   "checked": "the same probe on a second machine",
+   "over": "no machine has answered",
+   "as": "open",
+   "check": "run the probe again on a second machine and compare what each one found",
+   "found": [
+    "no outcome yet — unknown, not failed",
+    "no second machine has answered · due –"
+   ],
+   "when": "open · started 13:44"
+  },
+  {
+   "n": "4 certify",
+   "sev": "dm",
+   "out": "not run",
+   "checked": "the three rungs below it",
+   "over": "∅ awaiting rung 3",
+   "as": "–",
+   "check": "certify the claim from the three rungs below it",
+   "found": [
+    "not run · certification needs rung 3",
+    "only this rung can certify the claim"
+   ],
+   "when": "– · never started"
+  }
+ ],
+ "TR_EARLY": [
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "13:23:08",
+   "text": "Reading test_replay_gap first — it asserts zero inversions after a reconnect.",
+   "body": null
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:24:45",
+   "text": "pytest tests/test_normalize.py -k gap",
+   "body": [
+    "collected 3 items / 2 deselected",
+    "tests/test_normalize.py::test_replay_gap FAILED    [100%]",
+    "E  AssertionError: 2 != 0",
+    "1 failed, 2 deselected in 0.84s"
+   ]
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:26:59",
+   "text": "rg -n \"acked_cursor|arrival_order\" src/",
+   "body": [
+    "src/normalize.py:88:    seq = acked_cursor(window)",
+    "src/normalize.py:91:    seq = arrival_order(window)",
+    "src/replay.py:41:     cursor = arrival_order(win)",
+    "→ 3 files, 9 matches"
+   ]
+  },
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "13:28:15",
+   "text": "Two call sites read the cursor differently, so order depends on which ran first.",
+   "body": null
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:30:08",
+   "text": "git log --oneline -5 src/normalize.py",
+   "body": [
+    "9a03e7 widen the replay window",
+    "8f14c2 keep the wave shim for aliases",
+    "41ab90 seal the digest per attempt",
+    "→ 5 commits shown"
+   ]
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:32:38",
+   "text": "python -m eawf.replay --run RUN-daa66d18 --dry-run",
+   "body": [
+    "read     41,208 events · window 13:22 → 13:31",
+    "applied  41,206 · skipped 2 (already applied)",
+    "result   2 inversions at the reconnect boundary"
+   ]
+  },
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "13:34:10",
+   "text": "The inversions both land at the reconnect, not inside a steady replay.",
+   "body": null
+  },
+  {
+   "k": "file",
+   "who": "agent",
+   "at": "13:36:19",
+   "text": "tests/test_normalize.py · +6 −0",
+   "body": [
+    "+ def test_replay_gap_is_ordered():",
+    "+     log = record(run, gap_at=41_190)",
+    "+     assert inversions(replay(log)) == 0"
+   ]
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:37:30",
+   "text": "pytest tests/test_normalize.py -q",
+   "body": [
+    ".......F.......",
+    "14 passed, 1 failed in 2.31s",
+    "FAILED test_replay_gap_is_ordered"
+   ]
+  },
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "13:39:18",
+   "text": "The new case fails the same way, so the fixture is not the problem.",
+   "body": null
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:41:43",
+   "text": "python -m eawf.events dump --run RUN-daa66d18 --around 41190",
+   "body": [
+    "41,189  tool.completed   seq 41,189",
+    "41,191  message.delta    seq 41,191",
+    "41,190  tool.started     seq 41,190   ← out of order",
+    "→ 3 of 41,208 shown"
+   ]
+  },
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "13:43:10",
+   "text": "Event 41,190 arrives after 41,191, which is exactly the inversion.",
+   "body": null
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:45:14",
+   "text": "rg -n \"def acked_window|def arrival_window\" src/",
+   "body": [
+    "src/replay.py:28: def arrival_window(state):",
+    "src/replay.py:36: def acked_window(state):",
+    "→ 2 matches"
+   ]
+  },
+  {
+   "k": "file",
+   "who": "agent",
+   "at": "13:46:20",
+   "text": "src/replay.py · +4 −2",
+   "body": [
+    "- win = arrival_window(state)",
+    "+ win = acked_window(state)",
+    "+ if win.start < state.acked:",
+    "+     win = win.after(state.acked)"
+   ]
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:48:03",
+   "text": "pytest tests/ -q",
+   "body": [
+    "........................................F...",
+    "41 passed, 1 failed in 6.12s",
+    "FAILED tests/test_normalize.py::test_replay_gap"
+   ]
+  },
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "13:50:23",
+   "text": "Closer: the window is right, but normalize still sorts by arrival.",
+   "body": null
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:51:45",
+   "text": "git diff --stat",
+   "body": [
+    " src/normalize.py        | 12 ++++++------",
+    " src/replay.py           |  6 ++++--",
+    " tests/test_normalize.py |  6 ++++++",
+    " 3 files changed, 18 insertions(+), 8 deletions(-)"
+   ]
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:53:44",
+   "text": "python -m eawf.digest src/normalize.py",
+   "body": [
+    "digest  4f2a…19 · 88 lines",
+    "kept    with RUN-daa66d18"
+   ]
+  },
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "13:54:45",
+   "text": "Recording the digest before the edit so the two can be compared after.",
+   "body": null
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:56:23",
+   "text": "read src/replay.py",
+   "body": [
+    "28  def arrival_window(state):",
+    "36  def acked_window(state):",
+    "… 62 lines read"
+   ]
+  }
+ ],
+ "TR_BLOCKS": [
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "13:23:08",
+   "text": "Reading test_replay_gap first — it asserts zero inversions after a reconnect.",
+   "body": null
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:24:45",
+   "text": "pytest tests/test_normalize.py -k gap",
+   "body": [
+    "collected 3 items / 2 deselected",
+    "tests/test_normalize.py::test_replay_gap FAILED    [100%]",
+    "E  AssertionError: 2 != 0",
+    "1 failed, 2 deselected in 0.84s"
+   ]
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:26:59",
+   "text": "rg -n \"acked_cursor|arrival_order\" src/",
+   "body": [
+    "src/normalize.py:88:    seq = acked_cursor(window)",
+    "src/normalize.py:91:    seq = arrival_order(window)",
+    "src/replay.py:41:     cursor = arrival_order(win)",
+    "→ 3 files, 9 matches"
+   ]
+  },
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "13:28:15",
+   "text": "Two call sites read the cursor differently, so order depends on which ran first.",
+   "body": null
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:30:08",
+   "text": "git log --oneline -5 src/normalize.py",
+   "body": [
+    "9a03e7 widen the replay window",
+    "8f14c2 keep the wave shim for aliases",
+    "41ab90 seal the digest per attempt",
+    "→ 5 commits shown"
+   ]
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:32:38",
+   "text": "python -m eawf.replay --run RUN-daa66d18 --dry-run",
+   "body": [
+    "read     41,208 events · window 13:22 → 13:31",
+    "applied  41,206 · skipped 2 (already applied)",
+    "result   2 inversions at the reconnect boundary"
+   ]
+  },
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "13:34:10",
+   "text": "The inversions both land at the reconnect, not inside a steady replay.",
+   "body": null
+  },
+  {
+   "k": "file",
+   "who": "agent",
+   "at": "13:36:19",
+   "text": "tests/test_normalize.py · +6 −0",
+   "body": [
+    "+ def test_replay_gap_is_ordered():",
+    "+     log = record(run, gap_at=41_190)",
+    "+     assert inversions(replay(log)) == 0"
+   ]
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:37:30",
+   "text": "pytest tests/test_normalize.py -q",
+   "body": [
+    ".......F.......",
+    "14 passed, 1 failed in 2.31s",
+    "FAILED test_replay_gap_is_ordered"
+   ]
+  },
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "13:39:18",
+   "text": "The new case fails the same way, so the fixture is not the problem.",
+   "body": null
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:41:43",
+   "text": "python -m eawf.events dump --run RUN-daa66d18 --around 41190",
+   "body": [
+    "41,189  tool.completed   seq 41,189",
+    "41,191  message.delta    seq 41,191",
+    "41,190  tool.started     seq 41,190   ← out of order",
+    "→ 3 of 41,208 shown"
+   ]
+  },
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "13:43:10",
+   "text": "Event 41,190 arrives after 41,191, which is exactly the inversion.",
+   "body": null
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:45:14",
+   "text": "rg -n \"def acked_window|def arrival_window\" src/",
+   "body": [
+    "src/replay.py:28: def arrival_window(state):",
+    "src/replay.py:36: def acked_window(state):",
+    "→ 2 matches"
+   ]
+  },
+  {
+   "k": "file",
+   "who": "agent",
+   "at": "13:46:20",
+   "text": "src/replay.py · +4 −2",
+   "body": [
+    "- win = arrival_window(state)",
+    "+ win = acked_window(state)",
+    "+ if win.start < state.acked:",
+    "+     win = win.after(state.acked)"
+   ]
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:48:03",
+   "text": "pytest tests/ -q",
+   "body": [
+    "........................................F...",
+    "41 passed, 1 failed in 6.12s",
+    "FAILED tests/test_normalize.py::test_replay_gap"
+   ]
+  },
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "13:50:23",
+   "text": "Closer: the window is right, but normalize still sorts by arrival.",
+   "body": null
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:51:45",
+   "text": "git diff --stat",
+   "body": [
+    " src/normalize.py        | 12 ++++++------",
+    " src/replay.py           |  6 ++++--",
+    " tests/test_normalize.py |  6 ++++++",
+    " 3 files changed, 18 insertions(+), 8 deletions(-)"
+   ]
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:53:44",
+   "text": "python -m eawf.digest src/normalize.py",
+   "body": [
+    "digest  4f2a…19 · 88 lines",
+    "kept    with RUN-daa66d18"
+   ]
+  },
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "13:54:45",
+   "text": "Recording the digest before the edit so the two can be compared after.",
+   "body": null
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:56:23",
+   "text": "read src/replay.py",
+   "body": [
+    "28  def arrival_window(state):",
+    "36  def acked_window(state):",
+    "… 62 lines read"
+   ]
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:57:58",
+   "text": "pytest tests/ -x --looponfail",
+   "bg": "running",
+   "runS": 252,
+   "est": "~2m",
+   "body": [
+    "\u0007NOW\u0006      re-running on every save · pass 6",
+    "\u0007LAST\u0006     41 passed, 1 failed · 14:02:04",
+    "\u0007REPORTS\u0006  into this run each time it settles"
+   ]
+  },
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "13:58:04",
+   "text": "Starting on the ordering guarantee for the normalizer."
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "13:58:11",
+   "text": "read src/normalize.py",
+   "body": [
+    "1  def normalize(events, window):",
+    "2      seq = arrival_order(window)",
+    "3      return [shape(e) for e in events]",
+    "… 88 lines read"
+   ]
+  },
+  {
+   "k": "subagent",
+   "who": "agent",
+   "at": "13:58:20",
+   "text": "sub-1 survey every call site of arrival_order",
+   "bg": "running",
+   "runS": 230,
+   "est": "~5m",
+   "body": [
+    "\u0007NOW\u0006      reading src/replay.py · file 7 of 12",
+    "\u0007FOUND\u0006    9 call sites · 2 outside the normalizer",
+    "\u0007REPORTS\u0006  back into this run when it finishes"
+   ]
+  },
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "13:59:02",
+   "text": "Arrival order is assumed in two call sites."
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "14:01:18",
+   "text": "grep -n \"seq\" src/normalize.py",
+   "body": [
+    "→ 14 matches",
+    "88:  seq = acked_cursor(window)",
+    "91:  seq = arrival_order(window)",
+    "134: if seq < last_seq: raise Inversion",
+    "… 11 more matches"
+   ]
+  },
+  {
+   "k": "file",
+   "who": "agent",
+   "at": "14:01:40",
+   "text": "src/normalize.py · +18 −4",
+   "body": [
+    "- seq = arrival_order(window)",
+    "+ seq = acked_cursor(window)",
+    "+ if seq < last_seq:",
+    "+     raise Inversion(seq, last_seq)"
+   ]
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "14:01:52",
+   "text": "pytest tests/test_normalize.py",
+   "body": [
+    "→ 41 passed · 1 failed",
+    "FAILED test_replay_gap · expected 0 inversions, got 2"
+   ]
+  },
+  {
+   "k": "error",
+   "who": "tool",
+   "at": "14:01:58",
+   "text": "test_replay_gap failed · 2 inversions",
+   "body": [
+    "assert inversions == 0",
+    "E  AssertionError: 2 != 0",
+    "tests/test_normalize.py:212"
+   ]
+  },
+  {
+   "k": "subagent",
+   "who": "agent",
+   "at": "14:01:59",
+   "text": "sub-2 bisect the gap path against the recorded log",
+   "bg": "done",
+   "run": "1m 12s",
+   "body": [
+    "\u0007ENDED\u0006    14:03:11 · 1m 12s",
+    "\u0007FOUND\u0006    the inversion enters at the reconnect, not the replay",
+    "\u0007KEPT\u0006     with RUN-daa66d18 · digest 4c81…09"
+   ]
+  },
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "14:01:59",
+   "text": "Summary of the ordering work so far: the inversion is not in the replay loop but at the reconnect, where the daemon has already applied events up to its acked cursor and the replay window still begins at arrival order. Two call sites read the cursor differently — src/normalize.py:88 takes the acked cursor and src/replay.py:41 takes arrival order — so which one ran first decided the sequence. The wave shim and the alias table both sit in that path, and retiring the wrong one would close the gap by inventing an event rather than reconciling it, which is the one outcome the claim forbids."
+  },
+  {
+   "k": "message",
+   "who": "agent",
+   "at": "14:02:00",
+   "text": "The gap path still reorders; the shim decides which cursor wins."
+  },
+  {
+   "k": "question",
+   "who": "agent",
+   "at": "14:02:03",
+   "text": "Which shim may be retired — the wave shim, or the alias table?",
+   "waitS": 124
+  },
+  {
+   "k": "thinking",
+   "who": "agent",
+   "at": "14:02:06",
+   "text": "weighing the two shims against the replay digests",
+   "runS": 18,
+   "est": "~30s"
+  },
+  {
+   "k": "tool",
+   "who": "agent",
+   "at": "14:02:10",
+   "text": "write src/normalize.py",
+   "runS": 12,
+   "est": "~4s"
+  }
+ ],
+ "TR_FEED": [
+  {
+   "dwell": 2400,
+   "done": [
+    "write src/normalize.py",
+    "weighing the two shims"
+   ],
+   "block": {
+    "k": "file",
+    "who": "agent",
+    "text": "src/normalize.py · +2 −1",
+    "body": [
+     "- if seq < last_seq:",
+     "+ if seq < state.acked:",
+     "+     seq = state.acked"
+    ]
+   }
+  },
+  {
+   "dwell": 2600,
+   "hold": true,
+   "est": "~3s",
+   "block": {
+    "k": "tool",
+    "who": "agent",
+    "text": "pytest tests/test_normalize.py -q",
+    "body": [
+     "...............",
+     "15 passed in 2.04s"
+    ]
+   }
+  },
+  {
+   "dwell": 2000,
+   "block": {
+    "k": "message",
+    "who": "agent",
+    "text": "The reconnect no longer reorders — the acked cursor wins at the boundary."
+   }
+  },
+  {
+   "dwell": 2800,
+   "hold": true,
+   "est": "~6s",
+   "mark": [
+    "sub-1 survey every call site"
+   ],
+   "block": {
+    "k": "tool",
+    "who": "agent",
+    "text": "python -m eawf.replay --run RUN-daa66d18 --dry-run",
+    "body": [
+     "read     41,208 events · window 13:22 → 14:02",
+     "applied  41,208 · skipped 0",
+     "result   0 inversions"
+    ]
+   }
+  },
+  {
+   "dwell": 1800,
+   "hold": true,
+   "est": "~30s",
+   "block": {
+    "k": "thinking",
+    "who": "agent",
+    "text": "reading the replay result against the two shims"
+   }
+  },
+  {
+   "dwell": 2200,
+   "block": {
+    "k": "message",
+    "who": "agent",
+    "text": "Zero inversions on the recorded log, so the wave shim is the one that can go — the alias table is still load-bearing for imported waves."
+   }
+  },
+  {
+   "dwell": 3000,
+   "hold": true,
+   "est": "~2s",
+   "block": {
+    "k": "tool",
+    "who": "agent",
+    "text": "python -m eawf.digest src/normalize.py",
+    "body": [
+     "digest  8b41…07 · 90 lines",
+     "kept    with RUN-daa66d18"
+    ]
+   }
+  },
+  {
+   "dwell": 2600,
+   "block": {
+    "k": "message",
+    "who": "agent",
+    "text": "Done: the ordering guarantee holds under replay and the digest is recorded."
+   }
+  }
+ ],
+ "TR_GLYPH": {
+  "message": "¶",
+  "tool": "›",
+  "file": "±",
+  "question": "?",
+  "error": "!",
+  "heartbeat": "~",
+  "subagent": "»",
+  "thinking": "°"
+ },
+ "TR_CLS": {
+  "message": null,
+  "tool": "info",
+  "file": "info",
+  "question": "wn",
+  "error": "er",
+  "heartbeat": "dm",
+  "subagent": "ok",
+  "thinking": "dm"
+ },
+ "TR_PAL": {
+  "kind": {
+   "message": null,
+   "tool": "info",
+   "file": "ok",
+   "question": "wn",
+   "error": "er",
+   "heartbeat": "dm",
+   "subagent": "ok",
+   "thinking": "dm",
+   "running": "info",
+   "background": "ok"
+  },
+  "severity": {
+   "message": null,
+   "tool": null,
+   "file": null,
+   "question": "wn",
+   "error": "er",
+   "heartbeat": "dm",
+   "subagent": null,
+   "thinking": "dm",
+   "running": null,
+   "background": null
+  },
+  "actor": {
+   "message": null,
+   "tool": "dm",
+   "file": "dm",
+   "question": "wn",
+   "error": "er",
+   "heartbeat": "dm",
+   "subagent": "info",
+   "thinking": "dm",
+   "running": "dm",
+   "background": "info"
+  }
+ },
+ "RECEIPTS": {
+  "EVT-2218": {
+   "what": "Events carry a semantic kind.",
+   "run": "RUN-daa66d18",
+   "at": "14:01:58",
+   "by": "conformance runner",
+   "digest": "b41e…7c",
+   "kept": "EAWF-0002",
+   "body": [
+    "\u0007CHECKED\u0006   Every event in the window carries a kind.",
+    "\u0007SAMPLED\u0006   41,208 events · 0 unkinded",
+    "\u0007VERDICT\u0006   The criterion holds at this digest."
+   ]
+  },
+  "EVT-2210": {
+   "what": "The replay window ends at the acknowledged cursor.",
+   "run": "RUN-538453eb",
+   "at": "13:44:02",
+   "by": "conformance runner",
+   "digest": "2f77…a1",
+   "kept": "EAWF-0042",
+   "body": [
+    "\u0007CHECKED\u0006   A catch-up replays nothing already applied.",
+    "\u0007SAMPLED\u0006   20 runs · 0 double-applied",
+    "\u0007VERDICT\u0006   The criterion holds at this digest."
+   ]
+  },
+  "EVT-2201": {
+   "what": "Every escape has an authority reference.",
+   "run": "RUN-3c6ef367",
+   "at": "13:31:10",
+   "by": "conformance runner",
+   "digest": "8e11…a7",
+   "kept": "MLS-0004",
+   "body": [
+    "\u0007CHECKED\u0006   Every escape row names its authority.",
+    "\u0007SAMPLED\u0006   312 escapes · 0 unattributed",
+    "\u0007VERDICT\u0006   The criterion holds at this digest."
+   ]
+  }
+ },
+ "ROUTE_OF": {
+  "RUN-": "run.detail",
+  "EAWF": "task.detail",
+  "BAT-": "batch.detail",
+  "MLS-": "milestone",
+  "REL-": "release",
+  "CAM-": "campaign",
+  "CLM-": "evidence",
+  "TRK-": "track",
+  "QST-": "attention",
+  "EVT-": "run.detail"
+ },
+ "ROUTE_SUBJ": {
+  "evidence": "CLM-0004",
+  "trust": "MLS-0007"
+ },
+ "TAB_OWNER": {
+  "activity": "buckets",
+  "milestone": "section",
+  "release": "section",
+  "backlog": "groups",
+  "settings": "rail",
+  "entry": "path",
+  "campaign": "sections"
+ },
+ "BACKLOG_GROUPS": [
+  "DRAFTS",
+  "DEFERRED"
+ ],
+ "CAM_STEPS": [
+  [
+   "1 baseline digests",
+   "✓ done",
+   "ok",
+   "–",
+   [
+    "EVD-0011",
+    "bounds-check.md"
+   ],
+   "1.1h"
+  ],
+  [
+   "2 canary replay",
+   "✓ done",
+   "ok",
+   "–",
+   [
+    "EVD-0014"
+   ],
+   "0.6h"
+  ],
+  [
+   "3 retry probe",
+   "✓ done",
+   "ok",
+   "1 · 2",
+   [
+    "timing.txt",
+    "EVD-0026"
+   ],
+   "2.4h"
+  ],
+  [
+   "4 digest diff",
+   "✓ done",
+   "ok",
+   "3",
+   [
+    "drift-report.md",
+    "digest-table.md"
+   ],
+   "0.8h"
+  ],
+  [
+   "5 cross-provider",
+   "► running",
+   "ok",
+   "3 · 4",
+   [],
+   "1.3h of ≤2h"
+  ],
+  [
+   "6 write-up",
+   "○ blocked",
+   "wn",
+   "5",
+   [],
+   "–"
+  ]
+ ],
+ "CAM_STEP_DETAIL": [
+  {
+   "run": "RUN-a708a7d6",
+   "prov": "claude",
+   "state": "done",
+   "started": "11:18",
+   "ended": "12:24",
+   "sum": "20 runs were replayed, 20 digests recorded, and no ordering inversions found.",
+   "acts": [
+    [
+     "11:18",
+     "¶ message · started     baseline over both providers"
+    ],
+    [
+     "11:19",
+     "› tool · started        replay --record baseline"
+    ],
+    [
+     "11:24",
+     "progress ×212 · 29s"
+    ],
+    [
+     "11:52",
+     "± file · changed        baseline/digests.jsonl"
+    ],
+    [
+     "12:03",
+     "~ heartbeat"
+    ],
+    [
+     "12:19",
+     "› tool · completed      replay --record baseline"
+    ],
+    [
+     "12:24",
+     "¶ message · completed   baseline recorded for both providers"
+    ]
+   ]
+  },
+  {
+   "run": "RUN-be1e085a",
+   "prov": "codex",
+   "state": "done",
+   "started": "12:26",
+   "ended": "12:58",
+   "sum": "40 canary runs were replayed against their own logs, with no inversions.",
+   "acts": [
+    [
+     "12:26",
+     "› tool · started        replay --canary --provider codex"
+    ],
+    [
+     "12:31",
+     "progress ×88 · 12s"
+    ],
+    [
+     "12:44",
+     "~ heartbeat"
+    ],
+    [
+     "12:57",
+     "› tool · completed      replay --canary --provider codex"
+    ],
+    [
+     "12:58",
+     "¶ message · completed   canary stable over 40 runs"
+    ]
+   ]
+  },
+  {
+   "run": "RUN-cc623ab9",
+   "prov": "claude",
+   "state": "done",
+   "started": "12:20",
+   "ended": "13:31",
+   "sum": "The retry path was exercised on 20 runs, and 3 digests differ.",
+   "acts": [
+    [
+     "12:20",
+     "› tool · started        replay --retry"
+    ],
+    [
+     "12:38",
+     "progress ×301 · 41s"
+    ],
+    [
+     "12:52",
+     "! error · recorded       digest mismatch at event 40,912"
+    ],
+    [
+     "13:04",
+     "! error · recorded       digest mismatch at event 40,977"
+    ],
+    [
+     "13:20",
+     "± file · changed        timing.txt"
+    ],
+    [
+     "13:31",
+     "› tool · completed      replay --retry"
+    ]
+   ]
+  },
+  {
+   "run": "RUN-f1bbcd9c",
+   "prov": "claude",
+   "state": "done",
+   "started": "13:34",
+   "ended": "13:58",
+   "sum": "First and retry digests were compared per run, and the report was written.",
+   "acts": [
+    [
+     "13:34",
+     "› tool · started        diff --first --retry"
+    ],
+    [
+     "13:41",
+     "progress ×64 · 9s"
+    ],
+    [
+     "13:50",
+     "± file · changed        digest-table.md"
+    ],
+    [
+     "13:57",
+     "± file · changed        drift-report.md"
+    ],
+    [
+     "13:58",
+     "¶ message · completed   3 of 20 runs differ, all on the model-changed path"
+    ]
+   ]
+  },
+  {
+   "run": "RUN-98c47577",
+   "prov": "codex",
+   "state": "running",
+   "started": "13:44",
+   "ended": "–",
+   "sum": "~ 62% · 12 of 20 runs replayed, 1.3h of the ≤2h bound spent.",
+   "acts": [
+    [
+     "13:44",
+     "¶ message · started     cross-provider replay"
+    ],
+    [
+     "13:51",
+     "progress ×147 · 22s"
+    ],
+    [
+     "13:58",
+     "? question · answered    may it read the second provider’s cards"
+    ],
+    [
+     "14:00",
+     "› tool · started        replay --provider codex --run 13"
+    ],
+    [
+     "14:01",
+     "~ heartbeat"
+    ],
+    [
+     "14:02",
+     "¶ message · streaming   comparing digests as they land"
+    ]
+   ]
+  },
+  {
+   "run": "∅ none",
+   "prov": "–",
+   "state": "blocked",
+   "started": "–",
+   "ended": "–",
+   "sum": "Nothing has started. It waits on step 5 and on the open contradiction.",
+   "acts": []
+  }
+ ],
+ "CAM_EVID": [
+  [
+   "EVD-0011",
+   "digest differs on retry",
+   "drift is real",
+   "3 receipts",
+   "claude · 3 of 20 runs",
+   "CLM-0004"
+  ],
+  [
+   "EVD-0014",
+   "digest stable over 40",
+   "drift is bounded",
+   "2 receipts",
+   "codex · 0 of 40 runs",
+   "CLM-0004"
+  ],
+  [
+   "EVD-0019",
+   "provider changed model",
+   "cause is upstream",
+   "1 receipt",
+   "model card Jul 19",
+   "CLM-0004"
+  ],
+  [
+   "EVD-0022",
+   "bounds held at 14 runs",
+   "the bound is honoured",
+   "1 receipt",
+   "14 of ≤20 runs",
+   "CLM-0004"
+  ],
+  [
+   "EVD-0026",
+   "retry path is the cause",
+   "drift is explained",
+   "2 receipts",
+   "3 of 3 differing runs",
+   "CLM-0004"
+  ]
+ ],
+ "CAM_ART": [
+  {
+   "f": "drift-report.md",
+   "k": "markdown",
+   "sz": "2.1 KB",
+   "at": "13:58",
+   "by": "step 4",
+   "dg": "sha256 b41e…7c",
+   "body": [
+    "\u0007PROVIDER DRIFT UNDER REPLAY\u0006",
+    "",
+    "Two providers were replayed against the same recorded log. The question",
+    "was whether the provider changes a replay digest. It does, for one of",
+    "them, and only on retry.",
+    "",
+    "\u0007WHAT WE FOUND\u0006",
+    "",
+    "• claude · digest differs on retry in 3 of 20 runs",
+    "• codex · digest stable over 40 runs",
+    "• every differing run touched the model-changed path",
+    "",
+    "\u0007PROVIDER │ RUNS │ DIGEST STABLE │ RECEIPT\u0006",
+    "─────────┼──────┼───────────────┼──────────",
+    "claude   │ 20   │ no · 3 differ │ EVD-0011",
+    "codex    │ 40   │ yes           │ EVD-0014",
+    "",
+    "\u0007STILL OPEN\u0006",
+    "",
+    "• EVD-0011 and EVD-0014 disagree about the same task, so the bound",
+    "  says stop before step 6",
+    "• nothing here has been promoted to MLS-0007 yet"
+   ]
+  },
+  {
+   "f": "digest-table.md",
+   "k": "markdown · table",
+   "sz": "0.9 KB",
+   "at": "13:31",
+   "by": "step 3",
+   "dg": "sha256 2f77…a1",
+   "body": [
+    "\u0007RETRY DIGESTS PER RUN\u0006",
+    "",
+    "\u0007RUN          │ PROVIDER │ FIRST     │ RETRY     │ SAME\u0006",
+    "─────────────┼──────────┼───────────┼───────────┼──────",
+    "RUN-538453eb │ claude   │ 4f2a…19   │ 4f2a…19   │ yes",
+    "RUN-f1bbcd9c │ claude   │ 91cc…40   │ 7de1…02   │ no",
+    "RUN-cc623ab9 │ claude   │ 2f77…a1   │ b41e…7c   │ no",
+    "RUN-a708a7d6 │ codex    │ 9ac0…5e   │ 9ac0…5e   │ yes",
+    "",
+    "3 of 20 claude runs differ · 0 of 40 codex runs differ"
+   ]
+  },
+  {
+   "f": "timing.txt",
+   "k": "plain",
+   "sz": "0.4 KB",
+   "at": "12:44",
+   "by": "step 3",
+   "dg": "sha256 9ac0…5e",
+   "body": [
+    "replay 41,208 events · claude",
+    "  first pass    18.4s",
+    "  retry         19.1s",
+    "  digest        differs at event 40,912",
+    "",
+    "replay 41,208 events · codex",
+    "  first pass    17.9s",
+    "  retry         17.7s",
+    "  digest        identical",
+    "",
+    "no timing difference explains the drift"
+   ]
+  },
+  {
+   "f": "bounds-check.md",
+   "k": "markdown",
+   "sz": "0.6 KB",
+   "at": "13:12",
+   "by": "step 1",
+   "dg": "sha256 5c11…d3",
+   "body": [
+    "\u0007BOUNDS AS SPENT\u0006",
+    "",
+    "\u0007BOUND         │ ALLOWED │ SPENT │ LEFT\u0006",
+    "──────────────┼─────────┼───────┼───────",
+    "runs          │ 20      │ 14    │ 6",
+    "wall clock    │ 8h      │ 6.2h  │ 1.8h",
+    "providers     │ 2       │ 2     │ 0",
+    "",
+    "the stop rule fires on the first contradiction, not on the budget"
+   ]
+  },
+  {
+   "f": "provider-cards.txt",
+   "k": "plain",
+   "sz": "0.3 KB",
+   "at": "12:20",
+   "by": "step 1",
+   "dg": "sha256 e0b8’41",
+   "body": [
+    "claude",
+    "  model card    Jul 19 2026",
+    "  changed       retry path rewritten",
+    "",
+    "codex",
+    "  model card    Jun 2 2026",
+    "  changed       nothing since attach",
+    "",
+    "both cards were read before the probe ran"
+   ]
+  }
+ ],
+ "CAM_SECTS": [
+  "PLAN",
+  "EVIDENCE",
+  "ARTIFACTS"
+ ],
+ "BL_DRAFTS": [
+  [
+   "EAWF-0091",
+   "Coalesce progress events",
+   "needs criteria · owner",
+   "Jul 28"
+  ],
+  [
+   "EAWF-0088",
+   "Bound the replay window",
+   "needs criteria",
+   "Jul 24"
+  ],
+  [
+   "EAWF-0086",
+   "Retire the compat shims",
+   "ready to promote",
+   "Jul 21"
+  ],
+  [
+   "EAWF-0083",
+   "Certify the local runner",
+   "needs owner · batch",
+   "Aug 2"
+  ]
+ ],
+ "BL_DEFERRED": [
+  [
+   "EAWF-0084",
+   "Provider drift probe",
+   "waits on CAM-0001",
+   "Jul 11"
+  ],
+  [
+   "EAWF-0079",
+   "Snapshot compaction",
+   "no owner",
+   "Jul 4"
+  ]
+ ],
+ "OVERLAY_ROUTES": [
+  "notifications",
+  "merge.conflict",
+  "export",
+  "settings.stack",
+  "evidence.digest",
+  "campaign.artifact",
+  "campaign.step"
+ ]
+}

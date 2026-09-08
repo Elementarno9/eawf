@@ -1,0 +1,3970 @@
+{
+ "RUN-538453eb": [
+  [
+   "PROVIDER",
+   "claude · session reused · handle 4h left"
+  ],
+  [
+   "STARTED",
+   "14:00:12 · seq 41,204"
+  ],
+  [
+   "ASKED",
+   "write outside its batch · fs.write.scope = project root"
+  ],
+  [
+   "SCOPE",
+   "BAT-0002 · EAWF-0042 Bound replay"
+  ],
+  [
+   "STATE",
+   "WAIT-PERM · needs permission"
+  ],
+  [
+   "USAGE",
+   "elapsed 2m 08s · tokens out 18,402 · cost ~0.31 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Answer the permission, or let the run go."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 1 of 1 · no retry · no fork."
+  ]
+ ],
+ "RUN-be1e085a": [
+  [
+   "PROVIDER",
+   "claude · session lost"
+  ],
+  [
+   "STARTED",
+   "13:41:55 · seq 41,150"
+  ],
+  [
+   "LAST HEARD",
+   "14:01:03 · heartbeat expired after 90s"
+  ],
+  [
+   "SCOPE",
+   "BAT-0004 · EAWF-0051 Coalesce"
+  ],
+  [
+   "STATE",
+   "LOST · stopped responding"
+  ],
+  [
+   "USAGE",
+   "elapsed 19m 08s · tokens out 96,110 · cost ~2.84 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Resume from the last acknowledged event, or let it go."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 1 of 1 · retry available · no fork."
+  ]
+ ],
+ "RUN-98c47577": [
+  [
+   "PROVIDER",
+   "codex · session fresh"
+  ],
+  [
+   "STARTED",
+   "13:12:40 · seq 41,088"
+  ],
+  [
+   "REPORT",
+   "final report rejected · schema check failed on 2 fields"
+  ],
+  [
+   "SCOPE",
+   "BAT-0005 · EAWF-0053 Certify runner"
+  ],
+  [
+   "STATE",
+   "RUNNING · run active"
+  ],
+  [
+   "USAGE",
+   "elapsed 49m 20s · tokens out 210,880 · cost ~6.02 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Re-run the report, or accept the run without it."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 2 of 3 · forked from RUN-1c93af08."
+  ]
+ ],
+ "RUN-7b0e4d31": [
+  [
+   "PROVIDER",
+   "codex · session reused"
+  ],
+  [
+   "STARTED",
+   "13:58:02 · seq 41,181"
+  ],
+  [
+   "SCOPE",
+   "BAT-0002 · EAWF-0044 Retire shim"
+  ],
+  [
+   "STATE",
+   "RUNNING · run active"
+  ],
+  [
+   "USAGE",
+   "elapsed 4m 11s · tokens out 31,004 · cost ~0.88 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Pause, or let it finish."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 1 of 1 · no retry · no fork."
+  ]
+ ],
+ "EAWF-0042": [
+  [
+   "PROBLEM",
+   "The replay window is unbounded, so a catch-up may replay events"
+  ],
+  [
+   "",
+   "the console has already applied and count them twice."
+  ],
+  [
+   "OUTCOME",
+   "The window ends at the acknowledged cursor and each event"
+  ],
+  [
+   "",
+   "applies once."
+  ],
+  [
+   "STEPS",
+   "1. Bind the window’s upper edge to the acknowledged cursor."
+  ],
+  [
+   "",
+   "2. Retire the compatibility shims that assumed arrival order."
+  ],
+  [
+   "",
+   "3. Prove the bound under load and record the receipt."
+  ],
+  [
+   "RISKS",
+   "A shim retired too early breaks a call site that still relies"
+  ],
+  [
+   "",
+   "on it."
+  ],
+  [
+   "WHY NOW",
+   "MLS-0001 cannot be accepted while a replay may double-count."
+  ],
+  [
+   "NAME",
+   "Bound replay"
+  ],
+  [
+   "STATE",
+   "WAIT-PERM"
+  ],
+  [
+   "RUNS",
+   "RUN-538453eb · WAIT-PERM · claude · 2m 08s"
+  ],
+  [
+   "BATCH",
+   "BAT-0002"
+  ],
+  [
+   "CRITERIA",
+   "The replay window ends at the acked cursor."
+  ],
+  [
+   "",
+   "No event is replayed twice."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2210 · receipt EVT-2214"
+  ],
+  [
+   "BLOCKED BY",
+   "A permission you have not answered."
+  ]
+ ],
+ "EAWF-0044": [
+  [
+   "PROBLEM",
+   "BAT-0002 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record it beside EVT-2218."
+  ],
+  [
+   "RISKS",
+   "A receipt filed at EVT-2218 before the check passes would prove"
+  ],
+  [
+   "",
+   "nothing."
+  ],
+  [
+   "NAME",
+   "Retire shim"
+  ],
+  [
+   "STATE",
+   "WAIT-USER"
+  ],
+  [
+   "BATCH",
+   "BAT-0002"
+  ],
+  [
+   "CRITERIA",
+   "The compat shims are gone and nothing imports them."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2218"
+  ],
+  [
+   "RUNS",
+   "RUN-7b0e4d31 · WAIT-USER · codex · 4m 11s"
+  ],
+  [
+   "BLOCKED BY",
+   "A question you have not answered."
+  ]
+ ],
+ "EAWF-0051": [
+  [
+   "PROBLEM",
+   "BAT-0004 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Read RUN-be1e085a’s last event and name the cause."
+  ],
+  [
+   "",
+   "2. Repair the cause rather than the symptom."
+  ],
+  [
+   "",
+   "3. Re-run the task and record the receipt."
+  ],
+  [
+   "RISKS",
+   "RUN-be1e085a stopped without saying why, and a repair that"
+  ],
+  [
+   "",
+   "hides the cause leaves it unexplained."
+  ],
+  [
+   "NAME",
+   "Coalesce"
+  ],
+  [
+   "STATE",
+   "LOST"
+  ],
+  [
+   "RUNS",
+   "RUN-be1e085a · LOST · claude · 19m 08s"
+  ],
+  [
+   "BATCH",
+   "BAT-0004"
+  ],
+  [
+   "CRITERIA",
+   "Progress events coalesce without losing a phase."
+  ],
+  [
+   "PROOF",
+   "∅ no receipt yet"
+  ],
+  [
+   "BLOCKED BY",
+   "A run that stopped responding."
+  ]
+ ],
+ "BAT-0003": [
+  [
+   "NAME",
+   "Escape ledger"
+  ],
+  [
+   "STATE",
+   "BLOCKED"
+  ],
+  [
+   "TASKS",
+   "EAWF-0051 Coalesce · LOST"
+  ],
+  [
+   "",
+   "EAWF-0052 Seal ledger · PLANNED"
+  ],
+  [
+   "MILESTONE",
+   "MLS-0003"
+  ],
+  [
+   "COUNT",
+   "2 tasks"
+  ],
+  [
+   "MERGE",
+   "Authority no longer valid · the head moved to 9a03e7."
+  ],
+  [
+   "HEAD",
+   "Integration base a1f4c9e is behind the shared branch by 2."
+  ],
+  [
+   "CHECKS",
+   "tests pass · lint pass · conformance ? unknown"
+  ],
+  [
+   "NEEDS",
+   "A fresh merge authority before it can integrate."
+  ]
+ ],
+ "MLS-0001": [
+  [
+   "NAME",
+   "Replay-safe activity"
+  ],
+  [
+   "TRACK",
+   "Runtime"
+  ],
+  [
+   "STATE",
+   "ACTIVE"
+  ],
+  [
+   "BATCHES",
+   "∅ derived"
+  ],
+  [
+   "BUNDLE",
+   "sealed 13:20 · digest 2b9f…c41 · immutable"
+  ],
+  [
+   "PROMISED",
+   "Activity survives a replay unchanged."
+  ],
+  [
+   "BUILT",
+   "2 batches · 7 tasks · 1 repair"
+  ],
+  [
+   "VERDICT",
+   "2 of 3 criteria proven · 1 open"
+  ],
+  [
+   "CRITERIA",
+   "Events carry a semantic kind · proven."
+  ],
+  [
+   "",
+   "Replay digest equals a clean load · proven."
+  ],
+  [
+   "",
+   "No wave vocabulary remains · open."
+  ]
+ ],
+ "MLS-0003": [
+  [
+   "NAME",
+   "Escape ledger"
+  ],
+  [
+   "TRACK",
+   "Runtime"
+  ],
+  [
+   "STATE",
+   "ACTIVE"
+  ],
+  [
+   "BATCHES",
+   "∅ derived"
+  ],
+  [
+   "BUNDLE",
+   "∅ not sealed · the milestone is still planned"
+  ],
+  [
+   "PROMISED",
+   "Every escape is recorded with its authority."
+  ],
+  [
+   "BUILT",
+   "1 batch · 3 tasks · 0 repairs"
+  ],
+  [
+   "VERDICT",
+   "∅ no verdict until the bundle seals"
+  ],
+  [
+   "CRITERIA",
+   "Every escape has an authority ref · not yet judged."
+  ],
+  [
+   "",
+   "No escape bypasses the ledger · not yet judged."
+  ]
+ ],
+ "MLS-0000": [
+  [
+   "NAME",
+   "Event normalizer"
+  ],
+  [
+   "TRACK",
+   "Runtime"
+  ],
+  [
+   "STATE",
+   "COMPLETED"
+  ],
+  [
+   "BATCHES",
+   "∅ derived"
+  ],
+  [
+   "BUNDLE",
+   "sealed 09:04 · digest 8e11…a70 · immutable"
+  ],
+  [
+   "PROMISED",
+   "A tool event normalizes to one shape."
+  ],
+  [
+   "BUILT",
+   "3 batches · 11 tasks · 2 repairs"
+  ],
+  [
+   "VERDICT",
+   "4 of 4 criteria proven · accepted 09:12"
+  ],
+  [
+   "CRITERIA",
+   "Every criterion proven · jury quorum 3 of 4."
+  ]
+ ],
+ "CAM-0001": [
+  [
+   "QUESTION",
+   "which provider drift matters to us"
+  ],
+  [
+   "ASKED",
+   "4 agents · 2 answered · 1 running · 1 queued"
+  ],
+  [
+   "FINDINGS",
+   "2 promoted · 1 held for evidence"
+  ],
+  [
+   "CONSUMES",
+   "MLS-0007 acceptance · no milestone progress (R34)"
+  ],
+  [
+   "NOT",
+   "a campaign never advances the milestone that reads it"
+  ]
+ ],
+ "RUN-f1bbcd9c": [
+  [
+   "PROVIDER",
+   "codex · session fresh · handle 2h left"
+  ],
+  [
+   "STARTED",
+   "14:02 · seq 41,154"
+  ],
+  [
+   "SCOPE",
+   "BAT-0002 · EAWF-0043 Seal ledger"
+  ],
+  [
+   "STATE",
+   "WAIT-PERM · needs permission"
+  ],
+  [
+   "USAGE",
+   "elapsed 8m 53s · tokens out 22,072 · cost ~0.84 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Answer the permission, or let the run go."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 1 of 1 · no retry · no fork."
+  ]
+ ],
+ "RUN-cc623ab9": [
+  [
+   "PROVIDER",
+   "codex · session reused · handle 7h left"
+  ],
+  [
+   "STARTED",
+   "14:02 · seq 41,141"
+  ],
+  [
+   "SCOPE",
+   "BAT-0003 · EAWF-0044 Retire shim"
+  ],
+  [
+   "STATE",
+   "WAIT-USER · needs your answer"
+  ],
+  [
+   "USAGE",
+   "elapsed 16m 52s · tokens out 10,179 · cost ~7.91 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Answer the question, or let the run go."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 2 of 2 · no retry · no fork."
+  ]
+ ],
+ "RUN-a708a7d6": [
+  [
+   "PROVIDER",
+   "claude · session fresh · handle 4h left"
+  ],
+  [
+   "STARTED",
+   "13:58 · seq 41,186"
+  ],
+  [
+   "SCOPE",
+   "BAT-0004 · EAWF-0047 Digest guard"
+  ],
+  [
+   "STATE",
+   "SUSPENDED · control outcome unknown"
+  ],
+  [
+   "USAGE",
+   "elapsed 29m 01s · tokens out 22,808 · cost ~6.20 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Reconcile before issuing another control."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 1 of 1 · no retry · no fork."
+  ]
+ ],
+ "RUN-5c558210": [
+  [
+   "PROVIDER",
+   "codex · session reused · handle 5h left"
+  ],
+  [
+   "STARTED",
+   "13:59 · seq 41,154"
+  ],
+  [
+   "SCOPE",
+   "BAT-0006 · EAWF-0053 Window trim"
+  ],
+  [
+   "STATE",
+   "LOST · stopped responding"
+  ],
+  [
+   "USAGE",
+   "elapsed 30m 19s · tokens out 15,065 · cost ~7.77 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Recover the run, or let it go."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 2 of 2 · retried once · no fork."
+  ]
+ ],
+ "RUN-d53368de": [
+  [
+   "PROVIDER",
+   "claude · session fresh · handle 4h left"
+  ],
+  [
+   "STARTED",
+   "14:02 · seq 41,114"
+  ],
+  [
+   "SCOPE",
+   "BAT-0001 · EAWF-0054 Ledger audit"
+  ],
+  [
+   "STATE",
+   "RUNNING · integrating"
+  ],
+  [
+   "USAGE",
+   "elapsed 14m 34s · tokens out 20,998 · cost ~7.10 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Nothing to do · integration reports when it lands."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 1 of 1 · no retry · no fork."
+  ]
+ ],
+ "RUN-736ae294": [
+  [
+   "PROVIDER",
+   "codex · session reused · handle 7h left"
+  ],
+  [
+   "STARTED",
+   "14:02 · seq 41,150"
+  ],
+  [
+   "SCOPE",
+   "BAT-0002 · EAWF-0063 Seal check"
+  ],
+  [
+   "STATE",
+   "RUNNING · checking"
+  ],
+  [
+   "USAGE",
+   "elapsed 37m 18s · tokens out 15,633 · cost ~8.45 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Nothing to do · the check reports when it returns."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 2 of 2 · no retry · no fork."
+  ]
+ ],
+ "RUN-11a25c4a": [
+  [
+   "PROVIDER",
+   "claude · session fresh · handle 2h left"
+  ],
+  [
+   "STARTED",
+   "14:02 · seq 41,142"
+  ],
+  [
+   "SCOPE",
+   "BAT-0003 · EAWF-0064 Digest verify"
+  ],
+  [
+   "STATE",
+   "RUNNING · checking"
+  ],
+  [
+   "USAGE",
+   "elapsed 35m 33s · tokens out 7,870 · cost ~8.82 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Nothing to do · the check reports when it returns."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 1 of 1 · retried once · no fork."
+  ]
+ ],
+ "RUN-afd9d5fb": [
+  [
+   "PROVIDER",
+   "codex · session reused · handle 3h left"
+  ],
+  [
+   "STARTED",
+   "14:02 · seq 41,161"
+  ],
+  [
+   "SCOPE",
+   "BAT-0004 · EAWF-0065 Merge probe"
+  ],
+  [
+   "STATE",
+   "RUNNING · integrating"
+  ],
+  [
+   "USAGE",
+   "elapsed 23m 59s · tokens out 13,785 · cost ~3.97 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Nothing to do · integration reports when it lands."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 2 of 2 · retried once · no fork."
+  ]
+ ],
+ "RUN-28b7bcce": [
+  [
+   "PROVIDER",
+   "claude · session fresh · handle 6h left"
+  ],
+  [
+   "STARTED",
+   "14:02 · seq 41,164"
+  ],
+  [
+   "SCOPE",
+   "BAT-0005 · EAWF-0055 Normalize"
+  ],
+  [
+   "STATE",
+   "RUNNING · run active"
+  ],
+  [
+   "USAGE",
+   "elapsed 13m 36s · tokens out 21,488 · cost ~4.00 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Pause, or let it run."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 1 of 1 · no retry · no fork."
+  ]
+ ],
+ "RUN-c6ef367f": [
+  [
+   "PROVIDER",
+   "claude · session fresh · handle 2h left"
+  ],
+  [
+   "STARTED",
+   "14:02 · seq 41,115"
+  ],
+  [
+   "SCOPE",
+   "BAT-0006 · EAWF-0056 Bound window"
+  ],
+  [
+   "STATE",
+   "RUNNING · run active"
+  ],
+  [
+   "USAGE",
+   "elapsed 18m 57s · tokens out 6,776 · cost ~2.88 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Pause, or let it run."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 1 of 1 · no retry · no fork."
+  ]
+ ],
+ "RUN-6526b035": [
+  [
+   "PROVIDER",
+   "codex · session reused · handle 5h left"
+  ],
+  [
+   "STARTED",
+   "14:02 · seq 41,130"
+  ],
+  [
+   "SCOPE",
+   "BAT-0007 · EAWF-0057 Escape audit"
+  ],
+  [
+   "STATE",
+   "QUEUED · waiting for a slot"
+  ],
+  [
+   "USAGE",
+   "elapsed 36m 06s · tokens out 15,173 · cost ~2.85 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Nothing to do · a slot frees when a run ends."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 2 of 2 · no retry · no fork."
+  ]
+ ],
+ "RUN-035e29eb": [
+  [
+   "PROVIDER",
+   "claude · session reused · handle 7h left"
+  ],
+  [
+   "STARTED",
+   "14:02 · seq 41,198"
+  ],
+  [
+   "SCOPE",
+   "BAT-0001 · EAWF-0058 Ledger seal"
+  ],
+  [
+   "STATE",
+   "RUNNING · run active"
+  ],
+  [
+   "USAGE",
+   "elapsed 11m 09s · tokens out 8,905 · cost ~3.17 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Pause, or let it run."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 2 of 2 · retried once · no fork."
+  ]
+ ],
+ "RUN-a195a39c": [
+  [
+   "PROVIDER",
+   "codex · session fresh · handle 6h left"
+  ],
+  [
+   "STARTED",
+   "14:02 · seq 41,179"
+  ],
+  [
+   "SCOPE",
+   "BAT-0002 · EAWF-0059 Digest check"
+  ],
+  [
+   "STATE",
+   "RUNNING · run active"
+  ],
+  [
+   "USAGE",
+   "elapsed 33m 25s · tokens out 24,682 · cost ~6.94 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Pause, or let it run."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 1 of 1 · no retry · no fork."
+  ]
+ ],
+ "RUN-3fcd1d52": [
+  [
+   "PROVIDER",
+   "claude · session fresh · handle 4h left"
+  ],
+  [
+   "STARTED",
+   "14:02 · seq 41,114"
+  ],
+  [
+   "SCOPE",
+   "BAT-0003 · EAWF-0060 Wave shim"
+  ],
+  [
+   "STATE",
+   "RUNNING · run active"
+  ],
+  [
+   "USAGE",
+   "elapsed 15m 04s · tokens out 5,510 · cost ~4.22 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Pause, or let it run."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 1 of 1 · retried once · no fork."
+  ]
+ ],
+ "RUN-de049703": [
+  [
+   "PROVIDER",
+   "codex · session fresh · handle 6h left"
+  ],
+  [
+   "STARTED",
+   "14:02 · seq 41,149"
+  ],
+  [
+   "SCOPE",
+   "BAT-0004 · EAWF-0061 Snapshot"
+  ],
+  [
+   "STATE",
+   "QUEUED · waiting for a slot"
+  ],
+  [
+   "USAGE",
+   "elapsed 11m 53s · tokens out 15,544 · cost ~5.56 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Nothing to do · a slot frees when a run ends."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 1 of 1 · no retry · no fork."
+  ]
+ ],
+ "RUN-7c3c10b9": [
+  [
+   "PROVIDER",
+   "claude · session fresh · handle 6h left"
+  ],
+  [
+   "STARTED",
+   "14:02 · seq 41,176"
+  ],
+  [
+   "SCOPE",
+   "BAT-0005 · EAWF-0062 Compaction"
+  ],
+  [
+   "STATE",
+   "RUNNING · run active"
+  ],
+  [
+   "USAGE",
+   "elapsed 17m 26s · tokens out 23,172 · cost ~4.84 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Pause, or let it run."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 1 of 1 · no retry · no fork."
+  ]
+ ],
+ "RUN-1a738a6f": [
+  [
+   "PROVIDER",
+   "codex · session reused · handle 5h left"
+  ],
+  [
+   "STARTED",
+   "14:02 · seq 41,118"
+  ],
+  [
+   "SCOPE",
+   "BAT-0006 · EAWF-0066 Kind mapper"
+  ],
+  [
+   "STATE",
+   "RUNNING · run active"
+  ],
+  [
+   "USAGE",
+   "elapsed 5m 04s · tokens out 5,591 · cost ~9.03 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Pause, or let it run."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 2 of 2 · no retry · no fork."
+  ]
+ ],
+ "RUN-b8ab0420": [
+  [
+   "PROVIDER",
+   "claude · session reused · handle 3h left"
+  ],
+  [
+   "STARTED",
+   "14:02 · seq 41,101"
+  ],
+  [
+   "SCOPE",
+   "BAT-0007 · EAWF-0067 Alias table"
+  ],
+  [
+   "STATE",
+   "RUNNING · run active"
+  ],
+  [
+   "USAGE",
+   "elapsed 32m 11s · tokens out 9,611 · cost ~8.23 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Pause, or let it run."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 2 of 2 · no retry · no fork."
+  ]
+ ],
+ "RUN-56e27dd6": [
+  [
+   "PROVIDER",
+   "codex · session reused · handle 3h left"
+  ],
+  [
+   "STARTED",
+   "14:01 · seq 41,128"
+  ],
+  [
+   "SCOPE",
+   "BAT-0001 · EAWF-0068 Retention pass"
+  ],
+  [
+   "STATE",
+   "RUNNING · run active"
+  ],
+  [
+   "USAGE",
+   "elapsed 9m 11s · tokens out 19,615 · cost ~4.27 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Pause, or let it run."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 2 of 2 · retried once · no fork."
+  ]
+ ],
+ "RUN-f519f787": [
+  [
+   "PROVIDER",
+   "claude · session reused · handle 5h left"
+  ],
+  [
+   "STARTED",
+   "14:01 · seq 41,115"
+  ],
+  [
+   "SCOPE",
+   "BAT-0002 · EAWF-0069 Index rebuild"
+  ],
+  [
+   "STATE",
+   "RUNNING · run active"
+  ],
+  [
+   "USAGE",
+   "elapsed 16m 49s · tokens out 12,793 · cost ~4.05 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Pause, or let it run."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 2 of 2 · no retry · no fork."
+  ]
+ ],
+ "RUN-9351713d": [
+  [
+   "PROVIDER",
+   "codex · session reused · handle 5h left"
+  ],
+  [
+   "STARTED",
+   "14:01 · seq 41,157"
+  ],
+  [
+   "SCOPE",
+   "BAT-0003 · EAWF-0070 Cursor probe"
+  ],
+  [
+   "STATE",
+   "RUNNING · run active"
+  ],
+  [
+   "USAGE",
+   "elapsed 21m 00s · tokens out 13,363 · cost ~3.75 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "Pause, or let it run."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 2 of 2 · no retry · no fork."
+  ]
+ ],
+ "RUN-3c6ef367": [
+  [
+   "PROVIDER",
+   "claude · session reused · handle 7h left"
+  ],
+  [
+   "STARTED",
+   "13:52 · seq 41,171"
+  ],
+  [
+   "SCOPE",
+   "BAT-0004 · EAWF-0071 Event normalize"
+  ],
+  [
+   "STATE",
+   "SUCCEEDED · final report accepted"
+  ],
+  [
+   "USAGE",
+   "elapsed 33m 03s · tokens out 17,359 · cost ~3.71 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "No control is outstanding."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 2 of 2 · no retry · no fork."
+  ]
+ ],
+ "RUN-daa66d18": [
+  [
+   "PROVIDER",
+   "codex · session reused · handle 3h left"
+  ],
+  [
+   "STARTED",
+   "13:50 · seq 41,119"
+  ],
+  [
+   "SCOPE",
+   "BAT-0005 · EAWF-0072 Shim retire"
+  ],
+  [
+   "STATE",
+   "SUCCEEDED · final report accepted"
+  ],
+  [
+   "USAGE",
+   "elapsed 36m 59s · tokens out 21,465 · cost ~8.77 of 20.00"
+  ],
+  [
+   "CONTROLS",
+   "No control is outstanding."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 2 of 2 · retried once · no fork."
+  ]
+ ],
+ "EAWF-0043": [
+  [
+   "PROBLEM",
+   "BAT-0002 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record it beside EVT-2249."
+  ],
+  [
+   "RISKS",
+   "A receipt filed at EVT-2249 before the check passes would prove"
+  ],
+  [
+   "",
+   "nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0002 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Seal ledger"
+  ],
+  [
+   "STATE",
+   "WAIT-PERM"
+  ],
+  [
+   "BATCH",
+   "BAT-0002"
+  ],
+  [
+   "RUNS",
+   "RUN-f1bbcd9c · attempt 4 of 4 · WAIT-PERM · codex"
+  ],
+  [
+   "",
+   "RUN-98c47577 · attempt 3 of 4 · FAILED · codex · report rejected"
+  ],
+  [
+   "",
+   "RUN-be1e085a · attempt 2 of 4 · LOST · codex · stopped responding"
+  ],
+  [
+   "",
+   "RUN-a708a7d6 · attempt 1 of 4 · FAILED · claude · ceiling reached"
+  ],
+  [
+   "CRITERIA",
+   "No event is replayed twice."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2249"
+  ],
+  [
+   "STANDING",
+   "needs permission"
+  ]
+ ],
+ "EAWF-0047": [
+  [
+   "PROBLEM",
+   "BAT-0004 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record it beside EVT-2253."
+  ],
+  [
+   "RISKS",
+   "A receipt filed at EVT-2253 before the check passes would prove"
+  ],
+  [
+   "",
+   "nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0004 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Digest guard"
+  ],
+  [
+   "STATE",
+   "SUSPENDED"
+  ],
+  [
+   "BATCH",
+   "BAT-0004"
+  ],
+  [
+   "RUNS",
+   "RUN-a708a7d6 · SUSPENDED · claude · as of 13:58"
+  ],
+  [
+   "CRITERIA",
+   "No event is replayed twice."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2253"
+  ],
+  [
+   "STANDING",
+   "control outcome unknown"
+  ]
+ ],
+ "EAWF-0053": [
+  [
+   "PROBLEM",
+   "BAT-0006 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Read RUN-5c558210’s last event and name the cause."
+  ],
+  [
+   "",
+   "2. Repair the cause rather than the symptom."
+  ],
+  [
+   "",
+   "3. Re-run the task and record the receipt."
+  ],
+  [
+   "RISKS",
+   "RUN-5c558210 stopped without saying why, and a repair that"
+  ],
+  [
+   "",
+   "hides the cause leaves it unexplained."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0006 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Window trim"
+  ],
+  [
+   "STATE",
+   "LOST"
+  ],
+  [
+   "BATCH",
+   "BAT-0006"
+  ],
+  [
+   "RUNS",
+   "RUN-5c558210 · LOST · codex · as of 13:59"
+  ],
+  [
+   "CRITERIA",
+   "The change is provable at this digest."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2280"
+  ],
+  [
+   "STANDING",
+   "stopped responding"
+  ]
+ ],
+ "EAWF-0052": [
+  [
+   "PROBLEM",
+   "BAT-0007 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Read RUN-98c47577’s last event and name the cause."
+  ],
+  [
+   "",
+   "2. Repair the cause rather than the symptom."
+  ],
+  [
+   "",
+   "3. Re-run the task and record the receipt."
+  ],
+  [
+   "RISKS",
+   "RUN-98c47577 stopped without saying why, and a repair that"
+  ],
+  [
+   "",
+   "hides the cause leaves it unexplained."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0007 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Replay guard"
+  ],
+  [
+   "STATE",
+   "FAILED"
+  ],
+  [
+   "BATCH",
+   "BAT-0007"
+  ],
+  [
+   "RUNS",
+   "RUN-98c47577 · FAILED · codex · as of 14:01"
+  ],
+  [
+   "CRITERIA",
+   "Every escape carries its authority."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2279"
+  ],
+  [
+   "STANDING",
+   "final report rejected"
+  ]
+ ],
+ "EAWF-0054": [
+  [
+   "PROBLEM",
+   "BAT-0001 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record the receipt so BAT-0001 can integrate."
+  ],
+  [
+   "RISKS",
+   "BAT-0001 would integrate on a receipt that proves nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0001 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Ledger audit"
+  ],
+  [
+   "STATE",
+   "RUNNING"
+  ],
+  [
+   "BATCH",
+   "BAT-0001"
+  ],
+  [
+   "RUNS",
+   "RUN-d53368de · RUNNING · claude · as of 14:02"
+  ],
+  [
+   "CRITERIA",
+   "No event is replayed twice."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "∅ no receipt yet · the run has not reported"
+  ],
+  [
+   "STANDING",
+   "in flight · nothing blocking"
+  ]
+ ],
+ "EAWF-0063": [
+  [
+   "PROBLEM",
+   "BAT-0002 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record the receipt so BAT-0002 can integrate."
+  ],
+  [
+   "RISKS",
+   "BAT-0002 would integrate on a receipt that proves nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0002 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Seal check"
+  ],
+  [
+   "STATE",
+   "RUNNING"
+  ],
+  [
+   "BATCH",
+   "BAT-0002"
+  ],
+  [
+   "RUNS",
+   "RUN-736ae294 · RUNNING · codex · as of 14:02"
+  ],
+  [
+   "CRITERIA",
+   "Every escape carries its authority."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "∅ no receipt yet · the run has not reported"
+  ],
+  [
+   "STANDING",
+   "in flight · nothing blocking"
+  ]
+ ],
+ "EAWF-0064": [
+  [
+   "PROBLEM",
+   "BAT-0003 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record it beside EVT-2222."
+  ],
+  [
+   "RISKS",
+   "A receipt filed at EVT-2222 before the check passes would prove"
+  ],
+  [
+   "",
+   "nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0003 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Digest verify"
+  ],
+  [
+   "STATE",
+   "RUNNING"
+  ],
+  [
+   "BATCH",
+   "BAT-0003"
+  ],
+  [
+   "RUNS",
+   "RUN-11a25c4a · RUNNING · claude · as of 14:02"
+  ],
+  [
+   "CRITERIA",
+   "The change is provable at this digest."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2222"
+  ],
+  [
+   "STANDING",
+   "in flight · nothing blocking"
+  ]
+ ],
+ "EAWF-0065": [
+  [
+   "PROBLEM",
+   "BAT-0004 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record it beside EVT-2223."
+  ],
+  [
+   "RISKS",
+   "A receipt filed at EVT-2223 before the check passes would prove"
+  ],
+  [
+   "",
+   "nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0004 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Merge probe"
+  ],
+  [
+   "STATE",
+   "RUNNING"
+  ],
+  [
+   "BATCH",
+   "BAT-0004"
+  ],
+  [
+   "RUNS",
+   "RUN-afd9d5fb · RUNNING · codex · as of 14:02"
+  ],
+  [
+   "CRITERIA",
+   "No event is replayed twice."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2223"
+  ],
+  [
+   "STANDING",
+   "in flight · nothing blocking"
+  ]
+ ],
+ "EAWF-0055": [
+  [
+   "PROBLEM",
+   "BAT-0005 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record it beside EVT-2282."
+  ],
+  [
+   "RISKS",
+   "A receipt filed at EVT-2282 before the check passes would prove"
+  ],
+  [
+   "",
+   "nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0005 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Normalize"
+  ],
+  [
+   "STATE",
+   "RUNNING"
+  ],
+  [
+   "BATCH",
+   "BAT-0005"
+  ],
+  [
+   "RUNS",
+   "RUN-28b7bcce · RUNNING · claude · as of 14:02"
+  ],
+  [
+   "CRITERIA",
+   "The ledger stays append-only."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2282"
+  ],
+  [
+   "STANDING",
+   "in flight · nothing blocking"
+  ]
+ ],
+ "EAWF-0056": [
+  [
+   "PROBLEM",
+   "BAT-0006 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record it beside EVT-2283."
+  ],
+  [
+   "RISKS",
+   "A receipt filed at EVT-2283 before the check passes would prove"
+  ],
+  [
+   "",
+   "nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0006 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Bound window"
+  ],
+  [
+   "STATE",
+   "RUNNING"
+  ],
+  [
+   "BATCH",
+   "BAT-0006"
+  ],
+  [
+   "RUNS",
+   "RUN-c6ef367f · RUNNING · claude · as of 14:02"
+  ],
+  [
+   "CRITERIA",
+   "Every escape carries its authority."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2283"
+  ],
+  [
+   "STANDING",
+   "in flight · nothing blocking"
+  ]
+ ],
+ "EAWF-0057": [
+  [
+   "PROBLEM",
+   "BAT-0007 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record the receipt so BAT-0007 can integrate."
+  ],
+  [
+   "RISKS",
+   "BAT-0007 would integrate on a receipt that proves nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0007 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Escape audit"
+  ],
+  [
+   "STATE",
+   "QUEUED"
+  ],
+  [
+   "BATCH",
+   "BAT-0007"
+  ],
+  [
+   "RUNS",
+   "RUN-6526b035 · QUEUED · codex · as of 14:02"
+  ],
+  [
+   "CRITERIA",
+   "The change is provable at this digest."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "∅ no receipt yet · the run has not reported"
+  ],
+  [
+   "STANDING",
+   "waiting for a slot"
+  ]
+ ],
+ "EAWF-0058": [
+  [
+   "PROBLEM",
+   "BAT-0001 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record it beside EVT-2285."
+  ],
+  [
+   "RISKS",
+   "A receipt filed at EVT-2285 before the check passes would prove"
+  ],
+  [
+   "",
+   "nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0001 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Ledger seal"
+  ],
+  [
+   "STATE",
+   "RUNNING"
+  ],
+  [
+   "BATCH",
+   "BAT-0001"
+  ],
+  [
+   "RUNS",
+   "RUN-035e29eb · RUNNING · claude · as of 14:02"
+  ],
+  [
+   "CRITERIA",
+   "No event is replayed twice."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2285"
+  ],
+  [
+   "STANDING",
+   "in flight · nothing blocking"
+  ]
+ ],
+ "EAWF-0059": [
+  [
+   "PROBLEM",
+   "BAT-0002 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record it beside EVT-2286."
+  ],
+  [
+   "RISKS",
+   "A receipt filed at EVT-2286 before the check passes would prove"
+  ],
+  [
+   "",
+   "nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0002 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Digest check"
+  ],
+  [
+   "STATE",
+   "RUNNING"
+  ],
+  [
+   "BATCH",
+   "BAT-0002"
+  ],
+  [
+   "RUNS",
+   "RUN-a195a39c · RUNNING · codex · as of 14:02"
+  ],
+  [
+   "CRITERIA",
+   "The ledger stays append-only."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2286"
+  ],
+  [
+   "STANDING",
+   "in flight · nothing blocking"
+  ]
+ ],
+ "EAWF-0060": [
+  [
+   "PROBLEM",
+   "BAT-0003 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record the receipt so BAT-0003 can integrate."
+  ],
+  [
+   "RISKS",
+   "BAT-0003 would integrate on a receipt that proves nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0003 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Wave shim"
+  ],
+  [
+   "STATE",
+   "RUNNING"
+  ],
+  [
+   "BATCH",
+   "BAT-0003"
+  ],
+  [
+   "RUNS",
+   "RUN-3fcd1d52 · RUNNING · claude · as of 14:02"
+  ],
+  [
+   "CRITERIA",
+   "The change is provable at this digest."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "∅ no receipt yet · the run has not reported"
+  ],
+  [
+   "STANDING",
+   "in flight · nothing blocking"
+  ]
+ ],
+ "EAWF-0061": [
+  [
+   "PROBLEM",
+   "BAT-0004 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record it beside EVT-2219."
+  ],
+  [
+   "RISKS",
+   "A receipt filed at EVT-2219 before the check passes would prove"
+  ],
+  [
+   "",
+   "nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0004 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Snapshot"
+  ],
+  [
+   "STATE",
+   "QUEUED"
+  ],
+  [
+   "BATCH",
+   "BAT-0004"
+  ],
+  [
+   "RUNS",
+   "RUN-de049703 · QUEUED · codex · as of 14:02"
+  ],
+  [
+   "CRITERIA",
+   "No event is replayed twice."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2219"
+  ],
+  [
+   "STANDING",
+   "waiting for a slot"
+  ]
+ ],
+ "EAWF-0062": [
+  [
+   "PROBLEM",
+   "BAT-0005 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record it beside EVT-2220."
+  ],
+  [
+   "RISKS",
+   "A receipt filed at EVT-2220 before the check passes would prove"
+  ],
+  [
+   "",
+   "nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0005 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Compaction"
+  ],
+  [
+   "STATE",
+   "RUNNING"
+  ],
+  [
+   "BATCH",
+   "BAT-0005"
+  ],
+  [
+   "RUNS",
+   "RUN-7c3c10b9 · RUNNING · claude · as of 14:02"
+  ],
+  [
+   "CRITERIA",
+   "The ledger stays append-only."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2220"
+  ],
+  [
+   "STANDING",
+   "in flight · nothing blocking"
+  ]
+ ],
+ "EAWF-0066": [
+  [
+   "PROBLEM",
+   "BAT-0006 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record the receipt so BAT-0006 can integrate."
+  ],
+  [
+   "RISKS",
+   "BAT-0006 would integrate on a receipt that proves nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0006 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Kind mapper"
+  ],
+  [
+   "STATE",
+   "RUNNING"
+  ],
+  [
+   "BATCH",
+   "BAT-0006"
+  ],
+  [
+   "RUNS",
+   "RUN-1a738a6f · RUNNING · codex · as of 14:02"
+  ],
+  [
+   "CRITERIA",
+   "The ledger stays append-only."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "∅ no receipt yet · the run has not reported"
+  ],
+  [
+   "STANDING",
+   "in flight · nothing blocking"
+  ]
+ ],
+ "EAWF-0067": [
+  [
+   "PROBLEM",
+   "BAT-0007 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record it beside EVT-2225."
+  ],
+  [
+   "RISKS",
+   "A receipt filed at EVT-2225 before the check passes would prove"
+  ],
+  [
+   "",
+   "nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0007 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Alias table"
+  ],
+  [
+   "STATE",
+   "RUNNING"
+  ],
+  [
+   "BATCH",
+   "BAT-0007"
+  ],
+  [
+   "RUNS",
+   "RUN-b8ab0420 · RUNNING · claude · as of 14:02"
+  ],
+  [
+   "CRITERIA",
+   "Every escape carries its authority."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2225"
+  ],
+  [
+   "STANDING",
+   "in flight · nothing blocking"
+  ]
+ ],
+ "EAWF-0068": [
+  [
+   "PROBLEM",
+   "BAT-0001 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record it beside EVT-2226."
+  ],
+  [
+   "RISKS",
+   "A receipt filed at EVT-2226 before the check passes would prove"
+  ],
+  [
+   "",
+   "nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0001 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Retention pass"
+  ],
+  [
+   "STATE",
+   "RUNNING"
+  ],
+  [
+   "BATCH",
+   "BAT-0001"
+  ],
+  [
+   "RUNS",
+   "RUN-56e27dd6 · RUNNING · codex · as of 14:01"
+  ],
+  [
+   "CRITERIA",
+   "The change is provable at this digest."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2226"
+  ],
+  [
+   "STANDING",
+   "in flight · nothing blocking"
+  ]
+ ],
+ "EAWF-0069": [
+  [
+   "PROBLEM",
+   "BAT-0002 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record the receipt so BAT-0002 can integrate."
+  ],
+  [
+   "RISKS",
+   "BAT-0002 would integrate on a receipt that proves nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0002 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Index rebuild"
+  ],
+  [
+   "STATE",
+   "RUNNING"
+  ],
+  [
+   "BATCH",
+   "BAT-0002"
+  ],
+  [
+   "RUNS",
+   "RUN-f519f787 · RUNNING · claude · as of 14:01"
+  ],
+  [
+   "CRITERIA",
+   "No event is replayed twice."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "∅ no receipt yet · the run has not reported"
+  ],
+  [
+   "STANDING",
+   "in flight · nothing blocking"
+  ]
+ ],
+ "EAWF-0070": [
+  [
+   "PROBLEM",
+   "BAT-0003 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record it beside EVT-2249."
+  ],
+  [
+   "RISKS",
+   "A receipt filed at EVT-2249 before the check passes would prove"
+  ],
+  [
+   "",
+   "nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0003 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Cursor probe"
+  ],
+  [
+   "STATE",
+   "RUNNING"
+  ],
+  [
+   "BATCH",
+   "BAT-0003"
+  ],
+  [
+   "RUNS",
+   "RUN-9351713d · RUNNING · codex · as of 14:01"
+  ],
+  [
+   "CRITERIA",
+   "Every escape carries its authority."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2249"
+  ],
+  [
+   "STANDING",
+   "in flight · nothing blocking"
+  ]
+ ],
+ "EAWF-0071": [
+  [
+   "PROBLEM",
+   "BAT-0004 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record it beside EVT-2250."
+  ],
+  [
+   "RISKS",
+   "A receipt filed at EVT-2250 before the check passes would prove"
+  ],
+  [
+   "",
+   "nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0004 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Event normalize"
+  ],
+  [
+   "STATE",
+   "SUCCEEDED"
+  ],
+  [
+   "BATCH",
+   "BAT-0004"
+  ],
+  [
+   "RUNS",
+   "RUN-3c6ef367 · SUCCEEDED · claude · as of 13:52"
+  ],
+  [
+   "CRITERIA",
+   "The change is provable at this digest."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2250"
+  ],
+  [
+   "STANDING",
+   "final report accepted"
+  ]
+ ],
+ "EAWF-0072": [
+  [
+   "PROBLEM",
+   "BAT-0005 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Run the check that exercises this criterion."
+  ],
+  [
+   "",
+   "2. Compare what the run produced against the criterion."
+  ],
+  [
+   "",
+   "3. Record the receipt so BAT-0005 can integrate."
+  ],
+  [
+   "RISKS",
+   "BAT-0005 would integrate on a receipt that proves nothing."
+  ],
+  [
+   "WHY NOW",
+   "BAT-0005 is in flight, and this is one of the tasks holding it"
+  ],
+  [
+   "",
+   "there."
+  ],
+  [
+   "NAME",
+   "Shim retire"
+  ],
+  [
+   "STATE",
+   "SUCCEEDED"
+  ],
+  [
+   "BATCH",
+   "BAT-0005"
+  ],
+  [
+   "RUNS",
+   "RUN-daa66d18 · SUCCEEDED · codex · as of 13:50"
+  ],
+  [
+   "CRITERIA",
+   "No event is replayed twice."
+  ],
+  [
+   "",
+   "The batch integrates only when every criterion is proven."
+  ],
+  [
+   "PROOF",
+   "∅ no receipt yet · the run has not reported"
+  ],
+  [
+   "STANDING",
+   "final report accepted"
+  ]
+ ],
+ "BAT-0001": [
+  [
+   "NAME",
+   "Semantic event slice"
+  ],
+  [
+   "STATE",
+   "ACTIVE"
+  ],
+  [
+   "TASKS",
+   "EAWF-0042 · WAIT-PERM"
+  ],
+  [
+   "",
+   "EAWF-0054 · RUNNING"
+  ],
+  [
+   "",
+   "EAWF-0058 · RUNNING"
+  ],
+  [
+   "",
+   "EAWF-0068 · RUNNING"
+  ],
+  [
+   "MILESTONE",
+   "MLS-0001"
+  ],
+  [
+   "COUNT",
+   "4 tasks"
+  ],
+  [
+   "HEAD",
+   "integration base 5f4c2e9 · level with the shared branch"
+  ],
+  [
+   "CHECKS",
+   "tests pass · lint pass · conformance pass"
+  ],
+  [
+   "NEEDS",
+   "Nothing · it integrates when its tasks prove out."
+  ]
+ ],
+ "BAT-0002": [
+  [
+   "NAME",
+   "Bound replay"
+  ],
+  [
+   "STATE",
+   "ACTIVE"
+  ],
+  [
+   "TASKS",
+   "EAWF-0043 · WAIT-PERM"
+  ],
+  [
+   "",
+   "EAWF-0063 · RUNNING"
+  ],
+  [
+   "",
+   "EAWF-0059 · RUNNING"
+  ],
+  [
+   "",
+   "EAWF-0069 · RUNNING"
+  ],
+  [
+   "MILESTONE",
+   "MLS-0001"
+  ],
+  [
+   "COUNT",
+   "4 tasks"
+  ],
+  [
+   "HEAD",
+   "integration base 6f5c3e9 · behind by 1"
+  ],
+  [
+   "CHECKS",
+   "tests pass · lint pass · conformance ? unknown"
+  ],
+  [
+   "NEEDS",
+   "A fresh merge authority before it can integrate."
+  ]
+ ],
+ "BAT-0004": [
+  [
+   "NAME",
+   "Ordering guard"
+  ],
+  [
+   "STATE",
+   "ACTIVE"
+  ],
+  [
+   "TASKS",
+   "EAWF-0047 · SUSPENDED"
+  ],
+  [
+   "",
+   "EAWF-0065 · RUNNING"
+  ],
+  [
+   "",
+   "EAWF-0061 · QUEUED"
+  ],
+  [
+   "",
+   "EAWF-0071 · SUCCEEDED"
+  ],
+  [
+   "MILESTONE",
+   "MLS-0007"
+  ],
+  [
+   "COUNT",
+   "4 tasks"
+  ],
+  [
+   "HEAD",
+   "integration base 8f0c0e9 · behind by 3"
+  ],
+  [
+   "CHECKS",
+   "tests pass · lint pass · conformance pass"
+  ],
+  [
+   "NEEDS",
+   "A fresh merge authority before it can integrate."
+  ]
+ ],
+ "BAT-0005": [
+  [
+   "NAME",
+   "Authority refs"
+  ],
+  [
+   "STATE",
+   "ACTIVE"
+  ],
+  [
+   "TASKS",
+   "EAWF-0051 · LOST"
+  ],
+  [
+   "",
+   "EAWF-0055 · RUNNING"
+  ],
+  [
+   "",
+   "EAWF-0062 · RUNNING"
+  ],
+  [
+   "",
+   "EAWF-0072 · SUCCEEDED"
+  ],
+  [
+   "MILESTONE",
+   "MLS-0011"
+  ],
+  [
+   "COUNT",
+   "4 tasks"
+  ],
+  [
+   "HEAD",
+   "integration base 0f1c1e9 · level with the shared branch"
+  ],
+  [
+   "CHECKS",
+   "tests pass · lint pass · conformance ? unknown"
+  ],
+  [
+   "NEEDS",
+   "Nothing · it integrates when its tasks prove out."
+  ]
+ ],
+ "BAT-0006": [
+  [
+   "NAME",
+   "Replay guard"
+  ],
+  [
+   "STATE",
+   "INTEGRATING"
+  ],
+  [
+   "TASKS",
+   "EAWF-0053 · LOST"
+  ],
+  [
+   "",
+   "EAWF-0056 · RUNNING"
+  ],
+  [
+   "",
+   "EAWF-0066 · RUNNING"
+  ],
+  [
+   "MILESTONE",
+   "MLS-0000"
+  ],
+  [
+   "COUNT",
+   "3 tasks"
+  ],
+  [
+   "HEAD",
+   "integration base 1f2c2e9 · behind by 2"
+  ],
+  [
+   "CHECKS",
+   "tests pass · lint pass · conformance pass"
+  ],
+  [
+   "NEEDS",
+   "A fresh merge authority before it can integrate."
+  ]
+ ],
+ "BAT-0007": [
+  [
+   "NAME",
+   "Escape audit"
+  ],
+  [
+   "STATE",
+   "ACTIVE"
+  ],
+  [
+   "TASKS",
+   "EAWF-0052 · FAILED"
+  ],
+  [
+   "",
+   "EAWF-0057 · QUEUED"
+  ],
+  [
+   "",
+   "EAWF-0067 · RUNNING"
+  ],
+  [
+   "MILESTONE",
+   "MLS-0004"
+  ],
+  [
+   "COUNT",
+   "3 tasks"
+  ],
+  [
+   "HEAD",
+   "integration base 2f3c3e9 · level with the shared branch"
+  ],
+  [
+   "CHECKS",
+   "tests pass · lint pass · conformance pass"
+  ],
+  [
+   "NEEDS",
+   "Nothing · it integrates when its tasks prove out."
+  ]
+ ],
+ "MLS-0004": [
+  [
+   "NAME",
+   "Escape-ledger"
+  ],
+  [
+   "TRACK",
+   "Trust"
+  ],
+  [
+   "STATE",
+   "ACCEPTANCE_REVIEW"
+  ],
+  [
+   "BATCHES",
+   "∅ derived"
+  ],
+  [
+   "BUNDLE",
+   "sealed 14:01 · digest 7c1f…a94 · immutable"
+  ],
+  [
+   "PROMISED",
+   "Every escape is recorded with its authority."
+  ],
+  [
+   "BUILT",
+   "3 batches · 11 tasks · 2 repairs"
+  ],
+  [
+   "VERDICT",
+   "3 of 4 criteria proven · 1 open"
+  ],
+  [
+   "CRITERIA",
+   "Every escape has an authority ref · proven."
+  ],
+  [
+   "",
+   "No escape bypasses the ledger · proven."
+  ],
+  [
+   "",
+   "Audit sign-off recorded · open."
+  ]
+ ],
+ "MLS-0007": [
+  [
+   "NAME",
+   "Replay-safe ordering"
+  ],
+  [
+   "TRACK",
+   "Trust"
+  ],
+  [
+   "STATE",
+   "ACTIVE"
+  ],
+  [
+   "BATCHES",
+   "∅ derived"
+  ],
+  [
+   "BUNDLE",
+   "∅ not sealed · the milestone is still active"
+  ],
+  [
+   "PROMISED",
+   "Ordering survives a replay unchanged."
+  ],
+  [
+   "BUILT",
+   "1 batch · 4 tasks · no repair"
+  ],
+  [
+   "VERDICT",
+   "1 of 3 criteria proven · 2 open"
+  ],
+  [
+   "CRITERIA",
+   "The normalizer preserves arrival order · proven."
+  ],
+  [
+   "",
+   "Replay of a bounded window is exact · open."
+  ],
+  [
+   "",
+   "No call site assumes arrival order · open."
+  ]
+ ],
+ "EAWF-0091": [
+  [
+   "PROBLEM",
+   "Bound replay window is not proven, so nothing above it can"
+  ],
+  [
+   "",
+   "depend on it yet."
+  ],
+  [
+   "OUTCOME",
+   "The intended end state is that the replay window ends at the"
+  ],
+  [
+   "",
+   "acknowledged cursor, once the criterion is written."
+  ],
+  [
+   "STEPS",
+   "1. Write the criterion this task will be judged on."
+  ],
+  [
+   "",
+   "2. Cut it into a batch alongside the work it belongs with."
+  ],
+  [
+   "",
+   "3. Dispatch a run and record what it proves."
+  ],
+  [
+   "RISKS",
+   "Without a written criterion, no reviewer can say whether this"
+  ],
+  [
+   "",
+   "landed."
+  ],
+  [
+   "WHY NOW",
+   "It must be defined by W30."
+  ],
+  [
+   "NAME",
+   "Bound replay window"
+  ],
+  [
+   "STATE",
+   "DRAFT"
+  ],
+  [
+   "STANDING",
+   "in the shaped queue"
+  ],
+  [
+   "DEFINITION",
+   "Criteria missing · owner set · batch not cut."
+  ],
+  [
+   "DUE",
+   "W30 · the week it must be defined by, not delivered"
+  ],
+  [
+   "PROMOTION",
+   "A draft becomes work when criteria, owner and batch are all set."
+  ],
+  [
+   "BLOCKED BY",
+   "No criteria have been written for it yet."
+  ]
+ ],
+ "EAWF-0092": [
+  [
+   "PROBLEM",
+   "Retire wave shim is not proven, so nothing above it can depend"
+  ],
+  [
+   "",
+   "on it yet."
+  ],
+  [
+   "STEPS",
+   "1. Write the criterion this task will be judged on."
+  ],
+  [
+   "",
+   "2. Cut it into a batch alongside the work it belongs with."
+  ],
+  [
+   "",
+   "3. Dispatch a run and record what it proves."
+  ],
+  [
+   "RISKS",
+   "Without a written criterion, no reviewer can say whether this"
+  ],
+  [
+   "",
+   "landed."
+  ],
+  [
+   "WHY NOW",
+   "It is queued rather than cut, so nothing waits on it yet."
+  ],
+  [
+   "NAME",
+   "Retire wave shim"
+  ],
+  [
+   "STATE",
+   "DRAFT"
+  ],
+  [
+   "STANDING",
+   "in the shaped queue"
+  ],
+  [
+   "DEFINITION",
+   "Criteria set · owner set · batch not cut."
+  ],
+  [
+   "DUE",
+   "W31"
+  ],
+  [
+   "PROMOTION",
+   "One thing remains: cut it into a batch."
+  ],
+  [
+   "CRITERIA",
+   "No wave vocabulary remains in the surface."
+  ],
+  [
+   "",
+   "The shim is removed in one change, not deprecated."
+  ]
+ ],
+ "RUN-1c93af08": [
+  [
+   "PROVIDER",
+   "claude · session fresh · handle 3h left"
+  ],
+  [
+   "STARTED",
+   "13:22 · seq 41,088"
+  ],
+  [
+   "SCOPE",
+   "BAT-0004 · EAWF-0057 Escape audit"
+  ],
+  [
+   "STATE",
+   "STOPPED · hard limit reached"
+  ],
+  [
+   "USAGE",
+   "elapsed 19m 04s · tokens out 41,860 · cost ~8.40 of 8.40"
+  ],
+  [
+   "STOPPED AT",
+   "13:41 · the ceiling, not a failure"
+  ],
+  [
+   "CONTROLS",
+   "the ceiling moves in settings · nothing here retries"
+  ],
+  [
+   "LINEAGE",
+   "attempt 1 of 1 · no retry · no fork"
+  ]
+ ],
+ "EAWF-0002": [
+  [
+   "PROBLEM",
+   "A busy run emits hundreds of progress events and the timeline"
+  ],
+  [
+   "",
+   "prints a row for each, so a reviewer cannot see where a phase"
+  ],
+  [
+   "",
+   "began."
+  ],
+  [
+   "OUTCOME",
+   "A reader sees one row per phase, carrying its count and its"
+  ],
+  [
+   "",
+   "span."
+  ],
+  [
+   "STEPS",
+   "1. Group consecutive progress events by the phase they belong"
+  ],
+  [
+   "",
+   "to."
+  ],
+  [
+   "",
+   "2. Render each group as its kind, its count and its span."
+  ],
+  [
+   "",
+   "3. Leave P0 and P1 events uncollapsed, whatever their number."
+  ],
+  [
+   "RISKS",
+   "A collapsed row that hid a phase change would make the timeline"
+  ],
+  [
+   "",
+   "lie."
+  ],
+  [
+   "WHY NOW",
+   "The timeline is unreadable during a wave, which blocks review."
+  ],
+  [
+   "NAME",
+   "Coalesce progress"
+  ],
+  [
+   "STATE",
+   "RUNNING"
+  ],
+  [
+   "BATCH",
+   "BAT-0001"
+  ],
+  [
+   "RUNS",
+   "RUN-daa66d18 · RUNNING · claude · as of 14:02"
+  ],
+  [
+   "CRITERIA",
+   "Repeated progress events collapse to one row."
+  ],
+  [
+   "",
+   "The collapsed row states its count and span."
+  ],
+  [
+   "PROOF",
+   "receipt EVT-2218"
+  ],
+  [
+   "STANDING",
+   "in flight · nothing blocking"
+  ]
+ ],
+ "EAWF-0003": [
+  [
+   "PROBLEM",
+   "A replay can advance past the acknowledged cursor, so an event"
+  ],
+  [
+   "",
+   "may be applied twice and a gap papered over unseen."
+  ],
+  [
+   "OUTCOME",
+   "A replay stops at the acknowledged cursor and states that it"
+  ],
+  [
+   "",
+   "did."
+  ],
+  [
+   "STEPS",
+   "1. Read the acknowledged cursor before the replay begins."
+  ],
+  [
+   "",
+   "2. Refuse any event beyond it, naming the cursor in the refusal."
+  ],
+  [
+   "",
+   "3. Prove the bound with a replay over a window that exceeds it."
+  ],
+  [
+   "RISKS",
+   "A guard set too strictly would stall a legitimate catch-up."
+  ],
+  [
+   "WHY NOW",
+   "Until the bound exists, no replay can be trusted to be exact."
+  ],
+  [
+   "NAME",
+   "Replay guard"
+  ],
+  [
+   "STATE",
+   "PLANNED"
+  ],
+  [
+   "BATCH",
+   "BAT-0001"
+  ],
+  [
+   "RUNS",
+   "∅ not started · the task is planned"
+  ],
+  [
+   "CRITERIA",
+   "A replay cannot advance past the acked cursor."
+  ],
+  [
+   "",
+   "The guard is proved by a bounded replay."
+  ],
+  [
+   "PROOF",
+   "∅ no receipt yet · nothing has run"
+  ],
+  [
+   "STANDING",
+   "planned · waiting on EAWF-0002"
+  ]
+ ],
+ "EAWF-0079": [
+  [
+   "PROBLEM",
+   "Snapshot compaction is not proven, so nothing above it can"
+  ],
+  [
+   "",
+   "depend on it yet."
+  ],
+  [
+   "OUTCOME",
+   "The intended end state is that the store is compacted without"
+  ],
+  [
+   "",
+   "losing a retained revision, once the criterion is written."
+  ],
+  [
+   "STEPS",
+   "1. Write the criterion this task will be judged on."
+  ],
+  [
+   "",
+   "2. Cut it into a batch alongside the work it belongs with."
+  ],
+  [
+   "",
+   "3. Dispatch a run and record what it proves."
+  ],
+  [
+   "RISKS",
+   "Without a written criterion, no reviewer can say whether this"
+  ],
+  [
+   "",
+   "landed."
+  ],
+  [
+   "WHY NOW",
+   "It is queued rather than cut, so nothing waits on it yet."
+  ],
+  [
+   "NAME",
+   "Snapshot compaction"
+  ],
+  [
+   "STATE",
+   "DEFERRED"
+  ],
+  [
+   "SINCE",
+   "Jul 4"
+  ],
+  [
+   "REASON",
+   "No owner · it waits for one, not for work."
+  ],
+  [
+   "CRITERIA",
+   "∅ none written · a deferred draft carries no criteria yet."
+  ]
+ ],
+ "EAWF-0084": [
+  [
+   "PROBLEM",
+   "Provider drift probe is not proven, so nothing above it can"
+  ],
+  [
+   "",
+   "depend on it yet."
+  ],
+  [
+   "STEPS",
+   "1. Write the criterion this task will be judged on."
+  ],
+  [
+   "",
+   "2. Cut it into a batch alongside the work it belongs with."
+  ],
+  [
+   "",
+   "3. Dispatch a run and record what it proves."
+  ],
+  [
+   "RISKS",
+   "Without a written criterion, no reviewer can say whether this"
+  ],
+  [
+   "",
+   "landed."
+  ],
+  [
+   "WHY NOW",
+   "It is queued rather than cut, so nothing waits on it yet."
+  ],
+  [
+   "NAME",
+   "Provider drift probe"
+  ],
+  [
+   "STATE",
+   "DEFERRED"
+  ],
+  [
+   "STANDING",
+   "waits on CAM-0001"
+  ],
+  [
+   "SINCE",
+   "Jul 11"
+  ],
+  [
+   "REASON",
+   "The campaign it reads has not reported."
+  ],
+  [
+   "CRITERIA",
+   "Drift is measured against a certified baseline."
+  ]
+ ],
+ "EAWF-0093": [
+  [
+   "PROBLEM",
+   "Retire compat shim is not proven, so nothing above it can"
+  ],
+  [
+   "",
+   "depend on it yet."
+  ],
+  [
+   "OUTCOME",
+   "No call site references a retired compatibility shim."
+  ],
+  [
+   "STEPS",
+   "1. Write the criterion this task will be judged on."
+  ],
+  [
+   "",
+   "2. Cut it into a batch alongside the work it belongs with."
+  ],
+  [
+   "",
+   "3. Dispatch a run and record what it proves."
+  ],
+  [
+   "RISKS",
+   "Without a written criterion, no reviewer can say whether this"
+  ],
+  [
+   "",
+   "landed."
+  ],
+  [
+   "WHY NOW",
+   "It is queued rather than cut, so nothing waits on it yet."
+  ],
+  [
+   "NAME",
+   "Retire compat shim"
+  ],
+  [
+   "STATE",
+   "DRAFT"
+  ],
+  [
+   "STANDING",
+   "in the backlog"
+  ],
+  [
+   "DEFINITION",
+   "Criteria set · owner set · batch not cut."
+  ],
+  [
+   "DUE",
+   "W32"
+  ],
+  [
+   "PROMOTION",
+   "One thing remains: cut it into a batch."
+  ]
+ ],
+ "MLS-0002": [
+  [
+   "NAME",
+   "Resumable runs"
+  ],
+  [
+   "TRACK",
+   "Runtime"
+  ],
+  [
+   "STATE",
+   "PLANNED"
+  ],
+  [
+   "BATCHES",
+   "∅ derived"
+  ],
+  [
+   "PROMISED",
+   "A run can be resumed after a console restart."
+  ],
+  [
+   "VERDICT",
+   "0 of 3 criteria proven · 3 open"
+  ]
+ ],
+ "MLS-0011": [
+  [
+   "NAME",
+   "Verdict authority"
+  ],
+  [
+   "TRACK",
+   "Trust"
+  ],
+  [
+   "STATE",
+   "ACTIVE"
+  ],
+  [
+   "BATCHES",
+   "∅ derived"
+  ],
+  [
+   "BUNDLE",
+   "∅ not sealed · the milestone is still active"
+  ],
+  [
+   "PROMISED",
+   "Every verdict names the jury that reached it."
+  ],
+  [
+   "VERDICT",
+   "2 of 4 criteria proven · 2 open"
+  ]
+ ],
+ "MLS-0012": [
+  [
+   "NAME",
+   "Finding provenance"
+  ],
+  [
+   "TRACK",
+   "Research"
+  ],
+  [
+   "STATE",
+   "PLANNED"
+  ],
+  [
+   "BATCHES",
+   "∅ derived"
+  ],
+  [
+   "PROMISED",
+   "A promoted finding names what it changed."
+  ],
+  [
+   "VERDICT",
+   "0 of 2 criteria proven · 2 open"
+  ]
+ ],
+ "REL-0001": [
+  [
+   "STATE",
+   "published · tag v0.6.4"
+  ],
+  [
+   "HEAD",
+   "8f14c2 · bound at approval"
+  ],
+  [
+   "MEMBERS",
+   "MLS-0000 Event normalizer · ready"
+  ],
+  [
+   "APPROVED",
+   "by you at 09:41 against 8f14c2"
+  ],
+  [
+   "PUBLISHED",
+   "09:46 · publication facts carry the head they shipped"
+  ]
+ ],
+ "RUN-4e2b6c77": [
+  [
+   "PROVIDER",
+   "codex · session fresh"
+  ],
+  [
+   "STARTED",
+   "12:04:11 · seq 40,902"
+  ],
+  [
+   "SCOPE",
+   "BAT-0007 · EAWF-0052 Replay guard"
+  ],
+  [
+   "STATE",
+   "STOPPED"
+  ],
+  [
+   "USAGE",
+   "elapsed 1h 56m 12s · tokens out 82,140 · cost ~20.00 of 20.00"
+  ],
+  [
+   "STOPPED AT",
+   "12:08 · hard limit reached"
+  ],
+  [
+   "CONTROLS",
+   "The ceiling moves in settings."
+  ],
+  [
+   "LINEAGE",
+   "Attempt 1 of 1 · no retry · no fork."
+  ]
+ ],
+ "EAWF-0088": [
+  [
+   "PROBLEM",
+   "BAT-0001 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Write the criterion this task will be judged on."
+  ],
+  [
+   "",
+   "2. Cut it into a batch alongside the work it belongs with."
+  ],
+  [
+   "",
+   "3. Dispatch a run and record what it proves."
+  ],
+  [
+   "RISKS",
+   "Bound the replay window cannot be judged when it lands until"
+  ],
+  [
+   "",
+   "its criterion is written."
+  ],
+  [
+   "WHY NOW",
+   "It is queued rather than cut, so nothing waits on it yet."
+  ],
+  [
+   "NAME",
+   "Bound the replay window"
+  ],
+  [
+   "STATE",
+   "DRAFT"
+  ],
+  [
+   "BATCH",
+   "BAT-0001"
+  ],
+  [
+   "DEFINITION",
+   "Criteria set · owner set · batch cut."
+  ],
+  [
+   "DUE",
+   "W30"
+  ],
+  [
+   "CRITERIA",
+   "The window ends at the acked cursor."
+  ]
+ ],
+ "EAWF-0086": [
+  [
+   "PROBLEM",
+   "BAT-0002 cannot integrate while this task is unproven, because"
+  ],
+  [
+   "",
+   "its criteria are the ones the batch still holds open."
+  ],
+  [
+   "STEPS",
+   "1. Write the criterion this task will be judged on."
+  ],
+  [
+   "",
+   "2. Cut it into a batch alongside the work it belongs with."
+  ],
+  [
+   "",
+   "3. Dispatch a run and record what it proves."
+  ],
+  [
+   "RISKS",
+   "Retire the compat shims cannot be judged when it lands until"
+  ],
+  [
+   "",
+   "its criterion is written."
+  ],
+  [
+   "WHY NOW",
+   "It is queued rather than cut, so nothing waits on it yet."
+  ],
+  [
+   "NAME",
+   "Retire the compat shims"
+  ],
+  [
+   "STATE",
+   "DRAFT"
+  ],
+  [
+   "BATCH",
+   "BAT-0002"
+  ],
+  [
+   "DEFINITION",
+   "Criteria set · owner set · batch cut."
+  ],
+  [
+   "DUE",
+   "W31"
+  ],
+  [
+   "CRITERIA",
+   "No call site references a retired shim."
+  ]
+ ],
+ "EAWF-0083": [
+  [
+   "PROBLEM",
+   "Certify the local runner is not proven, so nothing above it"
+  ],
+  [
+   "",
+   "can depend on it yet."
+  ],
+  [
+   "STEPS",
+   "1. Write the criterion this task will be judged on."
+  ],
+  [
+   "",
+   "2. Cut it into a batch alongside the work it belongs with."
+  ],
+  [
+   "",
+   "3. Dispatch a run and record what it proves."
+  ],
+  [
+   "RISKS",
+   "Without a written criterion, no reviewer can say whether this"
+  ],
+  [
+   "",
+   "landed."
+  ],
+  [
+   "WHY NOW",
+   "It is queued rather than cut, so nothing waits on it yet."
+  ],
+  [
+   "NAME",
+   "Certify the local runner"
+  ],
+  [
+   "STATE",
+   "DEFERRED"
+  ],
+  [
+   "STANDING",
+   "waits on a certified suite"
+  ],
+  [
+   "SINCE",
+   "Aug 2"
+  ],
+  [
+   "CRITERIA",
+   "The runner passes the conformance suite."
+  ]
+ ]
+}

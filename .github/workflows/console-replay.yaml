@@ -1,0 +1,46 @@
+name: Console replay
+
+# The console golden contract -- 261 frames and 25 journeys -- is evidence that
+# decays the moment nothing replays it. It ran once, under a gitignored spike, and
+# would otherwise sit unexercised across two checkpoints before the console port
+# inherits it. This workflow is deliberately unfiltered on push (not just the
+# protected branches ci.yaml watches) so a branch that moves the chassis, the
+# fixture or the normalisation map learns it broke the contract on that push
+# rather than at the phase PR.
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: console-replay-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  console-replay:
+    name: Console golden contract replay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Pytest (console golden frames and journeys)
+        # Single-process on purpose: the contract's ordering rule is that the 25
+        # journeys replay before the 261 frames in ONE app instance, so the frames
+        # prove the reset as well as the render. Sharding the parametrised cases
+        # across xdist workers would give each worker its own app and quietly
+        # weaken that to a per-worker reset.
+        run: >
+          uv run pytest -p no:xdist
+          tests/snapshots/tui/console/test_golden_frames.py
+          tests/snapshots/tui/console/test_golden_journeys.py
+          tests/snapshots/tui/console/test_normalisation_map.py
