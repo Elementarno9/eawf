@@ -28,7 +28,9 @@ of three inputs:
 W08 layers the **deterministic floor** on top of W06: criteria whose
 ``evidence_kind == "deterministic"`` have their gates compiled via
 :func:`eawf.workflow.verify.compile.compile_gate` and executed live via
-:func:`eawf.workflow.audit_dsl.runner.run_checks`. Jury / attested
+:func:`eawf.workflow.verify.sandboxed_checks.run_checks_out_of_process`,
+which runs them in a child bound to a throwaway sandbox rather than in
+this process against the live runtime directory. Jury / attested
 criteria stay on the W06 evidence-row path until v0.4.1 lands the
 jury + attestation subsystems. Waivers pre-empt the live run
 across both flavours so operator overrides survive the floor.
@@ -66,7 +68,6 @@ from eawf.workflow.audit_dsl.kinds.backlog_resolution import (
     check_backlog_resolution,
 )
 from eawf.workflow.audit_dsl.models import CheckSpec
-from eawf.workflow.audit_dsl.runner import run_checks
 from eawf.workflow.lifecycle._errors import LifecycleError, check_disabled_waiver_policy
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 from eawf.workflow.verify.compile import compile_floor_pack, compile_gate
@@ -75,6 +76,7 @@ from eawf.workflow.verify.models import (
     CriterionView,
     GateResult,
 )
+from eawf.workflow.verify.sandboxed_checks import run_checks_out_of_process
 
 if TYPE_CHECKING:
     from eawf.runtime.daemon.gate_execution import GateExecutionContext
@@ -410,6 +412,7 @@ def _run_deterministic_gate(
     *,
     runner_cwd: Path,
     gate_context: GateExecutionContext | None = None,
+    live_state_path: Path | None = None,
 ) -> str:
     """Compile + execute *gate* via the W15-hardened audit-DSL runner.
 
@@ -420,6 +423,15 @@ def _run_deterministic_gate(
     rolled-up :data:`~eawf.workflow.verify.models.GateStatus` literal
     so the caller can stamp it onto a :class:`GateResult` row
     untouched.
+
+    The runner is never entered in this process. A gate is routinely a
+    whole test suite, and a suite that drives eawf's own RPCs would drive
+    the caller's live runtime directory and live ledger. Both lanes
+    therefore execute in a child bound to a throwaway sandbox: the durable
+    lane through the shared gate runner when *gate_context* is set, the
+    advisory lane through
+    :func:`~eawf.workflow.verify.sandboxed_checks.run_checks_out_of_process`
+    otherwise.
 
     The function defends against the case where
     :func:`compile_gate` legitimately returns ``None`` for a
@@ -437,10 +449,15 @@ def _run_deterministic_gate(
             diff-base + scope resolution. Threaded through from
             :func:`compute`'s ``repo_root``.
         gate_context: When set, the gate runs through the shared
-            out-of-process runner under this durable identity instead
-            of executing in this process. The daemonless close lane
-            passes it so its gates claim + resolve exactly like the
-            daemon's; every advisory caller leaves it ``None``.
+            durable gate runner under this identity, claiming a
+            freshness key and resolving a receipt. The daemonless close
+            lane passes it so its gates claim + resolve exactly like the
+            daemon's; every advisory caller leaves it ``None`` and gets
+            the receipt-free sandboxed runner instead.
+        live_state_path: The live ``state.json`` the advisory lane's
+            sandbox ledger is snapshotted from, so the gate reads a
+            faithful copy. ``None`` seeds an empty ledger rather than
+            guessing one from the process environment.
 
     Returns:
         One of ``"pass"`` / ``"fail"`` / ``"blocked"``.
@@ -459,12 +476,16 @@ def _run_deterministic_gate(
             runner_cwd=runner_cwd,
             gate_context=gate_context,
         )
-    results = run_checks([compiled], cwd=runner_cwd)
+    results = run_checks_out_of_process(
+        [compiled],
+        cwd=runner_cwd,
+        live_state_path=live_state_path,
+    )
     result = results[0]
     status = result.status or ("pass" if result.passed else "fail")
     logger.debug(
         f"_run_deterministic_gate gate_id={gate.id!r} status={status!r} "
-        f"evidence_kind={criterion.evidence_kind!r}"
+        f"runner='out-of-process' evidence_kind={criterion.evidence_kind!r}"
     )
     return status
 
@@ -477,6 +498,7 @@ def _build_spec_views(
     runner_cwd: Path,
     prevalidated_gate_ids: Collection[str] = (),
     gate_context: GateExecutionContext | None = None,
+    live_state_path: Path | None = None,
 ) -> tuple[list[CriterionView], list[str]]:
     """Convert typed CriterionSpec / GateSpec into :class:`CriterionView` rows.
 
@@ -514,7 +536,10 @@ def _build_spec_views(
             subprocess execution.
         gate_context: Forwarded to :func:`_run_deterministic_gate`;
             when set, deterministic gates execute through the shared
-            out-of-process runner instead of in this process.
+            durable gate runner under that identity.
+        live_state_path: Forwarded to :func:`_run_deterministic_gate`;
+            names the live ledger the advisory lane's sandbox is
+            snapshotted from.
 
     Returns:
         ``(views, waived_gate_ids)``.
@@ -554,6 +579,7 @@ def _build_spec_views(
                             criterion,
                             runner_cwd=runner_cwd,
                             gate_context=gate_context,
+                            live_state_path=live_state_path,
                         )
                         was_waived = False
             else:
@@ -1214,6 +1240,7 @@ def _build_floor_views(
     wave: Wave,
     runner_cwd: Path,
     fresh_evidence: list[EvidenceRecord],
+    live_state_path: Path | None = None,
 ) -> list[CriterionView]:
     """Convert the profile-fed floor pack into :class:`CriterionView` rows.
 
@@ -1221,9 +1248,17 @@ def _build_floor_views(
     :attr:`VerifyBlock.floor_checks`, each floor check is compiled
     into a :class:`~eawf.workflow.audit_dsl.models.CheckSpec` via
     :func:`compile_floor_pack` and run through
-    :func:`~eawf.workflow.audit_dsl.runner.run_checks`. One floor
-    check yields one ``CriterionView(source="floor")`` whose single
-    gate result mirrors the live run.
+    :func:`~eawf.workflow.verify.sandboxed_checks.run_checks_out_of_process`.
+    One floor check yields one ``CriterionView(source="floor")`` whose
+    single gate result mirrors the live run.
+
+    The pack never executes in the calling process. A floor check is
+    typically a whole test suite, and a suite that drives eawf's own RPCs
+    would otherwise reach the caller's live runtime directory and live
+    ledger -- writing the live state and driving the live dispatch loop
+    for real. The child interpreter is pinned to a throwaway sandbox
+    seeded from a snapshot of both, so the pack still reads a faithful
+    copy while every write dies with the sandbox.
 
     Each floor row's declared ``scope`` is honored before the run: a
     non-``all`` scope narrows the compiled argv to *wave*'s ``file_scopes``
@@ -1261,6 +1296,10 @@ def _build_floor_views(
             :func:`compute`'s ``repo_root``.
         fresh_evidence: Scope-filtered evidence rows (SHA-stale waivers
             already removed) used to suppress waived floor checks.
+        live_state_path: The live ``state.json`` the sandbox ledger is
+            snapshotted from, so the pack reads a faithful copy.
+            ``None`` seeds an empty ledger rather than guessing one from
+            the process environment.
 
     Returns:
         Per-floor-check :class:`CriterionView` rows. Empty list when
@@ -1276,7 +1315,12 @@ def _build_floor_views(
     scoped = _scope_compiled_floor_pack(compiled, checks_by_name, wave=wave, runner_cwd=runner_cwd)
     to_run = [c for c in scoped if not _floor_check_waived(c.name, fresh_evidence)]
     ran_views: dict[str, CriterionView] = {}
-    for check_spec, result in zip(to_run, run_checks(to_run, cwd=runner_cwd), strict=True):
+    floor_results = run_checks_out_of_process(
+        to_run,
+        cwd=runner_cwd,
+        live_state_path=live_state_path,
+    )
+    for check_spec, result in zip(to_run, floor_results, strict=True):
         # status literal closed by CheckResult validator: pass / fail / blocked.
         status = result.status or ("pass" if result.passed else "fail")
         ran_views[check_spec.name] = CriterionView(
@@ -1586,9 +1630,10 @@ def compute(
 
     * ``"deterministic"`` — gates compile via
       :func:`eawf.workflow.verify.compile.compile_gate` and run via
-      :func:`eawf.workflow.audit_dsl.runner.run_checks` with
-      *repo_root* as the cwd. Fresh waiver rows pre-empt the live
-      run so W11's operator override semantics still apply.
+      :func:`~eawf.workflow.verify.sandboxed_checks.run_checks_out_of_process`
+      with *repo_root* as the cwd, in a child interpreter pinned to a
+      throwaway sandbox. Fresh waiver rows pre-empt the live run so
+      W11's operator override semantics still apply.
     * ``"jury"`` / ``"attested"`` — evidence-row scoring (W06's
       original path); jury votes + operator attestations land in
       v0.4.1+.
@@ -1598,7 +1643,8 @@ def compute(
     :attr:`~eawf.platform.profiles.models.VerifyBlock.floor_checks`,
     each floor check compiles via
     :func:`~eawf.workflow.verify.compile.compile_floor_pack` and runs
-    through :func:`~eawf.workflow.audit_dsl.runner.run_checks`. Each
+    through
+    :func:`~eawf.workflow.verify.sandboxed_checks.run_checks_out_of_process`. Each
     floor check yields one ``CriterionView(source="floor")``. The
     floor pack does NOT render when the wave already carries typed
     CriterionSpec rows — typed specs are authoritative when present.
@@ -1692,6 +1738,12 @@ def compute(
         and not (waiver_mode == "disabled" and row.status == "waived")
     ]
 
+    # The caller's own store root names the live state directory, so the
+    # sandbox is snapshotted from the ledger THIS close is scoring rather
+    # than whatever the calling process happens to point at. A daemon
+    # serving several repositories would resolve the wrong one otherwise.
+    live_state_path = store_dir.parent / "state.json"
+
     spec_views, waived_gate_ids = _build_spec_views(
         criterion_specs,
         gate_specs,
@@ -1699,6 +1751,7 @@ def compute(
         runner_cwd=repo_root,
         prevalidated_gate_ids=prevalidated_gate_ids,
         gate_context=gate_context,
+        live_state_path=live_state_path,
     )
     legacy_views, legacy_warnings = _build_legacy_views(wave)
     # Profile-fed floor pack. Floor checks render only
@@ -1709,7 +1762,11 @@ def compute(
     floor_views: list[CriterionView] = []
     if not spec_views:
         floor_views = _build_floor_views(
-            verify_block, wave=wave, runner_cwd=repo_root, fresh_evidence=fresh_evidence
+            verify_block,
+            wave=wave,
+            runner_cwd=repo_root,
+            fresh_evidence=fresh_evidence,
+            live_state_path=live_state_path,
         )
 
     # Backlog-resolution close-gate (P30-I10 QUAL-2). Scores the wave's
