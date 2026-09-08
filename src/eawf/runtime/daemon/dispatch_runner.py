@@ -729,6 +729,84 @@ def persist_agent_output_chunk(
     return envelope.id
 
 
+@dataclass(frozen=True)
+class ForwardedOutputChunk:
+    """One externally forwarded output chunk after ingestion.
+
+    Attributes:
+        scope_id: The scope the chunk was routed to -- the session row's own
+            scope, which is the key the Watch tail filters on.
+        runtime_session_id: The runtime session id stamped on the persisted
+            chunk, or ``None`` when the session row carries none.
+        envelope_id: The appended envelope id, or ``None`` when the forwarded
+            text held no renderable line (a no-op rather than an empty row).
+    """
+
+    scope_id: str
+    runtime_session_id: str | None
+    envelope_id: str | None
+
+
+def persist_forwarded_output_chunk(
+    events_path: Path,
+    *,
+    state: State,
+    session_id: str,
+    seq: int,
+    text: str,
+) -> ForwardedOutputChunk:
+    """Persist one output chunk an external orchestrator forwarded for its session.
+
+    The ingestion half of the streaming seam. A session the daemon did not spawn
+    has no in-process stdout pipe behind it, so its Watch row renders honest
+    empty for the whole run unless whoever owns that process forwards the
+    output. This lands one forwarded batch as the very same
+    ``agent.output.chunk`` row the spawn path writes (through
+    :func:`persist_agent_output_chunk`), so the Watch reader cannot tell a
+    forwarded chunk from a spawned one.
+
+    Routing identity is read from the session row rather than taken from the
+    forwarder: the Watch tail filters chunks on scope AND runtime session id, so
+    resolving both from state is what guarantees a forwarded chunk reaches the
+    reader instead of landing in a scope nothing reads.
+
+    Args:
+        events_path: Path to ``event.jsonl`` for the canonical append.
+        state: Validated state carrying the session row (read-only).
+        session_id: Id of the :class:`~eawf.kernel.state.models.AgentSession`
+            the forwarded chunk belongs to.
+        seq: Per-session monotonic chunk index (0-based) so the chunk order is
+            reconstructible from the persisted rows.
+        text: The forwarded output text for this chunk.
+
+    Returns:
+        The resolved routing identity plus the appended envelope id (``None``
+        when the forwarded text held nothing renderable).
+
+    Raises:
+        KeyError: When *session_id* names no session in *state*.
+    """
+    session = state.agent_sessions.get(session_id)
+    if session is None:
+        raise KeyError(f"unknown agent session: {session_id}")
+    envelope_id = persist_agent_output_chunk(
+        events_path,
+        scope_id=session.scope_id,
+        session_id=session.runtime_session_id,
+        seq=seq,
+        text=text,
+    )
+    logger.info(
+        f"persist_forwarded_output_chunk session={session_id} scope={session.scope_id} "
+        f"seq={seq} envelope_id={envelope_id!r}"
+    )
+    return ForwardedOutputChunk(
+        scope_id=session.scope_id,
+        runtime_session_id=session.runtime_session_id,
+        envelope_id=envelope_id,
+    )
+
+
 def emit_runtime_switched(
     ctx: MethodContext,
     *,
