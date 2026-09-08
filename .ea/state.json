@@ -13650,6 +13650,21 @@
       "status": "done",
       "updated_at": "2026-09-08T16:26:56.884799Z"
     },
+    "P32-I01-W31": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W31",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W31",
+      "model": null,
+      "scope_id": "P32-I01-W31",
+      "status": "done",
+      "updated_at": "2026-09-08T16:34:21.485735Z"
+    },
     "P32-I01-W32": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -16166,6 +16181,21 @@
       "runtime_session_id": null,
       "scope_id": "P32-I01",
       "started_at": "2026-09-08T16:26:44.663368Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260908T163416.749038Z-operator-claude-1cd78b32-8f70-43f1-8049-7061a1d8a034": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-08T16:34:18.590811Z",
+      "id": "SES-20260908T163416.749038Z-operator-claude-1cd78b32-8f70-43f1-8049-7061a1d8a034",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01",
+      "started_at": "2026-09-08T16:34:16.749038Z",
       "status": "stale",
       "summary": "orphaned by daemon restart",
       "worktree_ids": []
@@ -21213,8 +21243,7 @@
   "current": {
     "active_session_ids": [],
     "active_wave_ids": [
-      "P32-I01-W28",
-      "P32-I01-W31"
+      "P32-I01-W28"
     ],
     "iter_id": "P32-I01",
     "phase_id": "P32",
@@ -38456,7 +38485,8 @@
         "P32-I01-W32",
         "P32-I01-W33",
         "P32-I01-W34",
-        "P32-I01-W35"
+        "P32-I01-W35",
+        "P32-I01-W36"
       ]
     },
     "P33-I01": {
@@ -39859,7 +39889,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-08T16:32:11.065996Z",
+  "updated_at": "2026-09-08T16:34:21.485918Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -169288,12 +169318,14 @@
     },
     "P32-I01-W31": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P32-I01-W36"
+      ],
       "claim_session_id": "SES-20260908T152605.245637Z-operator-claude-e5a24373-e961-4f21-8026-4e7eeba35595",
       "claimed_at": "2026-09-08T15:26:29.327974Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-08T16:34:21.485735Z",
+      "commit": "e633db9a3c75cf2b25d3b4061ef02425b622b58e",
+      "commit_identity_digest": "sha256:d5ab7bce7b7305f686df594875571261ef8b3eb07919525a68d8d702eeef841a",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion; typed criteria land at phase prep via spec sync",
         "waived_at": "2026-09-07T13:38:19.680016Z",
@@ -169362,13 +169394,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-07T13:38:19.823229Z",
-      "outcome": null,
+      "outcome": "Session-close events project into typed telemetry rows behind an event payload schema bump, with a pre-bump payload rejected rather than projected empty; the live corpus stays empty until W36 lands the emitter.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -170027,6 +170059,147 @@
         }
       ],
       "title": "Route the deterministic floor pack out of process",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W36": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-08T16:33:49.971071Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W31"
+      ],
+      "description": "W31 landed the projector that turns session-close events into typed telemetry rows and proved it against a fixture event log, but nothing in the runtime emits that event, so a live rebuild still reports zero sessions. The projector is correct over a corpus no producer writes. The emitter belongs beside emit_dispatch_cost in dispatch_runner.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon",
+        "tests/integration/observability"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/observability/test_session_close_emitter.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/observability/test_session_close_emitter.py",
+              "-k",
+              "live_rebuild",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W36",
+      "intent": {
+        "desired_outcome": "a real session close emits the event and a live rebuild reports a non zero session count",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Emit the session-close event from the daemon when a session terminates|Prove a live rebuild after real session closes reports a non zero session count with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "Nothing emits the session-close event, so the telemetry projector reads an empty live corpus",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-08T16:33:50.166415Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "test_session_close_emits_event asserts one typed session-close event per terminating session carrying session id, open and close timestamps and runtime, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "one typed session-close event per terminating session, carrying session id, open and close timestamps and runtime",
+            "observe": "emits",
+            "quantifier": "single"
+          },
+          "text": "The daemon emits the typed session-close event when a session terminates, written beside the existing dispatch-cost emitter so every terminal session path produces exactly one event carrying the session id, its open and close timestamps and its runtime.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_live_rebuild_reports_sessions drives real session closes, rebuilds over the emitted log and asserts a non zero session count with durations matching the emitted timestamps, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the observability suite rebuilding session rows over an event log written by the runtime itself",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A rebuild over the event log the runtime actually wrote reports a non zero session count: driving real session opens and closes and then rebuilding yields one row per closed session with durations matching the emitted timestamps, closing the gap where the projector was correct only over a hand-authored fixture.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Emit the session-close event the telemetry projector reads",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
