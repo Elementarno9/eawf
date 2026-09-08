@@ -1,0 +1,937 @@
+{
+  "actuals": {
+    "P01-I01-W01": {
+      "current_store_record_id": "ACT-P01-I01-W01-1",
+      "id": "ACT-P01-I01-W01",
+      "scope_id": "P01-I01-W01",
+      "status": "recorded",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "P01-I01-W02": {
+      "current_store_record_id": "ACT-P01-I01-W02-1",
+      "id": "ACT-P01-I01-W02",
+      "scope_id": "P01-I01-W02",
+      "status": "recorded",
+      "updated_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  "agent_sessions": {
+    "S001": {
+      "id": "S001",
+      "role": "executor",
+      "runtime": "claude",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed"
+    },
+    "S002": {
+      "id": "S002",
+      "role": "executor",
+      "runtime": "claude",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed"
+    }
+  },
+  "artifacts": {
+    "ART-01": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "ART-01",
+      "kind": "research",
+      "uri": ".ea/artifacts/research/ART-01.md",
+      "urn": "urn:eawf:artifact:ART-01"
+    },
+    "ART-02": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "ART-02",
+      "kind": "research",
+      "uri": ".ea/artifacts/research/ART-02.md",
+      "urn": "urn:eawf:artifact:ART-02"
+    }
+  },
+  "audits": {
+    "A001": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A001",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A002": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A002",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A003": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A003",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A004": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A004",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A005": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A005",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A006": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A006",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A007": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A007",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A008": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A008",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A009": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A009",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A010": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A010",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A011": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A011",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A012": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A012",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A013": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A013",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A014": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A014",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A015": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A015",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A016": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A016",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A017": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A017",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A018": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A018",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A019": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A019",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A020": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A020",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A021": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A021",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A022": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A022",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A023": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A023",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A024": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A024",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A025": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A025",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A026": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A026",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A027": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A027",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A028": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A028",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A029": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A029",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A030": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A030",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A031": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A031",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A032": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A032",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A033": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A033",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A034": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A034",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A035": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A035",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A036": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A036",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A037": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A037",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A038": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A038",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A039": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A039",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A040": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A040",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A041": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A041",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A042": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A042",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A043": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A043",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A044": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A044",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A045": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A045",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A046": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A046",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A047": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A047",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A048": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A048",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A049": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A049",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A050": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A050",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A051": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A051",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A052": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A052",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A053": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A053",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A054": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A054",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A055": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A055",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A056": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A056",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A057": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A057",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A058": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A058",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A059": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A059",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A060": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A060",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A061": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A061",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A062": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A062",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A063": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A063",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A064": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A064",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A065": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A065",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A066": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A066",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A067": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A067",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A068": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A068",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A069": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A069",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A070": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A070",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A071": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A071",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A072": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A072",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A073": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A073",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A074": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A074",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A075": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A075",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A076": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A076",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A077": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A077",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A078": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A078",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A079": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A079",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A080": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A080",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A081": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A081",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    }
+  },
+  "backlog": {
+    "B001": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "B001",
+      "scope_id": "DEMO",
+      "status": "open",
+      "title": "Backlog B001"
+    },
+    "B002": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "B002",
+      "scope_id": "DEMO",
+      "status": "open",
+      "title": "Backlog B002"
+    }
+  },
+  "claims": null,
+  "close_attempts": {
+    "CA01": {
+      "id": "CA01",
+      "outcome": "integrated",
+      "requested_at": "2026-01-01T00:00:00Z",
+      "status": "terminal",
+      "wave_id": "P01-I01-W01"
+    }
+  },
+  "current": {
+    "iter_id": "P01-I01",
+    "phase_id": "P01",
+    "wave_id": null
+  },
+  "decisions": {
+    "D01": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "D01",
+      "rationale": "recorded at the time of the call",
+      "scope_id": "DEMO",
+      "status": "accepted",
+      "title": "Decision D01"
+    },
+    "D02": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "D02",
+      "rationale": "recorded at the time of the call",
+      "scope_id": "DEMO",
+      "status": "accepted",
+      "title": "Decision D02"
+    }
+  },
+  "dispatch_paused": false,
+  "estimates": {
+    "P01-I01-W01": {
+      "confidence": "medium",
+      "current_store_record_id": "EST-P01-I01-W01-1",
+      "display": "M",
+      "id": "EST-P01-I01-W01",
+      "reference_class": "wave",
+      "scope_id": "P01-I01-W01",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "P01-I01-W02": {
+      "confidence": "medium",
+      "current_store_record_id": "EST-P01-I01-W02-1",
+      "display": "M",
+      "id": "EST-P01-I01-W02",
+      "reference_class": "wave",
+      "scope_id": "P01-I01-W02",
+      "updated_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  "fleet_run": null,
+  "goals": {
+    "G01": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "G01",
+      "scope_id": "DEMO",
+      "status": "active",
+      "summary": "keep the census total",
+      "title": "Goal G01"
+    }
+  },
+  "health": null,
+  "hypotheses": null,
+  "incidents": {
+    "INC01": {
+      "cause": "a gate was mis-wired",
+      "id": "INC01",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "scope_id": "DEMO",
+      "severity": "low",
+      "status": "closed",
+      "title": "Incident INC01"
+    }
+  },
+  "indexes": {},
+  "iters": {
+    "P01-I01": {
+      "audit_id": "A001",
+      "id": "P01-I01",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "phase_id": "P01",
+      "status": "CLOSED",
+      "title": "Close P01-I01"
+    },
+    "P01-I02": {
+      "audit_id": "A002",
+      "id": "P01-I02",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "phase_id": "P01",
+      "status": "CLOSED",
+      "title": "Close P01-I02"
+    },
+    "P02-I01": {
+      "audit_id": "A999",
+      "id": "P02-I01",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "phase_id": "P02",
+      "status": "CLOSED",
+      "title": "Close P02-I01"
+    }
+  },
+  "mcp_grants": null,
+  "mcp_servers": null,
+  "memory_index": {
+    "MEM01": {
+      "confidence": "high",
+      "id": "MEM01",
+      "review_due": "2026-01-01T00:00:00Z",
+      "scope_id": "DEMO",
+      "status": "active",
+      "store_record_id": "MEM01-1",
+      "summary": "memory MEM01",
+      "tier": "project"
+    }
+  },
+  "open_questions": null,
+  "outcomes": null,
+  "phases": {
+    "P01": {
+      "id": "P01",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "scope_id": "P01",
+      "status": "CLOSED",
+      "title": "Deliver P01"
+    },
+    "P02": {
+      "id": "P02",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "scope_id": "P02",
+      "status": "CLOSED",
+      "title": "Deliver P02"
+    }
+  },
+  "plugins": {},
+  "project": {
+    "code": "DEMO",
+    "profiles": [
+      "python"
+    ],
+    "title": "Census demo project"
+  },
+  "sandbox_policies": {
+    "SP01": {
+      "granted_at": "2026-01-01T00:00:00Z",
+      "id": "SP01",
+      "scope_id": "DEMO",
+      "scope_kind": "project"
+    }
+  },
+  "schema_version": "1.19",
+  "scope_kind": "project",
+  "tracks": null,
+  "updated_at": "2026-01-01T00:00:00Z",
+  "urn": "urn:eawf:project:DEMO",
+  "wave_dependency_barriers": {},
+  "wave_dependency_bindings": {
+    "P01-I01-W02:P01-I01-W01": {
+      "bound_at": "2026-01-01T00:00:00Z",
+      "dep_wave_id": "P01-I01-W01",
+      "wave_id": "P01-I01-W02"
+    }
+  },
+  "wave_integrations": {
+    "WI01": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WI01",
+      "kind": "cherry_pick",
+      "status": "integrated",
+      "wave_id": "P01-I01-W01"
+    }
+  },
+  "waves": {
+    "P01-I01-W01": {
+      "id": "P01-I01-W01",
+      "iter_id": "P01-I01",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "status": "CLOSED",
+      "title": "Land P01-I01-W01"
+    },
+    "P01-I01-W02": {
+      "id": "P01-I01-W02",
+      "iter_id": "P01-I01",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "status": "CLOSED",
+      "title": "Land P01-I01-W02"
+    },
+    "P02-I01-W01": {
+      "id": "P02-I01-W01",
+      "iter_id": "P02-I01",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "status": "CLOSED",
+      "title": "Land P02-I01-W01"
+    }
+  },
+  "workspace": null,
+  "worktrees": {
+    "WT01": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-WT01",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT01",
+      "path": ".ea/worktrees/WT01",
+      "status": "removed",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT02": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-WT02",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT02",
+      "path": ".ea/worktrees/WT02",
+      "status": "removed",
+      "wave_id": "P01-I01-W01"
+    }
+  }
+}
