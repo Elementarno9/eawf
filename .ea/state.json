@@ -39583,7 +39583,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-08T14:59:11.922436Z",
+  "updated_at": "2026-09-08T15:13:03.887675Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -168089,19 +168089,40 @@
       "gates": [
         {
           "args": {
-            "criterion": "placeholder",
-            "file_scopes": [
-              "src/eawf/runtime/daemon/methods/spec.py",
-              "src/eawf/workflow/lifecycle",
-              "src/eawf/surfaces/cli/commands",
-              "tests/integration/workflow/lifecycle"
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/lifecycle/test_gate_repoint.py",
+              "-q"
             ],
-            "pattern": "placeholder"
+            "scope": "touched"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-01",
-          "id": "GATE-01",
-          "kind": "criterion_in_diff",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/lifecycle/test_gate_repoint.py",
+              "-k",
+              "reruns_green",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
           "policy": "block",
           "required": true,
           "timeout_s": null
@@ -168133,24 +168154,48 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "GATE-01"
+            "G-01"
           ],
           "id": "CR-01",
-          "kind": "converted",
-          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
-          "oracle_tier": 1,
-          "quality_dimension": "functional_suitability",
+          "kind": "behavioral",
+          "measurable_signal": "test_repoint_closed_wave_gate_argv asserts the mutation rewrites a closed wave's gate argv while criteria, verdict and closed_at compare equal before and after, and asserts a non-argv edit raises, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "maintainability",
           "required": true,
           "response": {
             "expected": null,
-            "gate_ref": "criterion_in_diff",
+            "gate_ref": null,
             "jury_reason": null,
-            "locus": "source",
-            "object": "placeholder replaced by a typed spec sync when the phase is prepped",
-            "observe": "file_matches",
+            "locus": "pytest",
+            "object": "zero from the lifecycle test suite covering the closed-wave gate-argv repoint mutation and its refusal of non-argv edits",
+            "observe": "exits",
             "quantifier": "single"
           },
-          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "text": "A bounded repoint path exists for a CLOSED wave's recorded gate argv: a dedicated audited mutation rewrites the argv of the gates on a closed wave without reopening it and without touching the wave's criteria, verdict or closed_at, and it refuses any edit that changes anything other than the gate argv.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_repointed_gate_reruns_green asserts the pre-repoint argv exits rc=4 and the post-repoint argv exits zero for the same closed wave, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the lifecycle test suite replaying a repointed closed-wave gate against the live test tree",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A gate repointed from a retired test path to its live path re-runs green: replaying the repointed gate argv of a previously closed P31 wave exits zero, where replaying the argv as originally recorded exits rc=4 because the path no longer exists.",
           "waiver_reason": null
         }
       ],
@@ -168185,19 +168230,59 @@
       "gates": [
         {
           "args": {
-            "criterion": "placeholder",
-            "file_scopes": [
-              "src/eawf/workflow/verify",
-              "src/eawf/runtime/daemon/methods",
-              "src/eawf/kernel/spec",
-              "tests/integration/workflow/verify"
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/verify/test_falsifiable_gates.py",
+              "-q"
             ],
-            "pattern": "placeholder"
+            "scope": "touched"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-01",
-          "id": "GATE-01",
-          "kind": "criterion_in_diff",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/verify/test_close_receipts.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/verify/test_close_receipts.py",
+              "-k",
+              "end_to_end",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
           "policy": "block",
           "required": true,
           "timeout_s": null
@@ -168229,24 +168314,72 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "GATE-01"
+            "G-01"
           ],
           "id": "CR-01",
-          "kind": "converted",
-          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
-          "oracle_tier": 1,
-          "quality_dimension": "functional_suitability",
+          "kind": "behavioral",
+          "measurable_signal": "test_replaced_gates_red_on_seeded_defect asserts each replaced gate exits non-zero on its seeded defect and zero on a clean tree, and test_credentials_probe_sunset asserts the credentials signal is absent from the derived required set, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "reliability",
           "required": true,
           "response": {
             "expected": null,
-            "gate_ref": "criterion_in_diff",
+            "gate_ref": null,
             "jury_reason": null,
-            "locus": "source",
-            "object": "placeholder replaced by a typed spec sync when the phase is prepped",
-            "observe": "file_matches",
+            "locus": "pytest",
+            "object": "zero from the verify test suite asserting each replaced gate reds on a seeded defect and the credentials probe is sunset",
+            "observe": "exits",
             "quantifier": "single"
           },
-          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "text": "Each of the three unfalsifiable required gates is replaced by a check that can red, or sunset outright: the git log invocation and the release tag dry run are re-argved so a seeded defect makes each exit non-zero, and the credentials probe is sunset because no shipped checkpoint target declares a credential_handle and every one authenticates by OIDC.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_close_persists_receipt_per_gate asserts the receipt count equals the executed gate count and each row carries gate id, argv, exit status and timestamp, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the verify test suite asserting one persisted receipt per gate executed by a close",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Every gate a close executes persists a receipt: a close writes one durable receipt row per executed gate carrying the gate id, the argv, the exit status and the timestamp, so the verification history of a closed wave is reconstructable from the store alone.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "behavioral",
+          "measurable_signal": "test_close_end_to_end_receipts_and_falsifiable_gates asserts an end-to-end wave close persists a receipt per executed gate and that every required gate reds under its seeded defect, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the end-to-end verify test covering receipt persistence and gate falsifiability across one wave close",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Both properties hold together over a real close: driving one wave close end to end persists a receipt for every gate and none of the executed required gates is one that cannot red, proven in a single test rather than by the two unit paths separately.",
           "waiver_reason": null
         }
       ],
@@ -168280,18 +168413,40 @@
       "gates": [
         {
           "args": {
-            "criterion": "placeholder",
-            "file_scopes": [
-              "src/eawf/runtime/daemon/gate_execution.py",
-              "src/eawf/runtime/daemon/methods",
-              "tests/integration/runtime/daemon"
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/daemon/test_gate_isolation.py",
+              "-q"
             ],
-            "pattern": "placeholder"
+            "scope": "touched"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-01",
-          "id": "GATE-01",
-          "kind": "criterion_in_diff",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/daemon/test_gate_isolation.py",
+              "-k",
+              "byte_identical",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
           "policy": "block",
           "required": true,
           "timeout_s": null
@@ -168323,24 +168478,48 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "GATE-01"
+            "G-01"
           ],
           "id": "CR-01",
-          "kind": "converted",
-          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
-          "oracle_tier": 1,
-          "quality_dimension": "functional_suitability",
+          "kind": "behavioral",
+          "measurable_signal": "test_gate_child_binds_isolated_runtime_dir asserts the gate child's resolved runtime directory differs from the live runtime directory and is seeded from its snapshot, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "security",
           "required": true,
           "response": {
             "expected": null,
-            "gate_ref": "criterion_in_diff",
+            "gate_ref": null,
             "jury_reason": null,
-            "locus": "source",
-            "object": "placeholder replaced by a typed spec sync when the phase is prepped",
-            "observe": "file_matches",
+            "locus": "pytest",
+            "object": "zero from the daemon test suite covering isolated runtime-directory binding for close-gate children",
+            "observe": "exits",
             "quantifier": "single"
           },
-          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "text": "Gate execution binds an isolated runtime directory seeded from a snapshot of the live one: the child process launched for a close gate resolves its runtime directory to the isolated copy rather than inheriting the live path, so a gate suite exercising the daemon's own RPCs reaches the copy.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_live_state_byte_identical_after_mutating_gate asserts the live state.json bytes, event store bytes and dispatch_paused value compare equal before and after a state-mutating close gate, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "security",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the daemon test suite asserting live-state byte equality across a state-mutating close gate",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Live project state is byte identical after a state mutating gate: running a close gate whose suite flips the dispatch pause flag and drives the dispatch path leaves the live state.json, event store and dispatch_paused flag unchanged, and spawns no agent against the main checkout.",
           "waiver_reason": null
         }
       ],
@@ -168375,19 +168554,59 @@
       "gates": [
         {
           "args": {
-            "criterion": "placeholder",
-            "file_scopes": [
-              "src/eawf/surfaces/cli/commands/release.py",
-              "src/eawf/workflow/release",
-              "tests/unit/workflow/release",
-              "tests/integration/surfaces/cli"
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/surfaces/cli/test_release_cli.py",
+              "-q"
             ],
-            "pattern": "placeholder"
+            "scope": "touched"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-01",
-          "id": "GATE-01",
-          "kind": "criterion_in_diff",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/workflow/release",
+              "-k",
+              "canonical",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/workflow/release",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
           "policy": "block",
           "required": true,
           "timeout_s": null
@@ -168419,24 +168638,72 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "GATE-01"
+            "G-01"
           ],
           "id": "CR-01",
-          "kind": "converted",
-          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
-          "oracle_tier": 1,
-          "quality_dimension": "functional_suitability",
+          "kind": "behavioral",
+          "measurable_signal": "test_every_release_verb_has_cli_subcommand asserts the set of registered release RPC verbs equals the set reachable from the release CLI, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "operability",
           "required": true,
           "response": {
             "expected": null,
-            "gate_ref": "criterion_in_diff",
+            "gate_ref": null,
             "jury_reason": null,
-            "locus": "source",
-            "object": "placeholder replaced by a typed spec sync when the phase is prepped",
-            "observe": "file_matches",
+            "locus": "pytest",
+            "object": "zero from the CLI test suite asserting parity between registered release verbs and release CLI subcommands",
+            "observe": "exits",
             "quantifier": "single"
           },
-          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "text": "Every registered release RPC verb is reachable from the release CLI: each of the nine registered verbs has a corresponding CLI subcommand that dispatches to it, so no release verb remains substrate with observe target as its only caller.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_release_concept_names_are_canonical asserts each of the four retired spellings is absent from the release subsystem and the canonical name resolves, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the release test suite asserting one canonical name per renamed concept pair and no surviving adapter shim",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The four near colliding concept pairs are renamed to one canonical name each: the receipt producer and observation pairs no longer carry two names for one concept, and the retired spellings are absent from the release subsystem rather than kept as adapter shims.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "behavioral",
+          "measurable_signal": "test_release_behaviour_tests_are_mirrored asserts no release behaviour test remains under the kernel mirror and the placement lint exits zero over the release subsystem, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the release test suite and the placement lint over the refiled release behaviour tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The seven release behaviour tests are refiled under their real mirror: they live under the release workflow mirror rather than the kernel mirror, and the test-placement lint passes over the release subsystem.",
           "waiver_reason": null
         }
       ],
@@ -168471,19 +168738,52 @@
       "gates": [
         {
           "args": {
-            "criterion": "placeholder",
-            "file_scopes": [
-              "src/eawf/surfaces/cli/commands/hook.py",
-              "src/eawf/runtime/daemon/dispatch_runner.py",
-              "src/eawf/surfaces/tui/modes",
-              "tests/integration/surfaces"
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/surfaces/test_agent_output_events.py",
+              "-q"
             ],
-            "pattern": "placeholder"
+            "scope": "touched"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-01",
-          "id": "GATE-01",
-          "kind": "criterion_in_diff",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/surfaces/test_agent_output_events.py",
+              "-k",
+              "watch_reader",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "evidence"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-03",
+          "kind": "affordance_parity",
           "policy": "block",
           "required": true,
           "timeout_s": null
@@ -168515,24 +168815,49 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "GATE-01"
+            "G-01"
           ],
           "id": "CR-01",
-          "kind": "converted",
-          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
-          "oracle_tier": 1,
-          "quality_dimension": "functional_suitability",
+          "kind": "behavioral",
+          "measurable_signal": "test_hook_ingests_agent_output_event asserts a well-formed external output chunk envelope is persisted and test_hook_rejects_malformed_output_event asserts a malformed envelope raises with nothing persisted, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "maintainability",
           "required": true,
           "response": {
             "expected": null,
-            "gate_ref": "criterion_in_diff",
+            "gate_ref": null,
             "jury_reason": null,
-            "locus": "source",
-            "object": "placeholder replaced by a typed spec sync when the phase is prepped",
-            "observe": "file_matches",
+            "locus": "pytest",
+            "object": "zero from the surfaces test suite covering external agent-output-event ingestion and malformed-envelope rejection",
+            "observe": "exits",
             "quantifier": "single"
           },
-          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "text": "The hook ingestion seam accepts an agent output event: the same path that already ingests an external agent end report accepts a typed output chunk envelope for a session the daemon did not spawn, and rejects a malformed envelope rather than persisting a partial row.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02",
+            "G-03"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_forwarded_chunk_reaches_watch_reader asserts the watch reader returns the forwarded chunk for an externally created session where it previously returned empty, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the surfaces test suite asserting a forwarded output chunk is readable by the agent watch surface",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A forwarded chunk reaches the watch reader: after an external orchestrator forwards an output event for its session, the agent watch surface reads that chunk for the session rather than rendering honest empty, so the row and its stream agree.",
           "waiver_reason": null
         }
       ],
@@ -168567,19 +168892,40 @@
       "gates": [
         {
           "args": {
-            "criterion": "placeholder",
-            "file_scopes": [
-              "tools/commit_prefix_lint.py",
-              "src/eawf/kernel/config",
-              "tests/unit",
-              "tests/integration"
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_commit_prefix_lint_amend.py",
+              "-q"
             ],
-            "pattern": "placeholder"
+            "scope": "touched"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-01",
-          "id": "GATE-01",
-          "kind": "criterion_in_diff",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit",
+              "-k",
+              "warn_once",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
           "policy": "block",
           "required": true,
           "timeout_s": null
@@ -168611,24 +168957,48 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "GATE-01"
+            "G-01"
           ],
           "id": "CR-01",
-          "kind": "converted",
-          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
-          "oracle_tier": 1,
-          "quality_dimension": "functional_suitability",
+          "kind": "behavioral",
+          "measurable_signal": "test_commit_cap_accepts_amend_adding_bytes asserts the lint exits zero for an amend that adds deliverable bytes and test_commit_cap_rejects_second_commit asserts it exits non-zero for a second commit on the same wave, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "operability",
           "required": true,
           "response": {
             "expected": null,
-            "gate_ref": "criterion_in_diff",
+            "gate_ref": null,
             "jury_reason": null,
-            "locus": "source",
-            "object": "placeholder replaced by a typed spec sync when the phase is prepped",
-            "observe": "file_matches",
+            "locus": "pytest",
+            "object": "zero from the commit-prefix-lint test suite covering the amend-accepted and second-commit-rejected pair",
+            "observe": "exits",
             "quantifier": "single"
           },
-          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "text": "The wave commit cap recognises an amend: amending a wave commit so it adds deliverable bytes passes the commit prefix lint, while a genuine second commit for the same wave still fails, so the cap distinguishes the two instead of grepping the log and rejecting both.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_config_warn_once_flag_warns_once asserts the config copy of the anchor fallback flag emits its warning exactly once across repeated calls, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the config test suite covering the warn-once behaviour of the duplicated anchor fallback flag",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The config copy of the anchor fallback warn once flag carries a regression test: the duplicated flag in the daemon state context and in config both assert their warn-once behaviour, so a symbol move that breaks either copy reds instead of passing silently.",
           "waiver_reason": null
         }
       ],
@@ -168662,18 +169032,38 @@
       "gates": [
         {
           "args": {
-            "criterion": "placeholder",
-            "file_scopes": [
-              "src/eawf/observability/telemetry",
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
               "tests/unit/observability/telemetry",
-              "tests/integration/observability"
+              "-q"
             ],
-            "pattern": "placeholder"
+            "scope": "touched"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-01",
-          "id": "GATE-01",
-          "kind": "criterion_in_diff",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/observability",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
           "policy": "block",
           "required": true,
           "timeout_s": null
@@ -168705,24 +169095,48 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "GATE-01"
+            "G-01"
           ],
           "id": "CR-01",
-          "kind": "converted",
-          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
-          "oracle_tier": 1,
+          "kind": "behavioral",
+          "measurable_signal": "test_session_close_event_projects_typed_row asserts one typed session row per session close event and test_pre_bump_payload_is_rejected asserts a pre-bump payload raises rather than projecting empty, under pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": {
             "expected": null,
-            "gate_ref": "criterion_in_diff",
+            "gate_ref": null,
             "jury_reason": null,
-            "locus": "source",
-            "object": "placeholder replaced by a typed spec sync when the phase is prepped",
-            "observe": "file_matches",
+            "locus": "pytest",
+            "object": "zero from the telemetry test suite covering typed session-row projection and pre-bump payload handling",
+            "observe": "exits",
             "quantifier": "single"
           },
-          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "text": "Session close events derive typed session rows behind an event payload schema bump: the projection turns each session close event into a typed row, and the payload schema version is bumped so a pre-bump event log is either migrated or rejected rather than silently projected as empty.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_rebuild_over_fixture_log_yields_sessions asserts the rebuilt session count is greater than zero and each row's duration equals its open-to-close timestamp difference, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the telemetry integration suite rebuilding session rows over a fixture event log",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A rebuild over a fixture event log yields a non zero session count with correct durations: the rebuild reports more than zero sessions where it previously reported zero, and each row's duration equals the difference between its session open and close event timestamps.",
           "waiver_reason": null
         }
       ],
@@ -168757,19 +169171,59 @@
       "gates": [
         {
           "args": {
-            "criterion": "placeholder",
-            "file_scopes": [
-              "src/eawf/workflow/audit_dsl",
-              "src/eawf/runtime/sandbox",
-              "tests/unit/workflow/audit_dsl",
-              "tests/integration/runtime/sandbox"
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/workflow/audit_dsl/test_gate_argv_validation.py",
+              "-q"
             ],
-            "pattern": "placeholder"
+            "scope": "touched"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-01",
-          "id": "GATE-01",
-          "kind": "criterion_in_diff",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/workflow/audit_dsl/test_gate_argv_validation.py",
+              "-k",
+              "child_env",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/sandbox/test_child_env_scrub.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
           "policy": "block",
           "required": true,
           "timeout_s": null
@@ -168801,24 +169255,72 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "GATE-01"
+            "G-01"
           ],
           "id": "CR-01",
-          "kind": "converted",
-          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
-          "oracle_tier": 1,
-          "quality_dimension": "functional_suitability",
+          "kind": "behavioral",
+          "measurable_signal": "test_check_builder_validates_gate_argv asserts a crafted argv outside the allowlist raises before any child process is spawned, under pytest exit zero",
+          "oracle_tier": 4,
+          "quality_dimension": "security",
           "required": true,
           "response": {
             "expected": null,
-            "gate_ref": "criterion_in_diff",
+            "gate_ref": null,
             "jury_reason": null,
-            "locus": "source",
-            "object": "placeholder replaced by a typed spec sync when the phase is prepped",
-            "observe": "file_matches",
+            "locus": "pytest",
+            "object": "a validation error from the audit-DSL check builder for a crafted argv outside the allowlist, with no child process spawned",
+            "observe": "raises",
             "quantifier": "single"
           },
-          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "text": "The audit-DSL check builder calls validate_gate_argv before running a command gate, so an argv assembled from free-form agent-supplied directives is checked against the allowlist rather than executed unvalidated.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_command_gate_child_env_is_scrubbed asserts the gate child environment equals the build_child_env output and carries no credential-bearing parent variable, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "security",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the audit-DSL test suite asserting the command gate child environment comes from build_child_env",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The command gate builds its child environment through build_child_env instead of passing the full parent environment, so the child receives the scrubbed environment that helper already produces.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "behavioral",
+          "measurable_signal": "test_close_child_rejects_crafted_argv_and_scrubs_env asserts the out-of-process close child rejects a crafted argv and exposes no credential variable, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "security",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the sandbox test suite covering argv rejection and environment scrubbing on the out-of-process close path",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Both hold on the out-of-process close path that P31 routed through the same runner: a crafted argv is rejected and credentials are absent from the child environment when the close child runs a command gate, not only when the audit skill does.",
           "waiver_reason": null
         }
       ],
@@ -168852,18 +169354,40 @@
       "gates": [
         {
           "args": {
-            "criterion": "placeholder",
-            "file_scopes": [
-              "pyproject.toml",
-              "tools/bundle_data.py",
-              "tests/integration/test_packaging.py"
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_packaging.py",
+              "-k",
+              "data_already_present",
+              "-q"
             ],
-            "pattern": "placeholder"
+            "scope": "touched"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-01",
-          "id": "GATE-01",
-          "kind": "criterion_in_diff",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_packaging.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
           "policy": "block",
           "required": true,
           "timeout_s": null
@@ -168895,24 +169419,48 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "GATE-01"
+            "G-01"
           ],
           "id": "CR-01",
-          "kind": "converted",
-          "measurable_signal": "placeholder replaced by a typed spec sync when the phase is prepped",
-          "oracle_tier": 1,
-          "quality_dimension": "functional_suitability",
+          "kind": "behavioral",
+          "measurable_signal": "test_wheel_builds_with_data_already_present asserts the wheel build exits zero in a tree where src/eawf/_data exists before the build, and asserts the built wheel carries exactly one src/eawf/_data member, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "reliability",
           "required": true,
           "response": {
             "expected": null,
-            "gate_ref": "criterion_in_diff",
+            "gate_ref": null,
             "jury_reason": null,
-            "locus": "source",
-            "object": "placeholder replaced by a typed spec sync when the phase is prepped",
-            "observe": "file_matches",
+            "locus": "pytest",
+            "object": "zero from the packaging test suite building a wheel over a tree whose bundle_data output is already present in place",
+            "observe": "exits",
             "quantifier": "single"
           },
-          "text": "placeholder replaced by a typed spec sync when the phase is prepped",
+          "text": "The wheel target no longer force-includes a path that the package glob already covers: src/eawf/_data is delivered by exactly one of the two mechanisms, so a uv build --wheel run in a tree where the bundle_data hatch hook has already written src/eawf/_data in place exits zero instead of failing with a duplicate archive member.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_repeat_wheel_build_succeeds runs the wheel build twice against one tree and asserts both invocations exit zero with the same archive member list, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from both invocations of the repeated wheel build in the packaging test suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A repeated wheel build in the same working tree succeeds: building twice in a row, which is the exact sequence that reds today because the first build leaves src/eawf/_data behind for the second, exits zero both times and yields byte-identical member lists.",
           "waiver_reason": null
         }
       ],
@@ -168945,17 +169493,40 @@
       "gates": [
         {
           "args": {
-            "criterion": "Placeholder",
-            "file_scopes": [
-              "src/eawf/surfaces/cli/commands/lifecycle_iter.py",
-              "tests/unit/surfaces/cli/test_lifecycle_iter_close.py"
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/surfaces/cli/test_lifecycle_iter_close.py",
+              "-q"
             ],
-            "pattern": "Placeholder"
+            "scope": "touched"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-01",
-          "id": "GATE-01",
-          "kind": "criterion_in_diff",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/surfaces/cli/test_lifecycle_iter_close.py",
+              "-k",
+              "sub_floor",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
           "policy": "block",
           "required": true,
           "timeout_s": null
@@ -168989,24 +169560,48 @@
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
           "gate_ids": [
-            "GATE-01"
+            "G-01"
           ],
           "id": "CR-01",
-          "kind": "converted",
-          "measurable_signal": "Placeholder criterion replaced by a typed spec sync during P32 prep",
-          "oracle_tier": 1,
+          "kind": "behavioral",
+          "measurable_signal": "test_fallback_close_passes_odr_dials asserts the fallback close_iter call receives odr_floor and odr_blocking equal to the loaded verify block values rather than the defaults, under pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "functional_suitability",
           "required": true,
           "response": {
             "expected": null,
-            "gate_ref": "criterion_in_diff",
+            "gate_ref": null,
             "jury_reason": null,
-            "locus": "source",
-            "object": "Placeholder criterion replaced by a typed spec sync during P32 prep",
-            "observe": "file_matches",
+            "locus": "pytest",
+            "object": "zero from the iter-close CLI test suite asserting the fallback path forwards the verify block ODR dials",
+            "observe": "exits",
             "quantifier": "single"
           },
-          "text": "Placeholder criterion replaced by a typed spec sync during P32 prep",
+          "text": "The CLI in-process portalocker fallback passes odr_floor and odr_blocking from the loaded verify block into its close_iter call, using the same verify block it already holds for require_iter_audit_accepted, so the dials no longer default to the unenforced value on that path.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_sub_floor_close_raises_through_fallback asserts a sub-floor iter close raises on the fallback path and that the daemon path raises identically for the same input, under pytest exit zero",
+          "oracle_tier": 4,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "a close rejection from the fallback mutator for a sub-floor iter, matching the daemon path for the same input",
+            "observe": "raises",
+            "quantifier": "single"
+          },
+          "text": "A sub-floor iter close raises through the fallback mutator: closing an iter whose ODR sits below the configured floor is rejected on the portalocker fallback path exactly as it is on the daemon path, so the gate no longer enforces purely by whether the daemon was reachable.",
           "waiver_reason": null
         }
       ],
