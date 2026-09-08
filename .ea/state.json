@@ -13530,6 +13530,21 @@
       "status": "done",
       "updated_at": "2026-09-08T15:59:45.732117Z"
     },
+    "P32-I01-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W04",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W04",
+      "model": null,
+      "scope_id": "P32-I01-W04",
+      "status": "done",
+      "updated_at": "2026-09-08T17:43:47.102781Z"
+    },
     "P32-I01-W09": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -16285,15 +16300,15 @@
       "claimed_wave_ids": [
         "P32-I01-W37"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-08T17:43:42.037230Z",
       "id": "SES-20260908T165638.085920Z-operator-claude-63729f15-3ba2-4a70-bb18-7f9de7cea4b9",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01",
       "started_at": "2026-09-08T16:56:38.085920Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -21337,11 +21352,8 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260908T165638.085920Z-operator-claude-63729f15-3ba2-4a70-bb18-7f9de7cea4b9"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [
-      "P32-I01-W04",
       "P32-I01-W19",
       "P32-I01-W37"
     ],
@@ -39991,7 +40003,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-08T16:56:38.969649Z",
+  "updated_at": "2026-09-08T17:43:47.103029Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -164497,9 +164509,9 @@
       ],
       "claim_session_id": "SES-20260908T163548.538041Z-operator-claude-f64325b6-0e88-4d3f-892c-dac6898b1a93",
       "claimed_at": "2026-09-08T16:35:49.359424Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-08T17:43:47.102781Z",
+      "commit": "de9cb265daa3b1cdfb930d20b352a09fa56190ca",
+      "commit_identity_digest": "sha256:ddd8b2ea446578a4f56692f9b1cc423ef9bf115f02e79e398d8201f3cf731126",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:58:45.114304Z",
@@ -164615,13 +164627,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-03T17:58:45.115034Z",
-      "outcome": null,
+      "outcome": "The strict Track, Milestone, DeliveryBatch and Task models land on W03's identity grammar, with format_qualified_urn bound as the PlainSerializer for all ten typed URN aliases so it runs on every model_dump; the idle-surface gate returns to green at 202 with the formatter wired rather than the ceiling raised.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
