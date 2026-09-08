@@ -13724,6 +13724,21 @@
       "scope_id": "P32-I01-W34",
       "status": "done",
       "updated_at": "2026-09-08T15:43:53.114353Z"
+    },
+    "P32-I01-W36": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W36",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W36",
+      "model": null,
+      "scope_id": "P32-I01-W36",
+      "status": "done",
+      "updated_at": "2026-09-08T16:55:59.797770Z"
     }
   },
   "agent_sessions": {
@@ -16245,6 +16260,21 @@
       "runtime_session_id": null,
       "scope_id": "P32-I01",
       "started_at": "2026-09-08T16:41:05.559040Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260908T165554.261257Z-operator-claude-06f6b1d2-1ca1-4f05-9aae-91384f9c41e0": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-08T16:55:56.346574Z",
+      "id": "SES-20260908T165554.261257Z-operator-claude-06f6b1d2-1ca1-4f05-9aae-91384f9c41e0",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01",
+      "started_at": "2026-09-08T16:55:54.261257Z",
       "status": "stale",
       "summary": "orphaned by daemon restart",
       "worktree_ids": []
@@ -21293,8 +21323,7 @@
     "active_session_ids": [],
     "active_wave_ids": [
       "P32-I01-W04",
-      "P32-I01-W19",
-      "P32-I01-W36"
+      "P32-I01-W19"
     ],
     "iter_id": "P32-I01",
     "phase_id": "P32",
@@ -38538,7 +38567,8 @@
         "P32-I01-W34",
         "P32-I01-W35",
         "P32-I01-W36",
-        "P32-I01-W37"
+        "P32-I01-W37",
+        "P32-I01-W38"
       ]
     },
     "P33-I01": {
@@ -39941,7 +39971,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-08T16:41:18.419781Z",
+  "updated_at": "2026-09-08T16:55:59.797967Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -170120,9 +170150,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260908T163548.538041Z-operator-claude-f64325b6-0e88-4d3f-892c-dac6898b1a93",
       "claimed_at": "2026-09-08T16:35:51.020770Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-08T16:55:59.797770Z",
+      "commit": "c1e7829218b619dbfc8d486cd58ee5e29dae1078",
+      "commit_identity_digest": "sha256:1307179299ab46159d68ae715ad9838c48ddbf930ca91fb3822a635e4e98d119",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
         "waived_at": "2026-09-08T16:33:49.971071Z",
@@ -170194,13 +170224,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-08T16:33:50.166415Z",
-      "outcome": null,
+      "outcome": "All four terminal session paths emit the typed session-close event through session/store.py, not the dispatch-side hook W31 assumed, so a rebuild over the log the runtime itself wrote reports a non zero session count; disabling the wiring reds ten of fifteen tests.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -170390,6 +170420,144 @@
         }
       ],
       "title": "Reconcile the snapshot pairing gate with one PR per phase",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W38": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-08T16:55:24.257259Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Landing W02, W25 and W28 together surfaced two defects no single wave could see. W25's spec_repoint.py imports four privates (_cache_replay, _idempotent_replay, _publish, _validate_post_sync) from its sibling methods/spec.py, which the methods import-graph gate forbids; W25 avoided editing spec.py because it is near the EAWF010 module cap, so the helpers need a shared home rather than a private import. Separately docs/reference/autogen/cli.md is missing the four workspace verb rows W02 added.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods",
+        "docs/reference/autogen",
+        "tests/unit/runtime/daemon"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/runtime/daemon/test_state_methods_import_graph.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_docs_autogen.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W38",
+      "intent": {
+        "desired_outcome": "the methods import graph carries no private sibling imports and the committed autogen tree matches regeneration",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Give the four shared spec helpers a non-private home both modules import|Regenerate the committed autogen tree|Prove both gates green with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "Two integration defects appear only once the parallel daemon-methods waves are landed together",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-08T16:55:24.399386Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "test_methods_import_graph_has_no_private_sibling_imports asserts the offender list is empty for the daemon methods package, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the methods import-graph test with an empty private-sibling-import offender list",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The four helpers spec_repoint reaches for (_cache_replay, _idempotent_replay, _publish, _validate_post_sync) live in a shared non-private home that both it and methods/spec import, so the methods import-graph gate reports no private sibling imports and methods/spec stays under the module-length cap.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_committed_autogen_tree_matches_regeneration asserts no AutogenDrift rows for the committed tree, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the autogen drift test with no drift rows for the committed reference tree",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The committed autogen tree matches regeneration: docs/reference/autogen/cli.md carries the workspace verb rows added this phase, so the drift gate passes against a fresh generate_all run.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Repair the integration drift the parallel waves left",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
