@@ -17,7 +17,6 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-import sys
 import time
 import uuid
 from collections.abc import Callable, Coroutine
@@ -432,9 +431,17 @@ def test_close_gate_runs_out_of_process_and_returns_the_child_receipt(
     state_path = tmp_path / ".ea" / "state.json"
     _write_state(state_path)
     context = gate_execution.GateExecutionContext(state_path=state_path, attempt_id="CA-01")
+    # The pid print rides a collected pytest module rather than a bare
+    # ``python -c``: the gate runner spawns only argv heads the L0 policy
+    # allowlists, and a path-qualified interpreter is not one of them.
+    # ``-s`` keeps the collection-time print on the gate's own stdout.
+    (tmp_path / "test_runner_pid.py").write_text(
+        "import os\n\nprint(f'runner_pid={os.getppid()}')\n\n\ndef test_ran() -> None:\n    pass\n",
+        encoding="utf-8",
+    )
     spec = _child_spec(
         "G-CHILD",
-        [sys.executable, "-c", "import os; print(f'runner_pid={os.getppid()}')"],
+        ["pytest", "-p", "no:cacheprovider", "-q", "-s", "test_runner_pid.py"],
     )
     recorder = _LockHoldRecorder(portalock.acquire)
     monkeypatch.setattr(portalock, "acquire", recorder)

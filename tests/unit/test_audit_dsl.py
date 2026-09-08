@@ -9,7 +9,8 @@ loader paths):
 * regex_in_file: match, no-match, missing-file, missing-arg.
 * state_field_equals: equal, mismatch, missing-segment, non-json
   state file, missing-arg, custom state_path.
-* command_exit_zero: zero, non-zero, missing-binary, missing-arg.
+* command_exit_zero: zero, non-zero, missing-binary, missing-arg,
+  argv outside the L0 allowlist.
 * criterion_in_diff: match (file scope), match (dir scope), no-match,
   missing-criterion, missing-pattern, missing-scopes, bad-regex.
 * run_checks: cwd resolution, golden sample.
@@ -18,12 +19,12 @@ loader paths):
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from eawf.runtime.sandbox.argv_policy import ArgvPolicyError
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.audit_dsl import (
     CHECK_REGISTRY,
@@ -31,6 +32,7 @@ from eawf.workflow.audit_dsl import (
     CheckResult,
     CheckSpec,
     load_spec,
+    registry,
     run_checks,
 )
 
@@ -322,12 +324,7 @@ def test_state_field_equals_missing_value_arg_raises(tmp_path: Path) -> None:
 
 
 def test_command_exit_zero_pass(tmp_path: Path) -> None:
-    result = _run_one(
-        "command_exit_zero",
-        "echo",
-        {"argv": [sys.executable, "-c", "import sys; sys.exit(0)"]},
-        tmp_path,
-    )
+    result = _run_one("command_exit_zero", "version", {"argv": ["ruff", "--version"]}, tmp_path)
     assert result.passed is True
     assert "returncode=0" in (result.details or "")
 
@@ -336,22 +333,31 @@ def test_command_exit_zero_nonzero(tmp_path: Path) -> None:
     result = _run_one(
         "command_exit_zero",
         "nonzero",
-        {"argv": [sys.executable, "-c", "import sys; sys.exit(7)"]},
+        {"argv": ["ruff", "check", "no_such_path_eawf"]},
         tmp_path,
     )
     assert result.passed is False
-    assert "returncode=7" in (result.details or "")
+    assert "returncode=1" in (result.details or "")
 
 
-def test_command_exit_zero_missing_binary(tmp_path: Path) -> None:
-    result = _run_one(
-        "command_exit_zero",
-        "ghost",
-        {"argv": ["definitely-not-a-real-binary-eawf-w04"]},
-        tmp_path,
-    )
+def test_command_exit_zero_missing_binary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An allowlisted head that resolves to nothing reports "not executable".
+
+    The head has to be allowlisted to reach the spawn at all, so the
+    allowlist is widened for this case only -- the point under test is the
+    ``FileNotFoundError`` branch, not the policy that precedes it.
+    """
+    ghost = "definitely-not-a-real-binary-eawf-w04"
+    monkeypatch.setattr(registry, "DEFAULT_GATE_ARGV_ALLOWLIST", (ghost,))
+    result = _run_one("command_exit_zero", "ghost", {"argv": [ghost]}, tmp_path)
     assert result.passed is False
     assert "not executable" in (result.details or "")
+
+
+def test_command_exit_zero_argv_outside_allowlist_raises(tmp_path: Path) -> None:
+    """An argv head off the L0 allowlist is rejected before any spawn."""
+    with pytest.raises(ArgvPolicyError, match="not in the caller-supplied allowlist"):
+        _run_one("command_exit_zero", "crafted", {"argv": ["curl", "attacker.example"]}, tmp_path)
 
 
 def test_command_exit_zero_missing_argv_arg_raises(tmp_path: Path) -> None:

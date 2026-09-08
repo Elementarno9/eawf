@@ -9,7 +9,6 @@ twice on the same state yields the same report on the second pass).
 from __future__ import annotations
 
 import os
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -432,20 +431,21 @@ def test_orphan_claim_from_a_crashed_child_never_reruns_the_gate(tmp_path: Path)
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True)
     marker = tmp_path / "gate-runs.log"
+    # The kill rides a collected pytest module rather than a bare
+    # ``python -c``: the gate runner spawns only argv heads the L0 policy
+    # allowlists, and a path-qualified interpreter is not one of them.
+    (tmp_path / "test_orphan_gate.py").write_text(
+        "import os\n"
+        "import signal\n\n"
+        f"open({str(marker)!r}, 'a').write('ran\\n')\n"
+        "os.kill(os.getppid(), signal.SIGKILL)\n",
+        encoding="utf-8",
+    )
     spec = CheckSpec(
         kind="command_exit_zero",
         name="G-ORPHAN",
         args={
-            "argv": [
-                sys.executable,
-                "-c",
-                (
-                    "import os, signal, sys\n"
-                    "open(sys.argv[1], 'a').write('ran\\n')\n"
-                    "os.kill(os.getppid(), signal.SIGKILL)\n"
-                ),
-                str(marker),
-            ],
+            "argv": ["pytest", "-p", "no:cacheprovider", "-q", "test_orphan_gate.py"],
             "scope": "all",
         },
     )

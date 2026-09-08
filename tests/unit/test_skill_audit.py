@@ -21,7 +21,6 @@ W14 makes the gate run real checks (no ``skipped`` by default):
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from typing import cast
 
@@ -34,6 +33,16 @@ from eawf.workflow.skills.bodies.audit import AuditBody
 from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
 from tests._criteria_helpers import legacy_criteria
 from tests.conftest import make_floor_waiver, make_intent
+
+#: A criterion-check argv that exits 0. The heads stay inside the L0
+#: argv-policy allowlist the audit-DSL runner enforces, because a
+#: ``criterion_checks`` directive is exactly the free-form agent input that
+#: policy exists to filter -- a bare interpreter path never reaches a spawn.
+_PASSING_ARGV = ["ruff", "--version"]
+
+#: The same shape, exiting non-zero: ``ruff`` reports E902 for a path that
+#: does not exist. Models a seeded regression in the audited surface.
+_FAILING_ARGV = ["ruff", "check", "no_such_path_eawf"]
 
 
 @pytest.fixture
@@ -140,7 +149,7 @@ def test_audit_no_check_status_is_skipped_by_default(state_dir: Path) -> None:
     ctx.args = {
         "wave_id": "P00-I01-W01",
         "criterion_checks": [
-            {"criterion": "smoke passes", "argv": [sys.executable, "-c", "raise SystemExit(0)"]},
+            {"criterion": "smoke passes", "argv": _PASSING_ARGV},
         ],
     }
     env = run_skill(skill, ctx)
@@ -266,7 +275,7 @@ def test_audit_seeded_behavioral_regression_fails_with_offending_criterion(
             {
                 "criterion": "the changed surface still behaves",
                 # SystemExit(1) models a seeded regression in the surface.
-                "argv": [sys.executable, "-c", "raise SystemExit(1)"],
+                "argv": _FAILING_ARGV,
             },
         ],
     }
@@ -288,7 +297,7 @@ def test_audit_passing_fixture_returns_ok_no_skipped(state_dir: Path) -> None:
         "criterion_checks": [
             {
                 "criterion": "the changed surface still behaves",
-                "argv": [sys.executable, "-c", "raise SystemExit(0)"],
+                "argv": _PASSING_ARGV,
             },
         ],
     }
@@ -446,7 +455,7 @@ def test_audit_enforce_false_findings_stay_partial(state_dir: Path) -> None:
     ctx.args = {
         "wave_id": "P00-I01-W01",
         "criterion_checks": [
-            {"criterion": "smoke behaves", "argv": [sys.executable, "-c", "raise SystemExit(1)"]},
+            {"criterion": "smoke behaves", "argv": _FAILING_ARGV},
         ],
     }
     env = run_skill(AuditSkill(), ctx)
@@ -460,7 +469,7 @@ def test_audit_enforce_true_findings_become_failed(state_dir: Path) -> None:
         "enforce": True,
         "wave_id": "P00-I01-W01",
         "criterion_checks": [
-            {"criterion": "smoke behaves", "argv": [sys.executable, "-c", "raise SystemExit(1)"]},
+            {"criterion": "smoke behaves", "argv": _FAILING_ARGV},
         ],
     }
     env = run_skill(AuditSkill(), ctx)
@@ -476,7 +485,7 @@ def test_audit_enforce_true_all_pass_stays_ok(state_dir: Path) -> None:
         "enforce": True,
         "wave_id": "P00-I01-W01",
         "criterion_checks": [
-            {"criterion": "smoke behaves", "argv": [sys.executable, "-c", "raise SystemExit(0)"]},
+            {"criterion": "smoke behaves", "argv": _PASSING_ARGV},
         ],
     }
     env = run_skill(AuditSkill(), ctx)
