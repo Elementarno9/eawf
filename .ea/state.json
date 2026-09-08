@@ -13560,6 +13560,21 @@
       "status": "done",
       "updated_at": "2026-09-08T16:07:58.827726Z"
     },
+    "P32-I01-W27": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W27",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W27",
+      "model": null,
+      "scope_id": "P32-I01-W27",
+      "status": "done",
+      "updated_at": "2026-09-08T16:22:32.173762Z"
+    },
     "P32-I01-W29": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -16054,15 +16069,30 @@
         "P32-I01-W25",
         "P32-I01-W28"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-08T16:22:09.637589Z",
       "id": "SES-20260908T154331.197864Z-operator-claude-df48900a-6f43-4cff-8bbe-30139cb9cf78",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01",
       "started_at": "2026-09-08T15:43:31.197864Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260908T162226.636780Z-operator-claude-fa764ccc-e675-42a3-b664-1209c4814ec3": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-08T16:22:28.364708Z",
+      "id": "SES-20260908T162226.636780Z-operator-claude-fa764ccc-e675-42a3-b664-1209c4814ec3",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01",
+      "started_at": "2026-09-08T16:22:26.636780Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -21106,14 +21136,11 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260908T154331.197864Z-operator-claude-df48900a-6f43-4cff-8bbe-30139cb9cf78"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [
       "P32-I01-W02",
       "P32-I01-W10",
       "P32-I01-W25",
-      "P32-I01-W27",
       "P32-I01-W28",
       "P32-I01-W30",
       "P32-I01-W31"
@@ -38357,7 +38384,8 @@
         "P32-I01-W31",
         "P32-I01-W32",
         "P32-I01-W33",
-        "P32-I01-W34"
+        "P32-I01-W34",
+        "P32-I01-W35"
       ]
     },
     "P33-I01": {
@@ -39760,7 +39788,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-08T16:08:56.723757Z",
+  "updated_at": "2026-09-08T16:22:32.173963Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -167264,7 +167292,8 @@
     "P32-I01-W19": {
       "agent_role": "executor",
       "blocks": [
-        "P32-I01-W20"
+        "P32-I01-W20",
+        "P32-I01-W35"
       ],
       "claim_session_id": null,
       "claimed_at": null,
@@ -168567,12 +168596,14 @@
     },
     "P32-I01-W27": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P32-I01-W35"
+      ],
       "claim_session_id": "SES-20260908T154331.197864Z-operator-claude-df48900a-6f43-4cff-8bbe-30139cb9cf78",
       "claimed_at": "2026-09-08T16:03:59.201144Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-08T16:22:32.173762Z",
+      "commit": "24493b5ace771eb12fb7429c08fcec4f678b3ef3",
+      "commit_identity_digest": "sha256:5e0b70eeba0b6619f0e93a60e9c1dcbe38807c4dea2a969e152e4249fd85b778",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion; typed criteria land at phase prep via spec sync",
         "waived_at": "2026-09-07T13:36:58.202858Z",
@@ -168643,13 +168674,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-07T13:36:58.321578Z",
-      "outcome": null,
+      "outcome": "Close gates now run against a sandboxed runtime directory seeded from a snapshot, with EAWF_RUNTIME_DIR and EA_STATE pinned to the sandbox, so a gate suite exercising the daemon RPCs cannot reach the live ledger. The floor pack remains in process and is carried by W35.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -169783,6 +169814,148 @@
         }
       ],
       "title": "Arm the ODR gate on the iter-close fallback path",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W35": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-08T16:21:33.965452Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W19",
+        "P32-I01-W27"
+      ],
+      "description": "W27 sandboxed the close-gate child but left the deterministic floor pack running in process in the daemon at readiness.py run_checks inside _build_floor_views, which takes no gate context, plus the advisory single-gate path. That is the exact shape of the incident W27 was opened for: a floor-pack suite exercising the daemon's own RPCs can still reach the live ledger. readiness.py was outside W27's declared scope.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/verify",
+        "tests/integration/workflow/verify"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/verify/test_floor_pack_isolation.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/verify/test_floor_pack_isolation.py",
+              "-k",
+              "byte_identical",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W35",
+      "intent": {
+        "desired_outcome": "every gate a close runs, floor pack included, executes in the sandboxed out-of-process runner",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Route _build_floor_views and the advisory single-gate path through the out-of-process gate runner|Prove live state is byte identical after a state mutating floor-pack gate with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "The deterministic floor pack still runs in process against the live runtime directory",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-08T16:21:34.233425Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "test_floor_pack_runs_out_of_process asserts the floor-pack checks execute in the sandboxed runner with EAWF_RUNTIME_DIR bound to the sandbox rather than the live tree, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "security",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the verify test suite asserting the floor pack executes through the sandboxed out-of-process gate runner",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The deterministic floor pack executes through the sandboxed out-of-process gate runner: the run_checks call inside _build_floor_views receives a gate context and launches its checks in the sandbox W27 introduced, rather than running in process in the daemon against the live runtime directory.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_live_state_byte_identical_after_floor_pack asserts live state.json bytes, store rows and dispatch_paused compare equal across a state-mutating floor-pack gate, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "security",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the verify test suite asserting live-state byte equality across a state-mutating floor-pack gate",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The advisory single-gate path is routed the same way, so no remaining readiness path runs a gate in process against the live runtime directory, and live state is byte identical after a state mutating floor-pack gate: state.json bytes, the committed store rows and the dispatch pause flag all compare equal before and after.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Route the deterministic floor pack out of process",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
