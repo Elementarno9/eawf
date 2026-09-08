@@ -586,7 +586,7 @@ DEFAULT_REGISTRY_READERS: Final[Mapping[ObservationAdapter, RegistryReader]] = d
 )
 
 
-def observe_publication(
+def collect_observation(
     request: ObservationRequest,
     *,
     observed_at: datetime,
@@ -594,6 +594,11 @@ def observe_publication(
     readers: Mapping[ObservationAdapter, RegistryReader] | None = None,
 ) -> PublicationObservation:
     """Return the read-back observation for one configured leg.
+
+    Collecting an observation and settling one onto the record are two
+    steps, so they carry two verbs:
+    :func:`~eawf.workflow.release.settlement.observe_target` writes what
+    this function found.
 
     Args:
         request: The read-back request for this leg.
@@ -628,9 +633,9 @@ __all__ = [
     "ObservationAdapterFn",
     "RegistryReader",
     "UndeclaredObservationAdapterError",
+    "collect_observation",
     "observe_npm_registry",
     "observe_package_index",
-    "observe_publication",
     "observe_source_host_release",
     "resolve_observe_adapter",
 ]

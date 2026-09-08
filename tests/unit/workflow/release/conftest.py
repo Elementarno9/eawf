@@ -1,7 +1,7 @@
-"""Fixtures for the kernel-vocabulary half of the release suite.
+"""Fixtures for the release-workflow behaviour tests.
 
 The builders themselves live in :mod:`tests._release_helpers`, shared
-with the workflow mirror; only the pytest fixtures are per-directory,
+with the kernel mirror; only the pytest fixtures are per-directory,
 because a fixture is resolved by directory and cannot be shared from a
 plain module.
 """

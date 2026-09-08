@@ -43,7 +43,7 @@ from eawf.kernel.spec.release import ReleaseGateProfile
 from eawf.kernel.spec.release_config import ReleaseGateName
 from eawf.workflow.release.train import DEV1_GATE_BINDINGS_YAML, gate_bindings_for
 from eawf.workflow.verify.release_readiness import GATE_SIGNAL_BINDINGS
-from tests.unit.kernel.release.conftest import SOURCE_SHA, dev1_binding_rows
+from tests._release_helpers import SOURCE_SHA, dev1_binding_rows
 
 
 def _table(rows: list[dict[str, Any]]) -> dict[str, Any]:

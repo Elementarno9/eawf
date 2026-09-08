@@ -13620,6 +13620,21 @@
       "status": "done",
       "updated_at": "2026-09-08T16:22:32.173762Z"
     },
+    "P32-I01-W28": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W28",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W28",
+      "model": null,
+      "scope_id": "P32-I01-W28",
+      "status": "done",
+      "updated_at": "2026-09-08T16:41:18.419616Z"
+    },
     "P32-I01-W29": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -16208,15 +16223,30 @@
         "P32-I01-W19",
         "P32-I01-W36"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-08T16:40:53.139889Z",
       "id": "SES-20260908T163548.538041Z-operator-claude-f64325b6-0e88-4d3f-892c-dac6898b1a93",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01",
       "started_at": "2026-09-08T16:35:48.538041Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260908T164105.559040Z-operator-claude-29e71dd0-069a-48d3-b870-e7169d148e24": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-08T16:41:07.322820Z",
+      "id": "SES-20260908T164105.559040Z-operator-claude-29e71dd0-069a-48d3-b870-e7169d148e24",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01",
+      "started_at": "2026-09-08T16:41:05.559040Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -21260,13 +21290,10 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260908T163548.538041Z-operator-claude-f64325b6-0e88-4d3f-892c-dac6898b1a93"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [
       "P32-I01-W04",
       "P32-I01-W19",
-      "P32-I01-W28",
       "P32-I01-W36"
     ],
     "iter_id": "P32-I01",
@@ -38510,7 +38537,8 @@
         "P32-I01-W33",
         "P32-I01-W34",
         "P32-I01-W35",
-        "P32-I01-W36"
+        "P32-I01-W36",
+        "P32-I01-W37"
       ]
     },
     "P33-I01": {
@@ -39913,7 +39941,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-08T16:35:51.021123Z",
+  "updated_at": "2026-09-08T16:41:18.419781Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -168866,9 +168894,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260908T154331.197864Z-operator-claude-df48900a-6f43-4cff-8bbe-30139cb9cf78",
       "claimed_at": "2026-09-08T16:08:56.723388Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-08T16:41:18.419616Z",
+      "commit": "fe271024a3e167f0d9a424e1e3d11e0e028b0eab",
+      "commit_identity_digest": "sha256:9b96abc9be311d1faba966ba80925438630c205aedb4be4e19f89bd9ee36935c",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion; typed criteria land at phase prep via spec sync",
         "waived_at": "2026-09-07T13:37:24.574949Z",
@@ -168959,13 +168987,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-07T13:37:24.712463Z",
-      "outcome": null,
+      "outcome": "All nine release RPC verbs are reachable from the release CLI, the four colliding concept pairs are renamed to one canonical spelling each with no adapter shim (find_spec is None), and eight release behaviour tests are refiled under the workflow mirror.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -170224,6 +170252,144 @@
         }
       ],
       "title": "Emit the session-close event the telemetry projector reads",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W37": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-08T16:40:37.768361Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The gate demands every commit mutating a managed golden carry a test: subject, but AGENTS commit-granularity says a golden refresh rides its cause, which is what W32 did when the new argv policy forced tests/golden/audit_dsl/sample.yaml to change under a fix: subject. The gate already exempts a phase PR, but detects one only via range_spans_multiple_iters, so a single-iter phase like P32 gets the hard per-commit gate and reds the phase PR.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tools/snapshot_pairing_gate.py",
+        "tests/lint",
+        "tests/integration/test_snapshot_pairing_gate.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_snapshot_pairing_gate.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_phase_ci_gates.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W37",
+      "intent": {
+        "desired_outcome": "a one-PR-per-phase range is recognised as a phase PR whether it spans one iter or several, and a genuine small-CL range still gets the hard gate",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Detect the phase-PR model rather than inferring it from iter count alone|Prove a single-iter phase range passes and an out-of-phase unpaired golden mutation still fails with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "The snapshot pairing gate contradicts commit-granularity for a phase PR that spans a single iter",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-08T16:40:37.895134Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "test_single_iter_phase_range_is_treated_as_a_phase_pr asserts the gate exits zero and lists the bundled golden-touching commits for a range whose commits all sit in one iter, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "operability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the snapshot pairing gate over a phase range whose commits all sit in a single iter",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The gate recognises the one-PR-per-phase model directly rather than inferring it from iter count, so a phase range that spans a single iter takes the same bundled-review path a multi-iter range already takes: golden-touching commits are listed for reviewer visibility and the gate exits zero.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_unpaired_golden_outside_a_phase_still_fails asserts the gate exits non-zero and names the offending commit for a non-phase range carrying an unpaired golden mutation, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "non-zero from the snapshot pairing gate for an unpaired golden mutation in a range that is not a phase PR",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The hard per-commit contract survives where it belongs: an unpaired golden mutation in a range that is not a phase PR still exits non-zero and names the offending commit, so this change narrows a false positive rather than disarming the gate.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Reconcile the snapshot pairing gate with one PR per phase",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null

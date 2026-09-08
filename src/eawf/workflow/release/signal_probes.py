@@ -1,9 +1,14 @@
-"""Signal producers this project ships, keyed by the signal they compute.
+"""Readiness signal probes this project ships, keyed by their signal.
 
-A readiness signal with no producer reports ``unavailable``, which is
+A readiness signal with no probe reports ``unavailable``, which is
 honest but useless: it names a gap rather than a fact. This module holds
-the producers that exist, so a signal graduates from "no producer yet"
-to a real verdict the moment its check lands.
+the probes that exist, so a signal graduates from "nothing computes it
+yet" to a real verdict the moment its check lands.
+
+"Probe" is the whole vocabulary here. The one thing this package calls a
+*producer* is the CI job in :mod:`eawf.workflow.release.produce` that
+writes the pipeline receipts these probes read back, so the two words
+name two jobs rather than one job twice.
 
 The ``platform`` signal was deliberately first: the platform claim is
 the one signal whose evidence can be *forged by accident*, because a
@@ -15,7 +20,7 @@ install.
 by a sweep: one needs a resolved environment to read licenses and an
 advisory database to query, the other needs two clean builds. Both are
 therefore produced in CI and *read back* from the receipts named in
-:mod:`eawf.workflow.release.receipts`. A receipt the CI job did not
+:mod:`eawf.workflow.release.pipeline_receipts`. A receipt the CI job did not
 write leaves its row ``unavailable`` naming the job, which is the
 honest reading -- an absent producer is not a passing check.
 """
@@ -43,7 +48,7 @@ from eawf.workflow.release.dependencies import (
     compute_lock_digest,
     inventory_component,
 )
-from eawf.workflow.release.receipts import (
+from eawf.workflow.release.pipeline_receipts import (
     RECEIPT_DIRNAME,
     read_build_receipt,
     read_dependency_manifest,
@@ -265,7 +270,7 @@ def build_receipt_probes(repo_root: Path) -> dict[ReleaseSignalName, ReleaseSign
     }
 
 
-#: Producers this project ships, by signal. A caller's own probe for the
+#: Probes this project ships, by signal. A caller's own probe for the
 #: same signal wins: injection is how a test pins a verdict and how a
 #: later checkpoint swaps in a stronger check without editing this map.
 DEFAULT_RELEASE_PROBES: Final[Mapping[ReleaseSignalName, ReleaseSignalProbe]] = {

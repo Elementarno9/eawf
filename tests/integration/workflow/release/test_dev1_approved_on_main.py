@@ -64,9 +64,8 @@ from eawf.workflow.release.dependencies import (
     compute_lock_digest,
 )
 from eawf.workflow.release.lifecycle import advance_release
-from eawf.workflow.release.producers import build_receipt_probes
+from eawf.workflow.release.pipeline_receipts import write_receipt
 from eawf.workflow.release.publication import begin_publication
-from eawf.workflow.release.receipts import write_receipt
 from eawf.workflow.release.records import (
     read_release_record,
     read_release_records,
@@ -80,6 +79,7 @@ from eawf.workflow.release.reproducibility import (
     BuildAttempt,
     ReproducibleBuildReceipt,
 )
+from eawf.workflow.release.signal_probes import build_receipt_probes
 from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
 from eawf.workflow.release.vulnerability import VulnerabilityReport
 from eawf.workflow.verify.release_probes import TagPreflightInputs, build_tag_probes

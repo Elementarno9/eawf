@@ -5,8 +5,8 @@ and its authored configuration in
 :mod:`eawf.kernel.spec.release_config`. This package holds the closed
 vocabularies a preflight sweep is written against -- the twelve signal
 names, the gate-to-evidence binding, and the waiver rows -- so the sweep
-(:mod:`eawf.workflow.verify.release_readiness`) and the signal producers
-(:mod:`eawf.workflow.release.producers`) can each depend on one
+(:mod:`eawf.workflow.verify.release_readiness`) and the signal probes
+(:mod:`eawf.workflow.release.signal_probes`) can each depend on one
 declaration instead of on each other.
 """
 

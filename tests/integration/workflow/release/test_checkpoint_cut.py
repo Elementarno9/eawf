@@ -77,8 +77,8 @@ from eawf.workflow.release.advance import (
 )
 from eawf.workflow.release.lifecycle import advance_release
 from eawf.workflow.release.preflight import approve_release
-from eawf.workflow.release.producers import RECEIPT_PRODUCER_JOB, build_receipt_probes
 from eawf.workflow.release.publication import begin_publication
+from eawf.workflow.release.signal_probes import RECEIPT_PRODUCER_JOB, build_receipt_probes
 from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
 from eawf.workflow.verify.release_probes import TagPreflightInputs, build_tag_probes
 from eawf.workflow.verify.release_readiness import ReleaseReadiness, compute_readiness

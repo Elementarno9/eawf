@@ -28,13 +28,13 @@ from eawf.workflow.release.advance import (
     assert_prerequisite_receipts,
 )
 from eawf.workflow.release.train import V07_TRAIN
-from tests.unit.kernel.release.conftest import (
+from tests._release_helpers import (
     MANIFEST_DIGEST,
     NOW,
     SOURCE_SHA,
     dev1_config,
 )
-from tests.unit.kernel.release.test_train_advance import (
+from tests.unit.workflow.release.test_train_advance import (
     advance,
     finished,
     gate_receipts,

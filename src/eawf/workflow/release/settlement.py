@@ -1,4 +1,13 @@
-"""REL-016/REL-018: the only verb that writes an observed target status.
+"""REL-016/REL-018: settling a leg from an independent read-back.
+
+This module is where an observation lands on the record. The vocabulary
+it settles -- the frozen manifest, the request and the observation
+itself -- lives in :mod:`eawf.workflow.release.observation`; collecting
+one from a registry is
+:func:`eawf.workflow.release.adapters.collect_observation`. The three
+steps are named apart because a reader tracing a baked release has to be
+able to tell "what was asked", "what came back" and "what was written"
+from the call site alone.
 
 Everything else in this package records what an adapter *said*. This
 module records what an independent read-back *found*, and it is the sole

@@ -76,7 +76,7 @@ RETRYABLE_TARGET_STATUSES: frozenset[ReleaseTargetStatus] = frozenset(
 #: read-back would have to establish. The complement of this set inside
 #: :data:`~eawf.kernel.spec.publication.SETTLED_TARGET_STATUSES` is
 #: exactly the two ``observed_*`` statuses, which belong to
-#: :mod:`eawf.workflow.release.observe` alone.
+#: :mod:`eawf.workflow.release.settlement` alone.
 RECONCILABLE_TARGET_STATUSES: Final[frozenset[ReleaseTargetStatus]] = frozenset(
     {
         ReleaseTargetStatus.REPORTED_SUCCESS,
@@ -470,7 +470,7 @@ def reconcile_target(
     read-back, and letting the same verb that records an adapter's claim
     also record its verification would make an adapter the judge of its
     own publication. Only
-    :func:`~eawf.workflow.release.observe.observe_target` writes them,
+    :func:`~eawf.workflow.release.settlement.observe_target` writes them,
     and only from an observation receipt.
 
     The release status does not move here: what a late report settles is

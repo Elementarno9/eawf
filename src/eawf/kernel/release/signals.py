@@ -2,7 +2,7 @@
 
 Two consumers need this vocabulary and neither may import the other: the
 sweep in :mod:`eawf.workflow.verify.release_readiness` computes the rows,
-and the producers in :mod:`eawf.workflow.release.producers` fill them in.
+and the probes in :mod:`eawf.workflow.release.signal_probes` fill them in.
 Declaring the names, statuses, failure codes and probe signature here
 keeps that dependency a Y rather than a cycle.
 

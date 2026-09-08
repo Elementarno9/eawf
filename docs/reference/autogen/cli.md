@@ -463,14 +463,22 @@ Project-level lifecycle (init).
 
 ### `eawf release`
 
-Tag releases and render release notes / changelog reports.
+Tag releases and drive the release train's checkpoint records.
 
 | Verb | Summary |
 |---|---|
+| `advance` | Walk the train onto its next rung, or refuse and change nothing. |
+| `approve` | Approve a candidate against a readiness sweep, and record it. |
 | `changelog` | Mine the current ``CHANGELOG.md`` unreleased section. |
+| `create` | Open one checkpoint's DRAFT record, after measured admission. |
 | `notes` | Render a scrubbed release-notes draft. |
 | `observe` | Read one publication target back and settle it against the manifest. |
-| `preflight` | Compute every release readiness signal for one checkpoint. |
+| `preflight` | Sweep every readiness signal for one checkpoint over this checkout. |
+| `publish` | Open the publication episode and return its reference at once. |
+| `readiness` | Ask the daemon for a checkpoint's readiness sweep. |
+| `reconcile` | Settle one leg against what its publish job finally reported. |
+| `retry` | Re-queue one leg of the open episode under the idempotency proof. |
+| `show` | Describe the train ladder, one checkpoint rung, and its record. |
 | `tag` | Create the ``v<version>`` release tag and (with ``--push``) trigger the pipeline. |
 
 ### `eawf repo`

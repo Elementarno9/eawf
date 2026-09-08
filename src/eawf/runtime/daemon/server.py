@@ -45,7 +45,7 @@ import eawf.runtime.daemon.methods.jury  # registers jury.label (P30-I23-W17)
 import eawf.runtime.daemon.methods.needs_user  # registers needs_user.{raise,resolve,park}
 import eawf.runtime.daemon.methods.registry  # registers registry.read / registry.update (W10)
 import eawf.runtime.daemon.methods.registry_workspace  # registers registry.workspace.*
-import eawf.runtime.daemon.methods.release  # registers release.{show,compute_readiness,approve}
+import eawf.runtime.daemon.methods.release  # registers the nine release.* verbs
 import eawf.runtime.daemon.methods.research  # registers research.create_campaign (P29-I09-W07)
 import eawf.runtime.daemon.methods.spec  # registers spec.{init,validate,promote,archive} (P25-W03)
 import eawf.runtime.daemon.methods.spec_convert  # registers spec.convert_legacy (P30-I23-W24)

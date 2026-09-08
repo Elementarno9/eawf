@@ -45,7 +45,7 @@ from eawf.workflow.release.publication import (
 )
 from eawf.workflow.release.target_machine import advance_target_attempt
 from eawf.workflow.verify.release_readiness import ReleaseReadiness, compute_readiness
-from tests.unit.kernel.release.conftest import (
+from tests._release_helpers import (
     MANIFEST_DIGEST,
     NOW,
     all_passing,

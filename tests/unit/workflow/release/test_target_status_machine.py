@@ -43,7 +43,7 @@ from eawf.workflow.release.target_machine import (
     retry_budget_remaining,
     validate_target_transition,
 )
-from tests.unit.kernel.release.conftest import dev1_config
+from tests._release_helpers import dev1_config
 
 NOW = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
 REQUEST_DIGEST = f"sha256:{'2' * 64}"

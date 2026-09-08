@@ -35,7 +35,7 @@ from eawf.workflow.verify.release_readiness import (
     compute_readiness,
     derive_required_signals,
 )
-from tests.unit.kernel.release.conftest import (
+from tests._release_helpers import (
     NOW,
     all_passing,
     dev1_config,
