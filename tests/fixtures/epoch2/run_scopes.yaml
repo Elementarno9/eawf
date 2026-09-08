@@ -1,0 +1,41 @@
+# One document per RunScope variant, in discriminator order. Every
+# entry is a complete scope: a Run holds exactly one of these, so a
+# variant that only parses with a field the fixture omits would be a
+# shape no stored Run can take.
+#
+# The task scope is the only one carrying a write_set, because it is the
+# only scope that owns a worktree to write to.
+scopes:
+  - scope_kind: task
+    purpose: implement
+    task_ref: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/task/EAWF-0042
+    write_set:
+      - src/eawf/kernel/state/epoch2/run.py
+      - tests/unit/kernel/state/test_run_scope.py
+  - scope_kind: batch
+    purpose: review
+    batch_ref: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/batch/BAT-0007
+  - scope_kind: milestone
+    purpose: audit
+    milestone_ref: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/milestone/MLS-0030
+  - scope_kind: campaign
+    purpose: research
+    campaign_ref: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/campaign/CAM-0003
+  - scope_kind: release
+    purpose: observe
+    release_ref: eawf://WSP-MAIN/PRJ-EAWF/_/release/REL-0.7.0
+  - scope_kind: repository
+    purpose: audit
+    repository_ref: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/repository/REP-EAWF
+  - scope_kind: workspace
+    purpose: plan
+    workspace_ref: eawf://WSP-MAIN/PRJ-EAWF/_/workspace/WSP-MAIN
+  - scope_kind: evidence
+    purpose: review
+    evidence_ref: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/evidence/EVD-0011
+  - scope_kind: claim
+    purpose: research
+    claim_ref: eawf://WSP-MAIN/PRJ-EAWF/_/claim/CLM-0005
+  - scope_kind: question
+    purpose: plan
+    question_ref: eawf://WSP-MAIN/PRJ-EAWF/_/question/QST-0002

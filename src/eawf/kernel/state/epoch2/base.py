@@ -134,6 +134,15 @@ BatchKey = Annotated[
     AfterValidator(_entity_key_validator(EntityKind.BATCH)),
 ]
 
+#: A ``RUN-########`` run key. The width is eight rather than four
+#: because a workspace mints runs by the thousand, and it is part of the
+#: grammar rather than a rendering choice, so ``RUN-0001`` is refused.
+RunKey = Annotated[
+    str,
+    StringConstraints(strict=True),
+    AfterValidator(_entity_key_validator(EntityKind.RUN)),
+]
+
 
 # ---- normalised free-text comparison ----------------------------------------
 
@@ -187,6 +196,7 @@ __all__ = [
     "NonEmptyStr",
     "OutcomeStr",
     "PrincipalKey",
+    "RunKey",
     "Sha256DigestStr",
     "ShaStr",
     "SlugStr",

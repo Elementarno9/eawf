@@ -141,6 +141,34 @@ EvidenceUrn = Annotated[
     _JSON_SCHEMA,
 ]
 
+WorkspaceUrn = Annotated[
+    QualifiedUrn,
+    PlainValidator(_urn_validator(EntityKind.WORKSPACE)),
+    _SERIALIZER,
+    _JSON_SCHEMA,
+]
+
+ReleaseUrn = Annotated[
+    QualifiedUrn,
+    PlainValidator(_urn_validator(EntityKind.RELEASE)),
+    _SERIALIZER,
+    _JSON_SCHEMA,
+]
+
+ClaimUrn = Annotated[
+    QualifiedUrn,
+    PlainValidator(_urn_validator(EntityKind.CLAIM)),
+    _SERIALIZER,
+    _JSON_SCHEMA,
+]
+
+QuestionUrn = Annotated[
+    QualifiedUrn,
+    PlainValidator(_urn_validator(EntityKind.QUESTION)),
+    _SERIALIZER,
+    _JSON_SCHEMA,
+]
+
 #: When a Task must be finally defined and executed by. The three
 #: admitted kinds are the three horizons a Task can be due against; a
 #: Track URN is refused because a Track never completes.
@@ -168,12 +196,16 @@ __all__ = [
     "AnyEntityUrn",
     "BatchUrn",
     "CampaignUrn",
+    "ClaimUrn",
     "DueScopeUrn",
     "EvidenceUrn",
     "MilestoneUrn",
+    "QuestionUrn",
+    "ReleaseUrn",
     "RepositoryUrn",
     "RunUrn",
     "TaskUrn",
     "TrackUrn",
+    "WorkspaceUrn",
     "render_qualified_urn",
 ]
