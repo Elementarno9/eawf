@@ -6,8 +6,9 @@ installed from PyPI can run ``eawf daemon enable`` without the repo
 checkout. The templates live at the repo-root ``templates/`` directory
 in version control (the daemon reads them from there in development);
 this hook copies the configured subset into ``src/eawf/_data/`` right
-before Hatchling assembles the wheel, and the wheel target's
-``force-include`` carries the generated tree into the archive.
+before Hatchling assembles the wheel, where the wheel target's
+``packages`` glob picks it up (``artifacts`` in ``pyproject.toml`` lifts
+the gitignore exclusion that would otherwise drop the generated tree).
 
 The hook is build-time only — ``hatchling`` is a ``[build-system]``
 requirement, not a runtime dependency, so this module is imported
@@ -103,8 +104,8 @@ class BundleDataBuildHook(BuildHookInterface):  # type: ignore[type-arg]
             version: The build target version (unused; Hatchling
                 resolves it from ``[tool.hatch.version]``).
             build_data: The mutable build-data mapping Hatchling passes
-                through the build (unused here — ``force-include`` in
-                ``pyproject.toml`` carries the generated tree).
+                through the build (unused here — the wheel target's
+                ``packages`` glob carries the generated tree).
         """
         config = _bundle_config(self.metadata.config)
         written = populate_data_tree(Path(self.root), config)

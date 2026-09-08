@@ -13,6 +13,10 @@ Covers the three load-bearing guarantees of P27-W27:
   under the ``[tool.eawf.bundle] wheel_max_bytes`` ceiling. Skipped
   cleanly when the build environment is unavailable; the assertions are
   real whenever the wheel builds.
+- **Generated-data delivery** — the wheel carries ``eawf/_data/`` through
+  exactly one mechanism (the ``packages`` glob, un-ignored via
+  ``artifacts``), so a build in a tree where the hook already wrote that
+  directory in place cannot abort on a duplicate archive member.
 - **npm dist-tag derivation** — ``dist_tag_for_version`` routes every
   prerelease to ``next`` and only a final release to ``latest``, so the
   plugin-release publish cannot hand a prerelease to the default
@@ -29,6 +33,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -262,6 +267,78 @@ def test_wheel_metadata_version_matches_single_source(tmp_path: Path) -> None:
         metadata = archive.read(metadata_name).decode()
     version_line = next(line for line in metadata.splitlines() if line.startswith("Version:"))
     assert version_line == f"Version: {eawf.__version__}"
+
+
+# --- Generated-data delivery ------------------------------------------------
+
+
+def _expected_data_members() -> list[str]:
+    """Return the ``eawf/_data/`` members a correct wheel carries."""
+    config = _bundle_config()
+    return sorted(f"eawf/_data/service_templates/{name}" for name in config["service_templates"])
+
+
+def _seed_data_tree() -> None:
+    """Populate ``src/eawf/_data`` the way an in-place build hook run leaves it.
+
+    The Hatchling hook writes its output into the source tree, so any prior
+    build (including the editable install refresh ``uv run`` performs) leaves
+    the tree in this state. Seeding it makes the "already present" case
+    deterministic instead of depending on what ran before pytest.
+    """
+    config = _bundle_config()
+    source_dir = _REPO_ROOT / config["service_templates_dir"]
+    dest_dir = _REPO_ROOT / "src" / "eawf" / "_data" / "service_templates"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    for name in config["service_templates"]:
+        shutil.copyfile(source_dir / name, dest_dir / name)
+
+
+def test_wheel_target_declares_one_delivery_mechanism_for_data() -> None:
+    """No ``force-include`` re-adds a path the ``packages`` glob already carries."""
+    with open(_PYPROJECT, "rb") as handle:
+        wheel_cfg = tomllib.load(handle)["tool"]["hatch"]["build"]["targets"]["wheel"]
+
+    assert wheel_cfg["packages"] == ["src/eawf"]
+    # ``artifacts`` lifts the gitignore exclusion so the packages glob alone
+    # delivers the generated tree; without it a clean (non-git) export drops it.
+    assert "/src/eawf/_data/**" in wheel_cfg.get("artifacts", [])
+    package_roots = [Path(package) for package in wheel_cfg["packages"]]
+    for source in wheel_cfg.get("force-include", {}):
+        for root in package_roots:
+            assert not Path(source).is_relative_to(root), (
+                f"force-include {source!r} duplicates a path under {str(root)!r}"
+            )
+
+
+def test_wheel_builds_with_data_already_present(tmp_path: Path) -> None:
+    """A pre-existing ``src/eawf/_data`` tree does not duplicate archive members."""
+    _seed_data_tree()
+    wheel = _build_wheel(tmp_path / "dist")
+    if wheel is None:
+        pytest.skip("uv build unavailable in this environment")
+
+    with zipfile.ZipFile(wheel) as archive:
+        members = [name for name in archive.namelist() if name.startswith("eawf/_data/")]
+    assert sorted(members) == _expected_data_members()
+    assert len(members) == len(set(members)), f"duplicate _data members: {members}"
+
+
+def test_repeat_wheel_build_succeeds(tmp_path: Path) -> None:
+    """Two consecutive builds in one tree both exit zero with the same members."""
+    first = _build_wheel(tmp_path / "dist-1")
+    if first is None:
+        pytest.skip("uv build unavailable in this environment")
+    second = _build_wheel(tmp_path / "dist-2")
+    assert second is not None
+
+    with zipfile.ZipFile(first) as archive:
+        first_members = archive.namelist()
+    with zipfile.ZipFile(second) as archive:
+        second_members = archive.namelist()
+    assert first_members == second_members
+    data_members = [n for n in first_members if n.startswith("eawf/_data/")]
+    assert sorted(data_members) == _expected_data_members()
 
 
 # --- Wheel-gate skip/fail discrimination ------------------------------------
