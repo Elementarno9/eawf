@@ -9,7 +9,7 @@ acceptance:
 flow:
   advance_after:
     audit: true
-    polish: true
+    polish: false
     research: true
 mcp:
   enabled: []
