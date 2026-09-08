@@ -16278,6 +16278,23 @@
       "status": "stale",
       "summary": "orphaned by daemon restart",
       "worktree_ids": []
+    },
+    "SES-20260908T165638.085920Z-operator-claude-63729f15-3ba2-4a70-bb18-7f9de7cea4b9": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P32-I01-W37"
+      ],
+      "ended_at": null,
+      "id": "SES-20260908T165638.085920Z-operator-claude-63729f15-3ba2-4a70-bb18-7f9de7cea4b9",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01",
+      "started_at": "2026-09-08T16:56:38.085920Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
     }
   },
   "artifacts": {
@@ -21320,10 +21337,13 @@
     }
   },
   "current": {
-    "active_session_ids": [],
+    "active_session_ids": [
+      "SES-20260908T165638.085920Z-operator-claude-63729f15-3ba2-4a70-bb18-7f9de7cea4b9"
+    ],
     "active_wave_ids": [
       "P32-I01-W04",
-      "P32-I01-W19"
+      "P32-I01-W19",
+      "P32-I01-W37"
     ],
     "iter_id": "P32-I01",
     "phase_id": "P32",
@@ -39971,7 +39991,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-08T16:55:59.797967Z",
+  "updated_at": "2026-09-08T16:56:38.969649Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -170289,8 +170309,8 @@
     "P32-I01-W37": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260908T165638.085920Z-operator-claude-63729f15-3ba2-4a70-bb18-7f9de7cea4b9",
+      "claimed_at": "2026-09-08T16:56:38.969261Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -170368,7 +170388,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
