@@ -559,6 +559,7 @@ Manage phase / iter / wave specs (init / validate / promote / archive / show).
 | `convert-legacy` | Convert a scope's legacy criterion rows to typed, gated rows. |
 | `init` | Scaffold a new spec via daemon proxy (or in-process fallback). |
 | `promote` | Forward-graduate DRAFT → READY → IMPLEMENTED through the daemon. |
+| `repoint-gates` | Rewrite the recorded gate argv of a CLOSED wave after a tree move. |
 | `show` | Print a spec body (cache + on-disk; ``--from-git`` walks history). |
 | `sync` | Parse a wave spec body + materialise its criteria + gates onto state. |
 | `validate` | Re-hash the on-disk spec body + refresh the daemon cache row. |
