@@ -34,6 +34,7 @@ import orjson
 # Import to ensure handlers register before dispatch runs.
 import eawf.runtime.daemon.methods.agent
 import eawf.runtime.daemon.methods.close  # registers durable close control methods
+import eawf.runtime.daemon.methods.close_hosted  # registers close.host (P32-I01-W19)
 import eawf.runtime.daemon.methods.config  # registers config read/write methods
 import eawf.runtime.daemon.methods.daemon
 import eawf.runtime.daemon.methods.doctor  # registers doctor.apply_repair

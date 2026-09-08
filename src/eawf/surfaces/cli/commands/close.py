@@ -81,6 +81,48 @@ def wait_for_close(
         time.sleep(interval_seconds)
 
 
+def submit_hosted_close(
+    *,
+    wave_id: str,
+    params: dict[str, Any],
+    flags: GlobalFlags,
+) -> dict[str, Any]:
+    """Submit one close that has no interactive session, or name the bypass.
+
+    Routes to ``close.host`` so the daemon owns the close and runs every gate
+    out of process -- the supported replacement for the daemonless bypass. An
+    unreachable daemon is the only case where a gate-bearing headless close has
+    no way to run its falsifiers, so the refusal quotes the lane decision
+    verbatim rather than leaving the operator to guess that the counted waiver
+    lane is what remains.
+
+    Args:
+        wave_id: The wave being closed; named in the refusal.
+        params: Close parameters forwarded to the RPC unchanged.
+        flags: Global CLI flags (workspace anchor, output mode).
+
+    Returns:
+        The ``close.host`` response payload.
+
+    Raises:
+        DaemonUnreachable: The daemon did not answer, so the close cannot be
+            hosted.
+    """
+    from eawf.workflow.verify.hosted_close import resolve_hosted_close
+
+    try:
+        return call_close_rpc(method="close.host", params=params, flags=flags)
+    except cli_errors.DaemonUnreachable as exc:
+        decision = resolve_hosted_close(
+            mode="hosted",
+            daemon_available=False,
+            gate_bearing=True,
+        )
+        raise cli_errors.DaemonUnreachable(
+            f"headless close of wave {wave_id!r} cannot run its gates: {decision.reason}"
+        ) from exc
+
+
 def render_close_status(result: dict[str, Any]) -> str:
     """Render one compact human-readable close status."""
     attempt = result["attempt"]
@@ -89,6 +131,8 @@ def render_close_status(result: dict[str, Any]) -> str:
         (f"integration={attempt['integration_id']} commit={attempt['integrated_sha']}"),
         (f"gate receipts={len(attempt['gate_receipt_ids'])}/{len(attempt['required_gate_ids'])}"),
     ]
+    if result.get("hosted"):
+        lines.append(f"mode=hosted waivers={result.get('waiver_count', 0)}")
     if attempt.get("failure_kind"):
         lines.append(
             f"failure={attempt['failure_kind']} "
@@ -130,6 +174,13 @@ def close_submit_cmd(
         bool,
         typer.Option("--no-runtime", help="Accept unavailable runtime capture."),
     ] = False,
+    headless: Annotated[
+        bool,
+        typer.Option(
+            "--headless",
+            help="Close with no interactive session; the daemon hosts the gates.",
+        ),
+    ] = False,
     wait: Annotated[
         bool,
         typer.Option("--wait", help="Wait for a terminal close result."),
@@ -147,20 +198,33 @@ def close_submit_cmd(
                 "--wait and --detach are mutually exclusive",
                 kind="InvalidInput",
             )
-        result = call_close_rpc(
-            method="close.submit",
-            params={
-                "wave_id": wave_id,
-                "outcome": outcome,
-                "commit": commit,
-                "tokens_consumed": tokens_consumed,
-                "no_runtime_waiver": no_runtime,
-            },
-            flags=flags,
+        if headless and detach:
+            raise cli_errors.ValidationError(
+                "--headless and --detach are mutually exclusive: a hosted close "
+                "has no session to reattach and follow",
+                kind="InvalidInput",
+            )
+        params = {
+            "wave_id": wave_id,
+            "outcome": outcome,
+            "commit": commit,
+            "tokens_consumed": tokens_consumed,
+            "no_runtime_waiver": no_runtime,
+        }
+        result = (
+            submit_hosted_close(wave_id=wave_id, params=params, flags=flags)
+            if headless
+            else call_close_rpc(method="close.submit", params=params, flags=flags)
         )
-        should_wait = wait or (not detach and not (sys.stdin.isatty() and sys.stdout.isatty()))
+        should_wait = (
+            headless or wait or (not detach and not (sys.stdin.isatty() and sys.stdout.isatty()))
+        )
         if should_wait:
-            result = wait_for_close(ref=result["attempt"]["id"], flags=flags)
+            # The status envelope carries no lane fields, so the hosted markers
+            # are re-applied; otherwise waiting would erase the mode the
+            # operator asked for from the rendered result.
+            lane = {key: result[key] for key in ("hosted", "waiver_count") if key in result}
+            result = {**wait_for_close(ref=result["attempt"]["id"], flags=flags), **lane}
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
@@ -271,5 +335,6 @@ __all__ = [
     "call_close_rpc",
     "close_app",
     "render_close_status",
+    "submit_hosted_close",
     "wait_for_close",
 ]
