@@ -13769,6 +13769,21 @@
       "scope_id": "P32-I01-W36",
       "status": "done",
       "updated_at": "2026-09-08T16:55:59.797770Z"
+    },
+    "P32-I01-W37": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W37",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W37",
+      "model": null,
+      "scope_id": "P32-I01-W37",
+      "status": "done",
+      "updated_at": "2026-09-08T17:52:58.508692Z"
     }
   },
   "agent_sessions": {
@@ -16335,15 +16350,15 @@
         "P32-I01-W35",
         "P32-I01-W38"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-08T17:52:51.081927Z",
       "id": "SES-20260908T174435.994990Z-operator-claude-12760925-c34e-4961-bdec-b86c996805b5",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01",
       "started_at": "2026-09-08T17:44:35.994990Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -21387,14 +21402,11 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260908T174435.994990Z-operator-claude-12760925-c34e-4961-bdec-b86c996805b5"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [
       "P32-I01-W05",
       "P32-I01-W11",
       "P32-I01-W35",
-      "P32-I01-W37",
       "P32-I01-W38"
     ],
     "iter_id": "P32-I01",
@@ -40043,7 +40055,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-08T17:45:40.833518Z",
+  "updated_at": "2026-09-08T17:52:58.508870Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -170363,9 +170375,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260908T165638.085920Z-operator-claude-63729f15-3ba2-4a70-bb18-7f9de7cea4b9",
       "claimed_at": "2026-09-08T16:56:38.969261Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-08T17:52:58.508692Z",
+      "commit": "4cb7e895f4ca81adeaa9e7b6043ea415a0e41f70",
+      "commit_identity_digest": "sha256:8e1313d43b26fa385ab8cc7f760b53e7fea905f418ad73362c0397f6574fbecb",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
         "waived_at": "2026-09-08T16:40:37.768361Z",
@@ -170434,13 +170446,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-08T16:40:37.895134Z",
-      "outcome": null,
+      "outcome": "The pairing gate reads phase membership from the subject prefix or the Eawf-Wave trailer and corroborates every named phase against an opened phase record in state, so a single-iter phase PR takes the bundled-review path while an out-of-phase or spoofed-tag unpaired golden mutation still exits non-zero.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",

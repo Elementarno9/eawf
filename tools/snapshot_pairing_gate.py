@@ -34,8 +34,9 @@ it.
 The ``M`` / ``D`` / ``R`` filter is applied **in Python** over the parsed
 records, never as a ``git`` ``--diff-filter``: a ``--diff-filter`` prunes
 the commits with no matching file from the log output entirely, which
-would starve :func:`range_spans_multiple_iters` (it needs *every* commit's
-subject to tell a phase PR apart from a single-iter one). Rename (``R``)
+would starve :func:`is_phase_pr` (it needs *every* commit's scope, not
+just the golden-touching ones, to tell a phase PR from ordinary work).
+Rename (``R``)
 and copy (``C``) entries arrive from ``--name-status -z`` in the three-token
 ``<status>\\0<old-path>\\0<new-path>`` form and are matched on the
 **destination** (new) path.
@@ -54,10 +55,23 @@ missing wave suffix) fails the gate.
 Per-commit pairing is the right contract for managed small-CL PRs. Under
 the one-PR-per-phase model the whole phase ships as a single reviewed unit
 and the snapshot test suite already asserts every committed golden matches
-current-code output, so per-commit ``test:`` pairing is redundant. When the
-PR range spans more than one iter (the phase-PR signal) the gate therefore
-lists the bundled golden-touching commits for reviewer visibility and exits
-``0`` instead of failing. Single-iter ranges keep the hard per-commit gate.
+current-code output, so per-commit ``test:`` pairing is redundant. The gate
+therefore reads the phase membership the commits themselves declare (the
+``[P##...]`` subject prefix, or the ``Eawf-Wave: P##-I##-W##`` trailer the
+trailer-style convention emits) and corroborates it against the repo's own
+``.ea/state.json``: when every phase the range names is one this repo has
+actually opened, the range is that phase's PR, so the gate lists the bundled
+golden-touching commits for reviewer visibility and exits ``0`` instead of
+failing. The determination is independent of how many iters the range
+touches -- a phase that ships in a single iter is still a phase PR.
+
+Ordinary work keeps the hard per-commit gate, and cannot reach the bundled
+path by accident: a range that declares no phase at all (out-of-phase work,
+a hotfix branch off the default branch, an unmanaged fork) names nothing to
+corroborate, and a fabricated scope tag buys nothing because the phase it
+names must exist in ``state.json`` with a status that says the phase was
+opened -- a merely PLANNED phase has no commits yet, so a commit claiming
+one is not a phase PR.
 
 Invocation (GitHub Actions):
 
@@ -75,10 +89,12 @@ Exit codes:
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 from eawf.surfaces.cli.commands.snapshot import SNAPSHOT_SURFACES
 
@@ -100,10 +116,30 @@ _WATCHED_DIRS: tuple[str, ...] = tuple(
 # the digit-width remains ``\d{2,}`` for 3-digit ids.
 _PAIRED_SUBJECT_RE = re.compile(r"^(?:\[P\d{2,}(-I(?!00)\d{2,})?-W(?!00)\d{2,}\]\s+)?test:\s+\S.*$")
 
-# Phase/iter scope key at the head of a commit subject, e.g. ``[P27-I04-W04]``
-# -> ``P27-I04`` and the bare pre-I02 form ``[P27-W19]`` -> ``P27``. Used to
-# tell a multi-iter phase-PR range apart from a single-iter small-CL range.
-_ITER_KEY_RE = re.compile(r"^\[(P\d{2,}(?:-I\d{2,})?)")
+# Phase id carried by a bracket-style subject prefix: ``[P27-I04-W04]``,
+# ``[P27-W19]``, ``[P27-I04]`` and the bare bookkeeping form ``[P27]`` all
+# name phase ``P27``. Trailing scope segments are matched loosely because
+# only the phase segment decides membership.
+_SUBJECT_PHASE_RE = re.compile(r"^\[(P\d{2,})[^\]]*\]")
+
+# Phase id carried by the trailer-style convention's ``Eawf-Wave`` line, the
+# only phase carrier a bare ``<type>: <summary>`` subject has. Matched over
+# the raw body rather than via ``git``'s ``%(trailers)`` because that
+# interpolation only sees the message's LAST paragraph, and the co-author
+# trailer routinely lands in a paragraph of its own below this one.
+_WAVE_TRAILER_RE = re.compile(
+    r"^Eawf-Wave:[ \t]*(P\d{2,})-I\d{2,}-W\d{2,}[ \t]*$",
+    re.MULTILINE,
+)
+
+# Phase statuses that mean "this phase has been opened and can own commits".
+# PLANNED is excluded on purpose: a planned phase has no commits, so a range
+# whose commits claim one is mislabelled work, not a phase PR.
+_OPENED_PHASE_STATUSES = frozenset({"active", "closed", "archived"})
+
+# The committed state document, relative to a project root. Read-only here:
+# the gate corroborates commit-declared scope, it never mutates state.
+_STATE_RELPATH = Path(".ea") / "state.json"
 
 # Sentinel token that heads each commit's ``git log`` record. It cannot
 # collide with a ``--name-status`` status token (single letter + optional
@@ -112,10 +148,16 @@ _ITER_KEY_RE = re.compile(r"^\[(P\d{2,}(?:-I\d{2,})?)")
 _RECORD_SENTINEL = "COMMIT"
 
 # ``git log --format`` string that prints, per commit, the sentinel, the
-# full SHA, and the subject, each field NUL-separated (``%x00``). The
-# ``-z`` flag then NUL-terminates the header and NUL-delimits the trailing
-# ``--name-status`` file entries so the whole stream parses in one pass.
-_LOG_FORMAT = f"--format={_RECORD_SENTINEL}%x00%H%x00%s"
+# full SHA, the subject, and the raw body, each field NUL-separated
+# (``%x00``). The ``-z`` flag then NUL-terminates the header and
+# NUL-delimits the trailing ``--name-status`` file entries so the whole
+# stream parses in one pass. The body rides along because it carries the
+# ``Eawf-Wave`` trailer, which is the phase carrier for trailer-style
+# commits; a body cannot contain a NUL, so it stays one token.
+_LOG_FORMAT = f"--format={_RECORD_SENTINEL}%x00%H%x00%s%x00%b"
+
+# Header field count per commit record: sentinel, SHA, subject, body.
+_HEADER_FIELDS = 4
 
 # Status codes that count as a golden *mutation* — the Python-side
 # equivalent of the old ``git diff-tree --diff-filter=MDR``. ``A`` (add)
@@ -131,6 +173,9 @@ class CommitRecord:
     Attributes:
         sha: The full 40-hex commit SHA.
         subject: The commit subject (``%s`` — first line only, no newline).
+        body: The raw commit body (``%b`` — everything below the subject),
+            which carries the ``Eawf-Wave`` trailer when the repo is on the
+            trailer-style subject convention.
         changed: ``(status_code, path)`` pairs for the commit's changed
             files. ``status_code`` is the leading letter of the raw status
             (``M`` / ``A`` / ``D`` / ``R`` / ``C`` / ...); for rename and
@@ -139,6 +184,7 @@ class CommitRecord:
 
     sha: str
     subject: str
+    body: str
     changed: tuple[tuple[str, str], ...]
 
 
@@ -161,8 +207,8 @@ def _parse_log(raw: str) -> list[CommitRecord]:
     """Parse a ``git log --name-status -z`` stream into :class:`CommitRecord`s.
 
     The stream is a flat NUL-delimited token list. Each commit opens with
-    the :data:`_RECORD_SENTINEL` token, followed by its SHA and subject;
-    then come the ``--name-status`` file entries. A plain entry is two
+    the :data:`_RECORD_SENTINEL` token, followed by its SHA, subject and
+    raw body; then come the ``--name-status`` file entries. A plain entry is two
     tokens (``<status>``, ``<path>``); a rename / copy entry is three
     (``<status>``, ``<old-path>``, ``<new-path>``) and is recorded against
     its destination path. The first status token of each commit carries a
@@ -179,7 +225,7 @@ def _parse_log(raw: str) -> list[CommitRecord]:
     """
     tokens = raw.split("\x00")
     records: list[CommitRecord] = []
-    header: tuple[str, str] | None = None
+    header: tuple[str, str, str] | None = None
     changed: list[tuple[str, str]] = []
     index = 0
     total = len(tokens)
@@ -187,10 +233,10 @@ def _parse_log(raw: str) -> list[CommitRecord]:
         token = tokens[index]
         if token == _RECORD_SENTINEL:
             if header is not None:
-                records.append(CommitRecord(header[0], header[1], tuple(changed)))
-            header = (tokens[index + 1], tokens[index + 2])
+                records.append(CommitRecord(header[0], header[1], header[2], tuple(changed)))
+            header = (tokens[index + 1], tokens[index + 2], tokens[index + 3])
             changed = []
-            index += 3
+            index += _HEADER_FIELDS
             continue
         status = token.strip()
         if not status:
@@ -205,7 +251,7 @@ def _parse_log(raw: str) -> list[CommitRecord]:
             changed.append((code, tokens[index + 1]))
             index += 2
     if header is not None:
-        records.append(CommitRecord(header[0], header[1], tuple(changed)))
+        records.append(CommitRecord(header[0], header[1], header[2], tuple(changed)))
     return records
 
 
@@ -262,28 +308,102 @@ def is_paired(subject: str) -> bool:
     return bool(_PAIRED_SUBJECT_RE.match(subject))
 
 
-def iter_key(subject: str) -> str | None:
-    """Return the phase-or-iter scope key (``P27-I04`` or ``P27``) from *subject*.
+def phase_key(record: CommitRecord) -> str | None:
+    """Return the phase id (``P27``) *record* declares, or ``None``.
 
-    Pre-I02 commits carry a bare ``[P##-W##]`` tag with no iter segment;
-    those map onto the bare phase key ``P##``. Returns ``None`` when the
-    subject has no recognisable scope tag.
+    A commit names its phase through exactly one of two carriers: the
+    bracket-style subject prefix (``[P27-I04-W04]``, ``[P27-W19]``,
+    ``[P27]``), or the ``Eawf-Wave: P##-I##-W##`` body trailer that the
+    trailer-style convention emits under a bare ``<type>: <summary>``
+    subject. Both are read here so the gate's view of phase membership does
+    not depend on which convention the repo is configured for.
+
+    Args:
+        record: The parsed commit to read scope from.
+
+    Returns:
+        The phase id, or ``None`` when the commit declares no phase (which
+        is the honest form for out-of-phase work).
     """
-    match = _ITER_KEY_RE.match(subject)
-    return match.group(1) if match else None
+    subject_match = _SUBJECT_PHASE_RE.match(record.subject)
+    if subject_match is not None:
+        return subject_match.group(1)
+    trailer_match = _WAVE_TRAILER_RE.search(record.body)
+    return trailer_match.group(1) if trailer_match is not None else None
 
 
-def range_spans_multiple_iters(records: list[CommitRecord]) -> bool:
-    """Return whether *records* reference more than one distinct phase/iter scope.
+def opened_phase_ids(start: Path | None = None) -> frozenset[str]:
+    """Return the ids of phases the repo has actually opened.
 
-    A phase PR (the one-PR-per-phase model) bundles commits from every iter
-    of the phase, so its range yields multiple distinct iter keys; a managed
-    small-CL PR stays within a single iter. The per-commit pairing contract
-    is enforced only for the latter — phase PRs defer to wholesale diff review
-    plus the snapshot test suite, which already pins golden freshness.
+    Reads the committed ``.ea/state.json``, walking up from *start* to find
+    the project root the way any tool invoked from a subdirectory must. The
+    document is parsed as a plain mapping rather than through the typed
+    state model on purpose: a CI gate must not red because the state schema
+    moved under it, and only two shallow fields are needed here. Only
+    phases whose status says the phase was opened
+    (:data:`_OPENED_PHASE_STATUSES`) are returned, so a PLANNED phase id --
+    which by definition owns no commits -- corroborates nothing.
+
+    Absence and corruption both read as "no phases known", which fails
+    closed: without corroboration the gate keeps its hard per-commit
+    contract rather than waving a range through.
+
+    Args:
+        start: Directory to begin the upward search from; defaults to the
+            current working directory, which is also the repo ``git`` runs
+            against.
+
+    Returns:
+        The opened phase ids, empty when no readable state document exists.
     """
-    keys = {key for record in records if (key := iter_key(record.subject))}
-    return len(keys) > 1
+    origin = Path.cwd() if start is None else start
+    for parent in [origin, *origin.parents]:
+        candidate = parent / _STATE_RELPATH
+        if not candidate.is_file():
+            continue
+        try:
+            raw = json.loads(candidate.read_text(encoding="utf-8"))
+        except OSError, json.JSONDecodeError:
+            return frozenset()
+        if not isinstance(raw, dict):
+            return frozenset()
+        phases = raw.get("phases")
+        if not isinstance(phases, dict):
+            return frozenset()
+        return frozenset(
+            phase_id
+            for phase_id, phase in phases.items()
+            if isinstance(phase, dict) and phase.get("status") in _OPENED_PHASE_STATUSES
+        )
+    return frozenset()
+
+
+def is_phase_pr(records: list[CommitRecord], *, opened_phases: frozenset[str]) -> bool:
+    """Return whether *records* form the PR of one or more opened phases.
+
+    Under the one-PR-per-phase model a phase ships as a single reviewed
+    unit, so the range that carries it defers to wholesale diff review plus
+    the snapshot suite, which already pins golden freshness. The signal is
+    the phase membership the commits declare, corroborated against the
+    phases *this repo* has opened -- not the number of iters the range
+    touches, which says nothing about whether the range is a phase PR (a
+    phase that lands in one iter is still a phase PR).
+
+    Ordinary work cannot fall into this path: a range that declares no phase
+    contributes no key and is rejected, and a scope tag naming a phase the
+    repo never opened is not corroborated.
+
+    Args:
+        records: The parsed commits of the ``base..head`` range.
+        opened_phases: Phase ids the repo has opened, per
+            :func:`opened_phase_ids`.
+
+    Returns:
+        ``True`` when the range names at least one phase and every phase it
+        names was opened by this repo.
+    """
+    named = {key for record in records if (key := phase_key(record))}
+    return bool(named) and named <= opened_phases
 
 
 def _unpaired_in_records(records: list[CommitRecord]) -> list[tuple[str, str]]:
@@ -339,18 +459,18 @@ def main(argv: list[str]) -> int:
         print("snapshot pairing gate: ok (all golden changes paired)")
         return 0
 
-    if range_spans_multiple_iters(records):
-        # Phase-PR model (one PR per phase): the range bundles commits from
-        # multiple iters and ships as a single reviewed unit, and the snapshot
-        # test suite already asserts every committed golden matches current-
-        # code output. Per-commit ``test:``-subject pairing is a small-CL
-        # review proxy that adds nothing here, so surface the bundled golden
+    if is_phase_pr(records, opened_phases=opened_phase_ids()):
+        # Phase-PR model (one PR per phase): the range carries an opened
+        # phase and ships as a single reviewed unit, and the snapshot test
+        # suite already asserts every committed golden matches current-code
+        # output. Per-commit ``test:``-subject pairing is a small-CL review
+        # proxy that adds nothing here, so surface the bundled golden
         # commits for reviewer visibility without blocking the merge.
         print(
-            "snapshot pairing gate: phase PR detected (range spans multiple iters); "
-            "golden changes are reviewed wholesale and pinned by the snapshot test "
-            "suite, so per-commit pairing is not enforced. Bundled golden-touching "
-            "commits:"
+            "snapshot pairing gate: phase PR detected (every phase the range names is "
+            "an opened phase in .ea/state.json); golden changes are reviewed wholesale "
+            "and pinned by the snapshot test suite, so per-commit pairing is not "
+            "enforced. Bundled golden-touching commits:"
         )
         for short_sha, subject in offenders:
             print(f"  {short_sha} {subject!r}")
