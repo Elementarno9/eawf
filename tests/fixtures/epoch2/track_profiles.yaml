@@ -1,0 +1,18 @@
+# Track lifecycle census: the two stored states, and the states a profile
+# or an epoch-1 record might try to supply instead.
+#
+# `admitted` is exhaustive. `refused` mixes three sources of an invented
+# state: the epoch-1 members dropped at the cutover, the lowercase epoch-1
+# spellings of the two survivors, and states a domain profile might wish
+# for. None of them may reach a Track row.
+admitted:
+  - ACTIVE
+  - RETIRED
+refused:
+  - PLANNED
+  - DEFERRED
+  - active
+  - retired
+  - PAUSED
+  - ARCHIVED
+  - ""

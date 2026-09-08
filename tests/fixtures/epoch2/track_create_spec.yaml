@@ -1,0 +1,37 @@
+# A complete Track create document, parsed through the same strict model
+# the daemon's RPC parameters use.
+key: TRK-RUNTIME
+title: Harden the runtime against a provider outage
+charter: >-
+  Keep a run recoverable when a provider stops responding, so an outage costs
+  a retry rather than an operator's afternoon.
+scope:
+  scope_kind: repository
+  repository_ref: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/repository/REP-EAWF
+in_scope:
+  - provider failover
+  - run resumption after a lost session
+out_of_scope:
+  - billing reconciliation
+owner:
+  principal_kind: operator
+  principal_id: OP-0001
+policy:
+  revision: 1
+  wip:
+    active_milestones: 1
+    active_batches_per_repo: 1
+  ownership_principal:
+    principal_kind: operator
+    principal_id: OP-0001
+  permitted_milestone_kinds: [product, platform]
+  campaign_templates: []
+  outcome_metrics:
+    - metric_id: MET-INSTALLABLE
+      unit: boolean
+      measurement_locus: milestone_acceptance
+  promotion_rules: []
+  integration_priority: 50
+  presentation:
+    default_view: roadmap
+    color_token: accent_blue
