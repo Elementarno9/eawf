@@ -21,4 +21,4 @@ checks:
   - kind: command_exit_zero
     name: ruff_no_errors
     args:
-      argv: ["echo", "ok"]
+      argv: ["ruff", "check", "src"]

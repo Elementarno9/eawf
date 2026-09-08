@@ -75,13 +75,15 @@ def _command_gate(argv: list[str], gate_id: str = "G-1") -> GateSpec:
 def test_run_rung1_gate_pass_certifies_criterion(tmp_path: Path) -> None:
     """A gate whose argv exits 0 (returncode == 0) CERTIFIES the criterion.
 
-    ``uv run pytest --version`` exits 0 and stays inside the L0 argv
-    allowlist (``pytest`` head under the ``uv run`` wrapper), so the
-    GateSpec construction validator accepts it and the live subprocess
-    returns ``returncode == 0`` -> ``passed`` -> rung-1 ``"pass"``.
+    ``pytest --version`` exits 0 and stays inside the L0 argv allowlist,
+    so the GateSpec construction validator accepts it and the live
+    subprocess returns ``returncode == 0`` -> ``passed`` -> rung-1
+    ``"pass"``. The head is bare rather than ``uv run``-wrapped because
+    the gate runs in an empty ``tmp_path`` where ``uv`` has no project to
+    resolve the tool from.
     """
     criterion = _deterministic_criterion()
-    gate = _command_gate(["uv", "run", "pytest", "--version"])
+    gate = _command_gate(["pytest", "--version"])
     record = run_rung1_gate(gate, criterion, scope_id=_SCOPE, runner_cwd=tmp_path)
     assert isinstance(record, EvidenceRecord)
     assert record.status == "pass"
