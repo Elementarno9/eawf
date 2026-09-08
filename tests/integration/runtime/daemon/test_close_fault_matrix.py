@@ -355,7 +355,7 @@ def _submit_without_worker(
     ctx: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> str:
-    monkeypatch.setattr(close_module, "_schedule", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(close_module, "schedule_attempt", lambda *_args, **_kwargs: False)
     submitted = asyncio.run(
         submit(
             ctx,
@@ -707,7 +707,7 @@ def test_worker_shutdown_from_preparing_is_durable_and_restart_reschedules(
         scheduled.append(attempt_id)
         return True
 
-    monkeypatch.setattr(close_module, "_schedule", _record_schedule)
+    monkeypatch.setattr(close_module, "schedule_attempt", _record_schedule)
     assert resume_durable_close_attempts(ctx) == 1
     assert scheduled == [attempt_id]
     recovered = State.model_validate_json(state_path.read_bytes())
@@ -1135,7 +1135,7 @@ def test_typed_worker_fault_persists_its_exact_failure_kind(
 ) -> None:
     """Each typed exception reaches ``state.json`` as its own failure kind."""
     repo, state_path, ctx = _repo_with_state(tmp_path)
-    monkeypatch.setattr(close_module, "_schedule", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(close_module, "schedule_attempt", lambda *_args, **_kwargs: False)
     close_module._SHUTTING_DOWN = False
     attempt_id = _submit_unscheduled(ctx, repo=repo, state_path=state_path, retry_budget=0)
 
@@ -1163,7 +1163,7 @@ def test_operator_cancel_persists_operator_cancelled(
 ) -> None:
     """The cancel RPC is the only producer of ``operator_cancelled``."""
     repo, state_path, ctx = _repo_with_state(tmp_path)
-    monkeypatch.setattr(close_module, "_schedule", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(close_module, "schedule_attempt", lambda *_args, **_kwargs: False)
     close_module._SHUTTING_DOWN = False
     attempt_id = _submit_unscheduled(ctx, repo=repo, state_path=state_path, retry_budget=1)
 
@@ -1191,7 +1191,7 @@ def test_harness_fault_still_spends_the_infrastructure_retry_budget(
 ) -> None:
     """Boundary: a retryable harness fault re-queues instead of going terminal."""
     repo, state_path, ctx = _repo_with_state(tmp_path)
-    monkeypatch.setattr(close_module, "_schedule", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(close_module, "schedule_attempt", lambda *_args, **_kwargs: False)
     close_module._SHUTTING_DOWN = False
     attempt_id = _submit_unscheduled(ctx, repo=repo, state_path=state_path, retry_budget=1)
 

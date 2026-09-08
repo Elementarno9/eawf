@@ -456,7 +456,7 @@ def test_crashing_gate_requeues_the_close_attempt_for_resume(
     lands as an infrastructure retry.
     """
     repo, state_path, ctx = _repo_with_state(tmp_path)
-    monkeypatch.setattr(close_module, "_schedule", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(close_module, "schedule_attempt", lambda *_args, **_kwargs: False)
     close_module._SHUTTING_DOWN = False
 
     async def _submit() -> str:

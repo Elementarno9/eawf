@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _state_path(ctx: MethodContext, repo_root: Path) -> Path:
+def anchor_state_path(ctx: MethodContext, repo_root: Path) -> Path:
     from eawf.surfaces.cli.scope import resolve_state_path
 
     if ctx.state_path is not None:
@@ -52,7 +52,7 @@ def _state_path(ctx: MethodContext, repo_root: Path) -> Path:
 def _load_state(ctx: MethodContext, repo_root: Path) -> State:
     from eawf.runtime.daemon.methods.state_context import read_state
 
-    state, _payload = read_state(_state_path(ctx, repo_root))
+    state, _payload = read_state(anchor_state_path(ctx, repo_root))
     return state
 
 
@@ -219,13 +219,13 @@ def reusable_pass_gate_ids(
     attempt_id: str,
 ) -> set[str]:
     """Return gates with pass receipts bound to the attempt's frozen inputs."""
-    scrub_gate_receipt_store(_state_path(ctx, repo_root))
+    scrub_gate_receipt_store(anchor_state_path(ctx, repo_root))
     state = _load_state(ctx, repo_root)
     attempt = state.close_attempts.get(attempt_id)
     if attempt is None or not attempt.gate_receipt_ids:
         return set()
     wanted = set(attempt.gate_receipt_ids)
-    path = store_path(_state_path(ctx, repo_root), StoreKind.GATE_RECEIPT)
+    path = store_path(anchor_state_path(ctx, repo_root), StoreKind.GATE_RECEIPT)
     if not path.is_file():
         return set()
     reusable: set[str] = set()
@@ -331,7 +331,7 @@ def persist_gate_receipt(
     result: CheckResult,
 ) -> str | None:
     """Persist one complete deterministic receipt and bind it to its attempt."""
-    scrub_gate_receipt_store(_state_path(ctx, repo_root))
+    scrub_gate_receipt_store(anchor_state_path(ctx, repo_root))
     state = _load_state(ctx, repo_root)
     attempt = state.close_attempts.get(attempt_id)
     if attempt is None:
@@ -381,7 +381,7 @@ def persist_gate_receipt(
     assert result.full_log_ref is not None
     assert result.freshness_key is not None
     receipt_id = f"GR-{result.freshness_key[:32]}"
-    receipt_path = store_path(_state_path(ctx, repo_root), StoreKind.GATE_RECEIPT)
+    receipt_path = store_path(anchor_state_path(ctx, repo_root), StoreKind.GATE_RECEIPT)
     found, existing_id = _reuse_existing_gate_receipt(
         ctx,
         repo_root=repo_root,
@@ -420,7 +420,7 @@ def persist_gate_receipt(
         log_present=True,
     )
     write_gate_diagnostic(
-        _state_path(ctx, repo_root),
+        anchor_state_path(ctx, repo_root),
         local_diagnostic,
         log_bytes=log_bytes,
     )
@@ -479,7 +479,7 @@ def persist_gate_receipt(
             else None
         ),
     )
-    append_gate_receipt(_state_path(ctx, repo_root), receipt)
+    append_gate_receipt(anchor_state_path(ctx, repo_root), receipt)
     row = _load_state(ctx, repo_root).close_attempts.get(attempt_id)
     if row is not None and receipt.id not in row.gate_receipt_ids:
         commit_attempt(

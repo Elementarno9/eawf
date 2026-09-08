@@ -36,11 +36,11 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
-from eawf.runtime.daemon.methods.spec import (
-    _cache_replay,
-    _idempotent_replay,
-    _publish,
-    _validate_post_sync,
+from eawf.runtime.daemon.methods.spec_context import (
+    cache_replay,
+    idempotent_replay,
+    publish_envelope,
+    validate_post_sync,
 )
 from eawf.runtime.daemon.methods.state_context import (
     read_state,
@@ -166,7 +166,7 @@ async def repoint_gates(ctx: MethodContext, params: dict[str, Any]) -> dict[str,
             f"validation_failed: gate repoint targets a wave scope, got {args.wave_id!r}"
         )
 
-    replay = _idempotent_replay(ctx, args.idempotency_key)
+    replay = idempotent_replay(ctx, args.idempotency_key)
     if replay is not None:
         logger.info(f"repoint_gates idempotent_replay wave={args.wave_id!r}")
         return replay
@@ -193,7 +193,7 @@ async def repoint_gates(ctx: MethodContext, params: dict[str, Any]) -> dict[str,
                 event_path=event_path,
                 wal_path=wal_path,
             )
-        _cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
+        cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
         return result
     finally:
         ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
@@ -238,7 +238,7 @@ def _apply_repoint_locked(
 
     state.updated_at = datetime.now(UTC)
     new_payload = state.model_dump(mode="json")
-    after_version = _validate_post_sync(new_payload)
+    after_version = validate_post_sync(new_payload)
 
     mutation_id = uuid.uuid4().hex
     envelope = _build_repoint_envelope(
@@ -262,7 +262,7 @@ def _apply_repoint_locked(
     wal.mark_applied(wal_path, mutation_id)
     append_envelope(event_path, envelope)
     wal.mark_fsynced(wal_path, mutation_id)
-    _publish(ctx, envelope)
+    publish_envelope(ctx, envelope)
     logger.info(
         f"repoint_gates ok wave={args.wave_id} changed={len(report.changed)} "
         f"before={before_version} after={after_version}"
