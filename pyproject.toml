@@ -604,10 +604,14 @@ path = "src/eawf/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/eawf"]
-# ``_data/`` is populated at wheel-build time by the custom build hook
-# below (it does not exist in the source tree). Force-include keeps it
-# in the wheel even though it is gitignored / generated.
-force-include = { "src/eawf/_data" = "eawf/_data" }
+# ``_data/`` is generated (and gitignored) -- the custom build hook below
+# writes it under ``src/eawf/`` before the archive is assembled, so the
+# ``packages`` glob above is the single mechanism that carries it into the
+# wheel. ``artifacts`` only lifts the VCS-ignore exclusion for that tree; a
+# ``force-include`` here would add every file a second time and abort the
+# build with a duplicate archive member whenever the hook had already run
+# in place.
+artifacts = ["/src/eawf/_data/**"]
 
 [tool.hatch.build.targets.wheel.hooks.custom]
 # Custom build hook that populates ``src/eawf/_data/`` from the
