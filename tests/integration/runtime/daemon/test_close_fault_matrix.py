@@ -306,6 +306,7 @@ def test_receipt_miss_executes_once_and_hit_executes_zero_more(
         _specs: list[CheckSpec],
         *,
         cwd: Path | None = None,
+        live_state_path: Path | None = None,
     ) -> list[CheckResult]:
         nonlocal executions
         executions += 1
@@ -327,7 +328,7 @@ def test_receipt_miss_executes_once_and_hit_executes_zero_more(
             args={"path": "payload.txt"},
         ),
     )
-    monkeypatch.setattr(oracle, "run_checks", _run_checks)
+    monkeypatch.setattr(oracle, "run_checks_out_of_process", _run_checks)
 
     async def _score(reusable: set[str]) -> None:
         result = await oracle.run_oracle(

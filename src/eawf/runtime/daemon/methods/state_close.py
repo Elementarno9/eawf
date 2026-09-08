@@ -580,6 +580,7 @@ async def score_required_criteria(
             before_gate_execute=before_gate_execute,
             after_gate_execute=on_gate_result,
             require_all_deterministic=bool(close_attempt_id),
+            close_attempt_id=close_attempt_id,
         )
         if result.status != "pass":
             logger.warning(
