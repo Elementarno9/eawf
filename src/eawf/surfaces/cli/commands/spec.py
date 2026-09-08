@@ -1,16 +1,17 @@
 """``eawf spec`` Typer sub-app — proxies through the daemon.
 
-Six verbs:
+Mutating verbs plus one read-only recovery verb:
 
 * ``eawf spec init <scope-id> --title ... --repo-code ...``
 * ``eawf spec validate <scope-id> --repo-code ...``
 * ``eawf spec promote <scope-id> --to {READY,IMPLEMENTED} --repo-code ...``
 * ``eawf spec archive <scope-id> --repo-code ...``
 * ``eawf spec sync <wave-id> [--spec-path PATH]``
+* ``eawf spec repoint-gates <wave-id> --gate 'G-01=<argv>'``
 * ``eawf spec show <urn> [--from-git]`` (read-only)
 
-The first five are mutators and route through the daemon's
-``spec.{init,validate,promote,archive,sync}`` JSON-RPC methods per
+Every verb but ``show`` is a mutator and routes through the daemon's
+``spec.{init,validate,promote,archive,sync,repoint_gates}`` JSON-RPC methods per
 authority-map row 9-10. The dispatch matches the existing
 ``_persist_registry`` shape: daemon-proxy arm by default; the
 daemonless carve-out (``EAWF_DAEMONLESS=1`` or daemon unreachable)
@@ -18,7 +19,8 @@ falls back to the in-process writer for the operations that do not
 require a running daemon. ``archive`` always requires the daemon up because the
 ``git rm`` + cache atomicity is daemon-owned. ``sync`` is likewise always
 daemon-mediated because materialising the parsed criteria + gates onto
-``state.json`` is a canonical state mutation (AGENTS rule 4).
+``state.json`` is a canonical state mutation (AGENTS rule 4), and
+``repoint-gates`` for the same reason.
 
 ``show`` is the recovery surface: it reads the daemon-resident cache
 to find ``file_path`` + ``file_sha``, then either reads the file from
@@ -30,6 +32,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Annotated, Any
@@ -545,6 +548,108 @@ def spec_convert_legacy_cmd(
         raise
     result["proxied"] = True
     _emit_convert_legacy_result(result, flags=flags)
+
+
+def parse_gate_repoint(spec: str) -> dict[str, Any]:
+    """Parse one ``--gate GATE_ID=<argv>`` value into a repoint row.
+
+    The argv half is split with :func:`shlex.split` so a quoted argument
+    (``-k 'not slow'``) survives as one argv element instead of being
+    torn apart on whitespace.
+
+    Args:
+        spec: The raw option value, ``<gate-id>=<argv>``.
+
+    Returns:
+        A ``{"gate_id": ..., "argv": [...]}`` row for the RPC params.
+
+    Raises:
+        typer.BadParameter: When the value carries no ``=``, names an
+            empty gate id, or supplies an empty argv.
+    """
+    gate_id, separator, argv_text = spec.partition("=")
+    if not separator:
+        raise typer.BadParameter(f"expected <gate-id>=<argv>, got {spec!r}")
+    gate_id = gate_id.strip()
+    if not gate_id:
+        raise typer.BadParameter(f"empty gate id in {spec!r}")
+    argv = shlex.split(argv_text)
+    if not argv:
+        raise typer.BadParameter(f"empty argv for gate {gate_id!r}")
+    return {"gate_id": gate_id, "argv": argv}
+
+
+def _emit_repoint_result(payload: dict[str, Any], *, flags: GlobalFlags) -> None:
+    """Emit the ``spec.repoint_gates`` RPC result as JSON or terse text."""
+    mode = "dry-run" if payload.get("dry_run") else "applied"
+    lines = [
+        f"repoint-gates {mode} wave={payload.get('wave_id')!r} "
+        f"changed={payload.get('changed_count')}"
+    ]
+    for row in payload.get("changed", []):
+        lines.append(
+            f"  {row.get('gate_id')}: {' '.join(row.get('before_argv', []))} "
+            f"-> {' '.join(row.get('after_argv', []))}"
+        )
+    emit_json_or_text(payload, "\n".join(lines), flags=flags)
+
+
+@spec_app.command("repoint-gates")
+def spec_repoint_gates_cmd(
+    ctx: typer.Context,
+    wave_id: Annotated[str, typer.Argument(help="Closed wave id: P##-I##-W##.")],
+    gate: Annotated[
+        list[str],
+        typer.Option(
+            "--gate",
+            help="Repoint one gate: 'GATE-ID=uv run pytest tests/new/path.py'. Repeatable.",
+        ),
+    ],
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Report the would-change set without writing state."),
+    ] = False,
+) -> None:
+    """Rewrite the recorded gate argv of a CLOSED wave after a tree move.
+
+    A closed wave's gates are its verification record. When a later wave
+    moves the tree beneath them the recorded argv names a path that no
+    longer exists, so replaying the record exits on a usage error even
+    though the verification was sound. This verb rewrites that argv --
+    and only that argv -- so the record stays re-runnable without
+    reopening the wave: the mutation is refused outright if it would move
+    the wave's criteria, outcome, ``closed_at``, or any non-argv gate
+    field.
+
+    Always daemon-mediated: the state mutation is daemon-owned, so there
+    is no in-process fallback.
+    """
+    from eawf.surfaces.cli._mutation import _daemon_reachable
+
+    flags: GlobalFlags = ctx.obj
+    repo_root = (flags.workspace or Path.cwd()).resolve()
+
+    if not _daemon_proxy_enabled_for_spec() or not _daemon_reachable():
+        raise cli_errors.StateConflict(
+            "daemon_required: spec repoint-gates requires the daemon up; run `eawf daemon start`",
+            kind="IntegrityViolation",
+        )
+
+    params: dict[str, Any] = {
+        "wave_id": wave_id,
+        "repoints": [parse_gate_repoint(entry) for entry in gate],
+        "dry_run": dry_run,
+        "repo_root": str(repo_root),
+    }
+    try:
+        with DaemonClient() as client:
+            result = client.call("spec.repoint_gates", params)
+    except DaemonRpcError as exc:
+        if exc.code in (-32602, cli_errors.RPC_VALIDATION_FAILED):
+            raise cli_errors.ValidationError(exc.message) from exc
+        raise
+    result["proxied"] = True
+    _emit_repoint_result(result, flags=flags)
 
 
 # ---- Read-only surface ----------------------------------------------------

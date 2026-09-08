@@ -49,6 +49,7 @@ import eawf.runtime.daemon.methods.release  # registers release.{show,compute_re
 import eawf.runtime.daemon.methods.research  # registers research.create_campaign (P29-I09-W07)
 import eawf.runtime.daemon.methods.spec  # registers spec.{init,validate,promote,archive} (P25-W03)
 import eawf.runtime.daemon.methods.spec_convert  # registers spec.convert_legacy (P30-I23-W24)
+import eawf.runtime.daemon.methods.spec_repoint  # registers spec.repoint_gates
 import eawf.runtime.daemon.methods.state  # registers state.read / state.mutate / state.digest
 import eawf.runtime.daemon.methods.state_subscribe  # noqa: F401  — registers (state|event).subscribe
 from eawf.kernel.store.envelope import Envelope
