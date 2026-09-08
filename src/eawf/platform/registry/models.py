@@ -17,8 +17,20 @@ Registry shape on disk::
       "repos": {
         "EAWF": {"code": "EAWF", "path": "/repos/eawf", "title": "Ea"},
         "DEMO": {"code": "DEMO", "path": "/repos/demo", "title": "Demo"}
+      },
+      "workspaces": {
+        "MONO": {
+          "key": "MONO",
+          "title": "Mono",
+          "member_project_codes": ["DEMO", "EAWF"],
+          "home_project_code": "EAWF",
+          "revision": 1
+        }
       }
     }
+
+``workspaces`` is optional: a registry file written before workspaces
+existed loads unchanged and resolves to an empty mapping.
 
 The mutator side lives in :mod:`eawf.surfaces.cli.commands.repo` (which dispatches
 to the daemon's ``registry.update`` RPC by default per D-SUP-01); this
@@ -33,7 +45,17 @@ from pathlib import Path
 from typing import Any
 
 import orjson
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
+
+from eawf.kernel.state.ids import is_project_code
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +110,86 @@ class RegistryRepoEntry(BaseModel):
     last_seen: datetime | None = None
 
 
+class WorkspaceRecord(BaseModel):
+    """One entry under :attr:`Registry.workspaces`.
+
+    A workspace is an operator-declared grouping of already-registered
+    repos. It is the unit a qualified URN is minted against, so the
+    record has to be unambiguous: every member is named explicitly by
+    project code and one of those members is the home repo whose
+    ``state.json`` anchors the workspace.
+
+    Membership is declared, never discovered. Per the
+    ``feedback_explicit_registry_only`` rule there is no filesystem
+    scan behind this record; an operator adds members with
+    ``eawf workspace member add``.
+
+    Attributes:
+        key: Workspace identifier, project-code shape
+            (``[A-Z][A-Z0-9_-]{1,15}``). Also the mapping key under
+            :attr:`Registry.workspaces`.
+        title: Optional human-readable title; display falls back to
+            :attr:`key` when absent.
+        member_project_codes: Non-empty set of project codes that
+            belong to the workspace. Serialised sorted so a rewrite of
+            an unchanged registry is byte-stable.
+        home_project_code: The member whose repo anchors the
+            workspace. MUST be an element of
+            :attr:`member_project_codes`.
+        revision: Compare-and-set counter. A membership mutation that
+            declares an expected revision is refused when the on-disk
+            record has moved on, so two concurrent editors cannot
+            silently clobber one another.
+        updated_at: Optional stamp of the last explicit mutation.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    title: str | None = None
+    member_project_codes: frozenset[str] = Field(min_length=1)
+    home_project_code: str
+    revision: int = Field(default=1, ge=1)
+    updated_at: datetime | None = None
+
+    @field_validator("key", "home_project_code")
+    @classmethod
+    def _validate_code_shape(cls, value: str) -> str:
+        """Reject a key or home code that is not project-code shaped."""
+        if not is_project_code(value):
+            raise ValueError(f"not a project code: {value!r}")
+        return value
+
+    @field_validator("member_project_codes")
+    @classmethod
+    def _validate_member_shapes(cls, value: frozenset[str]) -> frozenset[str]:
+        """Reject a member set containing a non-project-code entry."""
+        bad = sorted(code for code in value if not is_project_code(code))
+        if bad:
+            raise ValueError(f"member project codes are not project codes: {bad}")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_home_is_member(self) -> WorkspaceRecord:
+        """Reject a home repo that is not part of the declared membership.
+
+        A workspace whose anchor sits outside its own member set would
+        mint URNs against a repo the workspace does not track, so this
+        is rejected at load time rather than at mint time.
+        """
+        if self.home_project_code not in self.member_project_codes:
+            raise ValueError(
+                f"home_project_code {self.home_project_code!r} is not in "
+                f"member_project_codes {sorted(self.member_project_codes)}"
+            )
+        return self
+
+    @field_serializer("member_project_codes")
+    def _serialize_members(self, value: frozenset[str]) -> list[str]:
+        """Emit members as a sorted list so on-disk bytes stay stable."""
+        return sorted(value)
+
+
 class Registry(BaseModel):
     """Read-only view over ``~/.eawf/registry.json``.
 
@@ -105,6 +207,9 @@ class Registry(BaseModel):
         active_code: Optional code marking the "active" repo for the
             workspace dashboard's quadrant body.
         repos: Mapping of project-code to :class:`RegistryRepoEntry`.
+        workspaces: Mapping of workspace key to
+            :class:`WorkspaceRecord`. Defaults to empty so a registry
+            file written before workspaces existed still loads.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -113,6 +218,20 @@ class Registry(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     active_code: str | None = None
     repos: dict[str, RegistryRepoEntry] = Field(default_factory=dict)
+    workspaces: dict[str, WorkspaceRecord] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_workspace_keys(self) -> Registry:
+        """Reject a workspace filed under a key that is not its own.
+
+        The mapping key is what every lookup path uses; letting it
+        drift from ``record.key`` would make ``get`` and ``resolve``
+        disagree about the same record.
+        """
+        mismatched = sorted(key for key, record in self.workspaces.items() if record.key != key)
+        if mismatched:
+            raise ValueError(f"workspace records filed under a mismatched key: {mismatched}")
+        return self
 
 
 class RegistryReadError(Exception):
@@ -226,6 +345,7 @@ __all__ = [
     "Registry",
     "RegistryReadError",
     "RegistryRepoEntry",
+    "WorkspaceRecord",
     "default_registry_path",
     "read_registry",
     "reject_implicit_growth",

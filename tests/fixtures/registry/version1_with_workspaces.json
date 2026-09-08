@@ -1,0 +1,18 @@
+{
+  "version": "1",
+  "updated_at": "2026-05-01T12:34:56+00:00",
+  "active_code": "EAWF",
+  "repos": {
+    "EAWF": {"code": "EAWF", "path": "/repos/eawf", "title": "Ea"},
+    "DEMO": {"code": "DEMO", "path": "/repos/demo", "title": "Demo"}
+  },
+  "workspaces": {
+    "MONO": {
+      "key": "MONO",
+      "title": "Mono",
+      "member_project_codes": ["DEMO", "EAWF"],
+      "home_project_code": "EAWF",
+      "revision": 3
+    }
+  }
+}
