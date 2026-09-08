@@ -37,10 +37,10 @@ from eawf.kernel.spec.release_config import (
     ReleaseConfigRejection,
     ReleaseGateName,
 )
-from eawf.workflow.release.producers import DEFAULT_RELEASE_PROBES, platform_probe
+from eawf.workflow.release.signal_probes import DEFAULT_RELEASE_PROBES, platform_probe
 from eawf.workflow.release.train import gate_bindings_for
 from eawf.workflow.verify.release_readiness import compute_readiness
-from tests.unit.kernel.release.conftest import NOW, dev1_config
+from tests._release_helpers import NOW, dev1_config
 
 _LINUX_RECEIPT = "ci://eawf/.github/workflows/ci.yaml#linux-jail"
 

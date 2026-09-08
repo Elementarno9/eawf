@@ -32,7 +32,7 @@ from eawf.kernel.release.waiver import (
 )
 from eawf.kernel.spec.release_config import ReleaseGateName
 from eawf.workflow.verify.release_readiness import ReleaseReadiness, compute_readiness
-from tests.unit.kernel.release.conftest import (
+from tests._release_helpers import (
     NOW,
     all_passing,
     dev1_config,

@@ -82,7 +82,7 @@ from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
 from eawf.surfaces.cli.errors import CliError, UserError
 from eawf.workflow.evidence._io import load_state
-from eawf.workflow.release.adapters import observe_publication
+from eawf.workflow.release.adapters import collect_observation
 from eawf.workflow.release.admission import (
     create_checkpoint_release,
     required_contract_ids,
@@ -109,7 +109,6 @@ from eawf.workflow.release.observation import (
     assert_manifest_binds,
     observation_request,
 )
-from eawf.workflow.release.observe import observe_target
 from eawf.workflow.release.preflight import approve_release, record_preflight_result
 from eawf.workflow.release.publication import (
     begin_publication,
@@ -127,6 +126,7 @@ from eawf.workflow.release.records import (
     record_envelope_id,
     record_release,
 )
+from eawf.workflow.release.settlement import observe_target
 from eawf.workflow.release.target_machine import TargetTransitionError
 from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
 from eawf.workflow.verify.release_readiness import (
@@ -978,7 +978,7 @@ async def observe(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     try:
         manifest = FrozenManifest.model_validate(args.manifest)
         assert_manifest_binds(release, manifest)
-        observation = observe_publication(
+        observation = collect_observation(
             observation_request(config, manifest, target_id=args.target_id),
             response=None
             if args.response is None

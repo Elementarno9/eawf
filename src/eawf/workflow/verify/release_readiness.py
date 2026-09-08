@@ -67,7 +67,7 @@ from eawf.kernel.spec.release import (
     ReleaseKeyStr,
 )
 from eawf.kernel.spec.release_config import ReleaseConfig, ReleaseGateName
-from eawf.workflow.release.producers import DEFAULT_RELEASE_PROBES
+from eawf.workflow.release.signal_probes import DEFAULT_RELEASE_PROBES
 from eawf.workflow.release.train import gate_bindings_for
 
 logger = logging.getLogger(__name__)
@@ -572,7 +572,7 @@ def compute_readiness(
     Args:
         config: Loaded checkpoint configuration.
         probes: Producer per signal, overriding
-            :data:`~eawf.workflow.release.producers.DEFAULT_RELEASE_PROBES`.
+            :data:`~eawf.workflow.release.signal_probes.DEFAULT_RELEASE_PROBES`.
             Signals with no producer either way report ``unavailable``;
             a probe that raises reports ``blocked``.
         observed_revision: Source revision the sweep is computed

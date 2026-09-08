@@ -39,7 +39,7 @@ from eawf.workflow.release.dependencies import (
     normalized_name,
     shipped_distributions,
 )
-from eawf.workflow.release.receipts import write_receipt
+from eawf.workflow.release.pipeline_receipts import write_receipt
 from eawf.workflow.release.reproducibility import (
     ReproducibleBuildReceipt,
     double_build_receipt,

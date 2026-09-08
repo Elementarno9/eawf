@@ -36,7 +36,7 @@ from eawf.workflow.release.advance import (
     draft_release_for,
 )
 from eawf.workflow.release.train import V07_TRAIN
-from tests.unit.kernel.release.conftest import (
+from tests._release_helpers import (
     MANIFEST_DIGEST,
     NOW,
     SOURCE_SHA,

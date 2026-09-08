@@ -32,7 +32,7 @@ from eawf.workflow.release.adapters import (
     DEFAULT_REGISTRY_READERS,
     OBSERVATION_ADAPTERS,
     UndeclaredObservationAdapterError,
-    observe_publication,
+    collect_observation,
     resolve_observe_adapter,
 )
 from eawf.workflow.release.observation import (
@@ -48,7 +48,7 @@ from eawf.workflow.release.observation import (
     evidence_reference,
     observation_request,
 )
-from tests.unit.kernel.release.conftest import (
+from tests._release_helpers import (
     ADAPTER_STEMS,
     NOW,
     dev1_config,
@@ -74,7 +74,7 @@ CASE_RESULTS = {
 
 def observe(target_id: str, case: str) -> PublicationObservation:
     """Return the observation the recorded *case* supports for *target_id*."""
-    return observe_publication(
+    return collect_observation(
         read_back_request(target_id),
         response=recorded_response(target_id, case),
         observed_at=NOW,
@@ -167,7 +167,7 @@ def test_two_responses_that_differ_produce_different_adapter_digests() -> None:
 def test_package_index_answering_about_another_project_is_an_identity_mismatch() -> None:
     payload = json.loads(json.dumps(recorded_response("pypi", "match").payload))
     payload["info"]["name"] = "eawf-fork"
-    observation = observe_publication(
+    observation = collect_observation(
         read_back_request("pypi"),
         response=RecordedResponse(status=200, payload=payload),
         observed_at=NOW,
@@ -179,7 +179,7 @@ def test_package_index_answering_about_another_project_is_an_identity_mismatch()
 def test_package_index_exposing_another_version_is_version_absent() -> None:
     payload = json.loads(json.dumps(recorded_response("pypi", "match").payload))
     payload["info"]["version"] = "0.7.0.dev2"
-    observation = observe_publication(
+    observation = collect_observation(
         read_back_request("pypi"),
         response=RecordedResponse(status=200, payload=payload),
         observed_at=NOW,
@@ -190,7 +190,7 @@ def test_package_index_exposing_another_version_is_version_absent() -> None:
 def test_package_index_dropping_a_frozen_artifact_is_artifact_absent() -> None:
     payload = json.loads(json.dumps(recorded_response("pypi", "match").payload))
     payload["urls"] = payload["urls"][:1]
-    observation = observe_publication(
+    observation = collect_observation(
         read_back_request("pypi"),
         response=RecordedResponse(status=200, payload=payload),
         observed_at=NOW,
@@ -202,7 +202,7 @@ def test_package_index_dropping_a_frozen_artifact_is_artifact_absent() -> None:
 def test_npm_registry_answering_about_another_package_is_an_identity_mismatch() -> None:
     payload = json.loads(json.dumps(recorded_response("npm", "match").payload))
     payload["name"] = "@other/eawf"
-    observation = observe_publication(
+    observation = collect_observation(
         read_back_request("npm"),
         response=RecordedResponse(status=200, payload=payload),
         observed_at=NOW,
@@ -213,7 +213,7 @@ def test_npm_registry_answering_about_another_package_is_an_identity_mismatch() 
 def test_npm_registry_reads_the_semver_spelling_of_the_checkpoint() -> None:
     payload = json.loads(json.dumps(recorded_response("npm", "match").payload))
     payload["versions"] = {"0.7.0.dev1": payload["versions"]["0.7.0-dev.1"]}
-    observation = observe_publication(
+    observation = collect_observation(
         read_back_request("npm"),
         response=RecordedResponse(status=200, payload=payload),
         observed_at=NOW,
@@ -224,7 +224,7 @@ def test_npm_registry_reads_the_semver_spelling_of_the_checkpoint() -> None:
 def test_source_host_release_hanging_off_another_tag_is_an_identity_mismatch() -> None:
     payload = json.loads(json.dumps(recorded_response("github", "match").payload))
     payload["tag_name"] = "v0.7.0.dev2"
-    observation = observe_publication(
+    observation = collect_observation(
         read_back_request("github"),
         response=RecordedResponse(status=200, payload=payload),
         observed_at=NOW,
@@ -235,7 +235,7 @@ def test_source_host_release_hanging_off_another_tag_is_an_identity_mismatch() -
 
 @pytest.mark.parametrize("target_id", TARGET_IDS)
 def test_an_unreadable_body_is_unknown_rather_than_a_verdict(target_id: str) -> None:
-    observation = observe_publication(
+    observation = collect_observation(
         read_back_request(target_id),
         response=RecordedResponse(status=200, payload=None),
         observed_at=NOW,
@@ -246,7 +246,7 @@ def test_an_unreadable_body_is_unknown_rather_than_a_verdict(target_id: str) -> 
 
 @pytest.mark.parametrize("target_id", TARGET_IDS)
 def test_a_body_with_no_readable_rows_reads_back_no_digests(target_id: str) -> None:
-    observation = observe_publication(
+    observation = collect_observation(
         read_back_request(target_id),
         response=RecordedResponse(status=200, payload={"name": "x", "info": None}),
         observed_at=NOW,
@@ -304,13 +304,13 @@ def test_an_undeclared_adapter_is_refused_at_configuration_load() -> None:
 
 
 def test_the_default_reader_reports_an_unreachable_registry() -> None:
-    observation = observe_publication(read_back_request("pypi"), observed_at=NOW)
+    observation = collect_observation(read_back_request("pypi"), observed_at=NOW)
     assert observation.code is ObservationCode.REGISTRY_UNREACHABLE
 
 
 def test_a_naive_observation_instant_is_refused() -> None:
     with pytest.raises(ValueError, match="observed_at must be timezone-aware"):
-        observe_publication(
+        collect_observation(
             read_back_request("pypi"),
             response=recorded_response("pypi", "match"),
             observed_at=datetime(2026, 9, 4, 12, 0),

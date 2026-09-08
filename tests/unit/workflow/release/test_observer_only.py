@@ -30,17 +30,9 @@ from eawf.kernel.spec.release import (
     ReleaseTargetStatus,
 )
 from eawf.kernel.spec.release_config import ReleaseConfig
-from eawf.workflow.release.adapters import observe_publication
+from eawf.workflow.release.adapters import collect_observation
 from eawf.workflow.release.lifecycle import ReleaseDenialCode, ReleaseTransitionError
 from eawf.workflow.release.observation import PublicationObservation
-from eawf.workflow.release.observe import (
-    OBSERVED_STATUS_FOR_RESULT,
-    InconclusiveObservationError,
-    bake_release,
-    observe_target,
-    required_targets_observed,
-    route_after_observation,
-)
 from eawf.workflow.release.publication import (
     RECONCILABLE_TARGET_STATUSES,
     ObserverOnlyStatusError,
@@ -48,12 +40,20 @@ from eawf.workflow.release.publication import (
     begin_verification,
     reconcile_target,
 )
+from eawf.workflow.release.settlement import (
+    OBSERVED_STATUS_FOR_RESULT,
+    InconclusiveObservationError,
+    bake_release,
+    observe_target,
+    required_targets_observed,
+    route_after_observation,
+)
 from eawf.workflow.release.target_machine import (
     TargetTransitionError,
     advance_target_attempt,
 )
 from eawf.workflow.verify.release_readiness import ReleaseReadiness, compute_readiness
-from tests.unit.kernel.release.conftest import (
+from tests._release_helpers import (
     MANIFEST_DIGEST,
     NOW,
     all_passing,
@@ -133,7 +133,7 @@ def settle(
 
 def observation(target_id: str, case: str) -> PublicationObservation:
     """Return the observation the recorded *case* supports for *target_id*."""
-    return observe_publication(
+    return collect_observation(
         read_back_request(target_id), response=recorded_response(target_id, case), observed_at=NOW
     )
 

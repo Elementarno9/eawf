@@ -33,8 +33,7 @@ from eawf.kernel.release.signals import (
     ReleaseSignalStatus,
 )
 from eawf.kernel.spec.release_config import ReleaseGateName
-from eawf.workflow.release.producers import build_receipt_probes
-from eawf.workflow.release.receipts import write_receipt
+from eawf.workflow.release.pipeline_receipts import write_receipt
 from eawf.workflow.release.reproducibility import (
     BUILD_ATTEMPTS,
     SOURCE_DATE_EPOCH_ENV,
@@ -49,8 +48,9 @@ from eawf.workflow.release.reproducibility import (
     double_build_receipt,
     source_date_epoch,
 )
+from eawf.workflow.release.signal_probes import build_receipt_probes
 from eawf.workflow.verify.release_readiness import compute_readiness
-from tests.unit.kernel.release.conftest import dev1_config
+from tests._release_helpers import dev1_config
 
 pytestmark = pytest.mark.integration
 

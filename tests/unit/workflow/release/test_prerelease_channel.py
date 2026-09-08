@@ -21,7 +21,7 @@ import pytest
 from eawf.kernel.spec.publication import PublicationOperation, require_attempt
 from eawf.kernel.spec.release import Release, ReleaseStatus, ReleaseTargetStatus
 from eawf.kernel.spec.release_config import DEFAULT_DIST_TAG, ReleaseConfig
-from eawf.workflow.release.adapters import observe_publication
+from eawf.workflow.release.adapters import collect_observation
 from eawf.workflow.release.lifecycle import ReleaseDenialCode, ReleaseTransitionError
 from eawf.workflow.release.observation import (
     ObservationCode,
@@ -29,11 +29,11 @@ from eawf.workflow.release.observation import (
     PublicationObservation,
     RecordedResponse,
 )
-from eawf.workflow.release.observe import bake_release, observe_target
 from eawf.workflow.release.publication import begin_publication, begin_verification
+from eawf.workflow.release.settlement import bake_release, observe_target
 from eawf.workflow.release.target_machine import advance_target_attempt
 from eawf.workflow.verify.release_readiness import compute_readiness
-from tests.unit.kernel.release.conftest import (
+from tests._release_helpers import (
     MANIFEST_DIGEST,
     NOW,
     all_passing,
@@ -58,7 +58,7 @@ DEFAULT_CHANNEL_TARGETS = ("npm", "github")
 
 def observation(target_id: str, case: str) -> PublicationObservation:
     """Return the observation the recorded *case* supports for *target_id*."""
-    return observe_publication(
+    return collect_observation(
         read_back_request(target_id), response=recorded_response(target_id, case), observed_at=NOW
     )
 
@@ -147,7 +147,7 @@ def test_a_stable_version_on_the_default_channel_is_not_a_mismatch() -> None:
     payload = json.loads(json.dumps(recorded_response("npm", "match").payload))
     payload["dist-tags"][DEFAULT_DIST_TAG] = "0.7.0"
     payload["versions"] = {"0.7.0": payload["versions"]["0.7.0-dev.1"]}
-    read_back = observe_publication(
+    read_back = collect_observation(
         replace(read_back_request("npm"), version="0.7.0"),
         response=RecordedResponse(status=200, payload=payload),
         observed_at=NOW,

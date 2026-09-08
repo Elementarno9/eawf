@@ -22,7 +22,7 @@ from eawf.workflow.release.advance import (
     render_train_ladder_text,
 )
 from eawf.workflow.release.train import V07_TRAIN
-from tests.unit.kernel.release.test_train_advance import (
+from tests.unit.workflow.release.test_train_advance import (
     NEXT_UID,
     advance,
     finished,

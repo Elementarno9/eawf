@@ -30,7 +30,7 @@ from typing import Any
 
 import pytest
 
-from eawf.workflow.release.receipts import RECEIPT_FILENAMES
+from eawf.workflow.release.pipeline_receipts import RECEIPT_FILENAMES
 
 pytestmark = pytest.mark.integration
 

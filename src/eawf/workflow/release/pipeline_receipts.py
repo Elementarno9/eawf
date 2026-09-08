@@ -1,4 +1,11 @@
-"""Where the three release receipts are written, and how they are read back.
+"""Where the three pipeline receipts are written, and how they are read back.
+
+"Pipeline receipt" is the whole name, because the package holds a second
+receipt family: a
+:class:`~eawf.workflow.release.publication_receipt.PublicationReceipt` is
+one publish job's word about its own leg, while the three receipts here
+are the evidence a readiness sweep reads. Naming both "receipt" left a
+reader unable to tell which artifact a call site meant.
 
 The inventory, the vulnerability report and the double-build receipt are
 produced in CI -- they need a clean checkout, a resolved environment and
@@ -10,7 +17,7 @@ Naming the directory here rather than at each call site is what keeps
 the producer and the consumer from drifting: the CI job writes
 :data:`RECEIPT_FILENAMES` into :data:`RECEIPT_DIRNAME` and uploads them
 under the same three names, and the probes in
-:mod:`eawf.workflow.release.producers` look for exactly that. A receipt
+:mod:`eawf.workflow.release.signal_probes` look for exactly that. A receipt
 that is absent reports ``unavailable`` rather than passing, which is the
 honest reading of "the producer did not run".
 """
