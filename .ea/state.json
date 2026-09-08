@@ -13500,6 +13500,21 @@
       "status": "done",
       "updated_at": "2026-09-07T15:09:10.102151Z"
     },
+    "P32-I01-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W02",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W02",
+      "model": null,
+      "scope_id": "P32-I01-W02",
+      "status": "done",
+      "updated_at": "2026-09-08T16:27:10.920907Z"
+    },
     "P32-I01-W03": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13529,6 +13544,21 @@
       "scope_id": "P32-I01-W09",
       "status": "done",
       "updated_at": "2026-09-08T15:59:51.010376Z"
+    },
+    "P32-I01-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W10",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W10",
+      "model": null,
+      "scope_id": "P32-I01-W10",
+      "status": "done",
+      "updated_at": "2026-09-08T16:26:48.842473Z"
     },
     "P32-I01-W22": {
       "actual_cost_usd": 0.0,
@@ -13589,6 +13619,21 @@
       "scope_id": "P32-I01-W29",
       "status": "done",
       "updated_at": "2026-09-08T15:43:47.455460Z"
+    },
+    "P32-I01-W30": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W30",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W30",
+      "model": null,
+      "scope_id": "P32-I01-W30",
+      "status": "done",
+      "updated_at": "2026-09-08T16:26:56.884799Z"
     },
     "P32-I01-W32": {
       "actual_cost_usd": 0.0,
@@ -16093,6 +16138,21 @@
       "started_at": "2026-09-08T16:22:26.636780Z",
       "status": "stale",
       "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260908T162644.663368Z-operator-claude-516e9a65-3bf5-4d96-948c-cf68f3419f57": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260908T162644.663368Z-operator-claude-516e9a65-3bf5-4d96-948c-cf68f3419f57",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01",
+      "started_at": "2026-09-08T16:26:44.663368Z",
+      "status": "active",
+      "summary": null,
       "worktree_ids": []
     }
   },
@@ -21136,13 +21196,12 @@
     }
   },
   "current": {
-    "active_session_ids": [],
+    "active_session_ids": [
+      "SES-20260908T162644.663368Z-operator-claude-516e9a65-3bf5-4d96-948c-cf68f3419f57"
+    ],
     "active_wave_ids": [
-      "P32-I01-W02",
-      "P32-I01-W10",
       "P32-I01-W25",
       "P32-I01-W28",
-      "P32-I01-W30",
       "P32-I01-W31"
     ],
     "iter_id": "P32-I01",
@@ -39788,7 +39847,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-08T16:22:32.173963Z",
+  "updated_at": "2026-09-08T16:27:10.921194Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -163866,9 +163925,9 @@
       ],
       "claim_session_id": "SES-20260908T154331.197864Z-operator-claude-df48900a-6f43-4cff-8bbe-30139cb9cf78",
       "claimed_at": "2026-09-08T16:03:57.477462Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-08T16:27:10.920907Z",
+      "commit": "a19027dc3f60b5101dc126088785ebc92319f2cf",
+      "commit_identity_digest": "sha256:15c751ababbea347f0d583ec9ce4c780ac08e77fb1c0b6a72f048c2c14ac45d3",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:58:45.109473Z",
@@ -163965,13 +164024,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-03T17:58:45.110222Z",
-      "outcome": null,
+      "outcome": "The workspace registry record and resolution ladder land with membership algebra and six packet verbs, proven against a temporary registry path; the shipped repo-pointer verbs stay in place pending a follow-up wave that owns their callers.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -165539,9 +165598,9 @@
       ],
       "claim_session_id": "SES-20260908T154331.197864Z-operator-claude-df48900a-6f43-4cff-8bbe-30139cb9cf78",
       "claimed_at": "2026-09-08T16:03:58.348869Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-08T16:26:48.842473Z",
+      "commit": "26fd98fec7160963c91b79f8d4c12d2b0b4dc51f",
+      "commit_identity_digest": "sha256:6d53387a31f99af58dc1efa51f008320cb54e0d5c0a7c90d25e772f879e648b8",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:58:45.111936Z",
@@ -165640,13 +165699,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-03T17:58:45.112657Z",
-      "outcome": null,
+      "outcome": "The epoch-1 census reads the corpus behind a strict barrier with typed proof forms, reconciling 38 collection keys and the document/ledger audit union against pinned fixtures, and locating all eight row-failure codes on the malformed fixture.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -169079,9 +169138,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260908T154331.197864Z-operator-claude-df48900a-6f43-4cff-8bbe-30139cb9cf78",
       "claimed_at": "2026-09-08T16:04:00.093396Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-08T16:26:56.884799Z",
+      "commit": "2d276266f8c5dda03d36f6893c99004d27a39446",
+      "commit_identity_digest": "sha256:801b937fae49e4f6779024251f3d17536c82b72ba3f578f5dc0034e8640a09a9",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion; typed criteria land at phase prep via spec sync",
         "waived_at": "2026-09-07T13:37:26.211804Z",
@@ -169153,13 +169212,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-07T13:37:26.334164Z",
-      "outcome": null,
+      "outcome": "The commit lint now accepts the state-only fold amend it instructs the operator to make on a CLOSED wave, rejects an amend adding non-state bytes, still caps a genuine second commit, and the duplicated anchor-fallback warn-once flag carries a regression test.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
