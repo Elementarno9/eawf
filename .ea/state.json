@@ -16329,7 +16329,12 @@
     "SES-20260908T174435.994990Z-operator-claude-12760925-c34e-4961-bdec-b86c996805b5": {
       "agent_principal_id": null,
       "artifact_ids": [],
-      "claimed_wave_ids": [],
+      "claimed_wave_ids": [
+        "P32-I01-W05",
+        "P32-I01-W11",
+        "P32-I01-W35",
+        "P32-I01-W38"
+      ],
       "ended_at": null,
       "id": "SES-20260908T174435.994990Z-operator-claude-12760925-c34e-4961-bdec-b86c996805b5",
       "role": "operator",
@@ -21386,7 +21391,11 @@
       "SES-20260908T174435.994990Z-operator-claude-12760925-c34e-4961-bdec-b86c996805b5"
     ],
     "active_wave_ids": [
-      "P32-I01-W37"
+      "P32-I01-W05",
+      "P32-I01-W11",
+      "P32-I01-W35",
+      "P32-I01-W37",
+      "P32-I01-W38"
     ],
     "iter_id": "P32-I01",
     "phase_id": "P32",
@@ -40034,7 +40043,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-08T17:44:51.936086Z",
+  "updated_at": "2026-09-08T17:45:40.833518Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -164775,8 +164784,8 @@
         "P32-I01-W07",
         "P32-I01-W12"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260908T174435.994990Z-operator-claude-12760925-c34e-4961-bdec-b86c996805b5",
+      "claimed_at": "2026-09-08T17:45:38.387148Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -164882,7 +164891,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -165978,8 +165987,8 @@
         "P32-I01-W13",
         "P32-I01-W14"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260908T174435.994990Z-operator-claude-12760925-c34e-4961-bdec-b86c996805b5",
+      "claimed_at": "2026-09-08T17:45:39.203349Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -166088,7 +166097,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -170069,8 +170078,8 @@
     "P32-I01-W35": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260908T174435.994990Z-operator-claude-12760925-c34e-4961-bdec-b86c996805b5",
+      "claimed_at": "2026-09-08T17:45:39.987087Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -170152,7 +170161,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -170490,8 +170499,8 @@
     "P32-I01-W38": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260908T174435.994990Z-operator-claude-12760925-c34e-4961-bdec-b86c996805b5",
+      "claimed_at": "2026-09-08T17:45:40.832997Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -170569,7 +170578,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
