@@ -79,10 +79,20 @@ Enforces:
 5. One commit per wave. A commit naming a wave that already has a
    commit reachable from ``HEAD`` is rejected. Exempt: a commit whose
    staged paths are all on the state-bookkeeping whitelist (that IS
-   the fold amend), and the ``state`` / ``test`` types (bookkeeping and
+   the fold amend), an amend of ``HEAD`` itself (which rewrites the
+   wave's commit rather than adding one, so the wave still ends up with
+   exactly one), and the ``state`` / ``test`` types (bookkeeping and
    the managed-golden refresh the snapshot-pairing gate forces into its
    own paired commit). Genuinely new work appends a reactive wave and
    commits under its own ``W##`` id.
+
+6. Wave-source authorization. A non-``state`` commit naming a wave must
+   prove that wave is CLAIMED or IN_PROGRESS in the **canonical**
+   main-worktree ``state.json``. A fold amend is the exception: when
+   every staged path is on the state-bookkeeping whitelist, a CLOSED
+   wave proves the commit too, because the close records the fold
+   exists to carry only exist once the wave is closed. Adding
+   deliverable bytes under a CLOSED wave stays rejected.
 
 All checks run as a ``commit-msg``-stage pre-commit hook. The first
 argument is the commit-message file path (pre-commit passes it). The
@@ -225,6 +235,12 @@ _STATE_ONLY_PREFIXES = (".ea/store/", ".ea/specs/")
 # ``[P##-W##] docs:`` wave form, which accepts any path.
 _DOCS_BARE_PREFIXES = (".ea/artifacts/",)
 _CLAIMED_PROOF_STATUSES = frozenset({"claimed", "in_progress"})
+# The fold amend stages only state-bookkeeping paths, and the records it folds
+# in - the close row plus its evidence - exist only once the wave is CLOSED.
+# Demanding a live status there shuts the door the single-wave-close diagnostic
+# tells the operator to walk through, so CLOSED joins the accepted set for that
+# shape alone; an amend that adds deliverable bytes still needs a live wave.
+_FOLD_PROOF_STATUSES = _CLAIMED_PROOF_STATUSES | {"closed"}
 
 # A state subject that names exactly one wave AND a close verb is the
 # per-wave close record the fold moved onto the wave commit itself.
@@ -483,8 +499,13 @@ def _validate_commit_scope_refs(
     repo_root: Path | None,
     commit_type: str,
     canonical_state_path: Path | None,
+    state_only_fold: bool,
 ) -> str | None:
-    """Return the first hierarchy/authorization rejection for commit refs."""
+    """Return the first hierarchy/authorization rejection for commit refs.
+
+    *state_only_fold* is forwarded to the claimed-proof check, which widens
+    the accepted canonical statuses for a commit that stages bookkeeping only.
+    """
     if refs and state_path is not None and managed_state is None:
         return "managed state hierarchy unavailable: state.json is missing"
     if managed_state is None:
@@ -506,6 +527,7 @@ def _validate_commit_scope_refs(
         proof_error = _validate_claimed_proof(
             ref,
             canonical_state_path=resolved_canonical,
+            state_only_fold=state_only_fold,
         )
         if proof_error is not None:
             return f"{origin} rejected: {proof_error}"
@@ -542,8 +564,22 @@ def _validate_claimed_proof(
     ref: _ScopeRef,
     *,
     canonical_state_path: Path | None,
+    state_only_fold: bool,
 ) -> str | None:
-    """Require CLAIMED/IN_PROGRESS proof from canonical main-worktree state."""
+    """Require live-wave proof from canonical main-worktree state.
+
+    Args:
+        ref: Lifecycle reference carried by the commit's subject or trailer.
+        canonical_state_path: Path to the main worktree's ``state.json``,
+            which is the only copy a worktree commit may be proven against.
+        state_only_fold: True when every staged path is on the
+            state-bookkeeping whitelist. Such a commit adds no deliverable
+            bytes and exists to record the close, so a CLOSED wave proves it
+            just as well as a live one.
+
+    Returns:
+        A diagnostic naming the failed proof, or ``None`` when it holds.
+    """
     if ref.wave_id is None:
         return None
     if canonical_state_path is None or not canonical_state_path.is_file():
@@ -565,10 +601,12 @@ def _validate_claimed_proof(
     waves = canonical["waves"]
     wave = waves[ref.wave_id]
     status = wave.get("status")
-    if status not in _CLAIMED_PROOF_STATUSES:
+    accepted = _FOLD_PROOF_STATUSES if state_only_fold else _CLAIMED_PROOF_STATUSES
+    if status not in accepted:
+        expected = "CLAIMED, IN_PROGRESS or CLOSED" if state_only_fold else "CLAIMED or IN_PROGRESS"
         return (
             f"claimed proof rejected for wave {ref.wave_id!r}: "
-            f"canonical status {status!r} is not CLAIMED or IN_PROGRESS"
+            f"canonical status {status!r} is not {expected}"
         )
     return None
 
@@ -708,17 +746,109 @@ def _prior_wave_commits(terms: list[str], *, repo_root: Path | None) -> list[str
     return found
 
 
+def _author_date_epoch(raw: str | None) -> str | None:
+    """Return the epoch-seconds field of a git author date, else ``None``.
+
+    Args:
+        raw: A ``GIT_AUTHOR_DATE`` value in the internal form git exports to
+            hooks, such as ``"@1788883700 +0200"``.
+
+    Returns:
+        The epoch-seconds digits, or ``None`` when *raw* is absent, empty, or
+        spelled in any other format (an operator-supplied ISO date, say).
+    """
+    if not raw:
+        return None
+    fields = raw.strip().split()
+    if not fields:
+        return None
+    token = fields[0].removeprefix("@")
+    return token if token.isdigit() else None
+
+
+def _head_identity(repo_root: Path | None) -> tuple[str, str] | None:
+    """Return ``(sha, author_epoch)`` for ``HEAD``, or ``None`` when unknown.
+
+    Args:
+        repo_root: Directory the probe runs in; ``None`` uses the cwd.
+
+    Returns:
+        The tip's SHA and author-date epoch seconds. Probe failures (git
+        missing, unborn HEAD, timeout, unparsable output) return ``None`` so
+        the caller reads the commit as an ordinary append rather than an amend.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "log", "-1", "--format=%H %at", "HEAD"],
+            cwd=None if repo_root is None else str(repo_root),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=_WAVE_LOG_TIMEOUT_SECONDS,
+        )
+    except OSError, subprocess.SubprocessError:
+        return None
+    if proc.returncode != 0:
+        return None
+    fields = proc.stdout.strip().split()
+    if len(fields) != 2 or not fields[1].isdigit():
+        return None
+    return fields[0], fields[1]
+
+
+def _amends_head(
+    *,
+    prior: list[str],
+    repo_root: Path | None,
+    env: Mapping[str, str],
+) -> bool:
+    """Return True when this commit rewrites ``HEAD`` instead of appending.
+
+    ``git commit --amend`` reaches a commit-msg hook with the same argv and
+    environment keys as an ordinary commit, so the rewrite has to be inferred
+    from two signals taken together: the wave's existing commit is ``HEAD``
+    (an amend can only rewrite the tip), and ``--amend`` preserves the original
+    author date, which git exports to the hook as ``GIT_AUTHOR_DATE``. A fresh
+    commit stamps the current time instead, so an author date equal to
+    ``HEAD``'s own is the rewrite's fingerprint.
+
+    The residual false-accept window is one clock second wide - a genuine
+    second commit written inside the same second as the wave commit reads as
+    an amend. That is the cheaper error: an uncapped extra commit costs one
+    line of history, while a false reject leaves the operator unable to land
+    the fold the cap's own diagnostic prescribes.
+
+    Args:
+        prior: SHAs of the commits already carrying the wave.
+        repo_root: Directory the git probe runs in; ``None`` uses the cwd.
+        env: Environment the hook was invoked with.
+
+    Returns:
+        ``True`` when both signals hold, else ``False``.
+    """
+    env_epoch = _author_date_epoch(env.get("GIT_AUTHOR_DATE"))
+    if env_epoch is None:
+        return False
+    head = _head_identity(repo_root)
+    if head is None:
+        return False
+    head_sha, head_epoch = head
+    return head_sha in prior and head_epoch == env_epoch
+
+
 def _check_wave_commit_cap(
     *,
     ref: _ScopeRef | None,
     commit_type: str,
     staged: list[str],
     repo_root: Path | None,
+    env: Mapping[str, str],
 ) -> tuple[int, str] | None:
-    """Cap a wave at one commit, outside the state-bookkeeping fold amend.
+    """Cap a wave at one commit, outside the fold amend and the amend proper.
 
     Returns a ``(1, diagnostic)`` rejection when the named wave already has a
-    commit on ``HEAD`` and this one adds deliverable bytes, else ``None``.
+    commit on ``HEAD`` and this one appends deliverable bytes to it, else
+    ``None``.
     """
     if ref is None or ref.wave_id is None:
         return None
@@ -731,6 +861,11 @@ def _check_wave_commit_cap(
         return None
     prior = _prior_wave_commits(_wave_grep_terms(ref), repo_root=repo_root)
     if not prior:
+        return None
+    if _amends_head(prior=prior, repo_root=repo_root, env=env):
+        # An amend rewrites the wave's existing commit rather than adding one,
+        # so the wave still ends up with exactly one commit. Rejecting it would
+        # refuse the remedy the diagnostic below prescribes.
         return None
     return 1, (
         f"second commit for wave {ref.wave_id}: {prior[0][:12]} already carries it\n"
@@ -937,14 +1072,20 @@ def _check_wave_scope(
     state_path: Path | None,
     repo_root: Path | None,
     canonical_state_path: Path | None,
+    env: Mapping[str, str],
 ) -> tuple[int, str] | None:
     """Validate the wave a commit claims, in escalating specificity.
 
     The two scope carriers must name the same wave; that wave must resolve in
-    managed state and be CLAIMED; and only then does the one-commit-per-wave
-    cap apply — a commit whose wave does not resolve has a more fundamental
-    problem than how many commits that wave already has.
+    managed state and be live (or, for a bookkeeping-only fold, closed); and
+    only then does the one-commit-per-wave cap apply — a commit whose wave does
+    not resolve has a more fundamental problem than how many commits that wave
+    already has.
     """
+    # A commit that stages nothing outside the state-bookkeeping whitelist is
+    # the fold: it records a close rather than delivering bytes, so both the
+    # claimed-proof check and the cap treat it as riding the wave's own commit.
+    state_only_fold = all(_is_state_only_path(path) for path in staged)
     subject_ref = _subject_scope_ref(subject)
     trailer_ref = _trailer_scope_ref(text)
     mismatch = _carrier_mismatch(subject_ref, trailer_ref)
@@ -962,6 +1103,7 @@ def _check_wave_scope(
         repo_root=repo_root,
         commit_type=commit_type,
         canonical_state_path=canonical_state_path,
+        state_only_fold=state_only_fold,
     )
     if scope_error is not None:
         return 1, scope_error
@@ -970,6 +1112,7 @@ def _check_wave_scope(
         commit_type=commit_type,
         staged=staged,
         repo_root=repo_root,
+        env=env,
     )
 
 
@@ -991,6 +1134,7 @@ def lint(
     production callers leave it unset and the helper walks upward from cwd to
     find ``.ea/state.json``.
     """
+    resolved_env: Mapping[str, str] = {} if env is None else env
     managed_state: dict[str, Any] | None = None
     if state_path is not None:
         managed_state, state_error = _load_managed_state(state_path)
@@ -1031,6 +1175,7 @@ def lint(
         state_path=state_path,
         repo_root=repo_root,
         canonical_state_path=canonical_state_path,
+        env=resolved_env,
     )
     if wave_scope is not None:
         return wave_scope
@@ -1046,7 +1191,7 @@ def lint(
         )
         if scoped is not None:
             return scoped
-    return _accept_or_reject(text, {} if env is None else env, warning=deprecation)
+    return _accept_or_reject(text, resolved_env, warning=deprecation)
 
 
 def main(argv: list[str]) -> int:
