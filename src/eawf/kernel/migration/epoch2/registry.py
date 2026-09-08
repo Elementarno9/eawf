@@ -20,6 +20,15 @@ from eawf.kernel.migration.epoch2.allowlist import LegacySymbolAllowlist
 from eawf.kernel.migration.epoch2.backlog import BACKLOG_CLASSIFIER_RULE, obsolescence_rule
 from eawf.kernel.migration.epoch2.criteria import criteria_rule_payload
 from eawf.kernel.migration.epoch2.dispositions import disposition_rule_payload
+from eawf.kernel.migration.epoch2.lifecycle import (
+    CLAIM_SESSION_LEGACY_FIELD,
+    CLAIM_SESSION_RESOLVING_FIELD,
+    EMPTY_CLAIM_IMPORTS_AS,
+    RUN_SUCCESS_REQUIREMENTS,
+    UNCLASSIFIED_RUN_STATUS,
+    RunSource,
+    lifecycle_rule_payload,
+)
 from eawf.kernel.migration.epoch2.rows import row_contract_payload
 from eawf.kernel.migration.epoch2.rules import (
     MappingRuleVersion,
@@ -38,6 +47,7 @@ def totality_rule_payload() -> dict[str, Any]:
         "status": status_rule_payload(),
         "criteria": criteria_rule_payload(),
         "rows": row_contract_payload(),
+        "lifecycle": lifecycle_rule_payload(),
     }
 
 
@@ -53,9 +63,9 @@ SESSION_RUN_SPLIT_RULE: MappingRuleVersion = build_rule_version(
     source_kind="agent_sessions",
     title="A Run is minted only from a resolving claim entry or a wave attempt entry",
     payload={
-        "mints_run_from": ["resolving_claimed_wave_id", "wave_attempt_entry"],
-        "default_run_status": "TERMINAL_UNCLASSIFIED",
-        "succeeded_requires": ["bound_role_report", "exit_status_zero"],
+        "mints_run_from": [source.value for source in RunSource],
+        "default_run_status": UNCLASSIFIED_RUN_STATUS,
+        "succeeded_requires": list(RUN_SUCCESS_REQUIREMENTS),
     },
 )
 
@@ -64,9 +74,9 @@ CLAIM_SESSION_REF_RULE: MappingRuleVersion = build_rule_version(
     source_kind="waves",
     title="A legacy claim-session id is a string on the envelope and never a canonical reference",
     payload={
-        "legacy_field": "legacy_refs.claim_session_id",
-        "resolving_extra_field": "legacy_session_ref",
-        "empty_string_imports_as": "absent_field",
+        "legacy_field": CLAIM_SESSION_LEGACY_FIELD,
+        "resolving_extra_field": CLAIM_SESSION_RESOLVING_FIELD,
+        "empty_string_imports_as": EMPTY_CLAIM_IMPORTS_AS,
         "canonical_reference": False,
     },
 )
