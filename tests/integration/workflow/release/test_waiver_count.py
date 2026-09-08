@@ -30,7 +30,9 @@ instead of the function.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -152,11 +154,21 @@ def _approve(readiness: ReleaseReadiness) -> Release:
     return approve_release(_candidate(), readiness, approval_ref=APPROVAL_REF, approved_at=NOW)
 
 
-def _approve_over_rpc(readiness: ReleaseReadiness) -> dict[str, Any]:
-    """Approve through ``release.approve``, the daemon-facing surface."""
+def _approve_over_rpc(readiness: ReleaseReadiness, state_root: Path) -> dict[str, Any]:
+    """Approve through ``release.approve``, the daemon-facing surface.
+
+    Args:
+        readiness: The sweep the approval binds.
+        state_root: Directory the approved record is recorded under. The
+            verb refuses without one: an approval it cannot write down
+            would vanish the moment the call returned.
+
+    Returns:
+        The verb's reply.
+    """
     return asyncio.run(
         approve_rpc(
-            CTX,
+            replace(CTX, state_path=state_root / "state.json"),
             {
                 "release": _candidate().model_dump(mode="json"),
                 "readiness": readiness.model_dump(mode="json"),
@@ -209,9 +221,9 @@ def test_an_explained_waiver_blocks_approval_until_it_is_acknowledged() -> None:
     assert "awaiting_acknowledgement" in str(excinfo.value)
 
 
-def test_the_wire_refuses_an_unacknowledged_waiver_with_the_same_denial() -> None:
+def test_the_wire_refuses_an_unacknowledged_waiver_with_the_same_denial(tmp_path: Path) -> None:
     with pytest.raises(DaemonValidationError) as excinfo:
-        _approve_over_rpc(_sweep(waivers=(EXPLAINED,)))
+        _approve_over_rpc(_sweep(waivers=(EXPLAINED,)), tmp_path)
     assert ReleaseDenialCode.RELEASE_NOT_READY.value in str(excinfo.value)
 
 
@@ -253,9 +265,10 @@ def test_the_acknowledgement_is_carried_in_the_readiness_receipt() -> None:
     assert ReleaseReadiness.model_validate(payload).ready is True
 
 
-def test_the_wire_approves_once_every_waiver_is_acknowledged() -> None:
+def test_the_wire_approves_once_every_waiver_is_acknowledged(tmp_path: Path) -> None:
     result = _approve_over_rpc(
-        _sweep(waivers=(EXPLAINED, EXPLAINED_OTHER), acknowledgements=(ACK, ACK_OTHER))
+        _sweep(waivers=(EXPLAINED, EXPLAINED_OTHER), acknowledgements=(ACK, ACK_OTHER)),
+        tmp_path,
     )
     assert result["release"]["status"] == ReleaseStatus.APPROVED.value
 
