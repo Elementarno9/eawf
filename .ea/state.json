@@ -20941,8 +20941,8 @@
   "current": {
     "active_session_ids": [],
     "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "iter_id": "P32-I01",
+    "phase_id": "P32",
     "project_code": "EAWF",
     "track_id": null
   },
@@ -38144,7 +38144,7 @@
       "intent": null,
       "opened_at": "2026-09-03T17:58:45.106514Z",
       "phase_id": "P32",
-      "status": "planned",
+      "status": "active",
       "title": "Land the epoch-2 schemas and the importer and cut dev2",
       "trigger": "none",
       "wave_ids": [
@@ -38170,7 +38170,6 @@
         "P32-I01-W20",
         "P32-I01-W21",
         "P32-I01-W22",
-        "P32-I01-W23",
         "P32-I01-W24",
         "P32-I01-W25",
         "P32-I01-W26",
@@ -39440,7 +39439,7 @@
       "release": null,
       "scope_id": "EAWF",
       "source_brief_ids": [],
-      "status": "planned",
+      "status": "active",
       "title": "Ship the 0.7.0.dev2 offline-migration checkpoint",
       "track_id": null
     },
@@ -39584,7 +39583,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-07T15:12:40.898449Z",
+  "updated_at": "2026-09-08T14:59:11.922436Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -167922,103 +167921,6 @@
       "tokens_consumed": 0,
       "worktree_id": null
     },
-    "P32-I01-W23": {
-      "agent_role": "executor",
-      "blocks": [
-        "P32-I01-W24"
-      ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
-      "criteria_floor_waiver": {
-        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
-        "waived_at": "2026-09-07T13:17:30.527641Z",
-        "waived_by": null
-      },
-      "deps": [],
-      "description": "P31 left the credentials readiness signal with no producer in any wave, so it reports unavailable. It is a required signal whenever a checkpoint configuration declares required targets, which the dev1 configuration does, so the dev1 sweep cannot reach ready without it. P32-W01 presumes an APPROVED checkpoint and therefore presumes this producer exists.",
-      "dispatch_history": [],
-      "effort_bucket": "M",
-      "file_scopes": [
-        "src/eawf/workflow/release/producers.py",
-        "src/eawf/kernel/release",
-        "tests/unit/kernel/release"
-      ],
-      "gates": [
-        {
-          "args": {
-            "argv": [
-              "uv",
-              "run",
-              "pytest",
-              "tests/unit/kernel/release/test_credentials_probe.py"
-            ],
-            "scope": "all",
-            "timeout_class": "quick"
-          },
-          "cadence": "every-wave",
-          "criterion_id": "CR-01",
-          "id": "G-01",
-          "kind": "command_exit_zero",
-          "policy": "block",
-          "required": true,
-          "timeout_s": null
-        }
-      ],
-      "id": "P32-I01-W23",
-      "intent": {
-        "desired_outcome": "credentials returns a real pass or fail for a checkpoint declaring required targets",
-        "evidence_refs": [],
-        "planned_steps": [
-          "Add a credentials probe and register it in the release probe map|Prove it returns pass with handles present and fail naming each absent target with pytest"
-        ],
-        "priority_rationale": null,
-        "problem": "The credentials readiness signal has no producer, so the dev1 sweep cannot reach ready",
-        "risks": [],
-        "source_brief_ids": []
-      },
-      "iter_id": "P32-I01",
-      "opened_at": "2026-09-07T13:17:30.651172Z",
-      "outcome": null,
-      "runtime_baseline": null,
-      "runtime_carry": null,
-      "runtime_latest": null,
-      "runtime_preference": null,
-      "sessions": {},
-      "status": "pending",
-      "success_criteria": [
-        {
-          "acceptance_style": "binary",
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-01"
-          ],
-          "id": "CR-01",
-          "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/unit/kernel/release/test_credentials_probe.py exits 0 with a present-handle case passing and an absent-handle case failing by name",
-          "oracle_tier": 4,
-          "quality_dimension": "operability",
-          "required": true,
-          "response": {
-            "expected": null,
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "uv run pytest tests/unit/kernel/release/test_credentials_probe.py exits 0 with a present-handle case passing and an absent-handle case failing by name",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "The credentials readiness signal has a producer: compute_readiness returns a credentials outcome that is pass or fail rather than unavailable for a checkpoint whose configuration declares required targets, and the outcome names each target whose handle is absent; pytest tests/unit/kernel/release/test_credentials_probe.py",
-          "waiver_reason": null
-        }
-      ],
-      "title": "Add the credentials readiness producer for required targets",
-      "token_budget": null,
-      "tokens_consumed": 0,
-      "worktree_id": null
-    },
     "P32-I01-W24": {
       "agent_role": "executor",
       "blocks": [
@@ -168034,9 +167936,7 @@
         "waived_at": "2026-09-07T13:17:52.853120Z",
         "waived_by": null
       },
-      "deps": [
-        "P32-I01-W23"
-      ],
+      "deps": [],
       "description": "P31-W26 could not reach APPROVED before the merge: ancestry passes only once HEAD is an ancestor of main, artifacts and dependencies read receipts only the release workflow produces, and credentials had no producer. No Release record was persisted, so state carries no releases collection at all. P32-W01 opens by moving REL-0.7.0.dev1 from APPROVED to PUBLISHING and therefore presumes a record this phase must first create.",
       "dispatch_history": [],
       "effort_bucket": "M",
@@ -168273,7 +168173,7 @@
         "waived_by": null
       },
       "deps": [],
-      "description": "INC-P31-03 and INC-P31-04. Two P31 gates are required and blocking yet cannot fail on any tree: a git log invocation, and a release tag dry run that skips the readiness sweep because the sweep is gated on push. Separately the store holds close-attempt rows for only nineteen of forty eight closed waves and the affordance parity runs persist nothing, so the verification history of most of the phase cannot be reconstructed from state.",
+      "description": "INC-P31-03 and INC-P31-04. Three required blocking gates cannot fail on any tree: a git log invocation, a release tag dry run that skips the push-gated readiness sweep, and the credentials probe, which no shipped checkpoint target can exercise because every one authenticates by OIDC. Separately the store holds close-attempt rows for nineteen of forty eight closed waves and affordance parity runs persist nothing, so most of the phase's verification history is unreconstructable.",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -168308,10 +168208,10 @@
         "desired_outcome": "every required gate can red on a real defect and every close persists a receipt",
         "evidence_refs": [],
         "planned_steps": [
-          "Replace the two unfalsifiable gate argv with checks that can red|Persist a receipt for every gate a close executes|Prove both with pytest"
+          "Replace or sunset the three unfalsifiable gate argv so each can red|Persist a receipt for every gate a close executes|Prove both with pytest"
         ],
         "priority_rationale": null,
-        "problem": "Two required gates cannot fail and most closes leave no reconstructable verification record",
+        "problem": "Three required gates cannot fail and most closes leave no reconstructable verification record",
         "risks": [],
         "source_brief_ids": []
       },
