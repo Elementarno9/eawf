@@ -13499,6 +13499,51 @@
       "scope_id": "P31-I01-W52",
       "status": "done",
       "updated_at": "2026-09-07T15:09:10.102151Z"
+    },
+    "P32-I01-W29": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W29",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W29",
+      "model": null,
+      "scope_id": "P32-I01-W29",
+      "status": "done",
+      "updated_at": "2026-09-08T15:43:47.455460Z"
+    },
+    "P32-I01-W33": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W33",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W33",
+      "model": null,
+      "scope_id": "P32-I01-W33",
+      "status": "done",
+      "updated_at": "2026-09-08T15:37:10.437234Z"
+    },
+    "P32-I01-W34": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W34",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W34",
+      "model": null,
+      "scope_id": "P32-I01-W34",
+      "status": "done",
+      "updated_at": "2026-09-08T15:43:53.114353Z"
     }
   },
   "agent_sessions": {
@@ -15912,13 +15957,28 @@
         "P32-I01-W33",
         "P32-I01-W34"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-08T15:36:57.913249Z",
       "id": "SES-20260908T152605.245637Z-operator-claude-e5a24373-e961-4f21-8026-4e7eeba35595",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01",
       "started_at": "2026-09-08T15:26:05.245637Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260908T154331.197864Z-operator-claude-df48900a-6f43-4cff-8bbe-30139cb9cf78": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260908T154331.197864Z-operator-claude-df48900a-6f43-4cff-8bbe-30139cb9cf78",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01",
+      "started_at": "2026-09-08T15:43:31.197864Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -20965,18 +21025,15 @@
   },
   "current": {
     "active_session_ids": [
-      "SES-20260908T152605.245637Z-operator-claude-e5a24373-e961-4f21-8026-4e7eeba35595"
+      "SES-20260908T154331.197864Z-operator-claude-df48900a-6f43-4cff-8bbe-30139cb9cf78"
     ],
     "active_wave_ids": [
       "P32-I01-W03",
       "P32-I01-W09",
       "P32-I01-W22",
       "P32-I01-W24",
-      "P32-I01-W29",
       "P32-I01-W31",
-      "P32-I01-W32",
-      "P32-I01-W33",
-      "P32-I01-W34"
+      "P32-I01-W32"
     ],
     "iter_id": "P32-I01",
     "phase_id": "P32",
@@ -39620,7 +39677,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-08T15:26:31.677680Z",
+  "updated_at": "2026-09-08T15:43:53.114762Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -168754,9 +168811,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260908T152605.245637Z-operator-claude-e5a24373-e961-4f21-8026-4e7eeba35595",
       "claimed_at": "2026-09-08T15:26:28.542339Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-08T15:43:47.455460Z",
+      "commit": "21871b6f18a89efe5b14c5904ccb35f13c972370",
+      "commit_identity_digest": "sha256:a85cc1cf423dd3f22deb1b33838fa50764c9538ff0f3da5db96c7a1cd7f03462",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion; typed criteria land at phase prep via spec sync",
         "waived_at": "2026-09-07T13:37:25.413468Z",
@@ -168840,13 +168897,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-07T13:37:25.529191Z",
-      "outcome": null,
+      "outcome": "The hook ingestion seam accepts a typed agent output chunk envelope for an externally created session and the watch reader renders it; routing scope and runtime session id come from the state session row so a forwarded chunk cannot miss the reader identity filter.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -169371,9 +169428,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260908T152605.245637Z-operator-claude-e5a24373-e961-4f21-8026-4e7eeba35595",
       "claimed_at": "2026-09-08T15:26:30.895258Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-08T15:37:10.437234Z",
+      "commit": "b0a58b66a6fe0b556fc52578404855c126885468",
+      "commit_identity_digest": "sha256:f97d004060332d28b1980e6bd20fe369f25d375e27c96254ac476104fabb9fba",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion; typed criteria land at phase prep via spec sync",
         "waived_at": "2026-09-07T14:20:50.693334Z",
@@ -169444,13 +169501,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-07T14:20:50.847961Z",
-      "outcome": null,
+      "outcome": "Wheel delivers src/eawf/_data by the packages glob alone; force-include dropped and artifacts marks the tree, so a repeat build in a tree where the bundle_data hook already ran exits zero twice with byte-identical members.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -169511,9 +169568,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260908T152605.245637Z-operator-claude-e5a24373-e961-4f21-8026-4e7eeba35595",
       "claimed_at": "2026-09-08T15:26:31.677269Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-08T15:43:53.114353Z",
+      "commit": "aceeb3a9831504543dab7996872a0583b0554254",
+      "commit_identity_digest": "sha256:a05499f8b6da6febd70dc13afddafaf46d1deaa41894794d96746f23c213e8c2",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion replaced by a typed spec sync when P32 prep dispatches this wave",
         "waived_at": "2026-09-07T14:58:50.028190Z",
@@ -169585,13 +169642,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-07T14:58:50.159667Z",
-      "outcome": null,
+      "outcome": "The CLI portalocker fallback passes odr_floor and odr_blocking from the verify block it already loads, so a sub-floor iter close raises identically on fallback and daemon paths; reverting the two kwargs reds three of five tests.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
