@@ -277,6 +277,7 @@ Dispatch hook events through the Eä hook runner.
 
 | Verb | Summary |
 |---|---|
+| `agent-output` | Ingest one output chunk forwarded for an externally dispatched session. |
 | `dispatch` | Seed an interim verdict cohort from an ``agent_end`` event read from stdin. |
 | `eawf002-log-key` | Reject ``_id``-suffixed wave/iter/phase keys in library log messages. |
 | `eawf003-logger-acquire` | Reject library ``getLogger`` calls that do not pass ``__name__``. |

@@ -13,6 +13,11 @@ Surface contract:
   :func:`eawf.workflow.dispatch.seed.seed_interim_verdict` so the self-eval +
   jury surfaces read a primed cohort before the live verdict producer lands.
   Only ``agent_end`` is accepted; other event types exit ``3``.
+- ``eawf hook agent-output`` is the streaming sibling of that seeder: an
+  orchestrator that spawned the agent itself forwards one output chunk
+  (payload on stdin) and it lands as the same ``agent.output.chunk`` event the
+  in-daemon spawn path writes, so the agent watch surface renders a session the
+  daemon never spawned instead of an empty pane.
 - Exit ``0`` when no registered hook returns ``block=True``. ``session_end``
   registers the built-in runtime capture hook; other events without hooks keep
   the empty-result no-op path.
@@ -67,6 +72,26 @@ class AgentEndPayload(BaseModel):
     body: dict[str, Any]
     artifact_ids: list[str] = Field(default_factory=list)
     blob_refs: list[str] = Field(default_factory=list)
+
+
+class AgentOutputPayload(BaseModel):
+    """Payload accepted by ``eawf hook agent-output``.
+
+    Carries only the chunk itself. The scope the chunk routes to and the
+    runtime session id it is attributed to are resolved from the named session
+    row, so a forwarder cannot mis-address its own stream.
+
+    Attributes:
+        session_id: Id of the Eä agent session the chunk belongs to.
+        seq: Per-session monotonic chunk index (0-based).
+        text: The forwarded output text for this chunk.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str
+    seq: int = Field(ge=0)
+    text: str
 
 
 hook_app = typer.Typer(
@@ -263,6 +288,65 @@ def _envelope_for_agent_report(
         persisted_store_records=[store_urn],
         state_mutations=[],
         evidence_refs=[store_urn],
+        next_valid_actions=[],
+        warnings=[],
+        repair_commands=None,
+    )
+    return OutputEnvelope(header=header, body=body, footer=footer)
+
+
+def _envelope_for_agent_output(
+    *,
+    session_id: str,
+    scope_id: str,
+    seq: int,
+    event_id: str | None,
+    store_urn: str | None,
+    started_at: datetime,
+    finished_at: datetime,
+) -> OutputEnvelope:
+    """Assemble the output envelope for a forwarded output-chunk ingest.
+
+    Args:
+        session_id: The Eä session the chunk was forwarded for.
+        scope_id: The scope the chunk was routed to.
+        seq: The chunk index the forwarder supplied.
+        event_id: Appended envelope id, or ``None`` when the forwarded text
+            held nothing renderable.
+        store_urn: Store URN of the appended row, or ``None`` for that no-op.
+        started_at: When the command started.
+        finished_at: When the append finished.
+
+    Returns:
+        The canonical output envelope, ``status="ok"``.
+    """
+    from eawf.surfaces.render.envelope import EnvelopeFooter, EnvelopeHeader, OutputEnvelope
+
+    body: dict[str, object] = {
+        "event_type": "agent_output",
+        "scope_id": scope_id,
+        "session_id": session_id,
+        "seq": seq,
+        "event_id": event_id,
+        "persisted": event_id is not None,
+        "persisted_store_record": store_urn,
+        "blocked": False,
+        "results": [],
+    }
+    header = EnvelopeHeader(
+        skill="/audit",
+        scope_id=scope_id or "urn:eawf:v1:state:hook-run",
+        session="urn:eawf:v1:store:hook/sessions/SES-cli",
+        started_at=started_at,
+        finished_at=finished_at,
+        status="ok",
+        instrument_probe={},
+    )
+    footer = EnvelopeFooter(
+        persisted_artifacts=[],
+        persisted_store_records=[store_urn] if store_urn is not None else [],
+        state_mutations=[],
+        evidence_refs=[store_urn] if store_urn is not None else [],
         next_valid_actions=[],
         warnings=[],
         repair_commands=None,
@@ -900,6 +984,78 @@ def dispatch(
         occurred_at=started_at,
     )
     _seed_agent_end_verdict(event=event, payload=payload, flags=flags, started_at=started_at)
+
+
+@hook_app.command(name="agent-output")
+def agent_output(ctx: typer.Context) -> None:
+    """Ingest one output chunk forwarded for an externally dispatched session.
+
+    The streaming sibling of ``eawf hook dispatch --event-type agent_end``.
+    The watch surface reads persisted ``agent.output.chunk`` rows, whose only
+    other producer is the daemon piping a runtime it spawned itself; a session
+    an external orchestrator spawned therefore shows a correct row with no
+    stream behind it. That orchestrator forwards each output batch here as JSON
+    on stdin (``{"session_id": ..., "seq": ..., "text": ...}``) and it lands as
+    the same chunk row the spawn path writes, so the row and its stream agree.
+
+    Routing is resolved from the named session row (its scope and runtime
+    session id), never from the forwarder, so a forwarded chunk cannot land in
+    a scope the watch reader never reads.
+
+    Exits ``1`` when the stdin envelope is malformed (``InvalidInput``) or the
+    session id names no session (``NotFound``); nothing is persisted in either
+    case. Appends to the event store only -- no ``state.json`` mutation.
+    """
+    from eawf.kernel.state.enums import StoreKind
+    from eawf.kernel.state.urn import build as build_urn
+    from eawf.kernel.store.paths import store_path
+    from eawf.runtime.daemon.dispatch_runner import persist_forwarded_output_chunk
+
+    flags: GlobalFlags = ctx.obj
+    started_at = datetime.now(UTC)
+
+    try:
+        stdin_text = "" if sys.stdin.isatty() else sys.stdin.read()
+        chunk = AgentOutputPayload.model_validate(_parse_payload(stdin_text))
+        state_path = resolve_state_path(flags.workspace)
+        result = persist_forwarded_output_chunk(
+            store_path(state_path, StoreKind.EVENT),
+            state=_load_state(state_path),
+            session_id=chunk.session_id,
+            seq=chunk.seq,
+            text=chunk.text,
+        )
+    except ValidationError as err:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"agent output payload rejected: {err.errors()[0]['msg']}", kind="InvalidInput"
+            ),
+            flags=flags,
+        )
+        return
+    except KeyError as err:
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
+        return
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    store_urn = (
+        build_urn("store", owner=result.scope_id, id=f"event/{result.envelope_id}")
+        if result.envelope_id is not None
+        else None
+    )
+    _emit_envelope(
+        _envelope_for_agent_output(
+            session_id=chunk.session_id,
+            scope_id=result.scope_id,
+            seq=chunk.seq,
+            event_id=result.envelope_id,
+            store_urn=store_urn,
+            started_at=started_at,
+            finished_at=datetime.now(UTC),
+        )
+    )
 
 
 _FilesArg = Annotated[
