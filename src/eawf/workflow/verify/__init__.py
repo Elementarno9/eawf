@@ -48,6 +48,12 @@ from eawf.workflow.verify.dispatch_close import (
     VerifyResult,
     verify_close_readiness,
 )
+from eawf.workflow.verify.hosted_close import (
+    CloseSessionMode,
+    HostedCloseDecision,
+    count_scope_waivers,
+    resolve_hosted_close,
+)
 from eawf.workflow.verify.models import (
     CloseReadiness,
     CriterionView,
@@ -57,12 +63,16 @@ from eawf.workflow.verify.readiness import compute, load_active_verify_block
 
 __all__ = [
     "CloseReadiness",
+    "CloseSessionMode",
     "CriterionView",
     "DispatchCloseBlockedError",
     "GateResult",
+    "HostedCloseDecision",
     "VerifyResult",
     "compile_gate",
     "compute",
+    "count_scope_waivers",
     "load_active_verify_block",
+    "resolve_hosted_close",
     "verify_close_readiness",
 ]
