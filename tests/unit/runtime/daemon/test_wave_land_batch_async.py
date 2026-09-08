@@ -92,7 +92,7 @@ def test_wave_land_batch_submits_durable_attempts_after_integration_commit(
         return True
 
     monkeypatch.setattr(close_methods, "submit", _guarded_submit)
-    monkeypatch.setattr(close_methods, "_schedule", _record_schedule)
+    monkeypatch.setattr(close_methods, "schedule_attempt", _record_schedule)
 
     async def body() -> dict[str, Any]:
         return await state_methods.wave_land_batch_rpc(

@@ -52,11 +52,6 @@ LEGACY_PRIVATE_SIBLING_IMPORTS = frozenset(
     {
         ("close.py", "close_evidence", "_digest"),
         ("close.py", "close_evidence", "_load_state"),
-        ("close.py", "close_evidence", "_state_path"),
-        ("spec_convert.py", "spec", "_cache_replay"),
-        ("spec_convert.py", "spec", "_idempotent_replay"),
-        ("spec_convert.py", "spec", "_publish"),
-        ("spec_convert.py", "spec", "_validate_post_sync"),
     }
 )
 

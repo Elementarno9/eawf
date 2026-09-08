@@ -37,13 +37,13 @@ from eawf.runtime.daemon.methods.close import (
     _close_task_key,
     _policy_digest,
     _run_attempt,
-    _schedule,
     cancel,
     gate_freshness_inputs,
     persist_gate_receipt,
     resume,
     resume_durable_close_attempts,
     reusable_pass_gate_ids,
+    schedule_attempt,
     status,
     submit,
 )
@@ -178,7 +178,7 @@ def test_duplicate_submit_reuses_attempt_and_applies_close_once(tmp_path: Path) 
 def test_cancel_queued_attempt_is_durable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo, _state_path, ctx = _repo_with_state(tmp_path)
     monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.close._schedule",
+        "eawf.runtime.daemon.methods.close.schedule_attempt",
         lambda *args, **kwargs: False,
     )
 
@@ -220,7 +220,7 @@ def test_task_registry_scopes_identical_attempt_ids_by_repository(
     repo_a, state_path_a, ctx_a = _repo_with_state(root_a)
     repo_b, state_path_b, ctx_b = _repo_with_state(root_b)
     monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.close._schedule",
+        "eawf.runtime.daemon.methods.close.schedule_attempt",
         lambda *args, **kwargs: False,
     )
 
@@ -257,12 +257,12 @@ def test_task_registry_scopes_identical_attempt_ids_by_repository(
             "eawf.runtime.daemon.methods.close._run_attempt",
             _hold_worker,
         )
-        assert _schedule(
+        assert schedule_attempt(
             ctx_a,
             repo_root=repo_a,
             attempt_id=attempt_id,
         )
-        assert _schedule(
+        assert schedule_attempt(
             ctx_b,
             repo_root=repo_b,
             attempt_id=attempt_id,
@@ -353,7 +353,7 @@ def test_policy_change_makes_queued_attempt_stale(
     """A governing policy edit invalidates proof before any gate runs."""
     repo, _state_path, ctx = _repo_with_state(tmp_path)
     monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.close._schedule",
+        "eawf.runtime.daemon.methods.close.schedule_attempt",
         lambda *args, **kwargs: False,
     )
 
@@ -470,7 +470,7 @@ def test_restart_reschedules_every_resumable_stage(
     """Daemon startup schedules every durable nonterminal/retry stage."""
     repo, state_path, ctx = _repo_with_state(tmp_path)
     monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.close._schedule",
+        "eawf.runtime.daemon.methods.close.schedule_attempt",
         lambda *args, **kwargs: False,
     )
 
@@ -498,7 +498,7 @@ def test_restart_reschedules_every_resumable_stage(
         return True
 
     monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.close._schedule",
+        "eawf.runtime.daemon.methods.close.schedule_attempt",
         _record_schedule,
     )
 
@@ -515,7 +515,7 @@ def test_cleanup_failure_remains_retryable_until_cleanup_succeeds(
     """A closed Wave does not hide failed close-workspace cleanup."""
     repo, state_path, ctx = _repo_with_state(tmp_path)
     monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.close._schedule",
+        "eawf.runtime.daemon.methods.close.schedule_attempt",
         lambda *args, **kwargs: False,
     )
 
@@ -568,7 +568,7 @@ def test_gate_receipt_is_durable_idempotent_and_binds_full_log(
     """A complete result appends once, binds once, and preserves exact output."""
     repo, state_path, ctx = _repo_with_state(tmp_path)
     monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.close._schedule",
+        "eawf.runtime.daemon.methods.close.schedule_attempt",
         lambda *args, **kwargs: False,
     )
 
@@ -697,7 +697,7 @@ def test_file_exists_result_persists_terminal_receipt_without_command_facts(
     """Non-command deterministic proof receives the same durable receipt."""
     repo, state_path, ctx = _repo_with_state(tmp_path)
     monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.close._schedule",
+        "eawf.runtime.daemon.methods.close.schedule_attempt",
         lambda *args, **kwargs: False,
     )
 
@@ -781,7 +781,7 @@ def test_blocked_attempt_has_one_bounded_resume(
     """Repair needs new integration, rebuilds proof, then exhausts once."""
     repo, state_path, ctx = _repo_with_state(tmp_path)
     monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.close._schedule",
+        "eawf.runtime.daemon.methods.close.schedule_attempt",
         lambda *args, **kwargs: False,
     )
 
@@ -988,7 +988,7 @@ def test_repair_budget_receipt_is_emitted_once_on_a_blocked_terminal(
     """
     repo, state_path, ctx = _repo_with_state(tmp_path)
     monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.close._schedule",
+        "eawf.runtime.daemon.methods.close.schedule_attempt",
         lambda *args, **kwargs: False,
     )
     seeded = resolve_close_budget()
@@ -1068,7 +1068,7 @@ def test_infrastructure_budget_receipt_names_the_exhausted_axis(
     """
     repo, state_path, ctx = _repo_with_state(tmp_path)
     monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.close._schedule",
+        "eawf.runtime.daemon.methods.close.schedule_attempt",
         lambda *args, **kwargs: False,
     )
     seeded = resolve_close_budget()
@@ -1129,7 +1129,7 @@ def test_budget_receipt_absent_while_the_close_still_has_budget(
     """REL-004 boundary: an auto-requeued failure spends nothing, so emits nothing."""
     repo, state_path, ctx = _repo_with_state(tmp_path)
     monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.close._schedule",
+        "eawf.runtime.daemon.methods.close.schedule_attempt",
         lambda *args, **kwargs: False,
     )
 

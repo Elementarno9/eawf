@@ -50,7 +50,7 @@ from eawf.runtime.daemon.methods.close_evidence import (
     _load_state as _load_state,
 )
 from eawf.runtime.daemon.methods.close_evidence import (
-    _state_path as _state_path,
+    anchor_state_path as anchor_state_path,
 )
 from eawf.runtime.daemon.methods.close_evidence import (
     commit_attempt as commit_attempt,
@@ -77,7 +77,7 @@ from eawf.workflow.lifecycle.integration import (
 
 logger = logging.getLogger(__name__)
 
-_TERMINAL_STATUSES = frozenset(
+TERMINAL_STATUSES = frozenset(
     {
         CloseAttemptStatus.CLOSED,
         CloseAttemptStatus.BLOCKED,
@@ -192,7 +192,7 @@ class CloseStatusResult(BaseModel):
     backgrounded: bool
 
 
-def _repo_root(ctx: MethodContext, explicit: str | None) -> Path:
+def resolve_repo_root(ctx: MethodContext, explicit: str | None) -> Path:
     if explicit is not None:
         return Path(explicit).resolve()
     if ctx.state_path is None:
@@ -427,11 +427,11 @@ def _resolve_attempt(state: State, ref: str) -> CloseAttempt:
     raise ValueError(f"unknown close attempt or wave: {ref!r}")
 
 
-def _attempt_payload(attempt: CloseAttempt) -> dict[str, Any]:
+def attempt_payload(attempt: CloseAttempt) -> dict[str, Any]:
     return attempt.model_dump(mode="json")
 
 
-def _create_attempt(
+def create_attempt(
     ctx: MethodContext,
     *,
     repo_root: Path,
@@ -918,7 +918,7 @@ async def _run_attempt(  # noqa: C901
     try:
         state = _load_state(ctx, repo_root)
         attempt = _resolve_attempt(state, attempt_id)
-        if attempt.status in _TERMINAL_STATUSES:
+        if attempt.status in TERMINAL_STATUSES:
             return
         wave = state.waves.get(attempt.wave_id)
         if wave is None:
@@ -991,7 +991,7 @@ async def _run_attempt(  # noqa: C901
             # deterministic tier below this await executes out of process.
             with durable_gate_context(
                 GateExecutionContext(
-                    state_path=_state_path(ctx, repo_root),
+                    state_path=anchor_state_path(ctx, repo_root),
                     attempt_id=attempt.id,
                 )
             ):
@@ -1156,14 +1156,14 @@ async def _run_attempt(  # noqa: C901
         if current is asyncio.current_task():
             _CLOSE_TASKS.pop(task_key, None)
         if infrastructure_retry_queued:
-            _schedule(
+            schedule_attempt(
                 ctx,
                 repo_root=repo_root,
                 attempt_id=attempt_id,
             )
 
 
-def _schedule(
+def schedule_attempt(
     ctx: MethodContext,
     *,
     repo_root: Path,
@@ -1189,17 +1189,17 @@ def _schedule(
 async def submit(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Persist and schedule an idempotent exact-revision close attempt."""
     args = CloseSubmitParams.model_validate(params)
-    repo_root = _repo_root(ctx, args.repo_root)
-    attempt = _create_attempt(ctx, repo_root=repo_root, args=args)
+    repo_root = resolve_repo_root(ctx, args.repo_root)
+    attempt = create_attempt(ctx, repo_root=repo_root, args=args)
     backgrounded = False
-    if attempt.status not in _TERMINAL_STATUSES:
-        backgrounded = _schedule(
+    if attempt.status not in TERMINAL_STATUSES:
+        backgrounded = schedule_attempt(
             ctx,
             repo_root=repo_root,
             attempt_id=attempt.id,
         )
     return CloseStatusResult(
-        attempt=_attempt_payload(attempt),
+        attempt=attempt_payload(attempt),
         backgrounded=backgrounded,
     ).model_dump(mode="json")
 
@@ -1208,11 +1208,11 @@ async def submit(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 async def status(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Return durable status by attempt id or latest attempt for a wave."""
     args = CloseAttemptRefParams.model_validate(params)
-    repo_root = _repo_root(ctx, args.repo_root)
+    repo_root = resolve_repo_root(ctx, args.repo_root)
     attempt = _resolve_attempt(_load_state(ctx, repo_root), args.ref)
     task = _CLOSE_TASKS.get(_close_task_key(repo_root, attempt.id))
     return CloseStatusResult(
-        attempt=_attempt_payload(attempt),
+        attempt=attempt_payload(attempt),
         backgrounded=task is not None and not task.done(),
     ).model_dump(mode="json")
 
@@ -1221,7 +1221,7 @@ async def status(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 async def resume(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Resume one interrupted/infrastructure-failed close attempt."""
     args = CloseAttemptRefParams.model_validate(params)
-    repo_root = _repo_root(ctx, args.repo_root)
+    repo_root = resolve_repo_root(ctx, args.repo_root)
     attempt = _resolve_attempt(_load_state(ctx, repo_root), args.ref)
     blocked_retry = (
         attempt.status is CloseAttemptStatus.BLOCKED and attempt.repair_budget_remaining > 0
@@ -1256,10 +1256,10 @@ async def resume(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             command="close.resume",
         )
     backgrounded = False
-    if attempt.status not in _TERMINAL_STATUSES:
-        backgrounded = _schedule(ctx, repo_root=repo_root, attempt_id=attempt.id)
+    if attempt.status not in TERMINAL_STATUSES:
+        backgrounded = schedule_attempt(ctx, repo_root=repo_root, attempt_id=attempt.id)
     return CloseStatusResult(
-        attempt=_attempt_payload(attempt),
+        attempt=attempt_payload(attempt),
         backgrounded=backgrounded,
     ).model_dump(mode="json")
 
@@ -1268,13 +1268,13 @@ async def resume(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 async def cancel(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Cancel a non-applying close attempt."""
     args = CloseCancelParams.model_validate(params)
-    repo_root = _repo_root(ctx, args.repo_root)
+    repo_root = resolve_repo_root(ctx, args.repo_root)
     attempt = _resolve_attempt(_load_state(ctx, repo_root), args.ref)
     if attempt.status is CloseAttemptStatus.APPLYING:
         raise ValueError(f"close attempt {attempt.id!r} is applying and cannot be cancelled")
-    if attempt.status in _TERMINAL_STATUSES:
+    if attempt.status in TERMINAL_STATUSES:
         return CloseStatusResult(
-            attempt=_attempt_payload(attempt),
+            attempt=attempt_payload(attempt),
             backgrounded=False,
         ).model_dump(mode="json")
     task = _CLOSE_TASKS.get(_close_task_key(repo_root, attempt.id))
@@ -1299,7 +1299,7 @@ async def cancel(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             command="close.cancel",
         )
     return CloseStatusResult(
-        attempt=_attempt_payload(attempt),
+        attempt=attempt_payload(attempt),
         backgrounded=False,
     ).model_dump(mode="json")
 
@@ -1332,7 +1332,7 @@ def resume_durable_close_attempts(ctx: MethodContext) -> int:
                 },
                 command="close.restart_resume",
             )
-        if _schedule(
+        if schedule_attempt(
             ctx,
             repo_root=repo_root,
             attempt_id=attempt.id,

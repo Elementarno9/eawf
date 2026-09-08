@@ -23,14 +23,14 @@ from pydantic import Field
 
 from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.daemon.methods.close import (
-    _TERMINAL_STATUSES,
+    TERMINAL_STATUSES,
     CloseStatusResult,
     CloseSubmitParams,
-    _attempt_payload,
-    _create_attempt,
-    _repo_root,
-    _schedule,
-    _state_path,
+    anchor_state_path,
+    attempt_payload,
+    create_attempt,
+    resolve_repo_root,
+    schedule_attempt,
 )
 
 logger = logging.getLogger(__name__)
@@ -70,8 +70,8 @@ async def host(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Host one gate-bearing close for a caller with no interactive session.
 
     Creation and scheduling go through the same
-    :func:`~eawf.runtime.daemon.methods.close._create_attempt` /
-    :func:`~eawf.runtime.daemon.methods.close._schedule` pair ``close.submit``
+    :func:`~eawf.runtime.daemon.methods.close.create_attempt` /
+    :func:`~eawf.runtime.daemon.methods.close.schedule_attempt` pair ``close.submit``
     uses, so both lanes produce identical gates, receipts and failure kinds.
 
     Gate work runs in the crash-isolated child interpreter the close worker
@@ -97,21 +97,21 @@ async def host(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     from eawf.workflow.verify.hosted_close import count_scope_waivers
 
     args = CloseHostParams.model_validate(params)
-    repo_root = _repo_root(ctx, args.repo_root)
-    attempt = _create_attempt(
+    repo_root = resolve_repo_root(ctx, args.repo_root)
+    attempt = create_attempt(
         ctx,
         repo_root=repo_root,
         args=CloseSubmitParams.model_validate(args.model_dump()),
     )
     backgrounded = False
-    if attempt.status not in _TERMINAL_STATUSES:
-        backgrounded = _schedule(
+    if attempt.status not in TERMINAL_STATUSES:
+        backgrounded = schedule_attempt(
             ctx,
             repo_root=repo_root,
             attempt_id=attempt.id,
         )
     waiver_count = count_scope_waivers(
-        store_dir(_state_path(ctx, repo_root)),
+        store_dir(anchor_state_path(ctx, repo_root)),
         scope_id=args.wave_id,
     )
     logger.info(
@@ -119,7 +119,7 @@ async def host(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         f"backgrounded={backgrounded} waiver_count={waiver_count}"
     )
     return HostedCloseResult(
-        attempt=_attempt_payload(attempt),
+        attempt=attempt_payload(attempt),
         backgrounded=backgrounded,
         hosted=True,
         waiver_count=waiver_count,

@@ -667,11 +667,15 @@ Workspace-scoped state and repo linkage.
 
 | Verb | Summary |
 |---|---|
+| `add` | Register a workspace record with an explicit membership. |
 | `add-repo` | Append a :class:`WorkspaceRepoRef` to the workspace index. |
 | `init` | Create a workspace state document at the resolved state path. |
+| `list` | List every registered workspace, ordered by key. Read-only. |
 | `registry-list` | Enumerate repos in ``~/.eawf/registry.json``. |
 | `registry-status` | Render the workspace dashboard as text (top strip + W02 quadrant). |
 | `remove-repo` | Drop a :class:`WorkspaceRepoRef` from the workspace index. |
+| `select` | Select a workspace for the current session only. |
+| `show` | Show one workspace record, resolving it when no key is given. |
 | `status` | Print the workspace metadata + linked-repos summary. |
 | `validate` | Check that every linked repo path exists and contains ``.ea/state.json``. |
 

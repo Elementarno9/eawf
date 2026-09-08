@@ -37,7 +37,6 @@ from __future__ import annotations
 
 import logging
 import re
-import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -64,12 +63,17 @@ from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
-from eawf.kernel.validate.strict import validate_state
 from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.methods import (
     DaemonValidationError,
     MethodContext,
     register,
+)
+from eawf.runtime.daemon.methods.spec_context import (
+    cache_replay,
+    idempotent_replay,
+    publish_envelope,
+    validate_post_sync,
 )
 from eawf.runtime.daemon.methods.spec_sync_lints import (
     find_coverage_gaps,
@@ -87,10 +91,6 @@ from eawf.runtime.daemon.wal import WalRecord
 from eawf.workflow.lifecycle.transitions import LifecycleError, edit_wave_plan
 
 logger = logging.getLogger(__name__)
-
-
-#: TTL for cached idempotency results (seconds).
-IDEMPOTENCY_TTL_SECONDS: Final[float] = 60.0
 
 
 #: Allowed forward graduations. Backward / skip transitions are rejected.
@@ -241,43 +241,6 @@ class SpecSyncResult(BaseModel):
     after_version: str
     envelope: dict[str, Any]
     idempotent_replay: bool = False
-
-
-# ---- Idempotency cache ----------------------------------------------------
-
-
-class _CachedSpecMutation(BaseModel):
-    """One row in the daemon's spec idempotency cache."""
-
-    model_config = ConfigDict(extra="forbid")
-    result: dict[str, Any]
-    cached_at: float = Field(ge=0.0)
-
-
-def _idempotency_cache(ctx: MethodContext) -> dict[str, _CachedSpecMutation]:
-    """Return the per-process spec idempotency cache.
-
-    Shares :attr:`MethodContext.idempotency_cache` with the state /
-    config / registry mutators — one dict per daemon process; the
-    namespace separator is the idempotency key shape, not the
-    handler.
-    """
-    if isinstance(ctx.idempotency_cache, dict):
-        return ctx.idempotency_cache
-    fresh: dict[str, _CachedSpecMutation] = {}
-    ctx.idempotency_cache = fresh
-    return fresh
-
-
-def _evict_expired(cache: dict[str, Any], *, now: float) -> None:
-    """Drop entries older than :data:`IDEMPOTENCY_TTL_SECONDS`."""
-    expired = [
-        k
-        for k, v in cache.items()
-        if hasattr(v, "cached_at") and now - v.cached_at > IDEMPOTENCY_TTL_SECONDS
-    ]
-    for k in expired:
-        cache.pop(k, None)
 
 
 # ---- Helpers --------------------------------------------------------------
@@ -472,13 +435,6 @@ def _build_envelope(
     )
 
 
-def _publish(ctx: MethodContext, envelope: Envelope) -> None:
-    """Publish *envelope* on the subscription bus if one is attached."""
-    if ctx.bus is not None and hasattr(ctx.bus, "publish"):
-        ctx.bus.publish(envelope)
-    ctx.last_event_id = envelope.id
-
-
 def _result_dict(
     *,
     operation: str,
@@ -501,39 +457,6 @@ def _result_dict(
         envelope=envelope.model_dump(mode="json"),
         idempotent_replay=replay,
     ).model_dump(mode="json")
-
-
-def _idempotent_replay(
-    ctx: MethodContext,
-    idempotency_key: str | None,
-) -> dict[str, Any] | None:
-    """Return the cached result for *idempotency_key*, or ``None``."""
-    cache = _idempotency_cache(ctx)
-    _evict_expired(cache, now=time.monotonic())
-    if idempotency_key is None:
-        return None
-    cached = cache.get(idempotency_key)
-    if cached is None or not hasattr(cached, "result"):
-        return None
-    result = dict(cached.result)
-    result["idempotent_replay"] = True
-    return result
-
-
-def _cache_replay(
-    ctx: MethodContext,
-    *,
-    idempotency_key: str | None,
-    result: dict[str, Any],
-) -> None:
-    """Store *result* under *idempotency_key* for replay (when supplied)."""
-    if idempotency_key is None:
-        return
-    cache = _idempotency_cache(ctx)
-    cache[idempotency_key] = _CachedSpecMutation(
-        result=result,
-        cached_at=time.monotonic(),
-    )
 
 
 # ---- Handlers --------------------------------------------------------------
@@ -566,7 +489,7 @@ async def init(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     except ValueError as exc:
         raise ValueError(f"validation_failed: {exc}") from exc
 
-    replay = _idempotent_replay(ctx, args.idempotency_key)
+    replay = idempotent_replay(ctx, args.idempotency_key)
     if replay is not None:
         logger.info(f"init idempotent_replay scope_id={args.scope_id!r}")
         return replay
@@ -593,7 +516,7 @@ async def init(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 file_path=existing.file_path,
                 file_sha=existing.file_sha,
             )
-            _publish(ctx, envelope)
+            publish_envelope(ctx, envelope)
             result = _result_dict(
                 operation="init",
                 scope_id=args.scope_id,
@@ -603,7 +526,7 @@ async def init(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 file_sha=existing.file_sha,
                 envelope=envelope,
             )
-            _cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
+            cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
             return result
 
         body = spec_writer.scaffold_body(
@@ -632,7 +555,7 @@ async def init(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             file_path=entry.file_path,
             file_sha=entry.file_sha,
         )
-        _publish(ctx, envelope)
+        publish_envelope(ctx, envelope)
         logger.info(f"init ok scope_id={args.scope_id!r} urn={spec_urn!r} sha={file_sha[:8]}")
         result = _result_dict(
             operation="init",
@@ -643,7 +566,7 @@ async def init(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             file_sha=entry.file_sha,
             envelope=envelope,
         )
-        _cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
+        cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
         return result
     finally:
         ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
@@ -714,7 +637,7 @@ async def validate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]
             file_path=entry.file_path,
             file_sha=entry.file_sha,
         )
-        _publish(ctx, envelope)
+        publish_envelope(ctx, envelope)
         logger.info(f"validate ok scope_id={args.scope_id!r} urn={spec_urn!r} sha={file_sha[:8]}")
         return _result_dict(
             operation="validate",
@@ -750,7 +673,7 @@ async def promote(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     except ValidationError as exc:
         raise ValueError(f"validation_failed: {exc}") from exc
 
-    replay = _idempotent_replay(ctx, args.idempotency_key)
+    replay = idempotent_replay(ctx, args.idempotency_key)
     if replay is not None:
         logger.info(f"promote idempotent_replay scope_id={args.scope_id!r}")
         return replay
@@ -826,7 +749,7 @@ async def promote(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             file_path=entry.file_path,
             file_sha=entry.file_sha,
         )
-        _publish(ctx, envelope)
+        publish_envelope(ctx, envelope)
         logger.info(
             f"promote ok scope_id={args.scope_id!r} urn={spec_urn!r} status={args.target_status}"
         )
@@ -839,7 +762,7 @@ async def promote(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             file_sha=entry.file_sha,
             envelope=envelope,
         )
-        _cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
+        cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
         return result
     finally:
         ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
@@ -864,7 +787,7 @@ async def archive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     except ValidationError as exc:
         raise ValueError(f"validation_failed: {exc}") from exc
 
-    replay = _idempotent_replay(ctx, args.idempotency_key)
+    replay = idempotent_replay(ctx, args.idempotency_key)
     if replay is not None:
         logger.info(f"archive idempotent_replay scope_id={args.scope_id!r}")
         return replay
@@ -928,7 +851,7 @@ async def archive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             file_path=entry.file_path,
             file_sha=entry.file_sha,
         )
-        _publish(ctx, envelope)
+        publish_envelope(ctx, envelope)
         logger.info(f"archive ok scope_id={args.scope_id!r} urn={spec_urn!r} sha={file_sha[:8]}")
         result = _result_dict(
             operation="archive",
@@ -939,7 +862,7 @@ async def archive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             file_sha=entry.file_sha,
             envelope=envelope,
         )
-        _cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
+        cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
         return result
     finally:
         ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
@@ -1004,7 +927,7 @@ async def sync(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     if kind != "wave":
         raise ValueError(f"validation_failed: spec sync targets a wave scope, got {args.wave_id!r}")
 
-    replay = _idempotent_replay(ctx, args.idempotency_key)
+    replay = idempotent_replay(ctx, args.idempotency_key)
     if replay is not None:
         logger.info(f"sync idempotent_replay wave={args.wave_id!r}")
         return replay
@@ -1042,7 +965,7 @@ async def sync(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 event_path=event_path,
                 wal_path=wal_path,
             )
-        _cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
+        cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
         return result
     finally:
         ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
@@ -1188,7 +1111,7 @@ def _apply_sync_locked(
 
     state.updated_at = datetime.now(UTC)
     new_payload = state.model_dump(mode="json")
-    after_version = _validate_post_sync(new_payload)
+    after_version = validate_post_sync(new_payload)
 
     mutation_id = uuid.uuid4().hex
     envelope = _build_sync_envelope(
@@ -1213,7 +1136,7 @@ def _apply_sync_locked(
     append_envelope(event_path, envelope)
     wal.mark_fsynced(wal_path, mutation_id)
 
-    _publish(ctx, envelope)
+    publish_envelope(ctx, envelope)
     logger.info(
         f"sync ok wave={args.wave_id} criteria={len(criteria)} gates={len(gates)} "
         f"before={before_version} after={after_version}"
@@ -1227,33 +1150,6 @@ def _apply_sync_locked(
         after_version=after_version,
         envelope=envelope.model_dump(mode="json"),
     ).model_dump(mode="json")
-
-
-def _validate_post_sync(new_payload: dict[str, Any]) -> str:
-    """Re-validate the post-mutation state payload and return its version.
-
-    Args:
-        new_payload: The candidate ``state.json`` payload after the sync
-            mutation applied.
-
-    Returns:
-        The post-mutation state version digest.
-
-    Raises:
-        DaemonValidationError: When the payload fails schema validation or
-            trips an invariant (mapped to ``-32002``).
-    """
-    post = validate_state(new_payload, strict_optional=False)
-    if post.state is None:
-        raise DaemonValidationError(
-            "validation_failed: post-mutation schema invalid: " + "; ".join(post.schema_errors[:3])
-        )
-    if post.violations:
-        codes = ",".join(v.code for v in post.violations)
-        raise DaemonValidationError(
-            f"validation_failed: post-mutation invariants violated: {codes}"
-        )
-    return state_version(new_payload)
 
 
 def _build_sync_envelope(
@@ -1309,7 +1205,6 @@ def _build_sync_envelope(
 
 
 __all__ = [
-    "IDEMPOTENCY_TTL_SECONDS",
     "archive",
     "init",
     "promote",

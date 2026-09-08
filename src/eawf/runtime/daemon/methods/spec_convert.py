@@ -46,11 +46,11 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
-from eawf.runtime.daemon.methods.spec import (
-    _cache_replay,
-    _idempotent_replay,
-    _publish,
-    _validate_post_sync,
+from eawf.runtime.daemon.methods.spec_context import (
+    cache_replay,
+    idempotent_replay,
+    publish_envelope,
+    validate_post_sync,
 )
 from eawf.runtime.daemon.methods.spec_sync_lints import measure_criteria
 from eawf.runtime.daemon.methods.state_context import (
@@ -434,7 +434,7 @@ async def convert_legacy(ctx: MethodContext, params: dict[str, Any]) -> dict[str
     except ValueError as exc:
         raise ValueError(f"validation_failed: {exc}") from exc
 
-    replay = _idempotent_replay(ctx, args.idempotency_key)
+    replay = idempotent_replay(ctx, args.idempotency_key)
     if replay is not None:
         logger.info(f"convert_legacy idempotent_replay scope_id={args.scope_id!r}")
         return replay
@@ -465,7 +465,7 @@ async def convert_legacy(ctx: MethodContext, params: dict[str, Any]) -> dict[str
                 event_path=event_path,
                 wal_path=wal_path,
             )
-        _cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
+        cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
         return result
     finally:
         ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
@@ -551,7 +551,7 @@ def _apply_convert_legacy_locked(
 
     state.updated_at = datetime.now(UTC)
     new_payload = state.model_dump(mode="json")
-    after_version = _validate_post_sync(new_payload)
+    after_version = validate_post_sync(new_payload)
 
     mutation_id = uuid.uuid4().hex
     envelope = _build_convert_legacy_envelope(
@@ -577,7 +577,7 @@ def _apply_convert_legacy_locked(
     wal.mark_applied(wal_path, mutation_id)
     append_envelope(event_path, envelope)
     wal.mark_fsynced(wal_path, mutation_id)
-    _publish(ctx, envelope)
+    publish_envelope(ctx, envelope)
     logger.info(
         f"convert_legacy ok scope_id={args.scope_id} converted={converted_count} "
         f"retrofitted={retrofit_count} refused={refused_count} waves={touched} "
