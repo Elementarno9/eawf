@@ -10,8 +10,12 @@ name: Release
 
 on:
   push:
+    # ``v*``, matching plugin-release.yaml. The narrower ``v0.*`` this
+    # replaces silently skipped every tag outside the 0.x line: a
+    # ``v1.0.0`` tag fired the plugin publish and not this one, shipping
+    # the plugin to npm while the Python package was never built.
     tags:
-      - "v0.*" # v0.3.0a1, v0.3.0b1, v0.3.0rc1, v0.3.0
+      - "v*" # v0.3.0a1, v0.3.0rc1, v0.3.0, v1.0.0
   workflow_dispatch:
     inputs:
       channel:
@@ -177,11 +181,6 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
-          # The `credentials` row asserts each required target's declared
-          # handle is set where the publish runs. Only npm declares one;
-          # PyPI holds no handle (OIDC) and the GitHub release rides the
-          # ambient token.
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           uv run eawf release preflight "${TAG#v}" --source "${SHA}"

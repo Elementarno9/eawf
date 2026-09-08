@@ -32,9 +32,11 @@ name: Plugin Release
 # publish. ``workflow_dispatch`` renders + validates as a dry-run but never
 # publishes (the publish jobs gate on a real ``v*`` tag push).
 #
-# Secrets consumed (none inlined): ``NPM_TOKEN`` for the npm publish;
-# ``GITHUB_TOKEN`` (built-in) for the plugins-dist branch push + release
-# notes.
+# Secrets consumed (none inlined): ``GITHUB_TOKEN`` (built-in) for the
+# plugins-dist branch push + release notes. The npm publish holds no
+# secret -- it authenticates by OIDC through npm trusted publishing,
+# which binds to this workflow's filename, so renaming this file revokes
+# its ability to publish.
 
 on:
   push:
@@ -307,6 +309,14 @@ jobs:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: read
+      # npm trusted publishing exchanges this OIDC token for a
+      # short-lived credential at publish time. Without it npm falls back
+      # to looking for a token, and the registry answers a scoped package
+      # it cannot authenticate for with 404 rather than 401 -- an error
+      # that names the wrong problem entirely.
+      id-token: write
     steps:
       - name: Download rendered trees
         uses: actions/download-artifact@v4
@@ -315,10 +325,20 @@ jobs:
           path: build/
 
       - name: Set up Node + npm registry
+        # Trusted publishing requires npm >= 11.5.1 on Node >= 22.14.0.
+        # The npm bundled with a Node release lags, so the floor is
+        # asserted explicitly rather than inferred from node-version.
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
+
+      - name: Assert the npm floor trusted publishing needs
+        run: |
+          set -euo pipefail
+          npm install -g npm@latest
+          npm --version
+          node --version
 
       - name: Synthesize npm package manifest
         # The rendered Claude tree carries ``.claude-plugin/plugin.json``
@@ -380,8 +400,11 @@ jobs:
         # digests are the exact bytes the registry received. Digesting a
         # tree and publishing a repack of it proves nothing.
         id: npm
+        # No NODE_AUTH_TOKEN: authentication is the OIDC exchange above.
+        # A token present here takes precedence over trusted publishing,
+        # so leaving a stale one would keep failing while looking
+        # configured.
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DIST_TAG: ${{ needs.package-validate.outputs.dist_tag }}
         run: |
           set -euo pipefail

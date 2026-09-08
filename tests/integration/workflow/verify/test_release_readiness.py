@@ -193,7 +193,6 @@ def test_derive_required_signals_covers_the_dev1_profile() -> None:
         ReleaseSignalName.TREE_CLEANLINESS,
         ReleaseSignalName.ARTIFACTS,
         ReleaseSignalName.DEPENDENCIES,
-        ReleaseSignalName.CREDENTIALS,
     )
 
 

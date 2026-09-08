@@ -21,11 +21,13 @@ call, not as the tag being absent from the world. The absence form was
 tried first and was wrong: it holds only until the checkpoint actually
 ships, then reds permanently on the release it was written to guard.
 
-**The gap.** Three required rows (``artifacts``, ``dependencies``,
-``credentials``) cannot be greened by anything a working copy runs: the
-first two read receipts a CI job writes on a tag run, and the third has
-no producer at this checkpoint at all. The three proof-command gates are
-likewise never green *in a sweep*, because the sweep does not run them.
+**The gap.** Two required rows (``artifacts``, ``dependencies``)
+cannot be greened by anything a working copy runs: both read receipts a
+CI job writes on a tag run. ``credentials`` is not among them and is no
+longer required at all -- every dev1 target authenticates by OIDC or the
+ambient workflow token, so none declares a ``credential_handle`` for the
+row to assert. The three proof-command gates are likewise never green
+*in a sweep*, because the sweep does not run them.
 Those facts are pinned by exact set equality, so the day a producer
 lands this module reds and the claim gets revisited instead of quietly
 staying stale.
@@ -100,14 +102,14 @@ APPROVAL_REF = "receipt://approval/rel-0.7.0.dev1"
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
 #: The required rows no working copy can green at this checkpoint.
-#: ``artifacts`` and ``dependencies`` read CI receipts; ``credentials``
-#: has no producer at all and is required only because the dev1
-#: configuration declares required publication targets.
+#: Both read receipts that only a CI run produces, so a sweep run from a
+#: checkout reports them ``unavailable`` however clean the tree is.
+#: ``credentials`` is absent: no dev1 target declares a
+#: ``credential_handle`` any more, so the row is not required at all.
 PRODUCERLESS_REQUIRED_ROWS = frozenset(
     {
         ReleaseSignalName.ARTIFACTS,
         ReleaseSignalName.DEPENDENCIES,
-        ReleaseSignalName.CREDENTIALS,
     }
 )
 
@@ -334,11 +336,11 @@ def test_approved_eight_gates_settle_version_and_changelog_from_the_shipped_tree
         assert sweep.row(signal).status is ReleaseSignalStatus.PASS, signal
 
 
-def test_approved_eight_gates_leave_three_required_rows_without_a_producer(
+def test_approved_eight_gates_leave_two_required_rows_without_a_producer(
     tmp_path: Path,
 ) -> None:
     # Only the rows a working copy can answer are stubbed green; the
-    # three under test are left to the shipped producers, reading a
+    # two under test are left to the shipped producers, reading a
     # checkout that carries no receipts.
     probes = {
         signal: fixed_probe(ReleaseSignalStatus.PASS)
@@ -356,7 +358,6 @@ def test_approved_eight_gates_leave_three_required_rows_without_a_producer(
     assert sweep.ready is False
     assert RECEIPT_PRODUCER_JOB in sweep.row(ReleaseSignalName.ARTIFACTS).remediation
     assert RECEIPT_PRODUCER_JOB in sweep.row(ReleaseSignalName.DEPENDENCIES).remediation
-    assert "no producer is registered" in sweep.row(ReleaseSignalName.CREDENTIALS).remediation
 
 
 def test_approved_eight_gates_leave_the_three_proof_gates_unavailable_in_a_sweep() -> None:

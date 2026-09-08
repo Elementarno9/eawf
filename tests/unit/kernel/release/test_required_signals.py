@@ -5,8 +5,11 @@ the authored surface, never a second list beside it. So the module pins:
 
 1. The subset is exactly the rows the required gates bind, plus tree
    cleanliness under ``require_clean_tree``, ancestry under
-   ``require_ancestor_of_remote``, and credentials when any target is
-   required -- each flag independently drops its row when turned off.
+   ``require_ancestor_of_remote``, and credentials when a required
+   target declares a ``credential_handle`` -- each flag independently
+   drops its row when turned off. No dev1 target declares one: all three
+   authenticate by OIDC or the ambient workflow token, so the dev1
+   derivation is six rows, not seven.
 2. Two gates binding one row contribute it once, and a gate settled by a
    proof command contributes nothing.
 3. A CANDIDATE moves to PREFLIGHT_FAILED on any derived row that is not
@@ -47,7 +50,6 @@ _DEV1_REQUIRED = (
     ReleaseSignalName.TREE_CLEANLINESS,
     ReleaseSignalName.ARTIFACTS,
     ReleaseSignalName.DEPENDENCIES,
-    ReleaseSignalName.CREDENTIALS,
 )
 
 
@@ -62,7 +64,7 @@ def _sweep(*, red: ReleaseSignalName | None = None, **kwargs: object) -> Release
 # --- the derivation --------------------------------------------------
 
 
-def test_dev1_required_set_is_exactly_the_derived_seven(config: ReleaseConfig) -> None:
+def test_dev1_required_set_is_exactly_the_derived_six(config: ReleaseConfig) -> None:
     assert derive_required_signals(config) == _DEV1_REQUIRED
 
 
@@ -152,7 +154,7 @@ def test_a_single_required_gate_derives_a_single_row() -> None:
             gates={"profile": "dev1", "required": ["changelog_entry"]},
         )
     )
-    assert required == (ReleaseSignalName.CHANGELOG, ReleaseSignalName.CREDENTIALS)
+    assert required == (ReleaseSignalName.CHANGELOG,)
 
 
 def test_a_proof_only_gate_list_derives_no_gate_bound_row() -> None:
@@ -163,7 +165,7 @@ def test_a_proof_only_gate_list_derives_no_gate_bound_row() -> None:
             gates={"profile": "dev1", "required": ["front_door_journey"]},
         )
     )
-    assert required == (ReleaseSignalName.CREDENTIALS,)
+    assert required == ()
 
 
 # --- CANDIDATE -> PREFLIGHT_FAILED -----------------------------------

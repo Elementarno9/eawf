@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+import yaml
 from typer.testing import CliRunner
 
 from eawf.kernel.spec.release_config import load_release_config
@@ -99,8 +100,28 @@ def _ready_inputs(repo_root: Path) -> TagPreflightInputs:
     )
 
 
-def _sweep(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, ReleaseSignalStatus]:
-    config = load_release_config(checkpoint_config_yaml(DEV1_VERSION), train=V07_TRAIN)
+def _sweep(
+    inputs: TagPreflightInputs, *, credential_handle: str | None = None
+) -> dict[ReleaseSignalName, ReleaseSignalStatus]:
+    """Return each row's status for *inputs*.
+
+    Args:
+        inputs: The tag-preflight inputs the probes read.
+        credential_handle: Handle to declare on the npm target before
+            sweeping. No shipped target declares one -- every dev1 target
+            authenticates by OIDC or the ambient workflow token -- so a
+            test about the handle probe must supply one to have anything
+            to probe.
+
+    Returns:
+        Status by signal name.
+    """
+    body = yaml.safe_load(checkpoint_config_yaml(DEV1_VERSION))
+    if credential_handle is not None:
+        for target in body["release"]["targets"]:
+            if target["target_id"] == "npm":
+                target["credential_handle"] = credential_handle
+    config = load_release_config(body, train=V07_TRAIN)
     readiness = compute_readiness(
         config,
         probes=build_tag_probes(inputs),
@@ -318,7 +339,7 @@ def test_tag_preflight_credentials_reds_when_the_declared_handle_is_unset(
     operator exports the handle.
     """
     monkeypatch.delenv("NPM_TOKEN", raising=False)
-    statuses = _sweep(_ready_inputs(_init_published_repo(tmp_path)))
+    statuses = _sweep(_ready_inputs(_init_published_repo(tmp_path)), credential_handle="NPM_TOKEN")
     assert statuses[ReleaseSignalName.CREDENTIALS] is ReleaseSignalStatus.FAIL
 
 
@@ -327,7 +348,7 @@ def test_tag_preflight_credentials_passes_when_the_declared_handle_is_set(
 ) -> None:
     """The handle being present clears the row; its value is never read."""
     monkeypatch.setenv("NPM_TOKEN", "presence-is-all-that-is-checked")
-    statuses = _sweep(_ready_inputs(_init_published_repo(tmp_path)))
+    statuses = _sweep(_ready_inputs(_init_published_repo(tmp_path)), credential_handle="NPM_TOKEN")
     assert statuses[ReleaseSignalName.CREDENTIALS] is ReleaseSignalStatus.PASS
 
 
@@ -336,7 +357,7 @@ def test_tag_preflight_credentials_ignores_an_empty_handle(
 ) -> None:
     """An empty handle is unset: a blank secret authenticates nothing."""
     monkeypatch.setenv("NPM_TOKEN", "")
-    statuses = _sweep(_ready_inputs(_init_published_repo(tmp_path)))
+    statuses = _sweep(_ready_inputs(_init_published_repo(tmp_path)), credential_handle="NPM_TOKEN")
     assert statuses[ReleaseSignalName.CREDENTIALS] is ReleaseSignalStatus.FAIL
 
 
