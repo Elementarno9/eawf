@@ -13590,6 +13590,21 @@
       "status": "done",
       "updated_at": "2026-09-08T16:26:48.842473Z"
     },
+    "P32-I01-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W11",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W11",
+      "model": null,
+      "scope_id": "P32-I01-W11",
+      "status": "done",
+      "updated_at": "2026-09-08T18:25:10.541259Z"
+    },
     "P32-I01-W19": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -16476,15 +16491,15 @@
         "P32-I01-W26",
         "P32-I01-W40"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-08T18:25:06.550768Z",
       "id": "SES-20260908T181952.705242Z-operator-claude-f8d50875-344c-454e-9544-3336c1d34a4d",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01",
       "started_at": "2026-09-08T18:19:52.705242Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -21528,12 +21543,9 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260908T181952.705242Z-operator-claude-f8d50875-344c-454e-9544-3336c1d34a4d"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [
       "P32-I01-W07",
-      "P32-I01-W11",
       "P32-I01-W26",
       "P32-I01-W40"
     ],
@@ -38782,7 +38794,9 @@
         "P32-I01-W37",
         "P32-I01-W38",
         "P32-I01-W39",
-        "P32-I01-W40"
+        "P32-I01-W40",
+        "P32-I01-W41",
+        "P32-I01-W42"
       ]
     },
     "P33-I01": {
@@ -40185,7 +40199,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-08T18:20:52.153721Z",
+  "updated_at": "2026-09-08T18:25:10.541491Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -166131,9 +166145,9 @@
       ],
       "claim_session_id": "SES-20260908T174435.994990Z-operator-claude-12760925-c34e-4961-bdec-b86c996805b5",
       "claimed_at": "2026-09-08T17:45:39.203349Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-08T18:25:10.541259Z",
+      "commit": "8aae47a0fae6da37f4c88ba386371ccc7b172e3c",
+      "commit_identity_digest": "sha256:307284262073e5d6ec53d7b45aef0c7d0ec6832e7be324484b6feefa927ed340",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:58:45.115949Z",
@@ -166233,13 +166247,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-03T17:58:45.116690Z",
-      "outcome": null,
+      "outcome": "The lifecycle collections and criteria corpus map into epoch 2 with every unmappable field recorded as a typed DeferredField carrying a reason rather than filled, reusing W09's plans and W10's read barrier with no second registry; two latent defects it surfaced are carried by W41 and W42.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -171053,6 +171067,284 @@
         }
       ],
       "title": "Close the last in-process gate path in the close scorer",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W41": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-08T18:24:16.343884Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The wave status map keys the in-flight status as running, but WaveStatus spells it in_progress and has no running member. A migration plan built over a corpus containing a live in-flight wave would therefore fail to classify it. The corpus fixtures happen to contain no in-flight wave, so no gate caught it.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/kernel/migration/epoch2/status_map.py",
+        "tests/unit/kernel/migration"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/migration/test_status_map_and_defaults.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/migration/test_status_map_and_defaults.py",
+              "-k",
+              "every_enum_member",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W41",
+      "intent": {
+        "desired_outcome": "every WaveStatus member maps, proven by a totality check over the enum rather than over a fixture",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Key the in-flight status as the enum spells it|Add a totality test over WaveStatus members so a future rename cannot drift again"
+        ],
+        "priority_rationale": null,
+        "problem": "The wave status map keys a status string the WaveStatus enum does not define",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-08T18:24:16.456687Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "test_wave_status_map_classifies_an_in_flight_wave asserts a corpus row carrying the in-flight status maps to its target status and that the retired key is absent, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the migration suite classifying a corpus row that carries the in-flight wave status",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The wave status map keys the in-flight status exactly as WaveStatus spells it, so a corpus containing a live in-flight wave classifies instead of failing, and the retired spelling is gone rather than kept alongside as a second accepted key.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_wave_status_map_covers_every_enum_member iterates WaveStatus and asserts each member has a mapping, under pytest exit zero",
+          "oracle_tier": 4,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "WaveStatus members, each having a mapping in the wave status map",
+            "observe": "holds_for_all",
+            "quantifier": "single"
+          },
+          "text": "A totality check runs over the WaveStatus enum members themselves rather than over whatever statuses a fixture happens to contain, so a future rename or a newly added member fails the test instead of silently going unmapped as this one did.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Map the in-progress wave status the enum actually spells",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W42": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-08T18:24:17.111398Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "The built wheel is 3712187 bytes against a 3670016 ceiling. The overage is accounted new source this phase added under src/eawf: the identity grammar, the epoch-2 models, the migration importer and the sandboxed check runner, roughly forty nine kernel modules plus runtime and workflow additions. The ceiling exists to catch unexplained bloat, so it needs a deliberate raise with the new figure recorded, not a disabled assertion.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "pyproject.toml",
+        "tests/integration/test_packaging.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_packaging.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_packaging.py",
+              "-k",
+              "reds_on_growth",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W42",
+      "intent": {
+        "desired_outcome": "the ceiling is raised deliberately with headroom stated, and the gate still fails on unexplained growth",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Measure the wheel and set the ceiling with stated headroom|Prove the gate still reds on growth beyond the new ceiling"
+        ],
+        "priority_rationale": null,
+        "problem": "The wheel size ceiling no longer reflects the source surface the phase legitimately added",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-08T18:24:17.226078Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "test_wheel_bundles_service_templates_under_size_ceiling asserts the built wheel is at or under the new ceiling and still carries every declared service template, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the packaging suite with the wheel under the rebudgeted ceiling and every service template present",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The wheel size ceiling is raised to a figure measured from the current build with stated headroom, and the packaging suite passes; the service-template membership assertion is untouched, so the raise is a budget correction rather than a weakened gate.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_wheel_size_ceiling_reds_on_growth asserts the size comparison fails for a measurement past the new ceiling, under pytest exit zero",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "an assertion failure from the wheel size comparison for a measurement beyond the new ceiling",
+            "observe": "raises",
+            "quantifier": "single"
+          },
+          "text": "The ceiling still bites: a wheel measured past the new figure fails the assertion, proven by driving the comparison with an oversize value rather than by trusting that the constant is enforced somewhere.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Rebudget the wheel for the phase's new source surface",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
