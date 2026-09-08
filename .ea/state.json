@@ -13770,6 +13770,21 @@
       "status": "done",
       "updated_at": "2026-09-08T15:43:53.114353Z"
     },
+    "P32-I01-W35": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W35",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W35",
+      "model": null,
+      "scope_id": "P32-I01-W35",
+      "status": "done",
+      "updated_at": "2026-09-08T18:17:40.007593Z"
+    },
     "P32-I01-W36": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -16412,15 +16427,30 @@
       "claimed_wave_ids": [
         "P32-I01-W39"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-08T18:16:56.686105Z",
       "id": "SES-20260908T180424.931512Z-operator-claude-c7d03ec2-207c-4c4d-a4be-3c546cd04de6",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01",
       "started_at": "2026-09-08T18:04:24.931512Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260908T181723.536983Z-operator-claude-9e696e3f-37e7-4794-9192-36d08f110f1c": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-08T18:17:25.724454Z",
+      "id": "SES-20260908T181723.536983Z-operator-claude-9e696e3f-37e7-4794-9192-36d08f110f1c",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01",
+      "started_at": "2026-09-08T18:17:23.536983Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -21464,12 +21494,9 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260908T180424.931512Z-operator-claude-c7d03ec2-207c-4c4d-a4be-3c546cd04de6"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [
       "P32-I01-W11",
-      "P32-I01-W35",
       "P32-I01-W39"
     ],
     "iter_id": "P32-I01",
@@ -38716,7 +38743,8 @@
         "P32-I01-W36",
         "P32-I01-W37",
         "P32-I01-W38",
-        "P32-I01-W39"
+        "P32-I01-W39",
+        "P32-I01-W40"
       ]
     },
     "P33-I01": {
@@ -40119,7 +40147,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-08T18:04:30.317840Z",
+  "updated_at": "2026-09-08T18:17:40.007787Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -170153,12 +170181,14 @@
     },
     "P32-I01-W35": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P32-I01-W40"
+      ],
       "claim_session_id": "SES-20260908T174435.994990Z-operator-claude-12760925-c34e-4961-bdec-b86c996805b5",
       "claimed_at": "2026-09-08T17:45:39.987087Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-08T18:17:40.007593Z",
+      "commit": "dfab592f41d0c9bc610fc73a5bd7a9f0bfccd464",
+      "commit_identity_digest": "sha256:8134221c4ef1ac41b2fc85502b27adffb4125e70d93d925bca5da8c949411ed5",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
         "waived_at": "2026-09-08T16:21:33.965452Z",
@@ -170231,13 +170261,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-08T16:21:34.233425Z",
-      "outcome": null,
+      "outcome": "The floor pack and the advisory single-gate path now run through a sandboxed out-of-process runner, and the gate lane carries the runtime containment keys again, which had been dropped with the credential families and had silently made W27's binding inert. One in-process path remains in the close scorer and is carried by W40.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -170844,6 +170874,147 @@
         }
       ],
       "title": "Run the gate-isolation probes through an allowlisted argv",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W40": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-08T18:16:39.823063Z",
+        "waived_by": null
+      },
+      "deps": [
+        "P32-I01-W35"
+      ],
+      "description": "run_oracle still calls run_checks in the calling process when current_gate_context is None. It is the production close scorer reached from state_close, fleet and dispatch_close, so a gate can still execute against the live runtime directory on a real close.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/verify/oracle.py",
+        "tests/integration/workflow/verify"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/verify/test_oracle_isolation.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/verify/test_oracle_isolation.py",
+              "-k",
+              "freshness",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W40",
+      "intent": {
+        "desired_outcome": "every gate the close scorer runs executes in the sandboxed child, including the freshness-claim branch",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Route the advisory branch through the sandboxed runner|Carry the freshness claim across the process boundary so the claiming branch routes too|Prove no oracle path runs a gate in process with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "The production close scorer still runs gates in process when no gate context is bound",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-08T18:16:39.942150Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "test_close_scorer_runs_every_gate_out_of_process asserts both scorer branches spawn a sandboxed child and that no branch invokes the in-process check runner, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "security",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the verify suite asserting every close-scorer branch executes its gate in the sandboxed child",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Both remaining in-process branches of the close scorer route through the sandboxed child: the advisory branch that carries no freshness claim, and the branch that does, whose claim now crosses the process boundary instead of forcing in-process execution. No branch of the deterministic gate runner calls the check runner in the calling process.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_stale_freshness_claim_still_refuses asserts a stale claim yields the same refusal and failure kind through the sandboxed child as it did in process, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the verify suite asserting a stale freshness claim still refuses through the sandboxed child",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The freshness claim keeps its teeth across the boundary: a gate whose claim is stale is still refused with the same failure kind it produces today, so routing the claiming branch out of process does not turn a real refusal into a pass.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Close the last in-process gate path in the close scorer",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null

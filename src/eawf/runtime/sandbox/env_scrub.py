@@ -26,7 +26,10 @@ account credential family (claude: ``CLAUDE_*`` / ``ANTHROPIC_*``; codex:
 ``CODEX_HOME`` / ``OPENAI_*``) and drops the cross-lane key. Everything
 not on the allowlist -- ``AWS_*``, ``GH_*`` / ``GITHUB_*``, ``SSH_*``,
 ``KUBECONFIG``, ``EAWF_*`` daemon internals, and any unknown variable --
-is absent by construction.
+is absent by construction. The gate lane additionally carries the
+``EAWF_RUNTIME_DIR`` / ``EA_STATE`` containment pair, which pins WHICH
+runtime directory and ledger a gate reaches rather than granting it
+anything.
 
 Authoritative Keep/Drop table + auth precedence:
 ``.ea/local/research/2026-05-30-safety-floor.md`` (section "The floor:
@@ -131,6 +134,20 @@ _OPENCODE_AUTH_PREFIXES: tuple[str, ...] = ("OPENCODE_",)
 _GATE_AUTH_EXACT: frozenset[str] = frozenset()
 _GATE_AUTH_PREFIXES: tuple[str, ...] = ()
 
+#: gate-lane CONTAINMENT bindings, carried through rather than dropped.
+#:
+#: These two are not credentials; they are the seams that decide WHICH
+#: runtime directory and WHICH ledger a gate reaches. Dropping them denies
+#: a gate nothing: both resolvers simply fall back to the operator's live
+#: ``~/.eawfd`` daemon socket and to the live ``.ea`` found by walking up
+#: from the working tree. So the drop does not contain a gate -- it defeats
+#: containment, because a caller that deliberately bound a gate to a
+#: throwaway sandbox would have the binding stripped and the gate would
+#: reach the live daemon and the live ledger anyway. Carried, a gate
+#: launched inside a sandbox stays inside it; a gate launched outside one
+#: sees exactly what the fallback would have given it.
+_GATE_CONTAINMENT_KEYS: frozenset[str] = frozenset({"EAWF_RUNTIME_DIR", "EA_STATE"})
+
 
 def pinned_tmpdir(platform: str) -> str | None:
     """Return the ``TMPDIR`` a jailed child is pinned to on *platform*.
@@ -189,6 +206,20 @@ def _lane_allowlist(runtime: str) -> tuple[frozenset[str], tuple[str, ...]]:
     raise ValueError(f"unknown runtime lane: {runtime!r}")
 
 
+def _copy_present(source: Mapping[str, str], keys: frozenset[str]) -> dict[str, str]:
+    """Return the subset of *keys* that *source* carries, copied verbatim.
+
+    Args:
+        source: The parent environment being filtered.
+        keys: Exact-match keys to admit.
+
+    Returns:
+        A fresh dict of the admitted pairs. A key the parent never had is
+        NOT invented, so an empty parent yields an empty result.
+    """
+    return {key: source[key] for key in keys if key in source}
+
+
 def build_child_env(
     runtime: str,
     *,
@@ -204,7 +235,10 @@ def build_child_env(
     ``GITHUB_*``, ``SSH_*``, ``KUBECONFIG``, ``EAWF_*`` daemon internals,
     the cross-lane credential, and any unknown variable -- is absent by
     construction, so the child can never read a credential the floor did
-    not explicitly grant it.
+    not explicitly grant it. The one exception is the gate lane's
+    containment pair (:data:`_GATE_CONTAINMENT_KEYS`), which carries
+    through because dropping it widens what a gate reaches rather than
+    narrowing it.
 
     Args:
         runtime: The runtime adapter id selecting the auth lane. Maps
@@ -234,13 +268,14 @@ def build_child_env(
     source = os.environ if base_env is None else base_env
     auth_exact, auth_prefixes = _lane_allowlist(runtime)
 
-    child: dict[str, str] = {}
-
-    # Floor exact-match keys, copied only when the parent has them.
-    for key in _FLOOR_EXACT_KEYS:
-        value = source.get(key)
-        if value is not None:
-            child[key] = value
+    # Floor exact-match keys, plus -- on the gate lane only -- the
+    # containment bindings. An agent CLI gets its workspace through its own
+    # spawn contract, while a gate command inherits its runtime dir + ledger
+    # from whichever process launched it, so stripping them there would
+    # silently return a sandboxed gate to the live tree.
+    child: dict[str, str] = _copy_present(source, _FLOOR_EXACT_KEYS)
+    if runtime == GATE_RUNTIME_LANE:
+        child.update(_copy_present(source, _GATE_CONTAINMENT_KEYS))
 
     # Floor PATH is PINNED -- never the parent PATH. An optional
     # extra_path_dir (the resolved spawn binary's own directory) is
