@@ -1,0 +1,229 @@
+{
+  "spec": "CON-147",
+  "source": "rev H design pack, 261 frames and 25 journeys, replayed 2026-08-25",
+  "entries": [
+    {
+      "entry": "route word",
+      "pack": "timeline as the route id, Timeline in the header, g t timeline and the palette word",
+      "port": "roadmap everywhere; J7's typed query becomes r o a and J7 is re-recorded, J3 keys unchanged",
+      "golden_ids": ["route/timeline@*", "timeline/marker@*", "overlay/help@*", "J3", "J7"],
+      "rulings": ["S2-38", "S6-20"],
+      "route_id": "timeline",
+      "route_key": "roadmap",
+      "route_family": "planning"
+    },
+    {
+      "entry": "onboarding header",
+      "pack": "entry/onboarding header value ◈ SNAPSHOT LOADING",
+      "port": "the onboarding process value the entry rows declare",
+      "golden_ids": ["entry/onboarding@*"],
+      "rulings": ["S2-38", "X-27"]
+    },
+    {
+      "entry": "entry simulator pair",
+      "pack": "keybar pair [ ] state and subtitle · state N of 8",
+      "port": "removed; the entry suite is parametrised over the eight states",
+      "golden_ids": ["entry/*", "J14"],
+      "rulings": ["S2-38", "S6-17", "S9-06"]
+    },
+    {
+      "entry": "help simulator row",
+      "pack": "w   cycle frame size (a property of this document)",
+      "port": "removed; J15 is realised by resizing the terminal at three sizes with the same answer fields",
+      "golden_ids": ["overlay/help@*", "J15"],
+      "rulings": ["S6-16", "S9-05"]
+    },
+    {
+      "entry": "readiness target",
+      "pack": "the release returns to CANDIDATE",
+      "port": "DRAFT",
+      "golden_ids": ["overlay/readiness@*"],
+      "rulings": ["S6-10"]
+    },
+    {
+      "entry": "consequence panes",
+      "pack": "five panes ASKING, AT, EFFECTS, NOT, IF STALE",
+      "port": "ASKING and AT accepted as the rendering of ACTION and TARGET; an AUTHORITY row inserted at 80, a pane at 120 and 160",
+      "golden_ids": ["overlay/consequence@*", "J5", "J12"],
+      "rulings": ["S6-18"]
+    },
+    {
+      "entry": "track keys",
+      "pack": "tracks keyed by name (Runtime, Trust, Research); route/track@* a placeholder for TRK-0001",
+      "port": "TRK-RUNTIME, TRK-TRUST, TRK-RESEARCH with the name beside the key; J17's subject becomes the key",
+      "golden_ids": ["route/track@*", "route/scope.home@*", "J17"],
+      "rulings": ["S6-19"]
+    },
+    {
+      "entry": "disconnected body",
+      "pack": "conn/DISCONNECTED/* body identical to LIVE",
+      "port": "an ATTACHED  revision N · <age> old line and the known label on every count",
+      "golden_ids": ["conn/DISCONNECTED/*"],
+      "rulings": ["S6-21", "S9-23"]
+    },
+    {
+      "entry": "principal-scoped count",
+      "pack": "4 mine · 4 fleet-wide, and the incomplete-reads form 4 mine · 4 known whose reads never resolve a second count",
+      "port": "4 mine · 4 all principals in both forms, the second count derived from the register; fleet keeps its Run-population meaning",
+      "golden_ids": ["route/attention@*", "route/attention.bucket@*", "conn/*/attention", "J3", "J5", "J25"],
+      "rulings": ["S9-15"]
+    },
+    {
+      "entry": "denied token",
+      "pack": "≠ denied; CLAIM KIND head misaligned",
+      "port": "⊘ denied; head aligned to its column",
+      "golden_ids": ["overlay/evidence@*"],
+      "rulings": ["X-14", "S7-A3"]
+    },
+    {
+      "entry": "offline glyph",
+      "pack": "◌ OFFLINE SNAPSHOT",
+      "port": "▪ OFFLINE SNAPSHOT",
+      "golden_ids": ["entry/offline@*"],
+      "rulings": ["X-14"]
+    },
+    {
+      "entry": "campaign step glyph",
+      "pack": "► on a running step",
+      "port": "⋯",
+      "golden_ids": ["route/campaign@*"],
+      "rulings": ["X-14"]
+    },
+    {
+      "entry": "window indicator",
+      "pack": "... (N more)",
+      "port": "… N above / … N below",
+      "golden_ids": ["overlay/palette@*", "palette/scrolled@*", "J20"],
+      "rulings": ["X-23"]
+    },
+    {
+      "entry": "attention keybar",
+      "pack": "Enter bound and unadvertised; . actions shown",
+      "port": "Enter open advertised; . actions and Esc back dropped as globals at 80",
+      "golden_ids": ["route/attention@*", "conn/*/attention"],
+      "rulings": ["X-03"]
+    },
+    {
+      "entry": "activity keybar and rail",
+      "pack": "PgUp PgDn page; . actions; seven buckets with queued folded into running",
+      "port": "PageUp PageDown page; . actions dropped at 80; eight buckets with sub-buckets at 120 and 160",
+      "golden_ids": ["route/activity@*", "buckets/filtered@*", "verbose/activity@*", "conn/*/activity"],
+      "rulings": ["X-29", "X-01"]
+    },
+    {
+      "entry": "go drawer",
+      "pack": "pane/go@* recorded as setup.overlay = go, inert and byte-identical to route/run.detail@<width>",
+      "port": "recorded as a keyed state keys: [g] with the armed keybar, and go leaves the overlay domain of the frame grammar",
+      "golden_ids": ["pane/go@*", "J2", "J3", "J21"],
+      "rulings": ["S6-15", "S9-03"]
+    },
+    {
+      "entry": "roadmap marker cursor",
+      "pack": "marker cursor in colour only; J18 frames identical while mark changes",
+      "port": "text marker [ ] around the focused marker",
+      "golden_ids": ["timeline/marker@*", "marker-card/*", "J18"],
+      "rulings": ["S6-31"]
+    },
+    {
+      "entry": "absent deadline",
+      "pack": "— on the notice row",
+      "port": "due –; never-acted is the empty cell",
+      "golden_ids": ["route/attention@80"],
+      "rulings": ["X-14", "X-11"]
+    },
+    {
+      "entry": "notifications body",
+      "pack": "the repeated NEEDS YOU sentence",
+      "port": "removed",
+      "golden_ids": ["route/notifications@*"],
+      "rulings": ["X-14"]
+    },
+    {
+      "entry": "notifications classification",
+      "pack": "notifications filed with the entity sub-surfaces, as though it rendered one entity",
+      "port": "a global diagnostics route: it holds no authority, takes no subject and offers no verb beyond open, cursor movement and copy",
+      "golden_ids": ["route/notifications@*"],
+      "rulings": ["CON-143"],
+      "route_id": "notifications",
+      "route_key": "notifications",
+      "route_family": "diagnostics"
+    },
+    {
+      "entry": "release golden",
+      "pack": "a granted approval while the release is CANDIDATE",
+      "port": "the approval renders only against the head it binds; the fixture state corrected",
+      "golden_ids": ["route/release@80"],
+      "rulings": ["X-14"]
+    },
+    {
+      "entry": "decision overlay harness rows",
+      "pack": "STATE (i of N · s cycles) and IMPOSSIBLE footer rows",
+      "port": "removed; they are review-harness rows, not frame content",
+      "golden_ids": ["overlay/question@*", "overlay/pause@*", "overlay/evidence@*", "overlay/readiness@*"],
+      "rulings": ["X-14"]
+    },
+    {
+      "entry": "trust readout",
+      "pack": "FIELD readout with no field name",
+      "port": "the readout names its field",
+      "golden_ids": ["route/trust@*"],
+      "rulings": ["X-14"]
+    },
+    {
+      "entry": "unattended progress",
+      "pack": "~ 62%; key table and keybar disagree; shown without of total",
+      "port": "a named numerator with its marker; keybar from the key table; shown of total",
+      "golden_ids": ["route/unattended@*"],
+      "rulings": ["X-14"]
+    },
+    {
+      "entry": "sandbox log spelling",
+      "pack": "policy revision spelled inconsistently",
+      "port": "one spelling from the fixture record",
+      "golden_ids": ["route/sandbox.log@*"],
+      "rulings": ["X-14"]
+    },
+    {
+      "entry": "evidence rung names",
+      "pack": "the pack's rung names",
+      "port": "resolve · anchor · screen · entail",
+      "golden_ids": ["route/evidence@*", "card/rung@*"],
+      "rulings": ["X-14", "X-12"]
+    },
+    {
+      "entry": "health head",
+      "pack": "REASON and SINCE head misaligned",
+      "port": "aligned",
+      "golden_ids": ["route/health@*"],
+      "rulings": ["X-14"]
+    },
+    {
+      "entry": "export remnant",
+      "pack": "space includes remnant text",
+      "port": "removed",
+      "golden_ids": ["route/export@*"],
+      "rulings": ["X-14"]
+    },
+    {
+      "entry": "stale metadata",
+      "pack": "file count fields that disagree with their own contents, journey meta.generated, after.note, and the J3, J11 and J13 title and proves fields",
+      "port": "every census derived by the loader from the records themselves, or the field dropped from the file grammar; never compared, never trusted for a count",
+      "golden_ids": ["*"],
+      "rulings": ["S6-13", "S6-14", "S6-28"]
+    },
+    {
+      "entry": "ambiguous-width glyphs",
+      "pack": "41 Ambiguous glyphs in fixed slots, compared by code point",
+      "port": "no substitution: compared code-point and cell exact under the declared narrow policy",
+      "golden_ids": ["*"],
+      "rulings": ["X-04", "S6-22", "S9-02"]
+    },
+    {
+      "entry": "byte-identical alias frames",
+      "pack": "nineteen byte-identical groups over twenty redundant frames with nothing marking which is which, so a frame that records the wrong state passes as an alias",
+      "port": "every byte-identical group names the id each member aliases and why, so an unmarked byte-identical pair fails the replay instead of passing as an alias",
+      "golden_ids": ["pane/go@*", "timeline/marker@*", "conn/LIVE/*", "route/entry@*", "palette/top@*", "marker-card/inert@*", "card/artifact@160"],
+      "rulings": ["S9-03", "S6-31"]
+    }
+  ]
+}

@@ -71,7 +71,11 @@ jobs:
         # small-core runner does not thrash.
         # Same ubuntu-only coverage gating; --cov-append extends the parallel
         # leg's data file on ubuntu, macOS runs the suite without --cov.
-        run: uv run pytest -n 4 tests/snapshots/tui ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report=xml --cov-fail-under=0' || '' }}
+        # The console golden contract is ignored here and owned by
+        # console-replay.yaml: it must replay 25 journeys then 261 frames in one
+        # app instance, so sharding it over four workers would give each worker
+        # its own reset and prove less than the dedicated single-process job.
+        run: uv run pytest -n 4 tests/snapshots/tui --ignore=tests/snapshots/tui/console ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report=xml --cov-fail-under=0' || '' }}
       - name: Pytest (serial perf timing)
         # Stays serial on purpose: these assert p99 latency, so a contended
         # machine changes the number being measured.

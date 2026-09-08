@@ -1,0 +1,726 @@
+{
+ "kind": "connection-state frames",
+ "states": [
+  {
+   "id": "conn/LIVE/activity",
+   "kind": "connection",
+   "setup": {
+    "route": "activity",
+    "subjId": null,
+    "conn": "LIVE"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Activity                                  !4 NEEDS YOU  ● LIVE\n 26 runs                                                                        \n════════════════════════════════════════════════════════════════════════════════\n BUCKETS   ▸all 26 · needs operator 3 · unknown control outcome 1 · 5›          \n   RUN          TASK                      STATE       REASON              AS OF \n ▸ RUN-538453eb EAWF-0042 Bound replay    WAIT-PERM   needs permission    14:02 \n   RUN-f1bbcd9c EAWF-0043 Seal ledger     WAIT-PERM   needs permission    14:02 \n   RUN-cc623ab9 EAWF-0044 Retire shim     WAIT-USER   needs your answer   14:02 \n   RUN-a708a7d6 EAWF-0047 Digest guard    SUSPENDED   control outcome…    13:58 \n   RUN-be1e085a EAWF-0051 Coalesce        LOST        stopped responding  14:01 \n   RUN-5c558210 EAWF-0053 Window trim     LOST        stopped responding  13:59 \n   RUN-98c47577 EAWF-0052 Replay guard    FAILED      final report…       14:01 \n   RUN-d53368de EAWF-0054 Ledger audit    RUNNING     integrating         14:02 \n   RUN-736ae294 EAWF-0063 Seal check      RUNNING     checking            14:02 \n   RUN-11a25c4a EAWF-0064 Digest verify   RUNNING     checking            14:02 \n   RUN-afd9d5fb EAWF-0065 Merge probe     RUNNING     integrating         14:02 \n   RUN-28b7bcce EAWF-0055 Normalize       RUNNING     run active          14:02 \n   RUN-c6ef367f EAWF-0056 Bound window    RUNNING     run active          14:02 \n   RUN-6526b035 EAWF-0057 Escape audit    QUEUED      waiting for a slot  14:02 \n   RUN-035e29eb EAWF-0058 Ledger seal     RUNNING     run active          14:02 \n   RUN-a195a39c EAWF-0059 Digest check    RUNNING     run active          14:02 \n────────────────────────────────────────────────────────────────────────────────\n WINDOW    1–16 of 26                                                           \n ↑↓ row   PgUp PgDn page   Enter drill   Tab buckets   \\ filter   . actions     "
+  },
+  {
+   "id": "conn/LIVE/run.detail",
+   "kind": "connection",
+   "setup": {
+    "route": "run.detail",
+    "subjId": "RUN-538453eb",
+    "conn": "LIVE"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ RUN-538453eb                              !4 NEEDS YOU  ● LIVE\n Run RUN-538453eb · claude · WAIT-PERM · needs permission · seq 41,208          \n════════════════════════════════════════════════════════════════════════════════\n  PROVIDER     claude · session reused · handle 4h left                         \n  STARTED      14:00:12 · seq 41,204                                            \n  ASKED        write outside its batch · fs.write.scope = project root          \n  SCOPE      ▸ BAT-0002 · EAWF-0042 Bound replay                                \n  USAGE        elapsed 2m 08s · tokens out 18,402 · cost ~0.31 of 20.00         \n  CONTROLS     Answer the permission, or let the run go.                        \n  LINEAGE      Attempt 1 of 1 · no retry · no fork.                             \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n Enter drill   . actions   i inspect   Esc back                                 "
+  },
+  {
+   "id": "conn/LIVE/attention",
+   "kind": "connection",
+   "setup": {
+    "route": "attention",
+    "subjId": null,
+    "conn": "LIVE"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Needs you                                 !4 NEEDS YOU  ● LIVE\n 4 mine · 4 fleet-wide · nothing here opened itself                             \n════════════════════════════════════════════════════════════════════════════════\n BUCKETS   ▸all 5 · failed 0 · lost 1 · needs operator 3 · ↳ permission 1 · 7›  \n LOST  1                                                                        \n ▸ ACT-0034 RUN-be1e085a stopped responding · resume or…    OPEN      due –     \n              last heartbeat 14:01 · no final report                            \n NEEDS OPERATOR  3                                                              \n   ACT-0031 RUN-538453eb wants to write outside its batch   OPEN      due 4m    \n   ACT-0032 EAWF-0042 needs your answer                     OPEN      open      \n   ACT-0033 BAT-0003 merge authority no longer valid        OPEN      due –     \n OVER BUDGET  1                                                                 \n   ACT-0035 RUN-3fcd1d52 past its 45m estimate; still…      OPEN      —         \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n ↑↓ row   Tab buckets   a answer   x deny   z snooze   v resolve   . actions    "
+  },
+  {
+   "id": "conn/LIVE/settings",
+   "kind": "connection",
+   "setup": {
+    "route": "settings",
+    "subjId": null,
+    "conn": "LIVE"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Settings                                  !4 NEEDS YOU  ● LIVE\n 6 categories · 35 sections · in EXECUTION ▸ planning                           \n════════════════════════════════════════════════════════════════════════════════\nEXECUTION     │  PLANNING             global › workspace › repo › branch › local\n  dispatch    │      KEY                              VALUE                     \n  flow        │ ▸ ≠ approval                          auto                      \n▸ planning    │   = max_parallel_waves                6                         \n  prep        │   – require_research_for_unknowns     true                      \n  research    │   – auto_plan                         false                     \n  runtime     │                                                                 \n  ship        │                                                                 \n  worktrees   │                                                                 \nIDENTITY      │                                                                 \n  preferences │                                                                 \n  profiles    │                                                                 \n  project     │                                                                 \n  workspace   ├─────────────────────────────────────────────────────────────────\nINTERFACE     │  approval · enum                                                \n  cli         │  who authorises a plan before it dispatches                     \n  commands    │  ○ ask   stops for you                                          \n  docs        │  ● auto  dispatches the plan                                    \n  statusline  │  ○ never refuses to dispatch at all                             \n──────────────┴─────────────────────────────────────────────────────────────────\n ↑↓ field   Tab section   Enter edit   l layer   x unset   Esc back             "
+  },
+  {
+   "id": "conn/LIVE-PARTIAL/activity",
+   "kind": "connection",
+   "setup": {
+    "route": "activity",
+    "subjId": null,
+    "conn": "LIVE / PARTIAL"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Activity                        !4 NEEDS YOU  ◑ LIVE / PARTIAL\n 26 runs · partial · affected aggregates are labelled                           \n════════════════════════════════════════════════════════════════════════════════\n ATTACHED  revision 41,208                                                      \n BUCKETS   ▸all 26 · needs operator 3 · unknown control outcome 1 · 5›          \n   RUN          TASK                      STATE       REASON              AS OF \n ▸ RUN-538453eb EAWF-0042 Bound replay    WAIT-PERM   needs permission    14:02 \n   RUN-f1bbcd9c EAWF-0043 Seal ledger     WAIT-PERM   needs permission    14:02 \n   RUN-cc623ab9 EAWF-0044 Retire shim     WAIT-USER   needs your answer   14:02 \n   RUN-a708a7d6 EAWF-0047 Digest guard    SUSPENDED   control outcome…    13:58 \n   RUN-be1e085a EAWF-0051 Coalesce        LOST        stopped responding  14:01 \n   RUN-5c558210 EAWF-0053 Window trim     LOST        stopped responding  13:59 \n   RUN-98c47577 EAWF-0052 Replay guard    FAILED      final report…       14:01 \n   RUN-d53368de EAWF-0054 Ledger audit    RUNNING     integrating         14:02 \n   RUN-736ae294 EAWF-0063 Seal check      RUNNING     checking            14:02 \n   RUN-11a25c4a EAWF-0064 Digest verify   RUNNING     checking            14:02 \n   RUN-afd9d5fb EAWF-0065 Merge probe     RUNNING     integrating         14:02 \n   RUN-28b7bcce EAWF-0055 Normalize       RUNNING     run active          14:02 \n   RUN-c6ef367f EAWF-0056 Bound window    RUNNING     run active          14:02 \n   RUN-6526b035 EAWF-0057 Escape audit    QUEUED      waiting for a slot  14:02 \n   RUN-035e29eb EAWF-0058 Ledger seal     RUNNING     run active          14:02 \n────────────────────────────────────────────────────────────────────────────────\n WINDOW    1–15 of 26 known                                                     \n ↑↓ row   PgUp PgDn page   Enter drill   Tab buckets   \\ filter   . actions     "
+  },
+  {
+   "id": "conn/LIVE-PARTIAL/run.detail",
+   "kind": "connection",
+   "setup": {
+    "route": "run.detail",
+    "subjId": "RUN-538453eb",
+    "conn": "LIVE / PARTIAL"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ RUN-538453eb                    !4 NEEDS YOU  ◑ LIVE / PARTIAL\n Run RUN-538453eb · claude · WAIT-PERM · needs permission · seq 41,208          \n════════════════════════════════════════════════════════════════════════════════\n  PROVIDER     claude · session reused · handle 4h left                         \n  STARTED      14:00:12 · seq 41,204                                            \n  ASKED        write outside its batch · fs.write.scope = project root          \n  SCOPE      ▸ BAT-0002 · EAWF-0042 Bound replay                                \n  USAGE        elapsed 2m 08s · tokens out 18,402 · cost ~0.31 of 20.00         \n  CONTROLS     Answer the permission, or let the run go.                        \n  LINEAGE      Attempt 1 of 1 · no retry · no fork.                             \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n Enter drill   . actions   i inspect   Esc back                                 "
+  },
+  {
+   "id": "conn/LIVE-PARTIAL/attention",
+   "kind": "connection",
+   "setup": {
+    "route": "attention",
+    "subjId": null,
+    "conn": "LIVE / PARTIAL"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Needs you                       !4 NEEDS YOU  ◑ LIVE / PARTIAL\n 4 mine · 4 known · nothing here opened itself                                  \n════════════════════════════════════════════════════════════════════════════════\n ATTACHED  revision 41,208                                                      \n────────────────────────────────────────────────────────────────────────────────\n BUCKETS   ▸all 5 · failed 0 · lost 1 · needs operator 3 · ↳ permission 1 · 7›  \n LOST  1                                                                        \n ▸ ACT-0034 RUN-be1e085a stopped responding · resume or…    OPEN      due –     \n              last heartbeat 14:01 · no final report                            \n NEEDS OPERATOR  3                                                              \n   ACT-0031 RUN-538453eb wants to write outside its batch   OPEN      due 4m    \n   ACT-0032 EAWF-0042 needs your answer                     OPEN      open      \n   ACT-0033 BAT-0003 merge authority no longer valid        OPEN      due –     \n OVER BUDGET  1                                                                 \n   ACT-0035 RUN-3fcd1d52 past its 45m estimate; still…      OPEN      —         \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n ↑↓ row   Tab buckets   a answer   x deny   z snooze   v resolve   . actions    "
+  },
+  {
+   "id": "conn/LIVE-PARTIAL/settings",
+   "kind": "connection",
+   "setup": {
+    "route": "settings",
+    "subjId": null,
+    "conn": "LIVE / PARTIAL"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Settings                        !4 NEEDS YOU  ◑ LIVE / PARTIAL\n 6 categories · 35 sections · in EXECUTION ▸ planning                           \n════════════════════════════════════════════════════════════════════════════════\nEXECUTION     │  PLANNING             global › workspace › repo › branch › local\n  dispatch    │      KEY                              VALUE                     \n  flow        │ ▸ ≠ approval                          auto                      \n▸ planning    │   = max_parallel_waves                6                         \n  prep        │   – require_research_for_unknowns     true                      \n  research    │   – auto_plan                         false                     \n  runtime     │                                                                 \n  ship        │                                                                 \n  worktrees   │                                                                 \nIDENTITY      │                                                                 \n  preferences │                                                                 \n  profiles    │                                                                 \n  project     │                                                                 \n  workspace   ├─────────────────────────────────────────────────────────────────\nINTERFACE     │  approval · enum                                                \n  cli         │  who authorises a plan before it dispatches                     \n  commands    │  ○ ask   stops for you                                          \n  docs        │  ● auto  dispatches the plan                                    \n  statusline  │  ○ never refuses to dispatch at all                             \n──────────────┴─────────────────────────────────────────────────────────────────\n ↑↓ field   Tab section   Enter edit   l layer   x unset   Esc back             "
+  },
+  {
+   "id": "conn/DEGRADED/activity",
+   "kind": "connection",
+   "setup": {
+    "route": "activity",
+    "subjId": null,
+    "conn": "DEGRADED"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Activity                              !4 NEEDS YOU  ◐ DEGRADED\n 26 runs · degraded · a feed is unhealthy                                       \n════════════════════════════════════════════════════════════════════════════════\n ATTACHED  revision 41,208                                                      \n BUCKETS   ▸all 26 · needs operator 3 · unknown control outcome 1 · 5›          \n   RUN          TASK                      STATE       REASON              AS OF \n ▸ RUN-538453eb EAWF-0042 Bound replay    WAIT-PERM   needs permission    14:02 \n   RUN-f1bbcd9c EAWF-0043 Seal ledger     WAIT-PERM   needs permission    14:02 \n   RUN-cc623ab9 EAWF-0044 Retire shim     WAIT-USER   needs your answer   14:02 \n   RUN-a708a7d6 EAWF-0047 Digest guard    SUSPENDED   control outcome…    13:58 \n   RUN-be1e085a EAWF-0051 Coalesce        LOST        stopped responding  14:01 \n   RUN-5c558210 EAWF-0053 Window trim     LOST        stopped responding  13:59 \n   RUN-98c47577 EAWF-0052 Replay guard    FAILED      final report…       14:01 \n   RUN-d53368de EAWF-0054 Ledger audit    RUNNING     integrating         14:02 \n   RUN-736ae294 EAWF-0063 Seal check      RUNNING     checking            14:02 \n   RUN-11a25c4a EAWF-0064 Digest verify   RUNNING     checking            14:02 \n   RUN-afd9d5fb EAWF-0065 Merge probe     RUNNING     integrating         14:02 \n   RUN-28b7bcce EAWF-0055 Normalize       RUNNING     run active          14:02 \n   RUN-c6ef367f EAWF-0056 Bound window    RUNNING     run active          14:02 \n   RUN-6526b035 EAWF-0057 Escape audit    QUEUED      waiting for a slot  14:02 \n   RUN-035e29eb EAWF-0058 Ledger seal     RUNNING     run active          14:02 \n────────────────────────────────────────────────────────────────────────────────\n WINDOW    1–15 of 26 known                                                     \n ↑↓ row   PgUp PgDn page   Enter drill   Tab buckets   \\ filter   . actions     "
+  },
+  {
+   "id": "conn/DEGRADED/run.detail",
+   "kind": "connection",
+   "setup": {
+    "route": "run.detail",
+    "subjId": "RUN-538453eb",
+    "conn": "DEGRADED"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ RUN-538453eb                          !4 NEEDS YOU  ◐ DEGRADED\n Run RUN-538453eb · claude · WAIT-PERM · needs permission · seq 41,208          \n════════════════════════════════════════════════════════════════════════════════\n  PROVIDER     claude · session reused · handle 4h left                         \n  STARTED      14:00:12 · seq 41,204                                            \n  ASKED        write outside its batch · fs.write.scope = project root          \n  SCOPE      ▸ BAT-0002 · EAWF-0042 Bound replay                                \n  USAGE        elapsed 2m 08s · tokens out 18,402 · cost ~0.31 of 20.00         \n  CONTROLS     Answer the permission, or let the run go.                        \n  LINEAGE      Attempt 1 of 1 · no retry · no fork.                             \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n Enter drill   . actions   i inspect   Esc back                                 "
+  },
+  {
+   "id": "conn/DEGRADED/attention",
+   "kind": "connection",
+   "setup": {
+    "route": "attention",
+    "subjId": null,
+    "conn": "DEGRADED"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Needs you                             !4 NEEDS YOU  ◐ DEGRADED\n 4 mine · 4 known · nothing here opened itself                                  \n════════════════════════════════════════════════════════════════════════════════\n ATTACHED  revision 41,208                                                      \n────────────────────────────────────────────────────────────────────────────────\n BUCKETS   ▸all 5 · failed 0 · lost 1 · needs operator 3 · ↳ permission 1 · 7›  \n LOST  1                                                                        \n ▸ ACT-0034 RUN-be1e085a stopped responding · resume or…    OPEN      due –     \n              last heartbeat 14:01 · no final report                            \n NEEDS OPERATOR  3                                                              \n   ACT-0031 RUN-538453eb wants to write outside its batch   OPEN      due 4m    \n   ACT-0032 EAWF-0042 needs your answer                     OPEN      open      \n   ACT-0033 BAT-0003 merge authority no longer valid        OPEN      due –     \n OVER BUDGET  1                                                                 \n   ACT-0035 RUN-3fcd1d52 past its 45m estimate; still…      OPEN      —         \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n ↑↓ row   Tab buckets   a answer   x deny   z snooze   v resolve   . actions    "
+  },
+  {
+   "id": "conn/DEGRADED/settings",
+   "kind": "connection",
+   "setup": {
+    "route": "settings",
+    "subjId": null,
+    "conn": "DEGRADED"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Settings                              !4 NEEDS YOU  ◐ DEGRADED\n 6 categories · 35 sections · in EXECUTION ▸ planning                           \n════════════════════════════════════════════════════════════════════════════════\nEXECUTION     │  PLANNING             global › workspace › repo › branch › local\n  dispatch    │      KEY                              VALUE                     \n  flow        │ ▸ ≠ approval                          auto                      \n▸ planning    │   = max_parallel_waves                6                         \n  prep        │   – require_research_for_unknowns     true                      \n  research    │   – auto_plan                         false                     \n  runtime     │                                                                 \n  ship        │                                                                 \n  worktrees   │                                                                 \nIDENTITY      │                                                                 \n  preferences │                                                                 \n  profiles    │                                                                 \n  project     │                                                                 \n  workspace   ├─────────────────────────────────────────────────────────────────\nINTERFACE     │  approval · enum                                                \n  cli         │  who authorises a plan before it dispatches                     \n  commands    │  ○ ask   stops for you                                          \n  docs        │  ● auto  dispatches the plan                                    \n  statusline  │  ○ never refuses to dispatch at all                             \n──────────────┴─────────────────────────────────────────────────────────────────\n ↑↓ field   Tab section   Enter edit   l layer   x unset   Esc back             "
+  },
+  {
+   "id": "conn/DISCONNECTED/activity",
+   "kind": "connection",
+   "setup": {
+    "route": "activity",
+    "subjId": null,
+    "conn": "DISCONNECTED"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Activity                          !4 NEEDS YOU  ◌ DISCONNECTED\n 26 runs                                                                        \n════════════════════════════════════════════════════════════════════════════════\n BUCKETS   ▸all 26 · needs operator 3 · unknown control outcome 1 · 5›          \n   RUN          TASK                      STATE       REASON              AS OF \n ▸ RUN-538453eb EAWF-0042 Bound replay    WAIT-PERM   needs permission    14:02 \n   RUN-f1bbcd9c EAWF-0043 Seal ledger     WAIT-PERM   needs permission    14:02 \n   RUN-cc623ab9 EAWF-0044 Retire shim     WAIT-USER   needs your answer   14:02 \n   RUN-a708a7d6 EAWF-0047 Digest guard    SUSPENDED   control outcome…    13:58 \n   RUN-be1e085a EAWF-0051 Coalesce        LOST        stopped responding  14:01 \n   RUN-5c558210 EAWF-0053 Window trim     LOST        stopped responding  13:59 \n   RUN-98c47577 EAWF-0052 Replay guard    FAILED      final report…       14:01 \n   RUN-d53368de EAWF-0054 Ledger audit    RUNNING     integrating         14:02 \n   RUN-736ae294 EAWF-0063 Seal check      RUNNING     checking            14:02 \n   RUN-11a25c4a EAWF-0064 Digest verify   RUNNING     checking            14:02 \n   RUN-afd9d5fb EAWF-0065 Merge probe     RUNNING     integrating         14:02 \n   RUN-28b7bcce EAWF-0055 Normalize       RUNNING     run active          14:02 \n   RUN-c6ef367f EAWF-0056 Bound window    RUNNING     run active          14:02 \n   RUN-6526b035 EAWF-0057 Escape audit    QUEUED      waiting for a slot  14:02 \n   RUN-035e29eb EAWF-0058 Ledger seal     RUNNING     run active          14:02 \n   RUN-a195a39c EAWF-0059 Digest check    RUNNING     run active          14:02 \n────────────────────────────────────────────────────────────────────────────────\n WINDOW    1–16 of 26                                                           \n ↑↓ row   PgUp PgDn page   Enter drill   Tab buckets   \\ filter   . actions     "
+  },
+  {
+   "id": "conn/DISCONNECTED/run.detail",
+   "kind": "connection",
+   "setup": {
+    "route": "run.detail",
+    "subjId": "RUN-538453eb",
+    "conn": "DISCONNECTED"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ RUN-538453eb                      !4 NEEDS YOU  ◌ DISCONNECTED\n Run RUN-538453eb · claude · WAIT-PERM · needs permission · seq 41,208          \n════════════════════════════════════════════════════════════════════════════════\n  PROVIDER     claude · session reused · handle 4h left                         \n  STARTED      14:00:12 · seq 41,204                                            \n  ASKED        write outside its batch · fs.write.scope = project root          \n  SCOPE      ▸ BAT-0002 · EAWF-0042 Bound replay                                \n  USAGE        elapsed 2m 08s · tokens out 18,402 · cost ~0.31 of 20.00         \n  CONTROLS     Answer the permission, or let the run go.                        \n  LINEAGE      Attempt 1 of 1 · no retry · no fork.                             \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n Enter drill   . actions   i inspect   Esc back                                 "
+  },
+  {
+   "id": "conn/DISCONNECTED/attention",
+   "kind": "connection",
+   "setup": {
+    "route": "attention",
+    "subjId": null,
+    "conn": "DISCONNECTED"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Needs you                         !4 NEEDS YOU  ◌ DISCONNECTED\n 4 mine · 4 fleet-wide · nothing here opened itself                             \n════════════════════════════════════════════════════════════════════════════════\n BUCKETS   ▸all 5 · failed 0 · lost 1 · needs operator 3 · ↳ permission 1 · 7›  \n LOST  1                                                                        \n ▸ ACT-0034 RUN-be1e085a stopped responding · resume or…    OPEN      due –     \n              last heartbeat 14:01 · no final report                            \n NEEDS OPERATOR  3                                                              \n   ACT-0031 RUN-538453eb wants to write outside its batch   OPEN      due 4m    \n   ACT-0032 EAWF-0042 needs your answer                     OPEN      open      \n   ACT-0033 BAT-0003 merge authority no longer valid        OPEN      due –     \n OVER BUDGET  1                                                                 \n   ACT-0035 RUN-3fcd1d52 past its 45m estimate; still…      OPEN      —         \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n ↑↓ row   Tab buckets   . actions   Esc back                                    "
+  },
+  {
+   "id": "conn/DISCONNECTED/settings",
+   "kind": "connection",
+   "setup": {
+    "route": "settings",
+    "subjId": null,
+    "conn": "DISCONNECTED"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Settings                          !4 NEEDS YOU  ◌ DISCONNECTED\n 6 categories · 35 sections · in EXECUTION ▸ planning                           \n════════════════════════════════════════════════════════════════════════════════\nEXECUTION     │  PLANNING             global › workspace › repo › branch › local\n  dispatch    │      KEY                              VALUE                     \n  flow        │ ▸ ≠ approval                          auto                      \n▸ planning    │   = max_parallel_waves                6                         \n  prep        │   – require_research_for_unknowns     true                      \n  research    │   – auto_plan                         false                     \n  runtime     │                                                                 \n  ship        │                                                                 \n  worktrees   │                                                                 \nIDENTITY      │                                                                 \n  preferences │                                                                 \n  profiles    │                                                                 \n  project     │                                                                 \n  workspace   ├─────────────────────────────────────────────────────────────────\nINTERFACE     │  approval · enum                                                \n  cli         │  who authorises a plan before it dispatches                     \n  commands    │  ○ ask   stops for you                                          \n  docs        │  ● auto  dispatches the plan                                    \n  statusline  │  ○ never refuses to dispatch at all                             \n──────────────┴─────────────────────────────────────────────────────────────────\n ↑↓ field   Tab section   Enter edit   l layer   x unset   Esc back             "
+  },
+  {
+   "id": "conn/REPLAYING/activity",
+   "kind": "connection",
+   "setup": {
+    "route": "activity",
+    "subjId": null,
+    "conn": "REPLAYING"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Activity                             !4 NEEDS YOU  ► REPLAYING\n 26 runs · replaying · cached facts only                                        \n════════════════════════════════════════════════════════════════════════════════\n ATTACHED  revision 41,208                                                      \n BUCKETS   ▸all 26 · needs operator 3 · unknown control outcome 1 · 5›          \n   RUN          TASK                      STATE       REASON              AS OF \n ▸ RUN-538453eb EAWF-0042 Bound replay    WAIT-PERM   needs permission    14:02 \n   RUN-f1bbcd9c EAWF-0043 Seal ledger     WAIT-PERM   needs permission    14:02 \n   RUN-cc623ab9 EAWF-0044 Retire shim     WAIT-USER   needs your answer   14:02 \n   RUN-a708a7d6 EAWF-0047 Digest guard    SUSPENDED   control outcome…    13:58 \n   RUN-be1e085a EAWF-0051 Coalesce        LOST        stopped responding  14:01 \n   RUN-5c558210 EAWF-0053 Window trim     LOST        stopped responding  13:59 \n   RUN-98c47577 EAWF-0052 Replay guard    FAILED      final report…       14:01 \n   RUN-d53368de EAWF-0054 Ledger audit    RUNNING     integrating         14:02 \n   RUN-736ae294 EAWF-0063 Seal check      RUNNING     checking            14:02 \n   RUN-11a25c4a EAWF-0064 Digest verify   RUNNING     checking            14:02 \n   RUN-afd9d5fb EAWF-0065 Merge probe     RUNNING     integrating         14:02 \n   RUN-28b7bcce EAWF-0055 Normalize       RUNNING     run active          14:02 \n   RUN-c6ef367f EAWF-0056 Bound window    RUNNING     run active          14:02 \n   RUN-6526b035 EAWF-0057 Escape audit    QUEUED      waiting for a slot  14:02 \n   RUN-035e29eb EAWF-0058 Ledger seal     RUNNING     run active          14:02 \n────────────────────────────────────────────────────────────────────────────────\n WINDOW    1–15 of 26 known                                                     \n ↑↓ row   PgUp PgDn page   Enter drill   Tab buckets   \\ filter   . actions     "
+  },
+  {
+   "id": "conn/REPLAYING/run.detail",
+   "kind": "connection",
+   "setup": {
+    "route": "run.detail",
+    "subjId": "RUN-538453eb",
+    "conn": "REPLAYING"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ RUN-538453eb                         !4 NEEDS YOU  ► REPLAYING\n Run RUN-538453eb · claude · WAIT-PERM · needs permission · seq 41,208          \n════════════════════════════════════════════════════════════════════════════════\n  PROVIDER     claude · session reused · handle 4h left                         \n  STARTED      14:00:12 · seq 41,204                                            \n  ASKED        write outside its batch · fs.write.scope = project root          \n  SCOPE      ▸ BAT-0002 · EAWF-0042 Bound replay                                \n  USAGE        elapsed 2m 08s · tokens out 18,402 · cost ~0.31 of 20.00         \n  CONTROLS     Answer the permission, or let the run go.                        \n  LINEAGE      Attempt 1 of 1 · no retry · no fork.                             \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n Enter drill   . actions   i inspect   Esc back                                 "
+  },
+  {
+   "id": "conn/REPLAYING/attention",
+   "kind": "connection",
+   "setup": {
+    "route": "attention",
+    "subjId": null,
+    "conn": "REPLAYING"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Needs you                            !4 NEEDS YOU  ► REPLAYING\n 4 mine · 4 known · nothing here opened itself                                  \n════════════════════════════════════════════════════════════════════════════════\n ATTACHED  revision 41,208                                                      \n────────────────────────────────────────────────────────────────────────────────\n BUCKETS   ▸all 5 · failed 0 · lost 1 · needs operator 3 · ↳ permission 1 · 7›  \n LOST  1                                                                        \n ▸ ACT-0034 RUN-be1e085a stopped responding · resume or…    OPEN      due –     \n              last heartbeat 14:01 · no final report                            \n NEEDS OPERATOR  3                                                              \n   ACT-0031 RUN-538453eb wants to write outside its batch   OPEN      due 4m    \n   ACT-0032 EAWF-0042 needs your answer                     OPEN      open      \n   ACT-0033 BAT-0003 merge authority no longer valid        OPEN      due –     \n OVER BUDGET  1                                                                 \n   ACT-0035 RUN-3fcd1d52 past its 45m estimate; still…      OPEN      —         \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n ↑↓ row   Tab buckets   . actions   Esc back                                    "
+  },
+  {
+   "id": "conn/REPLAYING/settings",
+   "kind": "connection",
+   "setup": {
+    "route": "settings",
+    "subjId": null,
+    "conn": "REPLAYING"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Settings                             !4 NEEDS YOU  ► REPLAYING\n 6 categories · 35 sections · in EXECUTION ▸ planning                           \n════════════════════════════════════════════════════════════════════════════════\nEXECUTION     │  PLANNING             global › workspace › repo › branch › local\n  dispatch    │      KEY                              VALUE                     \n  flow        │ ▸ ≠ approval                          auto                      \n▸ planning    │   = max_parallel_waves                6                         \n  prep        │   – require_research_for_unknowns     true                      \n  research    │   – auto_plan                         false                     \n  runtime     │                                                                 \n  ship        │                                                                 \n  worktrees   │                                                                 \nIDENTITY      │                                                                 \n  preferences │                                                                 \n  profiles    │                                                                 \n  project     │                                                                 \n  workspace   ├─────────────────────────────────────────────────────────────────\nINTERFACE     │  approval · enum                                                \n  cli         │  who authorises a plan before it dispatches                     \n  commands    │  ○ ask   stops for you                                          \n  docs        │  ● auto  dispatches the plan                                    \n  statusline  │  ○ never refuses to dispatch at all                             \n──────────────┴─────────────────────────────────────────────────────────────────\n ↑↓ field   Tab section   Enter edit   l layer   x unset   Esc back             "
+  },
+  {
+   "id": "conn/GAP-DETECTED/activity",
+   "kind": "connection",
+   "setup": {
+    "route": "activity",
+    "subjId": null,
+    "conn": "GAP DETECTED"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Activity                          !4 NEEDS YOU  ▲ GAP DETECTED\n 26 runs · no count can be called complete for the gap                          \n════════════════════════════════════════════════════════════════════════════════\n ATTACHED  revision 41,208                                                      \n BUCKETS   ▸all 26 · needs operator 3 · unknown control outcome 1 · 5›          \n   RUN          TASK                      STATE       REASON              AS OF \n ▸ RUN-538453eb EAWF-0042 Bound replay    WAIT-PERM   needs permission    14:02 \n   RUN-f1bbcd9c EAWF-0043 Seal ledger     WAIT-PERM   needs permission    14:02 \n   RUN-cc623ab9 EAWF-0044 Retire shim     WAIT-USER   needs your answer   14:02 \n   RUN-a708a7d6 EAWF-0047 Digest guard    SUSPENDED   control outcome…    13:58 \n   RUN-be1e085a EAWF-0051 Coalesce        LOST        stopped responding  14:01 \n   RUN-5c558210 EAWF-0053 Window trim     LOST        stopped responding  13:59 \n   RUN-98c47577 EAWF-0052 Replay guard    FAILED      final report…       14:01 \n   RUN-d53368de EAWF-0054 Ledger audit    RUNNING     integrating         14:02 \n   RUN-736ae294 EAWF-0063 Seal check      RUNNING     checking            14:02 \n   RUN-11a25c4a EAWF-0064 Digest verify   RUNNING     checking            14:02 \n   RUN-afd9d5fb EAWF-0065 Merge probe     RUNNING     integrating         14:02 \n   RUN-28b7bcce EAWF-0055 Normalize       RUNNING     run active          14:02 \n   RUN-c6ef367f EAWF-0056 Bound window    RUNNING     run active          14:02 \n   RUN-6526b035 EAWF-0057 Escape audit    QUEUED      waiting for a slot  14:02 \n   RUN-035e29eb EAWF-0058 Ledger seal     RUNNING     run active          14:02 \n────────────────────────────────────────────────────────────────────────────────\n WINDOW    1–15 of 26 known                                                     \n ↑↓ row   PgUp PgDn page   Enter drill   Tab buckets   \\ filter   . actions     "
+  },
+  {
+   "id": "conn/GAP-DETECTED/run.detail",
+   "kind": "connection",
+   "setup": {
+    "route": "run.detail",
+    "subjId": "RUN-538453eb",
+    "conn": "GAP DETECTED"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ RUN-538453eb                      !4 NEEDS YOU  ▲ GAP DETECTED\n Run RUN-538453eb · claude · WAIT-PERM · needs permission · seq 41,208          \n════════════════════════════════════════════════════════════════════════════════\n  PROVIDER     claude · session reused · handle 4h left                         \n  STARTED      14:00:12 · seq 41,204                                            \n  ASKED        write outside its batch · fs.write.scope = project root          \n  SCOPE      ▸ BAT-0002 · EAWF-0042 Bound replay                                \n  USAGE        elapsed 2m 08s · tokens out 18,402 · cost ~0.31 of 20.00         \n  CONTROLS     Answer the permission, or let the run go.                        \n  LINEAGE      Attempt 1 of 1 · no retry · no fork.                             \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n Enter drill   . actions   i inspect   Esc back                                 "
+  },
+  {
+   "id": "conn/GAP-DETECTED/attention",
+   "kind": "connection",
+   "setup": {
+    "route": "attention",
+    "subjId": null,
+    "conn": "GAP DETECTED"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Needs you                         !4 NEEDS YOU  ▲ GAP DETECTED\n 4 mine · 4 known · nothing here opened itself                                  \n════════════════════════════════════════════════════════════════════════════════\n ATTACHED  revision 41,208                                                      \n────────────────────────────────────────────────────────────────────────────────\n BUCKETS   ▸all 5 · failed 0 · lost 1 · needs operator 3 · ↳ permission 1 · 7›  \n LOST  1                                                                        \n ▸ ACT-0034 RUN-be1e085a stopped responding · resume or…    OPEN      due –     \n              last heartbeat 14:01 · no final report                            \n NEEDS OPERATOR  3                                                              \n   ACT-0031 RUN-538453eb wants to write outside its batch   OPEN      due 4m    \n   ACT-0032 EAWF-0042 needs your answer                     OPEN      open      \n   ACT-0033 BAT-0003 merge authority no longer valid        OPEN      due –     \n OVER BUDGET  1                                                                 \n   ACT-0035 RUN-3fcd1d52 past its 45m estimate; still…      OPEN      —         \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n ↑↓ row   Tab buckets   . actions   Esc back                                    "
+  },
+  {
+   "id": "conn/GAP-DETECTED/settings",
+   "kind": "connection",
+   "setup": {
+    "route": "settings",
+    "subjId": null,
+    "conn": "GAP DETECTED"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Settings                          !4 NEEDS YOU  ▲ GAP DETECTED\n 6 categories · 35 sections · in EXECUTION ▸ planning                           \n════════════════════════════════════════════════════════════════════════════════\nEXECUTION     │  PLANNING             global › workspace › repo › branch › local\n  dispatch    │      KEY                              VALUE                     \n  flow        │ ▸ ≠ approval                          auto                      \n▸ planning    │   = max_parallel_waves                6                         \n  prep        │   – require_research_for_unknowns     true                      \n  research    │   – auto_plan                         false                     \n  runtime     │                                                                 \n  ship        │                                                                 \n  worktrees   │                                                                 \nIDENTITY      │                                                                 \n  preferences │                                                                 \n  profiles    │                                                                 \n  project     │                                                                 \n  workspace   ├─────────────────────────────────────────────────────────────────\nINTERFACE     │  approval · enum                                                \n  cli         │  who authorises a plan before it dispatches                     \n  commands    │  ○ ask   stops for you                                          \n  docs        │  ● auto  dispatches the plan                                    \n  statusline  │  ○ never refuses to dispatch at all                             \n──────────────┴─────────────────────────────────────────────────────────────────\n ↑↓ field   Tab section   Enter edit   l layer   x unset   Esc back             "
+  },
+  {
+   "id": "conn/SNAPSHOT-LOADING/activity",
+   "kind": "connection",
+   "setup": {
+    "route": "activity",
+    "subjId": null,
+    "conn": "SNAPSHOT LOADING"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Activity                      !4 NEEDS YOU  ◈ SNAPSHOT LOADING\n 26 runs · loading · the previous revision, labelled with its age               \n════════════════════════════════════════════════════════════════════════════════\n ATTACHED  revision 41,208                                                      \n BUCKETS   ▸all 26 · needs operator 3 · unknown control outcome 1 · 5›          \n   RUN          TASK                      STATE       REASON              AS OF \n ▸ RUN-538453eb EAWF-0042 Bound replay    WAIT-PERM   needs permission    14:02 \n   RUN-f1bbcd9c EAWF-0043 Seal ledger     WAIT-PERM   needs permission    14:02 \n   RUN-cc623ab9 EAWF-0044 Retire shim     WAIT-USER   needs your answer   14:02 \n   RUN-a708a7d6 EAWF-0047 Digest guard    SUSPENDED   control outcome…    13:58 \n   RUN-be1e085a EAWF-0051 Coalesce        LOST        stopped responding  14:01 \n   RUN-5c558210 EAWF-0053 Window trim     LOST        stopped responding  13:59 \n   RUN-98c47577 EAWF-0052 Replay guard    FAILED      final report…       14:01 \n   RUN-d53368de EAWF-0054 Ledger audit    RUNNING     integrating         14:02 \n   RUN-736ae294 EAWF-0063 Seal check      RUNNING     checking            14:02 \n   RUN-11a25c4a EAWF-0064 Digest verify   RUNNING     checking            14:02 \n   RUN-afd9d5fb EAWF-0065 Merge probe     RUNNING     integrating         14:02 \n   RUN-28b7bcce EAWF-0055 Normalize       RUNNING     run active          14:02 \n   RUN-c6ef367f EAWF-0056 Bound window    RUNNING     run active          14:02 \n   RUN-6526b035 EAWF-0057 Escape audit    QUEUED      waiting for a slot  14:02 \n   RUN-035e29eb EAWF-0058 Ledger seal     RUNNING     run active          14:02 \n────────────────────────────────────────────────────────────────────────────────\n WINDOW    1–15 of 26 known                                                     \n ↑↓ row   PgUp PgDn page   Enter drill   Tab buckets   \\ filter   . actions     "
+  },
+  {
+   "id": "conn/SNAPSHOT-LOADING/run.detail",
+   "kind": "connection",
+   "setup": {
+    "route": "run.detail",
+    "subjId": "RUN-538453eb",
+    "conn": "SNAPSHOT LOADING"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ RUN-538453eb                  !4 NEEDS YOU  ◈ SNAPSHOT LOADING\n Run RUN-538453eb · claude · WAIT-PERM · needs permission · seq 41,208          \n════════════════════════════════════════════════════════════════════════════════\n  PROVIDER     claude · session reused · handle 4h left                         \n  STARTED      14:00:12 · seq 41,204                                            \n  ASKED        write outside its batch · fs.write.scope = project root          \n  SCOPE      ▸ BAT-0002 · EAWF-0042 Bound replay                                \n  USAGE        elapsed 2m 08s · tokens out 18,402 · cost ~0.31 of 20.00         \n  CONTROLS     Answer the permission, or let the run go.                        \n  LINEAGE      Attempt 1 of 1 · no retry · no fork.                             \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n Enter drill   . actions   i inspect   Esc back                                 "
+  },
+  {
+   "id": "conn/SNAPSHOT-LOADING/attention",
+   "kind": "connection",
+   "setup": {
+    "route": "attention",
+    "subjId": null,
+    "conn": "SNAPSHOT LOADING"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Needs you                     !4 NEEDS YOU  ◈ SNAPSHOT LOADING\n 4 mine · 4 known · nothing here opened itself                                  \n════════════════════════════════════════════════════════════════════════════════\n ATTACHED  revision 41,208                                                      \n────────────────────────────────────────────────────────────────────────────────\n BUCKETS   ▸all 5 · failed 0 · lost 1 · needs operator 3 · ↳ permission 1 · 7›  \n LOST  1                                                                        \n ▸ ACT-0034 RUN-be1e085a stopped responding · resume or…    OPEN      due –     \n              last heartbeat 14:01 · no final report                            \n NEEDS OPERATOR  3                                                              \n   ACT-0031 RUN-538453eb wants to write outside its batch   OPEN      due 4m    \n   ACT-0032 EAWF-0042 needs your answer                     OPEN      open      \n   ACT-0033 BAT-0003 merge authority no longer valid        OPEN      due –     \n OVER BUDGET  1                                                                 \n   ACT-0035 RUN-3fcd1d52 past its 45m estimate; still…      OPEN      —         \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n ↑↓ row   Tab buckets   . actions   Esc back                                    "
+  },
+  {
+   "id": "conn/SNAPSHOT-LOADING/settings",
+   "kind": "connection",
+   "setup": {
+    "route": "settings",
+    "subjId": null,
+    "conn": "SNAPSHOT LOADING"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Settings                      !4 NEEDS YOU  ◈ SNAPSHOT LOADING\n 6 categories · 35 sections · in EXECUTION ▸ planning                           \n════════════════════════════════════════════════════════════════════════════════\nEXECUTION     │  PLANNING             global › workspace › repo › branch › local\n  dispatch    │      KEY                              VALUE                     \n  flow        │ ▸ ≠ approval                          auto                      \n▸ planning    │   = max_parallel_waves                6                         \n  prep        │   – require_research_for_unknowns     true                      \n  research    │   – auto_plan                         false                     \n  runtime     │                                                                 \n  ship        │                                                                 \n  worktrees   │                                                                 \nIDENTITY      │                                                                 \n  preferences │                                                                 \n  profiles    │                                                                 \n  project     │                                                                 \n  workspace   ├─────────────────────────────────────────────────────────────────\nINTERFACE     │  approval · enum                                                \n  cli         │  who authorises a plan before it dispatches                     \n  commands    │  ○ ask   stops for you                                          \n  docs        │  ● auto  dispatches the plan                                    \n  statusline  │  ○ never refuses to dispatch at all                             \n──────────────┴─────────────────────────────────────────────────────────────────\n ↑↓ field   Tab section   Enter edit   l layer   x unset   Esc back             "
+  },
+  {
+   "id": "conn/SNAPSHOT-REQUIRED/activity",
+   "kind": "connection",
+   "setup": {
+    "route": "activity",
+    "subjId": null,
+    "conn": "SNAPSHOT REQUIRED"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Activity                     !4 NEEDS YOU  ◇ SNAPSHOT REQUIRED\n 26 runs · no usable revision · operator repair needed                          \n════════════════════════════════════════════════════════════════════════════════\n ATTACHED  ∅ unavailable                                                        \n BUCKETS   ▸all 26 · needs operator 3 · unknown control outcome 1 · 5›          \n   RUN          TASK                      STATE       REASON              AS OF \n ▸ RUN-538453eb EAWF-0042 Bound replay    WAIT-PERM   needs permission    14:02 \n   RUN-f1bbcd9c EAWF-0043 Seal ledger     WAIT-PERM   needs permission    14:02 \n   RUN-cc623ab9 EAWF-0044 Retire shim     WAIT-USER   needs your answer   14:02 \n   RUN-a708a7d6 EAWF-0047 Digest guard    SUSPENDED   control outcome…    13:58 \n   RUN-be1e085a EAWF-0051 Coalesce        LOST        stopped responding  14:01 \n   RUN-5c558210 EAWF-0053 Window trim     LOST        stopped responding  13:59 \n   RUN-98c47577 EAWF-0052 Replay guard    FAILED      final report…       14:01 \n   RUN-d53368de EAWF-0054 Ledger audit    RUNNING     integrating         14:02 \n   RUN-736ae294 EAWF-0063 Seal check      RUNNING     checking            14:02 \n   RUN-11a25c4a EAWF-0064 Digest verify   RUNNING     checking            14:02 \n   RUN-afd9d5fb EAWF-0065 Merge probe     RUNNING     integrating         14:02 \n   RUN-28b7bcce EAWF-0055 Normalize       RUNNING     run active          14:02 \n   RUN-c6ef367f EAWF-0056 Bound window    RUNNING     run active          14:02 \n   RUN-6526b035 EAWF-0057 Escape audit    QUEUED      waiting for a slot  14:02 \n   RUN-035e29eb EAWF-0058 Ledger seal     RUNNING     run active          14:02 \n────────────────────────────────────────────────────────────────────────────────\n WINDOW    1–15 of 26 known                                                     \n ↑↓ row   PgUp PgDn page   Enter drill   Tab buckets   \\ filter   . actions     "
+  },
+  {
+   "id": "conn/SNAPSHOT-REQUIRED/run.detail",
+   "kind": "connection",
+   "setup": {
+    "route": "run.detail",
+    "subjId": "RUN-538453eb",
+    "conn": "SNAPSHOT REQUIRED"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ RUN-538453eb                 !4 NEEDS YOU  ◇ SNAPSHOT REQUIRED\n Run RUN-538453eb · claude · WAIT-PERM · needs permission · seq 41,208          \n════════════════════════════════════════════════════════════════════════════════\n  PROVIDER     claude · session reused · handle 4h left                         \n  STARTED      14:00:12 · seq 41,204                                            \n  ASKED        write outside its batch · fs.write.scope = project root          \n  SCOPE      ▸ BAT-0002 · EAWF-0042 Bound replay                                \n  USAGE        elapsed 2m 08s · tokens out 18,402 · cost ~0.31 of 20.00         \n  CONTROLS     Answer the permission, or let the run go.                        \n  LINEAGE      Attempt 1 of 1 · no retry · no fork.                             \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n Enter drill   . actions   i inspect   Esc back                                 "
+  },
+  {
+   "id": "conn/SNAPSHOT-REQUIRED/attention",
+   "kind": "connection",
+   "setup": {
+    "route": "attention",
+    "subjId": null,
+    "conn": "SNAPSHOT REQUIRED"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Needs you                    !4 NEEDS YOU  ◇ SNAPSHOT REQUIRED\n 4 mine · 4 known · nothing here opened itself                                  \n════════════════════════════════════════════════════════════════════════════════\n ATTACHED  ∅ unavailable                                                        \n────────────────────────────────────────────────────────────────────────────────\n BUCKETS   ▸all 5 · failed 0 · lost 1 · needs operator 3 · ↳ permission 1 · 7›  \n LOST  1                                                                        \n ▸ ACT-0034 RUN-be1e085a stopped responding · resume or…    OPEN      due –     \n              last heartbeat 14:01 · no final report                            \n NEEDS OPERATOR  3                                                              \n   ACT-0031 RUN-538453eb wants to write outside its batch   OPEN      due 4m    \n   ACT-0032 EAWF-0042 needs your answer                     OPEN      open      \n   ACT-0033 BAT-0003 merge authority no longer valid        OPEN      due –     \n OVER BUDGET  1                                                                 \n   ACT-0035 RUN-3fcd1d52 past its 45m estimate; still…      OPEN      —         \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n ↑↓ row   Tab buckets   . actions   Esc back                                    "
+  },
+  {
+   "id": "conn/SNAPSHOT-REQUIRED/settings",
+   "kind": "connection",
+   "setup": {
+    "route": "settings",
+    "subjId": null,
+    "conn": "SNAPSHOT REQUIRED"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Settings                     !4 NEEDS YOU  ◇ SNAPSHOT REQUIRED\n 6 categories · 35 sections · in EXECUTION ▸ planning                           \n════════════════════════════════════════════════════════════════════════════════\nEXECUTION     │  PLANNING             global › workspace › repo › branch › local\n  dispatch    │      KEY                              VALUE                     \n  flow        │ ▸ ≠ approval                          auto                      \n▸ planning    │   = max_parallel_waves                6                         \n  prep        │   – require_research_for_unknowns     true                      \n  research    │   – auto_plan                         false                     \n  runtime     │                                                                 \n  ship        │                                                                 \n  worktrees   │                                                                 \nIDENTITY      │                                                                 \n  preferences │                                                                 \n  profiles    │                                                                 \n  project     │                                                                 \n  workspace   ├─────────────────────────────────────────────────────────────────\nINTERFACE     │  approval · enum                                                \n  cli         │  who authorises a plan before it dispatches                     \n  commands    │  ○ ask   stops for you                                          \n  docs        │  ● auto  dispatches the plan                                    \n  statusline  │  ○ never refuses to dispatch at all                             \n──────────────┴─────────────────────────────────────────────────────────────────\n ↑↓ field   Tab section   Enter edit   l layer   x unset   Esc back             "
+  },
+  {
+   "id": "conn/OFFLINE-SNAPSHOT/activity",
+   "kind": "connection",
+   "setup": {
+    "route": "activity",
+    "subjId": null,
+    "conn": "OFFLINE SNAPSHOT"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Activity                      !4 NEEDS YOU  ▪ OFFLINE SNAPSHOT\n 26 runs · a snapshot · nothing is arriving                                     \n════════════════════════════════════════════════════════════════════════════════\n ATTACHED  revision 41,208 · 6m 12s old                                         \n BUCKETS   ▸all 26 · needs operator 3 · unknown control outcome 1 · 5›          \n   RUN          TASK                      STATE       REASON              AS OF \n ▸ RUN-538453eb EAWF-0042 Bound replay    WAIT-PERM   needs permission    14:02 \n   RUN-f1bbcd9c EAWF-0043 Seal ledger     WAIT-PERM   needs permission    14:02 \n   RUN-cc623ab9 EAWF-0044 Retire shim     WAIT-USER   needs your answer   14:02 \n   RUN-a708a7d6 EAWF-0047 Digest guard    SUSPENDED   control outcome…    13:58 \n   RUN-be1e085a EAWF-0051 Coalesce        LOST        stopped responding  14:01 \n   RUN-5c558210 EAWF-0053 Window trim     LOST        stopped responding  13:59 \n   RUN-98c47577 EAWF-0052 Replay guard    FAILED      final report…       14:01 \n   RUN-d53368de EAWF-0054 Ledger audit    RUNNING     integrating         14:02 \n   RUN-736ae294 EAWF-0063 Seal check      RUNNING     checking            14:02 \n   RUN-11a25c4a EAWF-0064 Digest verify   RUNNING     checking            14:02 \n   RUN-afd9d5fb EAWF-0065 Merge probe     RUNNING     integrating         14:02 \n   RUN-28b7bcce EAWF-0055 Normalize       RUNNING     run active          14:02 \n   RUN-c6ef367f EAWF-0056 Bound window    RUNNING     run active          14:02 \n   RUN-6526b035 EAWF-0057 Escape audit    QUEUED      waiting for a slot  14:02 \n   RUN-035e29eb EAWF-0058 Ledger seal     RUNNING     run active          14:02 \n────────────────────────────────────────────────────────────────────────────────\n WINDOW    1–15 of 26 known                                                     \n ↑↓ row   PgUp PgDn page   Enter drill   Tab buckets   \\ filter   . actions     "
+  },
+  {
+   "id": "conn/OFFLINE-SNAPSHOT/run.detail",
+   "kind": "connection",
+   "setup": {
+    "route": "run.detail",
+    "subjId": "RUN-538453eb",
+    "conn": "OFFLINE SNAPSHOT"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ RUN-538453eb                  !4 NEEDS YOU  ▪ OFFLINE SNAPSHOT\n Run RUN-538453eb · claude · WAIT-PERM · needs permission · seq 41,208          \n════════════════════════════════════════════════════════════════════════════════\n  PROVIDER     claude · session reused · handle 4h left                         \n  STARTED      14:00:12 · seq 41,204                                            \n  ASKED        write outside its batch · fs.write.scope = project root          \n  SCOPE      ▸ BAT-0002 · EAWF-0042 Bound replay                                \n  USAGE        elapsed 2m 08s · tokens out 18,402 · cost ~0.31 of 20.00         \n  CONTROLS     Answer the permission, or let the run go.                        \n  LINEAGE      Attempt 1 of 1 · no retry · no fork.                             \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n Enter drill   . actions   i inspect   Esc back                                 "
+  },
+  {
+   "id": "conn/OFFLINE-SNAPSHOT/attention",
+   "kind": "connection",
+   "setup": {
+    "route": "attention",
+    "subjId": null,
+    "conn": "OFFLINE SNAPSHOT"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Needs you                     !4 NEEDS YOU  ▪ OFFLINE SNAPSHOT\n 4 mine · 4 known · nothing here opened itself                                  \n════════════════════════════════════════════════════════════════════════════════\n ATTACHED  revision 41,208 · 6m 12s old                                         \n────────────────────────────────────────────────────────────────────────────────\n BUCKETS   ▸all 5 · failed 0 · lost 1 · needs operator 3 · ↳ permission 1 · 7›  \n LOST  1                                                                        \n ▸ ACT-0034 RUN-be1e085a stopped responding · resume or…    OPEN      due –     \n              last heartbeat 14:01 · no final report                            \n NEEDS OPERATOR  3                                                              \n   ACT-0031 RUN-538453eb wants to write outside its batch   OPEN      due 4m    \n   ACT-0032 EAWF-0042 needs your answer                     OPEN      open      \n   ACT-0033 BAT-0003 merge authority no longer valid        OPEN      due –     \n OVER BUDGET  1                                                                 \n   ACT-0035 RUN-3fcd1d52 past its 45m estimate; still…      OPEN      —         \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n ↑↓ row   Tab buckets   . actions   Esc back                                    "
+  },
+  {
+   "id": "conn/OFFLINE-SNAPSHOT/settings",
+   "kind": "connection",
+   "setup": {
+    "route": "settings",
+    "subjId": null,
+    "conn": "OFFLINE SNAPSHOT"
+   },
+   "size": [
+    80,
+    24
+   ],
+   "invariants": {
+    "lines": 24,
+    "width": 80,
+    "every_row_exact": true,
+    "keybar_last": true
+   },
+   "frame": " Eä ▸ eawf-core ▸ Settings                      !4 NEEDS YOU  ▪ OFFLINE SNAPSHOT\n 6 categories · 35 sections · in EXECUTION ▸ planning                           \n════════════════════════════════════════════════════════════════════════════════\nEXECUTION     │  PLANNING             global › workspace › repo › branch › local\n  dispatch    │      KEY                              VALUE                     \n  flow        │ ▸ ≠ approval                          auto                      \n▸ planning    │   = max_parallel_waves                6                         \n  prep        │   – require_research_for_unknowns     true                      \n  research    │   – auto_plan                         false                     \n  runtime     │                                                                 \n  ship        │                                                                 \n  worktrees   │                                                                 \nIDENTITY      │                                                                 \n  preferences │                                                                 \n  profiles    │                                                                 \n  project     │                                                                 \n  workspace   ├─────────────────────────────────────────────────────────────────\nINTERFACE     │  approval · enum                                                \n  cli         │  who authorises a plan before it dispatches                     \n  commands    │  ○ ask   stops for you                                          \n  docs        │  ● auto  dispatches the plan                                    \n  statusline  │  ○ never refuses to dispatch at all                             \n──────────────┴─────────────────────────────────────────────────────────────────\n ↑↓ field   Tab section   Enter edit   l layer   x unset   Esc back             "
+  }
+ ],
+ "count": 36
+}

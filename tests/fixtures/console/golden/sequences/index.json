@@ -1,0 +1,36 @@
+{
+ "meta": {
+  "generated": "2026-08-25 (finalization pass · B5 closed)",
+  "source": "stages/proto/ (proto-data · proto-detail · proto-settings · proto-app · proto-g)",
+  "verdicts": [
+   "pass",
+   "defect",
+   "blocker"
+  ],
+  "reset": "Every sequence starts from EA_PROTO.resetSession() — the console's own canonical reset (D9). The harness does not keep a second copy of the state list.",
+  "how_to_replay": "The prototype loads proto-replay.js: ▸ replay journeys drives every sequence and compares each step against after{} and frame; ▸ check golden frames re-renders every recorded state. A step fails on one differing character.",
+  "how_to_read_from_pytest": "Each frames-*.json state carries setup{}, size[w,h], invariants{} and frame (exact text, rows joined by \\n). A Textual snapshot test asserts render(setup) == frame; journeys assert the step-by-step after{} projection, including the notification rack depth.",
+  "files": [
+   "sequences/frames-routes-80.json",
+   "sequences/frames-routes-120.json",
+   "sequences/frames-routes-160.json",
+   "sequences/frames-overlays.json",
+   "sequences/frames-connection.json",
+   "sequences/frames-entry.json",
+   "sequences/frames-notifications.json",
+   "sequences/journeys.json"
+  ],
+  "ordering": "Replay the journeys FIRST, then the frames: the frames must still match in a session the journeys left deep in state, which is what proves the reset rather than the renderer.",
+  "projection": "route · overlay · sel · subjId · conn · bucket · back_depth · toasts · mark — the marker is projected because a cursor drawn in colour is invisible to a text comparison."
+ },
+ "inventory": {
+  "route_frames": 105,
+  "overlay_and_pane_frames": 63,
+  "connection_frames": 36,
+  "entry_frames": 24,
+  "rack_diagnostics_palette_frames": 33,
+  "journeys": 25,
+  "journey_steps": 188,
+  "enter_opened_cards": 21
+ }
+}
