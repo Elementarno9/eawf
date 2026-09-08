@@ -21,7 +21,7 @@ fallthrough. Error-path: a gate that raises is caught and skipped (it never
 aborts the escalation), and when only a raising gate exists the runner falls
 through to the verdict tier rather than propagating.
 
-Every external seam (``compile_gate``, ``run_checks``,
+Every external seam (``compile_gate``, ``run_checks_out_of_process``,
 ``verify_wave_verdict_gate``, ``convene_cross_vendor_jury``,
 ``verdict_requirement``) is monkeypatched on the :mod:`oracle` module so
 each branch is driven deterministically with no live jury, no subprocess,
@@ -159,7 +159,9 @@ def test_run_oracle_passing_t1_gate_returns_t1_without_jury(
         lambda gate, *, criterion: CheckSpec(kind="file_exists", name=gate.id),
     )
     monkeypatch.setattr(
-        oracle, "run_checks", lambda specs, *, cwd=None: [_check_result(status="pass")]
+        oracle,
+        "run_checks_out_of_process",
+        lambda specs, *, cwd=None, live_state_path=None: [_check_result(status="pass")],
     )
     monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _forbidden_jury)
     monkeypatch.setattr(
@@ -186,7 +188,9 @@ def test_run_oracle_failing_required_gate_returns_fail_without_jury(
         lambda gate, *, criterion: CheckSpec(kind="file_exists", name=gate.id),
     )
     monkeypatch.setattr(
-        oracle, "run_checks", lambda specs, *, cwd=None: [_check_result(status="fail")]
+        oracle,
+        "run_checks_out_of_process",
+        lambda specs, *, cwd=None, live_state_path=None: [_check_result(status="fail")],
     )
     monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _forbidden_jury)
     monkeypatch.setattr(
@@ -214,9 +218,9 @@ def test_run_oracle_failing_required_gate_returns_fail_without_jury(
 def test_run_oracle_slow_deterministic_gate_does_not_starve_loop(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """CR-01: run_checks runs via asyncio.to_thread, keeping the loop responsive.
+    """CR-01: the gate child runs via asyncio.to_thread, keeping the loop responsive.
 
-    ``run_checks`` is monkeypatched to a synchronous blocker that parks its
+    ``run_checks_out_of_process`` is monkeypatched to a synchronous blocker that parks its
     caller until a concurrent driver releases it. If ``run_oracle`` called it
     inline on the event loop, the blocking call would freeze the loop and the
     concurrent driver could not advance until the gate returned. Because the
@@ -230,7 +234,12 @@ def test_run_oracle_slow_deterministic_gate_does_not_starve_loop(
     gate_entered = threading.Event()
     release = threading.Event()
 
-    def _blocking_run(specs: list[CheckSpec], *, cwd: Path | None = None) -> list[CheckResult]:
+    def _blocking_run(
+        specs: list[CheckSpec],
+        *,
+        cwd: Path | None = None,
+        live_state_path: Path | None = None,
+    ) -> list[CheckResult]:
         order.append("gate_enter")
         gate_entered.set()
         # Parks the CALLER: a worker thread when offloaded (loop stays free), the
@@ -245,7 +254,7 @@ def test_run_oracle_slow_deterministic_gate_does_not_starve_loop(
         "compile_gate",
         lambda gate, *, criterion: CheckSpec(kind="file_exists", name=gate.id),
     )
-    monkeypatch.setattr(oracle, "run_checks", _blocking_run)
+    monkeypatch.setattr(oracle, "run_checks_out_of_process", _blocking_run)
     monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _forbidden_jury)
 
     async def _drive() -> OracleResult:
@@ -335,12 +344,17 @@ def test_run_oracle_tries_gates_in_ascending_tier_order(
         seen.append(gate.id)
         return CheckSpec(kind="file_exists", name=gate.id)
 
-    def _raising_run(specs: list[CheckSpec], *, cwd: Path | None = None) -> list[CheckResult]:
+    def _raising_run(
+        specs: list[CheckSpec],
+        *,
+        cwd: Path | None = None,
+        live_state_path: Path | None = None,
+    ) -> list[CheckResult]:
         raise RuntimeError("gate unavailable")
 
     # Raised gates are skipped, so the runner exhausts every gate before falling through.
     monkeypatch.setattr(oracle, "compile_gate", _spy_compile)
-    monkeypatch.setattr(oracle, "run_checks", _raising_run)
+    monkeypatch.setattr(oracle, "run_checks_out_of_process", _raising_run)
     monkeypatch.setattr(oracle, "verdict_requirement", lambda wave: "skip")
 
     class _Gate:
@@ -370,11 +384,16 @@ def test_run_oracle_unknown_kind_gate_sorts_last(
         seen.append(gate.id)
         return CheckSpec(kind="file_exists", name=gate.id)
 
-    def _raising_run(specs: list[CheckSpec], *, cwd: Path | None = None) -> list[CheckResult]:
+    def _raising_run(
+        specs: list[CheckSpec],
+        *,
+        cwd: Path | None = None,
+        live_state_path: Path | None = None,
+    ) -> list[CheckResult]:
         raise RuntimeError("gate unavailable")
 
     monkeypatch.setattr(oracle, "compile_gate", _spy_compile)
-    monkeypatch.setattr(oracle, "run_checks", _raising_run)
+    monkeypatch.setattr(oracle, "run_checks_out_of_process", _raising_run)
     monkeypatch.setattr(oracle, "verdict_requirement", lambda wave: "skip")
 
     class _Gate:
@@ -737,7 +756,12 @@ def test_run_oracle_raising_gate_is_caught_and_skipped(
 ) -> None:
     """A gate whose run raises is caught (not propagated) and escalation continues."""
 
-    def _raising_run(specs: list[CheckSpec], *, cwd: Path | None = None) -> list[CheckResult]:
+    def _raising_run(
+        specs: list[CheckSpec],
+        *,
+        cwd: Path | None = None,
+        live_state_path: Path | None = None,
+    ) -> list[CheckResult]:
         raise RuntimeError("gate blew up")
 
     monkeypatch.setattr(
@@ -745,7 +769,7 @@ def test_run_oracle_raising_gate_is_caught_and_skipped(
         "compile_gate",
         lambda gate, *, criterion: CheckSpec(kind="file_exists", name=gate.id),
     )
-    monkeypatch.setattr(oracle, "run_checks", _raising_run)
+    monkeypatch.setattr(oracle, "run_checks_out_of_process", _raising_run)
     monkeypatch.setattr(oracle, "verdict_requirement", lambda wave: "skip")
 
     class _Gate:
@@ -774,7 +798,9 @@ def test_run_oracle_compile_returns_none_skips_gate(
 
     monkeypatch.setattr(oracle, "compile_gate", _compile)
     monkeypatch.setattr(
-        oracle, "run_checks", lambda specs, *, cwd=None: [_check_result(status="pass")]
+        oracle,
+        "run_checks_out_of_process",
+        lambda specs, *, cwd=None, live_state_path=None: [_check_result(status="pass")],
     )
     monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _forbidden_jury)
 
