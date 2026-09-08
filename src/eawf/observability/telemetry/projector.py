@@ -42,7 +42,10 @@ Incremental projection guards three failure modes:
 * **Per-row isolation** — one row whose upsert fails is logged + skipped
   (counted in ``RebuildReport.rows_skipped``); the good rows already
   accumulated still commit, so a single bad row never discards the
-  rebuild.
+  rebuild. The one exception is a session payload whose schema version
+  this build cannot project: that is a property of the whole log, so it
+  aborts the rebuild rather than reporting success over an empty session
+  table.
 
 Every adapter is driven one file at a time so the projector keeps a
 bounded working set (C09 §5.9.4 bounded-memory invariant).
@@ -60,7 +63,12 @@ from enum import StrEnum
 from pathlib import Path
 
 from eawf.kernel.store.envelope import Envelope
-from eawf.observability.telemetry.aggregator import incident_from_envelope, roll_session
+from eawf.observability.telemetry.aggregator import (
+    SessionPayloadSchemaError,
+    incident_from_envelope,
+    roll_session,
+    session_from_envelope,
+)
 from eawf.observability.telemetry.models import (
     TelemetryDispatchCost,
     TelemetryFileMeta,
@@ -392,9 +400,16 @@ def _upsert_row_safe(
     accumulated stay in the pending transaction and commit at the end of the
     :func:`rebuild`. Without this isolation an exception would unwind past the
     single ``store.commit()`` and drop every projected row.
+
+    A :class:`~eawf.observability.telemetry.aggregator.SessionPayloadSchemaError` is
+    deliberately NOT isolated: an unprojectable payload version is a
+    property of the whole log, not of one row, so swallowing it would
+    report a clean rebuild over an empty session table.
     """
     try:
         _upsert_row(store, spec, row, report)
+    except SessionPayloadSchemaError:
+        raise
     except Exception as exc:
         report.rows_skipped += 1
         logger.warning(
@@ -415,6 +430,10 @@ def _upsert_row(
         report.sessions += 1
         return
     if isinstance(row, Envelope):
+        session = session_from_envelope(row)
+        if session is not None:
+            store.upsert(_SESSIONS_TABLE, roll_session(session, project_id=spec.project_id))
+            report.sessions += 1
         incident = incident_from_envelope(row)
         if incident is not None:
             store.upsert(_INCIDENTS_TABLE, incident)

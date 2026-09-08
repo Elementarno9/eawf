@@ -32,11 +32,16 @@ from eawf.kernel.store.kinds.events.base import TracedEventPayload
 from eawf.kernel.store.kinds.events.cache_mislayer import CacheMislayerAlarmPayload
 from eawf.kernel.store.kinds.events.dispatch_cost import DispatchCostPayload
 from eawf.kernel.store.kinds.events.runtime_switched import RuntimeSwitchedPayload
+from eawf.kernel.store.kinds.events.session_closed import (
+    SESSION_PAYLOAD_SCHEMA_VERSION,
+    SessionClosedPayload,
+)
 from eawf.kernel.store.kinds.events.session_continued import SessionContinuedPayload
 from eawf.kernel.store.kinds.events.session_failover import SessionFailoverPayload
 
 C09EventPayloadUnion = Annotated[
     RuntimeSwitchedPayload
+    | SessionClosedPayload
     | SessionContinuedPayload
     | SessionFailoverPayload
     | DispatchCostPayload
@@ -84,11 +89,13 @@ row.
 
 __all__ = [
     "C09_EVENT_TYPE_TAGS",
+    "SESSION_PAYLOAD_SCHEMA_VERSION",
     "AgentOutputChunkPayload",
     "C09EventPayloadUnion",
     "CacheMislayerAlarmPayload",
     "DispatchCostPayload",
     "RuntimeSwitchedPayload",
+    "SessionClosedPayload",
     "SessionContinuedPayload",
     "SessionFailoverPayload",
     "TracedEventPayload",
