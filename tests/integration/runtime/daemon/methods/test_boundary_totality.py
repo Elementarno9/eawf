@@ -66,6 +66,7 @@ EXPECTED_SITES = frozenset(
         "publication:burn_release",
         "publication:reconcile_target",
         "publication:retry_publication",
+        "records:record_release",
         "target_machine:advance_target_attempt",
         "target_machine:open_target_attempt",
     }

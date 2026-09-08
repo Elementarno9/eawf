@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from eawf.kernel.spec.publication import PublicationOperation
+from eawf.kernel.spec.release import Release
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.kinds.actual import ActualPayload
 from eawf.kernel.store.kinds.agent_report import AgentReportPayload
@@ -62,4 +63,8 @@ PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     # The publication ledger reuses the kernel record rather than
     # restating its shape here: a second copy could only drift.
     StoreKind.RELEASE: PublicationOperation,
+    # The checkpoint record keeps its own kind rather than sharing the
+    # ledger's: ledger rows are addressed by idempotency key, record rows
+    # by release revision, and one id namespace could collide the two.
+    StoreKind.RELEASE_RECORD: Release,
 }

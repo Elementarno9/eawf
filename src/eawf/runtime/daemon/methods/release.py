@@ -25,12 +25,19 @@ Four more verbs touch an external registry and are keyed differently:
 ``release.publish``, ``release.retry_target``, ``release.reconcile`` and
 ``release.observe_target`` each require an ``expected_revision``
 (compare-and-swap against the record the caller holds) and an
-``idempotency_key`` (replay identity in the durable ledger). The first
-three verbs stay pure -- a readiness sweep can be run against a proposed
-record before anything is persisted; the last four append to
+``idempotency_key`` (replay identity in the durable ledger).
+``release.show`` and ``release.compute_readiness`` stay pure -- a
+readiness sweep can be run against a proposed record before anything is
+persisted; the four registry verbs append to
 ``<state_dir>/store/release.jsonl`` through
 :mod:`eawf.workflow.release.ledger`, because a verb that touches an
 external registry has to remember what it already did.
+
+``release.create`` and ``release.approve`` persist too, into the
+separate record collection of :mod:`eawf.workflow.release.records`. They
+touch no registry, but they are the two verbs that open and authorise a
+checkpoint, and a record only a single RPC reply ever carried could not
+be read back by anything -- so neither runs without a state root.
 
 ``release.reconcile`` and ``release.observe_target`` are deliberately
 separate verbs rather than one with a flag. Reconciliation records what
@@ -114,6 +121,11 @@ from eawf.workflow.release.publication_receipt import (
     PublicationReceipt,
     load_receipt,
     reported_status,
+)
+from eawf.workflow.release.records import (
+    read_release_record,
+    record_envelope_id,
+    record_release,
 )
 from eawf.workflow.release.target_machine import TargetTransitionError
 from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
@@ -213,28 +225,63 @@ def _resolve_config(version: str) -> ReleaseConfig:
 
 @register("release.show")
 async def show(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Describe the train ladder and one checkpoint rung.
+    """Describe the train ladder, one checkpoint rung, and its record.
+
+    The ladder is source-resident, but "which rung exists" and "has that
+    rung been cut" are different questions, and an operator asking the
+    second one should not have to read a store file. So the reply also
+    carries the recorded record for the rung, or ``None`` when the
+    checkpoint has never been opened.
 
     Args:
-        ctx: Server context; unused, the ladder is source-resident data.
+        ctx: Server context; its state root supplies the recorded
+            record. A daemon without one answers ``record: None`` rather
+            than refusing: describing the ladder is useful even where
+            nothing is recorded.
         params: JSON-RPC params per :class:`ShowParams`.
 
     Returns:
-        The train id, target version, the ordered ladder, and the
-        requested rung.
+        The train id, target version, the ordered ladder, the requested
+        rung, and the record standing at it.
 
     Raises:
         DaemonValidationError: When the train declares no such rung.
     """
     args = ShowParams.model_validate(params)
     rung = V07_TRAIN.current_checkpoint if args.version is None else _rung_for(args.version)
+    record = _recorded_release(ctx, rung.release_key)
     return {
         "train_id": V07_TRAIN.train_id,
         "target_version": V07_TRAIN.target_version,
         "current_checkpoint_index": V07_TRAIN.current_checkpoint_index,
         "checkpoints": [checkpoint.model_dump(mode="json") for checkpoint in V07_TRAIN.checkpoints],
         "checkpoint": rung.model_dump(mode="json"),
+        "record": None if record is None else record.model_dump(mode="json"),
     }
+
+
+def _recorded_release(ctx: MethodContext, release_key: str) -> Release | None:
+    """Return the record filed under *release_key*, or ``None``.
+
+    Args:
+        ctx: Server context; ``state_path`` may be unset.
+        release_key: ``REL-<version>`` key to look up.
+
+    Returns:
+        The current record, or ``None`` when the daemon has no state
+        root or the collection carries no row for the key.
+
+    Raises:
+        DaemonValidationError: When the collection exists but is
+            corrupt. A checkpoint reported as never opened because its
+            row could not be parsed is the one wrong answer here.
+    """
+    if ctx.state_path is None:
+        return None
+    try:
+        return read_release_record(Path(ctx.state_path), release_key)
+    except ValueError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
 
 
 def _rung_for(version: str) -> ReleaseCheckpoint:
@@ -305,22 +352,33 @@ async def compute_readiness_method(ctx: MethodContext, params: dict[str, Any]) -
 
 @register("release.approve")
 async def approve(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Approve a candidate against a readiness sweep.
+    """Approve a candidate against a readiness sweep, and record it.
+
+    The transition itself is pure, but the approval is the decision the
+    whole publication path is authorised by, so it is written to the
+    release-record collection before the reply is built. An approval no
+    reader can find again is indistinguishable from one that never
+    happened, which is why the verb refuses rather than approving into
+    the void when there is nowhere to record it.
 
     Args:
-        ctx: Server context; unused, approval is a pure transition.
+        ctx: Server context; supplies the root the approved record is
+            recorded under.
         params: JSON-RPC params per :class:`ApproveParams`.
 
     Returns:
-        The serialized approved record.
+        The serialized approved record and the id of the collection row
+        carrying it.
 
     Raises:
-        DaemonValidationError: When the record or sweep is invalid, or
-            the transition is denied -- the message leads with the named
-            denial code (``release_not_ready`` when a required signal is
-            not passing).
+        DaemonValidationError: When the daemon has no on-disk state
+            root, the record or sweep is invalid, or the transition is
+            denied -- the message leads with the named denial code
+            (``release_not_ready`` when a required signal is not
+            passing).
     """
     args = ApproveParams.model_validate(params)
+    state_path = _require_state_path(ctx)
     candidate = _validated_release(args.release)
     try:
         readiness = ReleaseReadiness.model_validate(args.readiness)
@@ -339,8 +397,17 @@ async def approve(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
     except ValueError as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    record_release(
+        state_path,
+        approved,
+        recorded_at=datetime.now(UTC),
+        summary=f"approve {approved.key}: {approved.status.value}",
+    )
     logger.info(f"approve key={approved.key!r} revision={approved.revision}")
-    return {"release": approved.model_dump(mode="json")}
+    return {
+        "release": approved.model_dump(mode="json"),
+        "release_record_id": record_envelope_id(approved),
+    }
 
 
 def _validated_release(payload: dict[str, Any]) -> Release:
@@ -508,12 +575,12 @@ def _require_state_path(ctx: MethodContext) -> Path:
 
     Raises:
         DaemonValidationError: When the daemon runs without on-disk
-            state. An external-effect verb with nowhere to record what
-            it did is worse than one that refuses.
+            state. A verb with nowhere to record what it did is worse
+            than one that refuses.
     """
     if ctx.state_path is None:
         raise DaemonValidationError(
-            "validation_failed: publication verbs require an on-disk state root"
+            "validation_failed: recording release verbs require an on-disk state root"
         )
     return Path(ctx.state_path)
 
@@ -1016,14 +1083,19 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     refusal names the single contract that is missing plus the command
     that promotes it, so the operator's next action is in the error.
 
+    The admitted record is persisted before the reply is built. A record
+    that existed only in one RPC response could not be found again, so
+    every later verb would have to be handed the record it is acting on
+    and no reader could tell an opened checkpoint from an imagined one.
+
     Args:
         ctx: Server context; supplies the state the citations resolve
-            against.
+            against and the root the record is recorded under.
         params: JSON-RPC params per :class:`CreateParams`.
 
     Returns:
-        The serialized DRAFT record plus the contract ids that admitted
-        it.
+        The serialized DRAFT record, the id of the collection row
+        carrying it, plus the contract ids that admitted it.
 
     Raises:
         DaemonValidationError: With ``measured_contract_missing`` when a
@@ -1032,6 +1104,7 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """
     args = CreateParams.model_validate(params)
     state = _require_state(ctx)
+    state_path = _require_state_path(ctx)
     try:
         record = create_checkpoint_release(
             state,
@@ -1044,9 +1117,16 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         raise DaemonValidationError(f"validation_failed: {exc.kind}: {exc}") from exc
     except (KeyError, ValidationError, ValueError) as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    record_release(
+        state_path,
+        record,
+        recorded_at=datetime.now(UTC),
+        summary=f"create {record.key}: {record.status.value}",
+    )
     logger.info(f"create key={record.key!r} version={args.version!r}")
     return {
         "release": record.model_dump(mode="json"),
+        "release_record_id": record_envelope_id(record),
         "measured_contracts": list(required_contract_ids(args.version)),
     }
 
