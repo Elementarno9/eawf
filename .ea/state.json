@@ -13545,6 +13545,21 @@
       "status": "done",
       "updated_at": "2026-09-08T17:43:47.102781Z"
     },
+    "P32-I01-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W05",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W05",
+      "model": null,
+      "scope_id": "P32-I01-W05",
+      "status": "done",
+      "updated_at": "2026-09-08T18:03:47.387322Z"
+    },
     "P32-I01-W09": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -16357,6 +16372,21 @@
       "runtime_session_id": null,
       "scope_id": "P32-I01",
       "started_at": "2026-09-08T17:44:35.994990Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260908T180342.781013Z-operator-claude-c04b6c67-0e18-4a4c-9921-aa5f12d71324": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-08T18:03:44.516273Z",
+      "id": "SES-20260908T180342.781013Z-operator-claude-c04b6c67-0e18-4a4c-9921-aa5f12d71324",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01",
+      "started_at": "2026-09-08T18:03:42.781013Z",
       "status": "stale",
       "summary": "orphaned by daemon restart",
       "worktree_ids": []
@@ -21404,7 +21434,6 @@
   "current": {
     "active_session_ids": [],
     "active_wave_ids": [
-      "P32-I01-W05",
       "P32-I01-W11",
       "P32-I01-W35",
       "P32-I01-W38"
@@ -38652,7 +38681,8 @@
         "P32-I01-W35",
         "P32-I01-W36",
         "P32-I01-W37",
-        "P32-I01-W38"
+        "P32-I01-W38",
+        "P32-I01-W39"
       ]
     },
     "P33-I01": {
@@ -40055,7 +40085,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-08T17:52:58.508870Z",
+  "updated_at": "2026-09-08T18:03:47.387558Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -164798,9 +164828,9 @@
       ],
       "claim_session_id": "SES-20260908T174435.994990Z-operator-claude-12760925-c34e-4961-bdec-b86c996805b5",
       "claimed_at": "2026-09-08T17:45:38.387148Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-08T18:03:47.387322Z",
+      "commit": "6e8202985f89361d849d6316bf25196d86186689",
+      "commit_identity_digest": "sha256:ebe4ee40e483ba45aafe80677a369d7b6c59e8a5a9637017a53e60d6b773bb36",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:58:45.115104Z",
@@ -164897,13 +164927,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-03T17:58:45.115853Z",
-      "outcome": null,
+      "outcome": "The Run, RunScope, SuspensionReason and Release leaf models land on the epoch-2 base with ten scope variants; three planned re-homings were declined on layering grounds rather than creating a kernel-to-workflow import or a second canonical import path.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -170642,6 +170672,144 @@
         }
       ],
       "title": "Repair the integration drift the parallel waves left",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W39": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
+        "waived_at": "2026-09-08T18:03:08.044016Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "W27's gate-isolation tests pass sys.executable, an absolute interpreter path, as argv zero. W32 then landed validate_gate_argv, which admits only allowlisted argv heads, so the two tests red together though each wave was green alone. W32 already converted its own probe gates to a planted pytest module, the sanctioned vehicle; W27's tests were written concurrently and never got that treatment. The policy is correct and the tests need the same conversion.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/integration/runtime/daemon/test_gate_isolation.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/daemon/test_gate_isolation.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/daemon/test_gate_isolation.py",
+              "-k",
+              "byte_identical",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W39",
+      "intent": {
+        "desired_outcome": "the gate-isolation tests drive their probe through an allowlisted argv and still prove sandbox binding and live-state byte equality",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Convert the two probe gates to the allowlisted vehicle W32 established|Prove both isolation assertions still hold with pytest"
+        ],
+        "priority_rationale": null,
+        "problem": "Two gate-isolation tests pass an absolute interpreter path as argv zero, which the argv allowlist now rejects",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-08T18:03:08.178156Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "test_gate_child_binds_isolated_runtime_dir asserts the child resolves the sandbox runtime directory and exits zero under the argv allowlist, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the gate-isolation suite with the probe driven through an allowlisted argv head",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Both gate-isolation probes drive their child through an argv head the policy admits, replacing the absolute interpreter path they pass today, so the two tests pass under validate_gate_argv while still asserting that the gate child binds the isolated runtime directory rather than the live one.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_live_state_byte_identical_after_mutating_gate asserts fixture live state bytes and the dispatch pause flag compare equal across the mutating gate, under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "security",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the gate-isolation suite asserting live-state byte equality across a state-mutating gate",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The live-state byte equality assertion survives the conversion: after a state mutating gate runs through the allowlisted probe, the fixture live state.json bytes, store rows and dispatch pause flag still compare equal before and after, so the conversion did not weaken what the test proves.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Run the gate-isolation probes through an allowlisted argv",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
