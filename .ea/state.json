@@ -16050,7 +16050,9 @@
         "P32-I01-W02",
         "P32-I01-W10",
         "P32-I01-W27",
-        "P32-I01-W30"
+        "P32-I01-W30",
+        "P32-I01-W25",
+        "P32-I01-W28"
       ],
       "ended_at": null,
       "id": "SES-20260908T154331.197864Z-operator-claude-df48900a-6f43-4cff-8bbe-30139cb9cf78",
@@ -21110,7 +21112,9 @@
     "active_wave_ids": [
       "P32-I01-W02",
       "P32-I01-W10",
+      "P32-I01-W25",
       "P32-I01-W27",
+      "P32-I01-W28",
       "P32-I01-W30",
       "P32-I01-W31"
     ],
@@ -39756,7 +39760,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-08T16:08:06.470695Z",
+  "updated_at": "2026-09-08T16:08:56.723757Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -168239,8 +168243,8 @@
     "P32-I01-W25": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260908T154331.197864Z-operator-claude-df48900a-6f43-4cff-8bbe-30139cb9cf78",
+      "claimed_at": "2026-09-08T16:08:55.828260Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -168321,7 +168325,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -168704,8 +168708,8 @@
     "P32-I01-W28": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260908T154331.197864Z-operator-claude-df48900a-6f43-4cff-8bbe-30139cb9cf78",
+      "claimed_at": "2026-09-08T16:08:56.723388Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -168805,7 +168809,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
