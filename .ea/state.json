@@ -13829,6 +13829,21 @@
       "scope_id": "P32-I01-W38",
       "status": "done",
       "updated_at": "2026-09-08T18:04:29.455549Z"
+    },
+    "P32-I01-W39": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W39",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W39",
+      "model": null,
+      "scope_id": "P32-I01-W39",
+      "status": "done",
+      "updated_at": "2026-09-08T18:19:59.332747Z"
     }
   },
   "agent_sessions": {
@@ -16451,6 +16466,21 @@
       "started_at": "2026-09-08T18:17:23.536983Z",
       "status": "stale",
       "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260908T181952.705242Z-operator-claude-f8d50875-344c-454e-9544-3336c1d34a4d": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260908T181952.705242Z-operator-claude-f8d50875-344c-454e-9544-3336c1d34a4d",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01",
+      "started_at": "2026-09-08T18:19:52.705242Z",
+      "status": "active",
+      "summary": null,
       "worktree_ids": []
     }
   },
@@ -21494,10 +21524,11 @@
     }
   },
   "current": {
-    "active_session_ids": [],
+    "active_session_ids": [
+      "SES-20260908T181952.705242Z-operator-claude-f8d50875-344c-454e-9544-3336c1d34a4d"
+    ],
     "active_wave_ids": [
-      "P32-I01-W11",
-      "P32-I01-W39"
+      "P32-I01-W11"
     ],
     "iter_id": "P32-I01",
     "phase_id": "P32",
@@ -40147,7 +40178,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-08T18:17:40.007787Z",
+  "updated_at": "2026-09-08T18:19:59.332961Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -170745,9 +170776,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260908T180424.931512Z-operator-claude-c7d03ec2-207c-4c4d-a4be-3c546cd04de6",
       "claimed_at": "2026-09-08T18:04:30.317448Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-08T18:19:59.332747Z",
+      "commit": "2f59e014baa8e2712ff0a3c1933d2548fafe464e",
+      "commit_identity_digest": "sha256:54d97b6cd8beddefcb953154de26a50670477f8b240950ccdc3282d78828b209",
       "criteria_floor_waiver": {
         "reason": "Placeholder criterion replaced immediately by a typed spec sync in the same operator step",
         "waived_at": "2026-09-08T18:03:08.044016Z",
@@ -170816,13 +170847,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-08T18:03:08.178156Z",
-      "outcome": null,
+      "outcome": "The two gate-isolation probes drive an allowlisted pytest vehicle instead of an absolute interpreter path, so they execute a gate for the first time; the mutating probe really writes dispatch_paused and an event row, and stubbing the sandbox env reds both tests.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
