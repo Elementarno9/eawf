@@ -191,15 +191,14 @@ class ReleaseTargetConfig(_StrictModel):
             through, where the target has the concept.
         stable_dist_tag: Distribution tag a stable release resolves
             through.
-        credential_handle: Name of the credential the publisher must
-            hold to authenticate here, e.g. ``NPM_TOKEN``. ``None`` for
-            a target that holds no handle by construction -- PyPI
-            trusted publishing exchanges an OIDC token at publish time
-            and GitHub releases ride the ambient workflow token. The
-            readiness sweep requires the ``credentials`` signal only
-            where a handle is declared, because "the required handle is
-            available" is unanswerable, not merely unmet, for a
-            mechanism whose design is that no handle is held.
+
+    Every target on this train authenticates without holding a named
+    secret -- PyPI trusted publishing exchanges an OIDC token at publish
+    time, npm publishes from the same workflow identity, and the GitHub
+    release rides the ambient workflow token -- so there is no
+    credential-handle field to declare. A configuration that names one
+    is refused by ``extra="forbid"`` rather than arming a check that no
+    target on this train can exercise.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -212,7 +211,6 @@ class ReleaseTargetConfig(_StrictModel):
     retry_limit: Annotated[int, Field(ge=0)]
     prerelease_dist_tag: Annotated[str, Field(min_length=1)] | None = None
     stable_dist_tag: Annotated[str, Field(min_length=1)] | None = None
-    credential_handle: Annotated[str, Field(min_length=1)] | None = None
 
 
 class ReleasePlatformClaim(_StrictModel):

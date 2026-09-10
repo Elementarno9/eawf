@@ -4,12 +4,11 @@ The contract under test is that the required subset is a *function* of
 the authored surface, never a second list beside it. So the module pins:
 
 1. The subset is exactly the rows the required gates bind, plus tree
-   cleanliness under ``require_clean_tree``, ancestry under
-   ``require_ancestor_of_remote``, and credentials when a required
-   target declares a ``credential_handle`` -- each flag independently
-   drops its row when turned off. No dev1 target declares one: all three
-   authenticate by OIDC or the ambient workflow token, so the dev1
-   derivation is six rows, not seven.
+   cleanliness under ``require_clean_tree`` and ancestry under
+   ``require_ancestor_of_remote`` -- each flag independently drops its
+   row when turned off. Credentials is never derived: every target on
+   this train authenticates by OIDC or the ambient workflow token, so
+   no target holds a handle the row could assert.
 2. Two gates binding one row contribute it once, and a gate settled by a
    proof command contributes nothing.
 3. A CANDIDATE moves to PREFLIGHT_FAILED on any derived row that is not
@@ -117,33 +116,24 @@ def test_credentials_drop_when_no_target_is_required(config: ReleaseConfig) -> N
     assert ReleaseSignalName.CREDENTIALS not in required
 
 
-def test_credentials_drop_when_no_required_target_declares_a_handle(
+def test_credentials_are_never_derived_and_no_target_can_declare_a_handle(
     config: ReleaseConfig,
 ) -> None:
-    """A required target that holds no handle does not derive the row.
+    """The row is sunset: it is not derived, and the handle cannot be authored.
 
-    PyPI trusted publishing and the GitHub release authenticate without
-    holding anything the sweep could look for, so deriving "a required
-    handle is available" from their mere presence asked a question with
-    no answer and left the checkpoint permanently unready.
+    PyPI trusted publishing, npm's workflow identity and the GitHub
+    release all authenticate without holding anything the sweep could
+    look for, so "a required handle is available" was a question with no
+    answer on any shipped target. Declaring one is now refused outright
+    rather than arming a check nothing can exercise.
     """
-    handleless = [
-        dict(target.model_dump(mode="json"), credential_handle=None) for target in config.targets
-    ]
-    required = set(derive_required_signals(dev1_config(targets=handleless)))
-    assert ReleaseSignalName.CREDENTIALS not in required
-
-
-def test_credentials_derive_from_one_handle_bearing_required_target(
-    config: ReleaseConfig,
-) -> None:
-    """One required target declaring a handle is enough to derive the row."""
+    assert ReleaseSignalName.CREDENTIALS not in set(derive_required_signals(config))
     targets = [
-        dict(target.model_dump(mode="json"), credential_handle=None) for target in config.targets
+        dict(target.model_dump(mode="json"), credential_handle="SOME_TOKEN")
+        for target in config.targets
     ]
-    targets[0] = dict(targets[0], required=True, credential_handle="SOME_TOKEN")
-    required = set(derive_required_signals(dev1_config(targets=targets)))
-    assert ReleaseSignalName.CREDENTIALS in required
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+        dev1_config(targets=targets)
 
 
 def test_a_single_required_gate_derives_a_single_row() -> None:

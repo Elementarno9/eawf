@@ -246,7 +246,13 @@ def _loop(ctx: MethodContext, **kwargs: Any) -> _Loop:
 
 
 def _deterministic_pass_rows(state_path: Path) -> list[EvidenceRecord]:
-    """Decode the ``deterministic`` / ``pass`` evidence rows (empty when absent)."""
+    """Decode the criterion-level ``deterministic`` / ``pass`` rows.
+
+    The per-gate execution receipts share the store and the same
+    ``deterministic`` / ``pass`` shape, so they are excluded by their
+    ``metrics["receipt"]`` marker: this helper answers "did the close
+    mint its criterion pass row", not "how many gates ran".
+    """
     path = store_path(state_path, StoreKind.EVIDENCE)
     if not path.exists():
         return []
@@ -255,6 +261,8 @@ def _deterministic_pass_rows(state_path: Path) -> list[EvidenceRecord]:
         if not line.strip():
             continue
         record = EvidenceRecord.model_validate(orjson.loads(line)["payload"])
+        if (record.metrics or {}).get("receipt") is not None:
+            continue
         if record.evidence_kind == "deterministic" and record.status == "pass":
             rows.append(record)
     return rows

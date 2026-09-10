@@ -280,8 +280,15 @@ def test_close_gate_passes_when_parity_holds(
         assert payload["waves"][_WAVE]["status"] == "closed"
 
         rows = _read_evidence_rows(state_path)
+        # The per-gate execution receipts share the store and the
+        # ``deterministic`` / ``pass`` shape, so the criterion-level row is
+        # selected by the absence of the receipt marker.
         deterministic_pass = [
-            row for row in rows if row.evidence_kind == "deterministic" and row.status == "pass"
+            row
+            for row in rows
+            if row.evidence_kind == "deterministic"
+            and row.status == "pass"
+            and (row.metrics or {}).get("receipt") is None
         ]
         assert len(deterministic_pass) == 1
         row = deterministic_pass[0]
