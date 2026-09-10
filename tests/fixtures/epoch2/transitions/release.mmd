@@ -1,0 +1,34 @@
+%% release lifecycle
+stateDiagram-v2
+    draft
+    candidate
+    preflight_failed
+    approved
+    cancelled
+    publishing
+    publish_timeout
+    verifying
+    recovering
+    baked
+    released
+    partially_released
+    draft --> candidate: pinned [manifest_complete]
+    candidate --> preflight_failed: preflight_failed [none]
+    candidate --> draft: invalidated [no_external_effect]
+    candidate --> cancelled: cancelled [no_external_effect]
+    candidate --> approved: approved [gates_green]
+    preflight_failed --> draft: invalidated [no_external_effect]
+    preflight_failed --> cancelled: cancelled [no_external_effect]
+    approved --> draft: invalidated [no_external_effect]
+    approved --> cancelled: cancelled [no_external_effect]
+    approved --> publishing: publication_started [approval_fresh]
+    publishing --> verifying: publication_reported [target_results_complete]
+    publishing --> publish_timeout: publication_timed_out [none]
+    publishing --> recovering: recovery_opened [none]
+    publish_timeout --> publishing: publication_retried [idempotent_retry]
+    publish_timeout --> recovering: recovery_opened [none]
+    verifying --> baked: baked [observed_prerelease]
+    verifying --> released: released [observed_stable]
+    verifying --> recovering: recovery_opened [none]
+    recovering --> publishing: publication_retried [idempotent_retry]
+    recovering --> partially_released: burned [recovery_exhausted]

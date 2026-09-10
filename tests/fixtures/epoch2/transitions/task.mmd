@@ -1,0 +1,28 @@
+%% task lifecycle
+stateDiagram-v2
+    DRAFT
+    DEFERRED
+    DROPPED
+    PLANNED
+    CLAIMED
+    RUNNING
+    READY_TO_INTEGRATE
+    COMPLETED
+    CANCELLED
+    FAILED
+    DRAFT --> DEFERRED: deferred [reason_recorded]
+    DRAFT --> DROPPED: dropped [reason_recorded]
+    DRAFT --> PLANNED: promoted [promotion_contract_complete]
+    DEFERRED --> DRAFT: reactivated [none]
+    DEFERRED --> DROPPED: dropped [reason_recorded]
+    PLANNED --> CLAIMED: claimed [lease_held]
+    PLANNED --> CANCELLED: cancelled [reason_recorded]
+    CLAIMED --> RUNNING: started [run_bound]
+    CLAIMED --> PLANNED: lease_released [reason_recorded]
+    CLAIMED --> CANCELLED: cancelled [reason_recorded]
+    RUNNING --> READY_TO_INTEGRATE: ready [run_report_bound+criteria_evidence_bound]
+    RUNNING --> FAILED: failed [run_report_bound+reason_recorded]
+    RUNNING --> CANCELLED: cancelled [reason_recorded]
+    READY_TO_INTEGRATE --> COMPLETED: completed [integrated_binding_pinned]
+    READY_TO_INTEGRATE --> PLANNED: replanned [reason_recorded]
+    READY_TO_INTEGRATE --> FAILED: failed [reason_recorded]

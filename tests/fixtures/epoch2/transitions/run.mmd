@@ -1,0 +1,17 @@
+%% run lifecycle
+stateDiagram-v2
+    QUEUED
+    RUNNING
+    SUSPENDED
+    COMPLETED
+    FAILED
+    CANCELLED
+    QUEUED --> RUNNING: started [none]
+    QUEUED --> CANCELLED: cancelled [reason_recorded]
+    RUNNING --> SUSPENDED: suspended [suspension_reason_named]
+    RUNNING --> COMPLETED: completed [run_report_bound]
+    RUNNING --> FAILED: failed [run_report_bound+reason_recorded]
+    RUNNING --> CANCELLED: cancelled [reason_recorded]
+    SUSPENDED --> RUNNING: resumed [clearing_fact_observed]
+    SUSPENDED --> CANCELLED: cancelled [reason_recorded]
+    SUSPENDED --> FAILED: failed [reason_recorded]

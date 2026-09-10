@@ -1,0 +1,14 @@
+%% milestone lifecycle
+stateDiagram-v2
+    PLANNED
+    ACTIVE
+    ACCEPTANCE_REVIEW
+    COMPLETED
+    CANCELLED
+    PLANNED --> ACTIVE: activated [track_active]
+    PLANNED --> CANCELLED: cancelled [reason_recorded]
+    ACTIVE --> ACCEPTANCE_REVIEW: review_opened [required_batches_completed]
+    ACTIVE --> CANCELLED: cancelled [reason_recorded]
+    ACCEPTANCE_REVIEW --> ACTIVE: review_reopened [reason_recorded]
+    ACCEPTANCE_REVIEW --> COMPLETED: completed [acceptance_journey_passed]
+    ACCEPTANCE_REVIEW --> CANCELLED: cancelled [reason_recorded]

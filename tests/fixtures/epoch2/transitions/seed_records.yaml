@@ -1,0 +1,282 @@
+# One valid record per (entity, status) of the epoch-2 transition
+# registry, loaded through the strict models themselves.
+#
+# The reducers are pure, so what drives them at this checkpoint is a
+# fixture rather than canonical state: every seed below is a complete
+# record that the model accepts, which is what lets the guard sweep start
+# a legal edge from each source status and the terminal sweep prove a
+# finished record refuses to move at all.
+#
+# Anchors carry the fields that never vary; each status entry overrides
+# only what its own status makes a fact.
+bases:
+  origin: &native_origin
+    kind: native
+    mapping_basis: native
+    confidence: exact
+
+  owner: &owner
+    principal_kind: operator
+    principal_id: OP-0001
+
+  binding: &binding
+    head_sha: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    tree_sha: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    contract_digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    policy_revision: 1
+    evidence_digest: sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+
+  reason: &reason
+    code: host-refused-the-merge
+    message: The host refused the merge because the base branch moved.
+    evidence_refs: []
+
+  criterion: &criterion
+    id: CR-01
+    text: the published wheel installs into a clean environment
+    kind: functional_suitability
+    acceptance_style: binary
+    evidence_kind: deterministic
+    gate_ids: [G-01]
+    quality_dimension: functional_suitability
+    measurable_signal: uv run pytest tests/unit/kernel/state exits zero
+
+  track: &track_base
+    uid: 1b4e28ba-2fa1-11d2-883f-0016d3cca427
+    key: TRK-RUNTIME
+    urn: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/track/TRK-RUNTIME
+    origin: *native_origin
+    revision: 1
+    created_at: "2026-09-08T00:00:00Z"
+    updated_at: "2026-09-08T00:00:00Z"
+    title: Harden the runtime against a provider outage
+    charter: Keep a run recoverable when a provider stops responding.
+    scope:
+      scope_kind: repository
+      repository_ref: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/repository/REP-EAWF
+    in_scope: [provider failover]
+    out_of_scope: [billing reconciliation]
+    owner: *owner
+    policy:
+      revision: 1
+      wip:
+        active_milestones: 1
+        active_batches_per_repo: 1
+      ownership_principal: *owner
+      permitted_milestone_kinds: [product]
+      campaign_templates: []
+      outcome_metrics:
+        - metric_id: MET-INSTALLABLE
+          unit: boolean
+          measurement_locus: milestone_acceptance
+      promotion_rules: []
+      integration_priority: 50
+      presentation:
+        default_view: roadmap
+        color_token: accent_blue
+    status: ACTIVE
+
+  milestone: &milestone_base
+    uid: 2b4e28ba-2fa1-11d2-883f-0016d3cca427
+    key: MLS-0030
+    urn: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/milestone/MLS-0030
+    origin: *native_origin
+    revision: 1
+    created_at: "2026-09-08T00:00:00Z"
+    updated_at: "2026-09-08T00:00:00Z"
+    primary_track_ref: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/track/TRK-RUNTIME
+    title: Publish an installable wheel
+    outcome: An operator installs the published wheel and the CLI answers.
+    appetite: M
+    exclusions: [platform packaging for Windows]
+    acceptance_journey:
+      - step_id: AS-01
+        actor: operator
+        action: install the published wheel into a clean environment
+        expected_observation: the install completes and reports the version
+        evidence_kinds: [artifact]
+    status: PLANNED
+
+  batch: &batch_base
+    uid: 3b4e28ba-2fa1-11d2-883f-0016d3cca427
+    key: BAT-0007
+    urn: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/batch/BAT-0007
+    origin: *native_origin
+    revision: 1
+    created_at: "2026-09-08T00:00:00Z"
+    updated_at: "2026-09-08T00:00:00Z"
+    milestone_ref: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/milestone/MLS-0030
+    repository_ref: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/repository/REP-EAWF
+    status: PLANNED
+
+  task: &task_base
+    uid: 4b4e28ba-2fa1-11d2-883f-0016d3cca427
+    key: EAWF-0042
+    urn: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/task/EAWF-0042
+    origin: *native_origin
+    revision: 1
+    created_at: "2026-09-08T00:00:00Z"
+    updated_at: "2026-09-08T00:00:00Z"
+    priority: P1
+    intent: Publish the wheel to the index
+    contract_revision: 1
+    status: DRAFT
+
+  run: &run_base
+    uid: 5b4e28ba-2fa1-11d2-883f-0016d3cca427
+    key: RUN-00000010
+    urn: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/RUN-00000010
+    origin: *native_origin
+    revision: 1
+    created_at: "2026-09-08T00:00:00Z"
+    updated_at: "2026-09-08T00:00:00Z"
+    scope:
+      scope_kind: task
+      purpose: implement
+      task_ref: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/task/EAWF-0042
+      write_set: [src/eawf/kernel/state/epoch2/transitions.py]
+    status: QUEUED
+
+records:
+  track:
+    ACTIVE:
+      <<: *track_base
+    RETIRED:
+      <<: *track_base
+      status: RETIRED
+
+  milestone:
+    PLANNED:
+      <<: *milestone_base
+    ACTIVE:
+      <<: *milestone_base
+      status: ACTIVE
+    ACCEPTANCE_REVIEW:
+      <<: *milestone_base
+      status: ACCEPTANCE_REVIEW
+      acceptance_bundle_revision: 1
+    COMPLETED:
+      <<: *milestone_base
+      status: COMPLETED
+      acceptance_bundle_revision: 1
+      accepted_binding: *binding
+    CANCELLED:
+      <<: *milestone_base
+      status: CANCELLED
+
+  batch:
+    PLANNED:
+      <<: *batch_base
+    ACTIVE:
+      <<: *batch_base
+      status: ACTIVE
+      target_branch: feature/eawf-v0.7
+    READY_TO_MERGE:
+      <<: *batch_base
+      status: READY_TO_MERGE
+      target_branch: feature/eawf-v0.7
+      current_head_binding: *binding
+    MERGING:
+      <<: *batch_base
+      status: MERGING
+      target_branch: feature/eawf-v0.7
+      current_head_binding: *binding
+    MERGED_PENDING_RECONCILIATION:
+      <<: *batch_base
+      status: MERGED_PENDING_RECONCILIATION
+      target_branch: feature/eawf-v0.7
+      current_head_binding: *binding
+    COMPLETED:
+      <<: *batch_base
+      status: COMPLETED
+      target_branch: feature/eawf-v0.7
+      current_head_binding: *binding
+    CANCELLED:
+      <<: *batch_base
+      status: CANCELLED
+      target_branch: feature/eawf-v0.7
+    FAILED:
+      <<: *batch_base
+      status: FAILED
+      target_branch: feature/eawf-v0.7
+      failure: *reason
+
+  task:
+    DRAFT:
+      <<: *task_base
+    DEFERRED:
+      <<: *task_base
+      status: DEFERRED
+    DROPPED:
+      <<: *task_base
+      status: DROPPED
+    PLANNED: &task_planned
+      <<: *task_base
+      status: PLANNED
+      batch_ref: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/batch/BAT-0007
+      due_scope: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/milestone/MLS-0030
+      criteria: [*criterion]
+    CLAIMED:
+      <<: *task_planned
+      status: CLAIMED
+    RUNNING:
+      <<: *task_planned
+      status: RUNNING
+      active_run_ref: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/RUN-00000010
+    READY_TO_INTEGRATE:
+      <<: *task_planned
+      status: READY_TO_INTEGRATE
+    COMPLETED:
+      <<: *task_planned
+      status: COMPLETED
+      integrated_binding: *binding
+    CANCELLED:
+      <<: *task_planned
+      status: CANCELLED
+    FAILED:
+      <<: *task_planned
+      status: FAILED
+
+  run:
+    QUEUED:
+      <<: *run_base
+    RUNNING:
+      <<: *run_base
+      status: RUNNING
+      started_at: "2026-09-08T01:00:00Z"
+    SUSPENDED:
+      <<: *run_base
+      status: SUSPENDED
+      started_at: "2026-09-08T01:00:00Z"
+      suspension_reason: AWAITING_LEASE
+    COMPLETED:
+      <<: *run_base
+      status: COMPLETED
+      started_at: "2026-09-08T01:00:00Z"
+      ended_at: "2026-09-08T02:00:00Z"
+    FAILED:
+      <<: *run_base
+      status: FAILED
+      started_at: "2026-09-08T01:00:00Z"
+      ended_at: "2026-09-08T02:00:00Z"
+      failure: *reason
+    CANCELLED:
+      <<: *run_base
+      status: CANCELLED
+      started_at: "2026-09-08T01:00:00Z"
+      ended_at: "2026-09-08T02:00:00Z"
+
+# A Task the importer projected from an epoch-1 wave. It is a legal
+# record and an illegal subject: the native lifecycle refuses it, so the
+# refusal is proven against a record that would otherwise transition.
+legacy_origin:
+  task:
+    <<: *task_planned
+    origin:
+      kind: legacy
+      source_schema_version: v1.20
+      source_kind: wave
+      source_id: legacy-wave-row
+      source_digest: sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+      mapping_basis: mechanical
+      confidence: supported
