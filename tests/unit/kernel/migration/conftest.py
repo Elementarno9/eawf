@@ -11,7 +11,7 @@ from eawf.kernel.migration.epoch2.allowlist import (
     load_legacy_symbol_allowlist,
 )
 from eawf.kernel.migration.epoch2.corpus import Epoch1BacklogCorpus
-from eawf.kernel.migration.epoch2.plan import LifecycleImportPlan
+from eawf.kernel.migration.epoch2.plan import CorpusImportPlan, LifecycleImportPlan
 from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot
 
 MIGRATION_FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "migration"
@@ -39,3 +39,17 @@ def full_lifecycle_plan() -> LifecycleImportPlan:
         snapshot=SourceSnapshot.read(EPOCH1_FULL_SNAPSHOT),
         allowlist_path=ALLOWLIST_PATH,
     )
+
+
+def build_full_corpus_plan() -> CorpusImportPlan:
+    """Import the whole full-shape snapshot, reading it once."""
+    return CorpusImportPlan.build(
+        snapshot=SourceSnapshot.read(EPOCH1_FULL_SNAPSHOT),
+        allowlist_path=ALLOWLIST_PATH,
+    )
+
+
+@pytest.fixture(scope="session")
+def full_corpus_plan() -> CorpusImportPlan:
+    """Every collection of the full-shape snapshot, imported once."""
+    return build_full_corpus_plan()

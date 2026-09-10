@@ -1,9 +1,14 @@
-"""Applying the backlog and criteria rules to a whole source collection.
+"""Applying the importer rules to whole source collections.
 
 The rule modules each decide one thing about one row. This module is
 where they are put together into the plan the cutover consumes, so the
 rules have exactly one production call site and a reader can see, in one
 place, the order the importer applies them in.
+
+:class:`CorpusImportPlan` is the outermost of those: it runs the
+lifecycle mappers first, re-points the measurement collections against
+the Task population they produced, and imports everything that converts
+without a rule as an envelope or a ledger row.
 """
 
 from __future__ import annotations
@@ -26,18 +31,21 @@ from eawf.kernel.migration.epoch2.backlog import (
 )
 from eawf.kernel.migration.epoch2.criteria import ImportedCriterion, convert_criterion
 from eawf.kernel.migration.epoch2.dispositions import DropProofForm, drop_proof_form
+from eawf.kernel.migration.epoch2.envelopes import EnvelopeImportPlan
 from eawf.kernel.migration.epoch2.lifecycle import (
     SOURCE_COLLECTIONS,
     ImportedLifecycleRecord,
     LifecycleSourceIndex,
-    MintedRun,
+    LifecycleTarget,
     map_backlog_row,
     map_iter_row,
     map_phase_row,
     map_wave_row,
 )
+from eawf.kernel.migration.epoch2.measurements import MeasurementImportPlan
 from eawf.kernel.migration.epoch2.registry import mapping_rule_index
 from eawf.kernel.migration.epoch2.rules import MappingRuleVersion, StrictMigrationModel
+from eawf.kernel.migration.epoch2.runs import MintedRun, report_ledger_rows
 from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot
 from eawf.kernel.migration.epoch2.status_map import (
     SourceLifecycle,
@@ -305,7 +313,9 @@ class LifecycleImportPlan(StrictMigrationModel):
             ValidationError: When a wave criterion or gate is unreadable.
         """
         document = snapshot.document
-        index = LifecycleSourceIndex.build(document)
+        index = LifecycleSourceIndex.build(
+            document, report_rows=report_ledger_rows(snapshot.ledgers)
+        )
         phases = _keyed_rows(document, SOURCE_COLLECTIONS[SourceLifecycle.PHASE])
         iters = _keyed_rows(document, SOURCE_COLLECTIONS[SourceLifecycle.ITER])
         waves = _keyed_rows(document, SOURCE_COLLECTIONS[SourceLifecycle.WAVE])
@@ -389,3 +399,77 @@ class LifecycleImportPlan(StrictMigrationModel):
     def minted_runs(self) -> tuple[MintedRun, ...]:
         """Return every Run the source supports, across all records."""
         return tuple(run for record in self.records for run in record.minted_runs)
+
+    def task_source_ids(self) -> frozenset[str]:
+        """Return the source id of every row imported as a Task.
+
+        Returns:
+            The ids the measurement re-point resolves its map keys
+            against. A wave and a backlog row both become Tasks, so both
+            populations are in here.
+        """
+        return frozenset(
+            record.origin.source_id
+            for record in self.records
+            if record.target is LifecycleTarget.TASK and record.origin.source_id is not None
+        )
+
+
+class CorpusImportPlan(StrictMigrationModel):
+    """The whole epoch-1 corpus as the importer will write it.
+
+    This is where the stages meet: the lifecycle mappers decide which
+    Tasks exist, the measurement re-point resolves against exactly that
+    population, and the envelope writer takes everything that converts
+    without a rule. Assembling them in one place is what makes the
+    orphan check meaningful -- a re-point checked against a different
+    Task population than the one the import wrote would prove nothing.
+
+    Attributes:
+        lifecycle: The four lifecycle collections.
+        measurements: The estimate and actual collections, re-pointed.
+        envelopes: The session, worktree, artifact, memory and audit
+            collections.
+    """
+
+    lifecycle: LifecycleImportPlan
+    measurements: MeasurementImportPlan
+    envelopes: EnvelopeImportPlan
+
+    @classmethod
+    def build(cls, *, snapshot: SourceSnapshot, allowlist_path: Path) -> CorpusImportPlan:
+        """Import every collection of ``snapshot`` under the declared rules.
+
+        Args:
+            snapshot: The frozen epoch-1 corpus.
+            allowlist_path: Location of the shared allowed-legacy-symbol
+                allowlist.
+
+        Returns:
+            The corpus import plan, with the measurement re-point already
+            proven free of orphans.
+
+        Raises:
+            FileNotFoundError: When ``allowlist_path`` does not exist.
+            MigrationFabricationDetectedError: When a measurement
+                re-points at a Task the import never wrote.
+            MigrationSourceUnreadableError: When the snapshot holds no
+                audit ledger.
+            MigrationCountMismatchError: When a row carries a status
+                outside the closed map, cannot default its intent, or
+                reaches no classifier arm.
+            ValidationError: When a source row is unreadable.
+        """
+        lifecycle = LifecycleImportPlan.build(snapshot=snapshot, allowlist_path=allowlist_path)
+        measurements = MeasurementImportPlan.build(
+            document=snapshot.document,
+            task_ids=lifecycle.task_source_ids(),
+            source_schema_version=lifecycle.source_index.source_schema_version,
+        )
+        measurements.require_no_orphans()
+        envelopes = EnvelopeImportPlan.build(
+            document=snapshot.document,
+            audit_ledger_rows=snapshot.ledger(AUDIT_LEDGER),
+            source_schema_version=lifecycle.source_index.source_schema_version,
+        )
+        return cls(lifecycle=lifecycle, measurements=measurements, envelopes=envelopes)

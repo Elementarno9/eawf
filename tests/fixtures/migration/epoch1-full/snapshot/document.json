@@ -1,5 +1,14 @@
 {
   "actuals": {
+    "B003": {
+      "calibration_excluded": false,
+      "current_store_record_id": "ACT-B003-1",
+      "elapsed_eu": 0.5,
+      "id": "ACT-B003",
+      "scope_id": "B003",
+      "status": "done",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
     "P01-I01-W01": {
       "current_store_record_id": "ACT-P01-I01-W01-1",
       "id": "ACT-P01-I01-W01",
@@ -12,6 +21,24 @@
       "id": "ACT-P01-I01-W02",
       "scope_id": "P01-I01-W02",
       "status": "recorded",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "P01-I02": {
+      "calibration_excluded": true,
+      "current_store_record_id": "ACT-P01-I02-1",
+      "elapsed_eu": 4.0,
+      "id": "ACT-P01-I02",
+      "scope_id": "P01-I02",
+      "status": "abandoned",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "P02-I01-W01": {
+      "calibration_excluded": true,
+      "current_store_record_id": "ACT-P02-I01-W01-1",
+      "elapsed_eu": 2.0,
+      "id": "ACT-P02-I01-W01",
+      "scope_id": "P02-I01-W01",
+      "status": "interrupted",
       "updated_at": "2026-01-01T00:00:00Z"
     }
   },
@@ -31,6 +58,457 @@
       "scope_id": "P01-I01-W01",
       "started_at": "2026-01-01T00:00:00Z",
       "status": "closed"
+    },
+    "S003": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S003",
+      "role": "planner",
+      "runtime": "claude",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "stale",
+      "summary": "session S003 summary"
+    },
+    "S004": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S004",
+      "role": "researcher",
+      "runtime": "codex",
+      "scope_id": "P01-I01-W02",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "failed",
+      "summary": "session S004 summary"
+    },
+    "S005": {
+      "claimed_wave_ids": [
+        "P02-I01-W01"
+      ],
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S005",
+      "role": "polisher",
+      "runtime": "opencode",
+      "scope_id": "P02-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "checkpointed",
+      "summary": "session S005 summary"
+    },
+    "S006": {
+      "id": "S006",
+      "role": "executor",
+      "runtime": "claude",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "active"
+    },
+    "S007": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S007",
+      "role": "auditor",
+      "runtime": "codex",
+      "runtime_session_id": "PS-007",
+      "scope_id": "P01-I01-W02",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S007 summary"
+    },
+    "S008": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S008",
+      "role": "reviewer",
+      "runtime": "opencode",
+      "scope_id": "P02-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S008 summary"
+    },
+    "S009": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S009",
+      "role": "planner",
+      "runtime": "claude",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S009 summary"
+    },
+    "S010": {
+      "claimed_wave_ids": [
+        "P01-I01-W02"
+      ],
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S010",
+      "role": "researcher",
+      "runtime": "codex",
+      "scope_id": "P01-I01-W02",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "stale",
+      "summary": "session S010 summary"
+    },
+    "S011": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S011",
+      "role": "polisher",
+      "runtime": "opencode",
+      "scope_id": "P02-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "failed",
+      "summary": "session S011 summary"
+    },
+    "S012": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S012",
+      "role": "executor",
+      "runtime": "claude",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "checkpointed",
+      "summary": "session S012 summary"
+    },
+    "S013": {
+      "id": "S013",
+      "role": "auditor",
+      "runtime": "codex",
+      "scope_id": "P01-I01-W02",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "active"
+    },
+    "S014": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S014",
+      "role": "reviewer",
+      "runtime": "opencode",
+      "runtime_session_id": "PS-014",
+      "scope_id": "P02-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S014 summary"
+    },
+    "S015": {
+      "claimed_wave_ids": [
+        "P01-I01-W01"
+      ],
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S015",
+      "role": "planner",
+      "runtime": "claude",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S015 summary"
+    },
+    "S016": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S016",
+      "role": "researcher",
+      "runtime": "codex",
+      "scope_id": "P01-I01-W02",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S016 summary"
+    },
+    "S017": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S017",
+      "role": "polisher",
+      "runtime": "opencode",
+      "scope_id": "P02-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "stale",
+      "summary": "session S017 summary"
+    },
+    "S018": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S018",
+      "role": "executor",
+      "runtime": "claude",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "failed",
+      "summary": "session S018 summary"
+    },
+    "S019": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S019",
+      "role": "auditor",
+      "runtime": "codex",
+      "scope_id": "P01-I01-W02",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "checkpointed",
+      "summary": "session S019 summary"
+    },
+    "S020": {
+      "claimed_wave_ids": [
+        "P02-I01-W01"
+      ],
+      "id": "S020",
+      "role": "reviewer",
+      "runtime": "opencode",
+      "scope_id": "P02-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "active"
+    },
+    "S021": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S021",
+      "role": "planner",
+      "runtime": "claude",
+      "runtime_session_id": "PS-021",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S021 summary"
+    },
+    "S022": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S022",
+      "role": "researcher",
+      "runtime": "codex",
+      "scope_id": "P01-I01-W02",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S022 summary"
+    },
+    "S023": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S023",
+      "role": "polisher",
+      "runtime": "opencode",
+      "scope_id": "P02-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S023 summary"
+    },
+    "S024": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S024",
+      "role": "executor",
+      "runtime": "claude",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "stale",
+      "summary": "session S024 summary"
+    },
+    "S025": {
+      "claimed_wave_ids": [
+        "P01-I01-W02"
+      ],
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S025",
+      "role": "auditor",
+      "runtime": "codex",
+      "scope_id": "P01-I01-W02",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "failed",
+      "summary": "session S025 summary"
+    },
+    "S026": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S026",
+      "role": "reviewer",
+      "runtime": "opencode",
+      "scope_id": "P02-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "checkpointed",
+      "summary": "session S026 summary"
+    },
+    "S027": {
+      "id": "S027",
+      "role": "planner",
+      "runtime": "claude",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "active"
+    },
+    "S028": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S028",
+      "role": "researcher",
+      "runtime": "codex",
+      "runtime_session_id": "PS-028",
+      "scope_id": "P01-I01-W02",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S028 summary"
+    },
+    "S029": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S029",
+      "role": "polisher",
+      "runtime": "opencode",
+      "scope_id": "P02-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S029 summary"
+    },
+    "S030": {
+      "claimed_wave_ids": [
+        "P01-I01-W01"
+      ],
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S030",
+      "role": "executor",
+      "runtime": "claude",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S030 summary"
+    },
+    "S031": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S031",
+      "role": "auditor",
+      "runtime": "codex",
+      "scope_id": "P01-I01-W02",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "stale",
+      "summary": "session S031 summary"
+    },
+    "S032": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S032",
+      "role": "reviewer",
+      "runtime": "opencode",
+      "scope_id": "P02-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "failed",
+      "summary": "session S032 summary"
+    },
+    "S033": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S033",
+      "role": "planner",
+      "runtime": "claude",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "checkpointed",
+      "summary": "session S033 summary"
+    },
+    "S034": {
+      "id": "S034",
+      "role": "researcher",
+      "runtime": "codex",
+      "scope_id": "P01-I01-W02",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "active"
+    },
+    "S035": {
+      "claimed_wave_ids": [
+        "P02-I01-W01"
+      ],
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S035",
+      "role": "polisher",
+      "runtime": "opencode",
+      "runtime_session_id": "PS-035",
+      "scope_id": "P02-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S035 summary"
+    },
+    "S036": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S036",
+      "role": "executor",
+      "runtime": "claude",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S036 summary"
+    },
+    "S037": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S037",
+      "role": "auditor",
+      "runtime": "codex",
+      "scope_id": "P01-I01-W02",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S037 summary"
+    },
+    "S038": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S038",
+      "role": "reviewer",
+      "runtime": "opencode",
+      "scope_id": "P02-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "stale",
+      "summary": "session S038 summary"
+    },
+    "S039": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S039",
+      "role": "planner",
+      "runtime": "claude",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "failed",
+      "summary": "session S039 summary"
+    },
+    "S040": {
+      "claimed_wave_ids": [
+        "P01-I01-W02"
+      ],
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S040",
+      "role": "researcher",
+      "runtime": "codex",
+      "scope_id": "P01-I01-W02",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "checkpointed",
+      "summary": "session S040 summary"
+    },
+    "S041": {
+      "id": "S041",
+      "role": "polisher",
+      "runtime": "opencode",
+      "scope_id": "P02-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "active"
+    },
+    "S042": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S042",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": "PS-042",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S042 summary"
+    },
+    "S043": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S043",
+      "role": "auditor",
+      "runtime": "codex",
+      "scope_id": "P01-I01-W02",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S043 summary"
+    },
+    "S044": {
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S044",
+      "role": "reviewer",
+      "runtime": "opencode",
+      "scope_id": "P02-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed",
+      "summary": "session S044 summary"
+    },
+    "S045": {
+      "claimed_wave_ids": [
+        "P01-I01-W01"
+      ],
+      "ended_at": "2026-01-02T00:00:00Z",
+      "id": "S045",
+      "role": "planner",
+      "runtime": "claude",
+      "scope_id": "P01-I01-W01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "stale",
+      "summary": "session S045 summary"
     }
   },
   "artifacts": {
@@ -47,6 +525,22 @@
       "kind": "research",
       "uri": ".ea/artifacts/research/ART-02.md",
       "urn": "urn:eawf:artifact:ART-02"
+    },
+    "ART-03": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "ART-03",
+      "kind": "audit",
+      "metadata": {
+        "pages": 3,
+        "tags": [
+          "cutover",
+          "census"
+        ]
+      },
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "size_bytes": 2048,
+      "uri": ".ea/artifacts/audit/ART-03.md",
+      "urn": "urn:eawf:artifact:ART-03"
     }
   },
   "audits": {
@@ -761,6 +1255,33 @@
   },
   "dispatch_paused": false,
   "estimates": {
+    "B003": {
+      "confidence": "low",
+      "current_store_record_id": "EST-B003-1",
+      "display": "S",
+      "id": "EST-B003",
+      "reference_class": "backlog",
+      "scope_id": "B003",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "P01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P01-1",
+      "display": "XL",
+      "id": "EST-P01",
+      "reference_class": "phase",
+      "scope_id": "P01",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "P01-I01": {
+      "confidence": "medium",
+      "current_store_record_id": "EST-P01-I01-1",
+      "display": "XL",
+      "id": "EST-P01-I01",
+      "reference_class": "iter",
+      "scope_id": "P01-I01",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
     "P01-I01-W01": {
       "confidence": "medium",
       "current_store_record_id": "EST-P01-I01-W01-1",
@@ -777,6 +1298,15 @@
       "id": "EST-P01-I01-W02",
       "reference_class": "wave",
       "scope_id": "P01-I01-W02",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "P02-I01-W01": {
+      "confidence": "high",
+      "current_store_record_id": "EST-P02-I01-W01-1",
+      "display": "L",
+      "id": "EST-P02-I01-W01",
+      "reference_class": "wave",
+      "scope_id": "P02-I01-W01",
       "updated_at": "2026-01-01T00:00:00Z"
     }
   },
@@ -843,6 +1373,16 @@
       "store_record_id": "MEM01-1",
       "summary": "memory MEM01",
       "tier": "project"
+    },
+    "MEM02": {
+      "confidence": "medium",
+      "id": "MEM02",
+      "review_due": "2026-02-01T00:00:00Z",
+      "scope_id": "DEMO",
+      "status": "superseded",
+      "store_record_id": "MEM02-1",
+      "summary": "memory MEM02",
+      "tier": "phase"
     }
   },
   "open_questions": null,
@@ -933,6 +1473,72 @@
   },
   "workspace": null,
   "worktrees": {
+    "WT003": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt003",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT003",
+      "path": ".ea/worktrees/WT003",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT004": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt004",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT004",
+      "path": ".ea/worktrees/WT004",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT005": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt005",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT005",
+      "path": ".ea/worktrees/WT005",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT006": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt006",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT006",
+      "merged_commit": "0000006",
+      "path": ".ea/worktrees/WT006",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT007": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt007",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT007",
+      "merged_commit": "0000007",
+      "path": ".ea/worktrees/WT007",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT008": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt008",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT008",
+      "merged_commit": "0000008",
+      "path": ".ea/worktrees/WT008",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT009": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt009",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT009",
+      "path": ".ea/worktrees/WT009",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
     "WT01": {
       "base_branch": "feature/demo",
       "branch": "feature/demo-WT01",
@@ -942,6 +1548,102 @@
       "status": "removed",
       "wave_id": "P01-I01-W01"
     },
+    "WT010": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt010",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT010",
+      "path": ".ea/worktrees/WT010",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT011": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt011",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT011",
+      "owner_session_id": "S012",
+      "path": ".ea/worktrees/WT011",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT012": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt012",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT012",
+      "merged_commit": "000000c",
+      "path": ".ea/worktrees/WT012",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT013": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt013",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT013",
+      "merged_commit": "000000d",
+      "path": ".ea/worktrees/WT013",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT014": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt014",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT014",
+      "merged_commit": "000000e",
+      "path": ".ea/worktrees/WT014",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT015": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt015",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT015",
+      "path": ".ea/worktrees/WT015",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT016": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt016",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT016",
+      "path": ".ea/worktrees/WT016",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT017": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt017",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT017",
+      "path": ".ea/worktrees/WT017",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT018": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt018",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT018",
+      "merged_commit": "0000012",
+      "path": ".ea/worktrees/WT018",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT019": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt019",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT019",
+      "merged_commit": "0000013",
+      "path": ".ea/worktrees/WT019",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
     "WT02": {
       "base_branch": "feature/demo",
       "branch": "feature/demo-WT02",
@@ -949,6 +1651,3046 @@
       "id": "WT02",
       "path": ".ea/worktrees/WT02",
       "status": "removed",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT020": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt020",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT020",
+      "merged_commit": "0000014",
+      "path": ".ea/worktrees/WT020",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT021": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt021",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT021",
+      "path": ".ea/worktrees/WT021",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT022": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt022",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT022",
+      "owner_session_id": "S023",
+      "path": ".ea/worktrees/WT022",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT023": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt023",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT023",
+      "path": ".ea/worktrees/WT023",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT024": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt024",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT024",
+      "merged_commit": "0000018",
+      "path": ".ea/worktrees/WT024",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT025": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt025",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT025",
+      "merged_commit": "0000019",
+      "path": ".ea/worktrees/WT025",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT026": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt026",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT026",
+      "merged_commit": "000001a",
+      "path": ".ea/worktrees/WT026",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT027": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt027",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT027",
+      "path": ".ea/worktrees/WT027",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT028": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt028",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT028",
+      "path": ".ea/worktrees/WT028",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT029": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt029",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT029",
+      "path": ".ea/worktrees/WT029",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT030": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt030",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT030",
+      "merged_commit": "000001e",
+      "path": ".ea/worktrees/WT030",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT031": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt031",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT031",
+      "merged_commit": "000001f",
+      "path": ".ea/worktrees/WT031",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT032": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt032",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT032",
+      "merged_commit": "0000020",
+      "path": ".ea/worktrees/WT032",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT033": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt033",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT033",
+      "owner_session_id": "S034",
+      "path": ".ea/worktrees/WT033",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT034": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt034",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT034",
+      "path": ".ea/worktrees/WT034",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT035": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt035",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT035",
+      "path": ".ea/worktrees/WT035",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT036": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt036",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT036",
+      "merged_commit": "0000024",
+      "path": ".ea/worktrees/WT036",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT037": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt037",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT037",
+      "merged_commit": "0000025",
+      "path": ".ea/worktrees/WT037",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT038": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt038",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT038",
+      "merged_commit": "0000026",
+      "path": ".ea/worktrees/WT038",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT039": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt039",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT039",
+      "path": ".ea/worktrees/WT039",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT040": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt040",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT040",
+      "path": ".ea/worktrees/WT040",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT041": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt041",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT041",
+      "path": ".ea/worktrees/WT041",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT042": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt042",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT042",
+      "merged_commit": "000002a",
+      "path": ".ea/worktrees/WT042",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT043": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt043",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT043",
+      "merged_commit": "000002b",
+      "path": ".ea/worktrees/WT043",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT044": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt044",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT044",
+      "merged_commit": "000002c",
+      "owner_session_id": "S045",
+      "path": ".ea/worktrees/WT044",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT045": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt045",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT045",
+      "path": ".ea/worktrees/WT045",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT046": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt046",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT046",
+      "path": ".ea/worktrees/WT046",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT047": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt047",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT047",
+      "path": ".ea/worktrees/WT047",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT048": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt048",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT048",
+      "merged_commit": "0000030",
+      "path": ".ea/worktrees/WT048",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT049": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt049",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT049",
+      "merged_commit": "0000031",
+      "path": ".ea/worktrees/WT049",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT050": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt050",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT050",
+      "merged_commit": "0000032",
+      "path": ".ea/worktrees/WT050",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT051": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt051",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT051",
+      "path": ".ea/worktrees/WT051",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT052": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt052",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT052",
+      "path": ".ea/worktrees/WT052",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT053": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt053",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT053",
+      "path": ".ea/worktrees/WT053",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT054": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt054",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT054",
+      "merged_commit": "0000036",
+      "path": ".ea/worktrees/WT054",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT055": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt055",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT055",
+      "merged_commit": "0000037",
+      "owner_session_id": "S011",
+      "path": ".ea/worktrees/WT055",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT056": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt056",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT056",
+      "merged_commit": "0000038",
+      "path": ".ea/worktrees/WT056",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT057": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt057",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT057",
+      "path": ".ea/worktrees/WT057",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT058": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt058",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT058",
+      "path": ".ea/worktrees/WT058",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT059": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt059",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT059",
+      "path": ".ea/worktrees/WT059",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT060": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt060",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT060",
+      "merged_commit": "000003c",
+      "path": ".ea/worktrees/WT060",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT061": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt061",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT061",
+      "merged_commit": "000003d",
+      "path": ".ea/worktrees/WT061",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT062": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt062",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT062",
+      "merged_commit": "000003e",
+      "path": ".ea/worktrees/WT062",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT063": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt063",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT063",
+      "path": ".ea/worktrees/WT063",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT064": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt064",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT064",
+      "path": ".ea/worktrees/WT064",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT065": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt065",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT065",
+      "path": ".ea/worktrees/WT065",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT066": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt066",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT066",
+      "merged_commit": "0000042",
+      "owner_session_id": "S022",
+      "path": ".ea/worktrees/WT066",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT067": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt067",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT067",
+      "merged_commit": "0000043",
+      "path": ".ea/worktrees/WT067",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT068": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt068",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT068",
+      "merged_commit": "0000044",
+      "path": ".ea/worktrees/WT068",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT069": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt069",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT069",
+      "path": ".ea/worktrees/WT069",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT070": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt070",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT070",
+      "path": ".ea/worktrees/WT070",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT071": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt071",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT071",
+      "path": ".ea/worktrees/WT071",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT072": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt072",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT072",
+      "merged_commit": "0000048",
+      "path": ".ea/worktrees/WT072",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT073": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt073",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT073",
+      "merged_commit": "0000049",
+      "path": ".ea/worktrees/WT073",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT074": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt074",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT074",
+      "merged_commit": "000004a",
+      "path": ".ea/worktrees/WT074",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT075": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt075",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT075",
+      "path": ".ea/worktrees/WT075",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT076": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt076",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT076",
+      "path": ".ea/worktrees/WT076",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT077": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt077",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT077",
+      "owner_session_id": "S033",
+      "path": ".ea/worktrees/WT077",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT078": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt078",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT078",
+      "merged_commit": "000004e",
+      "path": ".ea/worktrees/WT078",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT079": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt079",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT079",
+      "merged_commit": "000004f",
+      "path": ".ea/worktrees/WT079",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT080": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt080",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT080",
+      "merged_commit": "0000050",
+      "path": ".ea/worktrees/WT080",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT081": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt081",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT081",
+      "path": ".ea/worktrees/WT081",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT082": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt082",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT082",
+      "path": ".ea/worktrees/WT082",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT083": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt083",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT083",
+      "path": ".ea/worktrees/WT083",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT084": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt084",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT084",
+      "merged_commit": "0000054",
+      "path": ".ea/worktrees/WT084",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT085": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt085",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT085",
+      "merged_commit": "0000055",
+      "path": ".ea/worktrees/WT085",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT086": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt086",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT086",
+      "merged_commit": "0000056",
+      "path": ".ea/worktrees/WT086",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT087": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt087",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT087",
+      "path": ".ea/worktrees/WT087",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT088": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt088",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT088",
+      "owner_session_id": "S044",
+      "path": ".ea/worktrees/WT088",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT089": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt089",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT089",
+      "path": ".ea/worktrees/WT089",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT090": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt090",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT090",
+      "merged_commit": "000005a",
+      "path": ".ea/worktrees/WT090",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT091": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt091",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT091",
+      "merged_commit": "000005b",
+      "path": ".ea/worktrees/WT091",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT092": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt092",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT092",
+      "merged_commit": "000005c",
+      "path": ".ea/worktrees/WT092",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT093": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt093",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT093",
+      "path": ".ea/worktrees/WT093",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT094": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt094",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT094",
+      "path": ".ea/worktrees/WT094",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT095": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt095",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT095",
+      "path": ".ea/worktrees/WT095",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT096": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt096",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT096",
+      "merged_commit": "0000060",
+      "path": ".ea/worktrees/WT096",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT097": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt097",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT097",
+      "merged_commit": "0000061",
+      "path": ".ea/worktrees/WT097",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT098": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt098",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT098",
+      "merged_commit": "0000062",
+      "path": ".ea/worktrees/WT098",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT099": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt099",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT099",
+      "owner_session_id": "S010",
+      "path": ".ea/worktrees/WT099",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT100": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt100",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT100",
+      "path": ".ea/worktrees/WT100",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT101": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt101",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT101",
+      "path": ".ea/worktrees/WT101",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT102": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt102",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT102",
+      "merged_commit": "0000066",
+      "path": ".ea/worktrees/WT102",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT103": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt103",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT103",
+      "merged_commit": "0000067",
+      "path": ".ea/worktrees/WT103",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT104": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt104",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT104",
+      "merged_commit": "0000068",
+      "path": ".ea/worktrees/WT104",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT105": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt105",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT105",
+      "path": ".ea/worktrees/WT105",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT106": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt106",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT106",
+      "path": ".ea/worktrees/WT106",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT107": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt107",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT107",
+      "path": ".ea/worktrees/WT107",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT108": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt108",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT108",
+      "merged_commit": "000006c",
+      "path": ".ea/worktrees/WT108",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT109": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt109",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT109",
+      "merged_commit": "000006d",
+      "path": ".ea/worktrees/WT109",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT110": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt110",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT110",
+      "merged_commit": "000006e",
+      "owner_session_id": "S021",
+      "path": ".ea/worktrees/WT110",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT111": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt111",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT111",
+      "path": ".ea/worktrees/WT111",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT112": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt112",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT112",
+      "path": ".ea/worktrees/WT112",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT113": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt113",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT113",
+      "path": ".ea/worktrees/WT113",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT114": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt114",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT114",
+      "merged_commit": "0000072",
+      "path": ".ea/worktrees/WT114",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT115": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt115",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT115",
+      "merged_commit": "0000073",
+      "path": ".ea/worktrees/WT115",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT116": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt116",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT116",
+      "merged_commit": "0000074",
+      "path": ".ea/worktrees/WT116",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT117": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt117",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT117",
+      "path": ".ea/worktrees/WT117",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT118": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt118",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT118",
+      "path": ".ea/worktrees/WT118",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT119": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt119",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT119",
+      "path": ".ea/worktrees/WT119",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT120": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt120",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT120",
+      "merged_commit": "0000078",
+      "path": ".ea/worktrees/WT120",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT121": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt121",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT121",
+      "merged_commit": "0000079",
+      "owner_session_id": "S032",
+      "path": ".ea/worktrees/WT121",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT122": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt122",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT122",
+      "merged_commit": "000007a",
+      "path": ".ea/worktrees/WT122",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT123": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt123",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT123",
+      "path": ".ea/worktrees/WT123",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT124": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt124",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT124",
+      "path": ".ea/worktrees/WT124",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT125": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt125",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT125",
+      "path": ".ea/worktrees/WT125",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT126": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt126",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT126",
+      "merged_commit": "000007e",
+      "path": ".ea/worktrees/WT126",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT127": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt127",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT127",
+      "merged_commit": "000007f",
+      "path": ".ea/worktrees/WT127",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT128": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt128",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT128",
+      "merged_commit": "0000080",
+      "path": ".ea/worktrees/WT128",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT129": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt129",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT129",
+      "path": ".ea/worktrees/WT129",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT130": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt130",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT130",
+      "path": ".ea/worktrees/WT130",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT131": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt131",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT131",
+      "path": ".ea/worktrees/WT131",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT132": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt132",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT132",
+      "merged_commit": "0000084",
+      "owner_session_id": "S043",
+      "path": ".ea/worktrees/WT132",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT133": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt133",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT133",
+      "merged_commit": "0000085",
+      "path": ".ea/worktrees/WT133",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT134": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt134",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT134",
+      "merged_commit": "0000086",
+      "path": ".ea/worktrees/WT134",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT135": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt135",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT135",
+      "path": ".ea/worktrees/WT135",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT136": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt136",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT136",
+      "path": ".ea/worktrees/WT136",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT137": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt137",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT137",
+      "path": ".ea/worktrees/WT137",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT138": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt138",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT138",
+      "merged_commit": "000008a",
+      "path": ".ea/worktrees/WT138",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT139": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt139",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT139",
+      "merged_commit": "000008b",
+      "path": ".ea/worktrees/WT139",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT140": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt140",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT140",
+      "merged_commit": "000008c",
+      "path": ".ea/worktrees/WT140",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT141": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt141",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT141",
+      "path": ".ea/worktrees/WT141",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT142": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt142",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT142",
+      "path": ".ea/worktrees/WT142",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT143": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt143",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT143",
+      "owner_session_id": "S009",
+      "path": ".ea/worktrees/WT143",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT144": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt144",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT144",
+      "merged_commit": "0000090",
+      "path": ".ea/worktrees/WT144",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT145": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt145",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT145",
+      "merged_commit": "0000091",
+      "path": ".ea/worktrees/WT145",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT146": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt146",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT146",
+      "merged_commit": "0000092",
+      "path": ".ea/worktrees/WT146",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT147": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt147",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT147",
+      "path": ".ea/worktrees/WT147",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT148": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt148",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT148",
+      "path": ".ea/worktrees/WT148",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT149": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt149",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT149",
+      "path": ".ea/worktrees/WT149",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT150": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt150",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT150",
+      "merged_commit": "0000096",
+      "path": ".ea/worktrees/WT150",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT151": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt151",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT151",
+      "merged_commit": "0000097",
+      "path": ".ea/worktrees/WT151",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT152": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt152",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT152",
+      "merged_commit": "0000098",
+      "path": ".ea/worktrees/WT152",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT153": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt153",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT153",
+      "path": ".ea/worktrees/WT153",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT154": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt154",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT154",
+      "owner_session_id": "S020",
+      "path": ".ea/worktrees/WT154",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT155": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt155",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT155",
+      "path": ".ea/worktrees/WT155",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT156": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt156",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT156",
+      "merged_commit": "000009c",
+      "path": ".ea/worktrees/WT156",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT157": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt157",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT157",
+      "merged_commit": "000009d",
+      "path": ".ea/worktrees/WT157",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT158": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt158",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT158",
+      "merged_commit": "000009e",
+      "path": ".ea/worktrees/WT158",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT159": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt159",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT159",
+      "path": ".ea/worktrees/WT159",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT160": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt160",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT160",
+      "path": ".ea/worktrees/WT160",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT161": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt161",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT161",
+      "path": ".ea/worktrees/WT161",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT162": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt162",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT162",
+      "merged_commit": "00000a2",
+      "path": ".ea/worktrees/WT162",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT163": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt163",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT163",
+      "merged_commit": "00000a3",
+      "path": ".ea/worktrees/WT163",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT164": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt164",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT164",
+      "merged_commit": "00000a4",
+      "path": ".ea/worktrees/WT164",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT165": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt165",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT165",
+      "owner_session_id": "S031",
+      "path": ".ea/worktrees/WT165",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT166": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt166",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT166",
+      "path": ".ea/worktrees/WT166",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT167": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt167",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT167",
+      "path": ".ea/worktrees/WT167",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT168": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt168",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT168",
+      "merged_commit": "00000a8",
+      "path": ".ea/worktrees/WT168",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT169": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt169",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT169",
+      "merged_commit": "00000a9",
+      "path": ".ea/worktrees/WT169",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT170": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt170",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT170",
+      "merged_commit": "00000aa",
+      "path": ".ea/worktrees/WT170",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT171": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt171",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT171",
+      "path": ".ea/worktrees/WT171",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT172": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt172",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT172",
+      "path": ".ea/worktrees/WT172",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT173": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt173",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT173",
+      "path": ".ea/worktrees/WT173",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT174": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt174",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT174",
+      "merged_commit": "00000ae",
+      "path": ".ea/worktrees/WT174",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT175": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt175",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT175",
+      "merged_commit": "00000af",
+      "path": ".ea/worktrees/WT175",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT176": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt176",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT176",
+      "merged_commit": "00000b0",
+      "owner_session_id": "S042",
+      "path": ".ea/worktrees/WT176",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT177": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt177",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT177",
+      "path": ".ea/worktrees/WT177",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT178": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt178",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT178",
+      "path": ".ea/worktrees/WT178",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT179": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt179",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT179",
+      "path": ".ea/worktrees/WT179",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT180": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt180",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT180",
+      "merged_commit": "00000b4",
+      "path": ".ea/worktrees/WT180",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT181": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt181",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT181",
+      "merged_commit": "00000b5",
+      "path": ".ea/worktrees/WT181",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT182": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt182",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT182",
+      "merged_commit": "00000b6",
+      "path": ".ea/worktrees/WT182",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT183": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt183",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT183",
+      "path": ".ea/worktrees/WT183",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT184": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt184",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT184",
+      "path": ".ea/worktrees/WT184",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT185": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt185",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT185",
+      "path": ".ea/worktrees/WT185",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT186": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt186",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT186",
+      "merged_commit": "00000ba",
+      "path": ".ea/worktrees/WT186",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT187": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt187",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT187",
+      "merged_commit": "00000bb",
+      "owner_session_id": "S008",
+      "path": ".ea/worktrees/WT187",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT188": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt188",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT188",
+      "merged_commit": "00000bc",
+      "path": ".ea/worktrees/WT188",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT189": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt189",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT189",
+      "path": ".ea/worktrees/WT189",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT190": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt190",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT190",
+      "path": ".ea/worktrees/WT190",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT191": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt191",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT191",
+      "path": ".ea/worktrees/WT191",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT192": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt192",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT192",
+      "merged_commit": "00000c0",
+      "path": ".ea/worktrees/WT192",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT193": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt193",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT193",
+      "merged_commit": "00000c1",
+      "path": ".ea/worktrees/WT193",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT194": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt194",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT194",
+      "merged_commit": "00000c2",
+      "path": ".ea/worktrees/WT194",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT195": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt195",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT195",
+      "path": ".ea/worktrees/WT195",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT196": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt196",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT196",
+      "path": ".ea/worktrees/WT196",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT197": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt197",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT197",
+      "path": ".ea/worktrees/WT197",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT198": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt198",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT198",
+      "merged_commit": "00000c6",
+      "owner_session_id": "S019",
+      "path": ".ea/worktrees/WT198",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT199": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt199",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT199",
+      "merged_commit": "00000c7",
+      "path": ".ea/worktrees/WT199",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT200": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt200",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT200",
+      "merged_commit": "00000c8",
+      "path": ".ea/worktrees/WT200",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT201": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt201",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT201",
+      "path": ".ea/worktrees/WT201",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT202": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt202",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT202",
+      "path": ".ea/worktrees/WT202",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT203": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt203",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT203",
+      "path": ".ea/worktrees/WT203",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT204": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt204",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT204",
+      "merged_commit": "00000cc",
+      "path": ".ea/worktrees/WT204",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT205": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt205",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT205",
+      "merged_commit": "00000cd",
+      "path": ".ea/worktrees/WT205",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT206": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt206",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT206",
+      "merged_commit": "00000ce",
+      "path": ".ea/worktrees/WT206",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT207": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt207",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT207",
+      "path": ".ea/worktrees/WT207",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT208": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt208",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT208",
+      "path": ".ea/worktrees/WT208",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT209": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt209",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT209",
+      "owner_session_id": "S030",
+      "path": ".ea/worktrees/WT209",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT210": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt210",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT210",
+      "merged_commit": "00000d2",
+      "path": ".ea/worktrees/WT210",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT211": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt211",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT211",
+      "merged_commit": "00000d3",
+      "path": ".ea/worktrees/WT211",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT212": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt212",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT212",
+      "merged_commit": "00000d4",
+      "path": ".ea/worktrees/WT212",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT213": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt213",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT213",
+      "path": ".ea/worktrees/WT213",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT214": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt214",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT214",
+      "path": ".ea/worktrees/WT214",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT215": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt215",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT215",
+      "path": ".ea/worktrees/WT215",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT216": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt216",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT216",
+      "merged_commit": "00000d8",
+      "path": ".ea/worktrees/WT216",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT217": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt217",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT217",
+      "merged_commit": "00000d9",
+      "path": ".ea/worktrees/WT217",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT218": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt218",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT218",
+      "merged_commit": "00000da",
+      "path": ".ea/worktrees/WT218",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT219": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt219",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT219",
+      "path": ".ea/worktrees/WT219",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT220": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt220",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT220",
+      "owner_session_id": "S041",
+      "path": ".ea/worktrees/WT220",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT221": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt221",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT221",
+      "path": ".ea/worktrees/WT221",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT222": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt222",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT222",
+      "merged_commit": "00000de",
+      "path": ".ea/worktrees/WT222",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT223": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt223",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT223",
+      "merged_commit": "00000df",
+      "path": ".ea/worktrees/WT223",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT224": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt224",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT224",
+      "merged_commit": "00000e0",
+      "path": ".ea/worktrees/WT224",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT225": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt225",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT225",
+      "path": ".ea/worktrees/WT225",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT226": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt226",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT226",
+      "path": ".ea/worktrees/WT226",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT227": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt227",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT227",
+      "path": ".ea/worktrees/WT227",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT228": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt228",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT228",
+      "merged_commit": "00000e4",
+      "path": ".ea/worktrees/WT228",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT229": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt229",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT229",
+      "merged_commit": "00000e5",
+      "path": ".ea/worktrees/WT229",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT230": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt230",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT230",
+      "merged_commit": "00000e6",
+      "path": ".ea/worktrees/WT230",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT231": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt231",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT231",
+      "owner_session_id": "S007",
+      "path": ".ea/worktrees/WT231",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT232": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt232",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT232",
+      "path": ".ea/worktrees/WT232",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT233": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt233",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT233",
+      "path": ".ea/worktrees/WT233",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT234": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt234",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT234",
+      "merged_commit": "00000ea",
+      "path": ".ea/worktrees/WT234",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT235": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt235",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT235",
+      "merged_commit": "00000eb",
+      "path": ".ea/worktrees/WT235",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT236": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt236",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT236",
+      "merged_commit": "00000ec",
+      "path": ".ea/worktrees/WT236",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT237": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt237",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT237",
+      "path": ".ea/worktrees/WT237",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT238": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt238",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT238",
+      "path": ".ea/worktrees/WT238",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT239": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt239",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT239",
+      "path": ".ea/worktrees/WT239",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT240": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt240",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT240",
+      "merged_commit": "00000f0",
+      "path": ".ea/worktrees/WT240",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT241": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt241",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT241",
+      "merged_commit": "00000f1",
+      "path": ".ea/worktrees/WT241",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT242": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt242",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT242",
+      "merged_commit": "00000f2",
+      "owner_session_id": "S018",
+      "path": ".ea/worktrees/WT242",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT243": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt243",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT243",
+      "path": ".ea/worktrees/WT243",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT244": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt244",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT244",
+      "path": ".ea/worktrees/WT244",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT245": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt245",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT245",
+      "path": ".ea/worktrees/WT245",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT246": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt246",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT246",
+      "merged_commit": "00000f6",
+      "path": ".ea/worktrees/WT246",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT247": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt247",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT247",
+      "merged_commit": "00000f7",
+      "path": ".ea/worktrees/WT247",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT248": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt248",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT248",
+      "merged_commit": "00000f8",
+      "path": ".ea/worktrees/WT248",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT249": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt249",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT249",
+      "path": ".ea/worktrees/WT249",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT250": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt250",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT250",
+      "path": ".ea/worktrees/WT250",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT251": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt251",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT251",
+      "path": ".ea/worktrees/WT251",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT252": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt252",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT252",
+      "merged_commit": "00000fc",
+      "path": ".ea/worktrees/WT252",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT253": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt253",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT253",
+      "merged_commit": "00000fd",
+      "owner_session_id": "S029",
+      "path": ".ea/worktrees/WT253",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT254": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt254",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT254",
+      "merged_commit": "00000fe",
+      "path": ".ea/worktrees/WT254",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT255": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt255",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT255",
+      "path": ".ea/worktrees/WT255",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT256": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt256",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT256",
+      "path": ".ea/worktrees/WT256",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT257": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt257",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT257",
+      "path": ".ea/worktrees/WT257",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT258": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt258",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT258",
+      "merged_commit": "0000102",
+      "path": ".ea/worktrees/WT258",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT259": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt259",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT259",
+      "merged_commit": "0000103",
+      "path": ".ea/worktrees/WT259",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT260": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt260",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT260",
+      "merged_commit": "0000104",
+      "path": ".ea/worktrees/WT260",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT261": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt261",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT261",
+      "path": ".ea/worktrees/WT261",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT262": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt262",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT262",
+      "path": ".ea/worktrees/WT262",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT263": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt263",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT263",
+      "path": ".ea/worktrees/WT263",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT264": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt264",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT264",
+      "merged_commit": "0000108",
+      "owner_session_id": "S040",
+      "path": ".ea/worktrees/WT264",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT265": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt265",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT265",
+      "merged_commit": "0000109",
+      "path": ".ea/worktrees/WT265",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT266": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt266",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT266",
+      "merged_commit": "000010a",
+      "path": ".ea/worktrees/WT266",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT267": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt267",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT267",
+      "path": ".ea/worktrees/WT267",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT268": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt268",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT268",
+      "path": ".ea/worktrees/WT268",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT269": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt269",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT269",
+      "path": ".ea/worktrees/WT269",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT270": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt270",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT270",
+      "merged_commit": "000010e",
+      "path": ".ea/worktrees/WT270",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT271": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt271",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT271",
+      "merged_commit": "000010f",
+      "path": ".ea/worktrees/WT271",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT272": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt272",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT272",
+      "merged_commit": "0000110",
+      "path": ".ea/worktrees/WT272",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT273": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt273",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT273",
+      "path": ".ea/worktrees/WT273",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT274": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt274",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT274",
+      "path": ".ea/worktrees/WT274",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT275": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt275",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT275",
+      "owner_session_id": "S006",
+      "path": ".ea/worktrees/WT275",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT276": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt276",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT276",
+      "merged_commit": "0000114",
+      "path": ".ea/worktrees/WT276",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT277": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt277",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT277",
+      "merged_commit": "0000115",
+      "path": ".ea/worktrees/WT277",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT278": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt278",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT278",
+      "merged_commit": "0000116",
+      "path": ".ea/worktrees/WT278",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT279": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt279",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT279",
+      "path": ".ea/worktrees/WT279",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT280": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt280",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT280",
+      "path": ".ea/worktrees/WT280",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT281": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt281",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT281",
+      "path": ".ea/worktrees/WT281",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT282": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt282",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT282",
+      "merged_commit": "000011a",
+      "path": ".ea/worktrees/WT282",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT283": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt283",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT283",
+      "merged_commit": "000011b",
+      "path": ".ea/worktrees/WT283",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT284": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt284",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT284",
+      "merged_commit": "000011c",
+      "path": ".ea/worktrees/WT284",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT285": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt285",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT285",
+      "path": ".ea/worktrees/WT285",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT286": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt286",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT286",
+      "owner_session_id": "S017",
+      "path": ".ea/worktrees/WT286",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT287": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt287",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT287",
+      "path": ".ea/worktrees/WT287",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT288": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt288",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT288",
+      "merged_commit": "0000120",
+      "path": ".ea/worktrees/WT288",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT289": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt289",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT289",
+      "merged_commit": "0000121",
+      "path": ".ea/worktrees/WT289",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT290": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt290",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT290",
+      "merged_commit": "0000122",
+      "path": ".ea/worktrees/WT290",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT291": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt291",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT291",
+      "path": ".ea/worktrees/WT291",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT292": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt292",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT292",
+      "path": ".ea/worktrees/WT292",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT293": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt293",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT293",
+      "path": ".ea/worktrees/WT293",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT294": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt294",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT294",
+      "merged_commit": "0000126",
+      "path": ".ea/worktrees/WT294",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT295": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt295",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT295",
+      "merged_commit": "0000127",
+      "path": ".ea/worktrees/WT295",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT296": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt296",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT296",
+      "merged_commit": "0000128",
+      "path": ".ea/worktrees/WT296",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT297": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt297",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT297",
+      "owner_session_id": "S028",
+      "path": ".ea/worktrees/WT297",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT298": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt298",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT298",
+      "path": ".ea/worktrees/WT298",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT299": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt299",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT299",
+      "path": ".ea/worktrees/WT299",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT300": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt300",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT300",
+      "merged_commit": "000012c",
+      "path": ".ea/worktrees/WT300",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT301": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt301",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT301",
+      "merged_commit": "000012d",
+      "path": ".ea/worktrees/WT301",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT302": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt302",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT302",
+      "merged_commit": "000012e",
+      "path": ".ea/worktrees/WT302",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT303": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt303",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT303",
+      "path": ".ea/worktrees/WT303",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT304": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt304",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT304",
+      "path": ".ea/worktrees/WT304",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT305": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt305",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT305",
+      "path": ".ea/worktrees/WT305",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT306": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt306",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT306",
+      "merged_commit": "0000132",
+      "path": ".ea/worktrees/WT306",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT307": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt307",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT307",
+      "merged_commit": "0000133",
+      "path": ".ea/worktrees/WT307",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT308": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt308",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT308",
+      "merged_commit": "0000134",
+      "owner_session_id": "S039",
+      "path": ".ea/worktrees/WT308",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT309": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt309",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT309",
+      "path": ".ea/worktrees/WT309",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT310": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt310",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT310",
+      "path": ".ea/worktrees/WT310",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT311": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt311",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT311",
+      "path": ".ea/worktrees/WT311",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT312": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt312",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT312",
+      "merged_commit": "0000138",
+      "path": ".ea/worktrees/WT312",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT313": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt313",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT313",
+      "merged_commit": "0000139",
+      "path": ".ea/worktrees/WT313",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT314": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt314",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT314",
+      "merged_commit": "000013a",
+      "path": ".ea/worktrees/WT314",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT315": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt315",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT315",
+      "path": ".ea/worktrees/WT315",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT316": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt316",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT316",
+      "path": ".ea/worktrees/WT316",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT317": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt317",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT317",
+      "path": ".ea/worktrees/WT317",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT318": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt318",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT318",
+      "merged_commit": "000013e",
+      "path": ".ea/worktrees/WT318",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT319": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt319",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT319",
+      "merged_commit": "000013f",
+      "owner_session_id": "S005",
+      "path": ".ea/worktrees/WT319",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT320": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt320",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT320",
+      "merged_commit": "0000140",
+      "path": ".ea/worktrees/WT320",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT321": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt321",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT321",
+      "path": ".ea/worktrees/WT321",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT322": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt322",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT322",
+      "path": ".ea/worktrees/WT322",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT323": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt323",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT323",
+      "path": ".ea/worktrees/WT323",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT324": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt324",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT324",
+      "merged_commit": "0000144",
+      "path": ".ea/worktrees/WT324",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT325": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt325",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT325",
+      "merged_commit": "0000145",
+      "path": ".ea/worktrees/WT325",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT326": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt326",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT326",
+      "merged_commit": "0000146",
+      "path": ".ea/worktrees/WT326",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT327": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt327",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT327",
+      "path": ".ea/worktrees/WT327",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT328": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt328",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT328",
+      "path": ".ea/worktrees/WT328",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT329": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt329",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT329",
+      "path": ".ea/worktrees/WT329",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT330": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt330",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT330",
+      "merged_commit": "000014a",
+      "owner_session_id": "S016",
+      "path": ".ea/worktrees/WT330",
+      "status": "merged",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT331": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt331",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT331",
+      "merged_commit": "000014b",
+      "path": ".ea/worktrees/WT331",
+      "status": "merged",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT332": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt332",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT332",
+      "merged_commit": "000014c",
+      "path": ".ea/worktrees/WT332",
+      "status": "merged",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT333": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt333",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT333",
+      "path": ".ea/worktrees/WT333",
+      "status": "abandoned",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT334": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt334",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT334",
+      "path": ".ea/worktrees/WT334",
+      "status": "conflicted",
+      "wave_id": "P01-I01-W02"
+    },
+    "WT335": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt335",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT335",
+      "path": ".ea/worktrees/WT335",
+      "status": "active",
+      "wave_id": "P02-I01-W01"
+    },
+    "WT336": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-wt336",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT336",
+      "merged_commit": "0000150",
+      "path": ".ea/worktrees/WT336",
+      "status": "merged",
       "wave_id": "P01-I01-W01"
     }
   }

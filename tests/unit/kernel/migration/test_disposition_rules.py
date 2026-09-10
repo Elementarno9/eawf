@@ -29,7 +29,16 @@ from eawf.kernel.migration.epoch2.rules import (
     rule_digest,
 )
 
-EXPECTED_RULE_IDS = ("DOM-004", "DOM-018", "DOM-041", "DOM-043", "DOM-044", "DOM-045")
+EXPECTED_RULE_IDS = (
+    "DOM-004",
+    "DOM-017",
+    "DOM-018",
+    "DOM-019",
+    "DOM-041",
+    "DOM-043",
+    "DOM-044",
+    "DOM-045",
+)
 
 
 def test_collection_dispositions_declare_five_dispositions() -> None:

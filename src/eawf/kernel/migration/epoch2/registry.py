@@ -20,14 +20,16 @@ from eawf.kernel.migration.epoch2.allowlist import LegacySymbolAllowlist
 from eawf.kernel.migration.epoch2.backlog import BACKLOG_CLASSIFIER_RULE, obsolescence_rule
 from eawf.kernel.migration.epoch2.criteria import criteria_rule_payload
 from eawf.kernel.migration.epoch2.dispositions import disposition_rule_payload
+from eawf.kernel.migration.epoch2.envelopes import envelope_rule_payload
 from eawf.kernel.migration.epoch2.lifecycle import (
     CLAIM_SESSION_LEGACY_FIELD,
     CLAIM_SESSION_RESOLVING_FIELD,
     EMPTY_CLAIM_IMPORTS_AS,
-    RUN_SUCCESS_REQUIREMENTS,
-    UNCLASSIFIED_RUN_STATUS,
-    RunSource,
     lifecycle_rule_payload,
+)
+from eawf.kernel.migration.epoch2.measurements import (
+    MeasurementKind,
+    measurement_rule_payload,
 )
 from eawf.kernel.migration.epoch2.rows import row_contract_payload
 from eawf.kernel.migration.epoch2.rules import (
@@ -35,6 +37,7 @@ from eawf.kernel.migration.epoch2.rules import (
     build_rule_version,
     index_rule_versions,
 )
+from eawf.kernel.migration.epoch2.runs import run_rule_payload
 from eawf.kernel.migration.epoch2.status_map import status_rule_payload
 
 logger = logging.getLogger(__name__)
@@ -48,6 +51,8 @@ def totality_rule_payload() -> dict[str, Any]:
         "criteria": criteria_rule_payload(),
         "rows": row_contract_payload(),
         "lifecycle": lifecycle_rule_payload(),
+        "envelopes": envelope_rule_payload(),
+        "measurements": measurement_rule_payload(),
     }
 
 
@@ -62,10 +67,26 @@ SESSION_RUN_SPLIT_RULE: MappingRuleVersion = build_rule_version(
     rule_id="DOM-041",
     source_kind="agent_sessions",
     title="A Run is minted only from a resolving claim entry or a wave attempt entry",
+    payload=run_rule_payload(),
+)
+
+ESTIMATE_REPOINT_RULE: MappingRuleVersion = build_rule_version(
+    rule_id="DOM-017",
+    source_kind="estimates",
+    title="An estimate re-points at the Task its map key names, never at its own row id",
     payload={
-        "mints_run_from": [source.value for source in RunSource],
-        "default_run_status": UNCLASSIFIED_RUN_STATUS,
-        "succeeded_requires": list(RUN_SUCCESS_REQUIREMENTS),
+        "kind": MeasurementKind.ESTIMATE.value,
+        **measurement_rule_payload(),
+    },
+)
+
+ACTUAL_REPOINT_RULE: MappingRuleVersion = build_rule_version(
+    rule_id="DOM-019",
+    source_kind="actuals",
+    title="An actual re-points with its quality marker and exclusion flag verbatim",
+    payload={
+        "kind": MeasurementKind.ACTUAL.value,
+        **measurement_rule_payload(),
     },
 )
 
@@ -116,6 +137,8 @@ def mapping_rule_versions(allowlist: LegacySymbolAllowlist) -> tuple[MappingRule
     versions = (
         TOTALITY_RULE,
         obsolescence_rule(allowlist),
+        ESTIMATE_REPOINT_RULE,
+        ACTUAL_REPOINT_RULE,
         SESSION_RUN_SPLIT_RULE,
         CLAIM_SESSION_REF_RULE,
         BACKLOG_CLASSIFIER_RULE,
