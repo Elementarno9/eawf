@@ -1,0 +1,22 @@
+%% batch lifecycle
+stateDiagram-v2
+    PLANNED
+    ACTIVE
+    READY_TO_MERGE
+    MERGING
+    MERGED_PENDING_RECONCILIATION
+    COMPLETED
+    CANCELLED
+    FAILED
+    PLANNED --> ACTIVE: activated [target_branch_pinned]
+    PLANNED --> CANCELLED: cancelled [reason_recorded]
+    ACTIVE --> READY_TO_MERGE: ready [tasks_ready_to_integrate+head_binding_pinned]
+    ACTIVE --> CANCELLED: cancelled [reason_recorded]
+    ACTIVE --> FAILED: failed [reason_recorded]
+    READY_TO_MERGE --> MERGING: merge_started [head_binding_pinned]
+    READY_TO_MERGE --> ACTIVE: reopened [reason_recorded]
+    MERGING --> MERGED_PENDING_RECONCILIATION: merge_observed [host_merge_observed]
+    MERGING --> READY_TO_MERGE: merge_refused [host_merge_refused]
+    MERGING --> FAILED: failed [reason_recorded]
+    MERGED_PENDING_RECONCILIATION --> COMPLETED: completed [reconciliation_matched]
+    MERGED_PENDING_RECONCILIATION --> FAILED: failed [reason_recorded]
