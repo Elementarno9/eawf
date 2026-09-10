@@ -13560,6 +13560,21 @@
       "status": "done",
       "updated_at": "2026-09-08T18:03:47.387322Z"
     },
+    "P32-I01-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 268011,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W07",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W07",
+      "model": null,
+      "scope_id": "P32-I01-W07",
+      "status": "done",
+      "updated_at": "2026-09-10T15:18:52.040166Z"
+    },
     "P32-I01-W09": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -16602,15 +16617,15 @@
       "claimed_wave_ids": [
         "P32-I01-W06"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-10T15:14:42.278534Z",
       "id": "SES-20260910T145445.908259Z-executor-claude-f716b87b-ab93-47c3-bd09-f8748d74741d",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W06",
       "started_at": "2026-09-10T14:54:45.908259Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260910T145447.161812Z-executor-claude-cd32c0c5-fad8-4b98-97e0-76286137e07a": {
@@ -16619,15 +16634,30 @@
       "claimed_wave_ids": [
         "P32-I01-W12"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-10T15:14:42.282469Z",
       "id": "SES-20260910T145447.161812Z-executor-claude-cd32c0c5-fad8-4b98-97e0-76286137e07a",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W12",
       "started_at": "2026-09-10T14:54:47.161812Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260910T151454.592803Z-auditor-claude-code-3698977b-14d1-4040-86fc-d71b75b3ee20": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-10T15:18:50.874201Z",
+      "id": "SES-20260910T151454.592803Z-auditor-claude-code-3698977b-14d1-4040-86fc-d71b75b3ee20",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W07::audit",
+      "started_at": "2026-09-10T15:14:54.592803Z",
+      "status": "closed",
+      "summary": "auditor report appended",
       "worktree_ids": []
     }
   },
@@ -21262,6 +21292,57 @@
       "wave_id": "P31-I01-W36",
       "wave_revision_digest": "28166d383a29b5b00865f50c9ec4ac902b47ca48a1c43f74c48632bdd13375aa"
     },
+    "close-94c5faf4525b3547dbc3cf0b": {
+      "apply_event_id": "EV-14fe193c3bcb",
+      "artifact_refs": [],
+      "audit_report_id": "AR-auditor-P32-I01-W07-01",
+      "audit_requirement": "required",
+      "candidate_sha": "70cf0a761916b702f7576f3359156a8aba5ee57f",
+      "commit_identity_digest": "sha256:ec521e2dabe80797258440cbe26f864a8f571e200a98ad1cf7c112c0781bc5cf",
+      "criteria_digest": "b4920def096f74fa7f188214eca39382a5b04e11a0962c63e8da775260624e28",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "d076a55cb137b373125301e2cb8e07b2db26e8e3841a7abc2aff63f3c9e031e2",
+      "gate_receipt_ids": [
+        "GR-e4c56313d7983f3235410aeca97a894c",
+        "GR-5c67634be08efe336d3395cfb580349e",
+        "GR-5608eacf111906b467a61204f34bc37c"
+      ],
+      "generation": 1,
+      "id": "close-94c5faf4525b3547dbc3cf0b",
+      "idempotency_key": "63a41d6a4b08910c7bb7ba065be8f77c2c651f33d7b7e5e554cc294f885f4b0b",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "70cf0a761916b702f7576f3359156a8aba5ee57f",
+      "integration_id": "integration-16b45c4f1bd8b8fb6013564d",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "Five storage tiers compiled total over 38 epoch-2 collections; terminal-record compaction, four-boundary crash recovery, the append-only ledger guard and a byte-reproducible derived index all land with their criterion suites green.",
+      "policy_digest": "4cea5e97aebfdb9d181c799193c1207db34e2849fdbd5486f95bf779c274424e",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-10T15:14:43.821078Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "b48a9a07d2b1f571b1200a088c6b7c2ab64838198309ac496d000711c4fde48c",
+      "spec_digest": "f253fc9d91a5cc66da814730fecd2d021a04325a39c94f3b6be0ee696d2cb568",
+      "started_at": "2026-09-10T15:14:44.137044Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-10T15:18:52.844175Z",
+      "tokens_consumed": 268011,
+      "tree_sha": "8b4cc73fd4d5d598b2e7e40e11e71d667dea2f38",
+      "updated_at": "2026-09-10T15:18:52.844171Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W07",
+      "wave_revision_digest": "e7cca6056505a2bf607e186e6ec98fe7b4d252aa3c266814327391ba50e346d3"
+    },
     "close-98a66b478dd804addce946c3": {
       "apply_event_id": "EV-69e88f37c2dc",
       "artifact_refs": [],
@@ -21859,13 +21940,9 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260910T145445.908259Z-executor-claude-f716b87b-ab93-47c3-bd09-f8748d74741d",
-      "SES-20260910T145447.161812Z-executor-claude-cd32c0c5-fad8-4b98-97e0-76286137e07a"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [
       "P32-I01-W06",
-      "P32-I01-W07",
       "P32-I01-W12",
       "P32-I01-W26"
     ],
@@ -40519,7 +40596,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-10T14:55:06.654708Z",
+  "updated_at": "2026-09-10T15:18:52.844262Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -41501,6 +41578,22 @@
       "supersedes_id": null,
       "tree_sha": "4ddca4ece85b58c139b48af3847fc5e4d66036c4",
       "wave_id": "P31-I01-W07"
+    },
+    "integration-16b45c4f1bd8b8fb6013564d": {
+      "base_sha": "7c77336699de42455c6f3703e0bee960144d67e4",
+      "candidate_sha": "70cf0a761916b702f7576f3359156a8aba5ee57f",
+      "created_at": "2026-09-10T15:14:42.820258Z",
+      "diff_digest": "548e0b5f9f24a4f059cc69f2b539c0cf043d66b509e607af6b455b7cfabe1b85",
+      "generation": 1,
+      "id": "integration-16b45c4f1bd8b8fb6013564d",
+      "integrated_sha": "70cf0a761916b702f7576f3359156a8aba5ee57f",
+      "kind": "adopt",
+      "reason": "Cherry-picked by hand onto the phase branch so the repo hook's attribution trailer could be stripped per operator policy; verified on the parent with 92 passing tests across the four criterion suites.",
+      "spec_digest": "f253fc9d91a5cc66da814730fecd2d021a04325a39c94f3b6be0ee696d2cb568",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "8b4cc73fd4d5d598b2e7e40e11e71d667dea2f38",
+      "wave_id": "P32-I01-W07"
     },
     "integration-255c31588340e5fb494bf5d9": {
       "base_sha": "1f55e5d19f2c6a0b374fe2c5f609709ba08176cc",
@@ -165725,9 +165818,9 @@
       ],
       "claim_session_id": "SES-20260908T181952.705242Z-operator-claude-f8d50875-344c-454e-9544-3336c1d34a4d",
       "claimed_at": "2026-09-08T18:20:50.458903Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-10T15:18:52.040166Z",
+      "commit": "70cf0a761916b702f7576f3359156a8aba5ee57f",
+      "commit_identity_digest": "sha256:ec521e2dabe80797258440cbe26f864a8f571e200a98ad1cf7c112c0781bc5cf",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:58:45.117611Z",
@@ -165825,13 +165918,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-03T17:58:45.118403Z",
-      "outcome": null,
+      "outcome": "Five storage tiers compiled total over 38 epoch-2 collections; terminal-record compaction, four-boundary crash recovery, the append-only ledger guard and a byte-reproducible derived index all land with their criterion suites green.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -165908,7 +166001,7 @@
       ],
       "title": "Declare the five storage tiers and the terminal compaction transaction",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 268011,
       "worktree_id": null
     },
     "P32-I01-W08": {

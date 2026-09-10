@@ -87,7 +87,12 @@ from eawf.kernel.state.epoch2.run import (
     WorkspaceScope,
     WriteSetPath,
 )
-from eawf.kernel.state.epoch2.task import Task, TaskPriority, TaskStatus
+from eawf.kernel.state.epoch2.task import (
+    TERMINAL_TASK_STATUSES,
+    Task,
+    TaskPriority,
+    TaskStatus,
+)
 from eawf.kernel.state.epoch2.track import (
     RepoTrackScope,
     Track,
@@ -129,6 +134,7 @@ __all__ = [
     "EXCLUSIONS_NONE_MARKER",
     "MUTATING_PURPOSES",
     "SUSPENSION_ACTIVITY_BUCKETS",
+    "TERMINAL_TASK_STATUSES",
     "AcceptanceStep",
     "AcceptanceStepId",
     "ActivityBucket",

@@ -24,7 +24,14 @@ _TOOL_PATH = _REPO_ROOT / "tools" / "idle_surface_report.py"
 #: The previous 525 is not comparable: it was calibrated against the file-level
 #: proxy, which reported 600 rows of which 469 had a caller in their own
 #: defining file.
-IDLE_CEILING = 202
+#:
+#: Re-pinned from 202 for the four epoch-2 storage entry points whose only
+#: callers today are their own tests: ``compact_terminal_task`` and
+#: ``recover_store_tree`` (``kernel/store/compaction.py``),
+#: ``append_correction`` and ``guarded_ledger_write``
+#: (``kernel/store/ledger.py``). The staged importer and the recovery leg are
+#: what call them; lower this back to 202 when those land.
+IDLE_CEILING = 206
 
 
 def _load_tool() -> Any:

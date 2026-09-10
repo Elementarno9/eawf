@@ -2,6 +2,12 @@
 
 Compaction is idempotent and preserves first-seen insertion order.
 All reads and writes are performed under the portalocker advisory lock.
+
+This rewrites the file in place, which is exactly what an append-only
+ledger forbids, so a path under the reserved ``ledger/`` directory is
+refused rather than deduplicated. The two writers stay apart by
+directory: this one owns ``store/`` and the epoch-2 ledgers own
+``ledger/``.
 """
 
 from __future__ import annotations
@@ -16,6 +22,8 @@ from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds import PAYLOAD_MODELS
 from eawf.kernel.store.kinds.event import validate_event_payload
+from eawf.kernel.store.ledger import LedgerAppendOnlyError
+from eawf.kernel.store.paths import is_epoch2_ledger_path
 from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
@@ -43,8 +51,16 @@ def compact_store(path: Path) -> CompactReport:
     Returns:
         A :class:`CompactReport` with ``records_in``, ``records_out``, and
         ``dedup_count``.
+
+    Raises:
+        LedgerAppendOnlyError: The path is an epoch-2 ledger, whose lines
+            are committed history and may never be rewritten in place.
     """
     path = Path(path)
+    if is_epoch2_ledger_path(path):
+        raise LedgerAppendOnlyError(
+            f"{path} is an append-only ledger; in-place compaction would rewrite committed lines"
+        )
     if not path.exists():
         return CompactReport(0, 0, 0)
 

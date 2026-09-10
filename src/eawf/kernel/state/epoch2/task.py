@@ -68,6 +68,14 @@ _DRAFT_HEAD: Final = frozenset({TaskStatus.DRAFT, TaskStatus.DEFERRED, TaskStatu
 #: ``PLANNED`` onward the due scope is always a recorded fact.
 _UNDATED: Final = frozenset({TaskStatus.DRAFT, TaskStatus.DEFERRED, TaskStatus.DROPPED})
 
+#: The three states a Task never leaves, and therefore the three from
+#: which its record moves out of the document and into the ledger. The
+#: draft-head states are not here: a ``DROPPED`` Task never entered
+#: delivery, so it carries no history a ledger line would preserve.
+TERMINAL_TASK_STATUSES: Final[frozenset[TaskStatus]] = frozenset(
+    {TaskStatus.COMPLETED, TaskStatus.CANCELLED, TaskStatus.FAILED}
+)
+
 
 class Task(Epoch2Record):
     """One unit of work, from backlog idea to integrated delivery.
@@ -144,6 +152,7 @@ class Task(Epoch2Record):
 
 
 __all__ = [
+    "TERMINAL_TASK_STATUSES",
     "Task",
     "TaskPriority",
     "TaskStatus",
