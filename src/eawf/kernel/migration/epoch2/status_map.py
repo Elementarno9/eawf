@@ -54,11 +54,14 @@ ITER_STATUS_MAP: Mapping[str, str] = MappingProxyType(
     }
 )
 
+# Every key is the source status verbatim, so the in-flight wave reads
+# ``in_progress`` here — the spelling the epoch-1 corpus writes — even
+# though the epoch-2 status it lands on is named RUNNING.
 WAVE_STATUS_MAP: Mapping[str, str] = MappingProxyType(
     {
         "pending": "PLANNED",
         "claimed": "CLAIMED",
-        "running": "RUNNING",
+        "in_progress": "RUNNING",
         "closed": "COMPLETED",
         "abandoned": "CANCELLED",
         "failed": "FAILED",
