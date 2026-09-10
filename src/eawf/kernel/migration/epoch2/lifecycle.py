@@ -17,8 +17,10 @@ validate and make it wrong.
 The same rule governs references. A claim-session id is carried as a
 string on the envelope and only additionally resolved when the source
 really holds that session; a Run is minted only from a claim that
-resolves or from a recorded attempt; and a Track that the source cannot
-name uniquely leaves the Milestone unassigned rather than guessing.
+resolves or from a recorded attempt, under the rules in
+:mod:`~eawf.kernel.migration.epoch2.runs`; and a Track that the source
+cannot name uniquely leaves the Milestone unassigned rather than
+guessing.
 """
 
 from __future__ import annotations
@@ -33,14 +35,22 @@ from pydantic import Field
 from eawf.kernel.migration.epoch2.backlog import BacklogResolution
 from eawf.kernel.migration.epoch2.criteria import ImportedCriterion
 from eawf.kernel.migration.epoch2.errors import MigrationCountMismatchError
-from eawf.kernel.migration.epoch2.rules import StrictMigrationModel, rule_digest
+from eawf.kernel.migration.epoch2.origins import build_legacy_origin
+from eawf.kernel.migration.epoch2.rules import StrictMigrationModel
+from eawf.kernel.migration.epoch2.runs import (
+    MintedRun,
+    ReportBindingIndex,
+    mint_attempt_runs,
+    mint_claim_run,
+    run_rule_payload,
+)
 from eawf.kernel.migration.epoch2.status_map import (
     SourceLifecycle,
     apply_annotated_defaults,
     compact_annotations,
     map_source_status,
 )
-from eawf.kernel.state.epoch2.values import EntityOrigin, MappingBasis, OriginConfidence
+from eawf.kernel.state.epoch2.values import EntityOrigin, OriginConfidence
 from eawf.kernel.state.models import BacklogItem, Iter, Phase, Wave
 
 logger = logging.getLogger(__name__)
@@ -58,15 +68,6 @@ SOURCE_COLLECTIONS: Mapping[SourceLifecycle, str] = {
 #: of the source intent brief is carried on ``legacy_refs`` unchanged.
 INTENT_NATIVE_SOURCE_KEY = "desired_outcome"
 
-#: A run minted from an imported source is never claimed to have
-#: succeeded: success needs a bound role report, which the source row
-#: does not carry, so every imported run lands unclassified.
-UNCLASSIFIED_RUN_STATUS = "TERMINAL_UNCLASSIFIED"
-
-#: Both facts a run needs before it may claim success. Neither is
-#: reconstructible from a lifecycle row alone.
-RUN_SUCCESS_REQUIREMENTS: tuple[str, ...] = ("bound_role_report", "exit_status_zero")
-
 #: Where a legacy claim-session id lands, and what it becomes when the
 #: source really holds the session it names.
 CLAIM_SESSION_SOURCE_FIELD = "claim_session_id"
@@ -75,7 +76,6 @@ CLAIM_SESSION_RESOLVING_FIELD = "legacy_session_ref"
 EMPTY_CLAIM_IMPORTS_AS = "absent_field"
 
 TRACK_UNASSIGNED_ANNOTATION = "track_unassigned_no_unique_source_candidate"
-ATTEMPT_RUN_ID_SEPARATOR = "#attempt-"
 
 
 class LifecycleTarget(StrEnum):
@@ -324,21 +324,6 @@ HEAD_BOUND_BATCH_STATUSES: frozenset[str] = frozenset(
 DRAFT_HEAD_STATUSES: frozenset[str] = frozenset({"DRAFT", "DEFERRED", "DROPPED"})
 
 
-class RunSource(StrEnum):
-    """The only two source facts a Run may be minted from."""
-
-    RESOLVING_CLAIM = "resolving_claimed_wave_id"
-    WAVE_ATTEMPT = "wave_attempt_entry"
-
-
-class MintedRun(StrictMigrationModel):
-    """One Run the source really supports, with the fact that supports it."""
-
-    run_source: RunSource
-    source_id: Annotated[str, Field(min_length=1)]
-    status: Annotated[str, Field(min_length=1)]
-
-
 class TrackAssignment(StrictMigrationModel):
     """Which Track owns a Milestone, when the source can say.
 
@@ -363,18 +348,31 @@ class LifecycleSourceIndex(StrictMigrationModel):
             the rows came from; it is stamped on every imported origin.
         track_ids: Every track the source holds, in source order.
         session_ids: Every agent-session id the source holds.
+        report_bindings: Which provider sessions a role report can speak
+            for, which is what lets a minted Run claim an outcome.
     """
 
     source_schema_version: Annotated[str, Field(min_length=1)]
     track_ids: tuple[str, ...]
     session_ids: frozenset[str]
+    report_bindings: ReportBindingIndex
 
     @classmethod
-    def build(cls, document: Mapping[str, Any]) -> LifecycleSourceIndex:
+    def build(
+        cls,
+        document: Mapping[str, Any],
+        *,
+        report_rows: Iterable[Mapping[str, Any]],
+    ) -> LifecycleSourceIndex:
         """Read the resolution populations out of one epoch-1 document.
 
         Args:
             document: The decoded epoch-1 state document.
+            report_rows: Every role-report ledger row the snapshot holds.
+                The argument is required rather than defaulted: an index
+                built from no reports classifies every minted Run
+                unclassified, and a caller that forgot to pass them would
+                read that as a fact about the corpus.
 
         Returns:
             The index, ready to map rows against.
@@ -396,6 +394,7 @@ class LifecycleSourceIndex(StrictMigrationModel):
             source_schema_version=version,
             track_ids=tuple(tracks) if isinstance(tracks, dict) else (),
             session_ids=frozenset(sessions) if isinstance(sessions, dict) else frozenset(),
+            report_bindings=ReportBindingIndex.build(document=document, report_rows=report_rows),
         )
 
     def resolve_track(self, track_id: Any) -> TrackAssignment:
@@ -468,22 +467,6 @@ class ImportedLifecycleRecord(StrictMigrationModel):
         return tuple(field.target_field for field in self.deferred_fields)
 
 
-def _source_digest(row: Mapping[str, Any]) -> str:
-    """Return the prefixed sha256 digest of one source row.
-
-    Args:
-        row: The source row, read only.
-
-    Returns:
-        The digest in ``sha256:<hex>`` form, which is what an epoch-2
-        origin's ``source_digest`` field admits.
-
-    Raises:
-        TypeError: When the row holds a value ``json`` cannot encode.
-    """
-    return f"sha256:{rule_digest(row)}"
-
-
 def _origin(
     *,
     lifecycle: SourceLifecycle,
@@ -502,20 +485,16 @@ def _origin(
         confidence: How much the mapping of this row is trusted.
 
     Returns:
-        The origin, always ``kind='legacy'`` with a mechanical basis: the
-        conversion is a table lookup, not an observation or a judgement.
+        The origin, always ``kind='legacy'``.
 
     Raises:
         ValidationError: When a field violates the origin contract.
     """
-    basis: MappingBasis = "mechanical"
-    return EntityOrigin(
-        kind="legacy",
-        source_schema_version=index.source_schema_version,
+    return build_legacy_origin(
         source_kind=SOURCE_COLLECTIONS[lifecycle],
         source_id=source_id,
-        source_digest=_source_digest(row),
-        mapping_basis=basis,
+        row=row,
+        source_schema_version=index.source_schema_version,
         confidence=confidence,
     )
 
@@ -639,11 +618,12 @@ def _carry_intent_brief(*, row: Mapping[str, Any], legacy_refs: dict[str, Any]) 
 
 
 def _claim_session(
-    *, row: Mapping[str, Any], index: LifecycleSourceIndex
+    *, source_id: str, row: Mapping[str, Any], index: LifecycleSourceIndex
 ) -> tuple[str | None, str | None, tuple[MintedRun, ...]]:
     """Read a wave's claimed session without minting one that never existed.
 
     Args:
+        source_id: The claiming wave's own id.
         row: The source wave row.
         index: The source index holding the session population.
 
@@ -659,52 +639,7 @@ def _claim_session(
         return None, None, ()
     if raw not in index.session_ids:
         return raw, None, ()
-    return (
-        raw,
-        raw,
-        (
-            MintedRun(
-                run_source=RunSource.RESOLVING_CLAIM,
-                source_id=raw,
-                status=UNCLASSIFIED_RUN_STATUS,
-            ),
-        ),
-    )
-
-
-def _attempt_runs(*, source_id: str, row: Mapping[str, Any]) -> tuple[MintedRun, ...]:
-    """Mint one Run per recorded dispatch attempt, in attempt order.
-
-    An attempt is a fact: the source says a subprocess ran. Its outcome
-    is not, so every minted run is unclassified even when the attempt
-    exited zero, because success also needs a bound role report the
-    lifecycle row does not carry.
-
-    Args:
-        source_id: The wave's own id, used to address a nameless attempt.
-        row: The source wave row.
-
-    Returns:
-        The minted runs, keyed in sorted attempt order so two passes over
-        one row agree.
-    """
-    attempts = row.get("sessions")
-    if not isinstance(attempts, Mapping):
-        return ()
-    runs: list[MintedRun] = []
-    for key in sorted(attempts, key=str):
-        attempt = attempts[key]
-        session_id = attempt.get("session_id") if isinstance(attempt, Mapping) else None
-        if not isinstance(session_id, str) or not session_id:
-            session_id = f"{source_id}{ATTEMPT_RUN_ID_SEPARATOR}{key}"
-        runs.append(
-            MintedRun(
-                run_source=RunSource.WAVE_ATTEMPT,
-                source_id=session_id,
-                status=UNCLASSIFIED_RUN_STATUS,
-            )
-        )
-    return tuple(runs)
+    return raw, raw, (mint_claim_run(wave_id=source_id, provider_session_id=raw),)
 
 
 def _unrecorded(fields: Iterable[str]) -> list[DeferredField]:
@@ -904,7 +839,7 @@ def map_wave_row(
     record["status"] = target_status
     _carry_intent_brief(row=row, legacy_refs=legacy_refs)
 
-    carried, resolving, claim_runs = _claim_session(row=row, index=index)
+    carried, resolving, claim_runs = _claim_session(source_id=source_id, row=row, index=index)
     if carried is None:
         legacy_refs.pop(CLAIM_SESSION_SOURCE_FIELD, None)
     else:
@@ -934,7 +869,8 @@ def map_wave_row(
         legacy_refs=legacy_refs,
         legacy_session_ref=resolving,
         criteria=criteria,
-        minted_runs=claim_runs + _attempt_runs(source_id=source_id, row=row),
+        minted_runs=claim_runs
+        + mint_attempt_runs(wave_id=source_id, row=row, bindings=index.report_bindings),
         deferred_fields=tuple(deferred),
         resolution=None,
         obsolete=False,
@@ -1044,11 +980,7 @@ def lifecycle_rule_payload() -> dict[str, Any]:
             "task": list(TASK_UNRECORDED_FIELDS),
             "reasons": sorted(reason.value for reason in DeferralReason),
         },
-        "runs": {
-            "mints_run_from": [source.value for source in RunSource],
-            "default_run_status": UNCLASSIFIED_RUN_STATUS,
-            "succeeded_requires": list(RUN_SUCCESS_REQUIREMENTS),
-        },
+        "runs": run_rule_payload(),
         "claim_session": {
             "legacy_field": CLAIM_SESSION_LEGACY_FIELD,
             "resolving_extra_field": CLAIM_SESSION_RESOLVING_FIELD,

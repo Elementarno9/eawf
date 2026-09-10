@@ -90,7 +90,8 @@ def _index() -> LifecycleSourceIndex:
             "schema_version": SOURCE_SCHEMA_VERSION,
             "tracks": {"TRK-CORE": {"id": "TRK-CORE"}, "TRK-PLAT": {"id": "TRK-PLAT"}},
             "agent_sessions": {"S001": {"id": "S001"}},
-        }
+        },
+        report_rows=(),
     )
 
 
@@ -361,11 +362,11 @@ def test_map_wave_row_defers_criteria_only_when_the_source_recorded_none() -> No
 
 def test_lifecycle_source_index_build_without_a_schema_version_raises() -> None:
     with pytest.raises(MigrationCountMismatchError, match="schema_version"):
-        LifecycleSourceIndex.build({"tracks": None})
+        LifecycleSourceIndex.build({"tracks": None}, report_rows=())
 
 
 def test_lifecycle_source_index_build_reads_a_document_with_no_tracks() -> None:
-    index = LifecycleSourceIndex.build({"schema_version": "1.19", "tracks": None})
+    index = LifecycleSourceIndex.build({"schema_version": "1.19", "tracks": None}, report_rows=())
 
     assert index.track_ids == ()
     assert index.session_ids == frozenset()

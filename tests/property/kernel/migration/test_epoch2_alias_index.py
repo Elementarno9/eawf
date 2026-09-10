@@ -25,10 +25,10 @@ from eawf.kernel.migration.epoch2.lifecycle import (
     CLAIM_SESSION_RESOLVING_FIELD,
     CLAIM_SESSION_SOURCE_FIELD,
     EMPTY_CLAIM_IMPORTS_AS,
-    RunSource,
     map_wave_row,
 )
 from eawf.kernel.migration.epoch2.plan import LifecycleImportPlan
+from eawf.kernel.migration.epoch2.runs import RunSource
 from tests.property.kernel.migration.conftest import (
     DANGLING_SESSION_ID,
     RESOLVING_SESSION_ID,

@@ -43,7 +43,9 @@ def test_backlog_import_plan_build_over_the_epoch1_full_corpus(
     assert all(row.resolution is None for row in plan.rows if row.target_status == "DRAFT")
     assert tuple(rule.rule_id for rule in plan.mapping_rules) == (
         "DOM-004",
+        "DOM-017",
         "DOM-018",
+        "DOM-019",
         "DOM-041",
         "DOM-043",
         "DOM-044",
