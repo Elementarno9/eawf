@@ -26,6 +26,8 @@ from eawf.kernel.migration.epoch2.status_map import (
     compact_annotations,
     map_source_status,
 )
+from eawf.kernel.state.enums import WaveStatus
+from eawf.kernel.state.epoch2.task import TaskStatus
 
 
 @pytest.mark.parametrize(
@@ -59,6 +61,34 @@ def test_map_source_status_abandoned_is_cancelled_never_completed() -> None:
     assert ITER_STATUS_MAP["abandoned"] != "COMPLETED"
     assert map_source_status(SourceLifecycle.WAVE, "abandoned") == "CANCELLED"
     assert WAVE_STATUS_MAP["abandoned"] != "COMPLETED"
+
+
+def test_wave_status_map_keys_match_the_wave_status_enum_exactly() -> None:
+    """The wave map is keyed off the enum, not off the statuses a corpus happens to hold.
+
+    Set equality reads in both directions at once: no member may go
+    unmapped, and no retired spelling may survive alongside the current
+    one as a second accepted key.
+    """
+    assert set(WAVE_STATUS_MAP) == {status.value for status in WaveStatus}
+
+
+@pytest.mark.parametrize("status", list(WaveStatus), ids=lambda status: status.value)
+def test_map_source_status_classifies_every_wave_status_member(status: WaveStatus) -> None:
+    """Every member classifies, so a rename or an addition reds here and not on a live corpus."""
+    assert map_source_status(SourceLifecycle.WAVE, status.value) in {
+        member.value for member in TaskStatus
+    }
+
+
+def test_map_source_status_maps_the_in_flight_wave_status() -> None:
+    assert map_source_status(SourceLifecycle.WAVE, WaveStatus.IN_PROGRESS.value) == "RUNNING"
+
+
+def test_map_source_status_retired_in_flight_spelling_raises_count_mismatch() -> None:
+    """The source never wrote ``running``; accepting it would import a status nobody recorded."""
+    with pytest.raises(MigrationCountMismatchError, match="outside the closed status map"):
+        map_source_status(SourceLifecycle.WAVE, "running")
 
 
 def test_map_source_status_only_closed_reaches_completed() -> None:
