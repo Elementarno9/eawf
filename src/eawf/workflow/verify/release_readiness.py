@@ -17,11 +17,10 @@ sweep.
 The *required* subset is derived, never authored twice: it is exactly
 the rows the checkpoint's ``gates.required`` list binds -- through the
 gate binding table of :mod:`eawf.kernel.release.gate_binding`, which is
-the one declaration of what each gate reads -- plus the rows the three
+the one declaration of what each gate reads -- plus the rows the two
 configuration flags imply (tree cleanliness under ``require_clean_tree``,
-ancestry under ``require_ancestor_of_remote``, credentials whenever any
-target is required). A second authored list would be free to drift from
-the first, so there is no such list.
+ancestry under ``require_ancestor_of_remote``). A second authored list
+would be free to drift from the first, so there is no such list.
 
 The readiness object therefore carries two blocks over one set of facts.
 The twelve **signal** rows are what the sweep established; the eight
@@ -416,18 +415,16 @@ def derive_required_signals(config: ReleaseConfig) -> tuple[ReleaseSignalName, .
 
     The subset is a function of one authored surface: the rows bound by
     ``gates.required``, plus tree cleanliness when ``require_clean_tree``
-    is set, plus ancestry when ``require_ancestor_of_remote`` is set,
-    plus credentials when a required target declares a
-    ``credential_handle``. There is deliberately no second authored list
-    to drift from this derivation.
+    is set, plus ancestry when ``require_ancestor_of_remote`` is set.
+    There is deliberately no second authored list to drift from this
+    derivation.
 
-    Credentials keys off the declared handle rather than off the mere
-    presence of a required target: the row asserts that a required
-    handle is available, which is unanswerable for a target that holds
-    no handle at all. PyPI trusted publishing exchanges an OIDC token at
-    publish time and the GitHub release rides the ambient workflow
-    token, so requiring the row for those made the sweep permanently
-    unready rather than more careful.
+    Credentials is never derived. Every target on this train
+    authenticates without holding a named secret, so the row asserts
+    something no shipped checkpoint can answer; requiring it would make
+    the sweep permanently unready and probing it could only ever return
+    a green that measures nothing. The row stays in the signal
+    vocabulary and reports ``unavailable``.
 
     Args:
         config: Loaded checkpoint configuration.
@@ -450,8 +447,6 @@ def derive_required_signals(config: ReleaseConfig) -> tuple[ReleaseSignalName, .
         required.add(ReleaseSignalName.TREE_CLEANLINESS)
     if config.require_ancestor_of_remote:
         required.add(ReleaseSignalName.ANCESTRY)
-    if any(target.required and target.credential_handle is not None for target in config.targets):
-        required.add(ReleaseSignalName.CREDENTIALS)
     return tuple(name for name in ReleaseSignalName if name in required)
 
 

@@ -100,27 +100,16 @@ def _ready_inputs(repo_root: Path) -> TagPreflightInputs:
     )
 
 
-def _sweep(
-    inputs: TagPreflightInputs, *, credential_handle: str | None = None
-) -> dict[ReleaseSignalName, ReleaseSignalStatus]:
+def _sweep(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, ReleaseSignalStatus]:
     """Return each row's status for *inputs*.
 
     Args:
         inputs: The tag-preflight inputs the probes read.
-        credential_handle: Handle to declare on the npm target before
-            sweeping. No shipped target declares one -- every dev1 target
-            authenticates by OIDC or the ambient workflow token -- so a
-            test about the handle probe must supply one to have anything
-            to probe.
 
     Returns:
         Status by signal name.
     """
     body = yaml.safe_load(checkpoint_config_yaml(DEV1_VERSION))
-    if credential_handle is not None:
-        for target in body["release"]["targets"]:
-            if target["target_id"] == "npm":
-                target["credential_handle"] = credential_handle
     config = load_release_config(body, train=V07_TRAIN)
     readiness = compute_readiness(
         config,
@@ -329,36 +318,17 @@ def test_tag_preflight_leaves_producerless_signals_unavailable(tmp_path: Path) -
     assert statuses[ReleaseSignalName.ARTIFACTS] is ReleaseSignalStatus.UNAVAILABLE
 
 
-def test_tag_preflight_credentials_reds_when_the_declared_handle_is_unset(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """An unset publication handle is a FAIL, not an absent producer.
+def test_tag_preflight_credentials_reports_no_producer(tmp_path: Path) -> None:
+    """The sunset probe leaves the row UNAVAILABLE rather than a free green.
 
-    The distinction matters: UNAVAILABLE says nobody can answer, and the
-    operator waits for a producer. FAIL says the answer is no, and the
-    operator exports the handle.
+    Every target on this train authenticates by OIDC or the ambient
+    workflow token, so no shipped checkpoint holds a handle for the
+    probe to look for. UNAVAILABLE says nobody can answer, which is the
+    honest report; the removed probe said PASS, which was a green row
+    that measured nothing.
     """
-    monkeypatch.delenv("NPM_TOKEN", raising=False)
-    statuses = _sweep(_ready_inputs(_init_published_repo(tmp_path)), credential_handle="NPM_TOKEN")
-    assert statuses[ReleaseSignalName.CREDENTIALS] is ReleaseSignalStatus.FAIL
-
-
-def test_tag_preflight_credentials_passes_when_the_declared_handle_is_set(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The handle being present clears the row; its value is never read."""
-    monkeypatch.setenv("NPM_TOKEN", "presence-is-all-that-is-checked")
-    statuses = _sweep(_ready_inputs(_init_published_repo(tmp_path)), credential_handle="NPM_TOKEN")
-    assert statuses[ReleaseSignalName.CREDENTIALS] is ReleaseSignalStatus.PASS
-
-
-def test_tag_preflight_credentials_ignores_an_empty_handle(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """An empty handle is unset: a blank secret authenticates nothing."""
-    monkeypatch.setenv("NPM_TOKEN", "")
-    statuses = _sweep(_ready_inputs(_init_published_repo(tmp_path)), credential_handle="NPM_TOKEN")
-    assert statuses[ReleaseSignalName.CREDENTIALS] is ReleaseSignalStatus.FAIL
+    statuses = _sweep(_ready_inputs(_init_published_repo(tmp_path)))
+    assert statuses[ReleaseSignalName.CREDENTIALS] is ReleaseSignalStatus.UNAVAILABLE
 
 
 def test_tag_preflight_tree_cleanliness_reds_on_one_uncommitted_path(tmp_path: Path) -> None:
