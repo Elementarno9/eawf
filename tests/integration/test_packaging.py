@@ -12,7 +12,9 @@ Covers the three load-bearing guarantees of P27-W27:
   service templates under ``eawf/_data/service_templates/`` and stays
   under the ``[tool.eawf.bundle] wheel_max_bytes`` ceiling. Skipped
   cleanly when the build environment is unavailable; the assertions are
-  real whenever the wheel builds.
+  real whenever the wheel builds. The ceiling itself is proven to bite by
+  driving the same comparison with an oversize measurement, so raising the
+  budget cannot quietly turn the gate into a no-op.
 - **Generated-data delivery** — the wheel carries ``eawf/_data/`` through
   exactly one mechanism (the ``packages`` glob, un-ignored via
   ``artifacts``), so a build in a tree where the hook already wrote that
@@ -238,6 +240,23 @@ def _build_wheel(out_dir: Path) -> Path | None:
     return wheels[0]
 
 
+def _assert_wheel_within_ceiling(size: int, ceiling: int) -> None:
+    """Assert a measured wheel *size* fits under the configured *ceiling*.
+
+    The comparison is a named helper rather than an inline ``assert`` so a
+    test can drive it with an oversize measurement and watch it red. A
+    budget nobody has seen bite is a constant, not a gate.
+
+    Args:
+        size: Byte size measured from a built ``.whl``.
+        ceiling: The ``[tool.eawf.bundle] wheel_max_bytes`` budget.
+
+    Raises:
+        AssertionError: when *size* exceeds *ceiling*.
+    """
+    assert size <= ceiling, f"wheel {size} bytes exceeds ceiling {ceiling}"
+
+
 def test_wheel_bundles_service_templates_under_size_ceiling(tmp_path: Path) -> None:
     """The built wheel ships the service templates and stays under budget."""
     wheel = _build_wheel(tmp_path / "dist")
@@ -245,15 +264,39 @@ def test_wheel_bundles_service_templates_under_size_ceiling(tmp_path: Path) -> N
         pytest.skip("uv build unavailable in this environment")
 
     config = _bundle_config()
-    ceiling = config["wheel_max_bytes"]
-    size = wheel.stat().st_size
-    assert size <= ceiling, f"wheel {size} bytes exceeds ceiling {ceiling}"
+    _assert_wheel_within_ceiling(wheel.stat().st_size, config["wheel_max_bytes"])
 
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
     for template in config["service_templates"]:
         member = f"eawf/_data/service_templates/{template}"
         assert member in names, f"missing bundled template: {member}"
+
+
+@pytest.mark.parametrize("excess", [1, 512, 2 * 1024 * 1024])
+def test_wheel_size_ceiling_reds_on_an_oversize_measurement(excess: int) -> None:
+    """A wheel measured past the shipped budget FAILS the gate's comparison.
+
+    Drives the real ``wheel_max_bytes`` this repo ships through the same
+    helper the gate calls, with a measurement over it — one byte over, half
+    a kilobyte over, and the couple of megabytes an accidentally bundled
+    plugin or docs tree would add. Raising the budget therefore cannot
+    disarm the gate without reddening here.
+    """
+    ceiling = _bundle_config()["wheel_max_bytes"]
+    with pytest.raises(AssertionError, match=f"exceeds ceiling {ceiling}"):
+        _assert_wheel_within_ceiling(ceiling + excess, ceiling)
+
+
+def test_wheel_size_ceiling_admits_measurements_up_to_the_budget() -> None:
+    """Empty, single-byte, one-under, and exactly-at-budget all pass.
+
+    The other half of the off-by-one: the gate reds strictly *above* the
+    budget, so a wheel that exactly fills it is still shippable.
+    """
+    ceiling = _bundle_config()["wheel_max_bytes"]
+    for size in (0, 1, ceiling - 1, ceiling):
+        _assert_wheel_within_ceiling(size, ceiling)
 
 
 def test_wheel_metadata_version_matches_single_source(tmp_path: Path) -> None:
