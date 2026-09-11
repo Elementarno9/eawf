@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import copy
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -32,8 +32,15 @@ from eawf.kernel.release.signals import (
     ReleaseSignalProbe,
     ReleaseSignalStatus,
 )
-from eawf.kernel.spec.release import Release, ReleaseChannel, ReleaseStatus
+from eawf.kernel.spec.release import (
+    AdoptedTargetObservation,
+    Release,
+    ReleaseAdoption,
+    ReleaseChannel,
+    ReleaseStatus,
+)
 from eawf.kernel.spec.release_config import ReleaseConfig, load_release_config
+from eawf.workflow.release.advance import draft_release_for
 from eawf.workflow.release.observation import (
     FrozenManifest,
     ObservationRequest,
@@ -123,6 +130,101 @@ def release_record(**overrides: Any) -> Release:
     }
     payload.update(overrides)
     return Release(**payload)
+
+
+#: The four targets ``0.7.0.dev1`` reached without a release record, and
+#: the state each was independently read back in. ``plugins-dist`` is
+#: deliberately here and deliberately absent from the authored
+#: configuration: an uncontrolled publication can reach somewhere the
+#: checkpoint never declared, and a fixture that drops that row would
+#: test a tidier incident than the one that happened.
+ADOPTED_TARGET_DETAIL: Mapping[str, tuple[str, str]] = {
+    "pypi": (
+        "observed_mismatch",
+        "holds the 2026-09-07 wheel and source distribution, built from a "
+        "commit neither later tag target names; the filename cannot be reused",
+    ),
+    "npm": (
+        "observed_success",
+        "the next dist-tag resolves 0.7.0-dev.1 from the final tag target; latest is untouched",
+    ),
+    "github": (
+        "observed_mismatch",
+        "the source-host release exists with zero assets and prerelease false, "
+        "targeting the default branch rather than the tagged commit",
+    ),
+    "plugins-dist": (
+        "observed_mismatch",
+        "the version directory holds the 2026-09-07 render and refused both "
+        "later publications; no configured leg declares this target",
+    ),
+}
+
+#: The reason the dev1 adoption carries. A terminal record has no later
+#: transition that could explain it, so the explanation arrives here.
+ADOPTION_REASON = (
+    "0.7.0.dev1 was published to four targets with no release record open, and "
+    "the tag was then moved twice over already-published artifacts, so the "
+    "targets disagree on which commit the version denotes; the version is spent "
+    "and is superseded by 0.7.0.dev2"
+)
+
+#: The incident the dev1 adoption disposes of.
+ADOPTION_INCIDENT_REF = "INC-P32-01"
+
+#: Identity the adoption fixtures mint for the dev1 record.
+DEV1_DRAFT_UID = UUID(int=744)
+
+
+def adopted_observation(target_id: str, **overrides: Any) -> AdoptedTargetObservation:
+    """Return the recorded read-back of one out-of-band dev1 target.
+
+    Args:
+        target_id: One key of :data:`ADOPTED_TARGET_DETAIL`.
+        **overrides: Field overrides applied to the built row.
+
+    Returns:
+        The observation row.
+    """
+    status, detail = ADOPTED_TARGET_DETAIL[target_id]
+    payload: dict[str, Any] = {
+        "target_id": target_id,
+        "observed_status": status,
+        "observed_at": NOW,
+        "evidence_ref": f"observation://adopted/{target_id}/eawf@0.7.0.dev1",
+        "detail": detail,
+    }
+    payload.update(overrides)
+    return AdoptedTargetObservation(**payload)
+
+
+def dev1_adoption(*, targets: Sequence[str] | None = None, **overrides: Any) -> ReleaseAdoption:
+    """Return the dev1 adoption over *targets*, defaulting to all four.
+
+    Args:
+        targets: Target ids to observe. ``None`` observes every row of
+            :data:`ADOPTED_TARGET_DETAIL`.
+        **overrides: Field overrides applied to the built adoption.
+
+    Returns:
+        The adoption record.
+    """
+    chosen = tuple(ADOPTED_TARGET_DETAIL) if targets is None else tuple(targets)
+    payload: dict[str, Any] = {
+        "adopted_at": NOW,
+        "reason": ADOPTION_REASON,
+        "incident_ref": ADOPTION_INCIDENT_REF,
+        "observations": tuple(adopted_observation(target) for target in chosen),
+    }
+    payload.update(overrides)
+    return ReleaseAdoption(**payload)
+
+
+def dev1_draft(uid: UUID | None = None) -> Release:
+    """Return a fresh DRAFT dev1 record, exactly as the train opens it."""
+    return draft_release_for(
+        V07_TRAIN.checkpoint_for_version("0.7.0.dev1"), uid=uid or DEV1_DRAFT_UID
+    )
 
 
 def fixed_probe(status: ReleaseSignalStatus) -> ReleaseSignalProbe:

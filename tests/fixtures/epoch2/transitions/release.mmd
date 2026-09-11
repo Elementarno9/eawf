@@ -13,6 +13,8 @@ stateDiagram-v2
     released
     partially_released
     draft --> candidate: pinned [manifest_complete]
+    draft --> cancelled: cancelled [no_external_effect]
+    draft --> partially_released: burned [recovery_exhausted]
     candidate --> preflight_failed: preflight_failed [none]
     candidate --> draft: invalidated [no_external_effect]
     candidate --> cancelled: cancelled [no_external_effect]

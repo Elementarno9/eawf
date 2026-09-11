@@ -783,6 +783,20 @@ _RELEASE_ROWS: Final[tuple[TransitionRow, ...]] = (
     ),
     TransitionRow(
         entity=LifecycleEntity.RELEASE,
+        frm=ReleaseStatus.DRAFT,
+        to=ReleaseStatus.CANCELLED,
+        verb=TransitionVerb.CANCELLED,
+        guards=(TransitionGuard.NO_EXTERNAL_EFFECT,),
+    ),
+    TransitionRow(
+        entity=LifecycleEntity.RELEASE,
+        frm=ReleaseStatus.DRAFT,
+        to=ReleaseStatus.PARTIALLY_RELEASED,
+        verb=TransitionVerb.BURNED,
+        guards=(TransitionGuard.RECOVERY_EXHAUSTED,),
+    ),
+    TransitionRow(
+        entity=LifecycleEntity.RELEASE,
         frm=ReleaseStatus.CANDIDATE,
         to=ReleaseStatus.PREFLIGHT_FAILED,
         verb=TransitionVerb.PREFLIGHT_FAILED,

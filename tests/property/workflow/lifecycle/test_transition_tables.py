@@ -331,10 +331,17 @@ def test_validate_transition_matches_reference_for_all_wave_pairs(
 
 #: Reference edge-set for the Release table, derived independently from the
 #: release lifecycle diagram: pin, the deterministic preflight result, the
-#: three pre-effect returns to DRAFT, the two cancellations, approval,
-#: publication, timeout, verification, observation and recovery.
+#: three pre-effect returns to DRAFT, the three cancellations, approval,
+#: publication, timeout, verification, observation, recovery and the two
+#: burns -- the exhausted one out of RECOVERING and the operationless one
+#: out of DRAFT, which is where an adopted out-of-band publication stops.
 _RELEASE_REFERENCE: dict[tuple[ReleaseStatus, ReleaseStatus], ReleaseGuardName] = {
     (ReleaseStatus.DRAFT, ReleaseStatus.CANDIDATE): ReleaseGuardName.MANIFEST_COMPLETE,
+    (ReleaseStatus.DRAFT, ReleaseStatus.CANCELLED): ReleaseGuardName.NO_EXTERNAL_EFFECT,
+    (
+        ReleaseStatus.DRAFT,
+        ReleaseStatus.PARTIALLY_RELEASED,
+    ): ReleaseGuardName.RECOVERY_EXHAUSTED,
     (ReleaseStatus.CANDIDATE, ReleaseStatus.PREFLIGHT_FAILED): ReleaseGuardName.NONE,
     (ReleaseStatus.CANDIDATE, ReleaseStatus.DRAFT): ReleaseGuardName.NO_EXTERNAL_EFFECT,
     (ReleaseStatus.CANDIDATE, ReleaseStatus.CANCELLED): ReleaseGuardName.NO_EXTERNAL_EFFECT,

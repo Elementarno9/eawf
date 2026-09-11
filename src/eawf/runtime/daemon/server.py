@@ -47,7 +47,8 @@ import eawf.runtime.daemon.methods.migration  # registers migration.epoch2.plan
 import eawf.runtime.daemon.methods.needs_user  # registers needs_user.{raise,resolve,park}
 import eawf.runtime.daemon.methods.registry  # registers registry.read / registry.update (W10)
 import eawf.runtime.daemon.methods.registry_workspace  # registers registry.workspace.*
-import eawf.runtime.daemon.methods.release  # registers the nine release.* verbs
+import eawf.runtime.daemon.methods.release  # registers the ten release.* publication verbs
+import eawf.runtime.daemon.methods.release_disposition  # registers release.adopt / release.cancel
 import eawf.runtime.daemon.methods.research  # registers research.create_campaign (P29-I09-W07)
 import eawf.runtime.daemon.methods.spec  # registers spec.{init,validate,promote,archive} (P25-W03)
 import eawf.runtime.daemon.methods.spec_convert  # registers spec.convert_legacy (P30-I23-W24)

@@ -467,9 +467,11 @@ Tag releases and drive the release train's checkpoint records.
 
 | Verb | Summary |
 |---|---|
+| `adopt` | Adopt a publication that ran without a release record. |
 | `advance` | Walk the train onto its next rung, or refuse and change nothing. |
 | `approve` | Approve a candidate against a readiness sweep, and record it. |
 | `burn` | Burn the version: record the spent checkpoint as partially released. |
+| `cancel` | Abandon a checkpoint that never touched a registry, or refuse. |
 | `changelog` | Mine the current ``CHANGELOG.md`` unreleased section. |
 | `create` | Open one checkpoint's DRAFT record, after measured admission. |
 | `notes` | Render a scrubbed release-notes draft. |

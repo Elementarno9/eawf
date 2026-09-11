@@ -56,10 +56,12 @@ EXPECTED_SITES = frozenset(
     {
         "ledger:record_operation",
         "lifecycle:advance_release",
+        "lifecycle:cancel_release",
         "preflight:approve_release",
         "preflight:record_preflight_result",
         "publication:begin_publication",
         "publication:begin_verification",
+        "publication:_burn_adopted",
         "publication:burn_release",
         "publication:reconcile_target",
         "publication:retry_publication",
