@@ -24,6 +24,10 @@ Verbs:
 - ``eawf migrate epoch2 --export`` — read-only epoch-1 collection export.
 - ``eawf migrate epoch2 --apply --plan-digest <d>`` — build and select a
   new generation in a tree that has declared itself disposable.
+- ``eawf migrate epoch2 --recover [--manifest <p>]`` — finish or undo an
+  interrupted cutover, whichever the tree's boundary allows.
+- ``eawf migrate epoch2 --rollback [--manifest <p>]`` — put a tree back to
+  the surfaces its restore point pinned.
 
 Exit codes:
 
@@ -42,7 +46,7 @@ from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Final
 
 import typer
 from pydantic import ValidationError as PydanticValidationError
@@ -65,6 +69,13 @@ from eawf.kernel.migration.epoch2.plan_mode import (
     Epoch2PlanRequest,
     plan_cutover,
     plan_envelope,
+)
+from eawf.kernel.migration.epoch2.recovery import (
+    EPOCH2_RECOVER_METHOD,
+    Epoch2RecoverRequest,
+    RecoveryAction,
+    recover_cutover,
+    recovery_envelope,
 )
 from eawf.kernel.migrations import (
     DEFAULT_REGISTRY,
@@ -260,20 +271,36 @@ migrate_app.add_typer(epoch2_app)
 
 
 class Epoch2Mode(StrEnum):
-    """The three things ``eawf migrate epoch2`` can be asked to do."""
+    """The five things ``eawf migrate epoch2`` can be asked to do."""
 
     PLAN = "plan"
     APPLY = "apply"
     EXPORT = "export"
+    RECOVER = "recover"
+    ROLLBACK = "rollback"
 
 
-def _epoch2_mode(*, plan: bool, apply_: bool, export: bool) -> Epoch2Mode:
+#: The modes that read a corpus. The two recovery modes do not: they repair
+#: a tree from the restore point and the journal inside it, so asking for a
+#: snapshot root would be asking for a corpus nothing reads.
+_CORPUS_MODES: Final[tuple[Epoch2Mode, ...]] = (
+    Epoch2Mode.PLAN,
+    Epoch2Mode.APPLY,
+    Epoch2Mode.EXPORT,
+)
+
+
+def _epoch2_mode(
+    *, plan: bool, apply_: bool, export: bool, recover: bool, rollback: bool
+) -> Epoch2Mode:
     """Return the one mode the flags select.
 
     Args:
         plan: Whether ``--plan`` was passed.
         apply_: Whether ``--apply`` was passed.
         export: Whether ``--export`` was passed.
+        recover: Whether ``--recover`` was passed.
+        rollback: Whether ``--rollback`` was passed.
 
     Returns:
         The selected mode.
@@ -289,6 +316,8 @@ def _epoch2_mode(*, plan: bool, apply_: bool, export: bool) -> Epoch2Mode:
             (Epoch2Mode.PLAN, plan),
             (Epoch2Mode.APPLY, apply_),
             (Epoch2Mode.EXPORT, export),
+            (Epoch2Mode.RECOVER, recover),
+            (Epoch2Mode.ROLLBACK, rollback),
         )
         if chosen
     ]
@@ -378,6 +407,36 @@ def _epoch2_apply_request(
     except PydanticValidationError as exc:
         raise cli_errors.UserError(
             f"invalid epoch2 apply request: {exc}", kind="InvalidInput"
+        ) from exc
+
+
+def _epoch2_recover_request(
+    *, mode: Epoch2Mode, target_root: Path, manifest: Path | None
+) -> Epoch2RecoverRequest:
+    """Parse the recovery request, failing at the CLI boundary on a bad field.
+
+    Args:
+        mode: Which recovery mode was selected.
+        target_root: The tree to recover.
+        manifest: The restore manifest to write back, or ``None`` to use
+            the one the apply left inside the tree.
+
+    Returns:
+        The validated request.
+
+    Raises:
+        UserError: When a field violates the wire contract.
+    """
+    action = RecoveryAction.RECOVER if mode is Epoch2Mode.RECOVER else RecoveryAction.ROLLBACK
+    try:
+        return Epoch2RecoverRequest(
+            target_root=str(target_root),
+            action=action,
+            manifest_path=None if manifest is None else str(manifest),
+        )
+    except PydanticValidationError as exc:
+        raise cli_errors.UserError(
+            f"invalid epoch2 recovery request: {exc}", kind="InvalidInput"
         ) from exc
 
 
@@ -475,6 +534,22 @@ def epoch2_cmd(
         bool,
         typer.Option("--export", help="Read-only export of every declared epoch-1 collection."),
     ] = False,
+    recover: Annotated[
+        bool,
+        typer.Option(
+            "--recover", help="Finish or undo an interrupted cutover (needs --target-root)."
+        ),
+    ] = False,
+    rollback: Annotated[
+        bool,
+        typer.Option("--rollback", help="Put a tree back to its pre-cutover surfaces."),
+    ] = False,
+    manifest: Annotated[
+        Path | None,
+        typer.Option(
+            "--manifest", help="Restore manifest to write back; defaults to the in-tree one."
+        ),
+    ] = None,
     plan_digest: Annotated[
         str | None,
         typer.Option("--plan-digest", help="The approval digest of the plan being applied."),
@@ -499,20 +574,28 @@ def epoch2_cmd(
         typer.Option("--sealed-by", help="Principal recorded in the manifest seal."),
     ] = "operator",
 ) -> None:
-    """Plan, apply or export the one-shot epoch-1 to epoch-2 cutover.
+    """Plan, apply, recover, roll back or export the epoch-1 to epoch-2 cutover.
 
     ``--plan`` and ``--export`` write nothing: no canonical document, no
-    registry, no staging tree. ``--apply`` is the only write, and it
-    refuses on any tree that has not declared itself a disposable canary,
-    on any plan digest that is not the one the corpus now plans to, and on
-    any unresolved row the operator has not named.
+    registry, no staging tree. ``--apply`` is the only write that builds,
+    and it refuses on any tree that has not declared itself a disposable
+    canary, on any plan digest that is not the one the corpus now plans to,
+    and on any unresolved row the operator has not named.
+
+    ``--recover`` and ``--rollback`` repair a tree whose apply stopped part
+    way: they read the restore point and the journal inside the tree rather
+    than a corpus, so they take ``--target-root`` and no snapshot. A
+    rollback asked for after the new generation has accepted a mutation
+    refuses with ``rollback_boundary_crossed`` and writes nothing.
     """
     flags: GlobalFlags = ctx.obj
     try:
-        mode = _epoch2_mode(plan=plan, apply_=apply_, export=export)
+        mode = _epoch2_mode(
+            plan=plan, apply_=apply_, export=export, recover=recover, rollback=rollback
+        )
         payload = _epoch2_dispatch(
             mode=mode,
-            corpus=_required(snapshot_root, option="--snapshot-root", mode=mode),
+            snapshot_root=snapshot_root,
             allowlist=allowlist,
             workspace_key=workspace_key,
             project_key=project_key,
@@ -521,6 +604,7 @@ def epoch2_cmd(
             plan_digest=plan_digest,
             target_root=target_root,
             registry_path=registry_path,
+            manifest=manifest,
             accept_unresolved=accept_unresolved or [],
         )
     except cli_errors.CliError as exc:
@@ -533,7 +617,7 @@ def epoch2_cmd(
 def _epoch2_dispatch(
     *,
     mode: Epoch2Mode,
-    corpus: Path,
+    snapshot_root: Path | None,
     allowlist: Path | None,
     workspace_key: str | None,
     project_key: str | None,
@@ -542,13 +626,15 @@ def _epoch2_dispatch(
     plan_digest: str | None,
     target_root: Path | None,
     registry_path: Path | None,
+    manifest: Path | None,
     accept_unresolved: list[str],
 ) -> dict[str, Any]:
     """Assemble the request one mode needs and return its envelope.
 
     Args:
         mode: Which mode was selected.
-        corpus: The staging directory holding the epoch-1 corpus.
+        snapshot_root: The staging directory holding the epoch-1 corpus,
+            required by every mode that reads one.
         allowlist: The allowed-legacy-symbol allowlist, required by the
             two modes that import.
         workspace_key: The addressing workspace.
@@ -557,8 +643,9 @@ def _epoch2_dispatch(
         sealed_by: The principal recorded in the seal.
         plan_digest: The approved plan digest, required by ``--apply``.
         target_root: The tree the generation lands in, required by
-            ``--apply``.
+            ``--apply`` and by both recovery modes.
         registry_path: The workspace registry, required by ``--apply``.
+        manifest: The restore manifest the recovery writes back.
         accept_unresolved: Addresses of unresolved rows the apply accepts.
 
     Returns:
@@ -569,6 +656,21 @@ def _epoch2_dispatch(
         ValidationError: An importer rule refused the corpus.
         CliError: The daemon answered with any other failure.
     """
+    if mode not in _CORPUS_MODES:
+        recover_request = _epoch2_recover_request(
+            mode=mode,
+            target_root=_required(target_root, option="--target-root", mode=mode),
+            manifest=manifest,
+        )
+        return _epoch2_payload(
+            method=EPOCH2_RECOVER_METHOD,
+            params=recover_request.model_dump(mode="json"),
+            local=lambda: recovery_envelope(
+                recover_cutover(recover_request, recovered_at=datetime.now(UTC))
+            ),
+        )
+
+    corpus = _required(snapshot_root, option="--snapshot-root", mode=mode)
     if mode is Epoch2Mode.EXPORT:
         export_request = Epoch2ExportRequest(snapshot_root=str(corpus))
         return _epoch2_payload(
@@ -620,7 +722,9 @@ def _epoch2_text(mode: Epoch2Mode, payload: Mapping[str, Any]) -> str:
         return export_text(dict(payload))
     if mode is Epoch2Mode.PLAN:
         return _epoch2_plan_text(payload)
-    return _epoch2_apply_text(payload)
+    if mode is Epoch2Mode.APPLY:
+        return _epoch2_apply_text(payload)
+    return _epoch2_recovery_text(payload)
 
 
 def _epoch2_plan_text(payload: Mapping[str, Any]) -> str:
@@ -666,5 +770,30 @@ def _epoch2_apply_text(payload: Mapping[str, Any]) -> str:
             f"  journal rows:        {payload['journal_rows']}",
             f"  generations on disk: {payload['generation_count']}",
             f"  accepted unresolved: {len(payload['accepted_unresolved_rows'])}",
+        ]
+    )
+
+
+def _epoch2_recovery_text(payload: Mapping[str, Any]) -> str:
+    """Render one recovery envelope for a terminal.
+
+    Args:
+        payload: The recovery envelope.
+
+    Returns:
+        One header line naming what was done, then the boundary it was done
+        from and the single authority the tree reads from afterwards.
+    """
+    authority = payload["authority"]
+    generation = authority["generation_id"] or "none"
+    return "\n".join(
+        [
+            f"epoch2 {payload['action']}: {payload['outcome'].replace('_', ' ')} "
+            f"from the {payload['boundary'].replace('_', ' ')} boundary",
+            f"  reads from:          epoch {authority['epoch']} / {generation}",
+            f"  generations on disk: {authority['generation_count']}",
+            f"  surfaces restored:   {len(payload['restored_locators'])}",
+            f"  discarded:           {len(payload['discarded'])}",
+            f"  journal rows:        {payload['journal_rows']}",
         ]
     )

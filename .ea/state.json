@@ -13740,6 +13740,21 @@
       "status": "done",
       "updated_at": "2026-09-11T13:19:55.080601Z"
     },
+    "P32-I01-W17": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 344145,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W17",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W17",
+      "model": null,
+      "scope_id": "P32-I01-W17",
+      "status": "done",
+      "updated_at": "2026-09-11T14:27:12.034860Z"
+    },
     "P32-I01-W19": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -17040,15 +17055,45 @@
       "claimed_wave_ids": [
         "P32-I01-W17"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-11T14:12:32.610428Z",
       "id": "SES-20260911T132028.713399Z-executor-claude-71494250-6674-4317-89a8-284de3e00bff",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W17",
       "started_at": "2026-09-11T13:20:28.713399Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260911T141337.406996Z-auditor-claude-code-e55bf25b-2f1b-411e-b9d6-527816e4f06d": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-11T14:21:59.776724Z",
+      "id": "SES-20260911T141337.406996Z-auditor-claude-code-e55bf25b-2f1b-411e-b9d6-527816e4f06d",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W17::audit",
+      "started_at": "2026-09-11T14:13:37.406996Z",
+      "status": "failed",
+      "summary": "auditor attempt failed before report append",
+      "worktree_ids": []
+    },
+    "SES-20260911T142206.568386Z-auditor-claude-code-b9fc07a4-3023-45ab-9f92-017a0e4b1459": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-11T14:27:10.813712Z",
+      "id": "SES-20260911T142206.568386Z-auditor-claude-code-b9fc07a4-3023-45ab-9f92-017a0e4b1459",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W17::audit",
+      "started_at": "2026-09-11T14:22:06.568386Z",
+      "status": "closed",
+      "summary": "auditor report appended",
       "worktree_ids": []
     }
   },
@@ -21646,6 +21691,57 @@
       "wave_id": "P32-I01-W12",
       "wave_revision_digest": "e76c6179d7f4062e43962bad5974cb6d9469e9c6bdd24ec82b2cd68acbd6c38c"
     },
+    "close-6a8e52535c14ae831665d875": {
+      "apply_event_id": "EV-97beccf6e997",
+      "artifact_refs": [],
+      "audit_report_id": "AR-auditor-P32-I01-W17-01",
+      "audit_requirement": "required",
+      "candidate_sha": "ff3cb40cf8aae5b2c71d73b6cdcc7c4097a3b9a0",
+      "commit_identity_digest": "sha256:a4c9afdef3091b5e5590e1341b6b5733dff193f642f2289bea14fd37df9f681f",
+      "criteria_digest": "796fb6b5d39554af9532da616f7b337b75943eab3274d762a803d0740e3cbf4e",
+      "dependency_binding_digest": "36b7a12e4a81668e4b81164d50b2801cfee6b2ff4978e1cf8fd8d86d300f89bf",
+      "failure_detail_ref": ".ea/local/close-logs/close-6a8e52535c14ae831665d875.log",
+      "failure_kind": "infrastructure_retry",
+      "gate_manifest_digest": "47b552daa3f7d631c036e0e76a4d7163a89c725500d5154abf549b870370ffed",
+      "gate_receipt_ids": [
+        "GR-4e5b95c48efc518d66847b3885682b49",
+        "GR-1fdb4b1dbc5d7045146cb9c64ce6b340",
+        "GR-100199b97b1cb855b31dababf7f2f190"
+      ],
+      "generation": 1,
+      "id": "close-6a8e52535c14ae831665d875",
+      "idempotency_key": "b9dbaca32f0b23c8dcc5c72c2ad297f164fa304c40e1d1f9783a4520c9f87a19",
+      "infrastructure_retry_budget_remaining": 0,
+      "integrated_sha": "ff3cb40cf8aae5b2c71d73b6cdcc7c4097a3b9a0",
+      "integration_id": "integration-ee3bc2f0e5decd79968a1fb9",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "Eleven durable write boundaries each take an injected crash that cannot unwind, and the table's totality is derived by diffing a clean apply's created paths so a new durable write with no crash point reds by name; a rollback after the first native mutation refuses and writes nothing, and a partial restore point refuses before the first byte.",
+      "policy_digest": "4cea5e97aebfdb9d181c799193c1207db34e2849fdbd5486f95bf779c274424e",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-11T14:12:34.296202Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "b48a9a07d2b1f571b1200a088c6b7c2ab64838198309ac496d000711c4fde48c",
+      "spec_digest": "4e5fba43759c41bbc913eb09e66f0bdc1dd6dc288a235ca85e5634923a8385f0",
+      "started_at": "2026-09-11T14:12:34.614343Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-11T14:27:12.603907Z",
+      "tokens_consumed": 344145,
+      "tree_sha": "86154c7796d3013973f8ee8bc75fb2d90bbfdaf2",
+      "updated_at": "2026-09-11T14:27:12.603904Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W17",
+      "wave_revision_digest": "12725d09896eb1c1ae1ce4080ea8e1270616210cb79844af26729d2b60f1e377"
+    },
     "close-6adb1dd4655375c2eff65054": {
       "apply_event_id": "EV-79f9f9777489",
       "artifact_refs": [],
@@ -22886,12 +22982,8 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260911T132028.713399Z-executor-claude-71494250-6674-4317-89a8-284de3e00bff"
-    ],
-    "active_wave_ids": [
-      "P32-I01-W17"
-    ],
+    "active_session_ids": [],
+    "active_wave_ids": [],
     "iter_id": "P32-I01",
     "phase_id": "P32",
     "project_code": "EAWF",
@@ -41558,7 +41650,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-11T13:20:29.645772Z",
+  "updated_at": "2026-09-11T14:27:12.603998Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -43535,6 +43627,22 @@
       "supersedes_id": null,
       "tree_sha": "a02323b8589da966d7ee586476af1426eafbd1dd",
       "wave_id": "P32-I01-W42"
+    },
+    "integration-ee3bc2f0e5decd79968a1fb9": {
+      "base_sha": "a92bacaf97a0d9b9af569c57dbd93c0e2ab9aba9",
+      "candidate_sha": "ff3cb40cf8aae5b2c71d73b6cdcc7c4097a3b9a0",
+      "created_at": "2026-09-11T14:12:33.180646Z",
+      "diff_digest": "8a48e330fb2044ac7a8849b9139167a73833add23f19c4b15602eafec3e0488e",
+      "generation": 1,
+      "id": "integration-ee3bc2f0e5decd79968a1fb9",
+      "integrated_sha": "ff3cb40cf8aae5b2c71d73b6cdcc7c4097a3b9a0",
+      "kind": "adopt",
+      "reason": "Cherry-picked by hand onto the phase branch so the repo hook's attribution trailer could be stripped per operator policy; verified on the parent with 61 passing tests and a non-vacuous crash_point selector collecting 23.",
+      "spec_digest": "4e5fba43759c41bbc913eb09e66f0bdc1dd6dc288a235ca85e5634923a8385f0",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "86154c7796d3013973f8ee8bc75fb2d90bbfdaf2",
+      "wave_id": "P32-I01-W17"
     },
     "integration-f13aea6175d3fd72a8b2ab71": {
       "base_sha": "4aeb9776e322d8defff7a7e7c5df7b2f79f765be",
@@ -168955,9 +169063,9 @@
       ],
       "claim_session_id": "SES-20260911T132028.713399Z-executor-claude-71494250-6674-4317-89a8-284de3e00bff",
       "claimed_at": "2026-09-11T13:20:29.645380Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-11T14:27:12.034860Z",
+      "commit": "ff3cb40cf8aae5b2c71d73b6cdcc7c4097a3b9a0",
+      "commit_identity_digest": "sha256:a4c9afdef3091b5e5590e1341b6b5733dff193f642f2289bea14fd37df9f681f",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:58:45.123469Z",
@@ -169055,13 +169163,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-03T17:58:45.124232Z",
-      "outcome": null,
+      "outcome": "Eleven durable write boundaries each take an injected crash that cannot unwind, and the table's totality is derived by diffing a clean apply's created paths so a new durable write with no crash point reds by name; a rollback after the first native mutation refuses and writes nothing, and a partial restore point refuses before the first byte.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -169138,7 +169246,7 @@
       ],
       "title": "Add rollback, recovery and crash injection at every durable boundary",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 344145,
       "worktree_id": null
     },
     "P32-I01-W18": {

@@ -1,10 +1,14 @@
-"""Daemon-served planning, applying and export for the epoch-2 cutover.
+"""Daemon-served plan, apply, recovery and export for the epoch-2 cutover.
 
 Plan mode and export write nothing, so they need none of the authority
 machinery a mutation does: no lock, no WAL, no generation. They are served
 here anyway because the plan's approval digest is the token the apply is
 checked against, and computing it on the same side of the wire that later
 verifies it keeps the two from drifting apart.
+
+The recovery is served beside the apply because it is the other half of
+the same transaction: it writes the same files, under the same authority
+locks, to finish or undo what an interrupted apply started.
 
 The apply is the mutation, and it is the reason all three live together.
 It takes the authority locks itself rather than going through the generic
@@ -38,6 +42,12 @@ from eawf.kernel.migration.epoch2.plan_mode import (
     Epoch2PlanRequest,
     plan_cutover,
     plan_envelope,
+)
+from eawf.kernel.migration.epoch2.recovery import (
+    EPOCH2_RECOVER_METHOD,
+    Epoch2RecoverRequest,
+    recover_cutover,
+    recovery_envelope,
 )
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
 
@@ -120,6 +130,45 @@ async def apply_epoch2(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
     return apply_envelope(result)
 
 
+@register(EPOCH2_RECOVER_METHOD)
+async def recover_epoch2(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Take one interrupted cutover forward or back inside a declared tree.
+
+    Args:
+        ctx: Server context. Unused: the recovery takes the same authority
+            locks the apply does, for the same reason -- it writes the same
+            files.
+        params: The request, validated through
+            :class:`~eawf.kernel.migration.epoch2.recovery.Epoch2RecoverRequest`.
+
+    Returns:
+        The recovery envelope. ``status`` names what was done:
+        ``staging_discarded``, ``surfaces_restored``,
+        ``activation_completed``, ``window_closed`` or
+        ``nothing_to_recover``.
+
+    Raises:
+        DaemonValidationError: When a request field is malformed or the
+            recovery is refused. A rollback past the first native mutation
+            carries ``rollback_boundary_crossed``, so a caller routes on
+            the code rather than on prose.
+    """
+    del ctx
+    try:
+        request = Epoch2RecoverRequest.model_validate(params)
+    except ValueError as error:
+        raise DaemonValidationError(f"validation_failed: {error}") from error
+    try:
+        result = recover_cutover(request, recovered_at=datetime.now(UTC))
+    except MigrationRuleError as error:
+        raise DaemonValidationError(f"validation_failed: {error.code}: {error}") from error
+    logger.info(
+        f"recover_epoch2 action={result.action.value} outcome={result.outcome.value} "
+        f"epoch={result.authority.epoch}"
+    )
+    return recovery_envelope(result)
+
+
 @register(EPOCH2_EXPORT_METHOD)
 async def export_epoch2(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Serve a read-only export of every declared epoch-1 collection.
@@ -148,4 +197,4 @@ async def export_epoch2(ctx: MethodContext, params: dict[str, Any]) -> dict[str,
     return payload
 
 
-__all__ = ["apply_epoch2", "export_epoch2", "plan_epoch2"]
+__all__ = ["apply_epoch2", "export_epoch2", "plan_epoch2", "recover_epoch2"]

@@ -57,6 +57,14 @@ SELECTION_FILENAME: Final = "selected.json"
 #: The marker written last, after which readers are in epoch 2.
 MARKER_FILENAME: Final = "EPOCH2_ACTIVE.json"
 
+#: The directory holding the pre-cutover copy of every authority surface.
+#: It lives beside the generations rather than above them so one rename of
+#: ``generations/`` carries the restore point with the tree it restores.
+RESTORE_DIRNAME: Final = "restore"
+
+#: The file pinning what each copied surface digested to before the write.
+RESTORE_MANIFEST_FILENAME: Final = "restore-manifest.json"
+
 #: The machine-local marker held for the duration of the write window.
 #: It lives under ``local/`` because a maintenance window is a fact about
 #: one machine's run, not a fact a clone should inherit.
@@ -132,6 +140,28 @@ def read_declaration(root: Path) -> CanaryDeclaration:
             f"{root.name}/{CANARY_DECLARATION_FILENAME} does not declare a disposable "
             f"canary: {error}"
         ) from error
+
+
+def _require_declared(locator: str) -> str:
+    """Return ``locator`` when it names a declared authority surface.
+
+    Args:
+        locator: The tree-relative locator a caller wants addressed.
+
+    Returns:
+        The locator unchanged.
+
+    Raises:
+        ValueError: The locator is not declared. Restricting the set to
+            the declared surfaces is what keeps a traversal fragment or a
+            caller-composed path from reaching a write helper at all.
+    """
+    if locator not in TARGET_AUTHORITY_LOCATORS:
+        raise ValueError(
+            f"{locator!r} is not a declared authority surface, so it is not a path the "
+            f"cutover may snapshot or restore (declared: {', '.join(TARGET_AUTHORITY_LOCATORS)})"
+        )
+    return locator
 
 
 class DisposableTarget(StrictMigrationModel):
@@ -235,6 +265,47 @@ class DisposableTarget(StrictMigrationModel):
             )
         return self.generations_dir / generation_id
 
+    @property
+    def restore_dir(self) -> Path:
+        """Return the directory holding the pre-cutover copy of each surface."""
+        return self.generations_dir / RESTORE_DIRNAME
+
+    @property
+    def restore_manifest_path(self) -> Path:
+        """Return the manifest pinning what a restore writes back."""
+        return self.restore_dir / RESTORE_MANIFEST_FILENAME
+
+    def authority_path(self, locator: str) -> Path:
+        """Return where one declared authority surface lives in the tree.
+
+        Args:
+            locator: The surface's tree-relative locator.
+
+        Returns:
+            ``<root>/<locator>``.
+
+        Raises:
+            ValueError: The locator is not one of the declared authority
+                surfaces. A restore writes the tree's authority files and
+                nothing else, so the set it may address is closed rather
+                than whatever a caller passes.
+        """
+        return self.root / _require_declared(locator)
+
+    def restore_copy_path(self, locator: str) -> Path:
+        """Return where the pre-cutover copy of one surface is kept.
+
+        Args:
+            locator: The surface's tree-relative locator.
+
+        Returns:
+            ``<root>/generations/restore/<locator>``.
+
+        Raises:
+            ValueError: The locator is not a declared authority surface.
+        """
+        return self.restore_dir / _require_declared(locator)
+
     def authority_surfaces(self) -> tuple[tuple[str, Path], ...]:
         """Return each in-tree authority surface as ``(locator, path)``.
 
@@ -253,6 +324,8 @@ __all__ = [
     "GENERATIONS_DIRNAME",
     "MAINTENANCE_LOCATOR",
     "MARKER_FILENAME",
+    "RESTORE_DIRNAME",
+    "RESTORE_MANIFEST_FILENAME",
     "SELECTION_FILENAME",
     "TARGET_AUTHORITY_LOCATORS",
     "CanaryDeclaration",

@@ -1,0 +1,292 @@
+{
+  "schema_version": "1",
+  "purpose": "Every durable write one epoch-2 apply makes, as a crash point: the seam to kill the process at, the artifact the write before it produced, the boundary the wreckage sits at, and the recovery the rollback table prescribes there. The suite is total over this file, and the union of every writes entry is checked against the artifacts one clean apply leaves, so a new durable write that carries no crash point reds the gate.",
+  "crash_points": [
+    {
+      "id": "after_maintenance_marker",
+      "title": "the write window is declared open and nothing else exists",
+      "seam": {
+        "module": "eawf.kernel.migration.epoch2.journal",
+        "attribute": "CutoverJournal.flush",
+        "occurrence": 1,
+        "when": "before"
+      },
+      "writes": ["maintenance_marker"],
+      "expect": {
+        "boundary": "plan_only",
+        "journal_boundary": "plan_only",
+        "maintenance_held": true,
+        "staging": [],
+        "generations": 0,
+        "selected": false,
+        "marked": false
+      },
+      "recovery": {
+        "action": "rollback",
+        "outcome": "staging_discarded",
+        "stage": "rollback_discarded",
+        "epoch": 1
+      }
+    },
+    {
+      "id": "after_journal_opened",
+      "title": "the journal exists and carries only the opened window",
+      "seam": {
+        "module": "eawf.kernel.migration.epoch2.apply",
+        "attribute": "capture_restore_point",
+        "occurrence": 1,
+        "when": "before"
+      },
+      "writes": ["journal"],
+      "expect": {
+        "boundary": "plan_only",
+        "journal_boundary": "plan_only",
+        "maintenance_held": true,
+        "staging": [],
+        "generations": 0,
+        "selected": false,
+        "marked": false
+      },
+      "recovery": {
+        "action": "rollback",
+        "outcome": "staging_discarded",
+        "stage": "rollback_discarded",
+        "epoch": 1
+      }
+    },
+    {
+      "id": "after_restore_copies",
+      "title": "every surface is copied but no manifest names the copies",
+      "seam": {
+        "module": "eawf.kernel.migration.epoch2.restore",
+        "attribute": "write_restore_manifest",
+        "occurrence": 1,
+        "when": "before"
+      },
+      "writes": ["restore_copies"],
+      "expect": {
+        "boundary": "plan_only",
+        "journal_boundary": "plan_only",
+        "maintenance_held": true,
+        "staging": [],
+        "generations": 0,
+        "selected": false,
+        "marked": false
+      },
+      "recovery": {
+        "action": "rollback",
+        "outcome": "staging_discarded",
+        "stage": "rollback_discarded",
+        "epoch": 1
+      }
+    },
+    {
+      "id": "after_restore_manifest",
+      "title": "the restore point is complete and nothing is built",
+      "seam": {
+        "module": "eawf.kernel.migration.epoch2.apply",
+        "attribute": "build_generation",
+        "occurrence": 1,
+        "when": "before"
+      },
+      "writes": ["restore_manifest"],
+      "expect": {
+        "boundary": "plan_only",
+        "journal_boundary": "plan_only",
+        "maintenance_held": true,
+        "staging": [],
+        "generations": 0,
+        "selected": false,
+        "marked": false
+      },
+      "recovery": {
+        "action": "rollback",
+        "outcome": "staging_discarded",
+        "stage": "rollback_discarded",
+        "epoch": 1
+      }
+    },
+    {
+      "id": "after_staging_first",
+      "title": "the first of the two comparison builds is on disk",
+      "seam": {
+        "module": "eawf.kernel.migration.epoch2.generation",
+        "attribute": "_stage_once",
+        "occurrence": 2,
+        "when": "before"
+      },
+      "writes": ["staging_first"],
+      "expect": {
+        "boundary": "plan_only",
+        "journal_boundary": "plan_only",
+        "maintenance_held": true,
+        "staging": [".staging-a"],
+        "generations": 0,
+        "selected": false,
+        "marked": false
+      },
+      "recovery": {
+        "action": "rollback",
+        "outcome": "staging_discarded",
+        "stage": "rollback_discarded",
+        "epoch": 1
+      }
+    },
+    {
+      "id": "after_staging_second",
+      "title": "both builds are on disk and neither is published",
+      "seam": {
+        "module": "eawf.kernel.migration.epoch2.generation",
+        "attribute": "_publish_generation",
+        "occurrence": 1,
+        "when": "before"
+      },
+      "writes": ["staging_second"],
+      "expect": {
+        "boundary": "plan_only",
+        "journal_boundary": "plan_only",
+        "maintenance_held": true,
+        "staging": [".staging-a", ".staging-b"],
+        "generations": 0,
+        "selected": false,
+        "marked": false
+      },
+      "recovery": {
+        "action": "rollback",
+        "outcome": "staging_discarded",
+        "stage": "rollback_discarded",
+        "epoch": 1
+      }
+    },
+    {
+      "id": "after_generation_published",
+      "title": "the rename landed and the second build is still beside it",
+      "seam": {
+        "module": "eawf.kernel.migration.epoch2.generation",
+        "attribute": "discard_staging",
+        "occurrence": 1,
+        "when": "before"
+      },
+      "writes": ["generation"],
+      "expect": {
+        "boundary": "staged",
+        "journal_boundary": "plan_only",
+        "maintenance_held": true,
+        "staging": [".staging-b"],
+        "generations": 1,
+        "selected": false,
+        "marked": false
+      },
+      "recovery": {
+        "action": "rollback",
+        "outcome": "staging_discarded",
+        "stage": "rollback_discarded",
+        "epoch": 1
+      }
+    },
+    {
+      "id": "after_read_smoke",
+      "title": "the journal claims the select the pointer does not yet record",
+      "seam": {
+        "module": "eawf.kernel.migration.epoch2.apply",
+        "attribute": "select_generation",
+        "occurrence": 1,
+        "when": "before"
+      },
+      "writes": [],
+      "expect": {
+        "boundary": "staged",
+        "journal_boundary": "generation_selected",
+        "maintenance_held": true,
+        "staging": [],
+        "generations": 1,
+        "selected": false,
+        "marked": false
+      },
+      "recovery": {
+        "action": "rollback",
+        "outcome": "staging_discarded",
+        "stage": "rollback_discarded",
+        "epoch": 1
+      }
+    },
+    {
+      "id": "after_selection_replaced",
+      "title": "the pointer names a generation the tree is not yet marked for",
+      "seam": {
+        "module": "eawf.kernel.migration.epoch2.apply",
+        "attribute": "write_marker",
+        "occurrence": 1,
+        "when": "before"
+      },
+      "writes": ["selection"],
+      "expect": {
+        "boundary": "generation_selected",
+        "journal_boundary": "marker_written",
+        "maintenance_held": true,
+        "staging": [],
+        "generations": 1,
+        "selected": true,
+        "marked": false
+      },
+      "recovery": {
+        "action": "rollback",
+        "outcome": "surfaces_restored",
+        "stage": "surfaces_restored",
+        "epoch": 1
+      }
+    },
+    {
+      "id": "after_marker_written",
+      "title": "the activation is complete and the window is still open",
+      "seam": {
+        "module": "eawf.kernel.migration.epoch2.apply",
+        "attribute": "write_marker",
+        "occurrence": 1,
+        "when": "after"
+      },
+      "writes": ["marker"],
+      "expect": {
+        "boundary": "marker_written",
+        "journal_boundary": "marker_written",
+        "maintenance_held": true,
+        "staging": [],
+        "generations": 1,
+        "selected": true,
+        "marked": true
+      },
+      "recovery": {
+        "action": "recover",
+        "outcome": "window_closed",
+        "stage": "maintenance_exited",
+        "epoch": 2
+      }
+    },
+    {
+      "id": "after_window_closed",
+      "title": "the window is closed and the journal is short its closing row",
+      "seam": {
+        "module": "eawf.kernel.migration.epoch2.journal",
+        "attribute": "CutoverJournal.flush",
+        "occurrence": 6,
+        "when": "before"
+      },
+      "writes": [],
+      "expect": {
+        "boundary": "marker_written",
+        "journal_boundary": "marker_written",
+        "maintenance_held": false,
+        "staging": [],
+        "generations": 1,
+        "selected": true,
+        "marked": true
+      },
+      "recovery": {
+        "action": "recover",
+        "outcome": "window_closed",
+        "stage": "maintenance_exited",
+        "epoch": 2
+      }
+    }
+  ]
+}
