@@ -106,3 +106,40 @@ class MigrationRowValidationError(MigrationRuleError):
     """
 
     code: ClassVar[str] = "migration_row_validation"
+
+
+class MigrationSourceChangedError(MigrationRuleError):
+    """The source moved after a plan digest was taken over it.
+
+    Distinct from :class:`MigrationSourceMutatedError`, which catches a
+    surface moving *inside* one read barrier. This one catches the longer
+    window: a plan is approved by its digest, an operator applies it
+    later, and in between the corpus changed. The manifest would then
+    describe rows the apply never reads.
+    """
+
+    code: ClassVar[str] = "migration_source_changed"
+
+
+class MigrationPlanNotApplicableError(MigrationRuleError):
+    """The plan names rows the cutover cannot place, so apply is refused.
+
+    A row nobody decided the target of cannot be written and cannot be
+    dropped. Refusing here keeps the target census reconcilable against
+    the source census, which is the one invariant the whole cutover rests
+    on.
+    """
+
+    code: ClassVar[str] = "migration_plan_not_applicable"
+
+
+class MigrationValidationDivergedError(MigrationRuleError):
+    """Two validation passes over one pinned revision did not agree.
+
+    The cutover validates twice and compares the bytes. A difference
+    means the import is not a function of the source, so nothing about
+    the first pass can be trusted -- including the part that said the
+    import was clean.
+    """
+
+    code: ClassVar[str] = "migration_validation_diverged"

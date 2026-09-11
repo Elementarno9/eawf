@@ -77,6 +77,9 @@ EMPTY_CLAIM_IMPORTS_AS = "absent_field"
 
 TRACK_UNASSIGNED_ANNOTATION = "track_unassigned_no_unique_source_candidate"
 
+#: The epoch-2 field a Milestone's Track ownership lands in.
+MILESTONE_TRACK_FIELD = "primary_track_ref"
+
 
 class LifecycleTarget(StrEnum):
     """The three epoch-2 kinds the lifecycle collections convert into."""
@@ -650,11 +653,18 @@ def _unrecorded(fields: Iterable[str]) -> list[DeferredField]:
     ]
 
 
-def _track_deferral(assignment: TrackAssignment) -> list[DeferredField]:
-    """Return the Milestone's Track deferral, when the source cannot assign one.
+def track_deferral(assignment: TrackAssignment, *, target_field: str) -> list[DeferredField]:
+    """Return the Track deferral one record carries, when the source cannot assign one.
+
+    Every epoch-2 record that hangs off a Track asks the same question of
+    the source and has to answer it the same way, so the reason arms live
+    here once: a Milestone and a Track outcome metric that disagreed
+    about why the Track is unknown would be two different facts about one
+    corpus.
 
     Args:
         assignment: The resolved track assignment.
+        target_field: The epoch-2 field the Track reference would land in.
 
     Returns:
         An empty list when the source named a track that exists, else one
@@ -670,7 +680,7 @@ def _track_deferral(assignment: TrackAssignment) -> list[DeferredField]:
         reason = DeferralReason.SOURCE_HAS_NO_FIELD
     return [
         DeferredField(
-            target_field="primary_track_ref",
+            target_field=target_field,
             reason=reason,
             candidates=assignment.candidates,
         )
@@ -714,7 +724,9 @@ def map_phase_row(
         legacy_refs["track_id"] = assignment.unresolved_ref
     record["status"] = target_status
 
-    deferred = _unrecorded(MILESTONE_UNRECORDED_FIELDS) + _track_deferral(assignment)
+    deferred = _unrecorded(MILESTONE_UNRECORDED_FIELDS) + track_deferral(
+        assignment, target_field=MILESTONE_TRACK_FIELD
+    )
     if target_status == COMPLETED_STATUS:
         deferred.extend(_unrecorded(MILESTONE_ACCEPTANCE_FIELDS))
 

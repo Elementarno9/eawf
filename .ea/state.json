@@ -13680,6 +13680,21 @@
       "status": "done",
       "updated_at": "2026-09-11T10:16:26.577868Z"
     },
+    "P32-I01-W14": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 377259,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W14",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W14",
+      "model": null,
+      "scope_id": "P32-I01-W14",
+      "status": "done",
+      "updated_at": "2026-09-11T11:40:26.299533Z"
+    },
     "P32-I01-W19": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -16878,6 +16893,21 @@
       "started_at": "2026-09-11T11:33:13.194185Z",
       "status": "active",
       "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260911T113620.344637Z-auditor-claude-code-4bac05b5-9fa0-484c-aad6-f5cdebeb36ac": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-11T11:40:24.891498Z",
+      "id": "SES-20260911T113620.344637Z-auditor-claude-code-4bac05b5-9fa0-484c-aad6-f5cdebeb36ac",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W14::audit",
+      "started_at": "2026-09-11T11:36:20.344637Z",
+      "status": "closed",
+      "summary": "auditor report appended",
       "worktree_ids": []
     }
   },
@@ -20940,6 +20970,57 @@
   },
   "claims": null,
   "close_attempts": {
+    "close-0c25cc29b283a958282060cc": {
+      "apply_event_id": "EV-3460ce757afc",
+      "artifact_refs": [],
+      "audit_report_id": "AR-auditor-P32-I01-W14-01",
+      "audit_requirement": "required",
+      "candidate_sha": "1748e0aafa1195e3908e271a5adffc7071f536b8",
+      "commit_identity_digest": "sha256:51b43671626e06c04c3e2eb861507b33537688b5e20c19a2b4a446df49c78a27",
+      "criteria_digest": "d0d3eeeca87ecc431adb6823d938cc758416be644a2d6d37040402b0f42c903d",
+      "dependency_binding_digest": "9df981ac9960493e72b0c8649eff7ba3e8ce132b76d88edc8117420287a1195b",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "abff8783bf36455db4e8d47b7ff58c9d8560a649e83dfc4d99c340cc3588de65",
+      "gate_receipt_ids": [
+        "GR-e82decb6028dece7aed00aa3c02aedbf",
+        "GR-399bc38884d4e673f5c65be2c86890b7",
+        "GR-e789a3a94e7a01f34856c0339e98c275"
+      ],
+      "generation": 1,
+      "id": "close-0c25cc29b283a958282060cc",
+      "idempotency_key": "e5c74c16379285ca14b6cef3eb534158c989d4ff3e8d5f51337c91280046d16d",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "1748e0aafa1195e3908e271a5adffc7071f536b8",
+      "integration_id": "integration-55abc16c5e251f610c723ef4",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "The epoch-2 MigrationManifest is a strict twenty-field contract refusing a missing zero-row collection, an unknown disposition, an unresolved alias, an inferred acceptance and a target-count mismatch; plan mode runs seven read-only steps proven to write nothing and to emit a byte-identical digest twice.",
+      "policy_digest": "4cea5e97aebfdb9d181c799193c1207db34e2849fdbd5486f95bf779c274424e",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-11T11:36:01.968954Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "b48a9a07d2b1f571b1200a088c6b7c2ab64838198309ac496d000711c4fde48c",
+      "spec_digest": "c1be5159ede3837b76b5c9256dee9a1d5624ee7e1c93c1f0ed7c3c06066e00b4",
+      "started_at": "2026-09-11T11:36:02.358159Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-11T11:40:27.345457Z",
+      "tokens_consumed": 377259,
+      "tree_sha": "6ddf4eb7be8e03ee88e2674fe8c849a1a0cc48f7",
+      "updated_at": "2026-09-11T11:40:27.345452Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W14",
+      "wave_revision_digest": "981486bc795f5f34b57985d188e5b003c172cd400091260a22820b3beff6a743"
+    },
     "close-0f623e29d9ec48f4717383c8": {
       "apply_event_id": "EV-47a8ad234f93",
       "artifact_refs": [],
@@ -22515,8 +22596,7 @@
       "SES-20260911T113313.194185Z-operator-claude-74ab8404-c93c-4561-8dc9-c36748a202fd"
     ],
     "active_wave_ids": [
-      "P32-I01-W01",
-      "P32-I01-W14"
+      "P32-I01-W01"
     ],
     "iter_id": "P32-I01",
     "phase_id": "P32",
@@ -41183,7 +41263,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-11T11:33:14.120227Z",
+  "updated_at": "2026-09-11T11:40:27.345522Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -42513,6 +42593,22 @@
       "supersedes_id": null,
       "tree_sha": "dd97ab0e3bb81c2bfaa1c87e20b81d2c5846d4be",
       "wave_id": "P32-I01-W08"
+    },
+    "integration-55abc16c5e251f610c723ef4": {
+      "base_sha": "c8e3a42a2d075cbcee6fa37ea23c9f2b09b42d40",
+      "candidate_sha": "1748e0aafa1195e3908e271a5adffc7071f536b8",
+      "created_at": "2026-09-11T11:36:00.638825Z",
+      "diff_digest": "f6a19cc3d6de8a3753ecbe63a8cb41f5acc0277176452186c255842f42aa1ee2",
+      "generation": 1,
+      "id": "integration-55abc16c5e251f610c723ef4",
+      "integrated_sha": "1748e0aafa1195e3908e271a5adffc7071f536b8",
+      "kind": "adopt",
+      "reason": "Cherry-picked by hand onto the phase branch so the repo hook's attribution trailer could be stripped per operator policy; verified on the parent with 73 passing tests across the three criterion suites.",
+      "spec_digest": "c1be5159ede3837b76b5c9256dee9a1d5624ee7e1c93c1f0ed7c3c06066e00b4",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "6ddf4eb7be8e03ee88e2674fe8c849a1a0cc48f7",
+      "wave_id": "P32-I01-W14"
     },
     "integration-566fee107509139947e225f8": {
       "base_sha": "14bd044a91b8603063e154e03f2f7012bba4c9cf",
@@ -167873,9 +167969,9 @@
       ],
       "claim_session_id": "SES-20260911T102047.296494Z-executor-claude-8a19cffa-258c-4b5a-a47e-f335fba51374",
       "claimed_at": "2026-09-11T10:20:48.097008Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-11T11:40:26.299533Z",
+      "commit": "1748e0aafa1195e3908e271a5adffc7071f536b8",
+      "commit_identity_digest": "sha256:51b43671626e06c04c3e2eb861507b33537688b5e20c19a2b4a446df49c78a27",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:58:45.120935Z",
@@ -167976,13 +168072,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-03T17:58:45.121718Z",
-      "outcome": null,
+      "outcome": "The epoch-2 MigrationManifest is a strict twenty-field contract refusing a missing zero-row collection, an unknown disposition, an unresolved alias, an inferred acceptance and a target-count mismatch; plan mode runs seven read-only steps proven to write nothing and to emit a byte-identical digest twice.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -168059,7 +168155,7 @@
       ],
       "title": "Add the MigrationManifest, MigrationPlan and read-only plan mode",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 377259,
       "worktree_id": null
     },
     "P32-I01-W15": {
