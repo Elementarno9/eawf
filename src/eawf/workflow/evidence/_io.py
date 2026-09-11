@@ -76,25 +76,6 @@ def load_state(state_path: Path) -> State:
     return report.state
 
 
-def validate_or_raise(state: State) -> None:
-    """Run the post-mutation validator and raise on schema/invariant errors.
-
-    The mutated state has already been built by the caller; this helper
-    re-runs the strict validator (no ``strict_optional`` because that is
-    user-facing) and surfaces both schema and invariant violations under
-    :class:`eawf.surfaces.cli.errors.ValidationError`.
-    """
-    payload = json.loads(state.model_dump_json())
-    report = validate_payload(payload, strict_optional=False)
-    if not report.ok:
-        parts: list[str] = []
-        for err in report.schema_errors:
-            parts.append(f"schema: {err}")
-        for v in report.violations:
-            parts.append(f"{v.code} at {v.path}: {v.message}")
-        raise ValidationError("post-mutation validation failed: " + "; ".join(parts))
-
-
 def atomic_write_state(state_path: Path, state: State) -> None:
     """Persist *state* via the LOCKED atomic writer.
 
@@ -116,11 +97,6 @@ def args_hash(args: dict[str, Any]) -> str:
     """
     raw = json.dumps(args, sort_keys=True, default=str).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
-
-
-def now_iso() -> str:
-    """Return UTC now as an ISO-8601 string with the trailing ``+00:00``."""
-    return datetime.now(UTC).isoformat()
 
 
 def event_envelope(

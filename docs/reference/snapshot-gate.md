@@ -2,7 +2,7 @@
 
 The snapshot-pairing gate enforces the C09 §5.6 snapshot-update flow from the CI side: every commit in a PR range that *mutates* a managed golden surface must carry a wave-form `test:` subject, so a golden byte change can never sneak in under an unrelated `feat:` / `fix:` commit. The gate lives at `tools/snapshot_pairing_gate.py` and runs as the `snapshot-pairing` job in `.github/workflows/ci.yaml` (pull-request events only).
 
-## How it works
+## What the gate requires
 
 The gate walks the commits between the PR base and head. For each commit that modifies, deletes, or renames a file under a managed golden surface (status `M` / `D` / `R`), the subject must match a wave-form `test:` grammar — `[P##-W##] test: ...`, the `[P##-I##-W##] test: ...` iter variant, or the bare `test: ...` conventional form accepted while no phase is active. Pure additions (status `A`) are exempt: a brand-new surface ships its fixtures alongside the `feat:` wave that introduces it.
 

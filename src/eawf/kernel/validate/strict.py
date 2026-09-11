@@ -229,13 +229,3 @@ def validate_envelope(payload: dict[str, Any]) -> EnvelopeValidationReport:
         schema_errors=[],
         contract_errors=contract_errors,
     )
-
-
-def validate_envelope_path(path: Path) -> EnvelopeValidationReport:
-    """Read an envelope JSON file from disk and validate it.
-
-    Args:
-        path: Path to the envelope JSON file.
-    """
-    payload = orjson.loads(Path(path).read_bytes())
-    return validate_envelope(payload)

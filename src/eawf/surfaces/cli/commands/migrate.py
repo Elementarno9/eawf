@@ -46,36 +46,17 @@ from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any, Final
+from typing import TYPE_CHECKING, Annotated, Any, Final
 
 import typer
 from pydantic import ValidationError as PydanticValidationError
 
-from eawf.kernel.migration.epoch2.apply import (
-    EPOCH2_APPLY_METHOD,
-    Epoch2ApplyRequest,
-    apply_cutover,
-    apply_envelope,
-)
 from eawf.kernel.migration.epoch2.errors import MigrationRuleError
 from eawf.kernel.migration.epoch2.export import (
     EPOCH2_EXPORT_METHOD,
     Epoch2ExportRequest,
     export_epoch1,
     export_text,
-)
-from eawf.kernel.migration.epoch2.plan_mode import (
-    EPOCH2_PLAN_METHOD,
-    Epoch2PlanRequest,
-    plan_cutover,
-    plan_envelope,
-)
-from eawf.kernel.migration.epoch2.recovery import (
-    EPOCH2_RECOVER_METHOD,
-    Epoch2RecoverRequest,
-    RecoveryAction,
-    recover_cutover,
-    recovery_envelope,
 )
 from eawf.kernel.migrations import (
     DEFAULT_REGISTRY,
@@ -91,6 +72,11 @@ from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.error_codes import ErrorCode
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
+
+if TYPE_CHECKING:
+    from eawf.kernel.migration.epoch2.apply import Epoch2ApplyRequest
+    from eawf.kernel.migration.epoch2.plan_mode import Epoch2PlanRequest
+    from eawf.kernel.migration.epoch2.recovery import Epoch2RecoverRequest
 
 logger = logging.getLogger(__name__)
 
@@ -368,6 +354,8 @@ def _epoch2_request(
             takes an already-validated request, so the rejection happens
             here rather than three frames in.
     """
+    from eawf.kernel.migration.epoch2.plan_mode import Epoch2PlanRequest
+
     try:
         return Epoch2PlanRequest(
             snapshot_root=str(snapshot_root),
@@ -396,6 +384,8 @@ def _epoch2_apply_request(
     Raises:
         UserError: When a field violates the wire contract.
     """
+    from eawf.kernel.migration.epoch2.apply import Epoch2ApplyRequest
+
     try:
         return Epoch2ApplyRequest(
             plan_request=plan_request,
@@ -427,6 +417,8 @@ def _epoch2_recover_request(
     Raises:
         UserError: When a field violates the wire contract.
     """
+    from eawf.kernel.migration.epoch2.recovery import Epoch2RecoverRequest, RecoveryAction
+
     action = RecoveryAction.RECOVER if mode is Epoch2Mode.RECOVER else RecoveryAction.ROLLBACK
     try:
         return Epoch2RecoverRequest(
@@ -657,6 +649,12 @@ def _epoch2_dispatch(
         CliError: The daemon answered with any other failure.
     """
     if mode not in _CORPUS_MODES:
+        from eawf.kernel.migration.epoch2.recovery import (
+            EPOCH2_RECOVER_METHOD,
+            recover_cutover,
+            recovery_envelope,
+        )
+
         recover_request = _epoch2_recover_request(
             mode=mode,
             target_root=_required(target_root, option="--target-root", mode=mode),
@@ -688,11 +686,23 @@ def _epoch2_dispatch(
         sealed_by=sealed_by,
     )
     if mode is Epoch2Mode.PLAN:
+        from eawf.kernel.migration.epoch2.plan_mode import (
+            EPOCH2_PLAN_METHOD,
+            plan_cutover,
+            plan_envelope,
+        )
+
         return _epoch2_payload(
             method=EPOCH2_PLAN_METHOD,
             params=plan_request.model_dump(mode="json"),
             local=lambda: plan_envelope(plan_cutover(plan_request, sealed_at=datetime.now(UTC))),
         )
+
+    from eawf.kernel.migration.epoch2.apply import (
+        EPOCH2_APPLY_METHOD,
+        apply_cutover,
+        apply_envelope,
+    )
 
     apply_request = _epoch2_apply_request(
         plan_request=plan_request,
