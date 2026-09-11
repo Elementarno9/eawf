@@ -12,6 +12,11 @@ end: the library implemented the terminal burn and exported it, and no
 verb anywhere reached it, so the one transition that honestly describes
 a spent version was unreachable at the moment it was needed.
 
+The eleventh and twelfth, ``release.adopt`` and ``release.cancel``, are
+the pair for a publication this machinery never ran: one writes the
+observed facts of it onto the record, the other is the refusal those
+facts earn. ``cancelled`` had no operator surface at all before them.
+
 Two things are pinned here. The parity test asserts the registered set
 and the reachable set are the same set, so an eleventh verb lands broken
 rather than lands unreachable. The dispatch tests drive each subcommand
@@ -81,6 +86,27 @@ FAKE_REPLY: dict[str, Any] = {
     "train": {"current_checkpoint_index": 1},
     "receipt_refs": ["receipt://gate/dev1"],
     "next_status": "candidate",
+    "observed_targets": {"pypi": "observed_mismatch"},
+    "unconfigured_targets": ["plugins_dist"],
+    "reason": "the version is spent",
+}
+
+#: A well-formed adoption document, for the argv that carries one. The
+#: handler is stubbed here, so only its shape on the command line
+#: matters.
+ADOPTION: dict[str, Any] = {
+    "adopted_at": "2026-09-11T12:00:00Z",
+    "reason": "published with no record open",
+    "incident_ref": "INC-P32-01",
+    "observations": [
+        {
+            "target_id": "pypi",
+            "observed_status": "observed_mismatch",
+            "observed_at": "2026-09-11T12:00:00Z",
+            "evidence_ref": "observation://package_index/pypi/eawf@0.7.0.dev1",
+            "detail": "holds a build from a commit neither later tag target names",
+        }
+    ],
 }
 
 
@@ -199,6 +225,22 @@ def _argv(subcommand: str, tmp_path: Path) -> list[str]:
             "--reason",
             "the version is spent",
         ],
+        "adopt": [
+            "adopt",
+            RELEASE_KEY,
+            "--release",
+            record,
+            "--adoption",
+            _write(tmp_path / "adoption.json", ADOPTION),
+        ],
+        "cancel": [
+            "cancel",
+            RELEASE_KEY,
+            "--release",
+            record,
+            "--reason",
+            "nothing was ever published under it",
+        ],
         "advance": [
             "advance",
             RELEASE_KEY,
@@ -228,7 +270,7 @@ def test_every_mapped_subcommand_is_registered_on_the_release_app() -> None:
 
 def test_the_release_namespace_is_not_empty() -> None:
     """The parity assertion is over a non-empty set, not two empty ones."""
-    assert len(RELEASE_RPC_METHODS) == 10
+    assert len(RELEASE_RPC_METHODS) == 12
 
 
 # --- dispatch -------------------------------------------------------------

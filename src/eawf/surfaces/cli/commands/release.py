@@ -50,6 +50,8 @@ RELEASE_RPC_METHODS: Final[Mapping[str, str]] = {
     "reconcile": "release.reconcile",
     "observe": "release.observe_target",
     "burn": "release.burn",
+    "adopt": "release.adopt",
+    "cancel": "release.cancel",
     "advance": "release.advance_train",
 }
 
@@ -1179,8 +1181,111 @@ def release_burn(
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
+    settled = _operation_line(result) if result.get("operation_ref") else _record_line(result)
     text = (
-        f"{_operation_line(result)}\n"
+        f"{settled}\n  record: {result.get('release_record_id')}\n  reason: {result.get('reason')}"
+    )
+    emit_json_or_text(result, text, flags=flags)
+
+
+@release_app.command("adopt")
+def release_adopt(
+    ctx: typer.Context,
+    release_key: Annotated[
+        str, typer.Argument(help="Release key to adopt into, e.g. REL-0.7.0.dev1.")
+    ],
+    release_file: Annotated[
+        Path,
+        typer.Option("--release", help="Path to the serialized draft record."),
+    ],
+    adoption_file: Annotated[
+        Path,
+        typer.Option("--adoption", help="Path to the observed per-target facts, as JSON."),
+    ],
+) -> None:
+    """Adopt a publication that ran without a release record.
+
+    The verb writes observed facts and nothing else: one independent
+    read-back per target, the incident they belong to, and why the
+    version is being written up this way. It asserts no approval, runs
+    no readiness sweep and pins no manifest, because none of the three
+    happened -- and the record model forbids an adoption beside an
+    approval reference, so the adopted checkpoint can never be mistaken
+    for one that earned its approval.
+
+    Every configured target must carry a read-back or the call is
+    refused; a target the checkpoint never declared is recorded and
+    named back, because an uncontrolled publication can reach somewhere
+    the configuration does not know about.
+
+    The record stays a draft. ``eawf release burn`` ends it, and
+    ``eawf release cancel`` is refused on it from here on.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        record = _release_document(release_file, release_key)
+        result = _dispatch(
+            RELEASE_RPC_METHODS["adopt"],
+            {
+                "release": record,
+                "expected_revision": record.get("revision", 0),
+                "adoption": _read_json_document(adoption_file, label="adoption"),
+            },
+        )
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    observed = result.get("observed_targets") or {}
+    legs = ", ".join(f"{target}={status}" for target, status in sorted(observed.items()))
+    unconfigured = ", ".join(result.get("unconfigured_targets") or ()) or "(none)"
+    text = (
+        f"{_record_line(result)}\n"
+        f"  record: {result.get('release_record_id')}\n"
+        f"  observed: {legs}\n"
+        f"  not configured: {unconfigured}"
+    )
+    emit_json_or_text(result, text, flags=flags)
+
+
+@release_app.command("cancel")
+def release_cancel(
+    ctx: typer.Context,
+    release_key: Annotated[str, typer.Argument(help="Release key to cancel, e.g. REL-0.7.0.dev1.")],
+    release_file: Annotated[
+        Path,
+        typer.Option("--release", help="Path to the serialized record being abandoned."),
+    ],
+    reason: Annotated[
+        str, typer.Option("--reason", help="Why the checkpoint is abandoned; recorded with it.")
+    ],
+) -> None:
+    """Abandon a checkpoint that never touched a registry, or refuse.
+
+    A cancellation asserts that nothing was published under this
+    version, so the assertion is checked against the record itself: an
+    adopted publication, an opened publication operation or any leg past
+    ``not_started`` denies ``release_effect_already_started``. A spent
+    version is burned, never cancelled.
+
+    ``--reason`` is mandatory for the same reason the burn's is:
+    ``cancelled`` is terminal, so no later transition can explain it.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        record = _release_document(release_file, release_key)
+        result = _dispatch(
+            RELEASE_RPC_METHODS["cancel"],
+            {
+                "release": record,
+                "expected_revision": record.get("revision", 0),
+                "reason": reason,
+            },
+        )
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    text = (
+        f"{_record_line(result)}\n"
         f"  record: {result.get('release_record_id')}\n"
         f"  reason: {result.get('reason')}"
     )

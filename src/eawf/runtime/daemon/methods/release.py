@@ -54,6 +54,15 @@ requires an operator ``reason``, and it records that reason on both rows
 it appends, so a burned version's record says why it was abandoned
 instead of leaving a reader to infer an outcome from a terminal status.
 
+``release.adopt`` and ``release.cancel`` are the two verbs for a version
+whose publication this machinery did not run, and they live beside this
+module in :mod:`eawf.runtime.daemon.methods.release_disposition`. The
+burn reaches into that module for the one case it shares: an adopted
+record has no publication episode to abandon, so its terminal move
+writes a record row and no ledger row at all. The entry checks both
+modules run first are in
+:mod:`eawf.runtime.daemon.methods.release_context`.
+
 Two ladder verbs sit beside them. ``release.create`` opens a checkpoint's
 DRAFT record only once every measured contract the checkpoint asserts
 over is promoted (:mod:`eawf.workflow.release.admission`), and
@@ -86,15 +95,16 @@ from eawf.kernel.spec.release import (
     ReleaseCheckpoint,
     ReleaseTargetStatus,
     semver_equivalent,
-    validate_release_against_train,
-)
-from eawf.kernel.spec.release_config import (
-    ReleaseConfig,
-    ReleaseConfigError,
-    load_release_config,
 )
 from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
+from eawf.runtime.daemon.methods.release_context import (
+    assert_revision,
+    require_state_path,
+    resolve_config,
+    validated_release,
+)
+from eawf.runtime.daemon.methods.release_disposition import burn_adopted_record
 from eawf.surfaces.cli.errors import CliError, UserError
 from eawf.workflow.evidence._io import load_state
 from eawf.workflow.release.adapters import collect_observation
@@ -110,8 +120,6 @@ from eawf.workflow.release.advance import (
 )
 from eawf.workflow.release.ledger import (
     IdempotencyConflictError,
-    StaleReleaseRevisionError,
-    assert_fresh_revision,
     current_operation,
     record_operation,
     replayed_receipt,
@@ -144,7 +152,7 @@ from eawf.workflow.release.records import (
 )
 from eawf.workflow.release.settlement import observe_target
 from eawf.workflow.release.target_machine import TargetTransitionError
-from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
+from eawf.workflow.release.train import V07_TRAIN
 from eawf.workflow.verify.release_readiness import (
     DEFAULT_SIGNAL_TTL_SECONDS,
     ReleaseReadiness,
@@ -212,31 +220,6 @@ class ApproveParams(BaseModel):
     release: dict[str, Any]
     readiness: dict[str, Any]
     approval_ref: str
-
-
-def _resolve_config(version: str) -> ReleaseConfig:
-    """Return the loaded configuration for checkpoint *version*.
-
-    Args:
-        version: Normalized checkpoint version.
-
-    Returns:
-        The validated :class:`~eawf.kernel.spec.release_config.ReleaseConfig`.
-
-    Raises:
-        DaemonValidationError: When no configuration is authored for the
-            version, or the authored one is rejected by the loader.
-    """
-    try:
-        source = checkpoint_config_yaml(version)
-    except KeyError as exc:
-        raise DaemonValidationError(
-            f"validation_failed: no release configuration for {version!r}"
-        ) from exc
-    try:
-        return load_release_config(source, train=V07_TRAIN)
-    except ReleaseConfigError as exc:
-        raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
 
 
 @register("release.show")
@@ -340,7 +323,7 @@ async def compute_readiness_method(ctx: MethodContext, params: dict[str, Any]) -
             or the record is not in a state preflight applies to.
     """
     args = ComputeReadinessParams.model_validate(params)
-    config = _resolve_config(args.version)
+    config = resolve_config(args.version)
     try:
         readiness = compute_readiness(
             config,
@@ -358,7 +341,7 @@ async def compute_readiness_method(ctx: MethodContext, params: dict[str, Any]) -
         "first_red": None if readiness.first_red is None else readiness.first_red.value,
     }
     if args.release is not None:
-        candidate = _validated_release(args.release)
+        candidate = validated_release(args.release)
         try:
             result["next_status"] = record_preflight_result(candidate, readiness).status.value
         except (ReleaseTransitionError, ValueError) as exc:
@@ -394,8 +377,8 @@ async def approve(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             passing).
     """
     args = ApproveParams.model_validate(params)
-    state_path = _require_state_path(ctx)
-    candidate = _validated_release(args.release)
+    state_path = require_state_path(ctx)
+    candidate = validated_release(args.release)
     try:
         readiness = ReleaseReadiness.model_validate(args.readiness)
     except ValidationError as exc:
@@ -424,34 +407,6 @@ async def approve(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         "release": approved.model_dump(mode="json"),
         "release_record_id": record_envelope_id(approved),
     }
-
-
-def _validated_release(payload: dict[str, Any]) -> Release:
-    """Return the :class:`Release` in *payload*, placed on the train.
-
-    Args:
-        payload: Serialized release record.
-
-    Returns:
-        The validated record, whose epoch and membership agree with the
-        rung the train declares for it.
-
-    Raises:
-        DaemonValidationError: When the payload fails the record schema,
-            names a checkpoint the train does not declare, or
-            contradicts the rung's declaration.
-    """
-    try:
-        release = Release.model_validate(payload)
-    except ValidationError as exc:
-        raise DaemonValidationError(
-            f"validation_failed: release payload invalid: {exc.error_count()} error(s)"
-        ) from exc
-    try:
-        validate_release_against_train(release, V07_TRAIN)
-    except (KeyError, ValueError) as exc:
-        raise DaemonValidationError(f"validation_failed: {exc}") from exc
-    return release
 
 
 class _PublicationParams(BaseModel):
@@ -595,27 +550,6 @@ class ObserveTargetParams(_PublicationParams):
     effect_receipt_ref: str | None = None
 
 
-def _require_state_path(ctx: MethodContext) -> Path:
-    """Return the daemon's state path, or refuse the verb.
-
-    Args:
-        ctx: Server context.
-
-    Returns:
-        The bound ``state.json`` path.
-
-    Raises:
-        DaemonValidationError: When the daemon runs without on-disk
-            state. A verb with nowhere to record what it did is worse
-            than one that refuses.
-    """
-    if ctx.state_path is None:
-        raise DaemonValidationError(
-            "validation_failed: recording release verbs require an on-disk state root"
-        )
-    return Path(ctx.state_path)
-
-
 def _receipt(
     operation: PublicationOperation,
     release: Release,
@@ -686,22 +620,6 @@ def _replay(
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
 
 
-def _assert_revision(release: Release, expected_revision: int) -> None:
-    """Refuse the verb when the caller holds a stale record.
-
-    Args:
-        release: The record being mutated.
-        expected_revision: The revision the caller believes it holds.
-
-    Raises:
-        DaemonValidationError: With a ``stale_release_revision`` message.
-    """
-    try:
-        assert_fresh_revision(release, expected_revision)
-    except StaleReleaseRevisionError as exc:
-        raise DaemonValidationError(f"validation_failed: {exc}") from exc
-
-
 def _open_operation(state_path: Path, release: Release) -> PublicationOperation:
     """Return the operation already open for *release*, or refuse.
 
@@ -753,14 +671,14 @@ async def publish(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             longer binds).
     """
     args = PublishParams.model_validate(params)
-    state_path = _require_state_path(ctx)
-    release = _validated_release(args.release)
+    state_path = require_state_path(ctx)
+    release = validated_release(args.release)
     fingerprint = _fingerprint("release.publish", params)
     replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
     if replayed is not None:
         return _receipt(replayed, release, replayed=True)
-    _assert_revision(release, args.expected_revision)
-    config = _resolve_config(release.version)
+    assert_revision(release, args.expected_revision)
+    config = resolve_config(release.version)
     now = datetime.now(UTC)
     try:
         readiness = compute_readiness(
@@ -816,14 +734,14 @@ async def retry_target(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
             does not match the episode (``unsafe_release_retry``).
     """
     args = RetryTargetParams.model_validate(params)
-    state_path = _require_state_path(ctx)
-    release = _validated_release(args.release)
+    state_path = require_state_path(ctx)
+    release = validated_release(args.release)
     fingerprint = _fingerprint("release.retry_target", params)
     replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
     if replayed is not None:
         return _receipt(replayed, release, replayed=True)
-    _assert_revision(release, args.expected_revision)
-    config = _resolve_config(release.version)
+    assert_revision(release, args.expected_revision)
+    config = resolve_config(release.version)
     operation = _open_operation(state_path, release)
     now = datetime.now(UTC)
     try:
@@ -892,6 +810,11 @@ async def burn(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         record, the replay flag, the reason as recorded and the id of the
         record row carrying the burn.
 
+    An adopted record takes a shorter route through
+    :func:`~eawf.runtime.daemon.methods.release_disposition.burn_adopted_record`:
+    there is no publication episode to abandon, so there is no ledger row
+    and no idempotency index to key it in.
+
     Raises:
         DaemonValidationError: On a blank or absent reason, a stale
             revision, an idempotency conflict, no open operation, or a
@@ -901,8 +824,15 @@ async def burn(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             exhausted.
     """
     args = BurnParams.model_validate(params)
-    state_path = _require_state_path(ctx)
-    release = _validated_release(args.release)
+    state_path = require_state_path(ctx)
+    release = validated_release(args.release)
+    if release.adoption is not None:
+        return burn_adopted_record(
+            state_path,
+            release,
+            reason=args.reason,
+            expected_revision=args.expected_revision,
+        )
     fingerprint = _fingerprint("release.burn", params)
     replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
     if replayed is not None:
@@ -912,8 +842,8 @@ async def burn(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             "reason": args.reason,
             "release_record_id": record_envelope_id(settled),
         }
-    _assert_revision(release, args.expected_revision)
-    config = _resolve_config(release.version)
+    assert_revision(release, args.expected_revision)
+    config = resolve_config(release.version)
     operation = _open_operation(state_path, release)
     now = datetime.now(UTC)
     try:
@@ -923,9 +853,10 @@ async def burn(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     except (ValidationError, ValueError) as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
     summary = f"burn {burned.key}: {args.reason}"
+    settled_operation = operation if abandoned is None else abandoned
     recorded = record_operation(
         state_path,
-        abandoned,
+        settled_operation,
         idempotency_key=args.idempotency_key,
         fingerprint=fingerprint,
         recorded_at=now,
@@ -1018,14 +949,14 @@ async def reconcile(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any
             (``observer_only_status``).
     """
     args = ReconcileParams.model_validate(params)
-    state_path = _require_state_path(ctx)
-    release = _validated_release(args.release)
+    state_path = require_state_path(ctx)
+    release = validated_release(args.release)
     fingerprint = _fingerprint("release.reconcile", params)
     replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
     if replayed is not None:
         return _receipt(replayed, release, replayed=True)
-    _assert_revision(release, args.expected_revision)
-    config = _resolve_config(release.version)
+    assert_revision(release, args.expected_revision)
+    config = resolve_config(release.version)
     operation = _open_operation(state_path, release)
     now = datetime.now(UTC)
     try:
@@ -1086,14 +1017,14 @@ async def observe(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             release or target transition.
     """
     args = ObserveTargetParams.model_validate(params)
-    state_path = _require_state_path(ctx)
-    release = _validated_release(args.release)
+    state_path = require_state_path(ctx)
+    release = validated_release(args.release)
     fingerprint = _fingerprint("release.observe_target", params)
     replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
     if replayed is not None:
         return {**_receipt(replayed, release, replayed=True), "observation": None}
-    _assert_revision(release, args.expected_revision)
-    config = _resolve_config(release.version)
+    assert_revision(release, args.expected_revision)
+    config = resolve_config(release.version)
     operation = _open_operation(state_path, release)
     now = datetime.now(UTC)
     try:
@@ -1225,7 +1156,7 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """
     args = CreateParams.model_validate(params)
     state = _require_state(ctx)
-    state_path = _require_state_path(ctx)
+    state_path = require_state_path(ctx)
     try:
         record = create_checkpoint_release(
             state,
@@ -1277,8 +1208,8 @@ async def advance(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             ...) when the advance is refused.
     """
     args = AdvanceTrainParams.model_validate(params)
-    current = _validated_release(args.release)
-    config = _resolve_config(current.version)
+    current = validated_release(args.release)
+    config = resolve_config(current.version)
     try:
         receipts = [CheckpointGateReceipt.model_validate(row) for row in args.receipts]
         result = advance_train(

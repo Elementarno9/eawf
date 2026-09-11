@@ -88,7 +88,9 @@ class ReleaseStatus(StrEnum):
         RECOVERING: A hard failure landed after a possible side effect.
         BAKED: Prerelease independently observed on every required target.
         RELEASED: Stable independently observed on every required target.
-        PARTIALLY_RELEASED: Recovery exhausted; the version is burned.
+        PARTIALLY_RELEASED: The version is spent and burned -- either
+            recovery was exhausted, or an out-of-band publication was
+            adopted into the record (see :class:`ReleaseAdoption`).
     """
 
     DRAFT = "draft"
@@ -133,6 +135,15 @@ class ReleaseTargetStatus(StrEnum):
     UNKNOWN = "unknown"
     OBSERVED_SUCCESS = "observed_success"
     OBSERVED_MISMATCH = "observed_mismatch"
+
+
+#: The two per-target states reachable only through an independent
+#: read-back. Declared here, beside the enum, because both the operation
+#: records and the adoption rows need "is this an observation?" and a
+#: second copy of a two-member set is a second thing to keep in step.
+OBSERVED_TARGET_STATUSES: Final[frozenset[ReleaseTargetStatus]] = frozenset(
+    {ReleaseTargetStatus.OBSERVED_SUCCESS, ReleaseTargetStatus.OBSERVED_MISMATCH}
+)
 
 
 class ReleaseGateProfile(StrEnum):
@@ -336,6 +347,105 @@ class ReleaseInvalidation(_StrictModel):
     prior_status: ReleaseStatus
 
 
+class AdoptedTargetObservation(_StrictModel):
+    """One target's independently observed state in an adoption.
+
+    Attributes:
+        target_id: Publication target that was read back.
+        observed_status: What the read-back found. Only the two
+            ``observed_*`` states are admissible: an adoption carries
+            what an independent reader saw, never what a publisher
+            claimed, because no publisher call ran through the record to
+            do the claiming.
+        observed_at: When the read-back was taken (timezone-aware UTC).
+        evidence_ref: Locator of the read-back this row rests on.
+        detail: Non-blank prose naming what the target holds and what it
+            was built from, dense enough that a reader can tell why the
+            leg matched or diverged.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    target_id: TargetIdStr
+    observed_status: ReleaseTargetStatus
+    observed_at: UtcDatetime
+    evidence_ref: ReferenceStr
+    detail: Annotated[str, Field(min_length=1, max_length=1000)]
+
+    @model_validator(mode="after")
+    def _status_is_an_observation(self) -> AdoptedTargetObservation:
+        """Reject a row that reports rather than observes.
+
+        Raises:
+            ValueError: When *observed_status* is not one of
+                :data:`OBSERVED_TARGET_STATUSES`.
+        """
+        if self.observed_status not in OBSERVED_TARGET_STATUSES:
+            raise ValueError(
+                f"target {self.target_id!r} was adopted at "
+                f"{self.observed_status.value!r}; an adoption records an "
+                f"independent read-back, so only "
+                f"{sorted(status.value for status in OBSERVED_TARGET_STATUSES)} apply"
+            )
+        return self
+
+
+class ReleaseAdoption(_StrictModel):
+    """The typed record of a publication that ran outside the machinery.
+
+    A governed release is approved, then published, then observed. A
+    publication that happened with no record has none of those three,
+    and this object is deliberately not a stand-in for them: it carries
+    only what an independent reader could still see afterwards, plus why
+    the version is being written up this way.
+
+    The distinction is enforced, not merely documented.
+    :class:`Release` refuses to carry an adoption and an
+    :attr:`Release.approval_ref` at once, so an adopted checkpoint can
+    never be mistaken for one that earned its approval, and the reader
+    making the distinction does not have to interpret a free-form
+    reference string to make it.
+
+    Attributes:
+        adopted_at: When the adoption was recorded (timezone-aware UTC).
+        reason: Non-blank prose stating that the publication was
+            uncontrolled and why the version cannot be reused.
+        incident_ref: The incident this adoption disposes of. Required,
+            because an uncontrolled publication that no incident
+            describes has not been investigated enough to adopt.
+        observations: One independently observed state per target,
+            unique by target id and non-empty. An adoption that observed
+            nothing would assert an external effect it could not see.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    adopted_at: UtcDatetime
+    reason: Annotated[str, Field(min_length=1, max_length=1000)]
+    incident_ref: ReferenceStr
+    observations: Annotated[tuple[AdoptedTargetObservation, ...], Field(min_length=1)]
+
+    @model_validator(mode="after")
+    def _targets_are_unique(self) -> ReleaseAdoption:
+        """Reject two observations of the same target.
+
+        Raises:
+            ValueError: When a target id repeats. Two rows for one leg
+                would let the adoption assert both that a target matched
+                and that it diverged.
+        """
+        seen = [row.target_id for row in self.observations]
+        duplicates = sorted({name for name in seen if seen.count(name) > 1})
+        if duplicates:
+            raise ValueError(f"adoption observes targets more than once: {duplicates}")
+        return self
+
+    @property
+    def observed_target_statuses(self) -> Mapping[str, ReleaseTargetStatus]:
+        """Return the per-target projection this adoption asserts."""
+        return {row.target_id: row.observed_status for row in self.observations}
+
+
 class ReleaseCheckpoint(_StrictModel):
     """One declared rung of a :class:`ReleaseTrain`.
 
@@ -500,6 +610,9 @@ class Release(_StrictModel):
         publication_operation_ref: Set once external effect starts.
         supersedes_release_ref: Correction lineage for a burned version.
         last_invalidation: Typed record of the last return to DRAFT.
+        adoption: Typed record of an out-of-band publication adopted into
+            this checkpoint. Mutually exclusive with
+            :attr:`approval_ref`.
         revision: Compare-and-swap transition revision.
     """
 
@@ -523,6 +636,7 @@ class Release(_StrictModel):
     publication_operation_ref: ReferenceStr | None = None
     supersedes_release_ref: ReleaseKeyStr | None = None
     last_invalidation: ReleaseInvalidation | None = None
+    adoption: ReleaseAdoption | None = None
     revision: Annotated[int, Field(ge=0)] = 0
 
     @model_validator(mode="after")
@@ -559,6 +673,15 @@ class Release(_StrictModel):
     def _pin_is_complete(self) -> Release:
         """Require the pinned facts every post-DRAFT state depends on.
 
+        An adopted record is exempt from both requirements and the
+        exemption is the honest answer rather than a convenience. The
+        targets of an uncontrolled publication disagree about which
+        commit the version denotes, so there is no single source or
+        manifest to pin; and nobody approved it, so an approval
+        reference could only be invented. What stands in for both is
+        :attr:`adoption`, whose per-target rows say exactly what each
+        target was observed to hold.
+
         Raises:
             ValueError: When a record at :attr:`ReleaseStatus.CANDIDATE`
                 or later is missing its source binding or its manifest
@@ -566,6 +689,8 @@ class Release(_StrictModel):
                 :attr:`ReleaseStatus.APPROVED` or later carries no
                 approval reference.
         """
+        if self.adoption is not None:
+            return self
         if self.status in _PINNED_STATUSES:
             missing = [
                 name
@@ -581,6 +706,55 @@ class Release(_StrictModel):
                 raise ValueError(f"status {self.status.value!r} requires pinned fields: {missing}")
         if self.status in _APPROVED_STATUSES and self.approval_ref is None:
             raise ValueError(f"status {self.status.value!r} requires approval_ref")
+        return self
+
+    @model_validator(mode="after")
+    def _provenance_is_exclusive(self) -> Release:
+        """Keep the adopted record and the approved one distinguishable.
+
+        A burned version reached :attr:`ReleaseStatus.PARTIALLY_RELEASED`
+        one of exactly two ways, and a reader must always be able to
+        tell which: recovery was exhausted on a publication this record
+        approved and drove, or an uncontrolled publication was adopted
+        into it. So the terminal burn requires exactly one of
+        :attr:`approval_ref` and :attr:`adoption`, and no record may
+        carry both at any status.
+
+        Raises:
+            ValueError: When a record carries both an adoption and an
+                approval, when a burned record carries neither, when an
+                adoption appears at a status that cannot have one, or
+                when an adoption's observations disagree with the
+                per-target projection beside them.
+        """
+        if self.adoption is None:
+            if self.status is ReleaseStatus.PARTIALLY_RELEASED and self.approval_ref is None:
+                raise ValueError(
+                    f"status {self.status.value!r} requires approval_ref or adoption; "
+                    f"a burned version was either approved and driven here, or adopted"
+                )
+            return self
+        if self.approval_ref is not None:
+            raise ValueError(
+                f"release {self.key!r} carries an adoption and approval_ref "
+                f"{self.approval_ref!r}; an out-of-band publication was never "
+                f"approved, so the two are exclusive"
+            )
+        if self.status not in _ADOPTION_STATUSES:
+            raise ValueError(
+                f"status {self.status.value!r} cannot carry an adoption; "
+                f"admitted: {sorted(status.value for status in _ADOPTION_STATUSES)}"
+            )
+        drift = sorted(
+            row.target_id
+            for row in self.adoption.observations
+            if self.target_statuses.get(row.target_id) != row.observed_status
+        )
+        if drift:
+            raise ValueError(
+                f"adoption observations disagree with target_statuses for {drift}; "
+                f"the projection a reader reads must be the facts the adoption carries"
+            )
         return self
 
 
@@ -619,6 +793,15 @@ _PINNED_STATUSES: Final[frozenset[ReleaseStatus]] = frozenset(
         ReleaseStatus.RELEASED,
         ReleaseStatus.PARTIALLY_RELEASED,
     }
+)
+
+#: Statuses that may carry a :class:`ReleaseAdoption`. DRAFT is where an
+#: uncontrolled publication is written into the record, and
+#: PARTIALLY_RELEASED is where that record stops; nothing in between
+#: applies, because an adopted publication never passed through pinning,
+#: approval or dispatch.
+_ADOPTION_STATUSES: Final[frozenset[ReleaseStatus]] = frozenset(
+    {ReleaseStatus.DRAFT, ReleaseStatus.PARTIALLY_RELEASED}
 )
 
 #: Statuses that require a bound approval receipt.
@@ -673,9 +856,12 @@ def validate_release_against_train(release: Release, train: ReleaseTrain) -> Rel
 
 
 __all__ = [
+    "OBSERVED_TARGET_STATUSES",
+    "AdoptedTargetObservation",
     "NormalizedVersionStr",
     "ReferenceStr",
     "Release",
+    "ReleaseAdoption",
     "ReleaseChannel",
     "ReleaseCheckpoint",
     "ReleaseGateProfile",
