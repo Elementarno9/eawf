@@ -26,6 +26,7 @@ from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.state import _enforce_wave_close_gate, mutate
 from eawf.workflow.lifecycle.transitions import LifecycleError
+from tests._gate_child_helpers import GateChildDouble, install_gate_child_double
 
 pytestmark = pytest.mark.integration
 
@@ -252,48 +253,92 @@ def _read_evidence_rows(state_path: Path) -> list[EvidenceRecord]:
     return rows
 
 
+def _gate_receipts(rows: list[EvidenceRecord]) -> list[EvidenceRecord]:
+    """Return the per-gate execution receipts among *rows*."""
+    return [row for row in rows if (row.metrics or {}).get("receipt") is not None]
+
+
+def _criterion_rows(rows: list[EvidenceRecord]) -> list[EvidenceRecord]:
+    """Return the criterion-level evidence rows among *rows*.
+
+    The per-gate receipts share the store and the ``deterministic`` shape, so
+    the criterion-level row is the one WITHOUT the receipt marker.
+    """
+    return [row for row in rows if (row.metrics or {}).get("receipt") is None]
+
+
+def _assert_capture_ran_in_child(double: GateChildDouble, state_path: Path) -> None:
+    """Assert the capture ran in the gate child on the close-resolved arguments.
+
+    The close scores the gate twice -- once for the readiness projection and
+    once for the blocking close gate -- so the call COUNT is an artefact of
+    that pipeline; what the test pins is that every call the child made
+    carried the arguments the close path resolved, and that at least one call
+    happened at all (an uninstalled double would leave an empty log and turn
+    every other assertion here vacuous).
+    """
+    expected = {
+        "args": [],
+        "kwargs": {
+            "scope": "repo",
+            "state_path": str(state_path.resolve()),
+            "mode": "home",
+            "key_sequence": [],
+            "size": [100, 30],
+        },
+    }
+    calls = double.calls()
+    assert calls, "the screen-capture double never ran in the gate child"
+    assert calls == [expected] * len(calls)
+
+
 def _setup(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     *,
     captured: str,
-) -> tuple[Path, MethodContext]:
+) -> tuple[Path, MethodContext, GateChildDouble]:
+    """Build the enforcing fixture repo and fabricate the captured screen.
+
+    The close scorer runs the gate in a child interpreter, so the capture
+    double is installed THERE rather than in this process; everything else
+    about the close -- the spawn, the sandbox, the compiled check, the golden
+    read and the diff -- stays real.
+    """
     _write_enforcing_profile(tmp_path)
     _init_git_repo(tmp_path)
     _write_golden(tmp_path)
     state_path = tmp_path / ".ea" / "state.json"
     _write_state(state_path)
     ctx = _build_ctx(tmp_path, state_path)
-
-    def _capture(**kwargs: object) -> str:
-        assert kwargs["scope"] == "repo"
-        assert kwargs["state_path"] == state_path.resolve()
-        assert kwargs["mode"] == "home"
-        assert kwargs["size"] == (100, 30)
-        return captured
-
-    monkeypatch.setattr(
-        "eawf.surfaces.tui.snapshot.pilot_harness.capture_mockup_golden_screen_text_sync",
-        _capture,
+    double = install_gate_child_double(
+        monkeypatch,
+        workdir=tmp_path,
+        target_module="eawf.surfaces.tui.snapshot.pilot_harness",
+        attribute="capture_mockup_golden_screen_text_sync",
+        returns=captured,
     )
-    return state_path, ctx
+    return state_path, ctx, double
 
 
 def test_close_gate_passes_and_mints_t5_mockup_evidence(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    state_path, ctx = _setup(tmp_path, monkeypatch, captured=_GOLDEN_TEXT)
+    state_path, ctx, double = _setup(tmp_path, monkeypatch, captured=_GOLDEN_TEXT)
 
     async def body() -> None:
         await mutate(ctx, {"mutation": _close_mutation().model_dump(mode="json")})
 
         payload = orjson.loads(state_path.read_bytes())
         assert payload["waves"][_WAVE]["status"] == "closed"
+        _assert_capture_ran_in_child(double, state_path)
 
         rows = _read_evidence_rows(state_path)
         deterministic_pass = [
-            row for row in rows if row.evidence_kind == "deterministic" and row.status == "pass"
+            row
+            for row in _criterion_rows(rows)
+            if row.evidence_kind == "deterministic" and row.status == "pass"
         ]
         assert len(deterministic_pass) == 1
         row = deterministic_pass[0]
@@ -304,6 +349,7 @@ def test_close_gate_passes_and_mints_t5_mockup_evidence(
         assert row.metrics["gate_id"] == _GATE
         assert row.refs == [_GATE, _CRITERION]
         assert "tier T5" in row.summary
+        assert [receipt.status for receipt in _gate_receipts(rows)] == ["pass"]
 
     _run(body)
 
@@ -312,7 +358,7 @@ def test_close_gate_blocks_mockup_golden_divergence_with_region_diff(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    state_path, _ctx = _setup(
+    state_path, _ctx, double = _setup(
         tmp_path,
         monkeypatch,
         captured="+----------------+\n| actual screen |\n+----------------+",
@@ -337,6 +383,14 @@ def test_close_gate_blocks_mockup_golden_divergence_with_region_diff(
         assert "region=@@" in message
         assert "-| expected screen |" in message
         assert "+| actual screen |" in message
-        assert _read_evidence_rows(state_path) == []
+        # Without this the refusal could be any other fault reaching the
+        # same blocked status.
+        _assert_capture_ran_in_child(double, state_path)
+        rows = _read_evidence_rows(state_path)
+        # A refused close mints no criterion evidence, but it still owes a
+        # receipt for the gate it ran: a required blocking gate that leaves
+        # none is what the receipt floor refuses.
+        assert _criterion_rows(rows) == []
+        assert [receipt.status for receipt in _gate_receipts(rows)] == ["fail"]
 
     _run(body)

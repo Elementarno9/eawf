@@ -14144,6 +14144,21 @@
       "scope_id": "P32-I01-W45",
       "status": "done",
       "updated_at": "2026-09-11T18:20:03.143429Z"
+    },
+    "P32-I01-W46": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 211882,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W46",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W46",
+      "model": null,
+      "scope_id": "P32-I01-W46",
+      "status": "done",
+      "updated_at": "2026-09-11T18:56:41.656156Z"
     }
   },
   "agent_sessions": {
@@ -21728,6 +21743,55 @@
       "wave_id": "P31-I01-W36",
       "wave_revision_digest": "28166d383a29b5b00865f50c9ec4ac902b47ca48a1c43f74c48632bdd13375aa"
     },
+    "close-2f6b71832b1f283c842c9aa4": {
+      "apply_event_id": null,
+      "artifact_refs": [
+        "urn:eawf:v1:close-budget:close-2f6b71832b1f283c842c9aa4:infrastructure_retry:1"
+      ],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "64adcde579886e81dabe5e46d6fc39ca57ee2575",
+      "commit_identity_digest": "sha256:75f6fe595d5cf980b209db6ccb405c389f7f93cb7310fbf2d09331092a9657b2",
+      "criteria_digest": "c7bba8a12235add4e72ffabde74709bde4950cfb688864bd6119fb8a95e224ac",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "187db579691b6c8cf2347a22b912dd75ca2c610d788b09122d937194e9d3a1fb",
+      "gate_receipt_ids": [],
+      "generation": 1,
+      "id": "close-2f6b71832b1f283c842c9aa4",
+      "idempotency_key": "6951aa8228699cc435850c8aa10c08a9b1d89112533edcd034c0c8d34e5d10a6",
+      "infrastructure_retry_budget_remaining": 0,
+      "integrated_sha": "64adcde579886e81dabe5e46d6fc39ca57ee2575",
+      "integration_id": "integration-b96b7475573a91ee8dac4ac8",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "The affordance gate was never weakened: W40's sandboxed child could not see a monkeypatch applied in the pytest process, so the test's injection seam is now carried across the process boundary while the spawn, the sandbox and the receipt stay real. An oracle detail is bounded at source and clamped at the field, so a verbose gate no longer turns an already-scored verdict into a crashed close.",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-11T18:56:39.059775Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "b48a9a07d2b1f571b1200a088c6b7c2ab64838198309ac496d000711c4fde48c",
+      "spec_digest": "b761800515fd143a675429bf3347904d4f017c6d17898a6fa4e41d513047248f",
+      "started_at": "2026-09-11T18:56:39.388696Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-11T18:57:08.801372Z",
+      "tokens_consumed": 211882,
+      "tree_sha": "14104aa56dafce7ade21fef32d59accb6d1f1394",
+      "updated_at": "2026-09-11T18:57:08.863466Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W46",
+      "wave_revision_digest": "35be746cd23992558bfcbb8f2cd04544480dec5610f46934643a566b14078afa"
+    },
     "close-30fb6e9c3be01aa1253fa1d9": {
       "apply_event_id": null,
       "artifact_refs": [
@@ -23469,8 +23533,7 @@
       "SES-20260911T182254.099723Z-executor-claude-c11b55de-4103-40de-80f1-27803a2ea282"
     ],
     "active_wave_ids": [
-      "P32-I01-W21",
-      "P32-I01-W46"
+      "P32-I01-W21"
     ],
     "iter_id": "P32-I01",
     "phase_id": "P32",
@@ -42140,7 +42203,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-11T18:22:58.104676Z",
+  "updated_at": "2026-09-11T18:57:08.863516Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -44071,6 +44134,22 @@
       "supersedes_id": null,
       "tree_sha": "bcc1c1141369a944bb0bcb52e756012f60621660",
       "wave_id": "P31-I01-W22"
+    },
+    "integration-b96b7475573a91ee8dac4ac8": {
+      "base_sha": "0e9787df1e900c23508c8b9e4c05bf3b210e679f",
+      "candidate_sha": "64adcde579886e81dabe5e46d6fc39ca57ee2575",
+      "created_at": "2026-09-11T18:56:38.035562Z",
+      "diff_digest": "ec58602f7091085002294208aed8c8241b650c50a6a9c659a1eeb1911f5c7575",
+      "generation": 1,
+      "id": "integration-b96b7475573a91ee8dac4ac8",
+      "integrated_sha": "64adcde579886e81dabe5e46d6fc39ca57ee2575",
+      "kind": "adopt",
+      "reason": "Cherry-picked by hand onto the phase branch so the repo hook's attribution trailer could be stripped per operator policy; verified on the parent: both close-gate suites 4 passed, and W43's tiering repair still holds at 380 passed.",
+      "spec_digest": "b761800515fd143a675429bf3347904d4f017c6d17898a6fa4e41d513047248f",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "14104aa56dafce7ade21fef32d59accb6d1f1394",
+      "wave_id": "P32-I01-W46"
     },
     "integration-b9cf3e562f83c60f9a935dd2": {
       "base_sha": "a91bf67b4baa1f938e23ef78de7b75f1ff0efd00",
@@ -174175,9 +174254,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260911T182254.099723Z-executor-claude-c11b55de-4103-40de-80f1-27803a2ea282",
       "claimed_at": "2026-09-11T18:22:58.103428Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-11T18:56:41.656156Z",
+      "commit": "64adcde579886e81dabe5e46d6fc39ca57ee2575",
+      "commit_identity_digest": "sha256:75f6fe595d5cf980b209db6ccb405c389f7f93cb7310fbf2d09331092a9657b2",
       "criteria_floor_waiver": {
         "reason": "Regression wave appended after a baseline comparison against origin/main proved three failures reported as pre-existing were introduced by this phase.",
         "waived_at": "2026-09-11T18:22:26.109224Z",
@@ -174264,13 +174343,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-11T18:22:26.332663Z",
-      "outcome": null,
+      "outcome": "The affordance gate was never weakened: W40's sandboxed child could not see a monkeypatch applied in the pytest process, so the test's injection seam is now carried across the process boundary while the spawn, the sandbox and the receipt stay real. An oracle detail is bounded at source and clamped at the field, so a verbose gate no longer turns an already-scored verdict into a crashed close.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -174347,7 +174426,7 @@
       ],
       "title": "Repair the close-gate regressions this phase introduced",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 211882,
       "worktree_id": null
     }
   },

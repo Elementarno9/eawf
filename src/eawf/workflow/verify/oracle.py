@@ -38,7 +38,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from eawf.kernel.spec.common import (
     CriterionSpec,
@@ -78,6 +78,16 @@ BeforeGateExecute = Callable[
 ]
 AfterGateExecute = Callable[[str, str, CheckResult], None]
 
+#: Character bound on :attr:`OracleResult.detail`. The detail rides into
+#: the close-refusal message and into the state-resident evidence row, so
+#: it is a summary field with a deliberate bound.
+DETAIL_MAX_CHARS: int = 2000
+
+#: Suffix marking a detail that was clamped to :data:`DETAIL_MAX_CHARS`,
+#: so a reader can tell a short detail from the head slice of a long one
+#: and knows the untruncated output is still on ``check_result``.
+DETAIL_TRUNCATION_MARKER: str = "... (truncated; full output on check_result)"
+
 
 class OracleResult(_StrictModel):
     """Outcome of scoring one criterion through :func:`run_oracle`.
@@ -95,8 +105,37 @@ class OracleResult(_StrictModel):
     status: Literal["pass", "fail", "blocked", "needs_user"]
     criterion_id: IdStr
     gate_id: IdStr | None = None
-    detail: Annotated[str, Field(max_length=2000)] = ""
+    detail: Annotated[str, Field(max_length=DETAIL_MAX_CHARS)] = ""
     check_result: CheckResult | None = None
+
+    @field_validator("detail", mode="before")
+    @classmethod
+    def _clamp_detail(cls, value: object) -> object:
+        """Clamp an over-long detail rather than refusing to build the result.
+
+        A gate's own output is unbounded: a failing pytest run dumps kilobytes,
+        and a golden mismatch inlines a unified diff of a full-width screen.
+        Letting that overflow the field turns a gate the oracle SCORED into a
+        ``ValidationError`` raised out of the scorer, which crashes the close
+        instead of blocking it -- the loudest possible way to lose a verdict
+        that had already been reached. The head slice is kept because the
+        load-bearing part of every detail (the summary sentence, the diff
+        region marker, the first changed line) sits at the front, and the
+        untruncated output stays on ``check_result``.
+
+        Args:
+            value: The raw ``detail`` input, of any type.
+
+        Returns:
+            *value* unchanged when it is not an over-long string, else its
+            head slice with :data:`DETAIL_TRUNCATION_MARKER` appended. A
+            non-``str`` passes through so the field's own type error is the
+            one the caller sees.
+        """
+        if not isinstance(value, str) or len(value) <= DETAIL_MAX_CHARS:
+            return value
+        head = DETAIL_MAX_CHARS - len(DETAIL_TRUNCATION_MARKER)
+        return value[:head] + DETAIL_TRUNCATION_MARKER
 
     def failing_detail(self) -> str:
         """Return the concrete failing-check output for a refused criterion.
