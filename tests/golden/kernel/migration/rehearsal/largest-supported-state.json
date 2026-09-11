@@ -1,0 +1,41 @@
+{
+  "apply": {
+    "applied": true,
+    "journal_stages": [
+      "fence_cleared",
+      "workspace_resolved",
+      "authority_locked",
+      "quiescence_proved",
+      "recensus_matched",
+      "maintenance_entered",
+      "snapshot_taken",
+      "generation_built",
+      "read_smoke_passed",
+      "generation_selected",
+      "marker_written",
+      "maintenance_exited"
+    ]
+  },
+  "disposition": "imports",
+  "dry_run": {
+    "reproducible": true
+  },
+  "fixture": "largest-supported-state",
+  "rerun": {
+    "applied": false,
+    "journal_rows": 0,
+    "tree_unchanged": true
+  },
+  "rollback": {
+    "epoch": 1,
+    "generation_count": 0,
+    "outcome": "surfaces_restored",
+    "restored_locators": [
+      "config.yaml",
+      "state.json",
+      "store/audit.jsonl"
+    ],
+    "surfaces_match_restore_point": true
+  },
+  "scrub_findings": 0
+}

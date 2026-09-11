@@ -1,0 +1,316 @@
+{
+  "apply": {
+    "applied": true,
+    "generation_bytes": 1056007,
+    "generation_id": "gen-9b4f10dc3ead52b3",
+    "journal_stages": [
+      "fence_cleared",
+      "workspace_resolved",
+      "authority_locked",
+      "quiescence_proved",
+      "recensus_matched",
+      "maintenance_entered",
+      "snapshot_taken",
+      "generation_built",
+      "read_smoke_passed",
+      "generation_selected",
+      "marker_written",
+      "maintenance_exited"
+    ],
+    "ledger_files": 9,
+    "ledger_records": 684,
+    "residual_document_bytes": 234566
+  },
+  "disposition": "imports",
+  "dry_run": {
+    "approval_digest": "2c3811f087ee3c77caff38af3fa2e51d5160327888342ac04e321a8c127cc15d",
+    "collections": {
+      "actuals": [
+        24,
+        24,
+        0
+      ],
+      "agent_sessions": [
+        45,
+        45,
+        0
+      ],
+      "artifacts": [
+        88,
+        88,
+        0
+      ],
+      "audits": [
+        76,
+        100,
+        0
+      ],
+      "backlog": [
+        129,
+        129,
+        0
+      ],
+      "claims": [
+        0,
+        0,
+        0
+      ],
+      "close_attempts": [
+        0,
+        0,
+        0
+      ],
+      "current": [
+        6,
+        0,
+        0
+      ],
+      "decisions": [
+        58,
+        0,
+        58
+      ],
+      "dispatch_paused": [
+        0,
+        0,
+        0
+      ],
+      "estimates": [
+        24,
+        24,
+        0
+      ],
+      "fleet_run": [
+        0,
+        0,
+        0
+      ],
+      "goals": [
+        1,
+        1,
+        0
+      ],
+      "health": [
+        0,
+        0,
+        0
+      ],
+      "hypotheses": [
+        0,
+        0,
+        0
+      ],
+      "incidents": [
+        9,
+        0,
+        9
+      ],
+      "indexes": [
+        0,
+        0,
+        0
+      ],
+      "iters": [
+        1,
+        1,
+        0
+      ],
+      "mcp_grants": [
+        0,
+        0,
+        0
+      ],
+      "mcp_servers": [
+        0,
+        0,
+        0
+      ],
+      "memory_index": [
+        41,
+        41,
+        0
+      ],
+      "open_questions": [
+        0,
+        0,
+        0
+      ],
+      "outcomes": [
+        0,
+        0,
+        0
+      ],
+      "phases": [
+        1,
+        1,
+        0
+      ],
+      "plugins": [
+        0,
+        0,
+        0
+      ],
+      "project": [
+        10,
+        0,
+        1
+      ],
+      "sandbox_policies": [
+        1,
+        0,
+        1
+      ],
+      "schema_version": [
+        0,
+        0,
+        0
+      ],
+      "scope_kind": [
+        0,
+        0,
+        0
+      ],
+      "tracks": [
+        0,
+        0,
+        0
+      ],
+      "updated_at": [
+        0,
+        0,
+        0
+      ],
+      "urn": [
+        0,
+        0,
+        0
+      ],
+      "wave_dependency_barriers": [
+        0,
+        0,
+        0
+      ],
+      "wave_dependency_bindings": [
+        0,
+        0,
+        0
+      ],
+      "wave_integrations": [
+        0,
+        0,
+        0
+      ],
+      "waves": [
+        24,
+        24,
+        0
+      ],
+      "workspace": [
+        0,
+        0,
+        0
+      ],
+      "worktrees": [
+        336,
+        336,
+        0
+      ]
+    },
+    "manifest_digest": "9b4f10dc3ead52b3e33fc329d1faf6a022cdf1bee79fc777b5222c50cc17aeba",
+    "reproducible": true,
+    "source_digest": "dc40bc96a3e3137faab4f519f3a2242beec01dec06d3530ebd8f86fb3cc9bc01",
+    "source_rows": 874,
+    "target_rows": 814,
+    "unresolved_rows": [
+      "decisions/D-BAND-ENFORCE",
+      "decisions/D-BRANCH-GC",
+      "decisions/D-BRAND-MARK",
+      "decisions/D-EU-CAPTURE",
+      "decisions/D-FIDELITY-SPINE",
+      "decisions/D-HISTORY-ACCEPT",
+      "decisions/D-I21-RATIFY",
+      "decisions/D-I25-EU-EXCLUDE",
+      "decisions/D-I25-ODR-DRAIN",
+      "decisions/D-LOCK-SPLIT",
+      "decisions/D-ODR-ADVISORY",
+      "decisions/D-RESET-PARDON-STRICT",
+      "decisions/D-RPC-TERMINAL",
+      "decisions/D-SUP-01",
+      "decisions/D-SUP-02",
+      "decisions/D-SUP-03",
+      "decisions/D-SUP-04",
+      "decisions/D-SUP-05",
+      "decisions/D-SUP-TUI-01",
+      "decisions/D-TEETH",
+      "decisions/D-TUI-MODES",
+      "decisions/D-W43-CRITERIA-SUPERSEDED",
+      "decisions/D-WINDOWS-DESCOPE",
+      "decisions/D-WINDOWS-REALHOST",
+      "decisions/D-WINDOWS-VALIDATED",
+      "decisions/D-WINPIPE-01",
+      "decisions/D01",
+      "decisions/D02",
+      "decisions/D03",
+      "decisions/D04",
+      "decisions/D05",
+      "decisions/D06",
+      "decisions/D07",
+      "decisions/D08",
+      "decisions/D09",
+      "decisions/D10",
+      "decisions/D11",
+      "decisions/D12",
+      "decisions/D13",
+      "decisions/D14",
+      "decisions/D15",
+      "decisions/D16",
+      "decisions/D17",
+      "decisions/D18",
+      "decisions/D19",
+      "decisions/D20",
+      "decisions/D21",
+      "decisions/D22",
+      "decisions/D23",
+      "decisions/D24",
+      "decisions/D25",
+      "decisions/D26",
+      "decisions/D27",
+      "decisions/D28",
+      "decisions/D29",
+      "decisions/D30",
+      "decisions/D31",
+      "decisions/D32",
+      "incidents/INC-P30-01",
+      "incidents/INC-P30-02",
+      "incidents/INC-P30-03",
+      "incidents/INC-P30-06",
+      "incidents/INC-P30-07",
+      "incidents/INC-P30-08",
+      "incidents/INC-P30-09",
+      "incidents/INC-P30-10",
+      "incidents/INC-P30-11",
+      "project",
+      "sandbox_policies/POL-1"
+    ]
+  },
+  "fixture": "p30-i26-history",
+  "rerun": {
+    "applied": false,
+    "generation_id": "gen-9b4f10dc3ead52b3",
+    "journal_rows": 0,
+    "tree_unchanged": true
+  },
+  "rollback": {
+    "epoch": 1,
+    "generation_count": 0,
+    "outcome": "surfaces_restored",
+    "restored_locators": [
+      "config.yaml",
+      "state.json",
+      "store/audit.jsonl"
+    ],
+    "surfaces_match_restore_point": true
+  },
+  "scrub_findings": 0,
+  "source_bytes": 390126
+}

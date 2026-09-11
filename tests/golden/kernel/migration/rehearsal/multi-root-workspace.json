@@ -1,0 +1,250 @@
+{
+  "apply": {
+    "applied": true,
+    "generation_bytes": 6248,
+    "generation_id": "gen-544eb2efa09be126",
+    "journal_stages": [
+      "fence_cleared",
+      "workspace_resolved",
+      "authority_locked",
+      "quiescence_proved",
+      "recensus_matched",
+      "maintenance_entered",
+      "snapshot_taken",
+      "generation_built",
+      "read_smoke_passed",
+      "generation_selected",
+      "marker_written",
+      "maintenance_exited"
+    ],
+    "ledger_files": 2,
+    "ledger_records": 2,
+    "residual_document_bytes": 3464
+  },
+  "disposition": "imports",
+  "dry_run": {
+    "approval_digest": "0d8656d992f80959fc1e325c55ea024593b91834833fb6aad650f412cf493fa9",
+    "collections": {
+      "actuals": [
+        0,
+        0,
+        0
+      ],
+      "agent_sessions": [
+        0,
+        0,
+        0
+      ],
+      "artifacts": [
+        0,
+        0,
+        0
+      ],
+      "audits": [
+        0,
+        0,
+        0
+      ],
+      "backlog": [
+        0,
+        0,
+        0
+      ],
+      "claims": [
+        0,
+        0,
+        0
+      ],
+      "close_attempts": [
+        0,
+        0,
+        0
+      ],
+      "current": [
+        3,
+        0,
+        0
+      ],
+      "decisions": [
+        0,
+        0,
+        0
+      ],
+      "dispatch_paused": [
+        0,
+        0,
+        0
+      ],
+      "estimates": [
+        0,
+        0,
+        0
+      ],
+      "fleet_run": [
+        0,
+        0,
+        0
+      ],
+      "goals": [
+        0,
+        0,
+        0
+      ],
+      "health": [
+        0,
+        0,
+        0
+      ],
+      "hypotheses": [
+        0,
+        0,
+        0
+      ],
+      "incidents": [
+        0,
+        0,
+        0
+      ],
+      "indexes": [
+        0,
+        0,
+        0
+      ],
+      "iters": [
+        1,
+        1,
+        0
+      ],
+      "mcp_grants": [
+        0,
+        0,
+        0
+      ],
+      "mcp_servers": [
+        0,
+        0,
+        0
+      ],
+      "memory_index": [
+        0,
+        0,
+        0
+      ],
+      "open_questions": [
+        0,
+        0,
+        0
+      ],
+      "outcomes": [
+        0,
+        0,
+        0
+      ],
+      "phases": [
+        1,
+        1,
+        0
+      ],
+      "plugins": [
+        0,
+        0,
+        0
+      ],
+      "project": [
+        3,
+        0,
+        1
+      ],
+      "sandbox_policies": [
+        1,
+        0,
+        1
+      ],
+      "schema_version": [
+        0,
+        0,
+        0
+      ],
+      "scope_kind": [
+        0,
+        0,
+        0
+      ],
+      "tracks": [
+        0,
+        0,
+        0
+      ],
+      "updated_at": [
+        0,
+        0,
+        0
+      ],
+      "urn": [
+        0,
+        0,
+        0
+      ],
+      "wave_dependency_barriers": [
+        0,
+        0,
+        0
+      ],
+      "wave_dependency_bindings": [
+        0,
+        0,
+        0
+      ],
+      "wave_integrations": [
+        0,
+        0,
+        0
+      ],
+      "waves": [
+        1,
+        1,
+        0
+      ],
+      "workspace": [
+        3,
+        0,
+        1
+      ],
+      "worktrees": [
+        1,
+        1,
+        0
+      ]
+    },
+    "manifest_digest": "544eb2efa09be1264de66a5575095094050158169ad6d12b1a1665144eed8847",
+    "reproducible": true,
+    "source_digest": "83a271ceeda3a07980af884f4a8bcc7be0ee2682baa85b6059cffe211323a0f0",
+    "source_rows": 14,
+    "target_rows": 4,
+    "unresolved_rows": [
+      "project",
+      "sandbox_policies/SP01",
+      "workspace"
+    ]
+  },
+  "fixture": "multi-root-workspace",
+  "rerun": {
+    "applied": false,
+    "generation_id": "gen-544eb2efa09be126",
+    "journal_rows": 0,
+    "tree_unchanged": true
+  },
+  "rollback": {
+    "epoch": 1,
+    "generation_count": 0,
+    "outcome": "surfaces_restored",
+    "restored_locators": [
+      "config.yaml",
+      "state.json",
+      "store/audit.jsonl"
+    ],
+    "surfaces_match_restore_point": true
+  },
+  "scrub_findings": 0,
+  "source_bytes": 2888
+}

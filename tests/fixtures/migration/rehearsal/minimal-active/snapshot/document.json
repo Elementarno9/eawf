@@ -1,0 +1,106 @@
+{
+ "actuals": {},
+ "agent_sessions": {
+  "S001": {
+   "id": "S001",
+   "role": "executor",
+   "runtime": "claude",
+   "scope_id": "P01-I01-W01",
+   "started_at": "2026-01-01T00:00:00Z",
+   "status": "open"
+  }
+ },
+ "artifacts": {},
+ "audits": {},
+ "backlog": {},
+ "claims": null,
+ "close_attempts": {},
+ "current": {
+  "iter_id": "P01-I01",
+  "phase_id": "P01",
+  "wave_id": "P01-I01-W01"
+ },
+ "decisions": {},
+ "dispatch_paused": false,
+ "estimates": {
+  "P01-I01-W01": {
+   "confidence": "medium",
+   "display": "M",
+   "id": "EST-P01-I01-W01",
+   "reference_class": "wave",
+   "scope_id": "P01-I01-W01",
+   "updated_at": "2026-01-01T00:00:00Z"
+  }
+ },
+ "fleet_run": null,
+ "goals": {
+  "G01": {
+   "created_at": "2026-01-01T00:00:00Z",
+   "id": "G01",
+   "scope_id": "DEMO",
+   "status": "active",
+   "summary": "every row reaches exactly one arm",
+   "title": "Keep the census total"
+  }
+ },
+ "health": null,
+ "hypotheses": null,
+ "incidents": {},
+ "indexes": {},
+ "iters": {
+  "P01-I01": {
+   "id": "P01-I01",
+   "opened_at": "2026-01-01T00:00:00Z",
+   "phase_id": "P01",
+   "status": "active",
+   "title": "Close the first iter",
+   "wave_ids": [
+    "P01-I01-W01"
+   ]
+  }
+ },
+ "mcp_grants": null,
+ "mcp_servers": null,
+ "memory_index": {},
+ "open_questions": null,
+ "outcomes": null,
+ "phases": {
+  "P01": {
+   "id": "P01",
+   "iter_ids": [
+    "P01-I01"
+   ],
+   "opened_at": "2026-01-01T00:00:00Z",
+   "scope_id": "P01",
+   "status": "active",
+   "title": "Deliver the first phase"
+  }
+ },
+ "plugins": {},
+ "project": {
+  "code": "DEMO",
+  "created_at": "2026-01-01T00:00:00Z",
+  "title": "the rehearsal demo project"
+ },
+ "sandbox_policies": {},
+ "schema_version": "1.19",
+ "scope_kind": "project",
+ "tracks": null,
+ "updated_at": "2026-01-01T00:00:00Z",
+ "urn": "urn:eawf:project:DEMO",
+ "wave_dependency_barriers": {},
+ "wave_dependency_bindings": {},
+ "wave_integrations": {},
+ "waves": {
+  "P01-I01-W01": {
+   "claim_session_id": "S001",
+   "id": "P01-I01-W01",
+   "iter_id": "P01-I01",
+   "opened_at": "2026-01-01T00:00:00Z",
+   "status": "in_progress",
+   "title": "Land the first wave"
+  }
+ },
+ "workspace": null,
+ "worktrees": {}
+}

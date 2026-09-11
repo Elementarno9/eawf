@@ -1,0 +1,2 @@
+{"created_at": "2026-01-01T00:00:00Z", "id": "A001", "kind": "audit", "schema_version": "1.0", "scope_id": "P01-I01", "summary": "audit A001 review", "updated_at": "2026-01-01T00:00:00Z"}
+{"created_at": "2026-01-01T00:00:00Z", "id": "A002", "kind": "audit", "schema_version": "1.0", "scope_id": "DEMO", "summary": "audit A002 recorded only in the store", "updated_at": "2026-01-01T00:00:00Z"}

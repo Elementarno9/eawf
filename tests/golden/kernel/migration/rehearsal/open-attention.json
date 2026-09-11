@@ -1,0 +1,250 @@
+{
+  "apply": {
+    "applied": true,
+    "generation_bytes": 12545,
+    "generation_id": "gen-fe1af4bce192b2e0",
+    "journal_stages": [
+      "fence_cleared",
+      "workspace_resolved",
+      "authority_locked",
+      "quiescence_proved",
+      "recensus_matched",
+      "maintenance_entered",
+      "snapshot_taken",
+      "generation_built",
+      "read_smoke_passed",
+      "generation_selected",
+      "marker_written",
+      "maintenance_exited"
+    ],
+    "ledger_files": 3,
+    "ledger_records": 4,
+    "residual_document_bytes": 8173
+  },
+  "disposition": "imports",
+  "dry_run": {
+    "approval_digest": "e46b01f49d5326d6e0c433fc8568805a0ccd8b1c5658113ad1ceb4b047cf4c28",
+    "collections": {
+      "actuals": [
+        0,
+        0,
+        0
+      ],
+      "agent_sessions": [
+        0,
+        0,
+        0
+      ],
+      "artifacts": [
+        1,
+        1,
+        0
+      ],
+      "audits": [
+        1,
+        2,
+        0
+      ],
+      "backlog": [
+        2,
+        2,
+        0
+      ],
+      "claims": [
+        0,
+        0,
+        0
+      ],
+      "close_attempts": [
+        0,
+        0,
+        0
+      ],
+      "current": [
+        3,
+        0,
+        0
+      ],
+      "decisions": [
+        1,
+        0,
+        1
+      ],
+      "dispatch_paused": [
+        0,
+        0,
+        0
+      ],
+      "estimates": [
+        0,
+        0,
+        0
+      ],
+      "fleet_run": [
+        0,
+        0,
+        0
+      ],
+      "goals": [
+        0,
+        0,
+        0
+      ],
+      "health": [
+        0,
+        0,
+        0
+      ],
+      "hypotheses": [
+        0,
+        0,
+        0
+      ],
+      "incidents": [
+        1,
+        0,
+        1
+      ],
+      "indexes": [
+        0,
+        0,
+        0
+      ],
+      "iters": [
+        1,
+        1,
+        0
+      ],
+      "mcp_grants": [
+        0,
+        0,
+        0
+      ],
+      "mcp_servers": [
+        0,
+        0,
+        0
+      ],
+      "memory_index": [
+        1,
+        1,
+        0
+      ],
+      "open_questions": [
+        0,
+        0,
+        0
+      ],
+      "outcomes": [
+        0,
+        0,
+        0
+      ],
+      "phases": [
+        1,
+        1,
+        0
+      ],
+      "plugins": [
+        0,
+        0,
+        0
+      ],
+      "project": [
+        3,
+        0,
+        1
+      ],
+      "sandbox_policies": [
+        0,
+        0,
+        0
+      ],
+      "schema_version": [
+        0,
+        0,
+        0
+      ],
+      "scope_kind": [
+        0,
+        0,
+        0
+      ],
+      "tracks": [
+        0,
+        0,
+        0
+      ],
+      "updated_at": [
+        0,
+        0,
+        0
+      ],
+      "urn": [
+        0,
+        0,
+        0
+      ],
+      "wave_dependency_barriers": [
+        0,
+        0,
+        0
+      ],
+      "wave_dependency_bindings": [
+        0,
+        0,
+        0
+      ],
+      "wave_integrations": [
+        0,
+        0,
+        0
+      ],
+      "waves": [
+        1,
+        1,
+        0
+      ],
+      "workspace": [
+        0,
+        0,
+        0
+      ],
+      "worktrees": [
+        0,
+        0,
+        0
+      ]
+    },
+    "manifest_digest": "fe1af4bce192b2e00fce9522459b0e555d5da81461b6b93a7909d3db4b4af7ce",
+    "reproducible": true,
+    "source_digest": "433c936953760e80b24c6665f141794469122708fa12e2e652c04e493f8bdd9f",
+    "source_rows": 16,
+    "target_rows": 9,
+    "unresolved_rows": [
+      "decisions/D01",
+      "incidents/INC01",
+      "project"
+    ]
+  },
+  "fixture": "open-attention",
+  "rerun": {
+    "applied": false,
+    "generation_id": "gen-fe1af4bce192b2e0",
+    "journal_rows": 0,
+    "tree_unchanged": true
+  },
+  "rollback": {
+    "epoch": 1,
+    "generation_count": 0,
+    "outcome": "surfaces_restored",
+    "restored_locators": [
+      "config.yaml",
+      "state.json",
+      "store/audit.jsonl"
+    ],
+    "surfaces_match_restore_point": true
+  },
+  "scrub_findings": 0,
+  "source_bytes": 3972
+}

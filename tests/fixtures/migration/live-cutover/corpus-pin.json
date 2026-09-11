@@ -1,0 +1,11 @@
+{
+ "apply_timeout_budget_s": 30.0,
+ "declared_band": "thousands",
+ "multiplier_ceiling": 1.6,
+ "observed_apply_s": 3.849,
+ "observed_at_revision": "4a0659cbba0e",
+ "observed_multiplier": 1.319,
+ "observed_residual_bytes": 396720,
+ "observed_rows": 4638,
+ "residual_document_ceiling_bytes": 1600000
+}
