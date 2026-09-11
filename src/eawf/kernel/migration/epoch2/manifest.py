@@ -307,6 +307,38 @@ class MigrationManifest(StrictMigrationModel):
         payload["rollback_boundary"] = RollbackBoundary.STAGED.value
         return MigrationManifest.model_validate(payload)
 
+    def advanced(self, *, boundary: RollbackBoundary) -> MigrationManifest:
+        """Return this manifest with the rollback boundary moved forward.
+
+        The boundary is a record of what is on disk, so it only ever
+        moves in the direction the durable writes go. Refusing a
+        backwards move here is what stops a later stage from recording a
+        cutover as less far along than it is -- the one error that turns
+        a recoverable crash into a second write over a selected
+        generation.
+
+        Args:
+            boundary: The boundary the cutover has now reached.
+
+        Returns:
+            The manifest at ``boundary``.
+
+        Raises:
+            ValueError: ``boundary`` is at or behind the one already
+                recorded.
+            ValidationError: The new boundary contradicts the recorded
+                placement or backup.
+        """
+        order = tuple(RollbackBoundary)
+        if order.index(boundary) <= order.index(self.rollback_boundary):
+            raise ValueError(
+                f"the cutover is already at {self.rollback_boundary.value}, so it cannot "
+                f"be recorded as reaching {boundary.value}"
+            )
+        payload = self.model_dump(mode="json")
+        payload["rollback_boundary"] = boundary.value
+        return MigrationManifest.model_validate(payload)
+
 
 def seal_digest_of(*, manifest_digest: str, sealed_at: datetime, sealed_by: str) -> str:
     """Return the digest binding one content digest to one seal.

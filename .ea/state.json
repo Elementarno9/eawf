@@ -13725,6 +13725,21 @@
       "status": "done",
       "updated_at": "2026-09-11T12:20:20.711794Z"
     },
+    "P32-I01-W16": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 346847,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W16",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W16",
+      "model": null,
+      "scope_id": "P32-I01-W16",
+      "status": "done",
+      "updated_at": "2026-09-11T13:19:55.080601Z"
+    },
     "P32-I01-W19": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -16993,15 +17008,30 @@
       "claimed_wave_ids": [
         "P32-I01-W16"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-11T13:15:21.747904Z",
       "id": "SES-20260911T122050.320936Z-executor-claude-41f18eed-ca58-4663-9b62-80b60507f295",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W16",
       "started_at": "2026-09-11T12:20:50.320936Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260911T131537.932070Z-auditor-claude-code-2e4c31ee-adf1-4046-b51e-4c18817e7212": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-11T13:19:53.674450Z",
+      "id": "SES-20260911T131537.932070Z-auditor-claude-code-2e4c31ee-adf1-4046-b51e-4c18817e7212",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W16::audit",
+      "started_at": "2026-09-11T13:15:37.932070Z",
+      "status": "closed",
+      "summary": "auditor report appended",
       "worktree_ids": []
     }
   },
@@ -22685,6 +22715,57 @@
       "wave_id": "P31-I01-W13",
       "wave_revision_digest": "1d1647b9fe205929212cfcd21c559bbdbfc368e87cdd5cf70f7e2f6789c6298b"
     },
+    "close-f65eb94f1adeb9a05fc702b4": {
+      "apply_event_id": "EV-323c89485303",
+      "artifact_refs": [],
+      "audit_report_id": "AR-auditor-P32-I01-W16-01",
+      "audit_requirement": "required",
+      "candidate_sha": "f18e8a123b6952d5f4b1045f21a7dd3512e842ea",
+      "commit_identity_digest": "sha256:96422b0daca71d71ef416e9aac50a4df7c686f01ddbaaaf65f7df3f5712ec826",
+      "criteria_digest": "4d7dee80c417f12d21d453b8a99e1292f6020087e4298c856ef6ca849441e390",
+      "dependency_binding_digest": "4ff156b0cd0a4f6d0650e49a4dfea531ad32c5d6c0b915bb55d3b784f0e7fedf",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "4064e18cefb75a1abaceb381a2f5d15db4b8c2c1902c0d8c8438c3d70ecf7b92",
+      "gate_receipt_ids": [
+        "GR-db2684703ae2357ab72ce73c71a17a0e",
+        "GR-32d5345807a06333a9eeb8b38ae4f17d",
+        "GR-1d48c295000c19f07fe73dfb3c0a8212"
+      ],
+      "generation": 1,
+      "id": "close-f65eb94f1adeb9a05fc702b4",
+      "idempotency_key": "675a15c4002b72437520e7148c4707bb2ea26a479b0d6183b2a12ba79bcfcbc6",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "f18e8a123b6952d5f4b1045f21a7dd3512e842ea",
+      "integration_id": "integration-169d0e37bade6c295f560c3d",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "Apply builds a new generation behind a journaled quiescent transaction and selects it atomically with the epoch marker written last; the dev2 canary fence is enforced in the type rather than a branch so no write helper accepts a bare path, and an apply over a plan with unresolved rows refuses unless every address is enumerated exactly.",
+      "policy_digest": "4cea5e97aebfdb9d181c799193c1207db34e2849fdbd5486f95bf779c274424e",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-11T13:15:23.458744Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "b48a9a07d2b1f571b1200a088c6b7c2ab64838198309ac496d000711c4fde48c",
+      "spec_digest": "55f02161372b786180d68d0118b7efcfe0b7ed7151ff249054c6105fa8b0bed0",
+      "started_at": "2026-09-11T13:15:23.782704Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-11T13:19:56.150724Z",
+      "tokens_consumed": 346847,
+      "tree_sha": "1e757396ed379fc3607858f62eb3ec7aa5d03a7a",
+      "updated_at": "2026-09-11T13:19:56.150721Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W16",
+      "wave_revision_digest": "8f7b1a80f517f67f21648f618e6ef8c13686f1dd25e3454a971c159bf2344a55"
+    },
     "close-f937bfe4a6427a719d1f6357": {
       "apply_event_id": null,
       "artifact_refs": [],
@@ -22788,12 +22869,8 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260911T122050.320936Z-executor-claude-41f18eed-ca58-4663-9b62-80b60507f295"
-    ],
-    "active_wave_ids": [
-      "P32-I01-W16"
-    ],
+    "active_session_ids": [],
+    "active_wave_ids": [],
     "iter_id": "P32-I01",
     "phase_id": "P32",
     "project_code": "EAWF",
@@ -41460,7 +41537,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-11T12:20:51.126081Z",
+  "updated_at": "2026-09-11T13:19:56.150829Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -42530,6 +42607,22 @@
       "supersedes_id": null,
       "tree_sha": "4ddca4ece85b58c139b48af3847fc5e4d66036c4",
       "wave_id": "P31-I01-W07"
+    },
+    "integration-169d0e37bade6c295f560c3d": {
+      "base_sha": "2d7f2bd791a894d369c16193da3ec10e0fc7ff1f",
+      "candidate_sha": "f18e8a123b6952d5f4b1045f21a7dd3512e842ea",
+      "created_at": "2026-09-11T13:15:22.320403Z",
+      "diff_digest": "67fe3a31164db01a8c8b1ed2424c498e603bda3876df5f6fef2c88e5a95392c1",
+      "generation": 1,
+      "id": "integration-169d0e37bade6c295f560c3d",
+      "integrated_sha": "f18e8a123b6952d5f4b1045f21a7dd3512e842ea",
+      "kind": "adopt",
+      "reason": "Cherry-picked by hand onto the phase branch so the repo hook's attribution trailer could be stripped per operator policy; verified on the parent with 62 passing tests and a non-vacuous canary_fence selector collecting 7.",
+      "spec_digest": "55f02161372b786180d68d0118b7efcfe0b7ed7151ff249054c6105fa8b0bed0",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "1e757396ed379fc3607858f62eb3ec7aa5d03a7a",
+      "wave_id": "P32-I01-W16"
     },
     "integration-16b45c4f1bd8b8fb6013564d": {
       "base_sha": "7c77336699de42455c6f3703e0bee960144d67e4",
@@ -168632,9 +168725,9 @@
       ],
       "claim_session_id": "SES-20260911T122050.320936Z-executor-claude-41f18eed-ca58-4663-9b62-80b60507f295",
       "claimed_at": "2026-09-11T12:20:51.124815Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-11T13:19:55.080601Z",
+      "commit": "f18e8a123b6952d5f4b1045f21a7dd3512e842ea",
+      "commit_identity_digest": "sha256:96422b0daca71d71ef416e9aac50a4df7c686f01ddbaaaf65f7df3f5712ec826",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:58:45.122654Z",
@@ -168737,13 +168830,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-03T17:58:45.123381Z",
-      "outcome": null,
+      "outcome": "Apply builds a new generation behind a journaled quiescent transaction and selects it atomically with the epoch marker written last; the dev2 canary fence is enforced in the type rather than a branch so no write helper accepts a bare path, and an apply over a plan with unresolved rows refuses unless every address is enumerated exactly.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -168820,7 +168913,7 @@
       ],
       "title": "Add apply mode with the cutover journal, generation select and export",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 346847,
       "worktree_id": null
     },
     "P32-I01-W17": {

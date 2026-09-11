@@ -21,6 +21,9 @@ Verbs:
 - ``eawf migrate --no-backup`` — skip the backup write (testing only).
 - ``eawf migrate status`` — show current ``schema_version`` + chain.
 - ``eawf migrate epoch2 --plan`` — read-only epoch-2 cutover plan.
+- ``eawf migrate epoch2 --export`` — read-only epoch-1 collection export.
+- ``eawf migrate epoch2 --apply --plan-digest <d>`` — build and select a
+  new generation in a tree that has declared itself disposable.
 
 Exit codes:
 
@@ -35,15 +38,28 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
 from pydantic import ValidationError as PydanticValidationError
 
+from eawf.kernel.migration.epoch2.apply import (
+    EPOCH2_APPLY_METHOD,
+    Epoch2ApplyRequest,
+    apply_cutover,
+    apply_envelope,
+)
 from eawf.kernel.migration.epoch2.errors import MigrationRuleError
+from eawf.kernel.migration.epoch2.export import (
+    EPOCH2_EXPORT_METHOD,
+    Epoch2ExportRequest,
+    export_epoch1,
+    export_text,
+)
 from eawf.kernel.migration.epoch2.plan_mode import (
     EPOCH2_PLAN_METHOD,
     Epoch2PlanRequest,
@@ -235,12 +251,76 @@ def migrate_status(ctx: typer.Context) -> None:
 
 epoch2_app = typer.Typer(
     name="epoch2",
-    help="Plan the one-shot epoch-1 to epoch-2 corpus cutover.",
+    help="Plan, apply or export the one-shot epoch-1 to epoch-2 cutover.",
     no_args_is_help=True,
     invoke_without_command=True,
     add_completion=False,
 )
 migrate_app.add_typer(epoch2_app)
+
+
+class Epoch2Mode(StrEnum):
+    """The three things ``eawf migrate epoch2`` can be asked to do."""
+
+    PLAN = "plan"
+    APPLY = "apply"
+    EXPORT = "export"
+
+
+def _epoch2_mode(*, plan: bool, apply_: bool, export: bool) -> Epoch2Mode:
+    """Return the one mode the flags select.
+
+    Args:
+        plan: Whether ``--plan`` was passed.
+        apply_: Whether ``--apply`` was passed.
+        export: Whether ``--export`` was passed.
+
+    Returns:
+        The selected mode.
+
+    Raises:
+        UserError: No mode or more than one was selected. There is no
+            default: a run of this verb is never implicitly read-only and
+            never implicitly a write.
+    """
+    selected = [
+        mode
+        for mode, chosen in (
+            (Epoch2Mode.PLAN, plan),
+            (Epoch2Mode.APPLY, apply_),
+            (Epoch2Mode.EXPORT, export),
+        )
+        if chosen
+    ]
+    if len(selected) == 1:
+        return selected[0]
+    named = ", ".join(f"--{mode.value}" for mode in Epoch2Mode)
+    raise cli_errors.UserError(
+        f"pass exactly one of {named}: epoch2 has no default mode, so a run is never "
+        f"implicitly read-only or implicitly a write (got {len(selected)})",
+        kind="InvalidInput",
+    )
+
+
+def _required[T](value: T | None, *, option: str, mode: Epoch2Mode) -> T:
+    """Return ``value``, refusing the mode when the option was omitted.
+
+    Args:
+        value: The parsed option value.
+        option: The option's spelling, for the message.
+        mode: The mode that requires it.
+
+    Returns:
+        The value.
+
+    Raises:
+        UserError: The option was omitted. Every addressing slot is
+            required rather than defaulted, because a default here is a
+            guess about where a whole corpus lands.
+    """
+    if value is None:
+        raise cli_errors.UserError(f"--{mode.value} requires {option}", kind="InvalidInput")
+    return value
 
 
 def _epoch2_request(
@@ -274,13 +354,52 @@ def _epoch2_request(
         ) from exc
 
 
-def _epoch2_plan_payload(request: Epoch2PlanRequest) -> dict[str, Any]:
-    """Return the cutover plan, preferring the daemon's own computation.
+def _epoch2_apply_request(
+    *,
+    plan_request: Epoch2PlanRequest,
+    target_root: Path,
+    registry_path: Path,
+    plan_digest: str,
+    accept_unresolved: list[str],
+) -> Epoch2ApplyRequest:
+    """Parse the apply request, failing at the CLI boundary on a bad field.
 
-    Plan mode is a read, so the in-process arm is not a carve-out from
-    the canonical-mutator rule — it is the same read run locally. The
-    daemon is still preferred because the approval digest it computes is
-    the one its later apply will verify.
+    Raises:
+        UserError: When a field violates the wire contract.
+    """
+    try:
+        return Epoch2ApplyRequest(
+            plan_request=plan_request,
+            target_root=str(target_root),
+            registry_path=str(registry_path),
+            plan_digest=plan_digest,
+            accepted_unresolved_rows=tuple(accept_unresolved),
+        )
+    except PydanticValidationError as exc:
+        raise cli_errors.UserError(
+            f"invalid epoch2 apply request: {exc}", kind="InvalidInput"
+        ) from exc
+
+
+def _epoch2_payload(
+    *, method: str, params: Mapping[str, Any], local: Callable[[], dict[str, Any]]
+) -> dict[str, Any]:
+    """Return one epoch-2 envelope, preferring the daemon's own computation.
+
+    The daemon is preferred for all three modes, for two different
+    reasons. For the reads it is the side of the wire that computes the
+    approval digest a later apply verifies. For the apply it is the
+    canonical mutator. The in-process arm is the documented fallback: the
+    apply takes the same ``portalocker`` authority locks itself, so a
+    daemonless run is the direct-write path rather than an unguarded one.
+
+    Args:
+        method: The JSON-RPC method to call.
+        params: The already-validated request, as JSON.
+        local: The in-process computation to fall back to.
+
+    Returns:
+        The envelope.
 
     Raises:
         ValidationError: When an importer rule refuses the corpus.
@@ -291,27 +410,24 @@ def _epoch2_plan_payload(request: Epoch2PlanRequest) -> dict[str, Any]:
 
         try:
             with DaemonClient() as client:
-                return client.call(EPOCH2_PLAN_METHOD, request.model_dump(mode="json"))
+                return client.call(method, dict(params))
         except DaemonRpcError as exc:
             if exc.code in (-32602, cli_errors.RPC_VALIDATION_FAILED):
                 raise cli_errors.ValidationError(exc.message) from exc
             if exc.code != -32601:
                 raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
-            logger.debug("_epoch2_plan_payload daemon-rpc method-not-found; fallback")
+            logger.debug(f"_epoch2_payload daemon-rpc method-not-found method={method}; fallback")
         except (OSError, RuntimeError, TimeoutError) as exc:
-            raise cli_errors.DaemonUnreachable(
-                f"daemon unavailable for {EPOCH2_PLAN_METHOD}: {exc}"
-            ) from exc
+            raise cli_errors.DaemonUnreachable(f"daemon unavailable for {method}: {exc}") from exc
 
     try:
-        plan = plan_cutover(request, sealed_at=datetime.now(UTC))
+        return local()
     except MigrationRuleError as exc:
         raise cli_errors.ValidationError(f"{exc.code}: {exc}") from exc
-    return plan_envelope(plan)
 
 
 def _epoch2_daemon_enabled() -> bool:
-    """Whether this process routes the plan through the daemon.
+    """Whether this process routes the epoch-2 verbs through the daemon.
 
     Mirrors the repo-wide proxy gate: ``EAWF_DAEMONLESS=1`` opts one
     process out, as do the CI and recovery-shell carve-outs the merged
@@ -328,69 +444,183 @@ def _epoch2_daemon_enabled() -> bool:
 def epoch2_cmd(
     ctx: typer.Context,
     snapshot_root: Annotated[
-        Path,
+        Path | None,
         typer.Option("--snapshot-root", help="Staging directory holding the epoch-1 corpus."),
-    ],
+    ] = None,
     allowlist: Annotated[
-        Path,
+        Path | None,
         typer.Option("--allowlist", help="Path to the allowed-legacy-symbol allowlist."),
-    ],
+    ] = None,
     workspace_key: Annotated[
-        str,
+        str | None,
         typer.Option("--workspace-key", help="Addressing workspace for the imported corpus."),
-    ],
+    ] = None,
     project_key: Annotated[
-        str,
+        str | None,
         typer.Option("--project-key", help="Addressing project for the imported corpus."),
-    ],
+    ] = None,
     repository_key: Annotated[
-        str,
+        str | None,
         typer.Option("--repository-key", help="Addressing repository for the imported corpus."),
-    ],
+    ] = None,
     plan: Annotated[
         bool,
-        typer.Option("--plan", help="Required acknowledgement that this run writes nothing."),
+        typer.Option("--plan", help="Read-only plan: report what the cutover would do."),
     ] = False,
+    apply_: Annotated[
+        bool,
+        typer.Option("--apply", help="Build and select a generation (needs --plan-digest)."),
+    ] = False,
+    export: Annotated[
+        bool,
+        typer.Option("--export", help="Read-only export of every declared epoch-1 collection."),
+    ] = False,
+    plan_digest: Annotated[
+        str | None,
+        typer.Option("--plan-digest", help="The approval digest of the plan being applied."),
+    ] = None,
+    target_root: Annotated[
+        Path | None,
+        typer.Option("--target-root", help="Tree the new generation is built in."),
+    ] = None,
+    registry_path: Annotated[
+        Path | None,
+        typer.Option("--registry-path", help="Workspace registry the addressing key resolves in."),
+    ] = None,
+    accept_unresolved: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--accept-unresolved",
+            help="Address of one unresolved row the apply accepts; repeat per row.",
+        ),
+    ] = None,
     sealed_by: Annotated[
         str,
         typer.Option("--sealed-by", help="Principal recorded in the manifest seal."),
     ] = "operator",
 ) -> None:
-    """Emit the read-only epoch-2 cutover plan for a staged corpus.
+    """Plan, apply or export the one-shot epoch-1 to epoch-2 cutover.
 
-    The verb writes nothing: no canonical document, no registry, no
-    staging tree. It reports every mapping, every dropped collection with
-    its proof, every Track an operator still has to assign and every row
-    the cutover cannot place — which is the whole point of having it
-    before the apply exists.
+    ``--plan`` and ``--export`` write nothing: no canonical document, no
+    registry, no staging tree. ``--apply`` is the only write, and it
+    refuses on any tree that has not declared itself a disposable canary,
+    on any plan digest that is not the one the corpus now plans to, and on
+    any unresolved row the operator has not named.
     """
     flags: GlobalFlags = ctx.obj
-    if not plan:
-        cli_errors.emit_error(
-            cli_errors.UserError(
-                "pass --plan: epoch2 has no default mode, so a run is never implicitly "
-                "read-only or implicitly a write",
-                kind="InvalidInput",
-            ),
-            flags=flags,
-        )
-        return
-
     try:
-        request = _epoch2_request(
-            snapshot_root=snapshot_root,
+        mode = _epoch2_mode(plan=plan, apply_=apply_, export=export)
+        payload = _epoch2_dispatch(
+            mode=mode,
+            corpus=_required(snapshot_root, option="--snapshot-root", mode=mode),
             allowlist=allowlist,
             workspace_key=workspace_key,
             project_key=project_key,
             repository_key=repository_key,
             sealed_by=sealed_by,
+            plan_digest=plan_digest,
+            target_root=target_root,
+            registry_path=registry_path,
+            accept_unresolved=accept_unresolved or [],
         )
-        payload = _epoch2_plan_payload(request)
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
 
-    emit_json_or_text(payload, _epoch2_plan_text(payload), flags=flags)
+    emit_json_or_text(payload, _epoch2_text(mode, payload), flags=flags)
+
+
+def _epoch2_dispatch(
+    *,
+    mode: Epoch2Mode,
+    corpus: Path,
+    allowlist: Path | None,
+    workspace_key: str | None,
+    project_key: str | None,
+    repository_key: str | None,
+    sealed_by: str,
+    plan_digest: str | None,
+    target_root: Path | None,
+    registry_path: Path | None,
+    accept_unresolved: list[str],
+) -> dict[str, Any]:
+    """Assemble the request one mode needs and return its envelope.
+
+    Args:
+        mode: Which mode was selected.
+        corpus: The staging directory holding the epoch-1 corpus.
+        allowlist: The allowed-legacy-symbol allowlist, required by the
+            two modes that import.
+        workspace_key: The addressing workspace.
+        project_key: The addressing project.
+        repository_key: The addressing repository.
+        sealed_by: The principal recorded in the seal.
+        plan_digest: The approved plan digest, required by ``--apply``.
+        target_root: The tree the generation lands in, required by
+            ``--apply``.
+        registry_path: The workspace registry, required by ``--apply``.
+        accept_unresolved: Addresses of unresolved rows the apply accepts.
+
+    Returns:
+        The envelope the selected mode produced.
+
+    Raises:
+        UserError: A required option for the mode was omitted.
+        ValidationError: An importer rule refused the corpus.
+        CliError: The daemon answered with any other failure.
+    """
+    if mode is Epoch2Mode.EXPORT:
+        export_request = Epoch2ExportRequest(snapshot_root=str(corpus))
+        return _epoch2_payload(
+            method=EPOCH2_EXPORT_METHOD,
+            params=export_request.model_dump(mode="json"),
+            local=lambda: export_epoch1(export_request),
+        )
+
+    plan_request = _epoch2_request(
+        snapshot_root=corpus,
+        allowlist=_required(allowlist, option="--allowlist", mode=mode),
+        workspace_key=_required(workspace_key, option="--workspace-key", mode=mode),
+        project_key=_required(project_key, option="--project-key", mode=mode),
+        repository_key=_required(repository_key, option="--repository-key", mode=mode),
+        sealed_by=sealed_by,
+    )
+    if mode is Epoch2Mode.PLAN:
+        return _epoch2_payload(
+            method=EPOCH2_PLAN_METHOD,
+            params=plan_request.model_dump(mode="json"),
+            local=lambda: plan_envelope(plan_cutover(plan_request, sealed_at=datetime.now(UTC))),
+        )
+
+    apply_request = _epoch2_apply_request(
+        plan_request=plan_request,
+        target_root=_required(target_root, option="--target-root", mode=mode),
+        registry_path=_required(registry_path, option="--registry-path", mode=mode),
+        plan_digest=_required(plan_digest, option="--plan-digest", mode=mode),
+        accept_unresolved=accept_unresolved,
+    )
+    return _epoch2_payload(
+        method=EPOCH2_APPLY_METHOD,
+        params=apply_request.model_dump(mode="json"),
+        local=lambda: apply_envelope(apply_cutover(apply_request, applied_at=datetime.now(UTC))),
+    )
+
+
+def _epoch2_text(mode: Epoch2Mode, payload: Mapping[str, Any]) -> str:
+    """Render one epoch-2 envelope for a terminal.
+
+    Args:
+        mode: Which mode produced the envelope.
+        payload: The envelope.
+
+    Returns:
+        The rendered text.
+    """
+    if mode is Epoch2Mode.EXPORT:
+        return export_text(dict(payload))
+    if mode is Epoch2Mode.PLAN:
+        return _epoch2_plan_text(payload)
+    return _epoch2_apply_text(payload)
 
 
 def _epoch2_plan_text(payload: Mapping[str, Any]) -> str:
@@ -413,3 +643,28 @@ def _epoch2_plan_text(payload: Mapping[str, Any]) -> str:
     ]
     lines += [f"  {row['order']}. {row['step']}: {row['summary']}" for row in payload["steps"]]
     return "\n".join(lines)
+
+
+def _epoch2_apply_text(payload: Mapping[str, Any]) -> str:
+    """Render one apply envelope for a terminal.
+
+    Args:
+        payload: The apply envelope.
+
+    Returns:
+        One header line naming the generation, then the digests and the
+        rollback boundary the cutover reached.
+    """
+    verb = "applied" if payload["applied"] else "already selected"
+    return "\n".join(
+        [
+            f"epoch2 apply: {verb} generation {payload['generation_id']} "
+            f"over {payload['target_rows']} target rows",
+            f"  manifest digest:     {payload['manifest_digest']}",
+            f"  approval digest:     {payload['approval_digest']}",
+            f"  rollback boundary:   {payload['rollback_boundary']}",
+            f"  journal rows:        {payload['journal_rows']}",
+            f"  generations on disk: {payload['generation_count']}",
+            f"  accepted unresolved: {len(payload['accepted_unresolved_rows'])}",
+        ]
+    )

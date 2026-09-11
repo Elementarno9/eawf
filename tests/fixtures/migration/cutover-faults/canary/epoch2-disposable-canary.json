@@ -1,0 +1,5 @@
+{
+  "declared_by": "cutover-fault-fixtures",
+  "disposable": true,
+  "purpose": "throwaway tree built per test; losing it costs nothing"
+}
