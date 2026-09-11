@@ -47,6 +47,18 @@ The `APPROVED` transition in that walk carries an operator approval of **the bur
 - The tag chokepoint should refuse a tag push whose version already has published artifacts under a different digest.
 - `W01.file_scopes` still reads `.ea/artifacts` alone, which predates the discovery that the burn needs wiring; the wave's real surface includes the release workflow, its CLI command and its daemon method.
 
+## Attempting the disposition proved the gap is total
+
+The operator approved walking dev1 to the terminal burn. The attempt reached only `DRAFT`, and the walk is blocked in both directions.
+
+`eawf release create 0.7.0.dev1` opened the record at `REL-0.7.0.dev1@0`. `eawf release preflight 0.7.0.dev1` then returned `ready=False` with `ancestry` red and `tree_cleanliness` red: this is a feature branch that has not merged, so `approve` refuses. That refusal is correct, and `PARTIALLY_RELEASED` sits behind it.
+
+`CANCELLED` is the only other terminal state reachable from `DRAFT`, and it fails on two counts. Every edge into it carries the guard `NO_EXTERNAL_EFFECT`, documented as "No tag, upload or other external effect has" occurred -- which is false for dev1 on four targets. The guard would nonetheless pass, because it reads the record and the record knows nothing of the publication; the guard being satisfied is itself the defect. And there is no operator surface to cancel at all: `ReleaseStatus.CANCELLED` appears nowhere under `src/eawf/runtime` or `src/eawf/surfaces`, the same built-but-unreachable shape `burn_release` had.
+
+So the live record has **no reachable, truthful terminal state** and stays at `DRAFT`. No gate was waived and no approval was fabricated to move it.
+
+This is the strongest form of the third root cause. The release model assumes every publication passes through it, so it can neither describe nor dispose of one that did not. What it needs is an adoption path: a way to record that a version was published out of band, carrying the observed per-target facts, and to land it in a terminal state without asserting an approval or a readiness sweep that never happened.
+
 ## References
 
 | Ref | What it anchors |
