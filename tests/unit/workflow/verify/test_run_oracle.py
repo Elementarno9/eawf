@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from eawf.kernel.spec.common import CriterionSpec, GateSpec, OracleTier
 from eawf.kernel.state.models import Wave
@@ -45,7 +46,12 @@ from eawf.observability.eval.jury_validation import BlockAuthority
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.verify import oracle
-from eawf.workflow.verify.oracle import OracleResult, run_oracle
+from eawf.workflow.verify.oracle import (
+    DETAIL_MAX_CHARS,
+    DETAIL_TRUNCATION_MARKER,
+    OracleResult,
+    run_oracle,
+)
 
 _T0 = datetime(2026, 6, 6, 12, 0, 0, tzinfo=UTC)
 
@@ -858,3 +864,108 @@ def test_failing_detail_raises_on_passing_result() -> None:
 
     with pytest.raises(ValueError, match="passed: no failing detail"):
         result.failing_detail()
+
+
+# --------------------------------------------------------------------------- #
+# OracleResult.detail -- a gate's unbounded output must not crash the close.
+# --------------------------------------------------------------------------- #
+
+
+def test_detail_at_the_bound_is_kept_verbatim() -> None:
+    """A detail exactly at the bound is not truncated."""
+    detail = "x" * DETAIL_MAX_CHARS
+
+    result = OracleResult(
+        tier=OracleTier.T1_STATIC,
+        status="fail",
+        criterion_id="CR-01",
+        detail=detail,
+    )
+
+    assert result.detail == detail
+    assert DETAIL_TRUNCATION_MARKER not in result.detail
+
+
+def test_detail_one_over_the_bound_is_clamped_not_refused() -> None:
+    """One character past the bound clamps; it does not raise ValidationError.
+
+    A gate that SCORED a verdict must not have that verdict turned into a
+    crashed close by the size of its own output.
+    """
+    result = OracleResult(
+        tier=OracleTier.T1_STATIC,
+        status="fail",
+        criterion_id="CR-01",
+        detail="x" * (DETAIL_MAX_CHARS + 1),
+    )
+
+    assert len(result.detail) == DETAIL_MAX_CHARS
+    assert result.detail.endswith(DETAIL_TRUNCATION_MARKER)
+
+
+def test_detail_far_over_the_bound_keeps_its_head() -> None:
+    """A kilobyte-scale gate dump keeps the leading, load-bearing summary."""
+    head = "mockup golden mismatch for 'm.txt': region=@@ -1,60 +1,60 @@"
+    result = OracleResult(
+        tier=OracleTier.T5_GOLDEN,
+        status="fail",
+        criterion_id="CR-01",
+        detail=head + "\n" + "\n".join("-" + "e" * 100 for _ in range(200)),
+    )
+
+    assert len(result.detail) == DETAIL_MAX_CHARS
+    assert result.detail.startswith(head)
+    assert result.failing_detail().endswith(DETAIL_TRUNCATION_MARKER)
+
+
+def test_detail_empty_stays_empty() -> None:
+    """The empty default is below the bound and untouched."""
+    result = OracleResult(tier=OracleTier.T1_STATIC, status="pass", criterion_id="CR-01")
+
+    assert result.detail == ""
+
+
+def test_detail_non_str_still_raises_a_type_error() -> None:
+    """The clamp normalises length only; a wrong TYPE is still refused."""
+    with pytest.raises(ValidationError):
+        OracleResult(
+            tier=OracleTier.T1_STATIC,
+            status="fail",
+            criterion_id="CR-01",
+            detail=object(),  # type: ignore[arg-type]
+        )
+
+
+def test_score_gate_run_survives_an_oversized_gate_detail(tmp_path: Path) -> None:
+    """An oversized check output is scored, not raised, and is kept in full.
+
+    This is the production shape of the clamp: the scorer reads
+    ``CheckResult.details`` straight off a gate whose output is unbounded, and
+    the untruncated text stays reachable on ``check_result``.
+    """
+    details = "\n".join("-" + "e" * 100 for _ in range(200))
+    check = CheckResult(
+        name="mockup_golden_diff",
+        kind="mockup_golden_diff",
+        passed=False,
+        status="fail",
+        details=details,
+        started_at=datetime(2026, 9, 10, tzinfo=UTC),
+        ended_at=datetime(2026, 9, 10, tzinfo=UTC),
+    )
+
+    scored = oracle._score_gate_run(
+        _criterion(gate_ids=["G-T5"]),
+        _gate("G-T5", "mockup_golden_diff"),
+        result=check,
+        tier=int(OracleTier.T5_GOLDEN),
+        scope_id="P32-I01-W46",
+        state_path=tmp_path / "state.json",
+        after_gate_execute=None,
+    )
+
+    assert scored is not None
+    assert scored.status == "fail"
+    assert len(scored.detail) == DETAIL_MAX_CHARS
+    assert scored.check_result is not None
+    assert scored.check_result.details == details

@@ -8,6 +8,7 @@ import pytest
 
 from eawf.kernel.spec.common import OracleTier, _tier_for_gate_kind
 from eawf.workflow.audit_dsl import CHECK_REGISTRY, CheckResult, CheckSpec
+from eawf.workflow.verify.oracle import DETAIL_MAX_CHARS
 
 _GOLDEN_REL = "tests/snapshots/tui/golden/mockup_P30-I04-W08.txt"
 
@@ -91,3 +92,48 @@ def test_mockup_golden_diff_invalid_args_fail_not_raise(tmp_path: Path) -> None:
     result = _run_mockup_check({"golden_path": "", "surprise": True}, tmp_path)
     assert result.status == "fail"
     assert "invalid args" in (result.details or "")
+
+
+def test_mockup_golden_diff_detail_is_bounded_for_a_wholesale_divergence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A full-width frame diverging wholesale yields a BOUNDED detail.
+
+    The line cap alone does not bound the payload -- a hundred-column frame
+    times the line cap is kilobytes -- and this detail travels on into the
+    close scorer's bounded ``detail`` field and a state-resident evidence
+    row. The header survives in full so the refusal still names the region.
+    """
+    _write_golden(tmp_path, "\n".join("e" * 100 for _ in range(60)))
+    monkeypatch.setattr(
+        "eawf.surfaces.tui.snapshot.pilot_harness.capture_mockup_golden_screen_text_sync",
+        lambda **_kwargs: "\n".join("c" * 100 for _ in range(60)),
+    )
+
+    result = _run_mockup_check({"golden_path": _GOLDEN_REL}, tmp_path)
+
+    assert result.status == "fail"
+    assert result.details is not None
+    assert len(result.details) < DETAIL_MAX_CHARS
+    assert result.details.startswith("mockup golden mismatch")
+    assert "region=@@" in result.details
+    assert "diff truncated at" in result.details
+
+
+def test_mockup_golden_diff_detail_keeps_a_short_diff_whole(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A diff that fits the budget carries no truncation marker."""
+    _write_golden(tmp_path, "+---+\n| expected |\n+---+")
+    monkeypatch.setattr(
+        "eawf.surfaces.tui.snapshot.pilot_harness.capture_mockup_golden_screen_text_sync",
+        lambda **_kwargs: "+---+\n| actual |\n+---+",
+    )
+
+    result = _run_mockup_check({"golden_path": _GOLDEN_REL}, tmp_path)
+
+    assert result.details is not None
+    assert "diff truncated" not in result.details
+    assert result.details.endswith("+---+")
