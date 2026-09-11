@@ -1101,6 +1101,7 @@ def _assemble_manifest(
             )
         ),
         backup=None,
+        tier_placement=None,
         rollback_boundary=RollbackBoundary.PLAN_ONLY,
         validation_results=passes,
         seal_state=SealState.DRAFT,

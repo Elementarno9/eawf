@@ -143,3 +143,39 @@ class MigrationValidationDivergedError(MigrationRuleError):
     """
 
     code: ClassVar[str] = "migration_validation_diverged"
+
+
+class MigrationTerminalInDocumentError(MigrationRuleError):
+    """The staged document retains a record that never changes again.
+
+    The whole point of the tiering is that the compare-and-swap document
+    holds work in flight and nothing else. A terminal record left in it
+    would be rewritten on every mutation for the rest of the tree's life,
+    which is the cost the cutover exists to remove.
+    """
+
+    code: ClassVar[str] = "migration_terminal_in_document"
+
+
+class MigrationHomePathLeakError(MigrationRuleError):
+    """The staged tree carries a concrete home-directory path.
+
+    The importer never edits a source string, so a leak cannot be scrubbed
+    out on the way through: it is reported against the source row that
+    carries it and the cutover refuses, which leaves the operator a corpus
+    to fix rather than an import that quietly rewrote their data.
+    """
+
+    code: ClassVar[str] = "migration_home_path_leak"
+
+
+class MigrationTierUndeclaredError(MigrationRuleError):
+    """A staged record routes to a collection with no write rule.
+
+    Every collection the importer targets is declared either at the
+    document tier or as a ledger collection whose residency is known. A
+    record that reaches neither has no home, and guessing one is how bytes
+    land somewhere plausible and wrong.
+    """
+
+    code: ClassVar[str] = "migration_tier_undeclared"
