@@ -14129,6 +14129,21 @@
       "scope_id": "P32-I01-W44",
       "status": "done",
       "updated_at": "2026-09-11T16:13:48.305848Z"
+    },
+    "P32-I01-W45": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 132720,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W45",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W45",
+      "model": null,
+      "scope_id": "P32-I01-W45",
+      "status": "done",
+      "updated_at": "2026-09-11T18:20:03.143429Z"
     }
   },
   "agent_sessions": {
@@ -17282,6 +17297,23 @@
       "runtime_session_id": null,
       "scope_id": "P32-I01-W45",
       "started_at": "2026-09-11T17:59:34.702349Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260911T182254.099723Z-executor-claude-c11b55de-4103-40de-80f1-27803a2ea282": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P32-I01-W46"
+      ],
+      "ended_at": null,
+      "id": "SES-20260911T182254.099723Z-executor-claude-c11b55de-4103-40de-80f1-27803a2ea282",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W46",
+      "started_at": "2026-09-11T18:22:54.099723Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -21412,6 +21444,53 @@
   },
   "claims": null,
   "close_attempts": {
+    "close-0b112f041f9cc79253f656f0": {
+      "apply_event_id": "EV-4a2d373a2b1a",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "8beb9c884b9ab20a2dd775e3318a64703f96363d",
+      "commit_identity_digest": "sha256:7b69129690c425646b07a5cbbea21ea7837fdab6afe731bc2363b45bfb7e453f",
+      "criteria_digest": "5e57f4c9efe7fdbb9eb6fc2701c911ffda3dbd68609a41db2fee12c5e41f595d",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "0ef5d9e09c1a40347a12d0dc3af3077c97e9ef63be561ce3485b2388d79ef422",
+      "gate_receipt_ids": [],
+      "generation": 1,
+      "id": "close-0b112f041f9cc79253f656f0",
+      "idempotency_key": "f088bd9846a0b1633fdd2c40999d1e800621f8afb972c0f6436c6bf23375ee1a",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "8beb9c884b9ab20a2dd775e3318a64703f96363d",
+      "integration_id": "integration-a65484929fc717e98a4c7266",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "The prose gate, the idle-surface ceiling and the CLI import budget are all green: the vague-token heading is renamed, the ceiling is lowered from 206 to 204 by removing four zero-reference functions rather than raised, and the epoch-2 request types move behind TYPE_CHECKING so the migrate command no longer drags yaml onto the CLI import path.",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-11T18:20:00.821958Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "b48a9a07d2b1f571b1200a088c6b7c2ab64838198309ac496d000711c4fde48c",
+      "spec_digest": "70fface54e83d6273c3363d5acedf391c45e0ffe8f8bf18439b6fde5bd8bea72",
+      "started_at": "2026-09-11T18:20:01.147610Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-11T18:20:16.604010Z",
+      "tokens_consumed": 132720,
+      "tree_sha": "3e3d0cb3168e2115ebee18bed92888049c2b81fa",
+      "updated_at": "2026-09-11T18:20:16.604007Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W45",
+      "wave_revision_digest": "7c5c5316172836c9dcef2ec72659166e52a865b06c97a4b48e06bb8e117f7333"
+    },
     "close-0c25cc29b283a958282060cc": {
       "apply_event_id": "EV-3460ce757afc",
       "artifact_refs": [],
@@ -23386,11 +23465,12 @@
     "active_session_ids": [
       "SES-20260911T171240.996472Z-operator-claude-77a63699-d2f0-4457-9586-cfa8d898d95c",
       "SES-20260911T171601.968506Z-executor-claude-b312ed7e-19e9-489d-af10-ee00ffeccdc6",
-      "SES-20260911T175934.702349Z-polisher-claude-e5d3aa03-fcff-42e4-a9c6-a167ac8f9ceb"
+      "SES-20260911T175934.702349Z-polisher-claude-e5d3aa03-fcff-42e4-a9c6-a167ac8f9ceb",
+      "SES-20260911T182254.099723Z-executor-claude-c11b55de-4103-40de-80f1-27803a2ea282"
     ],
     "active_wave_ids": [
       "P32-I01-W21",
-      "P32-I01-W45"
+      "P32-I01-W46"
     ],
     "iter_id": "P32-I01",
     "phase_id": "P32",
@@ -40656,7 +40736,8 @@
         "P32-I01-W42",
         "P32-I01-W43",
         "P32-I01-W44",
-        "P32-I01-W45"
+        "P32-I01-W45",
+        "P32-I01-W46"
       ]
     },
     "P33-I01": {
@@ -42059,7 +42140,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-11T17:59:35.977346Z",
+  "updated_at": "2026-09-11T18:22:58.104676Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -43814,6 +43895,22 @@
       "supersedes_id": null,
       "tree_sha": "52956dd9bc011a455239207af8bb4d91b0edb637",
       "wave_id": "P31-I01-W01"
+    },
+    "integration-a65484929fc717e98a4c7266": {
+      "base_sha": "e540276b344417f861d2bd3c870bd1eada2de7ac",
+      "candidate_sha": "8beb9c884b9ab20a2dd775e3318a64703f96363d",
+      "created_at": "2026-09-11T18:19:59.803375Z",
+      "diff_digest": "654467cb4ea0f502f7cb3725049925ac4ddd60003dbe5acbdeefe263367acf68",
+      "generation": 1,
+      "id": "integration-a65484929fc717e98a4c7266",
+      "integrated_sha": "8beb9c884b9ab20a2dd775e3318a64703f96363d",
+      "kind": "adopt",
+      "reason": "Cherry-picked by hand onto the phase branch so the repo hook's attribution trailer could be stripped per operator policy; verified on the parent: prose gate 4, idle surface 19, import budget 2, all green.",
+      "spec_digest": "70fface54e83d6273c3363d5acedf391c45e0ffe8f8bf18439b6fde5bd8bea72",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "3e3d0cb3168e2115ebee18bed92888049c2b81fa",
+      "wave_id": "P32-I01-W45"
     },
     "integration-a87eaf5273d10cdd355c51d3": {
       "base_sha": "593bb47eb3bbbfacdd220a06d22168001d7dfd70",
@@ -173896,9 +173993,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260911T175934.702349Z-polisher-claude-e5d3aa03-fcff-42e4-a9c6-a167ac8f9ceb",
       "claimed_at": "2026-09-11T17:59:35.976946Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-11T18:20:03.143429Z",
+      "commit": "8beb9c884b9ab20a2dd775e3318a64703f96363d",
+      "commit_identity_digest": "sha256:7b69129690c425646b07a5cbbea21ea7837fdab6afe731bc2363b45bfb7e453f",
       "criteria_floor_waiver": {
         "reason": "Polish wave appended after the code waves landed to clear reds that no single wave owns; typed criteria follow via spec sync before dispatch.",
         "waived_at": "2026-09-11T17:58:51.416757Z",
@@ -173987,13 +174084,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-11T17:58:51.562914Z",
-      "outcome": null,
+      "outcome": "The prose gate, the idle-surface ceiling and the CLI import budget are all green: the vague-token heading is renamed, the ceiling is lowered from 206 to 204 by removing four zero-reference functions rather than raised, and the epoch-2 request types move behind TYPE_CHECKING so the migrate command no longer drags yaml onto the CLI import path.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -174069,6 +174166,186 @@
         }
       ],
       "title": "Clear the prose, idle-surface and import-budget reds",
+      "token_budget": null,
+      "tokens_consumed": 132720,
+      "worktree_id": null
+    },
+    "P32-I01-W46": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260911T182254.099723Z-executor-claude-c11b55de-4103-40de-80f1-27803a2ea282",
+      "claimed_at": "2026-09-11T18:22:58.103428Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Regression wave appended after a baseline comparison against origin/main proved three failures reported as pre-existing were introduced by this phase.",
+        "waived_at": "2026-09-11T18:22:26.109224Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Three close-gate tests pass on origin/main and fail on this branch, so the phase introduced them. Every wave reported them as pre-existing because stashing one wave's diff leaves the rest of the phase in place. One is a gate weakening: a close that should block on a dead affordance no longer raises. The other two are an OracleResult detail string exceeding its 2000-character cap.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/verify",
+        "src/eawf/kernel/spec",
+        "src/eawf/runtime/daemon/methods",
+        "tests/integration"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_close_gate_affordance_parity.py"
+            ],
+            "scope": "all"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_close_gate_mockup_golden_diff.py"
+            ],
+            "scope": "all"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_close_gate_affordance_parity.py",
+              "tests/integration/test_close_gate_mockup_golden_diff.py"
+            ],
+            "scope": "all"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W46",
+      "intent": {
+        "desired_outcome": "All three pass again with the gate blocking for the original reason rather than the assertion relaxed",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Three close-gate tests pass on origin/main and fail here; one is a gate that stopped blocking",
+        "risks": [
+          "The dead-affordance gate must block because the affordance is dead; making the test pass any other way reinstates the hole W43 just closed"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-11T18:22:26.332663Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "the parity test raises LifecycleError naming the unresolved advertised key and writes no evidence row",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "the parity test raises LifecycleError naming the unresolved advertised key and writes no evidence row",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "a close whose advertised affordance is dead raises LifecycleError again and blocks for that reason; asserted by pytest over the affordance parity suite",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "a detail exceeding 2000 characters is carried without a pydantic validation error and both mockup golden tests pass",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "a detail exceeding 2000 characters is carried without a pydantic validation error and both mockup golden tests pass",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "an oracle detail longer than the cap validates rather than raising and both mockup golden tests return green; asserted by pytest over the mockup golden suite",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "behavioral",
+          "measurable_signal": "both close-gate suites pass together and each repair carries a test that reds on the defect it fixes",
+          "oracle_tier": 4,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "both close-gate suites pass together and each repair carries a test that reds on the defect it fixes",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "the regression set holds for all three so a later change emits the failure by name; asserted by pytest over both suites together",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Repair the close-gate regressions this phase introduced",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null

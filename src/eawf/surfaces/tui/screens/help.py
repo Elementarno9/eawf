@@ -113,31 +113,16 @@ def global_key_rows() -> tuple[tuple[str, str], ...]:
     return _GLOBAL_KEYS
 
 
-def mode_key_rows() -> tuple[tuple[str, str], ...]:
-    """Return the mode digit-key rows (digit, action) for the help table.
-
-    Derived from the mode registry so the help reflects exactly the
-    digit-key mode axis the chassis binds (one ``<digit> switch to <Title>
-    mode`` row per mode). A new pane wave that adds a mode gets its help
-    row for free. Imported lazily to keep the help module's import graph
-    light.
-
-    Returns:
-        One ``(digit, action)`` row per registered mode, in digit order.
-    """
-    from eawf.surfaces.tui.modes.registry import MODE_REGISTRY
-
-    return tuple((spec.digit, f"switch to {spec.title} mode") for spec in MODE_REGISTRY)
-
-
 def mode_key_rows_active(current_mode: str) -> tuple[tuple[str, str, bool], ...]:
     """Return the mode digit-key rows tagged with the active-mode flag.
 
-    Mirrors :func:`mode_key_rows` but appends an ``is_active`` flag per row,
-    ``True`` only for the row whose mode name equals *current_mode*, so the
-    help overlay can mark which mode the operator is currently in. A
-    *current_mode* that matches no registered mode tags no row active (the
-    honest path under a bare harness with no resolved mode).
+    Derived from the mode registry so the help reflects exactly the
+    digit-key mode axis the chassis binds, with an ``is_active`` flag per
+    row that is ``True`` only for the row whose mode name equals
+    *current_mode*, so the help overlay can mark which mode the operator
+    is currently in. A *current_mode* that matches no registered mode tags
+    no row active (the honest path under a bare harness with no resolved
+    mode). Imported lazily to keep the help module's import graph light.
 
     Args:
         current_mode: The App's active mode name (``app.current_mode``).
@@ -158,7 +143,7 @@ def _mode_screen_classes() -> dict[str, type]:
     """Resolve the ``{mode_name: screen_class}`` map for the action-key help.
 
     Lazily imports each non-Home mode screen class (mirroring the deferred
-    import :func:`mode_key_rows` uses for the registry) so the help
+    import :func:`mode_key_rows_active` uses for the registry) so the help
     module's import graph stays light and free of the scope-screen cycle.
     Home is intentionally absent: it reuses the resolved scope screen and
     owns no mode-specific :attr:`~textual.screen.Screen.BINDINGS`, so it
@@ -487,7 +472,6 @@ __all__ = [
     "config_overlay_rows",
     "global_key_rows",
     "mode_action_key_rows",
-    "mode_key_rows",
     "mode_key_rows_active",
     "open_help",
     "pane_nav_rows",
