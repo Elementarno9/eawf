@@ -16847,6 +16847,38 @@
       "status": "stale",
       "summary": "orphaned by daemon restart",
       "worktree_ids": []
+    },
+    "SES-20260911T113211.511333Z-executor-claude-9281fa33-865f-444b-95e9-bb8bdb086e12": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-11T11:33:08.677684Z",
+      "id": "SES-20260911T113211.511333Z-executor-claude-9281fa33-865f-444b-95e9-bb8bdb086e12",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W01",
+      "started_at": "2026-09-11T11:32:11.511333Z",
+      "status": "closed",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260911T113313.194185Z-operator-claude-74ab8404-c93c-4561-8dc9-c36748a202fd": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P32-I01-W01"
+      ],
+      "ended_at": null,
+      "id": "SES-20260911T113313.194185Z-operator-claude-74ab8404-c93c-4561-8dc9-c36748a202fd",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W01",
+      "started_at": "2026-09-11T11:33:13.194185Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
     }
   },
   "artifacts": {
@@ -22479,8 +22511,11 @@
     }
   },
   "current": {
-    "active_session_ids": [],
+    "active_session_ids": [
+      "SES-20260911T113313.194185Z-operator-claude-74ab8404-c93c-4561-8dc9-c36748a202fd"
+    ],
     "active_wave_ids": [
+      "P32-I01-W01",
       "P32-I01-W14"
     ],
     "iter_id": "P32-I01",
@@ -41148,7 +41183,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-11T11:30:41.494541Z",
+  "updated_at": "2026-09-11T11:33:14.120227Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -165188,8 +165223,8 @@
       "blocks": [
         "P32-I01-W21"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260911T113313.194185Z-operator-claude-74ab8404-c93c-4561-8dc9-c36748a202fd",
+      "claimed_at": "2026-09-11T11:33:14.119509Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -165296,7 +165331,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
