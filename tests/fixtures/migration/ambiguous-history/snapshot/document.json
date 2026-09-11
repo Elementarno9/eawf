@@ -1,0 +1,311 @@
+{
+  "actuals": {
+    "P01-I01-W02": {
+      "current_store_record_id": "ACT-P01-I01-W02-1",
+      "id": "ACT-P01-I01-W02",
+      "scope_id": "P01-I01-W02",
+      "status": "recorded",
+      "updated_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  "agent_sessions": {
+    "S001": {
+      "id": "S001",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": "PS-SHARED",
+      "scope_id": "P01-I01",
+      "started_at": "2026-01-01T00:00:00Z",
+      "status": "closed"
+    }
+  },
+  "artifacts": {
+    "ART-01": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "ART-01",
+      "kind": "research",
+      "uri": ".ea/artifacts/research/ART-01.md",
+      "urn": "urn:eawf:artifact:ART-01"
+    }
+  },
+  "audits": {
+    "A001": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "A001",
+      "kind": "evaluation",
+      "scope_id": "P02-I01",
+      "status": "passed"
+    }
+  },
+  "backlog": {
+    "B001": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "B001",
+      "scope_id": "DEMO",
+      "status": "open",
+      "title": "Backlog B001"
+    },
+    "B002": {
+      "closed_at": "2026-01-02T00:00:00Z",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "B002",
+      "resolution": "superseded by P01-I01-W01",
+      "scope_id": "DEMO",
+      "status": "closed",
+      "title": "Backlog B002"
+    }
+  },
+  "claims": null,
+  "close_attempts": {
+    "CA01": {
+      "id": "CA01",
+      "outcome": "integrated",
+      "requested_at": "2026-01-01T00:00:00Z",
+      "status": "terminal",
+      "wave_id": "P01-I01-W01"
+    }
+  },
+  "current": {
+    "iter_id": "P01-I01",
+    "phase_id": "P01",
+    "wave_id": null
+  },
+  "decisions": {
+    "D01": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "D01",
+      "rationale": "recorded at the time of the call",
+      "scope_id": "DEMO",
+      "status": "accepted",
+      "title": "Decision D01"
+    }
+  },
+  "dispatch_paused": false,
+  "estimates": {
+    "P01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P01-1",
+      "display": "L",
+      "id": "EST-P01",
+      "reference_class": "phase",
+      "scope_id": "P01",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "P01-I01-W01": {
+      "confidence": "medium",
+      "current_store_record_id": "EST-P01-I01-W01-1",
+      "display": "M",
+      "id": "EST-P01-I01-W01",
+      "reference_class": "wave",
+      "scope_id": "P01-I01-W01",
+      "updated_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  "fleet_run": null,
+  "goals": {
+    "G01": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "G01",
+      "scope_id": "DEMO",
+      "status": "active",
+      "summary": "keep the census total",
+      "title": "Goal G01"
+    }
+  },
+  "health": null,
+  "hypotheses": null,
+  "incidents": {
+    "INC01": {
+      "cause": "a gate was mis-wired",
+      "id": "INC01",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "scope_id": "DEMO",
+      "severity": "low",
+      "status": "closed",
+      "title": "Incident INC01"
+    }
+  },
+  "indexes": {},
+  "iters": {
+    "P01-I01": {
+      "audit_id": "A404",
+      "candidate_tag": "v0.1.0",
+      "id": "P01-I01",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "phase_id": "P01",
+      "status": "closed",
+      "title": "Close P01-I01",
+      "wave_ids": [
+        "P01-I01-W01",
+        "P01-I01-W02"
+      ]
+    },
+    "P02-I01": {
+      "audit_id": "A001",
+      "id": "P02-I01",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "phase_id": "P02",
+      "status": "active",
+      "title": "Close P02-I01",
+      "wave_ids": [
+        "P02-I01-W01"
+      ]
+    }
+  },
+  "mcp_grants": null,
+  "mcp_servers": null,
+  "memory_index": {
+    "MEM01": {
+      "confidence": "high",
+      "id": "MEM01",
+      "review_due": "2026-01-01T00:00:00Z",
+      "scope_id": "DEMO",
+      "status": "active",
+      "store_record_id": "MEM01-1",
+      "summary": "memory MEM01",
+      "tier": "project"
+    }
+  },
+  "open_questions": null,
+  "outcomes": null,
+  "phases": {
+    "P01": {
+      "id": "P01",
+      "iter_ids": [
+        "P01-I01"
+      ],
+      "opened_at": "2026-01-01T00:00:00Z",
+      "scope_id": "P01",
+      "status": "closed",
+      "title": "Deliver P01"
+    },
+    "P02": {
+      "id": "P02",
+      "iter_ids": [
+        "P02-I01"
+      ],
+      "opened_at": "2026-01-01T00:00:00Z",
+      "scope_id": "P02",
+      "status": "active",
+      "title": "Deliver P02",
+      "track_id": "TRK-GONE"
+    }
+  },
+  "plugins": {},
+  "project": {
+    "code": "DEMO",
+    "profiles": [
+      "python"
+    ],
+    "title": "Census demo project"
+  },
+  "sandbox_policies": {
+    "SP01": {
+      "granted_at": "2026-01-01T00:00:00Z",
+      "id": "SP01",
+      "scope_id": "DEMO",
+      "scope_kind": "project"
+    }
+  },
+  "schema_version": "1.19",
+  "scope_kind": "project",
+  "tracks": {
+    "TRK-CORE": {
+      "id": "TRK-CORE",
+      "status": "active",
+      "title": "Core"
+    },
+    "TRK-PLAT": {
+      "id": "TRK-PLAT",
+      "status": "active",
+      "title": "Platform"
+    }
+  },
+  "updated_at": "2026-01-01T00:00:00Z",
+  "urn": "urn:eawf:project:DEMO",
+  "wave_dependency_barriers": {},
+  "wave_dependency_bindings": {
+    "P01-I01-W02:P01-I01-W01": {
+      "bound_at": "2026-01-01T00:00:00Z",
+      "dep_wave_id": "P01-I01-W01",
+      "wave_id": "P01-I01-W02"
+    }
+  },
+  "wave_integrations": {
+    "WI01": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WI01",
+      "kind": "cherry_pick",
+      "status": "integrated",
+      "wave_id": "P01-I01-W01"
+    }
+  },
+  "waves": {
+    "P01-I01-W01": {
+      "claim_session_id": "S001",
+      "id": "P01-I01-W01",
+      "iter_id": "P01-I01",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "ended_at": "2026-01-01T01:00:00Z",
+          "exit_status": 0,
+          "runtime": "claude",
+          "session_id": "PS-SHARED",
+          "started_at": "2026-01-01T00:00:00Z"
+        }
+      },
+      "status": "closed",
+      "title": "Land P01-I01-W01",
+      "worktree_id": "WT01"
+    },
+    "P01-I01-W02": {
+      "claim_session_id": "S404",
+      "id": "P01-I01-W02",
+      "iter_id": "P01-I01",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "sessions": {
+        "1": {
+          "attempt": 1,
+          "ended_at": "2026-01-01T01:00:00Z",
+          "exit_status": 0,
+          "runtime": "claude",
+          "session_id": "PS-SHARED",
+          "started_at": "2026-01-01T00:00:00Z"
+        }
+      },
+      "status": "closed",
+      "title": "Land P01-I01-W02"
+    },
+    "P02-I01-W01": {
+      "claim_session_id": "",
+      "id": "P02-I01-W01",
+      "iter_id": "P02-I01",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "status": "in_progress",
+      "title": "Land P02-I01-W01"
+    }
+  },
+  "workspace": null,
+  "worktrees": {
+    "WT01": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-WT01",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT01",
+      "path": ".ea/worktrees/WT01",
+      "status": "active",
+      "wave_id": "P01-I01-W01"
+    },
+    "WT02": {
+      "base_branch": "feature/demo",
+      "branch": "feature/demo-WT02",
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "WT02",
+      "path": ".ea/worktrees/WT02",
+      "status": "removed",
+      "wave_id": "P01-I01-W02"
+    }
+  }
+}

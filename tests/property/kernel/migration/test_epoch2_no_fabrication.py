@@ -19,10 +19,12 @@ from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import ValidationError
 
+from eawf.kernel.identity.keys import EntityKind
 from eawf.kernel.migration.epoch2.lifecycle import (
     BATCH_HEAD_BINDING_FIELD,
     MILESTONE_ACCEPTANCE_FIELDS,
     DeferralReason,
+    ImportedLifecycleRecord,
     map_phase_row,
 )
 from eawf.kernel.migration.epoch2.plan import CorpusImportPlan, LifecycleImportPlan
@@ -42,8 +44,17 @@ from eawf.kernel.migration.epoch2.runs import (
     mint_claim_run,
     report_ledger_rows,
 )
+from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot
 from eawf.kernel.migration.epoch2.status_map import SourceLifecycle
+from eawf.kernel.migration.epoch2.validation import (
+    FabricationCensus,
+    FabricationReason,
+    ImportValidationReport,
+    StagedImport,
+)
+from eawf.kernel.state.epoch2.values import EntityOrigin
 from tests.property.kernel.migration.conftest import (
+    AMBIGUOUS_HISTORY_SNAPSHOT,
     DANGLING_SESSION_ID,
     attempt_map_plan,
     sparse_history_index,
@@ -510,3 +521,174 @@ def test_attempt_map_binding_index_of_an_empty_document_binds_nothing() -> None:
     assert index.refusals == {}
     assert index.binding_for("PS-A") is None
     assert index.refusal_for("PS-A") is None
+
+
+# --- The fabrication census over a whole staged import ---
+#
+# The tests above check one rule at a time. The census checks the import
+# as a whole: it walks every record the import writes and asks the one
+# question a reader of an imported corpus needs answered -- which source
+# row does this row come from. A record that cannot answer is named,
+# because a row nobody can trace back is a row nobody can check.
+#
+# The ambiguous-history corpus is the positive case. It is full of open
+# questions -- a claim naming a session that never existed, an iter
+# tagged with an audit that resolves in neither the collection nor the
+# ledger, a phase with two candidate tracks and no recorded choice, a
+# worktree still open at the barrier -- and not one of them makes the
+# importer write a row it cannot cite.
+
+_AMBIGUOUS_SNAPSHOT = SourceSnapshot.read(AMBIGUOUS_HISTORY_SNAPSHOT)
+
+#: What the ambiguous-history import writes, counted from the fixture.
+AMBIGUOUS_IMPORTED_ROWS = 21
+AMBIGUOUS_TASKS = 5
+AMBIGUOUS_RUNS = 3
+
+#: The record kinds no stage of the import mints, named so an empty
+#: count reads as a decision rather than as an omission.
+UNWRITTEN_KINDS = (EntityKind.RELEASE, EntityKind.RECEIPT, EntityKind.EVIDENCE)
+
+#: An origin that cites nothing, which is what a record the importer
+#: created rather than projected carries.
+NATIVE_ORIGIN = EntityOrigin(kind="native", mapping_basis="native", confidence="exact")
+
+
+def _staged_with(
+    plan: CorpusImportPlan, records: tuple[ImportedLifecycleRecord, ...]
+) -> StagedImport:
+    """Reduce ``plan`` with its lifecycle records replaced by ``records``."""
+    lifecycle = plan.lifecycle.model_copy(update={"records": records})
+    return StagedImport.reduce(
+        plan=plan.model_copy(update={"lifecycle": lifecycle}),
+        snapshot=_AMBIGUOUS_SNAPSHOT,
+    )
+
+
+def _first_of(
+    plan: CorpusImportPlan, lifecycle: SourceLifecycle
+) -> tuple[ImportedLifecycleRecord, tuple[ImportedLifecycleRecord, ...]]:
+    """Return the first record of ``lifecycle`` and the untouched remainder."""
+    head = plan.lifecycle.for_lifecycle(lifecycle)[0]
+    return head, tuple(record for record in plan.lifecycle.records if record is not head)
+
+
+def _census_after(
+    plan: CorpusImportPlan,
+    *,
+    lifecycle: SourceLifecycle,
+    update: dict[str, object],
+) -> FabricationCensus:
+    """Census ``plan`` with one record of ``lifecycle`` doctored by ``update``."""
+    head, rest = _first_of(plan, lifecycle)
+    return FabricationCensus.build(_staged_with(plan, (head.model_copy(update=update), *rest)))
+
+
+def test_census_of_the_ambiguous_corpus_names_no_row_without_a_source_locator(
+    ambiguous_report: ImportValidationReport,
+) -> None:
+    """Every open question was left open, and every row still cites a row."""
+    census = ambiguous_report.fabrication
+
+    assert census.imported_rows == AMBIGUOUS_IMPORTED_ROWS
+    assert census.rows_without_source_locator == ()
+
+
+def test_census_of_the_ambiguous_corpus_finds_nothing_the_source_lacks(
+    ambiguous_report: ImportValidationReport,
+) -> None:
+    assert ambiguous_report.fabrication.findings == ()
+
+
+def test_census_of_the_ambiguous_corpus_counts_what_it_wrote(
+    ambiguous_report: ImportValidationReport,
+) -> None:
+    census = ambiguous_report.fabrication
+
+    assert census.rows_of_kind(EntityKind.TASK) == AMBIGUOUS_TASKS
+    assert census.rows_of_kind(EntityKind.RUN) == AMBIGUOUS_RUNS
+    assert sum(census.rows_by_entity_kind.values()) == census.imported_rows
+
+
+def test_census_counts_no_observation_of_a_kind_the_import_never_mints(
+    ambiguous_report: ImportValidationReport,
+) -> None:
+    """No Release, receipt or evidence row appears; the source entails none."""
+    for kind in UNWRITTEN_KINDS:
+        assert ambiguous_report.fabrication.rows_of_kind(kind) == 0
+
+
+def test_census_names_a_record_whose_disposition_cannot_cite_a_source_row(
+    ambiguous_plan: CorpusImportPlan,
+) -> None:
+    """A native origin cites nothing, so the record it carries is named."""
+    census = _census_after(
+        ambiguous_plan, lifecycle=SourceLifecycle.PHASE, update={"origin": NATIVE_ORIGIN}
+    )
+
+    assert census.rows_without_source_locator == ("phases/milestone",)
+    assert [finding.reason for finding in census.findings] == [FabricationReason.NO_SOURCE_LOCATOR]
+    assert census.findings[0].field is None
+
+
+def test_census_names_a_milestone_that_carries_an_acceptance_proof(
+    ambiguous_plan: CorpusImportPlan,
+) -> None:
+    """Epoch 1 recorded no acceptance, so a filled one came from nowhere."""
+    head, _rest = _first_of(ambiguous_plan, SourceLifecycle.PHASE)
+    field = MILESTONE_ACCEPTANCE_FIELDS[0]
+    census = _census_after(
+        ambiguous_plan,
+        lifecycle=SourceLifecycle.PHASE,
+        update={"record": {**head.record, field: "accepted"}},
+    )
+
+    assert [finding.field for finding in census.findings] == [field]
+    assert census.findings[0].reason is FabricationReason.ACCEPTANCE_WITHOUT_SOURCE_PROOF
+    assert census.rows_without_source_locator == ()
+
+
+def test_census_names_a_batch_that_carries_a_head_binding(
+    ambiguous_plan: CorpusImportPlan,
+) -> None:
+    """A filled head binding turns an unproven merge into a proven-looking one."""
+    head, _rest = _first_of(ambiguous_plan, SourceLifecycle.ITER)
+    census = _census_after(
+        ambiguous_plan,
+        lifecycle=SourceLifecycle.ITER,
+        update={"record": {**head.record, BATCH_HEAD_BINDING_FIELD: "abc1234"}},
+    )
+
+    assert [finding.field for finding in census.findings] == [BATCH_HEAD_BINDING_FIELD]
+    assert census.findings[0].reason is FabricationReason.HEAD_BINDING_WITHOUT_SOURCE_PROOF
+
+
+def test_census_of_an_import_with_no_rows_counts_nothing() -> None:
+    census = FabricationCensus.build(
+        StagedImport(source_schema_version="1.19", project_code="DEMO", rows=())
+    )
+
+    assert census.imported_rows == 0
+    assert census.rows_by_entity_kind == {}
+    assert census.rows_without_source_locator == ()
+    assert census.findings == ()
+    assert census.rows_of_kind(EntityKind.TASK) == 0
+
+
+@given(status=st.sampled_from([SUCCEEDED_RUN_STATUS, FAILED_RUN_STATUS]))
+def test_census_names_a_run_claiming_any_outcome_without_a_bound_report(
+    ambiguous_plan: CorpusImportPlan,
+    status: str,
+) -> None:
+    """Neither outcome may be claimed while the source binds no report."""
+    head = next(record for record in ambiguous_plan.lifecycle.records if record.minted_runs)
+    rest = tuple(record for record in ambiguous_plan.lifecycle.records if record is not head)
+    claiming = head.model_copy(
+        update={"minted_runs": (head.minted_runs[0].model_copy(update={"status": status}),)}
+    )
+    census = FabricationCensus.build(_staged_with(ambiguous_plan, (claiming, *rest)))
+
+    assert [finding.reason for finding in census.findings] == [
+        FabricationReason.OUTCOME_WITHOUT_BOUND_REPORT
+    ]
+    assert census.findings[0].field == "status"
