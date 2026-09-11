@@ -68,7 +68,7 @@ PROOF_ARGV_ALLOWLIST: Final[tuple[str, ...]] = (
 
 
 class GateEvidenceKind(StrEnum):
-    """The three shapes of evidence a gate can be bound to.
+    """The four shapes of evidence a gate can be bound to.
 
     Values:
         SIGNAL: The gate reads a whole readiness row.
@@ -76,11 +76,29 @@ class GateEvidenceKind(StrEnum):
             shares with another gate.
         PROOF_COMMAND: The gate has no row; it is settled by running an
             argv at the pinned source revision.
+        WAIVER_BLOCK: The gate has no row either; it reads the waiver
+            block the readiness receipt carries beside the signals.
+            Waivers are counted per checkpoint rather than probed, so
+            making one a thirteenth signal row would have required a
+            producer that cannot exist.
     """
 
     SIGNAL = "signal"
     SIGNAL_COMPONENT = "signal_component"
     PROOF_COMMAND = "proof_command"
+    WAIVER_BLOCK = "waiver_block"
+
+
+#: The evidence kinds that read a readiness row, and so contribute one to
+#: the derived required set.
+_ROW_BACKED_KINDS: Final[frozenset[GateEvidenceKind]] = frozenset(
+    {GateEvidenceKind.SIGNAL, GateEvidenceKind.SIGNAL_COMPONENT}
+)
+
+#: The evidence reference a waiver-block gate reports. A constant rather
+#: than a signal name because there is no row to name: the waiver block
+#: sits beside the twelve rows on the readiness receipt.
+WAIVER_BLOCK_REF: Final[str] = "readiness:waivers"
 
 
 class GateBindingRejection(StrEnum):
@@ -125,22 +143,42 @@ class GateBindingError(ValueError):
         self.code = code
 
 
-#: The gate names each profile admits. Only ``dev1`` is authored: the
-#: later profiles add their gates with the waves that build their
-#: producers, and an unauthored profile is a loud
+#: The eight gates the ``dev1`` profile admits, in declaration order.
+#: Named separately because ``dev2`` is defined as a superset of them: a
+#: checkpoint that dropped a gate its predecessor passed could not claim
+#: the train stabilizes monotonically, so the later profile extends the
+#: tuple rather than restating it.
+DEV1_GATES: Final[tuple[ReleaseGateName, ...]] = (
+    ReleaseGateName.VERSION_CONSISTENCY,
+    ReleaseGateName.CHANGELOG_ENTRY,
+    ReleaseGateName.DEPENDENCY_INVENTORY,
+    ReleaseGateName.ARTIFACT_REPRODUCIBILITY,
+    ReleaseGateName.SECURITY_REVIEW,
+    ReleaseGateName.EPOCH1_STABILIZATION,
+    ReleaseGateName.TELEMETRY_PRODUCER,
+    ReleaseGateName.FRONT_DOOR_JOURNEY,
+)
+
+#: The four gates ``dev2`` adds on top of :data:`DEV1_GATES`. Each names
+#: a protection the epoch-2 work introduced and nothing before it could
+#: have proven: the cutover rehearsal, the daemon-hosted gate runner, the
+#: strictness census over the epoch-2 entity package, and the waiver
+#: block that says how much of all of it was bought rather than earned.
+DEV2_ADDED_GATES: Final[tuple[ReleaseGateName, ...]] = (
+    ReleaseGateName.MIGRATION,
+    ReleaseGateName.HOSTED_GATE_RUNNER,
+    ReleaseGateName.SCHEMA_STRICTNESS,
+    ReleaseGateName.WAIVER_COUNT,
+)
+
+#: The gate names each profile admits. Only ``dev1`` and ``dev2`` are
+#: authored: the later profiles add their gates with the waves that build
+#: their producers, and an unauthored profile is a loud
 #: :attr:`GateBindingRejection.UNDECLARED_PROFILE` rather than a silently
 #: empty gate set.
 PROFILE_GATES: Final[Mapping[ReleaseGateProfile, tuple[ReleaseGateName, ...]]] = {
-    ReleaseGateProfile.DEV1: (
-        ReleaseGateName.VERSION_CONSISTENCY,
-        ReleaseGateName.CHANGELOG_ENTRY,
-        ReleaseGateName.DEPENDENCY_INVENTORY,
-        ReleaseGateName.ARTIFACT_REPRODUCIBILITY,
-        ReleaseGateName.SECURITY_REVIEW,
-        ReleaseGateName.EPOCH1_STABILIZATION,
-        ReleaseGateName.TELEMETRY_PRODUCER,
-        ReleaseGateName.FRONT_DOOR_JOURNEY,
-    ),
+    ReleaseGateProfile.DEV1: DEV1_GATES,
+    ReleaseGateProfile.DEV2: (*DEV1_GATES, *DEV2_ADDED_GATES),
 }
 
 
@@ -246,6 +284,7 @@ class GateBinding(_StrictModel):
             GateEvidenceKind.SIGNAL: ("signal",),
             GateEvidenceKind.SIGNAL_COMPONENT: ("signal", "component"),
             GateEvidenceKind.PROOF_COMMAND: ("proof",),
+            GateEvidenceKind.WAIVER_BLOCK: (),
         }
         required = expected[self.kind]
         present = tuple(
@@ -264,8 +303,11 @@ class GateBinding(_StrictModel):
 
         Returns:
             The signal name, the dotted ``<signal>.<component>``
-            reference, or ``proof:<command_id>``.
+            reference, ``proof:<command_id>``, or
+            :data:`WAIVER_BLOCK_REF`.
         """
+        if self.kind is GateEvidenceKind.WAIVER_BLOCK:
+            return WAIVER_BLOCK_REF
         if self.kind is GateEvidenceKind.PROOF_COMMAND:
             assert self.proof is not None
             return f"proof:{self.proof.command_id}"
@@ -282,9 +324,11 @@ class GateBinding(_StrictModel):
         A component binding contributes its *parent* row: a gate reading
         ``dependencies.inventory`` still needs the ``dependencies`` row
         computed. A proof-command binding contributes nothing, because
-        it is settled by a run rather than by a row.
+        it is settled by a run rather than by a row; a waiver-block
+        binding contributes nothing for the same reason, and its verdict
+        is already folded into the sweep's own readiness.
         """
-        return None if self.kind is GateEvidenceKind.PROOF_COMMAND else self.signal
+        return self.signal if self.kind in _ROW_BACKED_KINDS else None
 
     def resolve_proof(self, source_sha: str) -> ResolvedProofCommand:
         """Return this gate's proof command pinned to *source_sha*.
@@ -586,8 +630,11 @@ def resolved_proof_commands(
 
 
 __all__ = [
+    "DEV1_GATES",
+    "DEV2_ADDED_GATES",
     "PROFILE_GATES",
     "PROOF_ARGV_ALLOWLIST",
+    "WAIVER_BLOCK_REF",
     "GateBinding",
     "GateBindingError",
     "GateBindingRejection",

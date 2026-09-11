@@ -13,6 +13,7 @@ the probe cases drive the sweep directly against a local bare remote.
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +24,10 @@ from typer.testing import CliRunner
 
 from eawf.kernel.spec.release_config import load_release_config
 from eawf.surfaces.cli.app import app
+from eawf.workflow.evidence.migration_rehearsal import (
+    REHEARSAL_EVIDENCE_DIR,
+    evidence_dir,
+)
 from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
 from eawf.workflow.verify.release_probes import (
     TagPreflightInputs,
@@ -38,6 +43,10 @@ from eawf.workflow.verify.release_readiness import (
 runner = CliRunner()
 
 pytestmark = pytest.mark.integration
+
+#: This repository, which the synthetic checkouts copy the committed
+#: cutover rehearsal records out of.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 DEV1_VERSION = "0.7.0.dev1"
 
@@ -74,13 +83,39 @@ def _init_repo(path: Path) -> None:
     _git(["commit", "-m", "init"], path)
 
 
-def _init_published_repo(tmp_path: Path) -> Path:
-    """Return a clean checkout whose HEAD is already on ``origin/main``."""
+def _stage_rehearsal_records(work: Path) -> None:
+    """Copy this repository's committed cutover records into *work*.
+
+    The ``migration`` row reads the rehearsal a checkout carries, so a
+    synthetic repository with no records is unproven rather than clean.
+    Copying the real ones is what makes the fixture a *publishable*
+    checkout instead of one that is merely tidy.
+    """
+    source = evidence_dir(_REPO_ROOT)
+    destination = work.joinpath(*REHEARSAL_EVIDENCE_DIR)
+    destination.mkdir(parents=True, exist_ok=True)
+    for record in sorted(source.glob("*.json")):
+        shutil.copyfile(record, destination / record.name)
+
+
+def _init_published_repo(tmp_path: Path, *, rehearsed: bool = True) -> Path:
+    """Return a clean checkout whose HEAD is already on ``origin/main``.
+
+    Args:
+        tmp_path: Directory to build the checkout and its remote in.
+        rehearsed: Whether to stage the committed cutover rehearsal
+            records, which the ``migration`` row reads.
+
+    Returns:
+        The working copy.
+    """
     work = tmp_path / "work"
     work.mkdir()
     _init_repo(work)
     (work / "CHANGELOG.md").write_text(_READY_CHANGELOG, encoding="utf-8")
-    _git(["add", "CHANGELOG.md"], work)
+    if rehearsed:
+        _stage_rehearsal_records(work)
+    _git(["add", "--all"], work)
     _git(["commit", "-m", "changelog"], work)
     bare = tmp_path / "remote.git"
     _git(["init", "--bare", str(bare)], tmp_path)
@@ -402,6 +437,16 @@ def test_tag_preflight_changelog_reds_when_the_file_is_absent(tmp_path: Path) ->
     statuses = _sweep(_ready_inputs(work))
     assert statuses[ReleaseSignalName.CHANGELOG] is ReleaseSignalStatus.FAIL
     assert statuses[ReleaseSignalName.MIGRATION] is ReleaseSignalStatus.FAIL
+
+
+def test_tag_preflight_migration_is_unproven_without_the_rehearsal(tmp_path: Path) -> None:
+    """A checkout carrying no cutover records leaves the row unproven, not clean."""
+    work = _init_published_repo(tmp_path, rehearsed=False)
+
+    statuses = _sweep(_ready_inputs(work))
+
+    assert statuses[ReleaseSignalName.CHANGELOG] is ReleaseSignalStatus.PASS
+    assert statuses[ReleaseSignalName.MIGRATION] is ReleaseSignalStatus.UNAVAILABLE
 
 
 @pytest.mark.parametrize("blank", ["", "   "])

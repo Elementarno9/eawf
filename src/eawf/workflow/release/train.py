@@ -23,6 +23,10 @@ from collections.abc import Mapping
 from functools import cache
 from typing import Final
 
+from eawf.kernel.release.checkpoint_template import (
+    CheckpointConfigTemplate,
+    render_checkpoint_config,
+)
 from eawf.kernel.release.gate_binding import (
     GateBinding,
     load_gate_bindings,
@@ -153,12 +157,70 @@ release:
       - front_door_journey
 """
 
-#: Authored checkpoint configurations by version. Later rungs are
-#: generated independently from the train template rather than by
-#: overlaying version/channel/epoch onto this one, so each lands with
-#: the wave that builds it.
+#: The train-wide half of every checkpoint configuration: the three
+#: publication targets, the single real-host platform claim and the four
+#: publishability flags. Authored once here and rendered per rung by
+#: :func:`~eawf.kernel.release.checkpoint_template.render_checkpoint_config`,
+#: which fills the version, channel, epoch and gate set from the rung
+#: itself.
+V07_CONFIG_TEMPLATE: Final[CheckpointConfigTemplate] = CheckpointConfigTemplate(
+    source_branch="main",
+    require_signed_tag=True,
+    require_clean_tree=True,
+    require_ancestor_of_remote=True,
+    targets=(
+        {
+            "target_id": "pypi",
+            "required": True,
+            "artifact_kinds": ["wheel", "sdist"],
+            "observe_adapter": "package_index",
+            "timeout_seconds": 1800,
+            "retry_limit": 2,
+        },
+        {
+            "target_id": "npm",
+            "required": True,
+            "artifact_kinds": ["codex_plugin"],
+            "observe_adapter": "npm_registry",
+            "prerelease_dist_tag": "next",
+            "stable_dist_tag": "latest",
+            "timeout_seconds": 1800,
+            "retry_limit": 2,
+        },
+        {
+            "target_id": "github",
+            "required": True,
+            "artifact_kinds": ["release_notes", "checksums", "plugin_bundle"],
+            "observe_adapter": "source_host_release",
+            "timeout_seconds": 1800,
+            "retry_limit": 2,
+        },
+    ),
+    platform_claims=(
+        {
+            "platform_id": "linux-x86_64",
+            "receipt_ref": "ci://eawf/.github/workflows/ci.yaml#linux-jail",
+            "real_host": True,
+        },
+    ),
+)
+
+#: The ``0.7.0.dev2`` checkpoint configuration, rendered from the train
+#: template and the rung rather than overlaid onto ``dev1``. Rendering is
+#: what makes the twelve-gate profile and the configuration's required
+#: list the same list: an overlay would have carried ``dev1``'s eight.
+DEV2_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
+    rung=V07_TRAIN.checkpoint_for_version("0.7.0.dev2"),
+    template=V07_CONFIG_TEMPLATE,
+)
+
+#: Checkpoint configurations by version. ``dev1`` is authored -- it was
+#: cut before the template existed and its file is the one the burned
+#: checkpoint was swept against -- and every later rung is rendered, so
+#: none of them can inherit a predecessor's gate set.
 CHECKPOINT_CONFIGS: Final[dict[str, str]] = {
     "0.7.0.dev1": DEV1_RELEASE_CONFIG_YAML,
+    "0.7.0.dev2": DEV2_RELEASE_CONFIG_YAML,
 }
 
 #: What each of the eight ``dev1`` gates reads.
@@ -219,10 +281,53 @@ bindings:
       timeout_seconds: 900
 """
 
-#: Authored gate binding tables by profile. Only ``dev1`` is authored;
-#: the later profiles land with the waves that build their producers.
+#: What each of the four gates ``dev2`` adds on top of ``dev1`` reads.
+#:
+#: ``migration`` is the only one with a row. It reads the whole
+#: ``migration`` signal, which the working-copy probe computes from the
+#: committed four-leg rehearsal over the required corpus set: the gate
+#: is green only when every corpus was rehearsed and every leg holds.
+#:
+#: ``hosted_gate_runner`` and ``schema_strictness`` are proof commands
+#: for the same reason the ``dev1`` three are -- there is no fact about
+#: a checkout that settles them, only a run. The first drives a close
+#: with no attached session through the daemon and watches it run the
+#: gates rather than waive them; the second is the strictness census
+#: over the whole epoch-2 entity package, which is a property of the
+#: package rather than of the models somebody remembered to check.
+#:
+#: ``waiver_count`` reads the waiver block. It is the gate that makes
+#: the other eleven honest: a checkpoint can reach green by proving its
+#: gates or by waiving them, and only this row says which happened.
+DEV2_GATE_BINDINGS_YAML: Final[str] = (
+    DEV1_GATE_BINDINGS_YAML
+    + """\
+  - gate: migration
+    kind: signal
+    signal: migration
+  - gate: hosted_gate_runner
+    kind: proof_command
+    proof:
+      command_id: hosted_close_runs_the_gates
+      argv: [uv, run, pytest, tests/integration/runtime/daemon/test_headless_close.py, -q]
+      timeout_seconds: 900
+  - gate: schema_strictness
+    kind: proof_command
+    proof:
+      command_id: epoch2_strictness_census
+      argv: [uv, run, pytest, tests/contract/kernel/state/test_epoch2_models_strict.py, -q]
+      timeout_seconds: 900
+  - gate: waiver_count
+    kind: waiver_block
+"""
+)
+
+#: Authored gate binding tables by profile. ``dev1`` and ``dev2`` are
+#: authored; the later profiles land with the waves that build their
+#: producers.
 PROFILE_GATE_BINDINGS: Final[dict[ReleaseGateProfile, str]] = {
     ReleaseGateProfile.DEV1: DEV1_GATE_BINDINGS_YAML,
+    ReleaseGateProfile.DEV2: DEV2_GATE_BINDINGS_YAML,
 }
 
 
@@ -293,8 +398,11 @@ __all__ = [
     "CHECKPOINT_CONFIGS",
     "DEV1_GATE_BINDINGS_YAML",
     "DEV1_RELEASE_CONFIG_YAML",
+    "DEV2_GATE_BINDINGS_YAML",
+    "DEV2_RELEASE_CONFIG_YAML",
     "PROFILE_GATE_BINDINGS",
     "V07_CHECKPOINTS",
+    "V07_CONFIG_TEMPLATE",
     "V07_TARGET_VERSION",
     "V07_TRAIN",
     "checkpoint_config_yaml",

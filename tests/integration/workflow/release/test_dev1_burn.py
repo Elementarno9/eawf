@@ -888,8 +888,4 @@ def test_train_create_of_dev2_reads_no_index_from_the_burned_rung(
     assert burned.status is ReleaseStatus.PARTIALLY_RELEASED
     assert V07_TRAIN.current_checkpoint.release_key == DEV1_KEY
     assert V07_TRAIN.checkpoints[1].release_key == DEV2_KEY
-    assert required_contract_ids(DEV2_VERSION) == (
-        "MCT-26081301",
-        "MCT-26081302",
-        "MCT-26081303",
-    )
+    assert required_contract_ids(DEV2_VERSION) == ("MCT-26091101",)

@@ -162,6 +162,11 @@ class ReleaseGateName(StrEnum):
         EPOCH1_STABILIZATION: The epoch-1 stabilization proof command.
         TELEMETRY_PRODUCER: The telemetry-producer proof command.
         FRONT_DOOR_JOURNEY: The install-smoke journey proof command.
+        MIGRATION: The four-leg cutover rehearsal over the whole corpus set.
+        HOSTED_GATE_RUNNER: The daemon-hosted close proof command.
+        SCHEMA_STRICTNESS: The epoch-2 strictness census proof command.
+        WAIVER_COUNT: The checkpoint's waiver block, read off the
+            readiness receipt rather than off a signal row.
     """
 
     VERSION_CONSISTENCY = "version_consistency"
@@ -172,6 +177,10 @@ class ReleaseGateName(StrEnum):
     EPOCH1_STABILIZATION = "epoch1_stabilization"
     TELEMETRY_PRODUCER = "telemetry_producer"
     FRONT_DOOR_JOURNEY = "front_door_journey"
+    MIGRATION = "migration"
+    HOSTED_GATE_RUNNER = "hosted_gate_runner"
+    SCHEMA_STRICTNESS = "schema_strictness"
+    WAIVER_COUNT = "waiver_count"
 
 
 class ReleaseTargetConfig(_StrictModel):

@@ -1,22 +1,31 @@
-"""REL-037: dev2 is not built until all three measurements are citable.
+"""REL-037: a checkpoint is not built until its measurements are citable.
 
-The ``0.7.0.dev2`` checkpoint carries the epoch-2 importer, the
-cross-provider dispatch surface and the daemon under concurrent load.
-Each was probed before it was designed, and each probe is promoted as a
-:class:`~eawf.kernel.spec.measured_contract.MeasuredContract`. These
-tests pin that the checkpoint cannot be opened while any one of the
-three is unpromoted, and that the refusal names *that* contract plus the
-command that promotes it -- a refusal naming "some contract" would send
-the operator back to the same wall after every partial fix.
+Three surfaces were probed before any of them was designed -- the
+epoch-2 importer, the cross-provider dispatch surface and the daemon
+under concurrent load -- and each probe is promoted as a
+:class:`~eawf.kernel.spec.measured_contract.MeasuredContract`. Each leg
+is then assigned to the rung that builds the surface it measures:
+``dev2`` builds the importer, so it asserts over the importer contract;
+``dev3`` is the first rung that dispatches natively in parallel and the
+first with a projection seam over the daemon's RPC, so the other two
+land there.
 
-The negative fixture is per-contract on purpose: promoting two of three
-and asserting the third is named is what proves the check reads all
-three rather than short-circuiting on the first.
+These tests pin that neither rung can be opened while one of its
+contracts is unpromoted, and that the refusal names *each* missing
+contract plus the command that promotes it -- a refusal naming "some
+contract" would send the operator back to the same wall after every
+partial fix, and a refusal naming only the first would do it once per
+contract.
+
+The negative fixture is per-contract on purpose: promoting one of the
+dev3 pair and asserting the other is named is what proves the check
+reads both rather than short-circuiting.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Sequence
 from pathlib import Path
 from uuid import UUID
@@ -31,6 +40,7 @@ from eawf.runtime.daemon.methods.release import create
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence._io import atomic_write_state, load_state
 from eawf.workflow.evidence.measured_contract import (
+    IMPORTER_CORPUS_SCALE_BAND,
     LOCAL_SPIKE_ROOT,
     PREFLIGHT_CHECKPOINT_BANDS,
     PREFLIGHT_CONTRACTS,
@@ -53,17 +63,23 @@ _EMPTY_STATE = _REPO_ROOT / "tests" / "fixtures" / "states" / "valid" / "01-empt
 #: Project code of the empty-repo fixture; artifact URNs are built from it.
 SCOPE = "QR"
 
-#: The checkpoint under admission.
+#: The checkpoints under admission.
 DEV2 = "0.7.0.dev2"
+DEV3 = "0.7.0.dev3"
 
-#: The three contracts dev2 asserts over, in admission order.
+#: The contracts each rung asserts over, in admission order.
 CONTRACT_IDS = required_contract_ids(DEV2)
+DEV3_CONTRACT_IDS = required_contract_ids(DEV3)
 
 #: Identity minted for the record a successful create returns.
 DEV2_UID = UUID(int=372)
 
 #: The command the refusal must hand the operator.
 PROMOTE_CMD = "eawf artifact promote-contract"
+
+#: The corpus pin the importer contract was extracted from, which is the
+#: same document the cutover rehearsal is judged against.
+CORPUS_PIN = _REPO_ROOT / "tests" / "fixtures" / "migration" / "live-cutover" / "corpus-pin.json"
 
 
 def state_with(contract_ids: Sequence[str]) -> State:
@@ -84,13 +100,33 @@ def create_dev2(state: State) -> Release:
     return create_checkpoint_release(state, train=V07_TRAIN, version=DEV2, uid=DEV2_UID)
 
 
+def create_dev3(state: State) -> Release:
+    """Open the dev3 checkpoint against *state*."""
+    return create_checkpoint_release(
+        state,
+        train=V07_TRAIN,
+        version=DEV3,
+        uid=DEV2_UID,
+        membership_refs=("milestone://epoch2/native-canary",),
+    )
+
+
 # --- the admission table -----------------------------------------------------
 
 
-def test_dev2_requires_the_three_preflight_contracts() -> None:
-    """The admission table names exactly the three promoted contracts."""
-    assert CONTRACT_IDS == ("MCT-26081301", "MCT-26081302", "MCT-26081303")
-    assert set(CONTRACT_IDS) == set(PREFLIGHT_CONTRACTS)
+def test_dev2_requires_the_importer_contract_alone() -> None:
+    """dev2 builds the importer, so the importer is what it asserts over."""
+    assert CONTRACT_IDS == ("MCT-26091101",)
+
+
+def test_dev3_requires_the_cross_provider_and_daemon_contracts() -> None:
+    """The two legs whose surfaces dev3 is the first rung to exercise."""
+    assert DEV3_CONTRACT_IDS == ("MCT-26081302", "MCT-26081303")
+
+
+def test_the_admission_table_draws_only_on_promotable_contracts() -> None:
+    """Every id either rung requires is a contract that can be promoted."""
+    assert set(CONTRACT_IDS) | set(DEV3_CONTRACT_IDS) <= set(PREFLIGHT_CONTRACTS)
 
 
 def test_dev1_predates_the_rule_and_requires_nothing() -> None:
@@ -102,7 +138,7 @@ def test_dev1_predates_the_rule_and_requires_nothing() -> None:
 # --- the admitted case -------------------------------------------------------
 
 
-def test_all_three_promoted_admits_the_checkpoint() -> None:
+def test_the_importer_contract_promoted_admits_the_checkpoint() -> None:
     """With every contract citable, dev2 opens as a DRAFT record."""
     record = create_dev2(state_with(CONTRACT_IDS))
 
@@ -119,12 +155,45 @@ def test_admission_resolves_every_contract_to_its_artifact_row() -> None:
     assert all(row.metadata["boundary"] for row in rows)
 
 
-def test_the_importer_contract_is_measured_at_production_band() -> None:
-    """The importer asserts over the real population, so it needs that band."""
+def test_the_importer_contract_resolves_by_artifact_urn() -> None:
+    """The full URN, not only the bare id, lands on the promoted row."""
+    state = state_with(CONTRACT_IDS)
+    urn = f"urn:eawf:v1:artifact:{SCOPE}/{CONTRACT_IDS[0]}"
+
+    row = resolve_contract_citation(state, urn)
+
+    assert row.id == CONTRACT_IDS[0]
+    assert row.metadata["contract_id"] == CONTRACT_IDS[0]
+
+
+def test_the_importer_contract_is_measured_at_the_thousands_scale_band() -> None:
+    """The importer asserts over the production corpus, in the thousands band."""
     rows = assert_measured_contracts(state_with(CONTRACT_IDS), DEV2)
 
-    environment = rows[0].metadata["environment"]
-    assert environment["scale_band"] == ScaleBand.PRODUCTION.value
+    observed = rows[0].metadata["observed"]
+    assert observed["scale_band"] == IMPORTER_CORPUS_SCALE_BAND == "thousands"
+    assert rows[0].metadata["environment"]["scale_band"] == ScaleBand.PRODUCTION.value
+
+
+def test_the_importer_contract_band_matches_the_committed_corpus_pin() -> None:
+    """The band is the one the rehearsal itself is judged against."""
+    pin = json.loads(CORPUS_PIN.read_text(encoding="utf-8"))
+    rows = assert_measured_contracts(state_with(CONTRACT_IDS), DEV2)
+
+    observed = rows[0].metadata["observed"]
+    assert observed["scale_band"] == pin["declared_band"]
+    assert observed["corpus_rows"] == pin["observed_rows"]
+    assert observed["observed_at_revision"] == pin["observed_at_revision"]
+
+
+def test_the_importer_contract_boundary_cites_the_production_corpus() -> None:
+    """A non-empty boundary naming what was measured and where it stops."""
+    rows = assert_measured_contracts(state_with(CONTRACT_IDS), DEV2)
+
+    boundary = rows[0].metadata["boundary"]
+    assert boundary.strip()
+    assert "production corpus" in boundary
+    assert "thousands band" in boundary
 
 
 # --- the negative fixture: each single absence --------------------------------
@@ -132,7 +201,7 @@ def test_the_importer_contract_is_measured_at_production_band() -> None:
 
 @pytest.mark.parametrize("absent", CONTRACT_IDS)
 def test_a_single_absent_contract_refuses_and_names_it(absent: str) -> None:
-    """Promoting the other two still refuses, naming the missing one."""
+    """An unpromoted contract refuses the checkpoint, naming the missing one."""
     promoted = [contract_id for contract_id in CONTRACT_IDS if contract_id != absent]
 
     with pytest.raises(UserError) as excinfo:
@@ -145,19 +214,19 @@ def test_a_single_absent_contract_refuses_and_names_it(absent: str) -> None:
     assert f"{PROMOTE_CMD} {absent}" in message
 
 
-@pytest.mark.parametrize("absent", CONTRACT_IDS)
+@pytest.mark.parametrize("absent", DEV3_CONTRACT_IDS)
 def test_a_refusal_names_only_the_absent_contract(absent: str) -> None:
-    """The two that are promoted stay out of the operator's way."""
-    promoted = [contract_id for contract_id in CONTRACT_IDS if contract_id != absent]
+    """The contract that is promoted stays out of the operator's way."""
+    promoted = [contract_id for contract_id in DEV3_CONTRACT_IDS if contract_id != absent]
 
     with pytest.raises(UserError) as excinfo:
-        create_dev2(state_with(promoted))
+        create_dev3(state_with(promoted))
 
     assert not any(contract_id in str(excinfo.value) for contract_id in promoted)
 
 
-def test_no_contracts_promoted_refuses_on_the_first() -> None:
-    """The empty state fails closed on the first required contract."""
+def test_no_contracts_promoted_refuses_naming_the_required_one() -> None:
+    """The empty state fails closed and names what dev2 needs."""
     with pytest.raises(UserError) as excinfo:
         create_dev2(state_with(()))
 
@@ -165,17 +234,77 @@ def test_no_contracts_promoted_refuses_on_the_first() -> None:
     assert CONTRACT_IDS[0] in str(excinfo.value)
 
 
+# --- dev3 admission: the refusal names every missing contract -----------------
+
+
+def test_dev3_refusal_names_each_missing_contract() -> None:
+    """Both dev3 legs are named in one refusal, not one per round-trip."""
+    with pytest.raises(UserError) as excinfo:
+        create_dev3(state_with(()))
+
+    message = str(excinfo.value)
+    assert excinfo.value.kind == "measured_contract_missing"
+    for contract_id in DEV3_CONTRACT_IDS:
+        assert contract_id in message
+        assert CONTRACT_LABELS[contract_id] in message
+        assert f"{PROMOTE_CMD} {contract_id}" in message
+
+
+def test_dev3_refusal_names_the_surfaces_in_the_operators_vocabulary() -> None:
+    """The labels are cross-provider conformance and daemon RPC under dispatch."""
+    with pytest.raises(UserError) as excinfo:
+        create_dev3(state_with(()))
+
+    message = str(excinfo.value)
+    assert "cross-provider conformance" in message
+    assert "daemon RPC under concurrent dispatch" in message
+
+
+def test_dev3_refusal_counts_the_contracts_it_is_missing() -> None:
+    """The count tells the operator how many fixes are ahead of them."""
+    with pytest.raises(UserError) as excinfo:
+        create_dev3(state_with(()))
+
+    assert f"{len(DEV3_CONTRACT_IDS)} of {len(DEV3_CONTRACT_IDS)}" in str(excinfo.value)
+
+
+def test_dev3_is_not_blocked_on_the_importer_contract() -> None:
+    """The importer leg is dev2's assertion; dev3 does not re-demand it."""
+    assert CONTRACT_IDS[0] not in DEV3_CONTRACT_IDS
+
+    with pytest.raises(UserError) as excinfo:
+        create_dev3(state_with(()))
+
+    assert CONTRACT_IDS[0] not in str(excinfo.value)
+
+
+def test_dev3_opens_once_both_contracts_are_promoted() -> None:
+    """With the pair citable the rung opens as a DRAFT record."""
+    record = create_dev3(state_with(DEV3_CONTRACT_IDS))
+
+    assert record.key == "REL-0.7.0.dev3"
+    assert record.status is ReleaseStatus.DRAFT
+
+
 def test_admission_cites_ids_because_the_spike_path_stays_refused() -> None:
     """Promotion does not make the gitignored spike tree citable."""
-    spike_path = PREFLIGHT_CONTRACTS[CONTRACT_IDS[0]].observed_at_ref
-    promoted = state_with(CONTRACT_IDS)
+    spike_path = PREFLIGHT_CONTRACTS[DEV3_CONTRACT_IDS[0]].observed_at_ref
+    promoted = state_with(DEV3_CONTRACT_IDS)
     assert spike_path.startswith(LOCAL_SPIKE_ROOT)
 
     with pytest.raises(UserError) as excinfo:
         resolve_contract_citation(promoted, spike_path)
 
     assert excinfo.value.kind == "plan_reference_missing"
-    assert all(contract_id in promoted.artifacts for contract_id in CONTRACT_IDS)
+    assert all(contract_id in promoted.artifacts for contract_id in DEV3_CONTRACT_IDS)
+
+
+def test_the_importer_contract_cites_a_committed_observation() -> None:
+    """The re-measured importer leg points at a tree a reviewer can open."""
+    contract = PREFLIGHT_CONTRACTS[CONTRACT_IDS[0]]
+
+    assert not contract.observed_at_ref.startswith(LOCAL_SPIKE_ROOT)
+    assert (_REPO_ROOT / contract.observed_at_ref).is_file()
 
 
 # --- error paths -------------------------------------------------------------

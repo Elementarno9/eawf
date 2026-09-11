@@ -68,7 +68,9 @@ runner = CliRunner()
 IMPORTER_CONTRACT_ID = "MCT-26081301"
 CONFORMANCE_CONTRACT_ID = "MCT-26081302"
 DAEMON_CONTRACT_ID = "MCT-26081303"
-CONTRACT_IDS = (IMPORTER_CONTRACT_ID, CONFORMANCE_CONTRACT_ID, DAEMON_CONTRACT_ID)
+CORPUS_IMPORTER_CONTRACT_ID = "MCT-26091101"
+SPIKE_CONTRACT_IDS = (IMPORTER_CONTRACT_ID, CONFORMANCE_CONTRACT_ID, DAEMON_CONTRACT_ID)
+CONTRACT_IDS = (*SPIKE_CONTRACT_IDS, CORPUS_IMPORTER_CONTRACT_ID)
 
 #: The fixture project code; artifact URNs are built from it.
 SCOPE = "QR"
@@ -100,8 +102,8 @@ def _evidence_rows(state_path: Path) -> list[dict[str, Any]]:
 # ---- the registry ----------------------------------------------------------
 
 
-def test_preflight_registry_holds_exactly_the_three_spike_contracts() -> None:
-    assert tuple(sorted(PREFLIGHT_CONTRACTS)) == CONTRACT_IDS
+def test_preflight_registry_holds_the_spike_contracts_and_the_corpus_revision() -> None:
+    assert tuple(sorted(PREFLIGHT_CONTRACTS)) == tuple(sorted(CONTRACT_IDS))
     assert sorted(PREFLIGHT_CHECKPOINT_BANDS) == sorted(PREFLIGHT_CONTRACTS)
 
 
@@ -128,9 +130,18 @@ def test_every_preflight_contract_meets_its_checkpoint_band() -> None:
         )
 
 
-def test_every_preflight_contract_points_at_its_raw_spike_output() -> None:
-    for contract in PREFLIGHT_CONTRACTS.values():
-        assert contract.observed_at_ref.startswith(LOCAL_SPIKE_ROOT)
+def test_every_spike_contract_points_at_its_raw_spike_output() -> None:
+    for contract_id in SPIKE_CONTRACT_IDS:
+        assert PREFLIGHT_CONTRACTS[contract_id].observed_at_ref.startswith(LOCAL_SPIKE_ROOT)
+
+
+def test_the_corpus_importer_contract_points_at_a_committed_observation() -> None:
+    """The re-measured importer leg was rehearsed in tree, not in the spike shed."""
+    contract = PREFLIGHT_CONTRACTS[CORPUS_IMPORTER_CONTRACT_ID]
+
+    assert not contract.observed_at_ref.startswith(LOCAL_SPIKE_ROOT)
+    assert contract.environment.scale_band is ScaleBand.PRODUCTION
+    assert contract.observed["scale_band"] == "thousands"
 
 
 # ---- REL-037: eawf artifact show over the three URNs -----------------------
@@ -257,7 +268,8 @@ def test_plan_reference_missing_names_the_promotion_command_for_each_spike(
     state_path: Path,
 ) -> None:
     state = load_state(state_path)
-    for contract_id, contract in PREFLIGHT_CONTRACTS.items():
+    for contract_id in SPIKE_CONTRACT_IDS:
+        contract = PREFLIGHT_CONTRACTS[contract_id]
         message = _expect_plan_reference_missing(state, contract.observed_at_ref)
         assert f"{PROMOTE_CMD} {contract_id}" in message
 
