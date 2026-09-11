@@ -41,6 +41,7 @@ from eawf.kernel.migration.epoch2.manifest import (
     SealState,
     StoreMapping,
     TargetCensus,
+    TierPlacement,
     UnresolvedReason,
     UnresolvedRow,
     idempotence_payload,
@@ -67,6 +68,24 @@ ZERO_ROW_SLOT = "plugins"
 
 #: The collection whose Track ownership the source cannot supply.
 GOALS_COLLECTION = "goals"
+
+#: A restore point and a tier placement the staged-write cases reuse. Both
+#: are built through their own constructors so the digests they carry are
+#: the ones the models derive, which is what the negative cases then break.
+_BACKUP = BackupRecord.of(
+    taken_at=datetime(2026, 1, 1, tzinfo=UTC),
+    surfaces=("state.json@sha256:" + "a" * 64,),
+)
+_PLACEMENT = TierPlacement.of(
+    records_by_tier={
+        TierTableStorageTier.DOCUMENT: 3,
+        TierTableStorageTier.LEDGER: 511,
+    },
+    document_record_count=3,
+    document_byte_length=4940,
+    ledger_byte_length=436_017,
+    indexed_collections=(Epoch2Collection.TASK,),
+)
 
 
 @pytest.fixture(scope="module")
@@ -119,11 +138,12 @@ def _row(payload: dict[str, Any], collection: str) -> dict[str, Any]:
 def test_complete_manifest_fixture_loads(complete: MigrationManifest) -> None:
     """The fixture is a valid manifest of exactly the contracted shape."""
     assert complete.schema_version == MANIFEST_SCHEMA_VERSION
-    assert len(MigrationManifest.model_fields) == 20
+    assert len(MigrationManifest.model_fields) == 21
     assert len(complete.row_mappings) == 38
     assert complete.seal_state is SealState.SEALED
     assert complete.rollback_boundary is RollbackBoundary.PLAN_ONLY
     assert complete.backup is None
+    assert complete.tier_placement is None
     assert len(complete.validation_results) == VALIDATION_PASS_COUNT
 
 
@@ -328,11 +348,7 @@ def test_manifest_plan_only_boundary_admits_no_backup(payload: dict[str, Any]) -
     """Nothing written means nothing to restore."""
 
     def add_backup(candidate: dict[str, Any]) -> None:
-        candidate["backup"] = {
-            "taken_at": "2026-01-01T00:00:00Z",
-            "surfaces": ["document.json"],
-            "backup_digest": "a" * 64,
-        }
+        candidate["backup"] = _BACKUP.model_dump(mode="json")
 
     assert "carries a backup" in str(_broken(payload, add_backup).value)
 
@@ -346,6 +362,109 @@ def test_manifest_past_the_first_write_requires_a_backup(
         candidate["rollback_boundary"] = RollbackBoundary.MARKER_WRITTEN.value
 
     assert "no backup to restore from" in str(_broken(payload, advance_boundary).value)
+
+
+def test_manifest_plan_only_boundary_admits_no_tier_placement(
+    payload: dict[str, Any],
+) -> None:
+    """A plan that wrote nothing cannot have measured a tier layout."""
+
+    def add_placement(candidate: dict[str, Any]) -> None:
+        candidate["tier_placement"] = _PLACEMENT.model_dump(mode="json")
+
+    assert "has written nothing into a tier" in str(_broken(payload, add_placement).value)
+
+
+def test_manifest_past_the_staged_write_requires_a_tier_placement(
+    payload: dict[str, Any],
+) -> None:
+    """A staged cutover that reports no placement claims a layout nobody measured."""
+
+    def advance_boundary(candidate: dict[str, Any]) -> None:
+        candidate["rollback_boundary"] = RollbackBoundary.STAGED.value
+        candidate["backup"] = _BACKUP.model_dump(mode="json")
+
+    assert "reports no tier placement" in str(_broken(payload, advance_boundary).value)
+
+
+def test_staging_a_manifest_records_the_placement_and_keeps_the_seal(
+    complete: MigrationManifest,
+) -> None:
+    """Recording a staged write moves the boundary and nothing the seal covers."""
+    staged = complete.staged(placement=_PLACEMENT, backup=_BACKUP)
+
+    assert staged.rollback_boundary is RollbackBoundary.STAGED
+    assert staged.tier_placement == _PLACEMENT
+    assert staged.backup == _BACKUP
+    assert staged.manifest_digest == complete.manifest_digest
+    assert staged.seal_digest == complete.seal_digest
+    assert staged.idempotence_digest == complete.idempotence_digest
+
+
+def test_tier_placement_digest_covers_its_counts() -> None:
+    """A hand-edited byte count no longer matches the digest over it."""
+    payload = _PLACEMENT.model_dump(mode="json")
+    payload["document_byte_length"] = _PLACEMENT.document_byte_length + 1
+    with pytest.raises(ValidationError) as excinfo:
+        TierPlacement.model_validate(payload)
+    assert "does not cover its counts" in str(excinfo.value)
+
+
+def test_tier_placement_rejects_an_undeclared_tier() -> None:
+    """A tier the table never declared has no file for records to land in."""
+    candidate = _PLACEMENT.model_dump(mode="json")
+    candidate["records_by_tier"] = {"warm_cache": 3}
+    with pytest.raises(ValidationError) as excinfo:
+        TierPlacement.model_validate(candidate)
+    assert "which no storage tier declares" in str(excinfo.value)
+
+
+def test_tier_placement_refuses_a_residual_the_document_tier_disagrees_with() -> None:
+    """The residual count and the document tier's count are one number."""
+    with pytest.raises(ValidationError) as excinfo:
+        TierPlacement.of(
+            records_by_tier={TierTableStorageTier.DOCUMENT: 2},
+            document_record_count=5,
+            document_byte_length=64,
+            ledger_byte_length=0,
+            indexed_collections=(),
+        )
+    assert "residual document records" in str(excinfo.value)
+
+
+def test_tier_placement_refuses_a_non_empty_document_of_zero_bytes() -> None:
+    """A document holding rows cannot weigh nothing."""
+    with pytest.raises(ValidationError) as excinfo:
+        TierPlacement.of(
+            records_by_tier={TierTableStorageTier.DOCUMENT: 1},
+            document_record_count=1,
+            document_byte_length=0,
+            ledger_byte_length=0,
+            indexed_collections=(),
+        )
+    assert "zero bytes" in str(excinfo.value)
+
+
+def test_empty_tier_placement_is_a_valid_record_of_an_empty_write() -> None:
+    """A write that placed nothing is a placement, not a missing one."""
+    placement = TierPlacement.of(
+        records_by_tier={},
+        document_record_count=0,
+        document_byte_length=0,
+        ledger_byte_length=0,
+        indexed_collections=(),
+    )
+    assert placement.total_records == 0
+    assert placement.records_in(TierTableStorageTier.LEDGER) == 0
+
+
+def test_backup_record_digest_covers_its_surfaces() -> None:
+    """A surface added by hand no longer matches the digest over the set."""
+    payload = _BACKUP.model_dump(mode="json")
+    payload["surfaces"] = [*_BACKUP.surfaces, "ledger/task.jsonl@sha256:" + "b" * 64]
+    with pytest.raises(ValidationError) as excinfo:
+        BackupRecord.model_validate(payload)
+    assert "does not cover its" in str(excinfo.value)
 
 
 def test_sealing_a_draft_preserves_the_content_digest(

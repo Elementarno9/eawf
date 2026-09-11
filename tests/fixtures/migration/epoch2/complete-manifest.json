@@ -1055,6 +1055,7 @@
     "planned_rows": 1,
     "total_rows": 515
   },
+  "tier_placement": null,
   "track_assignments": [
     {
       "address": "phases/P01",

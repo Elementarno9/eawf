@@ -13710,6 +13710,21 @@
       "status": "done",
       "updated_at": "2026-09-11T11:40:26.299533Z"
     },
+    "P32-I01-W15": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 350433,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W15",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W15",
+      "model": null,
+      "scope_id": "P32-I01-W15",
+      "status": "done",
+      "updated_at": "2026-09-11T12:20:20.711794Z"
+    },
     "P32-I01-W19": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -16953,6 +16968,21 @@
       "runtime_session_id": null,
       "scope_id": "P32-I01-W01::audit",
       "started_at": "2026-09-11T12:12:59.819547Z",
+      "status": "closed",
+      "summary": "auditor report appended",
+      "worktree_ids": []
+    },
+    "SES-20260911T121827.857113Z-auditor-claude-code-7922d174-153b-481b-97bd-9eec92ab2e61": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-11T12:20:19.496949Z",
+      "id": "SES-20260911T121827.857113Z-auditor-claude-code-7922d174-153b-481b-97bd-9eec92ab2e61",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W15::audit",
+      "started_at": "2026-09-11T12:18:27.857113Z",
       "status": "closed",
       "summary": "auditor report appended",
       "worktree_ids": []
@@ -21552,6 +21582,57 @@
       "wave_id": "P32-I01-W12",
       "wave_revision_digest": "e76c6179d7f4062e43962bad5974cb6d9469e9c6bdd24ec82b2cd68acbd6c38c"
     },
+    "close-6adb1dd4655375c2eff65054": {
+      "apply_event_id": "EV-79f9f9777489",
+      "artifact_refs": [],
+      "audit_report_id": "AR-auditor-P32-I01-W15-01",
+      "audit_requirement": "required",
+      "candidate_sha": "f1acd6a7c4979c65089622a9cf3530790df00234",
+      "commit_identity_digest": "sha256:428fff3fae0e1a157cc966692713dd3569502fd251f23d43da6fb2f63a35a6c2",
+      "criteria_digest": "6431d4ab60062937457c756db2fec39b707d27c486b3bab199d14d5a2305fcff",
+      "dependency_binding_digest": "8e142a001e63a62962c528bee545e5cfca9a31ee7f0cc781c221a62991f8b9ec",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "a3f23f7f09aea42dcffabcec4ab6c1aa87be2e0537ed0adacbda77e720b6de0b",
+      "gate_receipt_ids": [
+        "GR-1e0a2aa40939936367f05f3f20483cbc",
+        "GR-fbb49dffc8b79aa37f3f0ccd3023086c",
+        "GR-d5ad7d6b69dbb69235b424c4280e7807"
+      ],
+      "generation": 1,
+      "id": "close-6adb1dd4655375c2eff65054",
+      "idempotency_key": "402598e3afdb5d9156740536199127480a935db57b4710631f129f1d6e60d0d4",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "f1acd6a7c4979c65089622a9cf3530790df00234",
+      "integration_id": "integration-2264cb23f104838c0519834a",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "The staged import places 511 records into their declared ledgers and leaves 3 in-flight rows in a 4940-byte document against a 1.6 MB ceiling, the staged index regenerates byte-identically, and the scrub gate reports zero hits over the placeholder forms and one over a real home path without rewriting a source string.",
+      "policy_digest": "4cea5e97aebfdb9d181c799193c1207db34e2849fdbd5486f95bf779c274424e",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-11T12:18:16.361051Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "b48a9a07d2b1f571b1200a088c6b7c2ab64838198309ac496d000711c4fde48c",
+      "spec_digest": "51978dd5d3eaff566def9a5e00345eb905a59357b081948e0291c8c8016447f7",
+      "started_at": "2026-09-11T12:18:16.673192Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-11T12:20:21.502378Z",
+      "tokens_consumed": 350433,
+      "tree_sha": "47593dbd2b3101ea42c414bf32649f9fb31be90f",
+      "updated_at": "2026-09-11T12:20:21.502374Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W15",
+      "wave_revision_digest": "3e27f9dd7a06197b162fd2c09471bd379560147d2805c8d23ef7e82ce312a595"
+    },
     "close-6bae50690d6cc4660deb50ca": {
       "apply_event_id": "EV-125dd33c6372",
       "artifact_refs": [],
@@ -22691,9 +22772,7 @@
   },
   "current": {
     "active_session_ids": [],
-    "active_wave_ids": [
-      "P32-I01-W15"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P32-I01",
     "phase_id": "P32",
     "project_code": "EAWF",
@@ -41360,7 +41439,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-11T12:15:03.108145Z",
+  "updated_at": "2026-09-11T12:20:21.502440Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -42440,6 +42519,22 @@
       "supersedes_id": "integration-c58d154ee918876d3e3aebb0",
       "tree_sha": "36d108cf1f01bb8e6cd3bf4991a7c1a288cd44d8",
       "wave_id": "P32-I01-W06"
+    },
+    "integration-2264cb23f104838c0519834a": {
+      "base_sha": "f8f6c55427e43fcca94b81447fb836875a5a55b2",
+      "candidate_sha": "f1acd6a7c4979c65089622a9cf3530790df00234",
+      "created_at": "2026-09-11T12:18:15.343251Z",
+      "diff_digest": "fdc1a51b860a94f4d328f7787d8263caf5053970e2397a41e0a9e638882eb14c",
+      "generation": 1,
+      "id": "integration-2264cb23f104838c0519834a",
+      "integrated_sha": "f1acd6a7c4979c65089622a9cf3530790df00234",
+      "kind": "adopt",
+      "reason": "Cherry-picked by hand onto the phase branch so the repo hook's attribution trailer could be stripped per operator policy; verified on the parent with 89 passing tests and a non-vacuous index_regen selector collecting 2.",
+      "spec_digest": "51978dd5d3eaff566def9a5e00345eb905a59357b081948e0291c8c8016447f7",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "47593dbd2b3101ea42c414bf32649f9fb31be90f",
+      "wave_id": "P32-I01-W15"
     },
     "integration-255c31588340e5fb494bf5d9": {
       "base_sha": "1f55e5d19f2c6a0b374fe2c5f609709ba08176cc",
@@ -168300,9 +168395,9 @@
       ],
       "claim_session_id": "SES-20260911T114104.813693Z-executor-claude-88b25095-f85b-4ef2-a01e-2e1d6a4afe6e",
       "claimed_at": "2026-09-11T11:41:05.737475Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-11T12:20:20.711794Z",
+      "commit": "f1acd6a7c4979c65089622a9cf3530790df00234",
+      "commit_identity_digest": "sha256:428fff3fae0e1a157cc966692713dd3569502fd251f23d43da6fb2f63a35a6c2",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:58:45.121841Z",
@@ -168401,13 +168496,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-03T17:58:45.122576Z",
-      "outcome": null,
+      "outcome": "The staged import places 511 records into their declared ledgers and leaves 3 in-flight rows in a 4940-byte document against a 1.6 MB ceiling, the staged index regenerates byte-identically, and the scrub gate reports zero hits over the placeholder forms and one over a real home path without rewriting a source string.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -168484,7 +168579,7 @@
       ],
       "title": "Write the staged import into its tiers with the scrub gate",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 350433,
       "worktree_id": null
     },
     "P32-I01-W16": {
