@@ -17033,6 +17033,23 @@
       "status": "closed",
       "summary": "auditor report appended",
       "worktree_ids": []
+    },
+    "SES-20260911T132028.713399Z-executor-claude-71494250-6674-4317-89a8-284de3e00bff": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P32-I01-W17"
+      ],
+      "ended_at": null,
+      "id": "SES-20260911T132028.713399Z-executor-claude-71494250-6674-4317-89a8-284de3e00bff",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W17",
+      "started_at": "2026-09-11T13:20:28.713399Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
     }
   },
   "artifacts": {
@@ -22869,8 +22886,12 @@
     }
   },
   "current": {
-    "active_session_ids": [],
-    "active_wave_ids": [],
+    "active_session_ids": [
+      "SES-20260911T132028.713399Z-executor-claude-71494250-6674-4317-89a8-284de3e00bff"
+    ],
+    "active_wave_ids": [
+      "P32-I01-W17"
+    ],
     "iter_id": "P32-I01",
     "phase_id": "P32",
     "project_code": "EAWF",
@@ -41537,7 +41558,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-11T13:19:56.150829Z",
+  "updated_at": "2026-09-11T13:20:29.645772Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -42541,6 +42562,17 @@
       "start_fact_ref": "integration:integration-2264cb23f104838c0519834a",
       "tree_sha": "47593dbd2b3101ea42c414bf32649f9fb31be90f",
       "wave_id": "P32-I01-W16"
+    },
+    "P32-I01-W17::P32-I01-W16": {
+      "bound_at": "2026-09-11T13:20:29.645153Z",
+      "dep_wave_id": "P32-I01-W16",
+      "generation": 1,
+      "integrated_sha": "f18e8a123b6952d5f4b1045f21a7dd3512e842ea",
+      "integration_id": "integration-169d0e37bade6c295f560c3d",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-169d0e37bade6c295f560c3d",
+      "tree_sha": "1e757396ed379fc3607858f62eb3ec7aa5d03a7a",
+      "wave_id": "P32-I01-W17"
     }
   },
   "wave_integrations": {
@@ -168921,8 +168953,8 @@
       "blocks": [
         "P32-I01-W18"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260911T132028.713399Z-executor-claude-71494250-6674-4317-89a8-284de3e00bff",
+      "claimed_at": "2026-09-11T13:20:29.645380Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -169029,7 +169061,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
