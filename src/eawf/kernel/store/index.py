@@ -24,6 +24,7 @@ from typing import Annotated, Final, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.spec.release import Sha256DigestStr
+from eawf.kernel.store.generated import guard_generated_write
 from eawf.kernel.store.ledger import (
     LedgerRecord,
     content_digest,
@@ -136,11 +137,14 @@ def write_ledger_index(state_path: Path, collection: Epoch2Collection) -> Ledger
     Raises:
         ValueError: The collection is not declared at the ledger tier.
         LedgerTornTailError: The ledger ends mid-line.
+        GeneratedWriteError: The resolved index path is not inside a
+            declared generated-output root.
     """
     ledger = ledger_path(state_path, collection)
     content = ledger.read_bytes() if ledger.exists() else b""
     index = build_ledger_index(collection, content)
     target = index_path(state_path, collection)
+    guard_generated_write(state_path, target)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(render_index(index))
     return index
