@@ -39622,7 +39622,8 @@
         "P32-I01-W39",
         "P32-I01-W40",
         "P32-I01-W41",
-        "P32-I01-W42"
+        "P32-I01-W42",
+        "P32-I01-W43"
       ]
     },
     "P33-I01": {
@@ -41025,7 +41026,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-11T10:16:35.474300Z",
+  "updated_at": "2026-09-11T10:19:50.179897Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -165040,7 +165041,7 @@
       "deps": [
         "P32-I01-W24"
       ],
-      "description": "Post-merge operator wave and the opening wave of the dev2 phase; no code lands here. On the merged main source release.publish moves REL-0.7.0.dev1 from APPROVED to PUBLISHING and pushes the tag through the P31-W20 chokepoint; the P31-W35 pipeline legs run; release.reconcile records each leg; release.observe reads pypi, npm under next and the source-host release back through the P31-W28 adapters; VERIFYING reaches BAKED; the P31-W31 train advance admits dev2.",
+      "description": "The dev1 checkpoint cannot reach BAKED: PyPI holds a wheel and sdist built from a commit that is not the tag target and forbids filename reuse, the source-host release carries no assets and is not flagged prerelease, and only the npm leg matches. Per the correction rule a burned version is superseded by the next version and never republished, so this wave drives dev1 to the terminal PARTIALLY_RELEASED state and advances the train from there.",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
@@ -165053,12 +165054,11 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/workflow/release/test_dev1_bake.py",
+              "tests/integration/workflow/release/test_dev1_burn.py",
               "-k",
-              "publishing"
+              "terminal"
             ],
-            "scope": "all",
-            "timeout_class": "quick"
+            "scope": "all"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-01",
@@ -165074,12 +165074,11 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/workflow/release/test_dev1_bake.py",
+              "tests/integration/workflow/release/test_dev1_burn.py",
               "-k",
-              "verifying"
+              "evidence"
             ],
-            "scope": "all",
-            "timeout_class": "quick"
+            "scope": "all"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-02",
@@ -165095,12 +165094,11 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/workflow/release/test_dev1_bake.py",
+              "tests/integration/workflow/release/test_dev1_burn.py",
               "-k",
-              "baked"
+              "train"
             ],
-            "scope": "all",
-            "timeout_class": "quick"
+            "scope": "all"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-03",
@@ -165109,44 +165107,24 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
-        },
-        {
-          "args": {
-            "argv": [
-              "uv",
-              "run",
-              "pytest",
-              "tests/integration/workflow/release/test_dev1_bake.py",
-              "-k",
-              "train_advanced"
-            ],
-            "scope": "all",
-            "timeout_class": "quick"
-          },
-          "cadence": "every-wave",
-          "criterion_id": "CR-04",
-          "id": "G-04",
-          "kind": "command_exit_zero",
-          "policy": "block",
-          "required": true,
-          "timeout_s": null
         }
       ],
       "id": "P32-I01-W01",
       "intent": {
-        "desired_outcome": "REL-0.7.0.dev1 is BAKED with three observed_success targets and the train index has advanced and the bake evidence is a committed artifact",
-        "evidence_refs": [],
-        "planned_steps": [
-          "After the P31 phase PR merges run eawf release publish REL-0.7.0.dev1 on main and confirm one tag push and one open PublicationOperation with three queued targets",
-          "Run eawf release reconcile once the tag workflows finish and retry any unknown or failed leg through retry-target within retry_limit",
-          "Run eawf release observe for pypi and npm and github and confirm each observation matches the frozen digests off the default channel",
-          "Confirm BAKED and run the train advance and commit the bake evidence artifact with the three observation receipts"
+        "desired_outcome": "REL-0.7.0.dev1 is terminal at PARTIALLY_RELEASED with the burn evidenced and the train index advanced so dev2 is admitted",
+        "evidence_refs": [
+          ".ea/local/2026-09-10-dev1-release-burned.md"
         ],
-        "priority_rationale": "Nothing in v0.7 proceeds until dev1 is terminal BAKED; this is the single act that turns the P31 code into a checkpoint the train can advance from.",
-        "problem": "P31-W26 ends at APPROVED by design and the merge creates the tag and the release train opens dev2 only from a terminal BAKED record observed across three targets",
+        "planned_steps": [
+          "Drive REL-0.7.0.dev1 through RECOVERING to the terminal PARTIALLY_RELEASED burn",
+          "Record the three observed target states as the burn evidence artifact under .ea/artifacts",
+          "Advance the release train index from the terminal record so dev2 is admitted"
+        ],
+        "priority_rationale": null,
+        "problem": "The dev1 checkpoint is burned across three targets so BAKED is unreachable and the train cannot advance from it",
         "risks": [
-          "Any leg that ends PARTIALLY_RELEASED burns 0.7.0.dev1 and the correction is 0.7.0.dev2 with supersedes_release_ref and never a republish",
-          "This wave runs against live registries; every check is read-only against them and the only writes are the ledger and the evidence artifact"
+          "The train advance may require a BAKED record rather than any terminal record; if so the train template needs a guarded edge for a burned checkpoint",
+          "No write to any live registry is permitted by this wave; every target read stays read-only"
         ],
         "source_brief_ids": []
       },
@@ -165167,21 +165145,21 @@
             "G-01"
           ],
           "id": "CR-01",
-          "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_dev1_bake.py -k publishing",
+          "kind": "behavioral",
+          "measurable_signal": "REL-0.7.0.dev1 reports status partially_released and the lifecycle offers it no out-edge",
           "oracle_tier": 4,
-          "quality_dimension": "reliability",
+          "quality_dimension": "functional_suitability",
           "required": true,
           "response": {
             "expected": null,
             "gate_ref": "command_exit_zero",
             "jury_reason": null,
             "locus": "pytest",
-            "object": "uv run pytest tests/integration/workflow/release/test_dev1_bake.py -k publishing",
+            "object": "REL-0.7.0.dev1 reports status partially_released and the lifecycle offers it no out-edge",
             "observe": "exits",
             "quantifier": "single"
           },
-          "text": "release.publish on the merged main source transitions to PUBLISHING with the approval proof_digest equal to the manifest_digest and the chokepoint preflight green, opens one PublicationOperation with three queued targets and pushes exactly one v0.7.0.dev1 tag; state json asserted by pytest tests/integration/workflow/release/test_dev1_bake.py reading the live record",
+          "text": "REL-0.7.0.dev1 transitions to partially_released and the lifecycle offers that state no out-edge; asserted by pytest over the dev1 burn suite",
           "waiver_reason": null
         },
         {
@@ -165191,21 +165169,21 @@
             "G-02"
           ],
           "id": "CR-02",
-          "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_dev1_bake.py -k verifying",
+          "kind": "behavioral",
+          "measurable_signal": "the burn evidence artifact names all three targets and validates against the artifact chassis",
           "oracle_tier": 4,
-          "quality_dimension": "reliability",
+          "quality_dimension": "functional_suitability",
           "required": true,
           "response": {
             "expected": null,
             "gate_ref": "command_exit_zero",
             "jury_reason": null,
             "locus": "pytest",
-            "object": "uv run pytest tests/integration/workflow/release/test_dev1_bake.py -k verifying",
+            "object": "the burn evidence artifact names all three targets and validates against the artifact chassis",
             "observe": "exits",
             "quantifier": "single"
           },
-          "text": "release.reconcile ingests the three pipeline receipts for the tag workflow runs and every leg is reported_success so the Release transitions to VERIFYING; a leg reported unknown or failed is retried through retry_target within retry_limit and every attempt is in the ledger; state json asserted by pytest tests/integration/workflow/release/test_dev1_bake.py",
+          "text": "the burn evidence artifact validates against the artifact chassis and names all three observed target states; asserted by pytest",
           "waiver_reason": null
         },
         {
@@ -165215,8 +165193,8 @@
             "G-03"
           ],
           "id": "CR-03",
-          "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_dev1_bake.py -k baked",
+          "kind": "behavioral",
+          "measurable_signal": "the train current checkpoint index advances by one and a dev2 release create is admitted",
           "oracle_tier": 4,
           "quality_dimension": "functional_suitability",
           "required": true,
@@ -165225,39 +165203,15 @@
             "gate_ref": "command_exit_zero",
             "jury_reason": null,
             "locus": "pytest",
-            "object": "uv run pytest tests/integration/workflow/release/test_dev1_bake.py -k baked",
+            "object": "the train current checkpoint index advances by one and a dev2 release create is admitted",
             "observe": "exits",
             "quantifier": "single"
           },
-          "text": "release.observe per target returns matches: PyPI file digests equal the frozen inventory, npm next resolves 0.7.0-dev.1 while latest does not, and the source-host release is prerelease with the three assets; every required target is observed_success and the Release transitions to BAKED; state json asserted by pytest tests/integration/workflow/release/test_dev1_bake.py",
-          "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-04"
-          ],
-          "id": "CR-04",
-          "kind": "deterministic",
-          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_dev1_bake.py -k train_advanced",
-          "oracle_tier": 4,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": {
-            "expected": null,
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "uv run pytest tests/integration/workflow/release/test_dev1_bake.py -k train_advanced",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "The train advanced: current_checkpoint_index validates as 1, release.create for 0.7.0.dev2 is admitted with the three MeasuredContracts resolved, and the bake evidence artifact under .ea/artifacts carries the three observation receipts and validates against the chassis; state json asserted by pytest tests/integration/workflow/release/test_dev1_bake.py",
+          "text": "release create for 0.7.0.dev2 exits zero once the train index has advanced by one from the terminal dev1 record; asserted by pytest over state json",
           "waiver_reason": null
         }
       ],
-      "title": "Publish and observe the 0.7.0.dev1 checkpoint to BAKED",
+      "title": "Record the burned dev1 checkpoint and advance the train",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -172339,6 +172293,186 @@
       "title": "Rebudget the wheel for the phase's new source surface",
       "token_budget": null,
       "tokens_consumed": 83137,
+      "worktree_id": null
+    },
+    "P32-I01-W43": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Added mid-iter as an operator-approved repair for a verified gate-integrity defect; typed criteria follow via spec sync once the root cause is named.",
+        "waived_at": "2026-09-11T10:18:04.929701Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Five closes this iter returned status=closed while recording zero gate receipts against a non-empty required_gate_ids. The daemon pid changed across those closes and a crashed gate child deliberately writes no receipt, so a daemon restart under gate execution is the live suspect. Three of the affected waves also carry gate argv naming absent files or -k selectors matching no test.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/verify",
+        "src/eawf/runtime/daemon",
+        "tests/integration/workflow/verify"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/verify/test_close_receipt_floor.py"
+            ],
+            "scope": "all"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/verify/test_gate_execution_stability.py"
+            ],
+            "scope": "all"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/verify/test_gate_selector_refusal.py"
+            ],
+            "scope": "all"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W43",
+      "intent": {
+        "desired_outcome": "A close executing no required gate refuses and a gate selecting no test is refused",
+        "evidence_refs": [
+          ".ea/local/2026-09-10-vacuous-close-gates.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Five closes recorded zero receipts against required gates and still returned closed",
+        "risks": [
+          "Adding the receipt refusal before the restart cause is found converts every crash into a blocked close"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-11T10:18:05.060407Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "a close driven with its gate child killed mid-run returns blocked and names the receiptless gate",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "a close driven with its gate child killed mid-run returns blocked and names the receiptless gate",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "a durable close whose required gates produced no receipt returns blocked rather than closed; asserted by pytest over the receipt floor suite",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "the regression reds on the named cause and a full close records a receipt for every required gate",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "the regression reds on the named cause and a full close records a receipt for every required gate",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "the cause of the daemon restart under gate execution is named and the regression emits the failure it pins; asserted by pytest over the stability suite",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "behavioral",
+          "measurable_signal": "a zero-selecting argv is refused and the repaired W41 W42 and W26 argv each select at least one test",
+          "oracle_tier": 4,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "a zero-selecting argv is refused and the repaired W41 W42 and W26 argv each select at least one test",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "a gate argv whose selector matches no test raises the unfalsifiable refusal and the three repaired argv exit zero; asserted by pytest over the selector suite",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Refuse a close whose required gates left no receipt",
+      "token_budget": null,
+      "tokens_consumed": 0,
       "worktree_id": null
     }
   },
