@@ -13590,6 +13590,21 @@
       "status": "done",
       "updated_at": "2026-09-10T15:18:52.040166Z"
     },
+    "P32-I01-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 198994,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W08",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W08",
+      "model": null,
+      "scope_id": "P32-I01-W08",
+      "status": "done",
+      "updated_at": "2026-09-11T10:15:59.963546Z"
+    },
     "P32-I01-W09": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13649,6 +13664,21 @@
       "scope_id": "P32-I01-W12",
       "status": "done",
       "updated_at": "2026-09-10T15:27:46.442154Z"
+    },
+    "P32-I01-W13": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 283020,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W13",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W13",
+      "model": null,
+      "scope_id": "P32-I01-W13",
+      "status": "done",
+      "updated_at": "2026-09-11T10:16:26.577868Z"
     },
     "P32-I01-W19": {
       "actual_cost_usd": 0.0,
@@ -16741,15 +16771,15 @@
       "claimed_wave_ids": [
         "P32-I01-W08"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-11T10:15:54.959070Z",
       "id": "SES-20260910T154325.727325Z-executor-claude-8952c5aa-dcbc-43b3-9f07-fb1912ad09cf",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W08",
       "started_at": "2026-09-10T15:43:25.727325Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260910T154327.204447Z-executor-claude-9c892a09-012a-4276-a03d-1e7c2f3702d3": {
@@ -16758,15 +16788,15 @@
       "claimed_wave_ids": [
         "P32-I01-W13"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-11T10:15:54.961724Z",
       "id": "SES-20260910T154327.204447Z-executor-claude-9c892a09-012a-4276-a03d-1e7c2f3702d3",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W13",
       "started_at": "2026-09-10T15:43:27.204447Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -20819,6 +20849,52 @@
   },
   "claims": null,
   "close_attempts": {
+    "close-0f623e29d9ec48f4717383c8": {
+      "apply_event_id": "EV-47a8ad234f93",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "12695ab832298f6f9bfe17bf030d6c95cafed7c7",
+      "commit_identity_digest": "sha256:4fe565ea879d36a8d9a6fd568b779e224050232d35944c330d0946986ba6ca14",
+      "criteria_digest": "641081c070649e510298f67923d38daaf7578431f2be3f24fc153bd5e6bd3969",
+      "dependency_binding_digest": "8bf6d00c17328dc0ed98ab6586d6a393c317f5f1c547737ac68c3a8f365c3412",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "371b3c041adb0a374456f5c9e3bb3bf4206ca8e7f8bfc247e110609148316f7f",
+      "gate_receipt_ids": [],
+      "generation": 1,
+      "id": "close-0f623e29d9ec48f4717383c8",
+      "idempotency_key": "fd9a6637184b6903e9f9a8653d4b75fc568642d0d0a6cb8dbdb5cd9f68e72599",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "12695ab832298f6f9bfe17bf030d6c95cafed7c7",
+      "integration_id": "integration-49e873e108b60890aaa1048a",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "Twenty-two path classes declare the committed surface under .ea/ with most-specific-wins matching and no default arm, the census reds on an undeclared, ignored-but-declared, absent or force-added path, and the shipped ledger-index generator writes through the generated-output fence.",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-11T10:15:57.344137Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "b48a9a07d2b1f571b1200a088c6b7c2ab64838198309ac496d000711c4fde48c",
+      "spec_digest": "7917e3dad4a7a174892e802c0624ec03fc6ca7c7d5ede287dbb7103fb99be15b",
+      "started_at": "2026-09-11T10:15:57.661546Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-11T10:16:12.409455Z",
+      "tokens_consumed": 198994,
+      "tree_sha": "dd97ab0e3bb81c2bfaa1c87e20b81d2c5846d4be",
+      "updated_at": "2026-09-11T10:16:12.409450Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W08",
+      "wave_revision_digest": "1840ff363f31e4c73e1ed546a088ccfd5aad7a966d32a8bb8dafcd0bb56c66c9"
+    },
     "close-13c63c96c7bb0854473aaa72": {
       "apply_event_id": "EV-21f6c5ba8a50",
       "artifact_refs": [],
@@ -22098,6 +22174,53 @@
       "wave_id": "P31-I01-W05",
       "wave_revision_digest": "d063910408d9c43c7120bec2bd20a70489b4e02e93a57ad92d3b30685f872a2a"
     },
+    "close-ecc73693c616eb94d0a6d365": {
+      "apply_event_id": "EV-6d0a4809051d",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "0cb933f75c8298fcf557530855427c95092494dd",
+      "commit_identity_digest": "sha256:f89bcd0646474c40742f1a18a909a26fcfaac060ac59fd8107a29d371474ef78",
+      "criteria_digest": "21646c10e4cb889bd6d87abb53f0d71877daf4c11973dacc76ec553c30775d9f",
+      "dependency_binding_digest": "bc10ba65a732c708afd7619ec2c1aa5ac674b9591463b7e61dc9a1c847c95274",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "58e1b01c0825f89f328417f0b41dc9b369d9d90f54af04200045420aaf67cde3",
+      "gate_receipt_ids": [],
+      "generation": 1,
+      "id": "close-ecc73693c616eb94d0a6d365",
+      "idempotency_key": "223fbbe49904e19ebc63e9a0d9751d308c4a6a37784749730d233ad52a9facfb",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "0cb933f75c8298fcf557530855427c95092494dd",
+      "integration_id": "integration-f6dc46f4e0005be44f439407",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "A staged import is validated for alias injectivity, canonical-reference resolution distinguished from legacy strings, and a no-fabrication census, with a byte-identical report digest on a second run; the criterion's 1,267/10 legacy-string counts do not describe the epoch1-full fixture and the measured values are reported instead.",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-11T10:16:24.211109Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "b48a9a07d2b1f571b1200a088c6b7c2ab64838198309ac496d000711c4fde48c",
+      "spec_digest": "4e342fcd726befcf5870cc894b70ac758240de7184b357c12e6ebb19766b678b",
+      "started_at": "2026-09-11T10:16:24.516376Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-11T10:16:35.474238Z",
+      "tokens_consumed": 283020,
+      "tree_sha": "24feb18e866b3bc83ff97a31ac6a4dd7d632f04b",
+      "updated_at": "2026-09-11T10:16:35.474234Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W13",
+      "wave_revision_digest": "9747355094a46ddd211b3b441e20dc6903b685c151e9e0f3dd8f7940dc999b14"
+    },
     "close-ecd2ea44933b6e1b3a9880f7": {
       "apply_event_id": "EV-536969ced684",
       "artifact_refs": [],
@@ -22250,14 +22373,8 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260910T154325.727325Z-executor-claude-8952c5aa-dcbc-43b3-9f07-fb1912ad09cf",
-      "SES-20260910T154327.204447Z-executor-claude-9c892a09-012a-4276-a03d-1e7c2f3702d3"
-    ],
-    "active_wave_ids": [
-      "P32-I01-W08",
-      "P32-I01-W13"
-    ],
+    "active_session_ids": [],
+    "active_wave_ids": [],
     "iter_id": "P32-I01",
     "phase_id": "P32",
     "project_code": "EAWF",
@@ -40908,7 +41025,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-10T15:43:28.000764Z",
+  "updated_at": "2026-09-11T10:16:35.474300Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -42201,6 +42318,22 @@
       "tree_sha": "ecae5f48add1b1e6bec9c71543b0ddf602e74fc3",
       "wave_id": "P31-I01-W09"
     },
+    "integration-49e873e108b60890aaa1048a": {
+      "base_sha": "326f7d1cb8fef32fb28385e2913bc49aff13056c",
+      "candidate_sha": "12695ab832298f6f9bfe17bf030d6c95cafed7c7",
+      "created_at": "2026-09-11T10:15:55.515656Z",
+      "diff_digest": "7902c62d8c9a1726dd81bbbc772cfcc097d5b0ccc7e5f1c7df549e7fb7897407",
+      "generation": 1,
+      "id": "integration-49e873e108b60890aaa1048a",
+      "integrated_sha": "12695ab832298f6f9bfe17bf030d6c95cafed7c7",
+      "kind": "adopt",
+      "reason": "Cherry-picked by hand onto the phase branch so the repo hook's attribution trailer could be stripped per operator policy; verified on the parent alongside W13 with 109 passing tests.",
+      "spec_digest": "7917e3dad4a7a174892e802c0624ec03fc6ca7c7d5ede287dbb7103fb99be15b",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "dd97ab0e3bb81c2bfaa1c87e20b81d2c5846d4be",
+      "wave_id": "P32-I01-W08"
+    },
     "integration-566fee107509139947e225f8": {
       "base_sha": "14bd044a91b8603063e154e03f2f7012bba4c9cf",
       "candidate_sha": "e84c2b321e70ba059576587d0707d73969b02516",
@@ -42760,6 +42893,22 @@
       "supersedes_id": null,
       "tree_sha": "719c6b9ff815d0d6569b2b1be01be7c846c8a4a9",
       "wave_id": "P31-I01-W05"
+    },
+    "integration-f6dc46f4e0005be44f439407": {
+      "base_sha": "12695ab832298f6f9bfe17bf030d6c95cafed7c7",
+      "candidate_sha": "0cb933f75c8298fcf557530855427c95092494dd",
+      "created_at": "2026-09-11T10:15:56.334114Z",
+      "diff_digest": "ffc593fd9fa7ac19c53b7e2f077478ea903120b15d723336716aae7a5482f53d",
+      "generation": 1,
+      "id": "integration-f6dc46f4e0005be44f439407",
+      "integrated_sha": "0cb933f75c8298fcf557530855427c95092494dd",
+      "kind": "adopt",
+      "reason": "Cherry-picked by hand onto the phase branch so the repo hook's attribution trailer could be stripped per operator policy; verified on the parent alongside W08 with 109 passing tests.",
+      "spec_digest": "4e342fcd726befcf5870cc894b70ac758240de7184b357c12e6ebb19766b678b",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "24feb18e866b3bc83ff97a31ac6a4dd7d632f04b",
+      "wave_id": "P32-I01-W13"
     },
     "integration-f7b02f59cb46d33dcce9d33c": {
       "base_sha": "f784e1f3b2ac9abf72c0a0afdbc011a6e79f68f9",
@@ -166409,9 +166558,9 @@
       ],
       "claim_session_id": "SES-20260910T154325.727325Z-executor-claude-8952c5aa-dcbc-43b3-9f07-fb1912ad09cf",
       "claimed_at": "2026-09-10T15:43:26.499841Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-11T10:15:59.963546Z",
+      "commit": "12695ab832298f6f9bfe17bf030d6c95cafed7c7",
+      "commit_identity_digest": "sha256:4fe565ea879d36a8d9a6fd568b779e224050232d35944c330d0946986ba6ca14",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:58:45.119327Z",
@@ -166489,13 +166638,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-03T17:58:45.120054Z",
-      "outcome": null,
+      "outcome": "Twenty-two path classes declare the committed surface under .ea/ with most-specific-wins matching and no default arm, the census reds on an undeclared, ignored-but-declared, absent or force-added path, and the shipped ledger-index generator writes through the generated-output fence.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -166548,7 +166697,7 @@
       ],
       "title": "Add the .ea commit-policy census and path classification",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 198994,
       "worktree_id": null
     },
     "P32-I01-W09": {
@@ -167379,9 +167528,9 @@
       ],
       "claim_session_id": "SES-20260910T154327.204447Z-executor-claude-9c892a09-012a-4276-a03d-1e7c2f3702d3",
       "claimed_at": "2026-09-10T15:43:28.000384Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-11T10:16:26.577868Z",
+      "commit": "0cb933f75c8298fcf557530855427c95092494dd",
+      "commit_identity_digest": "sha256:f89bcd0646474c40742f1a18a909a26fcfaac060ac59fd8107a29d371474ef78",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:58:45.120118Z",
@@ -167481,13 +167630,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-03T17:58:45.120850Z",
-      "outcome": null,
+      "outcome": "A staged import is validated for alias injectivity, canonical-reference resolution distinguished from legacy strings, and a no-fabrication census, with a byte-identical report digest on a second run; the criterion's 1,267/10 legacy-string counts do not describe the epoch1-full fixture and the measured values are reported instead.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -167564,7 +167713,7 @@
       ],
       "title": "Validate references, alias totality and no-fabrication over the corpus",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 283020,
       "worktree_id": null
     },
     "P32-I01-W14": {
