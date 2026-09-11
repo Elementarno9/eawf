@@ -67,7 +67,9 @@ from eawf.kernel.migration.epoch2.plan_mode import (
     MigrationPlan,
     plan_cutover,
 )
+from eawf.kernel.migration.epoch2.scrub import scan_text
 from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot
+from eawf.kernel.store.commit_policy import EA_PATH_CLASSES, CommitPolicy
 from eawf.kernel.store.compaction import read_document
 from eawf.surfaces.cli.app import app
 from tests.integration.kernel.migration._corpus_builders import CorpusPlan
@@ -86,10 +88,14 @@ from tests.integration.kernel.migration._historical_freeze import (
     row_counts,
 )
 from tests.integration.kernel.migration._live_corpus import (
+    LIVE_STORE_LOCATOR,
     PIN_FILENAME,
     LiveCorpusPin,
     ScaleBand,
     band_for,
+    committed_sources,
+    is_committed,
+    stage_live_corpus,
 )
 from tests.integration.kernel.migration._rehearsal import (
     HISTORICAL_CORPUS_ROOT,
@@ -99,6 +105,7 @@ from tests.integration.kernel.migration._rehearsal import (
     RehearsalRecord,
     compare_or_regenerate,
     rehearse,
+    scrub_corpus,
 )
 from tests.integration.kernel.migration._rehearsal import (
     SEALED_AT as REHEARSAL_SEALED_AT,
@@ -833,6 +840,14 @@ def test_negative_interrupted_close_imports_the_attempt_as_a_legacy_record(
 # ---------------------------------------------------------------------------
 
 
+#: The macOS home anchor, split so this file carries no substring the
+#: scrub scanner's own pattern can match.
+MACOS_HOME_ANCHOR = "/Users" + "/"
+
+#: One valid ledger row, so a built corpus has something to scan.
+SEEDED_AUDIT_ROW = '{"id": "AUD-1", "kind": "audit"}\n'
+
+
 @pytest.fixture(scope="module")
 def largest_pin() -> LiveCorpusPin:
     """Return the committed contract the live corpus has to keep satisfying."""
@@ -848,12 +863,26 @@ def test_largest_supported_state_is_the_live_corpus_at_the_declared_band(
     corpus grow without loosening the claim: a measurement taken over
     four thousand rows still backs a statement about thousands, and one
     taken over four hundred does not.
+
+    The band is the one assertion here that a growing corpus eventually
+    reds, and that is deliberate. Crossing ten thousand rows means the
+    rehearsal now backs a *stronger* claim than the one declared, and
+    re-declaring it is the point at which someone re-derives the ceilings
+    over the bigger population instead of inheriting numbers measured
+    over a smaller one.
     """
     record = rehearsed(LARGEST_FIXTURE)
     assert record.dry_run is not None
-    assert band_for(record.dry_run.source_rows) is largest_pin.declared_band
-    assert largest_pin.declared_band is ScaleBand.THOUSANDS
-    assert record.dry_run.source_rows >= largest_pin.observed_rows
+    observed = band_for(record.dry_run.source_rows)
+    assert observed is largest_pin.declared_band, (
+        f"the live corpus censuses {record.dry_run.source_rows} rows, which is band "
+        f"{observed.value}, not the {largest_pin.declared_band.value} the pin declares; "
+        f"re-measure the corpus and re-declare declared_band in {PIN_FILENAME}"
+    )
+    assert largest_pin.declared_band is ScaleBand.THOUSANDS, (
+        f"the rehearsal's published claim is a thousands-row cutover; raising "
+        f"declared_band in {PIN_FILENAME} means raising it here too"
+    )
 
 
 def test_largest_supported_state_stays_under_the_recorded_multiplier_ceiling(
@@ -865,24 +894,48 @@ def test_largest_supported_state_stays_under_the_recorded_multiplier_ceiling(
     An importer change that widened every ledger row, or that stopped
     compacting, would show up here as a number the recorded ceiling does
     not admit -- before the flag day rather than during it.
+
+    What is asserted is the ceiling, not the pin's own observation. The
+    corpus behind the ratio is live: matching a recorded number, to any
+    tolerance, would be a gate that reds on the calendar rather than on a
+    defect, and widening the tolerance until it stopped would leave a
+    gate that reds on nothing at all.
     """
     record = rehearsed(LARGEST_FIXTURE)
     assert record.apply is not None
     multiplier = record.apply.generation_bytes / record.source_bytes
 
-    assert multiplier == pytest.approx(largest_pin.observed_multiplier, rel=0.25)
-    assert multiplier <= largest_pin.multiplier_ceiling
+    assert multiplier <= largest_pin.multiplier_ceiling, (
+        f"the published generation is {multiplier:.3f}x the {record.source_bytes}-byte corpus "
+        f"it was built from, over the {largest_pin.multiplier_ceiling}x ceiling; either the "
+        f"importer stopped compacting or the ceiling has to be re-derived from a fresh "
+        f"measurement in {PIN_FILENAME}"
+    )
 
 
 def test_largest_supported_state_applies_inside_its_declared_budget(
     largest_pin: LiveCorpusPin, rehearsed: Callable[[RehearsalFixture], RehearsalRecord]
 ) -> None:
-    """One apply finishes in time and leaves a residual document a reader can hold."""
+    """One apply finishes in time and leaves a residual document a reader can hold.
+
+    Both numbers are budgets rather than observations. The apply has to
+    fit inside the wall clock an operator is asked to hold a maintenance
+    window open for, and the document left hot after the terminal records
+    move to their ledgers has to stay small enough that a reader does not
+    pay for history it is not looking at.
+    """
     record = rehearsed(LARGEST_FIXTURE)
     assert record.apply is not None
     assert record.apply.applied is True
-    assert record.apply.wall_clock_s <= largest_pin.apply_timeout_budget_s
-    assert record.apply.residual_document_bytes < largest_pin.residual_document_ceiling_bytes
+    assert record.apply.wall_clock_s <= largest_pin.apply_timeout_budget_s, (
+        f"the apply took {record.apply.wall_clock_s}s, over the "
+        f"{largest_pin.apply_timeout_budget_s}s budget the pin records"
+    )
+    assert record.apply.residual_document_bytes < largest_pin.residual_document_ceiling_bytes, (
+        f"the residual document is {record.apply.residual_document_bytes} bytes, over the "
+        f"{largest_pin.residual_document_ceiling_bytes}-byte ceiling; compaction is no longer "
+        f"moving terminal records out of the document"
+    )
     assert record.apply.ledger_records > 0
 
 
@@ -899,6 +952,93 @@ def test_largest_supported_state_pin_records_what_was_observed(
     assert largest_pin.observed_apply_s < largest_pin.apply_timeout_budget_s
     assert largest_pin.observed_residual_bytes < largest_pin.residual_document_ceiling_bytes
     assert band_for(largest_pin.observed_rows) is largest_pin.declared_band
+
+
+def test_the_live_corpus_stages_only_paths_the_commit_policy_carries() -> None:
+    """The staged surface is the committed one, decided by the policy table.
+
+    A migration operates on the state a clone can reproduce. Deriving
+    that set from
+    :data:`~eawf.kernel.store.commit_policy.EA_PATH_CLASSES` rather than
+    from an exclusion list kept alongside it is what stops the fixture
+    and the policy from disagreeing about which files those are.
+    """
+    sources = committed_sources(REPO_ROOT)
+    uncommitted = [source.locator for source in sources if not is_committed(source.locator)]
+
+    assert sources, "the live corpus staged nothing, so the rehearsal would be vacuous"
+    assert uncommitted == [], f"staged paths no clone carries: {uncommitted}"
+    assert [source.locator for source in sources[:2]] == [".ea/state.json", ".ea/config.yaml"]
+    assert {source.locator for source in sources[2:]} == {
+        f"{LIVE_STORE_LOCATOR}/{path.name}"
+        for path in (REPO_ROOT / LIVE_STORE_LOCATOR).glob("*.jsonl")
+        if is_committed(f"{LIVE_STORE_LOCATOR}/{path.name}")
+    }
+
+
+def _seed_uncommitted_families(repo_root: Path, *, leak: str) -> tuple[str, ...]:
+    """Write one representative file per uncommitted ``.ea/`` family.
+
+    The families come from the commit policy's own probe paths, so a row
+    added to the table is seeded here without anyone editing this test.
+
+    Args:
+        repo_root: The directory holding the synthetic ``.ea`` tree.
+        leak: A concrete home path to write into the firehose, so the
+            staged tree has something real to have carried.
+
+    Returns:
+        The repo-relative paths written, in table order.
+    """
+    written: list[str] = []
+    for row in EA_PATH_CLASSES:
+        if row.policy is not CommitPolicy.NOT_COMMITTED or not row.probe.startswith(".ea/"):
+            continue
+        path = repo_root / row.probe
+        path.parent.mkdir(parents=True, exist_ok=True)
+        leaks = row.probe.endswith("event.jsonl")
+        body = json.dumps({"id": "EV-1", "text": leak}) + "\n" if leaks else "seed\n"
+        path.write_text(body, encoding="utf-8")
+        written.append(row.probe)
+    return tuple(written)
+
+
+def test_the_staged_tree_drops_every_family_the_commit_policy_excludes(tmp_path: Path) -> None:
+    """The staging keeps the committed surface and nothing else.
+
+    Driven over a built tree rather than the repository's own, because
+    every excluded family is gitignored: a checkout that has never run an
+    agent carries no firehose, no telemetry database and no locks, so a
+    gate that only reds on a developer's machine is not a gate. The tree
+    here carries all of them, the firehose carries a concrete home path,
+    and the staged result has to hold the committed five and scan clean.
+    """
+    ea_root = tmp_path / "repo" / ".ea"
+    leak = f"{MACOS_HOME_ANCHOR}devuser/Workspace/eawf"
+    (ea_root / "store").mkdir(parents=True)
+    (ea_root / "state.json").write_text('{"schema_version": "1.19"}\n', encoding="utf-8")
+    (ea_root / "config.yaml").write_text("epoch: 1\n", encoding="utf-8")
+    (ea_root / "store" / "audit.jsonl").write_text(SEEDED_AUDIT_ROW, encoding="utf-8")
+    excluded = _seed_uncommitted_families(ea_root.parent, leak=leak)
+
+    staged = stage_live_corpus(repo_root=ea_root.parent, destination=tmp_path / "staged")
+    names = sorted(
+        path.relative_to(staged).as_posix() for path in staged.rglob("*") if path.is_file()
+    )
+
+    assert scan_text(locator=f"{LIVE_STORE_LOCATOR}/event.jsonl", text=leak), (
+        "the seeded firehose carries no reportable home path, so the scan proves nothing"
+    )
+    assert f"{LIVE_STORE_LOCATOR}/event.jsonl" in excluded
+    assert ".ea/telemetry.db" in excluded
+    assert names == [
+        "config/base.yaml",
+        "document.json",
+        "registry.json",
+        "store/audit.jsonl",
+        "telemetry.json",
+    ]
+    assert scrub_corpus(staged) == ()
 
 
 # ---------------------------------------------------------------------------
