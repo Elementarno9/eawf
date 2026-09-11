@@ -46,6 +46,14 @@ independent read-back found. Only the second may write an ``observed_*``
 status, and only from an observation receipt, so no adapter is ever the
 judge of its own publication.
 
+``release.burn`` is the terminal move of that same recovery path. It
+makes no registry call -- there is nothing left to call -- but it is
+keyed like the four that do, because it abandons the open operation and
+writes a status no later transition can revise. It is the one verb that
+requires an operator ``reason``, and it records that reason on both rows
+it appends, so a burned version's record says why it was abandoned
+instead of leaving a reader to infer an outcome from a terminal status.
+
 Two ladder verbs sit beside them. ``release.create`` opens a checkpoint's
 DRAFT record only once every measured contract the checkpoint asserts
 over is promoted (:mod:`eawf.workflow.release.admission`), and
@@ -62,7 +70,14 @@ from pathlib import Path
 from typing import Annotated, Any
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    ValidationError,
+    model_validator,
+)
 
 from eawf.kernel.release.waiver import ReleaseWaiver
 from eawf.kernel.spec.publication import PublicationOperation
@@ -112,6 +127,7 @@ from eawf.workflow.release.observation import (
 from eawf.workflow.release.preflight import approve_release, record_preflight_result
 from eawf.workflow.release.publication import (
     begin_publication,
+    burn_release,
     operation_reference,
     reconcile_target,
     retry_publication,
@@ -497,6 +513,21 @@ class RetryTargetParams(_PublicationParams):
     proof_digest: str
 
 
+class BurnParams(_PublicationParams):
+    """Params for :func:`burn`.
+
+    Attributes:
+        reason: Why the version is spent, in the operator's own words.
+            Required and non-blank: the burn writes a terminal status
+            that no later transition can explain, so the explanation has
+            to arrive with the call. Whitespace is stripped before the
+            length check, which is what makes a reason of spaces a
+            refusal rather than an empty annotation.
+    """
+
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+
+
 class ReconcileParams(_PublicationParams):
     """Params for :func:`reconcile`.
 
@@ -820,6 +851,96 @@ async def retry_target(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
         summary=f"retry {release.key} target {args.target_id}",
     )
     return _receipt(recorded, republished, replayed=False)
+
+
+@register("release.burn")
+async def burn(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Burn the version: record the spent checkpoint at PARTIALLY_RELEASED.
+
+    This is the terminal move of the recovery path and the only one that
+    admits a version is spent. It takes an operator *reason* and writes
+    it to both durable rows the call appends -- the abandoned operation
+    in the publication ledger and the burned record in the record
+    collection -- because a terminal status carries no later transition
+    that could explain it, and a burned version whose record does not
+    say why reads as an outcome rather than as an abandonment.
+
+    The burned record is persisted here, unlike at the other publication
+    verbs: the burn is where the checkpoint stops moving, so a reader
+    asking ``eawf release show`` after it must be answered
+    ``partially_released`` and not the status the record left behind.
+
+    What the verb deliberately does NOT write is any claim about the
+    publication's outcome. :func:`~eawf.workflow.release.publication.burn_release`
+    accepts no field updates, so the pinned source, tree, manifest and
+    digest are frozen exactly as recovery found them, and the reason is
+    an annotation beside them rather than a revision of them.
+
+    A replay answers with the *recorded* record rather than the payload
+    the caller presented, because after a burn the recorded one is the
+    burned one and echoing the pre-burn status back would report the
+    checkpoint as still moving. It falls back to the presented payload
+    only where the collection holds nothing for the key, which is the
+    torn-write case of a ledger row landing without its record row.
+
+    Args:
+        ctx: Server context; supplies the state root both stores live in.
+        params: JSON-RPC params per :class:`BurnParams`.
+
+    Returns:
+        The operation reference, the abandoned operation, the burned
+        record, the replay flag, the reason as recorded and the id of the
+        record row carrying the burn.
+
+    Raises:
+        DaemonValidationError: On a blank or absent reason, a stale
+            revision, an idempotency conflict, no open operation, or a
+            leg that still has a retry left
+            (``recovery_budget_available``) -- a burn declared while
+            recovery could still succeed is a burn that was not
+            exhausted.
+    """
+    args = BurnParams.model_validate(params)
+    state_path = _require_state_path(ctx)
+    release = _validated_release(args.release)
+    fingerprint = _fingerprint("release.burn", params)
+    replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
+    if replayed is not None:
+        settled = read_release_record(state_path, release.key) or release
+        return {
+            **_receipt(replayed, settled, replayed=True),
+            "reason": args.reason,
+            "release_record_id": record_envelope_id(settled),
+        }
+    _assert_revision(release, args.expected_revision)
+    config = _resolve_config(release.version)
+    operation = _open_operation(state_path, release)
+    now = datetime.now(UTC)
+    try:
+        burned, abandoned = burn_release(release, config, operation)
+    except ReleaseTransitionError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
+    except (ValidationError, ValueError) as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    summary = f"burn {burned.key}: {args.reason}"
+    recorded = record_operation(
+        state_path,
+        abandoned,
+        idempotency_key=args.idempotency_key,
+        fingerprint=fingerprint,
+        recorded_at=now,
+        summary=summary,
+    )
+    record_release(state_path, burned, recorded_at=now, summary=summary)
+    logger.info(
+        f"burn key={burned.key!r} operation_id={recorded.operation_id} "
+        f"status={burned.status.value!r} reason={args.reason!r}"
+    )
+    return {
+        **_receipt(recorded, burned, replayed=False),
+        "reason": args.reason,
+        "release_record_id": record_envelope_id(burned),
+    }
 
 
 def _receipt_result(
@@ -1188,6 +1309,7 @@ async def advance(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 __all__ = [
     "AdvanceTrainParams",
     "ApproveParams",
+    "BurnParams",
     "ComputeReadinessParams",
     "CreateParams",
     "ObserveTargetParams",
@@ -1197,6 +1319,7 @@ __all__ = [
     "ShowParams",
     "advance",
     "approve",
+    "burn",
     "compute_readiness_method",
     "create",
     "observe",
