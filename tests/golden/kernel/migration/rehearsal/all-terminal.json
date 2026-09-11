@@ -1,0 +1,248 @@
+{
+  "apply": {
+    "applied": true,
+    "generation_bytes": 15412,
+    "generation_id": "gen-b46c9992b69c46dc",
+    "journal_stages": [
+      "fence_cleared",
+      "workspace_resolved",
+      "authority_locked",
+      "quiescence_proved",
+      "recensus_matched",
+      "maintenance_entered",
+      "snapshot_taken",
+      "generation_built",
+      "read_smoke_passed",
+      "generation_selected",
+      "marker_written",
+      "maintenance_exited"
+    ],
+    "ledger_files": 6,
+    "ledger_records": 10,
+    "residual_document_bytes": 2082
+  },
+  "disposition": "imports",
+  "dry_run": {
+    "approval_digest": "6af89df97a2aa0c03e85f91be009f7f5381faac4b8c512e1d621a6889c619c28",
+    "collections": {
+      "actuals": [
+        1,
+        1,
+        0
+      ],
+      "agent_sessions": [
+        0,
+        0,
+        0
+      ],
+      "artifacts": [
+        0,
+        0,
+        0
+      ],
+      "audits": [
+        1,
+        1,
+        0
+      ],
+      "backlog": [
+        1,
+        1,
+        0
+      ],
+      "claims": [
+        0,
+        0,
+        0
+      ],
+      "close_attempts": [
+        0,
+        0,
+        0
+      ],
+      "current": [
+        3,
+        0,
+        0
+      ],
+      "decisions": [
+        0,
+        0,
+        0
+      ],
+      "dispatch_paused": [
+        0,
+        0,
+        0
+      ],
+      "estimates": [
+        0,
+        0,
+        0
+      ],
+      "fleet_run": [
+        0,
+        0,
+        0
+      ],
+      "goals": [
+        0,
+        0,
+        0
+      ],
+      "health": [
+        0,
+        0,
+        0
+      ],
+      "hypotheses": [
+        0,
+        0,
+        0
+      ],
+      "incidents": [
+        0,
+        0,
+        0
+      ],
+      "indexes": [
+        0,
+        0,
+        0
+      ],
+      "iters": [
+        2,
+        2,
+        0
+      ],
+      "mcp_grants": [
+        0,
+        0,
+        0
+      ],
+      "mcp_servers": [
+        0,
+        0,
+        0
+      ],
+      "memory_index": [
+        0,
+        0,
+        0
+      ],
+      "open_questions": [
+        0,
+        0,
+        0
+      ],
+      "outcomes": [
+        0,
+        0,
+        0
+      ],
+      "phases": [
+        2,
+        2,
+        0
+      ],
+      "plugins": [
+        0,
+        0,
+        0
+      ],
+      "project": [
+        3,
+        0,
+        1
+      ],
+      "sandbox_policies": [
+        0,
+        0,
+        0
+      ],
+      "schema_version": [
+        0,
+        0,
+        0
+      ],
+      "scope_kind": [
+        0,
+        0,
+        0
+      ],
+      "tracks": [
+        0,
+        0,
+        0
+      ],
+      "updated_at": [
+        0,
+        0,
+        0
+      ],
+      "urn": [
+        0,
+        0,
+        0
+      ],
+      "wave_dependency_barriers": [
+        0,
+        0,
+        0
+      ],
+      "wave_dependency_bindings": [
+        1,
+        0,
+        0
+      ],
+      "wave_integrations": [
+        1,
+        0,
+        0
+      ],
+      "waves": [
+        3,
+        3,
+        0
+      ],
+      "workspace": [
+        0,
+        0,
+        0
+      ],
+      "worktrees": [
+        1,
+        1,
+        0
+      ]
+    },
+    "manifest_digest": "b46c9992b69c46dccea9c96f8baf1d9b6adbdefbe10d96b88038189db725e3f9",
+    "reproducible": true,
+    "source_digest": "168ebf030453b8ee40cc9ac6bd983fa8441de966c6bca7bde996fbab06bca505",
+    "source_rows": 19,
+    "target_rows": 11,
+    "unresolved_rows": [
+      "project"
+    ]
+  },
+  "fixture": "all-terminal",
+  "rerun": {
+    "applied": false,
+    "generation_id": "gen-b46c9992b69c46dc",
+    "journal_rows": 0,
+    "tree_unchanged": true
+  },
+  "rollback": {
+    "epoch": 1,
+    "generation_count": 0,
+    "outcome": "surfaces_restored",
+    "restored_locators": [
+      "config.yaml",
+      "state.json",
+      "store/audit.jsonl"
+    ],
+    "surfaces_match_restore_point": true
+  },
+  "scrub_findings": 0,
+  "source_bytes": 4104
+}

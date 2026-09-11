@@ -1,0 +1,29 @@
+{
+ "active_code": null,
+ "repos": {},
+ "updated_at": "2026-01-01T00:00:00Z",
+ "version": "1",
+ "workspaces": {
+  "WSP-DEFAULT": {
+   "home_project_code": "PRJ-DEMO",
+   "key": "WSP-DEFAULT",
+   "member_project_codes": [
+    "PRJ-DEMO",
+    "PRJ-SATELLITE"
+   ],
+   "revision": 1,
+   "title": "the workspace the rehearsal corpora mint under",
+   "updated_at": "2026-01-01T00:00:00Z"
+  },
+  "WSP-SATELLITE": {
+   "home_project_code": "PRJ-SATELLITE",
+   "key": "WSP-SATELLITE",
+   "member_project_codes": [
+    "PRJ-SATELLITE"
+   ],
+   "revision": 1,
+   "title": "a second workspace the corpus is not addressed into",
+   "updated_at": "2026-01-01T00:00:00Z"
+  }
+ }
+}

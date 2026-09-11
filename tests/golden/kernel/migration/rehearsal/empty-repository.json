@@ -1,0 +1,248 @@
+{
+  "apply": {
+    "applied": true,
+    "generation_bytes": 28,
+    "generation_id": "gen-751705d8a7e9ad81",
+    "journal_stages": [
+      "fence_cleared",
+      "workspace_resolved",
+      "authority_locked",
+      "quiescence_proved",
+      "recensus_matched",
+      "maintenance_entered",
+      "snapshot_taken",
+      "generation_built",
+      "read_smoke_passed",
+      "generation_selected",
+      "marker_written",
+      "maintenance_exited"
+    ],
+    "ledger_files": 0,
+    "ledger_records": 0,
+    "residual_document_bytes": 28
+  },
+  "disposition": "imports",
+  "dry_run": {
+    "approval_digest": "a8d8594f1619ef4419d6f637934cd268e6b1e8a2256dd3f22da7d612c4ffdf42",
+    "collections": {
+      "actuals": [
+        0,
+        0,
+        0
+      ],
+      "agent_sessions": [
+        0,
+        0,
+        0
+      ],
+      "artifacts": [
+        0,
+        0,
+        0
+      ],
+      "audits": [
+        0,
+        0,
+        0
+      ],
+      "backlog": [
+        0,
+        0,
+        0
+      ],
+      "claims": [
+        0,
+        0,
+        0
+      ],
+      "close_attempts": [
+        0,
+        0,
+        0
+      ],
+      "current": [
+        3,
+        0,
+        0
+      ],
+      "decisions": [
+        0,
+        0,
+        0
+      ],
+      "dispatch_paused": [
+        0,
+        0,
+        0
+      ],
+      "estimates": [
+        0,
+        0,
+        0
+      ],
+      "fleet_run": [
+        0,
+        0,
+        0
+      ],
+      "goals": [
+        0,
+        0,
+        0
+      ],
+      "health": [
+        0,
+        0,
+        0
+      ],
+      "hypotheses": [
+        0,
+        0,
+        0
+      ],
+      "incidents": [
+        0,
+        0,
+        0
+      ],
+      "indexes": [
+        0,
+        0,
+        0
+      ],
+      "iters": [
+        0,
+        0,
+        0
+      ],
+      "mcp_grants": [
+        0,
+        0,
+        0
+      ],
+      "mcp_servers": [
+        0,
+        0,
+        0
+      ],
+      "memory_index": [
+        0,
+        0,
+        0
+      ],
+      "open_questions": [
+        0,
+        0,
+        0
+      ],
+      "outcomes": [
+        0,
+        0,
+        0
+      ],
+      "phases": [
+        0,
+        0,
+        0
+      ],
+      "plugins": [
+        0,
+        0,
+        0
+      ],
+      "project": [
+        3,
+        0,
+        1
+      ],
+      "sandbox_policies": [
+        0,
+        0,
+        0
+      ],
+      "schema_version": [
+        0,
+        0,
+        0
+      ],
+      "scope_kind": [
+        0,
+        0,
+        0
+      ],
+      "tracks": [
+        0,
+        0,
+        0
+      ],
+      "updated_at": [
+        0,
+        0,
+        0
+      ],
+      "urn": [
+        0,
+        0,
+        0
+      ],
+      "wave_dependency_barriers": [
+        0,
+        0,
+        0
+      ],
+      "wave_dependency_bindings": [
+        0,
+        0,
+        0
+      ],
+      "wave_integrations": [
+        0,
+        0,
+        0
+      ],
+      "waves": [
+        0,
+        0,
+        0
+      ],
+      "workspace": [
+        0,
+        0,
+        0
+      ],
+      "worktrees": [
+        0,
+        0,
+        0
+      ]
+    },
+    "manifest_digest": "751705d8a7e9ad81753045826d8eff224552c8f5b67130a53ef93a6239fda45d",
+    "reproducible": true,
+    "source_digest": "4b09d388413b8674c008051373e46e55c1a875b99571abc0e279ca0979a86c89",
+    "source_rows": 6,
+    "target_rows": 0,
+    "unresolved_rows": [
+      "project"
+    ]
+  },
+  "fixture": "empty-repository",
+  "rerun": {
+    "applied": false,
+    "generation_id": "gen-751705d8a7e9ad81",
+    "journal_rows": 0,
+    "tree_unchanged": true
+  },
+  "rollback": {
+    "epoch": 1,
+    "generation_count": 0,
+    "outcome": "surfaces_restored",
+    "restored_locators": [
+      "config.yaml",
+      "state.json",
+      "store/audit.jsonl"
+    ],
+    "surfaces_match_restore_point": true
+  },
+  "scrub_findings": 0,
+  "source_bytes": 1480
+}

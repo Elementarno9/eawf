@@ -1,0 +1,161 @@
+{
+ "actuals": {
+  "P01-I01-W01": {
+   "calibration_excluded": false,
+   "elapsed_eu": 0.5,
+   "id": "ACT-P01-I01-W01",
+   "scope_id": "P01-I01-W01",
+   "status": "done",
+   "updated_at": "2026-01-01T00:00:00Z"
+  }
+ },
+ "agent_sessions": {},
+ "artifacts": {},
+ "audits": {
+  "A001": {
+   "created_at": "2026-01-01T00:00:00Z",
+   "id": "A001",
+   "kind": "evaluation",
+   "scope_id": "P01-I01",
+   "status": "complete",
+   "verdict": "pass"
+  }
+ },
+ "backlog": {
+  "B001": {
+   "created_at": "2026-01-01T00:00:00Z",
+   "id": "B001",
+   "resolution": "delivered by P01-I01-W01",
+   "scope_id": "DEMO",
+   "status": "closed",
+   "title": "Retire the legacy exporter"
+  }
+ },
+ "claims": null,
+ "close_attempts": {},
+ "current": {
+  "iter_id": null,
+  "phase_id": null,
+  "wave_id": null
+ },
+ "decisions": {},
+ "dispatch_paused": false,
+ "estimates": {},
+ "fleet_run": null,
+ "goals": {},
+ "health": null,
+ "hypotheses": null,
+ "incidents": {},
+ "indexes": {},
+ "iters": {
+  "P01-I01": {
+   "audit_id": "A001",
+   "id": "P01-I01",
+   "opened_at": "2026-01-01T00:00:00Z",
+   "phase_id": "P01",
+   "status": "closed",
+   "title": "Close the first iter",
+   "wave_ids": [
+    "P01-I01-W01",
+    "P01-I01-W02"
+   ]
+  },
+  "P01-I02": {
+   "id": "P01-I02",
+   "opened_at": "2026-01-01T00:00:00Z",
+   "phase_id": "P01",
+   "status": "abandoned",
+   "title": "Abandon the second iter"
+  }
+ },
+ "mcp_grants": null,
+ "mcp_servers": null,
+ "memory_index": {},
+ "open_questions": null,
+ "outcomes": null,
+ "phases": {
+  "P01": {
+   "audit_id": "A001",
+   "id": "P01",
+   "iter_ids": [
+    "P01-I01",
+    "P01-I02"
+   ],
+   "opened_at": "2026-01-01T00:00:00Z",
+   "scope_id": "P01",
+   "status": "closed",
+   "title": "Deliver the finished phase"
+  },
+  "P02": {
+   "id": "P02",
+   "opened_at": "2026-01-01T00:00:00Z",
+   "scope_id": "P02",
+   "status": "archived",
+   "title": "Abandon the second phase"
+  }
+ },
+ "plugins": {},
+ "project": {
+  "code": "DEMO",
+  "created_at": "2026-01-01T00:00:00Z",
+  "title": "the rehearsal demo project"
+ },
+ "sandbox_policies": {},
+ "schema_version": "1.19",
+ "scope_kind": "project",
+ "tracks": null,
+ "updated_at": "2026-01-01T00:00:00Z",
+ "urn": "urn:eawf:project:DEMO",
+ "wave_dependency_barriers": {},
+ "wave_dependency_bindings": {
+  "P01-I01-W02:P01-I01-W01": {
+   "bound_at": "2026-01-01T00:00:00Z",
+   "dep_wave_id": "P01-I01-W01",
+   "wave_id": "P01-I01-W02"
+  }
+ },
+ "wave_integrations": {
+  "WI01": {
+   "created_at": "2026-01-01T00:00:00Z",
+   "id": "WI01",
+   "kind": "cherry_pick",
+   "status": "integrated",
+   "wave_id": "P01-I01-W01"
+  }
+ },
+ "waves": {
+  "P01-I01-W01": {
+   "id": "P01-I01-W01",
+   "iter_id": "P01-I01",
+   "opened_at": "2026-01-01T00:00:00Z",
+   "status": "closed",
+   "title": "Land the first wave"
+  },
+  "P01-I01-W02": {
+   "id": "P01-I01-W02",
+   "iter_id": "P01-I01",
+   "opened_at": "2026-01-01T00:00:00Z",
+   "status": "failed",
+   "title": "Fail the second wave"
+  },
+  "P01-I02-W01": {
+   "id": "P01-I02-W01",
+   "iter_id": "P01-I02",
+   "opened_at": "2026-01-01T00:00:00Z",
+   "status": "abandoned",
+   "title": "Abandon the third wave"
+  }
+ },
+ "workspace": null,
+ "worktrees": {
+  "WT001": {
+   "base_branch": "feature/demo",
+   "branch": "feature/demo-p01-w01",
+   "created_at": "2026-01-01T00:00:00Z",
+   "id": "WT001",
+   "path": ".ea/worktrees/WT001",
+   "status": "abandoned",
+   "wave_id": "P01-I01-W01"
+  }
+ }
+}

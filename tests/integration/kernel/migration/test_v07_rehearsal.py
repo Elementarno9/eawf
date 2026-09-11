@@ -31,6 +31,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -50,6 +51,7 @@ from eawf.kernel.migration.epoch2.canary import (
     TARGET_AUTHORITY_LOCATORS,
     DisposableTarget,
 )
+from eawf.kernel.migration.epoch2.dispositions import Disposition
 from eawf.kernel.migration.epoch2.generation import (
     GENERATION_DOCUMENT,
     generation_id_for,
@@ -59,13 +61,60 @@ from eawf.kernel.migration.epoch2.generation import (
 )
 from eawf.kernel.migration.epoch2.journal import CutoverStage, read_journal, require_chain_intact
 from eawf.kernel.migration.epoch2.manifest import RollbackBoundary
+from eawf.kernel.migration.epoch2.plan import CorpusImportPlan
 from eawf.kernel.migration.epoch2.plan_mode import (
     Epoch2PlanRequest,
     MigrationPlan,
     plan_cutover,
 )
+from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot
 from eawf.kernel.store.compaction import read_document
 from eawf.surfaces.cli.app import app
+from tests.integration.kernel.migration._corpus_builders import CorpusPlan
+from tests.integration.kernel.migration._corpus_shapes import (
+    INTERRUPTED_CLOSE_SESSION,
+    MISSING_ITER_ID,
+    STRUCTURAL_CORPORA,
+    UNKNOWN_EXTENSION_FIELD,
+)
+from tests.integration.kernel.migration._historical_freeze import (
+    BACKFILLED_COLLECTIONS,
+    PHASE_BATCH_POINTER,
+    SLICE_ITER_ID,
+    SLICE_PHASE_ID,
+    SOURCE_REVISION,
+    row_counts,
+)
+from tests.integration.kernel.migration._live_corpus import (
+    PIN_FILENAME,
+    LiveCorpusPin,
+    ScaleBand,
+    band_for,
+)
+from tests.integration.kernel.migration._rehearsal import (
+    HISTORICAL_CORPUS_ROOT,
+    LIVE_CORPUS_ROOT,
+    REPO_ROOT,
+    RehearsalFixture,
+    RehearsalRecord,
+    compare_or_regenerate,
+    rehearse,
+)
+from tests.integration.kernel.migration._rehearsal import (
+    SEALED_AT as REHEARSAL_SEALED_AT,
+)
+from tests.integration.kernel.migration._rehearsal import (
+    plan_request_for as rehearsal_plan_request,
+)
+from tests.integration.kernel.migration._rehearsal_set import (
+    IMPORTING_FIXTURES,
+    LARGEST_FIXTURE,
+    REFUSING_FIXTURES,
+    REHEARSAL_FIXTURE_INDEX,
+    REHEARSAL_FIXTURES,
+    committed_snapshot,
+    stage_corpus,
+)
 
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "migration"
 FULL_SNAPSHOT = FIXTURES / "epoch1-full" / "snapshot"
@@ -532,3 +581,363 @@ def test_apply_through_the_cli_refuses_two_modes_at_once(tmp_path: Path) -> None
 
     assert result.exit_code != 0
     assert "got 2" in result.output
+
+
+# ---------------------------------------------------------------------------
+# The ten-fixture rehearsal.
+#
+# Everything above rehearses one corpus in depth. What follows rehearses the
+# whole required set in breadth: ten corpora, four legs each, one recorded
+# manifest per corpus. The legs are separate tests over a cached record rather
+# than one test that asserts everything, so a failure names the fixture *and*
+# the leg -- "apply[p30-i26-history]" is a defect report; "the rehearsal
+# failed" is not.
+# ---------------------------------------------------------------------------
+
+
+#: The ten fixtures the migration signal is required to compute over. Pinned
+#: as a literal rather than derived from the registry, so deleting a fixture
+#: reds here instead of silently shrinking the set every other test iterates.
+REQUIRED_FIXTURE_NAMES = (
+    "empty-repository",
+    "minimal-active",
+    "all-terminal",
+    "interrupted-close",
+    "open-attention",
+    "multi-root-workspace",
+    "corrupt-reference",
+    "unknown-extension-field",
+    "p30-i26-history",
+    "largest-supported-state",
+)
+
+#: The stages a clean apply journals, in order. The same tuple the deep
+#: rehearsal above pins, reused so one corpus and ten corpora cannot disagree
+#: about what a complete transaction looks like.
+EXPECTED_STAGE_VALUES = tuple(stage.value for stage in EXPECTED_STAGES)
+
+
+@pytest.fixture(scope="module")
+def rehearsed(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Callable[[RehearsalFixture], RehearsalRecord]:
+    """Return a cached, lazy runner for one fixture's four legs.
+
+    Lazy because the two large corpora cost seconds and a ``-k`` selector
+    that names neither should not pay for them. Cached because the four
+    legs are one transaction: running them once and asserting over the
+    record is what keeps ten fixtures inside a quick gate's budget.
+    """
+    cache: dict[str, RehearsalRecord] = {}
+
+    def run(fixture: RehearsalFixture) -> RehearsalRecord:
+        if fixture.name not in cache:
+            root = tmp_path_factory.mktemp(fixture.name.replace("-", "_"))
+            corpus = stage_corpus(fixture=fixture, root=root, repo_root=REPO_ROOT)
+            cache[fixture.name] = rehearse(fixture=fixture, corpus=corpus, root=root)
+        return cache[fixture.name]
+
+    return run
+
+
+def test_the_rehearsal_covers_exactly_the_required_fixture_set() -> None:
+    """The set is the claim: a missing corpus is a hole in the signal."""
+    assert tuple(fixture.name for fixture in REHEARSAL_FIXTURES) == REQUIRED_FIXTURE_NAMES
+    assert len(IMPORTING_FIXTURES) + len(REFUSING_FIXTURES) == len(REQUIRED_FIXTURE_NAMES)
+
+
+@pytest.mark.parametrize("fixture", REHEARSAL_FIXTURES, ids=lambda row: row.name)
+def test_staged_corpus_carries_no_concrete_home_directory_path(
+    fixture: RehearsalFixture, rehearsed: Callable[[RehearsalFixture], RehearsalRecord]
+) -> None:
+    """Every corpus passes the cutover's own scrub gate before it is used.
+
+    The gate runs here rather than only at commit time because a
+    committed fixture is invisible to the repository's leak lints the
+    moment it stops being decodable text, and because the live corpus is
+    never committed at all.
+    """
+    assert rehearsed(fixture).scrub_findings == 0
+
+
+@pytest.mark.parametrize("fixture", IMPORTING_FIXTURES, ids=lambda row: row.name)
+def test_dry_run_seals_a_plan_that_two_reads_agree_on(
+    fixture: RehearsalFixture, rehearsed: Callable[[RehearsalFixture], RehearsalRecord]
+) -> None:
+    """Leg one: the plan is addressed by the corpus, not by the clock."""
+    dry_run = rehearsed(fixture).dry_run
+    assert dry_run is not None
+    assert dry_run.reproducible is True
+    assert dry_run.manifest_digest != dry_run.approval_digest
+    assert dry_run.target_rows >= 0
+
+
+@pytest.mark.parametrize("fixture", IMPORTING_FIXTURES, ids=lambda row: row.name)
+def test_apply_publishes_one_generation_and_journals_every_stage(
+    fixture: RehearsalFixture, rehearsed: Callable[[RehearsalFixture], RehearsalRecord]
+) -> None:
+    """Leg two: the corpus lands as a complete, selected, marked generation."""
+    record = rehearsed(fixture)
+    assert record.apply is not None
+    assert record.apply.applied is True
+    assert record.apply.journal_stages == EXPECTED_STAGE_VALUES
+    assert record.apply.generation_id.startswith("gen-")
+
+
+@pytest.mark.parametrize("fixture", IMPORTING_FIXTURES, ids=lambda row: row.name)
+def test_idempotent_rerun_recognises_its_own_work_and_writes_nothing(
+    fixture: RehearsalFixture, rehearsed: Callable[[RehearsalFixture], RehearsalRecord]
+) -> None:
+    """Leg three: a re-run of an approved plan declines, byte for byte."""
+    record = rehearsed(fixture)
+    assert record.apply is not None
+    assert record.rerun is not None
+    assert record.rerun.applied is False
+    assert record.rerun.journal_rows == 0
+    assert record.rerun.generation_id == record.apply.generation_id
+    assert record.rerun.tree_unchanged is True
+
+
+@pytest.mark.parametrize("fixture", IMPORTING_FIXTURES, ids=lambda row: row.name)
+def test_rollback_rehearsal_puts_the_tree_back_at_epoch_one(
+    fixture: RehearsalFixture, rehearsed: Callable[[RehearsalFixture], RehearsalRecord]
+) -> None:
+    """Leg four: the activation is reversible until a native write lands."""
+    rollback = rehearsed(fixture).rollback
+    assert rollback is not None
+    assert rollback.outcome == "surfaces_restored"
+    assert rollback.epoch == 1
+    assert rollback.generation_count == 0
+    assert rollback.surfaces_match_restore_point is True
+
+
+@pytest.mark.parametrize("fixture", REHEARSAL_FIXTURES, ids=lambda row: row.name)
+def test_rehearsal_matches_the_manifest_recorded_as_its_golden(
+    fixture: RehearsalFixture, rehearsed: Callable[[RehearsalFixture], RehearsalRecord]
+) -> None:
+    """The four legs are recorded, so a silent change of behaviour reds."""
+    compare_or_regenerate(fixture=fixture, record=rehearsed(fixture))
+
+
+# ---------------------------------------------------------------------------
+# Negative fixtures.
+#
+# A corpus the importer refuses has no four legs, so it rehearses the refusal
+# instead: refuse, refuse the same way again, and leave the target byte-
+# identical. The third negative is different in kind -- an interrupted close
+# is not refused, it is *imported*, and what has to be true is that the
+# attempt arrives as a record that grants nothing.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("fixture", REFUSING_FIXTURES, ids=lambda row: row.name)
+def test_negative_fixture_refuses_with_its_declared_code(
+    fixture: RehearsalFixture, rehearsed: Callable[[RehearsalFixture], RehearsalRecord]
+) -> None:
+    """The plan, the apply and the retry all refuse with one stable code."""
+    refusal = rehearsed(fixture).refusal
+    assert refusal is not None
+    assert refusal.plan_code == fixture.refusal_code
+    assert refusal.apply_code == fixture.refusal_code
+    assert refusal.retry_code == fixture.refusal_code
+
+
+@pytest.mark.parametrize("fixture", REFUSING_FIXTURES, ids=lambda row: row.name)
+def test_negative_fixture_names_what_an_operator_has_to_open(
+    fixture: RehearsalFixture, rehearsed: Callable[[RehearsalFixture], RehearsalRecord]
+) -> None:
+    """A code says what kind of defect; the names say which row holds it."""
+    refusal = rehearsed(fixture).refusal
+    assert refusal is not None
+    assert refusal.message_names == fixture.refusal_names
+
+
+@pytest.mark.parametrize("fixture", REFUSING_FIXTURES, ids=lambda row: row.name)
+def test_negative_fixture_leaves_the_target_tree_untouched(
+    fixture: RehearsalFixture, rehearsed: Callable[[RehearsalFixture], RehearsalRecord]
+) -> None:
+    """A refused import is a no-op, so a retry starts from where it started."""
+    refusal = rehearsed(fixture).refusal
+    assert refusal is not None
+    assert refusal.target_unchanged is True
+
+
+def test_negative_corrupt_reference_names_the_reference_that_resolves_to_nothing(
+    rehearsed: Callable[[RehearsalFixture], RehearsalRecord],
+) -> None:
+    """The refusal locates the dangling edge as ``row.field -> referent``.
+
+    The reference is unresolved rather than mis-typed: the source really
+    did record it, and the importer will not invent the record it names,
+    so the whole import stops instead of writing a Task whose batch does
+    not exist.
+    """
+    fixture = REHEARSAL_FIXTURE_INDEX["corrupt-reference"]
+    refusal = rehearsed(fixture).refusal
+    assert refusal is not None
+    assert refusal.plan_code == "migration_fabrication_detected"
+    assert refusal.message_names == ("waves/P01-I01-W02.batch_ref", MISSING_ITER_ID)
+
+
+def test_negative_unknown_extension_field_names_the_undeclared_field(
+    rehearsed: Callable[[RehearsalFixture], RehearsalRecord],
+) -> None:
+    """Strict validation reds on the key itself, before a row is read."""
+    fixture = REHEARSAL_FIXTURE_INDEX["unknown-extension-field"]
+    refusal = rehearsed(fixture).refusal
+    assert refusal is not None
+    assert refusal.plan_code == "migration_collection_unknown"
+    assert refusal.message_names == (UNKNOWN_EXTENSION_FIELD,)
+
+
+def test_negative_interrupted_close_imports_the_attempt_as_a_legacy_record(
+    tmp_path: Path,
+) -> None:
+    """The close that never finished arrives as a record that grants nothing.
+
+    Two halves. The session that was closing the wave imports as an
+    immutable legacy envelope: the row is preserved whole and mints no
+    live epoch-2 record, which is the only honest import of a claim whose
+    outcome the source never recorded. The ``close_attempts`` row itself
+    reaches the cutover's explicit-drop arm, so it is accounted for
+    rather than silently skipped -- a skipped row is one the target
+    census could never reconcile against the source.
+    """
+    fixture = REHEARSAL_FIXTURE_INDEX["interrupted-close"]
+    corpus = stage_corpus(fixture=fixture, root=tmp_path, repo_root=REPO_ROOT)
+    snapshot = SourceSnapshot.read(corpus)
+    import_plan = CorpusImportPlan.build(snapshot=snapshot, allowlist_path=ALLOWLIST)
+
+    envelopes = {
+        (row.source_collection, row.source_id): row for row in import_plan.envelopes.envelopes
+    }
+    attempt = envelopes[("agent_sessions", INTERRUPTED_CLOSE_SESSION)]
+    assert attempt.minted_records == ()
+    assert attempt.alias == f"legacy:agent_sessions/{INTERRUPTED_CLOSE_SESSION}"
+    assert attempt.payload["status"] == "open"
+
+    plan = plan_cutover(rehearsal_plan_request(corpus), sealed_at=REHEARSAL_SEALED_AT)
+    dropped = next(
+        mapping
+        for mapping in plan.manifest.row_mappings
+        if mapping.source_collection == "close_attempts"
+    )
+    assert dropped.disposition is Disposition.EXPLICIT_DROP
+    assert dropped.source_row_count == 1
+    assert dropped.target_row_count == 0
+    assert dropped.unresolved_row_count == 0
+
+
+# ---------------------------------------------------------------------------
+# The largest supported state.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def largest_pin() -> LiveCorpusPin:
+    """Return the committed contract the live corpus has to keep satisfying."""
+    return LiveCorpusPin.load(LIVE_CORPUS_ROOT / PIN_FILENAME)
+
+
+def test_largest_supported_state_is_the_live_corpus_at_the_declared_band(
+    largest_pin: LiveCorpusPin, rehearsed: Callable[[RehearsalFixture], RehearsalRecord]
+) -> None:
+    """The band is asserted over the corpus that was actually imported.
+
+    Asserting the band rather than a row count is what lets the live
+    corpus grow without loosening the claim: a measurement taken over
+    four thousand rows still backs a statement about thousands, and one
+    taken over four hundred does not.
+    """
+    record = rehearsed(LARGEST_FIXTURE)
+    assert record.dry_run is not None
+    assert band_for(record.dry_run.source_rows) is largest_pin.declared_band
+    assert largest_pin.declared_band is ScaleBand.THOUSANDS
+    assert record.dry_run.source_rows >= largest_pin.observed_rows
+
+
+def test_largest_supported_state_stays_under_the_recorded_multiplier_ceiling(
+    largest_pin: LiveCorpusPin, rehearsed: Callable[[RehearsalFixture], RehearsalRecord]
+) -> None:
+    """The published tree may grow against its source, but only so far.
+
+    The multiplier is the whole generation over the whole staged corpus.
+    An importer change that widened every ledger row, or that stopped
+    compacting, would show up here as a number the recorded ceiling does
+    not admit -- before the flag day rather than during it.
+    """
+    record = rehearsed(LARGEST_FIXTURE)
+    assert record.apply is not None
+    multiplier = record.apply.generation_bytes / record.source_bytes
+
+    assert multiplier == pytest.approx(largest_pin.observed_multiplier, rel=0.25)
+    assert multiplier <= largest_pin.multiplier_ceiling
+
+
+def test_largest_supported_state_applies_inside_its_declared_budget(
+    largest_pin: LiveCorpusPin, rehearsed: Callable[[RehearsalFixture], RehearsalRecord]
+) -> None:
+    """One apply finishes in time and leaves a residual document a reader can hold."""
+    record = rehearsed(LARGEST_FIXTURE)
+    assert record.apply is not None
+    assert record.apply.applied is True
+    assert record.apply.wall_clock_s <= largest_pin.apply_timeout_budget_s
+    assert record.apply.residual_document_bytes < largest_pin.residual_document_ceiling_bytes
+    assert record.apply.ledger_records > 0
+
+
+def test_largest_supported_state_pin_records_what_was_observed(
+    largest_pin: LiveCorpusPin,
+) -> None:
+    """The pin's ceilings sit above the numbers it says were measured.
+
+    A ceiling below its own observation is a gate that was green when it
+    was written and can never be green again, which is the specific way a
+    budget stops meaning anything.
+    """
+    assert largest_pin.observed_multiplier < largest_pin.multiplier_ceiling
+    assert largest_pin.observed_apply_s < largest_pin.apply_timeout_budget_s
+    assert largest_pin.observed_residual_bytes < largest_pin.residual_document_ceiling_bytes
+    assert band_for(largest_pin.observed_rows) is largest_pin.declared_band
+
+
+# ---------------------------------------------------------------------------
+# Fixture provenance.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("corpus", STRUCTURAL_CORPORA, ids=lambda row: row.name)
+def test_built_corpus_is_exactly_what_its_typed_builder_emits(
+    corpus: CorpusPlan, tmp_path: Path
+) -> None:
+    """The builder is the source of truth; the committed tree is its output.
+
+    Regenerating into a temporary directory and comparing bytes is what
+    makes that true rather than aspirational: a hand edit to the
+    committed JSON reds here, and so does a builder change nobody
+    re-emitted.
+    """
+    regenerated = corpus.write(tmp_path / "snapshot")
+    committed = committed_snapshot(corpus.name)
+
+    assert content_digests(regenerated) == content_digests(committed)
+
+
+def test_frozen_historical_corpus_agrees_with_its_recorded_provenance() -> None:
+    """The frozen slice says what it dropped, and the tree agrees with it."""
+    provenance = json.loads(
+        (HISTORICAL_CORPUS_ROOT / "provenance.json").read_text(encoding="utf-8")
+    )
+    document = json.loads(
+        (HISTORICAL_CORPUS_ROOT / "snapshot" / "document.json").read_text(encoding="utf-8")
+    )
+
+    assert provenance["source_revision"] == SOURCE_REVISION
+    assert provenance["scrub_findings"] == 0
+    assert provenance["row_counts_frozen"] == row_counts(document)
+    assert provenance["slice"] == {"phase_id": SLICE_PHASE_ID, "iter_id": SLICE_ITER_ID}
+    for collection in BACKFILLED_COLLECTIONS:
+        assert document[collection] == {}
+    assert PHASE_BATCH_POINTER not in document["phases"][SLICE_PHASE_ID]
+    assert set(document["iters"]) == {SLICE_ITER_ID}
+    assert set(document["iters"][SLICE_ITER_ID]["wave_ids"]) == set(document["waves"])
