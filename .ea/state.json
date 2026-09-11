@@ -17253,6 +17253,38 @@
       "status": "active",
       "summary": null,
       "worktree_ids": []
+    },
+    "SES-20260911T175913.337019Z-executor-claude-055a7cb3-0f1a-4e7c-a73f-819e90c303bb": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-11T17:59:33.625493Z",
+      "id": "SES-20260911T175913.337019Z-executor-claude-055a7cb3-0f1a-4e7c-a73f-819e90c303bb",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W45",
+      "started_at": "2026-09-11T17:59:13.337019Z",
+      "status": "closed",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260911T175934.702349Z-polisher-claude-e5d3aa03-fcff-42e4-a9c6-a167ac8f9ceb": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P32-I01-W45"
+      ],
+      "ended_at": null,
+      "id": "SES-20260911T175934.702349Z-polisher-claude-e5d3aa03-fcff-42e4-a9c6-a167ac8f9ceb",
+      "role": "polisher",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W45",
+      "started_at": "2026-09-11T17:59:34.702349Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
     }
   },
   "artifacts": {
@@ -23353,10 +23385,12 @@
   "current": {
     "active_session_ids": [
       "SES-20260911T171240.996472Z-operator-claude-77a63699-d2f0-4457-9586-cfa8d898d95c",
-      "SES-20260911T171601.968506Z-executor-claude-b312ed7e-19e9-489d-af10-ee00ffeccdc6"
+      "SES-20260911T171601.968506Z-executor-claude-b312ed7e-19e9-489d-af10-ee00ffeccdc6",
+      "SES-20260911T175934.702349Z-polisher-claude-e5d3aa03-fcff-42e4-a9c6-a167ac8f9ceb"
     ],
     "active_wave_ids": [
-      "P32-I01-W21"
+      "P32-I01-W21",
+      "P32-I01-W45"
     ],
     "iter_id": "P32-I01",
     "phase_id": "P32",
@@ -40621,7 +40655,8 @@
         "P32-I01-W41",
         "P32-I01-W42",
         "P32-I01-W43",
-        "P32-I01-W44"
+        "P32-I01-W44",
+        "P32-I01-W45"
       ]
     },
     "P33-I01": {
@@ -42024,7 +42059,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-11T17:16:02.825542Z",
+  "updated_at": "2026-09-11T17:59:35.977346Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -173854,6 +173889,188 @@
       "title": "Adopt a publication that happened outside the release model",
       "token_budget": null,
       "tokens_consumed": 386385,
+      "worktree_id": null
+    },
+    "P32-I01-W45": {
+      "agent_role": "polisher",
+      "blocks": [],
+      "claim_session_id": "SES-20260911T175934.702349Z-polisher-claude-e5d3aa03-fcff-42e4-a9c6-a167ac8f9ceb",
+      "claimed_at": "2026-09-11T17:59:35.976946Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Polish wave appended after the code waves landed to clear reds that no single wave owns; typed criteria follow via spec sync before dispatch.",
+        "waived_at": "2026-09-11T17:58:51.416757Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "Three tests red on this branch for reasons no wave owns: an EAWF021 vague-token violation in a reference doc keeps both prose-gate tests failing, the idle public surface stands at 208 against a 206 ceiling, and a forbidden heavy module reaches the CLI app import path. All three are inside this phase's reach and all three block a green phase PR.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "docs/reference",
+        "src/eawf",
+        "tests/lint",
+        "tests/unit",
+        "tests/perf",
+        ".gitignore",
+        "src/eawf/kernel/store/commit_policy.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_prose_gate_clean.py"
+            ],
+            "scope": "all"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_idle_surface_report.py"
+            ],
+            "scope": "all"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/perf/surfaces/cli/test_import_budget.py"
+            ],
+            "scope": "all"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W45",
+      "intent": {
+        "desired_outcome": "The prose gate, the idle ceiling and the import budget are all green without weakening any of them",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Three tests are red for reasons no wave owns and they block a green phase PR",
+        "risks": [
+          "Lowering the idle ceiling must follow real wiring or deletion; raising it to pass is the defect the gate exists to catch"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-11T17:58:51.562914Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "validate-prose reports zero violations across the changed files and both prose-gate tests pass",
+          "oracle_tier": 4,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "validate-prose reports zero violations across the changed files and both prose-gate tests pass",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "the strict prose gate exits zero over the changed markdown and both prose-gate tests return green; asserted by pytest over the prose gate suite",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "the idle count is at or below a ceiling strictly lower than 206 and every remaining entry is named in the commit body",
+          "oracle_tier": 4,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "the idle count is at or below a ceiling strictly lower than 206 and every remaining entry is named in the commit body",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "the idle public surface returns at or under a ceiling lowered rather than raised; asserted by pytest over the idle surface report",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "behavioral",
+          "measurable_signal": "importing the CLI app pulls no module on the forbidden list and the import budget test passes",
+          "oracle_tier": 4,
+          "quality_dimension": "performance_efficiency",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "importing the CLI app pulls no module on the forbidden list and the import budget test passes",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "the CLI app import path no longer pulls the forbidden heavy module and the budget test exits zero; asserted by pytest over the import budget suite",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Clear the prose, idle-surface and import-budget reds",
+      "token_budget": null,
+      "tokens_consumed": 0,
       "worktree_id": null
     }
   },
