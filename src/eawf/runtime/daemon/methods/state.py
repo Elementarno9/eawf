@@ -122,9 +122,11 @@ from eawf.runtime.daemon.methods.state_close import (
     build_close_attempt_hooks,
     compute_wave_close_extras,
     compute_wave_close_readiness,
+    enforce_close_gate_receipt_floor,
     enforce_nonzero_runtime_close,
     enforce_wave_verdict_gate,
     load_wave_session_rollup,
+    resolve_close_gate_tier,
     retract_closed_wave_advisories,
     score_required_criteria,
     validate_close_apply_snapshot,
@@ -554,6 +556,8 @@ async def _enforce_wave_close_gate(
             required criterion -- a :class:`LifecycleError` subclass carrying
             the refused criterion + the grounded failing-check output so a
             repair re-dispatch is fed the concrete falsifier.
+        GateReceiptFloorError: When a durable close reaches the end of the
+            scoring pass with a required blocking gate that left no receipt.
         LifecycleError: When the high-risk single-auditor gate refuses close.
     """
     from eawf.observability.eval.jury_validation import BlockAuthority
@@ -632,22 +636,9 @@ async def _enforce_wave_close_gate(
         _enforce_wave_verdict_gate(wave, state_path=state_path)
         logger.info(f"_enforce_wave_close_gate wave={wave_id} high_risk=single-auditor passed=True")
         return []
-    # Whole-fleet enforce is risk-weighted: a fleet profile (no
-    # ``uiux_bands``) gates only the high-risk ``"always"`` subset, so a
-    # mechanical (``"sampled"`` / ``"skip"``) wave closes exactly as it does
-    # under an advisory profile -- no oracle run, no block, no spawn. A
-    # band-scoped profile keeps the run_oracle path below: the resolver has
-    # already narrowed ``enforce`` to ``False`` for a non-band wave, so any
-    # wave that reaches here under a banded block is in-band and is scored.
-    if not verify_block.uiux_bands and verdict_requirement(wave) != "always":
-        logger.debug(
-            f"_enforce_wave_close_gate wave={wave_id} requirement=mechanical advisory=True"
-        )
-        return []
-    # Past the enforce guard the ordered oracle scores each required
-    # criterion. The events_path + spawn_factory mirror the cross-vendor
-    # jury gate so the jury tier (run_oracle's last resort for an un-gated
-    # criterion) convenes against the same store + per-runtime spawn map.
+    # Whole-fleet enforce is risk-weighted for the EXPENSIVE tier only; the
+    # resolver below narrows the tier a mechanical wave scores at rather than
+    # letting its risk band skip the scoring pass outright.
     events_path = store_path(state_path, StoreKind.EVENT)
     spawn_factory = _jury_spawn_factory(
         state,
@@ -657,6 +648,9 @@ async def _enforce_wave_close_gate(
         events_path=events_path,
     )
     gate_specs = _load_gate_specs(wave_id, state)
+    tier = resolve_close_gate_tier(tier, wave=wave, uiux_bands=verify_block.uiux_bands)
+    if tier == "skip":
+        return []
     freshness_inputs: dict[str, Any] = {}
     if close_attempt_id:
         from eawf.runtime.daemon.methods.close import gate_freshness_inputs
@@ -724,6 +718,12 @@ async def _enforce_wave_close_gate(
             f"_enforce_wave_close_gate wave={wave_id} "
             "high_risk=deterministic-then-single-auditor passed=True"
         )
+    enforce_close_gate_receipt_floor(
+        wave,
+        state_path=state_path,
+        gate_specs=gate_specs,
+        close_attempt_id=close_attempt_id,
+    )
     logger.info(
         f"_enforce_wave_close_gate wave={wave_id} oracle=pass "
         f"criteria={len(wave.success_criteria)} "

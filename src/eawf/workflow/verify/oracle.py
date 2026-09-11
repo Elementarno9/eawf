@@ -68,6 +68,7 @@ from eawf.workflow.verify.gate_receipts import (
     gate_execution_receipt,
 )
 from eawf.workflow.verify.sandboxed_checks import run_checks_out_of_process
+from eawf.workflow.verify.vacuous_gate import vacuous_gate_run
 
 logger = logging.getLogger(__name__)
 
@@ -230,6 +231,95 @@ def _record_gate_execution(
         )
 
 
+def _score_gate_run(
+    criterion: CriterionSpec,
+    gate: GateSpec,
+    *,
+    result: CheckResult,
+    tier: int,
+    scope_id: str,
+    state_path: Path,
+    after_gate_execute: AfterGateExecute | None,
+) -> OracleResult | None:
+    """Turn one completed gate run into a decisive result, or into nothing.
+
+    Receipts the run, then classifies it. ``None`` means the run was not
+    decisive for the criterion and the caller moves to the next gate: either a
+    non-blocking verdict, which the close may ignore, or a run that observed
+    nothing, which there is no honest way to score.
+
+    A run can exit non-zero having asserted nothing at all -- a pytest selector
+    that matched no test, a named path that does not resolve. Reading that as
+    the criterion failing accuses the wave's work of a defect the gate never
+    looked for, so it is refused the way an argv that cannot red is refused, and
+    its receipt records ``blocked`` rather than claiming a tree observation.
+
+    Args:
+        criterion: The criterion the gate is attached to.
+        gate: The gate that ran.
+        result: The runner's terminal result.
+        tier: The gate's oracle tier.
+        scope_id: Wave URN the receipt scopes to.
+        state_path: Path to ``state.json``; anchors the receipt store.
+        after_gate_execute: The durable receipt-persisting hook, or ``None``.
+
+    Returns:
+        The decisive :class:`OracleResult`, or ``None`` when this gate settles
+        nothing for the criterion.
+    """
+    if after_gate_execute is not None and result.started_at is not None:
+        after_gate_execute(criterion.id, gate.id, result)
+    blocking = gate.required and gate.policy == "block"
+    vacuous = vacuous_gate_run(
+        result.argv if result.argv is not None else _gate_argv(gate),
+        exit_status=result.exit_status,
+    )
+    gate_status: Literal["pass", "fail", "blocked"] = (
+        "blocked" if vacuous is not None else _check_result_status(result)
+    )
+    _record_gate_execution(
+        state_path,
+        scope_id=scope_id,
+        criterion_id=criterion.id,
+        gate_id=gate.id,
+        result=result,
+        status=gate_status,
+    )
+    if vacuous is not None:
+        logger.warning(
+            f"run_oracle status=gate-vacuous criterion={criterion.id!r} gate={gate.id!r} "
+            f"blocking={blocking} exit_status={result.exit_status} detail={vacuous.reason!r}"
+        )
+        if not blocking:
+            return None
+        return OracleResult(
+            tier=OracleTier(tier),
+            status="blocked",
+            criterion_id=criterion.id,
+            gate_id=gate.id,
+            detail=f"gate argv observed nothing: {vacuous.message()}",
+            check_result=result,
+        )
+    if gate_status != "pass" and not blocking:
+        logger.debug(
+            f"run_oracle mode=deterministic criterion={criterion.id!r} gate={gate.id!r} "
+            f"tier={tier} status={gate_status} blocking=False"
+        )
+        return None
+    logger.info(
+        f"run_oracle mode=deterministic criterion={criterion.id!r} gate={gate.id!r} "
+        f"tier={tier} status={gate_status} blocking={blocking}"
+    )
+    return OracleResult(
+        tier=OracleTier(tier),
+        status=gate_status,
+        criterion_id=criterion.id,
+        gate_id=gate.id,
+        detail=result.details or "",
+        check_result=result,
+    )
+
+
 async def _run_deterministic_gates(  # noqa: C901
     criterion: CriterionSpec,
     ordered: list[GateSpec],
@@ -384,50 +474,21 @@ async def _run_deterministic_gates(  # noqa: C901
                     detail=f"durable gate execution blocked: {exc!s}",
                 )
             continue
-        if after_gate_execute is not None and result.started_at is not None:
-            after_gate_execute(criterion.id, gate.id, result)
-        gate_status = _check_result_status(result)
-        _record_gate_execution(
-            state_path,
-            scope_id=scope_id,
-            criterion_id=criterion.id,
-            gate_id=gate.id,
+        scored = _score_gate_run(
+            criterion,
+            gate,
             result=result,
-            status=gate_status,
+            tier=tier,
+            scope_id=scope_id,
+            state_path=state_path,
+            after_gate_execute=after_gate_execute,
         )
-        if gate_status == "pass":
-            logger.info(
-                f"run_oracle status=pass criterion={criterion.id!r} gate={gate.id!r} tier={tier}"
-            )
-            passed_result = OracleResult(
-                tier=OracleTier(tier),
-                status="pass",
-                criterion_id=criterion.id,
-                gate_id=gate.id,
-                detail=result.details or "",
-                check_result=result,
-            )
-            if not require_all_deterministic:
-                return passed_result
-            last_pass = passed_result
+        if scored is None:
             continue
-        if gate.required and gate.policy == "block":
-            logger.info(
-                f"run_oracle mode=deterministic criterion={criterion.id!r} "
-                f"gate={gate.id!r} tier={tier} status={gate_status} blocking=True"
-            )
-            return OracleResult(
-                tier=OracleTier(tier),
-                status=gate_status,
-                criterion_id=criterion.id,
-                gate_id=gate.id,
-                detail=result.details or "",
-                check_result=result,
-            )
-        logger.debug(
-            f"run_oracle mode=deterministic criterion={criterion.id!r} "
-            f"gate={gate.id!r} tier={tier} status={gate_status} blocking=False"
-        )
+        if scored.status == "pass" and require_all_deterministic:
+            last_pass = scored
+            continue
+        return scored
     return last_pass
 
 
