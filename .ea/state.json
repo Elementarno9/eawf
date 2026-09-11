@@ -17765,6 +17765,16 @@
       "uri": "repo:.ea/artifacts/audits/v0.1-closeout.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-v0.1-closeout"
     },
+    "INC-P32-01-report": {
+      "created_at": "2026-09-11T10:27:27.275310Z",
+      "id": "INC-P32-01-report",
+      "kind": "incident_report",
+      "metadata": {},
+      "sha256": "fc94fe4c9c51c78fb5d8b2547de53785f06f608b950ca629f9cec2aebd44dfc5",
+      "size_bytes": 6436,
+      "uri": "repo:.ea/artifacts/incidents/2026-09-11-dev1-published-outside-release-machinery.md",
+      "urn": "urn:eawf:v1:artifact:P32-I01/INC-P32-01-report"
+    },
     "MCT-26081301": {
       "created_at": "2026-09-04T16:46:57.428397Z",
       "id": "MCT-26081301",
@@ -37053,6 +37063,20 @@
       "severity": "medium",
       "status": "open",
       "title": "Commit lint cannot distinguish an amend from a second wave commit"
+    },
+    "INC-P32-01": {
+      "cause": "unknown",
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "description": null,
+      "id": "INC-P32-01",
+      "opened_at": "2026-09-11T10:26:07.607536Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "P32-I01",
+      "severity": "high",
+      "status": "open",
+      "title": "dev1 published outside the release machinery"
     }
   },
   "indexes": {},
@@ -41066,7 +41090,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-11T10:20:49.673851Z",
+  "updated_at": "2026-09-11T10:28:31.387466Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
