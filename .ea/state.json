@@ -13500,6 +13500,21 @@
       "status": "done",
       "updated_at": "2026-09-07T15:09:10.102151Z"
     },
+    "P32-I01-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 270914,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W01",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W01",
+      "model": null,
+      "scope_id": "P32-I01-W01",
+      "status": "done",
+      "updated_at": "2026-09-11T12:15:02.110657Z"
+    },
     "P32-I01-W02": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -16884,15 +16899,15 @@
       "claimed_wave_ids": [
         "P32-I01-W01"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-11T12:02:14.936366Z",
       "id": "SES-20260911T113313.194185Z-operator-claude-74ab8404-c93c-4561-8dc9-c36748a202fd",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W01",
       "started_at": "2026-09-11T11:33:13.194185Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260911T113620.344637Z-auditor-claude-code-4bac05b5-9fa0-484c-aad6-f5cdebeb36ac": {
@@ -16916,15 +16931,30 @@
       "claimed_wave_ids": [
         "P32-I01-W15"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-11T12:02:14.940333Z",
       "id": "SES-20260911T114104.813693Z-executor-claude-88b25095-f85b-4ef2-a01e-2e1d6a4afe6e",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W15",
       "started_at": "2026-09-11T11:41:04.813693Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260911T121259.819547Z-auditor-claude-code-2f316a87-5c97-489c-b00e-6a41b5824010": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-11T12:15:00.885577Z",
+      "id": "SES-20260911T121259.819547Z-auditor-claude-code-2f316a87-5c97-489c-b00e-6a41b5824010",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W01::audit",
+      "started_at": "2026-09-11T12:12:59.819547Z",
+      "status": "closed",
+      "summary": "auditor report appended",
       "worktree_ids": []
     }
   },
@@ -17864,8 +17894,8 @@
       "id": "INC-P32-01-report",
       "kind": "incident_report",
       "metadata": {},
-      "sha256": "fc94fe4c9c51c78fb5d8b2547de53785f06f608b950ca629f9cec2aebd44dfc5",
-      "size_bytes": 6436,
+      "sha256": "6c0115126e5db174261737cdaae7d10a301b5eab0523c7945e65dcf14adb60c3",
+      "size_bytes": 8142,
       "uri": "repo:.ea/artifacts/incidents/2026-09-11-dev1-published-outside-release-machinery.md",
       "urn": "urn:eawf:v1:artifact:P32-I01/INC-P32-01-report"
     },
@@ -22166,6 +22196,57 @@
       "wave_id": "P32-I01-W06",
       "wave_revision_digest": "23a510345a6a4266a243cbeaa61e44fc4c62e3491d247f25f4ab56ade24d93fd"
     },
+    "close-cc655c6e42e7a6ceded743a8": {
+      "apply_event_id": "EV-29a2fd2005dc",
+      "artifact_refs": [],
+      "audit_report_id": "AR-auditor-P32-I01-W01-01",
+      "audit_requirement": "required",
+      "candidate_sha": "061729defd68433755303fee53a6a3c150d8a388",
+      "commit_identity_digest": "sha256:ec2a2ecb2303cd2478527604febc10e55bdc337a466c4430135ee42fdecc065b",
+      "criteria_digest": "a76cb343c26964b8635d55497f5123b557d327e8f0dc45e9bc879fd70b340cbf",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "9e344ffc48df4307d16eca830df07476e647d5a4c54d9cd6cbd2d7408b0415f4",
+      "gate_receipt_ids": [
+        "GR-104b553607a0b5bf41ba48e72477db78",
+        "GR-6d69bbba043f21af04ac7ebedf3dcb07",
+        "GR-1adb253aff5a57a7959a65ff496ad7af"
+      ],
+      "generation": 1,
+      "id": "close-cc655c6e42e7a6ceded743a8",
+      "idempotency_key": "11ee495d4f5a632127794fe1178ee64d3018350d85335b7d07a4b83f540ec4ae",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "061729defd68433755303fee53a6a3c150d8a388",
+      "integration_id": "integration-78fc7426020575fdf1e6b634",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "The terminal release burn is wired to an operator surface and the full walk to PARTIALLY_RELEASED is proven over fixtures; the live dev1 record reaches only DRAFT because approve refuses on a correctly red ancestry signal and CANCELLED has no operator surface and a guard that is false for a published version. W44 carries the adoption path.",
+      "policy_digest": "4cea5e97aebfdb9d181c799193c1207db34e2849fdbd5486f95bf779c274424e",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-11T12:12:39.828825Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "b48a9a07d2b1f571b1200a088c6b7c2ab64838198309ac496d000711c4fde48c",
+      "spec_digest": "4aaaa3f7a694005c641ca1328b22596710c60c6c676e2fe2bd4a210b274a8f9f",
+      "started_at": "2026-09-11T12:12:40.155627Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-11T12:15:03.108058Z",
+      "tokens_consumed": 270914,
+      "tree_sha": "1ddd15f89ab0d3f9b08613bc2b1b5ee689ce7432",
+      "updated_at": "2026-09-11T12:15:03.108053Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W01",
+      "wave_revision_digest": "49e7d21c67ff4946c65413d63dbebf28506e4832457fcf9a053e6fb890caa943"
+    },
     "close-d6a5f6aed70ea3237f1fa08f": {
       "apply_event_id": null,
       "artifact_refs": [],
@@ -22609,12 +22690,8 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260911T113313.194185Z-operator-claude-74ab8404-c93c-4561-8dc9-c36748a202fd",
-      "SES-20260911T114104.813693Z-executor-claude-88b25095-f85b-4ef2-a01e-2e1d6a4afe6e"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [
-      "P32-I01-W01",
       "P32-I01-W15"
     ],
     "iter_id": "P32-I01",
@@ -39879,7 +39956,8 @@
         "P32-I01-W40",
         "P32-I01-W41",
         "P32-I01-W42",
-        "P32-I01-W43"
+        "P32-I01-W43",
+        "P32-I01-W44"
       ]
     },
     "P33-I01": {
@@ -41282,7 +41360,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-11T11:41:05.738725Z",
+  "updated_at": "2026-09-11T12:15:03.108145Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -42746,6 +42824,22 @@
       "supersedes_id": null,
       "tree_sha": "ec7e7844a34ce48c5ddbcaad0d4eb605dd149cad",
       "wave_id": "P32-I01-W41"
+    },
+    "integration-78fc7426020575fdf1e6b634": {
+      "base_sha": "74250891264a9f91fa1cbf49489e0cc84b2c944b",
+      "candidate_sha": "061729defd68433755303fee53a6a3c150d8a388",
+      "created_at": "2026-09-11T12:12:38.773072Z",
+      "diff_digest": "088726c05b41075e57f384fdc14d25697cf6591291230846a546a085063f155e",
+      "generation": 1,
+      "id": "integration-78fc7426020575fdf1e6b634",
+      "integrated_sha": "061729defd68433755303fee53a6a3c150d8a388",
+      "kind": "adopt",
+      "reason": "Cherry-picked by hand onto the phase branch so the repo hook's attribution trailer could be stripped per operator policy; verified on the parent with 47 passing tests across the three criterion selectors.",
+      "spec_digest": "4aaaa3f7a694005c641ca1328b22596710c60c6c676e2fe2bd4a210b274a8f9f",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "1ddd15f89ab0d3f9b08613bc2b1b5ee689ce7432",
+      "wave_id": "P32-I01-W01"
     },
     "integration-7f010b9d37affca296e09de3": {
       "base_sha": "bb9d4d81b8e4b10b0baf22ff0d65740f1297d812",
@@ -165362,9 +165456,9 @@
       ],
       "claim_session_id": "SES-20260911T113313.194185Z-operator-claude-74ab8404-c93c-4561-8dc9-c36748a202fd",
       "claimed_at": "2026-09-11T11:33:14.119509Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-11T12:15:02.110657Z",
+      "commit": "061729defd68433755303fee53a6a3c150d8a388",
+      "commit_identity_digest": "sha256:ec2a2ecb2303cd2478527604febc10e55bdc337a466c4430135ee42fdecc065b",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:58:45.106700Z",
@@ -165462,13 +165556,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-03T17:58:45.109357Z",
-      "outcome": null,
+      "outcome": "The terminal release burn is wired to an operator surface and the full walk to PARTIALLY_RELEASED is proven over fixtures; the live dev1 record reaches only DRAFT because approve refuses on a correctly red ancestry signal and CANCELLED has no operator surface and a guard that is false for a published version. W44 carries the adoption path.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -165545,7 +165639,7 @@
       ],
       "title": "Record the burned dev1 checkpoint and advance the train",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 270914,
       "worktree_id": null
     },
     "P32-I01-W02": {
@@ -172805,6 +172899,102 @@
       "title": "Refuse a close whose required gates left no receipt",
       "token_budget": null,
       "tokens_consumed": 368292,
+      "worktree_id": null
+    },
+    "P32-I01-W44": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": {
+        "reason": "Added mid-iter after the live disposition attempt proved the model has no reachable truthful terminal state for dev1; typed criteria follow via spec sync.",
+        "waived_at": "2026-09-11T12:11:30.375061Z",
+        "waived_by": null
+      },
+      "deps": [],
+      "description": "REL-0.7.0.dev1 was published to four targets with no Release record and has no reachable truthful terminal state. PARTIALLY_RELEASED sits behind an approval the branch cannot earn; CANCELLED is guarded by NO_EXTERNAL_EFFECT which is false for dev1 and has no operator surface at all. The model assumes every publication passes through it so it can neither describe nor dispose of one that did not.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/release",
+        "src/eawf/runtime/daemon/methods/release.py",
+        "src/eawf/surfaces/cli/commands/release.py",
+        "tests/integration/workflow/release"
+      ],
+      "gates": [],
+      "id": "P32-I01-W44",
+      "intent": {
+        "desired_outcome": "An out-of-band publication is adoptable into a terminal record without a fabricated approval",
+        "evidence_refs": [
+          ".ea/artifacts/incidents/2026-09-11-dev1-published-outside-release-machinery.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "The release model can neither describe nor dispose of a version published outside it",
+        "risks": [
+          "Adoption must not become a bypass for the normal path; it has to record that the publication was uncontrolled rather than launder it"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-11T12:11:30.579544Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "An out-of-band publication is adopted into a Release record carrying the observed per-target facts without asserting an approval or a readiness sweep that never happened",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "An out-of-band publication is adopted into a Release record carrying the observed per-target facts without asserting an approval or a readiness sweep that never happened",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A record carrying observed external effect is refused the CANCELLED edge rather than passing its NO_EXTERNAL_EFFECT guard because the record is blind to the publication",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A record carrying observed external effect is refused the CANCELLED edge rather than passing its NO_EXTERNAL_EFFECT guard because the record is blind to the publication",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "The adopted record reaches a terminal state through an operator surface and REL-0.7.0.dev1 is driven to it",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The adopted record reaches a terminal state through an operator surface and REL-0.7.0.dev1 is driven to it",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Adopt a publication that happened outside the release model",
+      "token_budget": null,
+      "tokens_consumed": 0,
       "worktree_id": null
     }
   },
