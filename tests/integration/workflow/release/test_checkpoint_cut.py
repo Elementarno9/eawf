@@ -315,8 +315,11 @@ def test_approved_eight_gates_carry_the_pinned_candidate_to_approved() -> None:
 
 
 def test_approved_eight_gates_settle_version_and_changelog_from_the_shipped_tree() -> None:
-    # The two rows this wave's own commit moved: the version module and
-    # the changelog section are read out of the checkout, not a fixture.
+    # Read out of the checkout rather than a fixture, which is what makes
+    # the verdicts move as the tree does. The checkout now stands at the
+    # successor checkpoint, so the version row reds here by design while
+    # the changelog and migration rows stay green: a shipped release's
+    # section is kept, and dropping it would be rewriting history.
     probes = build_tag_probes(
         TagPreflightInputs(
             repo_root=REPO_ROOT,
@@ -327,12 +330,9 @@ def test_approved_eight_gates_settle_version_and_changelog_from_the_shipped_tree
         )
     )
     sweep = compute_readiness(dev1_config(), probes=probes, computed_at=NOW)
-    assert __version__ == DEV1_VERSION
-    for signal in (
-        ReleaseSignalName.VERSION_CONSISTENCY,
-        ReleaseSignalName.CHANGELOG,
-        ReleaseSignalName.MIGRATION,
-    ):
+    assert __version__ != DEV1_VERSION
+    assert sweep.row(ReleaseSignalName.VERSION_CONSISTENCY).status is ReleaseSignalStatus.FAIL
+    for signal in (ReleaseSignalName.CHANGELOG, ReleaseSignalName.MIGRATION):
         assert sweep.row(signal).status is ReleaseSignalStatus.PASS, signal
 
 
