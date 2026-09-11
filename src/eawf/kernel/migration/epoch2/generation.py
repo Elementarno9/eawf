@@ -27,6 +27,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import secrets
 import shutil
 from datetime import datetime
@@ -35,20 +36,26 @@ from typing import Annotated, Final, Literal
 
 from pydantic import Field
 
-from eawf.kernel.migration.epoch2.canary import DisposableTarget
+from eawf.kernel.migration.epoch2.canary import (
+    MARKER_FILENAME,
+    SELECTION_FILENAME,
+    DisposableTarget,
+)
 from eawf.kernel.migration.epoch2.cutover import (
     require_document_holds_only_work_in_flight,
     stage_cutover,
 )
 from eawf.kernel.migration.epoch2.errors import (
+    MigrationDualAuthorityError,
     MigrationReadSmokeFailedError,
+    MigrationRuleError,
     MigrationValidationDivergedError,
 )
 from eawf.kernel.migration.epoch2.manifest import MigrationManifest
 from eawf.kernel.migration.epoch2.plan_mode import MigrationPlan
-from eawf.kernel.migration.epoch2.rules import StrictMigrationModel
+from eawf.kernel.migration.epoch2.rules import StrictMigrationModel, rule_digest
 from eawf.kernel.store.compaction import document_rows, read_document
-from eawf.kernel.store.ledger import read_ledger_records
+from eawf.kernel.store.ledger import LedgerError, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import LEDGER_COLLECTIONS, StorageTier
 
@@ -103,6 +110,12 @@ class EpochMarker(StrictMigrationModel):
         epoch: Always ``2``.
         generation_id: The generation the marker was written for.
         manifest_digest: The manifest that built it.
+        generation_digest: What every byte of the published generation
+            digested to at activation. A later read that disagrees means a
+            mutation has been accepted natively against epoch 2, which is
+            the one-way door a rollback refuses to cross -- so the baseline
+            it is compared against is pinned in the file whose presence
+            makes the tree epoch 2 in the first place.
         written_at: When the marker was written, which is the last
             durable act of the apply.
     """
@@ -111,6 +124,7 @@ class EpochMarker(StrictMigrationModel):
     epoch: Literal[2]
     generation_id: Annotated[str, Field(pattern=GENERATION_ID_PATTERN)]
     manifest_digest: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    generation_digest: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     written_at: datetime
 
 
@@ -298,15 +312,144 @@ def build_generation(
         )
 
     generation_id = generation_id_for(first.manifest_digest)
-    destination = target.generation_path(generation_id)
-    if destination.exists():
-        shutil.rmtree(destination)
-    os.replace(first_root, destination)
-    shutil.rmtree(second_root)
+    _publish_generation(target=target, staging_root=first_root, generation_id=generation_id)
+    discard_staging(target, name=second_root.name)
     logger.info(
         f"build_generation generation={generation_id} manifest_digest={first.manifest_digest[:12]}"
     )
     return generation_id, first
+
+
+def _publish_generation(
+    *, target: DisposableTarget, staging_root: Path, generation_id: str
+) -> Path:
+    """Move one staging directory into the generation namespace atomically.
+
+    The rename is the publish: one operation the filesystem either did or
+    did not do, rather than a file-by-file copy an interruption could
+    leave half finished.
+
+    Args:
+        target: The fence-cleared target tree.
+        staging_root: The staging directory to publish.
+        generation_id: The name it is published under.
+
+    Returns:
+        The published generation's directory.
+
+    Raises:
+        ValueError: The identifier is not a plain directory name.
+        OSError: The rename failed.
+    """
+    destination = target.generation_path(generation_id)
+    if destination.exists():
+        shutil.rmtree(destination)
+    os.replace(staging_root, destination)
+    return destination
+
+
+def discard_staging(target: DisposableTarget, *, name: str) -> None:
+    """Remove one staging directory from the fenced tree.
+
+    Args:
+        target: The fence-cleared target tree.
+        name: The staging directory's name.
+
+    Raises:
+        ValueError: The name is not a staging directory's. A generation is
+            removed through :func:`discard_generation`, which refuses to
+            delete one the tree still reads from; routing a generation
+            name through here would bypass that check.
+        OSError: The directory could not be removed.
+    """
+    if not name.startswith(STAGING_PREFIX):
+        raise ValueError(
+            f"{name!r} is not a staging directory, so it is not a path this helper may "
+            f"remove (staging directories are named {STAGING_PREFIX}-*)"
+        )
+    path = target.generations_dir / name
+    if path.is_dir():
+        shutil.rmtree(path)
+        logger.info(f"discard_staging root={target.root.name} name={name}")
+
+
+def discard_generation(target: DisposableTarget, *, generation_id: str) -> None:
+    """Remove one built generation the tree does not read from.
+
+    Args:
+        target: The fence-cleared target tree.
+        generation_id: The generation to remove.
+
+    Raises:
+        MigrationDualAuthorityError: The selection pointer or the epoch
+            marker still names this generation. Clearing the activation
+            before deleting the data is the order that keeps a tree from
+            ever pointing at bytes that are gone, and enforcing it here
+            rather than trusting each caller is what makes it hold.
+        ValueError: The identifier is not a plain directory name.
+        OSError: The directory could not be removed.
+    """
+    path = target.generation_path(generation_id)
+    named_by = [
+        name
+        for name, pointed in (
+            (SELECTION_FILENAME, _selected_id(target)),
+            (MARKER_FILENAME, _marked_id(target)),
+        )
+        if pointed == generation_id
+    ]
+    if named_by:
+        raise MigrationDualAuthorityError(
+            f"{generation_id} is still named by {', '.join(named_by)}, so removing it "
+            "would leave the tree pointing at bytes that are gone; clear the activation "
+            "first"
+        )
+    if path.is_dir():
+        shutil.rmtree(path)
+        logger.info(f"discard_generation root={target.root.name} generation={generation_id}")
+
+
+def clear_activation(target: DisposableTarget) -> tuple[str, ...]:
+    """Remove the epoch marker, then the selection pointer, in that order.
+
+    Args:
+        target: The fence-cleared target tree.
+
+    Returns:
+        The filenames that were removed, in the order they were removed. A
+        tree that was never activated yields an empty tuple.
+
+    Raises:
+        OSError: A file existed but could not be removed.
+    """
+    removed: list[str] = []
+    for filename, path in (
+        (MARKER_FILENAME, target.marker_path),
+        (SELECTION_FILENAME, target.selection_path),
+    ):
+        if path.exists():
+            path.unlink()
+            removed.append(filename)
+    logger.info(f"clear_activation root={target.root.name} removed={len(removed)}")
+    return tuple(removed)
+
+
+def _selected_id(target: DisposableTarget) -> str | None:
+    """Return the generation the pointer names, or ``None`` when unreadable."""
+    try:
+        selection = read_selection(target)
+    except ValueError:
+        return None
+    return None if selection is None else selection.generation_id
+
+
+def _marked_id(target: DisposableTarget) -> str | None:
+    """Return the generation the marker names, or ``None`` when unreadable."""
+    try:
+        marker = read_marker(target)
+    except ValueError:
+        return None
+    return None if marker is None else marker.generation_id
 
 
 def _require_builds_identical(*, first_root: Path, second_root: Path) -> None:
@@ -380,6 +523,103 @@ def read_smoke(*, target: DisposableTarget, generation_id: str, manifest: Migrat
         f"ledger_records={in_ledgers}"
     )
     return in_document + in_ledgers
+
+
+def generation_digest(target: DisposableTarget, *, generation_id: str) -> str:
+    """Return one digest over every byte of one published generation.
+
+    Args:
+        target: The fence-cleared target tree.
+        generation_id: The generation to digest.
+
+    Returns:
+        A 64-character lowercase hex digest over the generation's whole
+        file set, so a created, removed or edited file all move it.
+
+    Raises:
+        MigrationReadSmokeFailedError: The generation is not on disk.
+        ValueError: The identifier is not a plain directory name.
+        OSError: A file could not be read.
+    """
+    root = target.generation_path(generation_id)
+    if not root.is_dir():
+        raise MigrationReadSmokeFailedError(
+            f"{generation_id} is not a directory under generations/, so there is nothing to digest"
+        )
+    return rule_digest(sorted(tree_digests(root).items()))
+
+
+def verify_selected_generation(target: DisposableTarget, *, generation_id: str) -> int:
+    """Read one published generation back without its build manifest.
+
+    The apply's own read smoke checks the tree against the manifest the
+    build produced. A recovery arrives after the process that held that
+    manifest died, so it asks the weaker question it can still answer: does
+    the generation read through the public readers at all, and does its
+    document hold only work in flight.
+
+    Args:
+        target: The fence-cleared target tree.
+        generation_id: The generation to read.
+
+    Returns:
+        How many records were read across the document and the ledgers.
+
+    Raises:
+        MigrationReadSmokeFailedError: The generation does not read back.
+            Every underlying failure -- an absent document, JSON that does
+            not parse, a torn ledger tail, a terminal record retained in
+            the document -- carries this one code, because the recovery
+            asks one question and acts on one answer.
+        ValueError: The identifier is not a plain directory name.
+    """
+    state_path = target.generation_path(generation_id) / GENERATION_DOCUMENT
+    if not state_path.is_file():
+        raise MigrationReadSmokeFailedError(
+            f"{generation_id} carries no {GENERATION_DOCUMENT}, so the tree it was "
+            "selected as cannot be read back"
+        )
+    try:
+        document = read_document(state_path)
+        in_document = sum(
+            len(document_rows(document, collection)) for collection in LEDGER_COLLECTIONS
+        )
+        in_ledgers = sum(
+            len(read_ledger_records(path))
+            for path in (ledger_path(state_path, name) for name in LEDGER_COLLECTIONS)
+            if path.is_file()
+        )
+        require_document_holds_only_work_in_flight(state_path)
+    except (OSError, ValueError, LedgerError, MigrationRuleError) as error:
+        raise MigrationReadSmokeFailedError(
+            f"{generation_id} does not read back through the public readers "
+            f"({error.__class__.__name__}: {error})"
+        ) from error
+    logger.info(f"verify_selected_generation generation={generation_id} records={in_document}")
+    return in_document + in_ledgers
+
+
+def staging_directories(target: DisposableTarget) -> tuple[str, ...]:
+    """Return every staging directory a crashed build left behind.
+
+    Args:
+        target: The fence-cleared target tree.
+
+    Returns:
+        The ``.staging-*`` directory names under ``generations/``, in name
+        order. A clean apply leaves none: the first is renamed into the
+        generation namespace and the second is discarded.
+    """
+    directory = target.generations_dir
+    if not directory.is_dir():
+        return ()
+    return tuple(
+        sorted(
+            item.name
+            for item in directory.iterdir()
+            if item.is_dir() and item.name.startswith(STAGING_PREFIX)
+        )
+    )
 
 
 def _require_counts_agree(
@@ -462,7 +702,12 @@ def select_generation(
 
 
 def write_marker(
-    *, target: DisposableTarget, generation_id: str, manifest_digest: str, written_at: datetime
+    *,
+    target: DisposableTarget,
+    generation_id: str,
+    manifest_digest: str,
+    published_digest: str,
+    written_at: datetime,
 ) -> EpochMarker:
     """Write the epoch marker, which is the apply's last durable act.
 
@@ -470,6 +715,9 @@ def write_marker(
         target: The fence-cleared target tree.
         generation_id: The selected generation.
         manifest_digest: The manifest that built it.
+        published_digest: What the generation's whole file set digested to
+            when it was read back, pinned as the baseline a later rollback
+            compares against.
         written_at: When the marker is written.
 
     Returns:
@@ -483,6 +731,7 @@ def write_marker(
         epoch=2,
         generation_id=generation_id,
         manifest_digest=manifest_digest,
+        generation_digest=published_digest,
         written_at=written_at,
     )
     atomic_write_json(target.marker_path, marker)
@@ -498,8 +747,11 @@ def generation_ids(target: DisposableTarget) -> tuple[str, ...]:
 
     Returns:
         The directory names under ``generations/`` that name a
-        generation. A crashed build's staging directory is excluded by
-        its leading dot, so it is never mistaken for one.
+        generation, in name order. Membership is decided by the identifier
+        pattern rather than by excluding the names that are not one: a
+        crashed build's staging directory and the restore point are both
+        under here, and so is whatever a later wave adds, so a directory
+        has to look like a generation to be counted as one.
     """
     directory = target.generations_dir
     if not directory.is_dir():
@@ -508,7 +760,7 @@ def generation_ids(target: DisposableTarget) -> tuple[str, ...]:
         sorted(
             item.name
             for item in directory.iterdir()
-            if item.is_dir() and not item.name.startswith(".")
+            if item.is_dir() and re.fullmatch(GENERATION_ID_PATTERN, item.name)
         )
     )
 
@@ -521,12 +773,18 @@ __all__ = [
     "GenerationSelection",
     "atomic_write_json",
     "build_generation",
+    "clear_activation",
+    "discard_generation",
+    "discard_staging",
+    "generation_digest",
     "generation_id_for",
     "generation_ids",
     "read_marker",
     "read_selection",
     "read_smoke",
     "select_generation",
+    "staging_directories",
     "tree_digests",
+    "verify_selected_generation",
     "write_marker",
 ]

@@ -255,3 +255,59 @@ class MigrationJournalBrokenError(MigrationRuleError):
     """
 
     code: ClassVar[str] = "migration_journal_broken"
+
+
+class MigrationRestorePointMissingError(MigrationRuleError):
+    """A recovery was asked to restore a tree that pinned no restore point.
+
+    The apply copies every authority surface and seals the restore
+    manifest before it builds anything, so a tree that holds a generation
+    and no manifest is a tree whose restore point was removed -- or a
+    manifest that belongs to a different cutover. Either way the recovery
+    refuses rather than inventing one: a restore that cannot name the
+    bytes it is restoring to is a guess about somebody's data.
+    """
+
+    code: ClassVar[str] = "migration_restore_point_missing"
+
+
+class MigrationRestoreIncompleteError(MigrationRuleError):
+    """A copy the restore manifest names is absent or digests to something else.
+
+    The whole surface set is verified before the first byte is written, so
+    an incomplete restore point refuses while the tree is still exactly as
+    the interrupted cutover left it. A half-written restore would leave a
+    tree that is neither the corpus the cutover started from nor the
+    generation it was building, which is the one state nobody can reason
+    about afterwards.
+    """
+
+    code: ClassVar[str] = "migration_restore_incomplete"
+
+
+class MigrationRollbackBoundaryCrossedError(MigrationRuleError):
+    """A rollback was asked for after the new generation accepted a write.
+
+    The epoch marker pins what every byte of the published generation
+    digested to at activation. Once those bytes move, a mutation has been
+    accepted natively against epoch 2, and restoring epoch 1 would discard
+    work recorded nowhere else. That is an incident and an operator
+    decision, not an automated repair, so the verb refuses and writes
+    nothing at all -- not even the journal row that would say it refused.
+    """
+
+    code: ClassVar[str] = "rollback_boundary_crossed"
+
+
+class MigrationDualAuthorityError(MigrationRuleError):
+    """The tree names more than one authority, or names one that is absent.
+
+    The selection pointer and the epoch marker are the two halves of the
+    select, and a recovery has to be able to say which single generation
+    the tree reads from. A marker with no pointer, a pair that disagree, a
+    pointer naming a generation that is not on disk, or a staging
+    directory left beside a finished cutover is a tree no recovery can
+    reconcile without being told which answer is the true one.
+    """
+
+    code: ClassVar[str] = "migration_dual_authority"

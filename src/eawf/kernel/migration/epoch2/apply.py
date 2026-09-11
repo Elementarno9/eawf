@@ -31,6 +31,11 @@ refuses a precondition, or that finds its generation already selected,
 leaves the tree byte-identical -- no journal row, no maintenance marker,
 no staging directory. The transaction, and the journal with it, begins at
 the first act that changes the tree.
+
+The transaction's own first act is the **restore point**: every authority
+surface is digested and copied inside the tree before anything is built,
+because a record that can only prove a surface moved is not something a
+rollback can write back.
 """
 
 from __future__ import annotations
@@ -56,6 +61,8 @@ from eawf.kernel.migration.epoch2.errors import (
 from eawf.kernel.migration.epoch2.generation import (
     GenerationSelection,
     build_generation,
+    generation_digest,
+    generation_id_for,
     generation_ids,
     read_marker,
     read_selection,
@@ -71,6 +78,11 @@ from eawf.kernel.migration.epoch2.plan_mode import (
     plan_cutover,
 )
 from eawf.kernel.migration.epoch2.quiescence import quiescence_findings, require_quiescent
+from eawf.kernel.migration.epoch2.restore import (
+    ABSENT_SURFACE,
+    REGISTRY_LOCATOR,
+    capture_restore_point,
+)
 from eawf.kernel.migration.epoch2.rules import StrictMigrationModel
 from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot, digest_bytes
 from eawf.platform.registry.models import Registry, RegistryReadError, read_registry
@@ -82,17 +94,6 @@ logger = logging.getLogger(__name__)
 
 #: The JSON-RPC method the cutover apply is served under.
 EPOCH2_APPLY_METHOD: Final = "migration.epoch2.apply"
-
-#: The locator the restore point records the workspace registry under. A
-#: logical name rather than the file's real path, because the registry
-#: lives in the operator's home directory and a manifest never records
-#: where on a machine anything was.
-REGISTRY_LOCATOR: Final = "registry.json"
-
-#: What the restore point records for an authority surface that does not
-#: exist yet. Distinct from a digest over empty bytes, which would claim
-#: the file was there and empty.
-ABSENT_SURFACE: Final = "absent"
 
 #: How long the apply waits for one authority lock. Short on purpose: a
 #: surface somebody else is holding is a quiescence failure to report,
@@ -438,6 +439,8 @@ def _commit(
         MigrationValidationDivergedError: The two staging imports differ.
         MigrationReadSmokeFailedError: The built generation does not read
             back as its manifest describes it.
+        MigrationRestoreIncompleteError: A surface moved between the digest
+            that pinned it and the copy that would restore it.
         OSError: A durable write failed.
     """
     snapshot_root = Path(request.plan_request.snapshot_root)
@@ -450,14 +453,24 @@ def _commit(
             recorded_at=applied_at,
             detail=f"write window opened by {request.plan_request.sealed_by}",
         )
+        written += journal.flush()
+
         backup = authority_snapshot(
             target, registry_path=Path(request.registry_path), taken_at=applied_at
+        )
+        capture_restore_point(
+            target=target,
+            backup=backup,
+            generation_id=generation_id_for(plan.manifest.manifest_digest),
+            manifest_digest=plan.manifest.manifest_digest,
+            idempotence_digest=plan.manifest.idempotence_digest,
+            approval_digest=plan.approval_digest,
         )
         journal.record(
             stage=CutoverStage.SNAPSHOT_TAKEN,
             boundary=RollbackBoundary.PLAN_ONLY,
             recorded_at=applied_at,
-            detail=f"pinned {len(backup.surfaces)} authority surfaces",
+            detail=f"pinned and copied {len(backup.surfaces)} authority surfaces",
         )
         written += journal.flush()
 
@@ -477,6 +490,7 @@ def _commit(
         written += journal.flush()
 
         records = read_smoke(target=target, generation_id=generation_id, manifest=manifest)
+        published_digest = generation_digest(target, generation_id=generation_id)
         journal.record(
             stage=CutoverStage.READ_SMOKE_PASSED,
             boundary=RollbackBoundary.STAGED,
@@ -509,6 +523,7 @@ def _commit(
             target=target,
             generation_id=generation_id,
             manifest_digest=manifest.manifest_digest,
+            published_digest=published_digest,
             written_at=applied_at,
         )
         final = manifest.advanced(boundary=RollbackBoundary.MARKER_WRITTEN)

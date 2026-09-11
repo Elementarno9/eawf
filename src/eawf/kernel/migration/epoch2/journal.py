@@ -50,7 +50,13 @@ CHAIN_SEED: Final = "epoch2-cutover-journal"
 
 
 class CutoverStage(StrEnum):
-    """Every stage of one apply, in the order the apply runs them."""
+    """Every stage one apply runs, then the stages a recovery can add.
+
+    The apply's own stages are declared in the order it runs them. The
+    recovery stages come last because they are not part of any apply: a
+    journal that carries one is a journal whose apply did not finish, and
+    the row names which repair was run over the wreckage.
+    """
 
     FENCE_CLEARED = "fence_cleared"
     WORKSPACE_RESOLVED = "workspace_resolved"
@@ -64,6 +70,10 @@ class CutoverStage(StrEnum):
     GENERATION_SELECTED = "generation_selected"
     MARKER_WRITTEN = "marker_written"
     MAINTENANCE_EXITED = "maintenance_exited"
+    ROLLBACK_DISCARDED = "rollback_discarded"
+    RESTORE_VERIFIED = "restore_verified"
+    SURFACES_RESTORED = "surfaces_restored"
+    ACTIVATION_COMPLETED = "activation_completed"
 
 
 class CutoverJournalRow(StrictMigrationModel):
