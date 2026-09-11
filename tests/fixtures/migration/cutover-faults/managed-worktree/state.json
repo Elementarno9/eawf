@@ -1,0 +1,14 @@
+{
+  "agent_sessions": {},
+  "schema_version": "1.20",
+  "worktrees": {
+    "WT-LIVE": {
+      "id": "WT-LIVE",
+      "status": "active"
+    },
+    "WT-MERGED": {
+      "id": "WT-MERGED",
+      "status": "merged"
+    }
+  }
+}

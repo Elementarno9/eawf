@@ -179,3 +179,79 @@ class MigrationTierUndeclaredError(MigrationRuleError):
     """
 
     code: ClassVar[str] = "migration_tier_undeclared"
+
+
+class MigrationTargetNotDisposableError(MigrationRuleError):
+    """The apply was aimed at a tree nobody declared throwaway.
+
+    An epoch-2 apply builds a whole new generation and re-points the
+    tree at it. Until the cutover has been rehearsed end to end, the
+    only trees that may receive one are the ones whose owner wrote down,
+    in the tree itself, that losing it costs nothing. Absence of the
+    declaration is a refusal rather than a prompt: a tree that cannot
+    say it is disposable is, for this purpose, production.
+    """
+
+    code: ClassVar[str] = "migration_target_not_disposable"
+
+
+class MigrationNotQuiescentError(MigrationRuleError):
+    """Something was still holding the tree when the apply asked for it.
+
+    The cutover reads every authority surface once and writes a
+    generation from what it read. A session, lease, write-ahead record
+    or managed worktree that is still live can mutate a surface between
+    the read and the select, so the apply refuses and names every holder
+    rather than racing them.
+    """
+
+    code: ClassVar[str] = "migration_not_quiescent"
+
+
+class MigrationWorkspaceNotRegisteredError(MigrationRuleError):
+    """The addressing workspace the apply was given is not registered.
+
+    Every epoch-2 URN is minted under a workspace, so an unregistered
+    one would address the whole imported corpus at a key nothing
+    resolves. The check runs before the first URN is minted, because a
+    corpus minted under a bad key is not repaired by noticing later.
+    """
+
+    code: ClassVar[str] = "workspace_not_registered"
+
+
+class MigrationPlanDigestStaleError(MigrationRuleError):
+    """The approved plan is not the plan the apply just recomputed.
+
+    The apply re-runs plan mode under the authority locks and compares
+    the approval digest it gets with the one the operator approved. A
+    difference means the corpus, the rules or the addressing moved after
+    the approval, so the operator approved work other than the work
+    about to run.
+    """
+
+    code: ClassVar[str] = "migration_plan_digest_stale"
+
+
+class MigrationReadSmokeFailedError(MigrationRuleError):
+    """The freshly built generation did not read back the way it was written.
+
+    The select is the one-way part of the cutover, so the generation is
+    read through the public readers first. A count that disagrees with
+    the manifest means the tree on disk is not the tree the manifest
+    describes, and selecting it would make the manifest a fiction.
+    """
+
+    code: ClassVar[str] = "migration_read_smoke_failed"
+
+
+class MigrationJournalBrokenError(MigrationRuleError):
+    """The cutover journal does not verify as its own append-only chain.
+
+    Each row digests the row before it, so a rewritten, reordered or
+    removed row breaks the chain. A journal that cannot be trusted
+    cannot answer how far a previous apply got, which is the only
+    question it exists to answer.
+    """
+
+    code: ClassVar[str] = "migration_journal_broken"

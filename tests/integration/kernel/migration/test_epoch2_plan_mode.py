@@ -365,7 +365,7 @@ def test_cli_plan_verb_requires_the_explicit_flag(monkeypatch: pytest.MonkeyPatc
         ],
     )
     assert result.exit_code != 0
-    assert "pass --plan" in result.output
+    assert "pass exactly one of --plan, --apply, --export" in result.output
 
 
 def test_cli_plan_verb_refuses_a_missing_corpus(
