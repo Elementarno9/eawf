@@ -13785,6 +13785,21 @@
       "status": "done",
       "updated_at": "2026-09-08T17:44:51.935879Z"
     },
+    "P32-I01-W20": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 349887,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W20",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W20",
+      "model": null,
+      "scope_id": "P32-I01-W20",
+      "status": "done",
+      "updated_at": "2026-09-11T17:12:51.071945Z"
+    },
     "P32-I01-W22": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -17196,13 +17211,28 @@
       "claimed_wave_ids": [
         "P32-I01-W20"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-11T17:12:40.031265Z",
       "id": "SES-20260911T161452.513812Z-executor-claude-898ea19b-7267-438a-b2ea-f11f787fa463",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W20",
       "started_at": "2026-09-11T16:14:52.513812Z",
+      "status": "closed",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260911T171240.996472Z-operator-claude-77a63699-d2f0-4457-9586-cfa8d898d95c": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260911T171240.996472Z-operator-claude-77a63699-d2f0-4457-9586-cfa8d898d95c",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W20",
+      "started_at": "2026-09-11T17:12:40.996472Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -21796,6 +21826,55 @@
       "wave_id": "P31-I01-W39",
       "wave_revision_digest": "fab212ba1f2d185fe01f464168075d8ad0fff7b7e58d185004a181103b08b342"
     },
+    "close-651fb6d9533ec681429aa63d": {
+      "apply_event_id": null,
+      "artifact_refs": [
+        "urn:eawf:v1:close-budget:close-651fb6d9533ec681429aa63d:infrastructure_retry:1"
+      ],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "54da264d91c34217e0eddcb6d3e8b02940c2265a",
+      "commit_identity_digest": "sha256:8227c78f19bbf24da4544cc816a865c97fc27140336fff48c60ea8430f183685",
+      "criteria_digest": "5c5171fe0a5a98646ebc309a4fd22abbd3d3835a6a2181d8f03c91d785cb959f",
+      "dependency_binding_digest": "bd99f4a4ff0e538fa3644db0f049e29885eb40109c19163c2bbf9db7bbb52d0c",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "45a224f256c6c8b770989dd11f87a97d01ef8f04c56ebd3fda647a8637d51627",
+      "gate_receipt_ids": [],
+      "generation": 1,
+      "id": "close-651fb6d9533ec681429aa63d",
+      "idempotency_key": "6c7474dc5a78da21efbaa670de889f687ccc4b51bb14ad14c977211b47705bf2",
+      "infrastructure_retry_budget_remaining": 0,
+      "integrated_sha": "54da264d91c34217e0eddcb6d3e8b02940c2265a",
+      "integration_id": "integration-19ed5c522d08ed4d4c3e4129",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "All twelve dev2 gate names bind to exactly one readiness row each, migration passes only when every one of the ten corpora passes all four legs with journal stages derived from CutoverStage, and an absent or stubbed vulnerability report reds security_review rather than passing it.",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-11T17:12:48.624917Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "b48a9a07d2b1f571b1200a088c6b7c2ab64838198309ac496d000711c4fde48c",
+      "spec_digest": "06a227b3af7b5c1c7201f391af04f3bcbe32e4db025c353755a30dd526ec07c0",
+      "started_at": "2026-09-11T17:12:48.938499Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-11T17:13:13.641509Z",
+      "tokens_consumed": 349887,
+      "tree_sha": "d8f96730eba8b0d756e6e536e06aa1ddecc43688",
+      "updated_at": "2026-09-11T17:13:13.718762Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W20",
+      "wave_revision_digest": "b2b7c30adefe39ccacfe70d6bcd49b18e8dd6219bba56e49cf52d066748d4835"
+    },
     "close-6921fa35b87740cf1711e15a": {
       "apply_event_id": "EV-3289ac9b4542",
       "artifact_refs": [],
@@ -23190,11 +23269,9 @@
   },
   "current": {
     "active_session_ids": [
-      "SES-20260911T161452.513812Z-executor-claude-898ea19b-7267-438a-b2ea-f11f787fa463"
+      "SES-20260911T171240.996472Z-operator-claude-77a63699-d2f0-4457-9586-cfa8d898d95c"
     ],
-    "active_wave_ids": [
-      "P32-I01-W20"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P32-I01",
     "phase_id": "P32",
     "project_code": "EAWF",
@@ -41861,7 +41938,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-11T16:14:53.380020Z",
+  "updated_at": "2026-09-11T17:13:13.718802Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -42996,6 +43073,22 @@
       "supersedes_id": null,
       "tree_sha": "8b4cc73fd4d5d598b2e7e40e11e71d667dea2f38",
       "wave_id": "P32-I01-W07"
+    },
+    "integration-19ed5c522d08ed4d4c3e4129": {
+      "base_sha": "743d4ee2ee6449de09e7f53e4590e3f819ae4c93",
+      "candidate_sha": "54da264d91c34217e0eddcb6d3e8b02940c2265a",
+      "created_at": "2026-09-11T17:12:26.892581Z",
+      "diff_digest": "d86c119e9c9e0ce6759e3dda172ff21a6921ba7e341613114d0393a5c909a545",
+      "generation": 1,
+      "id": "integration-19ed5c522d08ed4d4c3e4129",
+      "integrated_sha": "54da264d91c34217e0eddcb6d3e8b02940c2265a",
+      "kind": "adopt",
+      "reason": "Cherry-picked by hand onto the phase branch so the repo hook's attribution trailer could be stripped per operator policy; verified on the parent with 53 dev2_profile, 42 migration_signal and 26 REL-037 tests at the corrected paths.",
+      "spec_digest": "06a227b3af7b5c1c7201f391af04f3bcbe32e4db025c353755a30dd526ec07c0",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "d8f96730eba8b0d756e6e536e06aa1ddecc43688",
+      "wave_id": "P32-I01-W20"
     },
     "integration-21b825f3eb194d9d403dbf06": {
       "base_sha": "793fcf762bdc9e0851f1ee22bc9a49e1d301ebbb",
@@ -169909,9 +170002,9 @@
       ],
       "claim_session_id": "SES-20260911T161452.513812Z-executor-claude-898ea19b-7267-438a-b2ea-f11f787fa463",
       "claimed_at": "2026-09-11T16:14:53.379386Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-11T17:12:51.071945Z",
+      "commit": "54da264d91c34217e0eddcb6d3e8b02940c2265a",
+      "commit_identity_digest": "sha256:8227c78f19bbf24da4544cc816a865c97fc27140336fff48c60ea8430f183685",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:58:45.125149Z",
@@ -170014,13 +170107,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-03T17:58:45.125886Z",
-      "outcome": null,
+      "outcome": "All twelve dev2 gate names bind to exactly one readiness row each, migration passes only when every one of the ten corpora passes all four legs with journal stages derived from CutoverStage, and an absent or stubbed vulnerability report reds security_review rather than passing it.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -170097,7 +170190,7 @@
       ],
       "title": "Bind the dev2 gate profile, migration signal and checkpoint admission",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 349887,
       "worktree_id": null
     },
     "P32-I01-W21": {

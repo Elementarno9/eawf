@@ -23,10 +23,11 @@ ancestry under ``require_ancestor_of_remote``). A second authored list
 would be free to drift from the first, so there is no such list.
 
 The readiness object therefore carries two blocks over one set of facts.
-The twelve **signal** rows are what the sweep established; the eight
-**gate** rows are what the profile makes of them. They are kept separate
-rather than merged because a gate settled by a proof command has no row
-to merge into, and folding it in would require inventing one.
+The twelve **signal** rows are what the sweep established; the **gate**
+rows -- one per name the checkpoint's profile admits -- are what the
+profile makes of them. They are kept separate rather than merged because
+a gate settled by a proof command or by the waiver block has no row to
+merge into, and folding it in would require inventing one.
 """
 
 from __future__ import annotations
@@ -39,6 +40,7 @@ from typing import Annotated, Final, Literal
 from pydantic import ConfigDict, Field, model_validator
 
 from eawf.kernel.release.gate_binding import (
+    PROFILE_GATES,
     GateBinding,
     GateEvidenceKind,
     ReleaseGateRow,
@@ -77,16 +79,22 @@ logger = logging.getLogger(__name__)
 DEFAULT_SIGNAL_TTL_SECONDS: Final[int] = 3600
 
 
-#: The readiness row each declared ``dev1`` gate name reads, or ``None``
-#: when the gate is settled by a proof command run at the pinned
-#: revision and so contributes no row to the derived required set.
-#: Projected from the authored binding table rather than authored a
-#: second time: a component binding contributes its parent row, so
+#: The readiness row each declared gate name reads, or ``None`` when the
+#: gate is settled by a proof command or by the waiver block and so
+#: contributes no row to the derived required set. Projected from the
+#: authored binding tables rather than authored a second time: a
+#: component binding contributes its parent row, so
 #: ``dependency_inventory`` and ``security_review`` both land on
 #: ``dependencies``.
+#:
+#: The projection runs over every authored profile, so it is total over
+#: :class:`ReleaseGateName`. A gate name added to the vocabulary but
+#: bound by no profile would leave a hole here, which is how it gets
+#: noticed rather than passing as an unread name.
 GATE_SIGNAL_BINDINGS: Final[Mapping[ReleaseGateName, ReleaseSignalName | None]] = {
     gate: binding.required_signal
-    for gate, binding in gate_bindings_for(ReleaseGateProfile.DEV1).items()
+    for profile in PROFILE_GATES
+    for gate, binding in gate_bindings_for(profile).items()
 }
 
 
@@ -400,7 +408,10 @@ class ReleaseReadiness(_StrictModel):
         arbitrary one. A gate settled by a proof command is skipped: it
         contributes no row to the required set, so it cannot be the
         reason a sweep is not ready, and naming it would send the
-        operator to fix something the sweep never measured.
+        operator to fix something the sweep never measured. A
+        waiver-block gate is *not* skipped: it contributes no row either,
+        but an uncleared waiver block does hold :attr:`ready` down, so it
+        is a legitimate answer to "what do I fix first".
         """
         for row in self.gates:
             if not row.required or row.evidence_kind is GateEvidenceKind.PROOF_COMMAND:
@@ -498,10 +509,49 @@ def _run_probe(probe: ReleaseSignalProbe, context: ReleaseSignalContext) -> Rele
         )
 
 
+def _waiver_gate_verdict(
+    gate: ReleaseGateName,
+    disposition: WaiverDisposition,
+    outstanding: Sequence[ReleaseWaiver],
+) -> tuple[ReleaseSignalStatus, str]:
+    """Return the verdict a waiver-block gate reports.
+
+    Args:
+        gate: The gate being reported.
+        disposition: What the counted waivers mean for readiness.
+        outstanding: The explained waivers no acknowledgement covers.
+
+    Returns:
+        A ``(status, remediation)`` pair. Passing exactly when the
+        waiver block leaves the checkpoint approvable, and failing --
+        never ``unavailable`` -- otherwise: the waiver block is always
+        computed, so an unclear one is a finding rather than a gap.
+    """
+    if _waivers_cleared(disposition, outstanding):
+        return ReleaseSignalStatus.PASS, ""
+    if disposition is WaiverDisposition.UNEXPLAINED:
+        return (
+            ReleaseSignalStatus.FAIL,
+            f"gate {gate.value!r}: a counted waiver names no scope, reason or protected "
+            f"principal, so there is nothing to acknowledge; document each waiver or "
+            f"drop it",
+        )
+    named = ", ".join(f"{waiver.scope}/{waiver.protected_principal}" for waiver in outstanding)
+    return (
+        ReleaseSignalStatus.FAIL,
+        f"gate {gate.value!r}: {len(outstanding)} counted waiver(s) are explained but "
+        f"unacknowledged ({named}); record an acknowledgement naming each protection "
+        f"being accepted as lost",
+    )
+
+
 def _gate_rows(
     config: ReleaseConfig,
     bindings: Mapping[ReleaseGateName, GateBinding],
     rows: Sequence[ReleaseSignalRow],
+    *,
+    disposition: WaiverDisposition,
+    outstanding: Sequence[ReleaseWaiver],
 ) -> tuple[ReleaseGateRow, ...]:
     """Return one row per gate the profile admits, in profile order.
 
@@ -511,12 +561,15 @@ def _gate_rows(
     twice rather than disagreeing. A gate bound to a proof command has
     no row to inherit and reports ``unavailable`` naming the command,
     which is the same shape the sweep uses for any producer that has not
-    landed.
+    landed. A gate bound to the waiver block reads the block directly,
+    which is the one verdict the twelve rows cannot carry.
 
     Args:
         config: Loaded checkpoint configuration.
         bindings: The profile's validated binding table.
         rows: The computed signal rows.
+        disposition: What the counted waivers mean for readiness.
+        outstanding: The explained waivers no acknowledgement covers.
 
     Returns:
         The gate rows.
@@ -525,7 +578,9 @@ def _gate_rows(
     required = set(config.gates.required)
     gate_rows: list[ReleaseGateRow] = []
     for gate, binding in bindings.items():
-        if binding.kind is GateEvidenceKind.PROOF_COMMAND:
+        if binding.kind is GateEvidenceKind.WAIVER_BLOCK:
+            status, remediation = _waiver_gate_verdict(gate, disposition, outstanding)
+        elif binding.kind is GateEvidenceKind.PROOF_COMMAND:
             assert binding.proof is not None
             status = ReleaseSignalStatus.UNAVAILABLE
             remediation = (
@@ -635,7 +690,7 @@ def compute_readiness(
         channel=config.channel,
         gate_profile=config.gates.profile,
         signals=tuple(rows),
-        gates=_gate_rows(config, bindings, rows),
+        gates=_gate_rows(config, bindings, rows, disposition=disposition, outstanding=outstanding),
         required_signals=required,
         waiver_count=counted,
         waivers=tuple(waivers),

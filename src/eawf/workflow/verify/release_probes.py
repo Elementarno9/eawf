@@ -41,6 +41,12 @@ from eawf.platform.lint.exclusion_expiry import (
     expired_exclusions,
     validate_renewals,
 )
+from eawf.workflow.evidence.migration_rehearsal import (
+    REHEARSED_CORPORA,
+    rehearsal_evidence_refs,
+    rehearsal_findings,
+    summarise,
+)
 from eawf.workflow.verify.release_readiness import (
     ReleaseSignalContext,
     ReleaseSignalName,
@@ -294,33 +300,71 @@ def _probe_changelog(
     return _passing(f"{CHANGELOG_FILENAME}:{inputs.version}")
 
 
-def _probe_migration(
-    inputs: TagPreflightInputs, context: ReleaseSignalContext
-) -> ReleaseSignalOutcome:
-    """Report whether the changelog section states the migration outcome.
+def _migration_note_gap(inputs: TagPreflightInputs) -> str:
+    """Return why the changelog does not state the migration outcome.
 
     A release that needs no migration says so in one line. Silence is
-    indistinguishable from a forgotten migration note, so it fails.
+    indistinguishable from a forgotten migration note, so it counts as a
+    gap.
 
     Args:
         inputs: The chokepoint's inputs.
-        context: The sweep's context (unused; the note lives beside the
-            changelog entries).
 
     Returns:
-        Passing when a line of the section names the migration outcome.
+        The gap in one line, or ``""`` when the section names the
+        migration outcome.
     """
-    del context
     path = inputs.repo_root / CHANGELOG_FILENAME
     if not path.exists():
-        return _failing(f"{CHANGELOG_FILENAME} is absent; the migration outcome is unstated")
+        return f"{CHANGELOG_FILENAME} is absent, so the migration outcome is unstated"
     section = _changelog_section(path.read_text(encoding="utf-8"), inputs.version)
     if not any(_MIGRATION_RE.search(line) for line in section):
-        return _failing(
-            f"the {inputs.version!r} changelog section states no migration outcome; name the "
-            f"migration or say none is required"
+        return (
+            f"the {inputs.version!r} changelog section states no migration outcome; name "
+            f"the migration or say none is required"
         )
-    return _passing(f"{CHANGELOG_FILENAME}:{inputs.version}:migration")
+    return ""
+
+
+def _probe_migration(
+    inputs: TagPreflightInputs, context: ReleaseSignalContext
+) -> ReleaseSignalOutcome:
+    """Report whether the cutover is rehearsed and its outcome is stated.
+
+    The row carries two readings of one claim. The load-bearing one is
+    the committed rehearsal: every corpus of
+    :data:`~eawf.workflow.evidence.migration_rehearsal.REHEARSED_CORPORA`
+    has a record, and every leg of every record holds. The second is the
+    changelog note, which is what a reader of the release -- rather than
+    a reader of the evidence -- actually sees.
+
+    An absent record is reported ``unavailable`` and a disagreeing leg
+    ``fail``, because they are different repairs: the first needs the
+    rehearsal run, the second needs the cutover fixed. Both carry the
+    ``migration_unproven`` failure code, so neither reads as a pass.
+
+    Args:
+        inputs: The chokepoint's inputs, naming the checkout the
+            rehearsal records were committed in.
+        context: The sweep's context (unused; the rehearsal is a
+            property of the tree, not of the checkpoint).
+
+    Returns:
+        Passing when every declared corpus is rehearsed, every leg
+        holds, and the changelog states the outcome.
+    """
+    del context
+    findings = rehearsal_findings(inputs.repo_root)
+    note_gap = _migration_note_gap(inputs)
+    if not findings and not note_gap:
+        return _passing(*rehearsal_evidence_refs())
+    detail = "; ".join(part for part in (summarise(findings), note_gap) if part)
+    remediation = (
+        f"the cutover is not proven over the {len(REHEARSED_CORPORA)} rehearsed corpora: {detail}"
+    )
+    if findings and all(finding.is_absence for finding in findings):
+        return _unproven(remediation)
+    return _failing(remediation)
 
 
 def _probe_module_length_exclusion(

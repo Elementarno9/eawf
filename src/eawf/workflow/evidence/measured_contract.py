@@ -295,13 +295,106 @@ _DAEMON_RPC_PARALLEL = MeasuredContract(
 )
 
 
-#: The three contracts extracted from the 2026-08-13 preflight spikes,
-#: keyed by contract id.
+_IMPORTER_AT_PRODUCTION_CORPUS = MeasuredContract(
+    contract_id="MCT-26091101",
+    surface=(
+        "the epoch-2 importer run end to end over this project's own live epoch-1 corpus, "
+        "at the scale the cutover actually has to survive"
+    ),
+    probe_command="uv run pytest tests/integration/kernel/migration/test_v07_rehearsal.py -q",
+    observed={
+        "scale_band": "thousands",
+        "corpus_rows": 4638,
+        "generation_multiplier": 1.319,
+        "apply_wall_clock_s": 3.849,
+        "residual_document_bytes": 396720,
+        "rehearsed_corpora": 10,
+        "apply_journal_stages": 12,
+        "rollback_boundaries": 11,
+        "scrub_findings": 0,
+        "observed_at_revision": "4a0659cbba0e",  # pragma: allowlist secret
+    },
+    limits=(
+        ObservedLimit(
+            name="corpus_rows",
+            value=4638.0,
+            unit="count",
+            direction="floor",
+            basis=(
+                "row census of the live epoch-1 corpus staged at cutover; the thousands "
+                "band holds from this count up to the next order of magnitude"
+            ),
+        ),
+        ObservedLimit(
+            name="generation_multiplier",
+            value=1.6,
+            unit="ratio",
+            direction="ceiling",
+            basis=(
+                "published epoch-2 generation over staged epoch-1 corpus bytes; "
+                "observed 1.319 against a declared ceiling of 1.60"
+            ),
+        ),
+        ObservedLimit(
+            name="apply_wall_clock_s",
+            value=30.0,
+            unit="s",
+            direction="ceiling",
+            basis="one apply over the live corpus; observed 3.849 s against a 30 s budget",
+        ),
+        ObservedLimit(
+            name="residual_document_bytes",
+            value=1600000.0,
+            unit="bytes",
+            direction="ceiling",
+            basis=(
+                "the generation's own document after the terminal records move to their "
+                "ledgers; observed 396,720 B against a 1.6 MB bound"
+            ),
+        ),
+    ),
+    boundary=(
+        "Measured over the production corpus -- this project's own live epoch-1 .ea tree "
+        "at cutover, 4,638 rows in the thousands band -- plus nine committed corpora that "
+        "cover the structural shapes the live one does not exhibit. Ten corpora is the "
+        "whole measured population: a corpus shape outside that set is unmeasured, not "
+        "passing. The four legs are dry run, apply, idempotent rerun and rollback over a "
+        "tree that declared itself disposable, so nothing here characterises an apply "
+        "against a tree in use, a concurrent apply, or a corpus in the tens-of-thousands "
+        "band. Two of the ten corpora are refusals rather than imports, and what is "
+        "measured about them is that the refusal repeats identically and leaves the "
+        "target byte-identical -- not that the importer handles their content."
+    ),
+    observed_at=datetime(2026, 9, 9, tzinfo=UTC),
+    observed_at_ref="tests/fixtures/migration/live-cutover/corpus-pin.json",
+    environment=MeasurementEnvironment(
+        scale_band=ScaleBand.PRODUCTION,
+        population=(
+            "the live epoch-1 corpus at cutover: 4,638 rows in the thousands scale band, "
+            "rehearsed alongside nine committed corpora covering the empty, terminal, "
+            "multi-root, interrupted, attention-bearing, historical and refused shapes"
+        ),
+        population_size=4638,
+        host_platform="darwin",
+        toolchain="python 3.14.3",
+    ),
+)
+
+
+#: The measured contracts a checkpoint may cite, keyed by contract id.
+#: Three come from the 2026-08-13 preflight spikes; the fourth is the
+#: importer contract re-measured against the production corpus once the
+#: rehearsal existed to measure it with.
 PREFLIGHT_CONTRACTS: Final[Mapping[str, MeasuredContract]] = {
     _EPOCH1_STATE_AT_SCALE.contract_id: _EPOCH1_STATE_AT_SCALE,
     _CROSS_PROVIDER_CONFORMANCE.contract_id: _CROSS_PROVIDER_CONFORMANCE,
     _DAEMON_RPC_PARALLEL.contract_id: _DAEMON_RPC_PARALLEL,
+    _IMPORTER_AT_PRODUCTION_CORPUS.contract_id: _IMPORTER_AT_PRODUCTION_CORPUS,
 }
+
+#: The corpus scale band the importer contract asserts over, read off the
+#: same committed pin the rehearsal is judged against.
+IMPORTER_CORPUS_SCALE_BAND: Final[str] = "thousands"
 
 #: Scale band the implementing checkpoint asserts over, per contract. The
 #: importer checkpoint runs against the real state population, so it
@@ -313,6 +406,7 @@ PREFLIGHT_CHECKPOINT_BANDS: Final[Mapping[str, ScaleBand]] = {
     "MCT-26081301": ScaleBand.PRODUCTION,
     "MCT-26081302": ScaleBand.DEV,
     "MCT-26081303": ScaleBand.DEV,
+    "MCT-26091101": ScaleBand.PRODUCTION,
 }
 
 
@@ -582,6 +676,7 @@ __all__ = [
     "ARTIFACT_URN_PREFIX",
     "CONTRACT_ARTIFACT_KIND",
     "CONTRACT_BODY_URI",
+    "IMPORTER_CORPUS_SCALE_BAND",
     "LOCAL_SPIKE_ROOT",
     "PREFLIGHT_CHECKPOINT_BANDS",
     "PREFLIGHT_CONTRACTS",
