@@ -850,7 +850,12 @@ def test_train_advance_refuses_the_burned_rung_as_not_terminal(
 
 
 def test_train_create_admits_dev2_against_the_promoted_state_json(tmp_path: Path) -> None:
-    """dev2 opens once its three measured contracts resolve in state.json."""
+    """dev2 opens once its measured contract resolves and dev1 is burned.
+
+    Both preconditions are staged because both are real: the rung below
+    has to be recorded and finished with before its successor may open,
+    and the burn is how dev1 got there.
+    """
     from eawf.runtime.daemon.methods.release import create
 
     state_path = tmp_path / ".ea" / "state.json"
@@ -863,12 +868,15 @@ def test_train_create_admits_dev2_against_the_promoted_state_json(tmp_path: Path
         version=DEV2_VERSION,
         state_path=state_path,
     )
+    burned = burned_record(dev2_ctx, state_path)
+    assert burned.status is ReleaseStatus.PARTIALLY_RELEASED
 
     result = asyncio.run(create(dev2_ctx, {"version": DEV2_VERSION}))
 
     assert result["release"]["key"] == DEV2_KEY
     assert result["release"]["status"] == ReleaseStatus.DRAFT.value
     assert result["measured_contracts"] == list(required_contract_ids(DEV2_VERSION))
+    assert result["supersedes_release_ref"] == DEV1_KEY
     persisted = read_release_record(state_path, DEV2_KEY)
     assert persisted is not None
     assert persisted.status is ReleaseStatus.DRAFT

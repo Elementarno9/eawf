@@ -53,7 +53,11 @@ from eawf.workflow.release.admission import (
     create_checkpoint_release,
     required_contract_ids,
 )
+from eawf.workflow.release.adoption import adopt_publication
+from eawf.workflow.release.publication import burn_release
+from eawf.workflow.release.records import record_release
 from eawf.workflow.release.train import V07_TRAIN
+from tests._release_helpers import NOW, dev1_adoption, dev1_config, dev1_draft
 
 pytestmark = pytest.mark.integration
 
@@ -330,10 +334,19 @@ def test_a_malformed_version_is_refused() -> None:
 
 
 def _context(tmp_path: Path, state: State) -> MethodContext:
-    """Write *state* under *tmp_path* and return a context bound to it."""
+    """Write *state* under *tmp_path* and return a context bound to it.
+
+    The burned dev1 record is written alongside it because ``dev2``
+    succeeds ``dev1``, and a rung whose predecessor is unrecorded is
+    refused before its measurements are ever consulted. Staging it keeps
+    these cases about admission rather than about succession.
+    """
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_state(state_path, state)
+    adopted = adopt_publication(dev1_draft(), dev1_config(), adoption=dev1_adoption())
+    burned, _operation = burn_release(adopted, dev1_config(), None)
+    record_release(state_path, burned, recorded_at=NOW, summary=f"burn {burned.key}")
     return MethodContext(
         started_at="2026-09-04T00:00:00+00:00",
         pid=4321,

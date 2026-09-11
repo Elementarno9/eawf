@@ -120,7 +120,11 @@ def _sweep_release(
 
     The tag chokepoint and the ``preflight`` verb both come through
     here, so the sweep an operator inspects is the one the push is
-    gated on rather than a second opinion computed elsewhere.
+    gated on rather than a second opinion computed elsewhere. The
+    composition itself lives in
+    :func:`~eawf.runtime.release.chokepoint.sweep_for_tag`; what this
+    wrapper adds is the CLI's configuration resolution and its error
+    vocabulary.
 
     Args:
         version: Checkpoint version being swept.
@@ -139,26 +143,19 @@ def _sweep_release(
     from datetime import UTC, datetime
 
     from eawf import __version__
-    from eawf.workflow.verify.release_probes import TagPreflightInputs, build_tag_probes
-    from eawf.workflow.verify.release_readiness import compute_readiness
+    from eawf.runtime.release import sweep_for_tag
 
     config = _checkpoint_config(version)
     try:
-        probes = build_tag_probes(
-            TagPreflightInputs(
-                repo_root=repo_root,
-                version=version,
-                tag=f"v{version}",
-                package_version=__version__,
-                remote=remote,
-            )
-        )
-        return compute_readiness(
+        return sweep_for_tag(
             config,
-            probes=probes,
-            observed_revision=source,
-            computed_at=datetime.now(UTC),
+            version=version,
+            repo_root=repo_root,
+            remote=remote,
+            package_version=__version__,
+            source=source,
             waiver_count=waiver_count,
+            computed_at=datetime.now(UTC),
         )
     except ValueError as exc:
         raise cli_errors.ValidationError(str(exc)) from exc

@@ -30,6 +30,15 @@ every dev1 target authenticates by OIDC or the ambient workflow token,
 so none declares a ``credential_handle`` for the row to assert. The set
 is pinned by exact equality so re-adding a handle cannot quietly widen
 the gate.
+
+The fixture's ``package_version`` is the dev1 literal, not the running
+package's. The checkout being described carried dev1; the train has
+since walked past it, and binding the sweep to whatever version this
+process happens to be at would make the module describe today's
+checkpoint under dev1's name. The one place that distinction is visible
+is the CLI, which has no choice but to report its own version -- so the
+two verb-level cases assert the superseded-checkpoint refusal rather
+than a green the running package could not honestly produce.
 """
 
 from __future__ import annotations
@@ -263,7 +272,7 @@ def green_sweep(repo: Path) -> ReleaseReadiness:
                 repo_root=repo,
                 version=DEV1_VERSION,
                 tag=DEV1_TAG,
-                package_version=__version__,
+                package_version=DEV1_VERSION,
                 remote=PUBLISHING_REMOTE,
             )
         ),
@@ -465,33 +474,42 @@ def test_preflight_sweep_green_leaves_no_required_signal_unavailable(
     assert sweep.first_red is None
 
 
-def test_preflight_cli_sweep_green_exits_zero_on_the_merged_source(
+def test_preflight_cli_refuses_the_superseded_checkpoint_on_the_version_row(
     merged_main: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The verb the operator runs agrees with the sweep, and exits 0."""
+    """The verb reads its own package version, and dev1 has been superseded.
+
+    The library sweep above binds ``package_version`` to the checkout
+    being described; the verb cannot, because the version it reports is
+    the one the running package carries. Once the train walks past dev1
+    that is a different version, so the operator asking for a dev1
+    preflight is told the tree has moved on rather than handed a green
+    for a checkpoint this checkout could not cut.
+    """
     monkeypatch.chdir(merged_main)
 
     result = CliRunner().invoke(app, ["release", "preflight", DEV1_VERSION])
 
-    assert result.exit_code == 0, result.output
-    assert f"{DEV1_KEY}  profile=dev1  ready=True" in result.output
-    assert "first red:" not in result.output
+    assert result.exit_code != 0
+    assert f"{DEV1_KEY}  profile=dev1  ready=False" in result.output
+    assert f"first red: {ReleaseSignalName.VERSION_CONSISTENCY.value}" in result.output
+    assert __version__ != DEV1_VERSION
 
 
-def test_preflight_cli_sweep_green_reports_pass_for_each_required_row(
+def test_preflight_cli_reports_pass_for_every_required_row_but_the_version(
     merged_main: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Every ``REQ`` row the operator reads says ``pass``."""
+    """The producers still settle the other five ``REQ`` rows green."""
     monkeypatch.chdir(merged_main)
 
     result = CliRunner().invoke(app, ["--json", "release", "preflight", DEV1_VERSION])
 
-    assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     required = set(payload["required_signals"])
     assert required == {signal.value for signal in REQUIRED_DEV1_SIGNALS}
     reported = {row["signal"]: row["status"] for row in payload["signals"]}
-    assert {reported[name] for name in required} == {ReleaseSignalStatus.PASS.value}
+    settled = required - {ReleaseSignalName.VERSION_CONSISTENCY.value}
+    assert {reported[name] for name in settled} == {ReleaseSignalStatus.PASS.value}
 
 
 def test_preflight_cli_exits_non_zero_when_the_receipts_are_absent(

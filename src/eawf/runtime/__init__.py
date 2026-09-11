@@ -10,6 +10,7 @@ installer), :mod:`~eawf.runtime.sandbox` (deny-list policy enforcement),
 :mod:`~eawf.runtime.lock` (portalocker file locks),
 :mod:`~eawf.runtime.budget` (token / EU budgeting),
 :mod:`~eawf.runtime.ci_loop` (the verify gate loop),
+:mod:`~eawf.runtime.release` (the tag chokepoint sweep),
 :mod:`~eawf.runtime.worktree` (git worktree lifecycle),
 :mod:`~eawf.runtime.hooks` (lifecycle hook dispatch), and
 :mod:`~eawf.runtime.vcs` (git / gh wrappers).

@@ -4,6 +4,50 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.7.0.dev2]
+
+This is the second development checkpoint of the v0.7.0 release train. It is the checkpoint that carries the epoch-2 state-tree cutover from a written target shape to running, rehearsed code, and it runs under a twelve-gate profile rather than dev1's eight. It is still a development checkpoint, not a stable release: the limitations below name exactly what remains unproven.
+
+### Added
+- **The epoch-2 offline migration, in four modes.** `plan` reads the epoch-1 corpus and seals a manifest without writing anything; `apply` performs the cutover behind a journaled twelve-stage transaction; `recover` resumes an apply interrupted mid-stage from its recorded position; `rollback` returns the tree to the pre-apply snapshot across eleven recorded boundaries. A canary fence refuses to touch any repository that has not declared itself disposable, so the destructive modes cannot run against a tree in use by accident.
+- **Storage tiers, so the state document stops carrying finished work.** Every record that can never change again compacts into an append-only ledger and the document keeps only what is in flight, with a derived index tier that regenerates byte-identically from the ledgers and is therefore safe to leave out of version control.
+- **The epoch-2 entity model.** An identity grammar with allocators and an alias index; the track, milestone, batch and task entities; the run scope, suspension reason and release leaves; and the lifecycle collections, criteria, runs, measurements and legacy envelopes mapped into their epoch-2 homes.
+- **A guarded transition registry for the epoch-2 lifecycle,** with edge parity against the status vocabulary and an event emitted per guarded move, so a state change that no edge admits cannot happen quietly.
+- **`eawf release adopt` and `eawf release cancel`, and a burn with an operator surface.** A version published outside the release machinery can now be adopted into its record: the adoption carries the observed per-target facts and is mutually exclusive with `approval_ref` at the model boundary, so an adopted record can never claim an approval nobody gave.
+- **The twelve-gate dev2 profile, each gate bound to the evidence it reads.** Eight names carry over from dev1; `migration`, `hosted_gate_runner`, `schema_strictness` and `waiver_count` are new. `waiver_count` reads the waiver block directly, which is the row that says whether a green checkpoint proved its gates or waived them.
+- **Checkpoint configurations rendered from the train template** rather than overlaid onto the previous rung, so a new checkpoint cannot inherit its predecessor's gate profile or required gate list.
+- **Measured-contract admission on checkpoint creation.** A checkpoint covered by the admission table refuses to open until every measured contract backing it is promoted and resolvable, and the refusal names the missing contract plus the command that promotes it.
+- **A `.ea` commit policy, declared and censused.** Every path under `.ea/` is classified as committed or local, and a census reports any path the policy does not cover.
+- **A hosted close for a caller with no attached session,** so a close driven from a headless runtime runs its gates instead of waiving them.
+- **Telemetry session rows derived from session-close events,** and a declared workspace resolved from the user registry.
+
+### Changed
+- **Close gates run in a sandboxed child against a sandboxed runtime directory,** so a gate can no longer read or write the live runtime tree it is judging.
+- **Gate argv that cannot red is refused at plan time, and every gate run is receipted.** A selector matching nothing exits 5 and is rejected as vacuous rather than passing.
+- **Every release verb has an operator surface and exactly one name,** so the publication path an operator can drive is the path the tests exercise.
+- **The npm plugin publishes by OIDC** instead of a long-lived token, and the wheel-size ceiling moved to a measured 4 MiB.
+
+### Fixed
+- **The wave status map is keyed by the in-flight status spelling,** so an in-flight wave is no longer read as absent.
+- **The phase-PR signal is read from phase membership** rather than inferred from the iter count.
+- **License spellings and SPDX expressions the allowlist means are accepted,** a duplicate advisory row is collapsed, and `idna` moves to 3.19 to clear PYSEC-2026-215.
+- **The release receipt producer runs at all,** and the `credentials` signal is derived from a declared handle instead of asserted against nothing.
+
+### Migration
+- **The epoch-2 cutover is offline, explicit and reversible; it does not run on upgrade.** Installing this checkpoint changes nothing about an existing `.ea/` tree. The cutover is driven by the operator through plan, apply, recover and rollback, and every destructive mode refuses a repository that has not declared itself disposable.
+- **The cutover is rehearsed over ten corpora, four legs each: dry run, apply, idempotent rerun and rollback.** Eight are structural shapes, one is this project's own frozen history and one is the live corpus at cutover scale, 4,638 rows. Two of the ten are refusals rather than imports, and what is proven about them is that the refusal repeats identically and leaves the target byte-identical.
+- **The residual state document is sized by work in flight, not by corpus history.** Over the `epoch1-full` fixture the document falls to 4,940 B holding 3 records while 511 records move into ledgers; over the live corpus it is 396,720 B against a declared 1.6 MB bound.
+- **The repository does not get smaller.** Committed ledger bytes are still committed bytes -- over `epoch1-full` the ledgers carry 436,017 B of the history the document used to hold. What changes is that the finished history stops being rewritten on every mutation, not how much of it version control carries.
+- **`Release.adoption` is a new persisted field on the release record,** added so an out-of-band publication can be described truthfully. No `.ea/state.json` schema version changed in this checkpoint.
+
+### Limitations
+- **The state-schema version was not bumped for the new `Release.adoption` field.** A reader pinned to the previous schema version cannot distinguish a record written before the field existed from one written after, so the field's absence is ambiguous rather than meaning "not adopted".
+- **The migration is measured over ten corpora and nothing else.** Nothing here characterises an apply against a tree in use, a concurrent apply, or a corpus in the tens-of-thousands row band; a corpus shape outside the rehearsed set is unmeasured, not passing.
+- **This checkpoint does not apply the cutover to this repository.** The epoch-1 `.ea` tree is what ships at `0.7.0.dev2`; the applied cutover lands at a later rung of the train.
+- **`0.7.0.dev1` is burned.** It was published to four targets out of band while the release machinery held no record of it, was adopted into its record after the fact, and is superseded by this version. It will never be republished, and its record stands at `partially_released` with no approval attached.
+- **Five of the twelve dev2 gates are settled by running a command, not by the sweep.** `epoch1_stabilization`, `telemetry_producer`, `front_door_journey`, `hosted_gate_runner` and `schema_strictness` report `unavailable` in a preflight because a sweep never runs them; each is cleared by running its argv at the pinned source revision and attaching the receipt.
+- **`dependency_inventory`, `security_review` and `artifact_reproducibility` read receipts a tag-run CI job writes,** so a local sweep reports them `unavailable` rather than green, and `ancestry` passes only once the checkpoint commit is an ancestor of `origin/main`.
+
 ## [0.7.0.dev1]
 
 This is the first development checkpoint of the v0.7.0 release train. It is published to prove the release machinery end to end, not as a stable release: the limitations below name exactly what is unproven at this rung.

@@ -153,6 +153,11 @@ from eawf.workflow.release.records import (
 from eawf.workflow.release.settlement import observe_target
 from eawf.workflow.release.target_machine import TargetTransitionError
 from eawf.workflow.release.train import V07_TRAIN
+from eawf.workflow.verify.checkpoint_succession import (
+    CheckpointSuccessionError,
+    assert_predecessor_terminal,
+    predecessor_rung,
+)
 from eawf.workflow.verify.release_readiness import (
     DEFAULT_SIGNAL_TTL_SECONDS,
     ReleaseReadiness,
@@ -1126,14 +1131,48 @@ def _require_state(ctx: MethodContext) -> State:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
 
 
+def _terminal_predecessor(state_path: Path, version: str) -> Release | None:
+    """Return the finished record *version* succeeds, or refuse the open.
+
+    Args:
+        state_path: State root the record collection is read from.
+        version: Normalized checkpoint version being opened.
+
+    Returns:
+        The predecessor record, or ``None`` at the head of the ladder
+        where a checkpoint succeeds nothing.
+
+    Raises:
+        DaemonValidationError: With ``predecessor_unrecorded`` when the
+            rung below has no record, ``predecessor_live`` when it has
+            one that can still move, or naming the train when no rung is
+            declared for *version*.
+    """
+    try:
+        rung = predecessor_rung(V07_TRAIN, version)
+    except (KeyError, ValueError) as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    recorded = None if rung is None else read_release_record(state_path, rung.release_key)
+    try:
+        assert_predecessor_terminal(V07_TRAIN, version=version, predecessor=recorded)
+    except CheckpointSuccessionError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    return recorded
+
+
 @register("release.create")
 async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Open the DRAFT record of one checkpoint, after measured admission.
 
-    A checkpoint the admission table covers may not be created until
-    every measured contract backing it is promoted and resolvable. The
-    refusal names the single contract that is missing plus the command
-    that promotes it, so the operator's next action is in the error.
+    Two things gate the open. Every measured contract the checkpoint
+    asserts over must be promoted and resolvable, and the rung below must
+    be recorded and finished with, so two records never claim one line at
+    once and the reply can name the predecessor the new record
+    supersedes. Each refusal names the single thing that is missing plus
+    the command that repairs it, so the operator's next action is in the
+    error. Admission is asked first because it is a question about this
+    checkpoint's own evidence, which the operator is here to supply; the
+    succession answer sends them somewhere else entirely.
 
     The admitted record is persisted before the reply is built. A record
     that existed only in one RPC response could not be found again, so
@@ -1147,12 +1186,16 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
     Returns:
         The serialized DRAFT record, the id of the collection row
-        carrying it, plus the contract ids that admitted it.
+        carrying it, the contract ids that admitted it, plus the key of
+        the terminal predecessor it succeeds (``None`` at the head of
+        the ladder).
 
     Raises:
         DaemonValidationError: With ``measured_contract_missing`` when a
-            required contract is not promoted, or when the train
-            declares no such rung.
+            required contract is not promoted, with
+            ``predecessor_unrecorded`` / ``predecessor_live`` when the
+            rung below has not finished, or when the train declares no
+            such rung.
     """
     args = CreateParams.model_validate(params)
     state = _require_state(ctx)
@@ -1169,6 +1212,7 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         raise DaemonValidationError(f"validation_failed: {exc.kind}: {exc}") from exc
     except (KeyError, ValidationError, ValueError) as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    predecessor = _terminal_predecessor(state_path, args.version)
     record_release(
         state_path,
         record,
@@ -1180,6 +1224,7 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         "release": record.model_dump(mode="json"),
         "release_record_id": record_envelope_id(record),
         "measured_contracts": list(required_contract_ids(args.version)),
+        "supersedes_release_ref": None if predecessor is None else predecessor.key,
     }
 
 
