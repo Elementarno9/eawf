@@ -13755,6 +13755,21 @@
       "status": "done",
       "updated_at": "2026-09-11T14:27:12.034860Z"
     },
+    "P32-I01-W18": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 504041,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W18",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W18",
+      "model": null,
+      "scope_id": "P32-I01-W18",
+      "status": "done",
+      "updated_at": "2026-09-11T16:13:25.066601Z"
+    },
     "P32-I01-W19": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -14084,6 +14099,21 @@
       "scope_id": "P32-I01-W43",
       "status": "done",
       "updated_at": "2026-09-11T11:30:12.550016Z"
+    },
+    "P32-I01-W44": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 386385,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W44",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W44",
+      "model": null,
+      "scope_id": "P32-I01-W44",
+      "status": "done",
+      "updated_at": "2026-09-11T16:13:48.305848Z"
     }
   },
   "agent_sessions": {
@@ -17102,15 +17132,15 @@
       "claimed_wave_ids": [
         "P32-I01-W18"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-11T15:31:12.984889Z",
       "id": "SES-20260911T142805.838334Z-executor-claude-24a2074f-f1a5-45e1-82cf-80647399bba0",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W18",
       "started_at": "2026-09-11T14:28:05.838334Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260911T142807.431620Z-executor-claude-0bc54589-bfea-4619-a772-bfbbbe58a558": {
@@ -17119,15 +17149,45 @@
       "claimed_wave_ids": [
         "P32-I01-W44"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-11T15:31:12.987812Z",
       "id": "SES-20260911T142807.431620Z-executor-claude-0bc54589-bfea-4619-a772-bfbbbe58a558",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W44",
       "started_at": "2026-09-11T14:28:07.431620Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260911T153155.857235Z-auditor-claude-code-6802b69b-771f-4177-9685-250940fad80b": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-11T16:03:15.475843Z",
+      "id": "SES-20260911T153155.857235Z-auditor-claude-code-6802b69b-771f-4177-9685-250940fad80b",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W18::audit",
+      "started_at": "2026-09-11T15:31:55.857235Z",
+      "status": "failed",
+      "summary": "auditor attempt failed before report append",
+      "worktree_ids": []
+    },
+    "SES-20260911T160321.271652Z-auditor-claude-code-4c4cc0b4-cfca-46eb-b60f-cd579df5dafb": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-11T16:13:23.675728Z",
+      "id": "SES-20260911T160321.271652Z-auditor-claude-code-4c4cc0b4-cfca-46eb-b60f-cd579df5dafb",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W18::audit",
+      "started_at": "2026-09-11T16:03:21.271652Z",
+      "status": "closed",
+      "summary": "auditor report appended",
       "worktree_ids": []
     }
   },
@@ -21427,6 +21487,51 @@
       "wave_id": "P31-I01-W36",
       "wave_revision_digest": "28166d383a29b5b00865f50c9ec4ac902b47ca48a1c43f74c48632bdd13375aa"
     },
+    "close-30fb6e9c3be01aa1253fa1d9": {
+      "apply_event_id": null,
+      "artifact_refs": [
+        "urn:eawf:v1:close-budget:close-30fb6e9c3be01aa1253fa1d9:infrastructure_retry:1"
+      ],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "4d8328fbf4a2f1cc5a8d83dabb51916e86d96b4a",
+      "commit_identity_digest": "sha256:fcfcba797b67e83edd0583358aefd09e18b165de196897aab173f06e2c418f51",
+      "criteria_digest": "2e0779c748b4fb3d48ab8dba1c72914d4cd8cff9768c929bf37a663521b39c73",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "gate_receipt_ids": [],
+      "generation": 1,
+      "id": "close-30fb6e9c3be01aa1253fa1d9",
+      "idempotency_key": "1fd3f09fc8acaa9b86e690c009d6c0b05de94040c455a4b21eaa5fa0e6887b92",
+      "infrastructure_retry_budget_remaining": 0,
+      "integrated_sha": "4d8328fbf4a2f1cc5a8d83dabb51916e86d96b4a",
+      "integration_id": "integration-fea75d80e9b78d8a40a1b1e4",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "A publication that happened outside the model is adoptable into its record as a typed ReleaseAdoption carrying the observed per-target facts, mutually exclusive with approval_ref at the model boundary so an adopted record can never be read as one that earned approval; a record carrying observed external effect is refused the cancelled edge by a predicate derived from record-resident facts.",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-11T16:13:45.866221Z",
+      "required_gate_ids": [],
+      "required_operator_actions": [],
+      "runner_environment_digest": "b48a9a07d2b1f571b1200a088c6b7c2ab64838198309ac496d000711c4fde48c",
+      "spec_digest": "4217574a54234156a27c54648b200306125e43c65d06a079c42c7e7fc1ef46d2",
+      "started_at": "2026-09-11T16:13:46.178679Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-11T16:14:22.571951Z",
+      "tokens_consumed": 386385,
+      "tree_sha": "6a6e5a198b8b255f08be135b16f710d774ac96d2",
+      "updated_at": "2026-09-11T16:14:22.627218Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W44",
+      "wave_revision_digest": "c206a24433b93e0c4f040c0576fabcb1fcb53a2eab0c21fae81388a5ccdbb8cd"
+    },
     "close-344f486ba81c97f2e213a3cc": {
       "apply_event_id": "EV-6202a3a7d0f7",
       "artifact_refs": [],
@@ -23013,17 +23118,62 @@
       "waiver_decision_ids": [],
       "wave_id": "P32-I01-W42",
       "wave_revision_digest": "f4390451bcb7f86b023633d07dd2f3e128f2a69118bd346edc134946ee2aa363"
+    },
+    "close-ff14ad41177eec9a2d0eb36d": {
+      "apply_event_id": "EV-0f2f97de8bda",
+      "artifact_refs": [],
+      "audit_report_id": "AR-auditor-P32-I01-W18-01",
+      "audit_requirement": "required",
+      "candidate_sha": "dc645858c7b6bceff36790f1660228df2d7dbfef",
+      "commit_identity_digest": "sha256:c1a719f9e067653114af354133b98b1a98bc12184a6fe93e2c8da7834f8d2573",
+      "criteria_digest": "9db8969fd26ef78c5b3b1a3291eddd1a1e822d1c79fa1aa6ecb64effde4d8336",
+      "dependency_binding_digest": "67e6dd0a21a0fbdc96f9cb1bb68098998ddf63a86f46ba24fbdf943fc206fdc5",
+      "failure_detail_ref": null,
+      "failure_kind": "daemon_shutdown",
+      "gate_manifest_digest": "6e4f8f2c026982470a446f30a9f773dae4595091014c3d380ed5ac20bfb422d8",
+      "gate_receipt_ids": [
+        "GR-68d78bc9a0bc236e0c1b8ab440697f86",
+        "GR-c4f8075d7aa1ade46bd774eb7b3a7ffa",
+        "GR-6b15548ead961f23e760f57073b27b90"
+      ],
+      "generation": 1,
+      "id": "close-ff14ad41177eec9a2d0eb36d",
+      "idempotency_key": "3adb5b505d4befdf45287645865fa79c28afd9e7a9bfa2556f92a3deb4ebeda9",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "dc645858c7b6bceff36790f1660228df2d7dbfef",
+      "integration_id": "integration-a87eaf5273d10cdd355c51d3",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "Ten corpora rehearse dry-run, apply, idempotent rerun and rollback with per-fixture parametrisation and shape goldens; the scrub gate reports zero findings over all ten and now runs in CI, and the live-staged corpus draws only the committed surface so a gitignored firehose can no longer leak paths into the fixture or drift its pins.",
+      "policy_digest": "4cea5e97aebfdb9d181c799193c1207db34e2849fdbd5486f95bf779c274424e",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-11T15:31:15.052594Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "b48a9a07d2b1f571b1200a088c6b7c2ab64838198309ac496d000711c4fde48c",
+      "spec_digest": "5c155b8419600b9516fe6c597fcfe9074c8930b6803e00f23c10def50daa5093",
+      "started_at": "2026-09-11T15:31:15.390139Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-11T16:13:25.929162Z",
+      "tokens_consumed": 504041,
+      "tree_sha": "a56694dfd77e6e8f45d8afd16aefa8fa02c613b3",
+      "updated_at": "2026-09-11T16:13:25.929156Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W18",
+      "wave_revision_digest": "09de68438480365bf4ed5e3369b275805789b527160d0cfee36f075418cdef16"
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260911T142805.838334Z-executor-claude-24a2074f-f1a5-45e1-82cf-80647399bba0",
-      "SES-20260911T142807.431620Z-executor-claude-0bc54589-bfea-4619-a772-bfbbbe58a558"
-    ],
-    "active_wave_ids": [
-      "P32-I01-W18",
-      "P32-I01-W44"
-    ],
+    "active_session_ids": [],
+    "active_wave_ids": [],
     "iter_id": "P32-I01",
     "phase_id": "P32",
     "project_code": "EAWF",
@@ -41690,7 +41840,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-11T14:28:08.273454Z",
+  "updated_at": "2026-09-11T16:14:22.627266Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -43375,6 +43525,22 @@
       "tree_sha": "52956dd9bc011a455239207af8bb4d91b0edb637",
       "wave_id": "P31-I01-W01"
     },
+    "integration-a87eaf5273d10cdd355c51d3": {
+      "base_sha": "593bb47eb3bbbfacdd220a06d22168001d7dfd70",
+      "candidate_sha": "dc645858c7b6bceff36790f1660228df2d7dbfef",
+      "created_at": "2026-09-11T15:31:13.646112Z",
+      "diff_digest": "a361d6cb8271cfc457a657ac3b75735404f24f978fc0a9eb164681a0c81f24e8",
+      "generation": 1,
+      "id": "integration-a87eaf5273d10cdd355c51d3",
+      "integrated_sha": "dc645858c7b6bceff36790f1660228df2d7dbfef",
+      "kind": "adopt",
+      "reason": "Cherry-picked by hand onto the phase branch so the repo hook's attribution trailer could be stripped per operator policy; the wave landed in two commits because the fix for its live-corpus fragility could not ride the first. Verified on the parent against the real live tree with 92 passing tests and zero scrub findings.",
+      "spec_digest": "5c155b8419600b9516fe6c597fcfe9074c8930b6803e00f23c10def50daa5093",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "a56694dfd77e6e8f45d8afd16aefa8fa02c613b3",
+      "wave_id": "P32-I01-W18"
+    },
     "integration-a9c5d677c7a0905d9912c297": {
       "base_sha": "14d8454fbe52611fb8f4e40aeb307ce85cf8c716",
       "candidate_sha": "83de370ebbe244d6338d52e5d345912932186f1c",
@@ -43822,6 +43988,22 @@
       "supersedes_id": null,
       "tree_sha": "102a03e7dac3d28fe1682d83ec1e40383318f985",
       "wave_id": "P31-I01-W46"
+    },
+    "integration-fea75d80e9b78d8a40a1b1e4": {
+      "base_sha": "dc645858c7b6bceff36790f1660228df2d7dbfef",
+      "candidate_sha": "4d8328fbf4a2f1cc5a8d83dabb51916e86d96b4a",
+      "created_at": "2026-09-11T16:13:44.786332Z",
+      "diff_digest": "f78d2613831e67d1c52c0ed3d30b53fc47e1d2f2b3d579c313349f3b01414e33",
+      "generation": 1,
+      "id": "integration-fea75d80e9b78d8a40a1b1e4",
+      "integrated_sha": "4d8328fbf4a2f1cc5a8d83dabb51916e86d96b4a",
+      "kind": "adopt",
+      "reason": "Cherry-picked by hand onto the phase branch so the repo hook's attribution trailer could be stripped per operator policy; verified on the parent with 552 release tests plus 957 spec and epoch-2 parity tests, the latter because the wave changes a persisted schema.",
+      "spec_digest": "4217574a54234156a27c54648b200306125e43c65d06a079c42c7e7fc1ef46d2",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "6a6e5a198b8b255f08be135b16f710d774ac96d2",
+      "wave_id": "P32-I01-W44"
     }
   },
   "waves": {
@@ -169307,9 +169489,9 @@
       ],
       "claim_session_id": "SES-20260911T142805.838334Z-executor-claude-24a2074f-f1a5-45e1-82cf-80647399bba0",
       "claimed_at": "2026-09-11T14:28:06.681461Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-11T16:13:25.066601Z",
+      "commit": "dc645858c7b6bceff36790f1660228df2d7dbfef",
+      "commit_identity_digest": "sha256:c1a719f9e067653114af354133b98b1a98bc12184a6fe93e2c8da7834f8d2573",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:58:45.124319Z",
@@ -169408,13 +169590,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-03T17:58:45.125082Z",
-      "outcome": null,
+      "outcome": "Ten corpora rehearse dry-run, apply, idempotent rerun and rollback with per-fixture parametrisation and shape goldens; the scrub gate reports zero findings over all ten and now runs in CI, and the live-staged corpus draws only the committed surface so a gitignored firehose can no longer leak paths into the fixture or drift its pins.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -169491,7 +169673,7 @@
       ],
       "title": "Author the ten migration golden fixtures and rehearse all four legs",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 504041,
       "worktree_id": null
     },
     "P32-I01-W19": {
@@ -173328,9 +173510,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260911T142807.431620Z-executor-claude-0bc54589-bfea-4619-a772-bfbbbe58a558",
       "claimed_at": "2026-09-11T14:28:08.273079Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-11T16:13:48.305848Z",
+      "commit": "4d8328fbf4a2f1cc5a8d83dabb51916e86d96b4a",
+      "commit_identity_digest": "sha256:fcfcba797b67e83edd0583358aefd09e18b165de196897aab173f06e2c418f51",
       "criteria_floor_waiver": {
         "reason": "Added mid-iter after the live disposition attempt proved the model has no reachable truthful terminal state for dev1; typed criteria follow via spec sync.",
         "waived_at": "2026-09-11T12:11:30.375061Z",
@@ -173363,13 +173545,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-11T12:11:30.579544Z",
-      "outcome": null,
+      "outcome": "A publication that happened outside the model is adoptable into its record as a typed ReleaseAdoption carrying the observed per-target facts, mutually exclusive with approval_ref at the model boundary so an adopted record can never be read as one that earned approval; a record carrying observed external effect is refused the cancelled edge by a predicate derived from record-resident facts.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -173416,7 +173598,7 @@
       ],
       "title": "Adopt a publication that happened outside the release model",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 386385,
       "worktree_id": null
     }
   },
