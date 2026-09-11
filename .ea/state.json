@@ -13994,6 +13994,21 @@
       "scope_id": "P32-I01-W42",
       "status": "done",
       "updated_at": "2026-09-10T14:53:58.618555Z"
+    },
+    "P32-I01-W43": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 368292,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W43",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W43",
+      "model": null,
+      "scope_id": "P32-I01-W43",
+      "status": "done",
+      "updated_at": "2026-09-11T11:30:12.550016Z"
     }
   },
   "agent_sessions": {
@@ -16805,15 +16820,15 @@
       "claimed_wave_ids": [
         "P32-I01-W14"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-11T11:29:57.712238Z",
       "id": "SES-20260911T102047.296494Z-executor-claude-8a19cffa-258c-4b5a-a47e-f335fba51374",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W14",
       "started_at": "2026-09-11T10:20:47.296494Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260911T102048.858877Z-executor-claude-48d9dee4-6322-40d0-b8f1-f3950edd33ac": {
@@ -16822,15 +16837,15 @@
       "claimed_wave_ids": [
         "P32-I01-W43"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-11T11:29:57.715918Z",
       "id": "SES-20260911T102048.858877Z-executor-claude-48d9dee4-6322-40d0-b8f1-f3950edd33ac",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W43",
       "started_at": "2026-09-11T10:20:48.858877Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -21377,6 +21392,53 @@
       "wave_id": "P32-I01-W12",
       "wave_revision_digest": "e76c6179d7f4062e43962bad5974cb6d9469e9c6bdd24ec82b2cd68acbd6c38c"
     },
+    "close-6bae50690d6cc4660deb50ca": {
+      "apply_event_id": "EV-125dd33c6372",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "3774d7b0d8af717429735c92b17cc498b94abcde",
+      "commit_identity_digest": "sha256:7eab9e138dbcbf138c5ddc947c7fb40d8d721939cedc4ca77348bf76510b5eb9",
+      "criteria_digest": "4d6191e11259c0b556d6cb39f3909859cde5d04c579a54e2a3bfd64decbd3fcc",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "e2173c95a1a17dc9f74f80eef3f3b7d0177e5dd830a1e87aa777195795d6ee08",
+      "gate_receipt_ids": [],
+      "generation": 1,
+      "id": "close-6bae50690d6cc4660deb50ca",
+      "idempotency_key": "febedc7bd23896955b7aa55dbf09b2a97bcee6416537e2d8c4deaff84075b180",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "3774d7b0d8af717429735c92b17cc498b94abcde",
+      "integration_id": "integration-63bd86ec76a3dfc3666c27df",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "A mechanical wave's deterministic gates now run: the risk-weighted early return in the close gate was skipping every wave outside the always tier, a close whose required gates left no receipt is refused, and a gate argv selecting no test is refused as vacuous.",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-11T11:30:09.702526Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "b48a9a07d2b1f571b1200a088c6b7c2ab64838198309ac496d000711c4fde48c",
+      "spec_digest": "9fcc38259688ef0b433c8e9a6fbff8e8296c9db1cf8fb93fab048d5ff8fcbbe0",
+      "started_at": "2026-09-11T11:30:10.063033Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-11T11:30:41.494366Z",
+      "tokens_consumed": 368292,
+      "tree_sha": "1927f7e77b12681c1dd17195b6c3748b703cac77",
+      "updated_at": "2026-09-11T11:30:41.494358Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W43",
+      "wave_revision_digest": "e04585c9d5acd44d4c8d6f7080066cd8b3fab86d45cf9956840caca906a4115d"
+    },
     "close-6f315b64f9f82015824d1dff": {
       "apply_event_id": "EV-230625fb52dd",
       "artifact_refs": [],
@@ -22417,13 +22479,9 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260911T102047.296494Z-executor-claude-8a19cffa-258c-4b5a-a47e-f335fba51374",
-      "SES-20260911T102048.858877Z-executor-claude-48d9dee4-6322-40d0-b8f1-f3950edd33ac"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [
-      "P32-I01-W14",
-      "P32-I01-W43"
+      "P32-I01-W14"
     ],
     "iter_id": "P32-I01",
     "phase_id": "P32",
@@ -41090,7 +41148,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-11T10:28:31.387466Z",
+  "updated_at": "2026-09-11T11:30:41.494541Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -42452,6 +42510,22 @@
       "supersedes_id": null,
       "tree_sha": "2c7f902a0292865962c848d54bdfda8fe07587f5",
       "wave_id": "P31-I01-W38"
+    },
+    "integration-63bd86ec76a3dfc3666c27df": {
+      "base_sha": "40e42bbe4c8f42b847514b983f677e151c418ea8",
+      "candidate_sha": "3774d7b0d8af717429735c92b17cc498b94abcde",
+      "created_at": "2026-09-11T11:30:03.050497Z",
+      "diff_digest": "38c62431b7924c0e60aa3057041bbdd67a60fdb154d96bf88e1f6f436fa22167",
+      "generation": 1,
+      "id": "integration-63bd86ec76a3dfc3666c27df",
+      "integrated_sha": "3774d7b0d8af717429735c92b17cc498b94abcde",
+      "kind": "adopt",
+      "reason": "Cherry-picked by hand onto the phase branch so the repo hook's attribution trailer could be stripped per operator policy; verified on the parent with 81 passing tests across the three criterion suites plus the oracle-isolation suite.",
+      "spec_digest": "9fcc38259688ef0b433c8e9a6fbff8e8296c9db1cf8fb93fab048d5ff8fcbbe0",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "1927f7e77b12681c1dd17195b6c3748b703cac77",
+      "wave_id": "P32-I01-W43"
     },
     "integration-6c983b528b14d30526c8e8c4": {
       "base_sha": "e715bc001b4324547595102bba6b712a6f0ae93e",
@@ -172386,9 +172460,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260911T102048.858877Z-executor-claude-48d9dee4-6322-40d0-b8f1-f3950edd33ac",
       "claimed_at": "2026-09-11T10:20:49.673410Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-11T11:30:12.550016Z",
+      "commit": "3774d7b0d8af717429735c92b17cc498b94abcde",
+      "commit_identity_digest": "sha256:7eab9e138dbcbf138c5ddc947c7fb40d8d721939cedc4ca77348bf76510b5eb9",
       "criteria_floor_waiver": {
         "reason": "Added mid-iter as an operator-approved repair for a verified gate-integrity defect; typed criteria follow via spec sync once the root cause is named.",
         "waived_at": "2026-09-11T10:18:04.929701Z",
@@ -172475,13 +172549,13 @@
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-11T10:18:05.060407Z",
-      "outcome": null,
+      "outcome": "A mechanical wave's deterministic gates now run: the risk-weighted early return in the close gate was skipping every wave outside the always tier, a close whose required gates left no receipt is refused, and a gate argv selecting no test is refused as vacuous.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -172558,7 +172632,7 @@
       ],
       "title": "Refuse a close whose required gates left no receipt",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 368292,
       "worktree_id": null
     }
   },
