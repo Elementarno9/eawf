@@ -469,6 +469,7 @@ Tag releases and drive the release train's checkpoint records.
 |---|---|
 | `advance` | Walk the train onto its next rung, or refuse and change nothing. |
 | `approve` | Approve a candidate against a readiness sweep, and record it. |
+| `burn` | Burn the version: record the spent checkpoint as partially released. |
 | `changelog` | Mine the current ``CHANGELOG.md`` unreleased section. |
 | `create` | Open one checkpoint's DRAFT record, after measured admission. |
 | `notes` | Render a scrubbed release-notes draft. |

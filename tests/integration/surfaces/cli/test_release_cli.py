@@ -7,8 +7,13 @@ rediscovering. A verb an operator cannot invoke is a verb whose params
 have never been assembled by anything but a test, so its shape has never
 been checked against the way it is actually reached.
 
+The tenth verb, ``release.burn``, arrived the same way from the other
+end: the library implemented the terminal burn and exported it, and no
+verb anywhere reached it, so the one transition that honestly describes
+a spent version was unreachable at the moment it was needed.
+
 Two things are pinned here. The parity test asserts the registered set
-and the reachable set are the same set, so a tenth verb lands broken
+and the reachable set are the same set, so an eleventh verb lands broken
 rather than lands unreachable. The dispatch tests drive each subcommand
 through the real Typer app with a recording client in place of the
 daemon, so what is proven is that the argv the operator types produces
@@ -40,7 +45,7 @@ PROOF_DIGEST = f"sha256:{'1' * 64}"
 MANIFEST_DIGEST = f"sha256:{'c' * 64}"
 
 #: A reply carrying every key any release verb's renderer reads. One
-#: shape for all nine keeps the dispatch tests about dispatch: a renderer
+#: shape for all ten keeps the dispatch tests about dispatch: a renderer
 #: that reached for a key the handler does not return would still be
 #: caught, because the render runs.
 FAKE_REPLY: dict[str, Any] = {
@@ -184,6 +189,16 @@ def _argv(subcommand: str, tmp_path: Path) -> list[str]:
             "--manifest",
             _write(tmp_path / "manifest.json", {"version": "0.7.0.dev1"}),
         ],
+        "burn": [
+            "burn",
+            RELEASE_KEY,
+            "--release",
+            record,
+            "--idempotency-key",
+            "burn-01",
+            "--reason",
+            "the version is spent",
+        ],
         "advance": [
             "advance",
             RELEASE_KEY,
@@ -213,7 +228,7 @@ def test_every_mapped_subcommand_is_registered_on_the_release_app() -> None:
 
 def test_the_release_namespace_is_not_empty() -> None:
     """The parity assertion is over a non-empty set, not two empty ones."""
-    assert len(RELEASE_RPC_METHODS) == 9
+    assert len(RELEASE_RPC_METHODS) == 10
 
 
 # --- dispatch -------------------------------------------------------------

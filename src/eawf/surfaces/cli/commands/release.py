@@ -49,6 +49,7 @@ RELEASE_RPC_METHODS: Final[Mapping[str, str]] = {
     "retry": "release.retry_target",
     "reconcile": "release.reconcile",
     "observe": "release.observe_target",
+    "burn": "release.burn",
     "advance": "release.advance_train",
 }
 
@@ -1132,6 +1133,58 @@ def release_reconcile(
         cli_errors.emit_error(exc, flags=flags)
         return
     emit_json_or_text(result, _operation_line(result), flags=flags)
+
+
+@release_app.command("burn")
+def release_burn(
+    ctx: typer.Context,
+    release_key: Annotated[str, typer.Argument(help="Release key to burn, e.g. REL-0.7.0.dev1.")],
+    release_file: Annotated[
+        Path,
+        typer.Option("--release", help="Path to the serialized recovering record."),
+    ],
+    reason: Annotated[
+        str, typer.Option("--reason", help="Why the version is spent; recorded with the burn.")
+    ],
+    idempotency_key: Annotated[
+        str, typer.Option("--idempotency-key", help="Replay identity of this burn.")
+    ],
+) -> None:
+    """Burn the version: record the spent checkpoint as partially released.
+
+    The burn is terminal. It freezes the pinned source, tree and manifest
+    exactly as recovery found them, abandons the open publication
+    operation, and leaves a record that can never return to draft or
+    cancelled -- a burned version is corrected by the next version, never
+    by reopening this one. ``--reason`` is mandatory and is written
+    beside the burned record: a terminal status with no stated cause
+    reads as an outcome rather than as an abandonment.
+
+    The verb refuses ``recovery_budget_available`` while any configured
+    leg still has a retry left, so a version cannot be declared spent
+    while recovery could still succeed.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        record = _release_document(release_file, release_key)
+        result = _dispatch(
+            RELEASE_RPC_METHODS["burn"],
+            {
+                "release": record,
+                "expected_revision": record.get("revision", 0),
+                "idempotency_key": idempotency_key,
+                "reason": reason,
+            },
+        )
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    text = (
+        f"{_operation_line(result)}\n"
+        f"  record: {result.get('release_record_id')}\n"
+        f"  reason: {result.get('reason')}"
+    )
+    emit_json_or_text(result, text, flags=flags)
 
 
 @release_app.command("advance")
