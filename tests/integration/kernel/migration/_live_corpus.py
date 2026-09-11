@@ -6,6 +6,22 @@ honest answer available is the biggest real one in existence, which is the
 corpus this repository runs on. It is staged by copying -- never by
 pointing the importer at the live tree, which has a writer.
 
+What is copied is the **committed** surface of ``.ea/``, not the whole
+directory. A migration operates on the state a clone can reproduce, and
+the declaration of what that is already exists: the commit policy table
+at :data:`~eawf.kernel.store.commit_policy.EA_PATH_CLASSES`. Selecting
+through :func:`~eawf.kernel.store.commit_policy.classify_path` rather
+than through a hand-written exclusion list is what keeps the fixture and
+the policy from disagreeing -- a file whose policy changes moves the
+fixture with it, in the same commit, without anyone remembering to.
+
+The firehose is the case that makes this load-bearing.
+``.ea/store/event.jsonl`` is raw agent stdout: gitignored, unbounded, and
+full of this machine's absolute paths. Staging it measured a file no
+clone has, put megabytes of un-migrated text in the denominator of the
+growth multiplier, and failed the cutover's own scrub gate on bytes that
+were never part of the corpus.
+
 The corpus is not committed a second time. It is already in the
 repository at ``.ea/``, it is 6.9 MB, and the repository's own
 ``check-added-large-files`` hook caps a committed file at 1 MB, so a
@@ -33,6 +49,18 @@ from pathlib import Path
 from typing import Annotated, Final
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from eawf.kernel.store.commit_policy import CommitPolicy, classify_path
+from tests.integration.kernel.migration._corpus_builders import (
+    CONFIG_DIRNAME,
+    CONFIG_FILENAME,
+    DOCUMENT_FILENAME,
+    REGISTRY_FILENAME,
+    STORE_DIRNAME,
+    TELEMETRY_BODY,
+    TELEMETRY_FILENAME,
+)
+from tests.integration.kernel.migration._corpus_shapes import default_registry
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +179,100 @@ class LiveCorpusPin(BaseModel):
         return cls.model_validate(json.loads(path.read_text(encoding="utf-8")))
 
 
+class StagedSource(BaseModel):
+    """One live file the snapshot is assembled from.
+
+    Attributes:
+        locator: The file's repo-relative path, which is the string the
+            commit policy classifies.
+        destination: Where the file lands inside the staged snapshot,
+            relative to the snapshot root.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    locator: Annotated[str, Field(min_length=1)]
+    destination: Annotated[str, Field(min_length=1)]
+
+
+def is_committed(locator: str) -> bool:
+    """Report whether version control carries one path under ``.ea/``.
+
+    Args:
+        locator: A repo-relative, forward-slash path.
+
+    Returns:
+        ``True`` when the commit policy declares the path committed.
+
+    Raises:
+        UndeclaredPathError: When no policy row matches, which means the
+            tree grew a file family nobody declared.
+    """
+    return classify_path(locator).policy is CommitPolicy.COMMITTED
+
+
+def require_committed(locator: str) -> str:
+    """Return a locator the snapshot layout needs, once the policy admits it.
+
+    Args:
+        locator: A repo-relative path the fixed part of the layout maps.
+
+    Returns:
+        The locator unchanged.
+
+    Raises:
+        ValueError: When the policy declares the path uncommitted. The
+            layout and the policy then disagree about what a
+            repository's reproducible state is, and that is a defect in
+            one of the two rather than something to route around.
+        UndeclaredPathError: When no policy row matches the path.
+    """
+    if not is_committed(locator):
+        raise ValueError(f"{locator} is declared uncommitted, so the snapshot cannot stage it")
+    return locator
+
+
+def committed_sources(repo_root: Path) -> tuple[StagedSource, ...]:
+    """Return every live file the snapshot stages, committed surface only.
+
+    The document and the layered config sit at fixed destinations the
+    snapshot layout requires, so an uncommitted classification for either
+    is raised rather than filtered: a corpus missing its document is not
+    a smaller corpus, it is a broken one. The ledger set is discovered
+    and filtered, because which ledgers exist is a property of the tree.
+
+    Args:
+        repo_root: The repository whose ``.ea`` tree is the corpus.
+
+    Returns:
+        The document, the config, then each committed store ledger sorted
+        by filename.
+
+    Raises:
+        FileNotFoundError: When the repository carries no live store.
+        ValueError: When a locator the layout requires is uncommitted.
+    """
+    store_root = repo_root / LIVE_STORE_LOCATOR
+    if not store_root.is_dir():
+        raise FileNotFoundError(f"{LIVE_STORE_LOCATOR} is absent, so there is no live corpus")
+    ledgers = tuple(
+        StagedSource(locator=locator, destination=f"{STORE_DIRNAME}/{path.name}")
+        for path, locator in (
+            (path, f"{LIVE_STORE_LOCATOR}/{path.name}")
+            for path in sorted(store_root.glob("*.jsonl"))
+        )
+        if is_committed(locator)
+    )
+    return (
+        StagedSource(locator=require_committed(LIVE_STATE_LOCATOR), destination=DOCUMENT_FILENAME),
+        StagedSource(
+            locator=require_committed(LIVE_CONFIG_LOCATOR),
+            destination=f"{CONFIG_DIRNAME}/{CONFIG_FILENAME}",
+        ),
+        *ledgers,
+    )
+
+
 def stage_live_corpus(*, repo_root: Path, destination: Path) -> Path:
     """Copy the live corpus into a snapshot tree the read barrier can pin.
 
@@ -158,6 +280,11 @@ def stage_live_corpus(*, repo_root: Path, destination: Path) -> Path:
     a read barrier over it could only ever be advisory; a barrier over an
     assembled copy is enforceable, and nothing here ever opens the live
     tree for writing.
+
+    The registry and the telemetry surface are synthesised rather than
+    copied. The live ``.ea/telemetry.db`` is declared uncommitted because
+    it embeds this machine's absolute paths, so the snapshot carries the
+    builders' neutral body in its place.
 
     Args:
         repo_root: The repository whose ``.ea`` tree is the corpus.
@@ -168,24 +295,12 @@ def stage_live_corpus(*, repo_root: Path, destination: Path) -> Path:
 
     Raises:
         FileNotFoundError: When the repository carries no live corpus.
+        ValueError: When a locator the layout requires is uncommitted.
     """
-    from tests.integration.kernel.migration._corpus_builders import (
-        CONFIG_DIRNAME,
-        CONFIG_FILENAME,
-        DOCUMENT_FILENAME,
-        REGISTRY_FILENAME,
-        STORE_DIRNAME,
-        TELEMETRY_BODY,
-        TELEMETRY_FILENAME,
-    )
-    from tests.integration.kernel.migration._corpus_shapes import default_registry
-
     (destination / STORE_DIRNAME).mkdir(parents=True, exist_ok=True)
     (destination / CONFIG_DIRNAME).mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(repo_root / LIVE_STATE_LOCATOR, destination / DOCUMENT_FILENAME)
-    for ledger in sorted((repo_root / LIVE_STORE_LOCATOR).glob("*.jsonl")):
-        shutil.copyfile(ledger, destination / STORE_DIRNAME / ledger.name)
-    shutil.copyfile(repo_root / LIVE_CONFIG_LOCATOR, destination / CONFIG_DIRNAME / CONFIG_FILENAME)
+    for source in committed_sources(repo_root):
+        shutil.copyfile(repo_root / source.locator, destination / source.destination)
     _write_json(destination / REGISTRY_FILENAME, default_registry().document())
     _write_json(destination / TELEMETRY_FILENAME, TELEMETRY_BODY)
     return destination
@@ -209,7 +324,11 @@ __all__ = [
     "PIN_FILENAME",
     "LiveCorpusPin",
     "ScaleBand",
+    "StagedSource",
     "band_for",
+    "committed_sources",
     "corpus_bytes",
+    "is_committed",
+    "require_committed",
     "stage_live_corpus",
 ]
