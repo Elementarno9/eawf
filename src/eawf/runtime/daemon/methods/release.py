@@ -25,12 +25,19 @@ Four more verbs touch an external registry and are keyed differently:
 ``release.publish``, ``release.retry_target``, ``release.reconcile`` and
 ``release.observe_target`` each require an ``expected_revision``
 (compare-and-swap against the record the caller holds) and an
-``idempotency_key`` (replay identity in the durable ledger). The first
-three verbs stay pure -- a readiness sweep can be run against a proposed
-record before anything is persisted; the last four append to
+``idempotency_key`` (replay identity in the durable ledger).
+``release.show`` and ``release.compute_readiness`` stay pure -- a
+readiness sweep can be run against a proposed record before anything is
+persisted; the four registry verbs append to
 ``<state_dir>/store/release.jsonl`` through
 :mod:`eawf.workflow.release.ledger`, because a verb that touches an
 external registry has to remember what it already did.
+
+``release.create`` and ``release.approve`` persist too, into the
+separate record collection of :mod:`eawf.workflow.release.records`. They
+touch no registry, but they are the two verbs that open and authorise a
+checkpoint, and a record only a single RPC reply ever carried could not
+be read back by anything -- so neither runs without a state root.
 
 ``release.reconcile`` and ``release.observe_target`` are deliberately
 separate verbs rather than one with a flag. Reconciliation records what
@@ -38,6 +45,23 @@ the adapter finally said about its own call; observation records what an
 independent read-back found. Only the second may write an ``observed_*``
 status, and only from an observation receipt, so no adapter is ever the
 judge of its own publication.
+
+``release.burn`` is the terminal move of that same recovery path. It
+makes no registry call -- there is nothing left to call -- but it is
+keyed like the four that do, because it abandons the open operation and
+writes a status no later transition can revise. It is the one verb that
+requires an operator ``reason``, and it records that reason on both rows
+it appends, so a burned version's record says why it was abandoned
+instead of leaving a reader to infer an outcome from a terminal status.
+
+``release.adopt`` and ``release.cancel`` are the two verbs for a version
+whose publication this machinery did not run, and they live beside this
+module in :mod:`eawf.runtime.daemon.methods.release_disposition`. The
+burn reaches into that module for the one case it shares: an adopted
+record has no publication episode to abandon, so its terminal move
+writes a record row and no ledger row at all. The entry checks both
+modules run first are in
+:mod:`eawf.runtime.daemon.methods.release_context`.
 
 Two ladder verbs sit beside them. ``release.create`` opens a checkpoint's
 DRAFT record only once every measured contract the checkpoint asserts
@@ -55,7 +79,14 @@ from pathlib import Path
 from typing import Annotated, Any
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    ValidationError,
+    model_validator,
+)
 
 from eawf.kernel.release.waiver import ReleaseWaiver
 from eawf.kernel.spec.publication import PublicationOperation
@@ -64,18 +95,19 @@ from eawf.kernel.spec.release import (
     ReleaseCheckpoint,
     ReleaseTargetStatus,
     semver_equivalent,
-    validate_release_against_train,
-)
-from eawf.kernel.spec.release_config import (
-    ReleaseConfig,
-    ReleaseConfigError,
-    load_release_config,
 )
 from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
+from eawf.runtime.daemon.methods.release_context import (
+    assert_revision,
+    require_state_path,
+    resolve_config,
+    validated_release,
+)
+from eawf.runtime.daemon.methods.release_disposition import burn_adopted_record
 from eawf.surfaces.cli.errors import CliError, UserError
 from eawf.workflow.evidence._io import load_state
-from eawf.workflow.release.adapters import observe_publication
+from eawf.workflow.release.adapters import collect_observation
 from eawf.workflow.release.admission import (
     create_checkpoint_release,
     required_contract_ids,
@@ -88,8 +120,6 @@ from eawf.workflow.release.advance import (
 )
 from eawf.workflow.release.ledger import (
     IdempotencyConflictError,
-    StaleReleaseRevisionError,
-    assert_fresh_revision,
     current_operation,
     record_operation,
     replayed_receipt,
@@ -102,10 +132,10 @@ from eawf.workflow.release.observation import (
     assert_manifest_binds,
     observation_request,
 )
-from eawf.workflow.release.observe import observe_target
 from eawf.workflow.release.preflight import approve_release, record_preflight_result
 from eawf.workflow.release.publication import (
     begin_publication,
+    burn_release,
     operation_reference,
     reconcile_target,
     retry_publication,
@@ -115,8 +145,19 @@ from eawf.workflow.release.publication_receipt import (
     load_receipt,
     reported_status,
 )
+from eawf.workflow.release.records import (
+    read_release_record,
+    record_envelope_id,
+    record_release,
+)
+from eawf.workflow.release.settlement import observe_target
 from eawf.workflow.release.target_machine import TargetTransitionError
-from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
+from eawf.workflow.release.train import V07_TRAIN
+from eawf.workflow.verify.checkpoint_succession import (
+    CheckpointSuccessionError,
+    assert_predecessor_terminal,
+    predecessor_rung,
+)
 from eawf.workflow.verify.release_readiness import (
     DEFAULT_SIGNAL_TTL_SECONDS,
     ReleaseReadiness,
@@ -186,55 +227,65 @@ class ApproveParams(BaseModel):
     approval_ref: str
 
 
-def _resolve_config(version: str) -> ReleaseConfig:
-    """Return the loaded configuration for checkpoint *version*.
-
-    Args:
-        version: Normalized checkpoint version.
-
-    Returns:
-        The validated :class:`~eawf.kernel.spec.release_config.ReleaseConfig`.
-
-    Raises:
-        DaemonValidationError: When no configuration is authored for the
-            version, or the authored one is rejected by the loader.
-    """
-    try:
-        source = checkpoint_config_yaml(version)
-    except KeyError as exc:
-        raise DaemonValidationError(
-            f"validation_failed: no release configuration for {version!r}"
-        ) from exc
-    try:
-        return load_release_config(source, train=V07_TRAIN)
-    except ReleaseConfigError as exc:
-        raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
-
-
 @register("release.show")
 async def show(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Describe the train ladder and one checkpoint rung.
+    """Describe the train ladder, one checkpoint rung, and its record.
+
+    The ladder is source-resident, but "which rung exists" and "has that
+    rung been cut" are different questions, and an operator asking the
+    second one should not have to read a store file. So the reply also
+    carries the recorded record for the rung, or ``None`` when the
+    checkpoint has never been opened.
 
     Args:
-        ctx: Server context; unused, the ladder is source-resident data.
+        ctx: Server context; its state root supplies the recorded
+            record. A daemon without one answers ``record: None`` rather
+            than refusing: describing the ladder is useful even where
+            nothing is recorded.
         params: JSON-RPC params per :class:`ShowParams`.
 
     Returns:
-        The train id, target version, the ordered ladder, and the
-        requested rung.
+        The train id, target version, the ordered ladder, the requested
+        rung, and the record standing at it.
 
     Raises:
         DaemonValidationError: When the train declares no such rung.
     """
     args = ShowParams.model_validate(params)
     rung = V07_TRAIN.current_checkpoint if args.version is None else _rung_for(args.version)
+    record = _recorded_release(ctx, rung.release_key)
     return {
         "train_id": V07_TRAIN.train_id,
         "target_version": V07_TRAIN.target_version,
         "current_checkpoint_index": V07_TRAIN.current_checkpoint_index,
         "checkpoints": [checkpoint.model_dump(mode="json") for checkpoint in V07_TRAIN.checkpoints],
         "checkpoint": rung.model_dump(mode="json"),
+        "record": None if record is None else record.model_dump(mode="json"),
     }
+
+
+def _recorded_release(ctx: MethodContext, release_key: str) -> Release | None:
+    """Return the record filed under *release_key*, or ``None``.
+
+    Args:
+        ctx: Server context; ``state_path`` may be unset.
+        release_key: ``REL-<version>`` key to look up.
+
+    Returns:
+        The current record, or ``None`` when the daemon has no state
+        root or the collection carries no row for the key.
+
+    Raises:
+        DaemonValidationError: When the collection exists but is
+            corrupt. A checkpoint reported as never opened because its
+            row could not be parsed is the one wrong answer here.
+    """
+    if ctx.state_path is None:
+        return None
+    try:
+        return read_release_record(Path(ctx.state_path), release_key)
+    except ValueError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
 
 
 def _rung_for(version: str) -> ReleaseCheckpoint:
@@ -277,7 +328,7 @@ async def compute_readiness_method(ctx: MethodContext, params: dict[str, Any]) -
             or the record is not in a state preflight applies to.
     """
     args = ComputeReadinessParams.model_validate(params)
-    config = _resolve_config(args.version)
+    config = resolve_config(args.version)
     try:
         readiness = compute_readiness(
             config,
@@ -295,7 +346,7 @@ async def compute_readiness_method(ctx: MethodContext, params: dict[str, Any]) -
         "first_red": None if readiness.first_red is None else readiness.first_red.value,
     }
     if args.release is not None:
-        candidate = _validated_release(args.release)
+        candidate = validated_release(args.release)
         try:
             result["next_status"] = record_preflight_result(candidate, readiness).status.value
         except (ReleaseTransitionError, ValueError) as exc:
@@ -305,23 +356,34 @@ async def compute_readiness_method(ctx: MethodContext, params: dict[str, Any]) -
 
 @register("release.approve")
 async def approve(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Approve a candidate against a readiness sweep.
+    """Approve a candidate against a readiness sweep, and record it.
+
+    The transition itself is pure, but the approval is the decision the
+    whole publication path is authorised by, so it is written to the
+    release-record collection before the reply is built. An approval no
+    reader can find again is indistinguishable from one that never
+    happened, which is why the verb refuses rather than approving into
+    the void when there is nowhere to record it.
 
     Args:
-        ctx: Server context; unused, approval is a pure transition.
+        ctx: Server context; supplies the root the approved record is
+            recorded under.
         params: JSON-RPC params per :class:`ApproveParams`.
 
     Returns:
-        The serialized approved record.
+        The serialized approved record and the id of the collection row
+        carrying it.
 
     Raises:
-        DaemonValidationError: When the record or sweep is invalid, or
-            the transition is denied -- the message leads with the named
-            denial code (``release_not_ready`` when a required signal is
-            not passing).
+        DaemonValidationError: When the daemon has no on-disk state
+            root, the record or sweep is invalid, or the transition is
+            denied -- the message leads with the named denial code
+            (``release_not_ready`` when a required signal is not
+            passing).
     """
     args = ApproveParams.model_validate(params)
-    candidate = _validated_release(args.release)
+    state_path = require_state_path(ctx)
+    candidate = validated_release(args.release)
     try:
         readiness = ReleaseReadiness.model_validate(args.readiness)
     except ValidationError as exc:
@@ -339,36 +401,17 @@ async def approve(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
     except ValueError as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    record_release(
+        state_path,
+        approved,
+        recorded_at=datetime.now(UTC),
+        summary=f"approve {approved.key}: {approved.status.value}",
+    )
     logger.info(f"approve key={approved.key!r} revision={approved.revision}")
-    return {"release": approved.model_dump(mode="json")}
-
-
-def _validated_release(payload: dict[str, Any]) -> Release:
-    """Return the :class:`Release` in *payload*, placed on the train.
-
-    Args:
-        payload: Serialized release record.
-
-    Returns:
-        The validated record, whose epoch and membership agree with the
-        rung the train declares for it.
-
-    Raises:
-        DaemonValidationError: When the payload fails the record schema,
-            names a checkpoint the train does not declare, or
-            contradicts the rung's declaration.
-    """
-    try:
-        release = Release.model_validate(payload)
-    except ValidationError as exc:
-        raise DaemonValidationError(
-            f"validation_failed: release payload invalid: {exc.error_count()} error(s)"
-        ) from exc
-    try:
-        validate_release_against_train(release, V07_TRAIN)
-    except (KeyError, ValueError) as exc:
-        raise DaemonValidationError(f"validation_failed: {exc}") from exc
-    return release
+    return {
+        "release": approved.model_dump(mode="json"),
+        "release_record_id": record_envelope_id(approved),
+    }
 
 
 class _PublicationParams(BaseModel):
@@ -428,6 +471,21 @@ class RetryTargetParams(_PublicationParams):
 
     target_id: str
     proof_digest: str
+
+
+class BurnParams(_PublicationParams):
+    """Params for :func:`burn`.
+
+    Attributes:
+        reason: Why the version is spent, in the operator's own words.
+            Required and non-blank: the burn writes a terminal status
+            that no later transition can explain, so the explanation has
+            to arrive with the call. Whitespace is stripped before the
+            length check, which is what makes a reason of spaces a
+            refusal rather than an empty annotation.
+    """
+
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
 
 
 class ReconcileParams(_PublicationParams):
@@ -495,27 +553,6 @@ class ObserveTargetParams(_PublicationParams):
     manifest: dict[str, Any]
     response: dict[str, Any] | None = None
     effect_receipt_ref: str | None = None
-
-
-def _require_state_path(ctx: MethodContext) -> Path:
-    """Return the daemon's state path, or refuse the verb.
-
-    Args:
-        ctx: Server context.
-
-    Returns:
-        The bound ``state.json`` path.
-
-    Raises:
-        DaemonValidationError: When the daemon runs without on-disk
-            state. An external-effect verb with nowhere to record what
-            it did is worse than one that refuses.
-    """
-    if ctx.state_path is None:
-        raise DaemonValidationError(
-            "validation_failed: publication verbs require an on-disk state root"
-        )
-    return Path(ctx.state_path)
 
 
 def _receipt(
@@ -588,22 +625,6 @@ def _replay(
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
 
 
-def _assert_revision(release: Release, expected_revision: int) -> None:
-    """Refuse the verb when the caller holds a stale record.
-
-    Args:
-        release: The record being mutated.
-        expected_revision: The revision the caller believes it holds.
-
-    Raises:
-        DaemonValidationError: With a ``stale_release_revision`` message.
-    """
-    try:
-        assert_fresh_revision(release, expected_revision)
-    except StaleReleaseRevisionError as exc:
-        raise DaemonValidationError(f"validation_failed: {exc}") from exc
-
-
 def _open_operation(state_path: Path, release: Release) -> PublicationOperation:
     """Return the operation already open for *release*, or refuse.
 
@@ -655,14 +676,14 @@ async def publish(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             longer binds).
     """
     args = PublishParams.model_validate(params)
-    state_path = _require_state_path(ctx)
-    release = _validated_release(args.release)
+    state_path = require_state_path(ctx)
+    release = validated_release(args.release)
     fingerprint = _fingerprint("release.publish", params)
     replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
     if replayed is not None:
         return _receipt(replayed, release, replayed=True)
-    _assert_revision(release, args.expected_revision)
-    config = _resolve_config(release.version)
+    assert_revision(release, args.expected_revision)
+    config = resolve_config(release.version)
     now = datetime.now(UTC)
     try:
         readiness = compute_readiness(
@@ -718,14 +739,14 @@ async def retry_target(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
             does not match the episode (``unsafe_release_retry``).
     """
     args = RetryTargetParams.model_validate(params)
-    state_path = _require_state_path(ctx)
-    release = _validated_release(args.release)
+    state_path = require_state_path(ctx)
+    release = validated_release(args.release)
     fingerprint = _fingerprint("release.retry_target", params)
     replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
     if replayed is not None:
         return _receipt(replayed, release, replayed=True)
-    _assert_revision(release, args.expected_revision)
-    config = _resolve_config(release.version)
+    assert_revision(release, args.expected_revision)
+    config = resolve_config(release.version)
     operation = _open_operation(state_path, release)
     now = datetime.now(UTC)
     try:
@@ -753,6 +774,109 @@ async def retry_target(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
         summary=f"retry {release.key} target {args.target_id}",
     )
     return _receipt(recorded, republished, replayed=False)
+
+
+@register("release.burn")
+async def burn(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Burn the version: record the spent checkpoint at PARTIALLY_RELEASED.
+
+    This is the terminal move of the recovery path and the only one that
+    admits a version is spent. It takes an operator *reason* and writes
+    it to both durable rows the call appends -- the abandoned operation
+    in the publication ledger and the burned record in the record
+    collection -- because a terminal status carries no later transition
+    that could explain it, and a burned version whose record does not
+    say why reads as an outcome rather than as an abandonment.
+
+    The burned record is persisted here, unlike at the other publication
+    verbs: the burn is where the checkpoint stops moving, so a reader
+    asking ``eawf release show`` after it must be answered
+    ``partially_released`` and not the status the record left behind.
+
+    What the verb deliberately does NOT write is any claim about the
+    publication's outcome. :func:`~eawf.workflow.release.publication.burn_release`
+    accepts no field updates, so the pinned source, tree, manifest and
+    digest are frozen exactly as recovery found them, and the reason is
+    an annotation beside them rather than a revision of them.
+
+    A replay answers with the *recorded* record rather than the payload
+    the caller presented, because after a burn the recorded one is the
+    burned one and echoing the pre-burn status back would report the
+    checkpoint as still moving. It falls back to the presented payload
+    only where the collection holds nothing for the key, which is the
+    torn-write case of a ledger row landing without its record row.
+
+    Args:
+        ctx: Server context; supplies the state root both stores live in.
+        params: JSON-RPC params per :class:`BurnParams`.
+
+    Returns:
+        The operation reference, the abandoned operation, the burned
+        record, the replay flag, the reason as recorded and the id of the
+        record row carrying the burn.
+
+    An adopted record takes a shorter route through
+    :func:`~eawf.runtime.daemon.methods.release_disposition.burn_adopted_record`:
+    there is no publication episode to abandon, so there is no ledger row
+    and no idempotency index to key it in.
+
+    Raises:
+        DaemonValidationError: On a blank or absent reason, a stale
+            revision, an idempotency conflict, no open operation, or a
+            leg that still has a retry left
+            (``recovery_budget_available``) -- a burn declared while
+            recovery could still succeed is a burn that was not
+            exhausted.
+    """
+    args = BurnParams.model_validate(params)
+    state_path = require_state_path(ctx)
+    release = validated_release(args.release)
+    if release.adoption is not None:
+        return burn_adopted_record(
+            state_path,
+            release,
+            reason=args.reason,
+            expected_revision=args.expected_revision,
+        )
+    fingerprint = _fingerprint("release.burn", params)
+    replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
+    if replayed is not None:
+        settled = read_release_record(state_path, release.key) or release
+        return {
+            **_receipt(replayed, settled, replayed=True),
+            "reason": args.reason,
+            "release_record_id": record_envelope_id(settled),
+        }
+    assert_revision(release, args.expected_revision)
+    config = resolve_config(release.version)
+    operation = _open_operation(state_path, release)
+    now = datetime.now(UTC)
+    try:
+        burned, abandoned = burn_release(release, config, operation)
+    except ReleaseTransitionError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
+    except (ValidationError, ValueError) as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    summary = f"burn {burned.key}: {args.reason}"
+    settled_operation = operation if abandoned is None else abandoned
+    recorded = record_operation(
+        state_path,
+        settled_operation,
+        idempotency_key=args.idempotency_key,
+        fingerprint=fingerprint,
+        recorded_at=now,
+        summary=summary,
+    )
+    record_release(state_path, burned, recorded_at=now, summary=summary)
+    logger.info(
+        f"burn key={burned.key!r} operation_id={recorded.operation_id} "
+        f"status={burned.status.value!r} reason={args.reason!r}"
+    )
+    return {
+        **_receipt(recorded, burned, replayed=False),
+        "reason": args.reason,
+        "release_record_id": record_envelope_id(burned),
+    }
 
 
 def _receipt_result(
@@ -830,14 +954,14 @@ async def reconcile(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any
             (``observer_only_status``).
     """
     args = ReconcileParams.model_validate(params)
-    state_path = _require_state_path(ctx)
-    release = _validated_release(args.release)
+    state_path = require_state_path(ctx)
+    release = validated_release(args.release)
     fingerprint = _fingerprint("release.reconcile", params)
     replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
     if replayed is not None:
         return _receipt(replayed, release, replayed=True)
-    _assert_revision(release, args.expected_revision)
-    config = _resolve_config(release.version)
+    assert_revision(release, args.expected_revision)
+    config = resolve_config(release.version)
     operation = _open_operation(state_path, release)
     now = datetime.now(UTC)
     try:
@@ -898,20 +1022,20 @@ async def observe(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             release or target transition.
     """
     args = ObserveTargetParams.model_validate(params)
-    state_path = _require_state_path(ctx)
-    release = _validated_release(args.release)
+    state_path = require_state_path(ctx)
+    release = validated_release(args.release)
     fingerprint = _fingerprint("release.observe_target", params)
     replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
     if replayed is not None:
         return {**_receipt(replayed, release, replayed=True), "observation": None}
-    _assert_revision(release, args.expected_revision)
-    config = _resolve_config(release.version)
+    assert_revision(release, args.expected_revision)
+    config = resolve_config(release.version)
     operation = _open_operation(state_path, release)
     now = datetime.now(UTC)
     try:
         manifest = FrozenManifest.model_validate(args.manifest)
         assert_manifest_binds(release, manifest)
-        observation = observe_publication(
+        observation = collect_observation(
             observation_request(config, manifest, target_id=args.target_id),
             response=None
             if args.response is None
@@ -1007,31 +1131,75 @@ def _require_state(ctx: MethodContext) -> State:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
 
 
+def _terminal_predecessor(state_path: Path, version: str) -> Release | None:
+    """Return the finished record *version* succeeds, or refuse the open.
+
+    Args:
+        state_path: State root the record collection is read from.
+        version: Normalized checkpoint version being opened.
+
+    Returns:
+        The predecessor record, or ``None`` at the head of the ladder
+        where a checkpoint succeeds nothing.
+
+    Raises:
+        DaemonValidationError: With ``predecessor_unrecorded`` when the
+            rung below has no record, ``predecessor_live`` when it has
+            one that can still move, or naming the train when no rung is
+            declared for *version*.
+    """
+    try:
+        rung = predecessor_rung(V07_TRAIN, version)
+    except (KeyError, ValueError) as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    recorded = None if rung is None else read_release_record(state_path, rung.release_key)
+    try:
+        assert_predecessor_terminal(V07_TRAIN, version=version, predecessor=recorded)
+    except CheckpointSuccessionError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    return recorded
+
+
 @register("release.create")
 async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Open the DRAFT record of one checkpoint, after measured admission.
 
-    A checkpoint the admission table covers may not be created until
-    every measured contract backing it is promoted and resolvable. The
-    refusal names the single contract that is missing plus the command
-    that promotes it, so the operator's next action is in the error.
+    Two things gate the open. Every measured contract the checkpoint
+    asserts over must be promoted and resolvable, and the rung below must
+    be recorded and finished with, so two records never claim one line at
+    once and the reply can name the predecessor the new record
+    supersedes. Each refusal names the single thing that is missing plus
+    the command that repairs it, so the operator's next action is in the
+    error. Admission is asked first because it is a question about this
+    checkpoint's own evidence, which the operator is here to supply; the
+    succession answer sends them somewhere else entirely.
+
+    The admitted record is persisted before the reply is built. A record
+    that existed only in one RPC response could not be found again, so
+    every later verb would have to be handed the record it is acting on
+    and no reader could tell an opened checkpoint from an imagined one.
 
     Args:
         ctx: Server context; supplies the state the citations resolve
-            against.
+            against and the root the record is recorded under.
         params: JSON-RPC params per :class:`CreateParams`.
 
     Returns:
-        The serialized DRAFT record plus the contract ids that admitted
-        it.
+        The serialized DRAFT record, the id of the collection row
+        carrying it, the contract ids that admitted it, plus the key of
+        the terminal predecessor it succeeds (``None`` at the head of
+        the ladder).
 
     Raises:
         DaemonValidationError: With ``measured_contract_missing`` when a
-            required contract is not promoted, or when the train
-            declares no such rung.
+            required contract is not promoted, with
+            ``predecessor_unrecorded`` / ``predecessor_live`` when the
+            rung below has not finished, or when the train declares no
+            such rung.
     """
     args = CreateParams.model_validate(params)
     state = _require_state(ctx)
+    state_path = require_state_path(ctx)
     try:
         record = create_checkpoint_release(
             state,
@@ -1044,10 +1212,19 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         raise DaemonValidationError(f"validation_failed: {exc.kind}: {exc}") from exc
     except (KeyError, ValidationError, ValueError) as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    predecessor = _terminal_predecessor(state_path, args.version)
+    record_release(
+        state_path,
+        record,
+        recorded_at=datetime.now(UTC),
+        summary=f"create {record.key}: {record.status.value}",
+    )
     logger.info(f"create key={record.key!r} version={args.version!r}")
     return {
         "release": record.model_dump(mode="json"),
+        "release_record_id": record_envelope_id(record),
         "measured_contracts": list(required_contract_ids(args.version)),
+        "supersedes_release_ref": None if predecessor is None else predecessor.key,
     }
 
 
@@ -1076,8 +1253,8 @@ async def advance(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             ...) when the advance is refused.
     """
     args = AdvanceTrainParams.model_validate(params)
-    current = _validated_release(args.release)
-    config = _resolve_config(current.version)
+    current = validated_release(args.release)
+    config = resolve_config(current.version)
     try:
         receipts = [CheckpointGateReceipt.model_validate(row) for row in args.receipts]
         result = advance_train(
@@ -1108,6 +1285,7 @@ async def advance(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 __all__ = [
     "AdvanceTrainParams",
     "ApproveParams",
+    "BurnParams",
     "ComputeReadinessParams",
     "CreateParams",
     "ObserveTargetParams",
@@ -1117,6 +1295,7 @@ __all__ = [
     "ShowParams",
     "advance",
     "approve",
+    "burn",
     "compute_readiness_method",
     "create",
     "observe",

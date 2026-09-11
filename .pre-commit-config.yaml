@@ -42,7 +42,19 @@ repos:
         # and re-rolls whenever the managed body changes (same loop noise as
         # state.json). It is deterministic render output with no user secrets,
         # so it is excluded rather than baselined per regeneration.
-        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$|^tests/golden/plugin_install/claude/settings\.json$'
+        # The epoch-1 migration fixtures are slices of state.json taken at a
+        # pinned revision, so they carry the same 40-char wave-commit SHAs and
+        # URN-shaped audit ids the state.json exclusion above already covers.
+        # Baselining them would re-roll every line offset whenever a slice is
+        # widened, which is the loop noise the exclusions exist to avoid.
+        #
+        # The migration rehearsal goldens are the same class one step further
+        # on: they record the sha256 manifest, source and approval digests of
+        # each fixture's sealed plan, which is the whole point of pinning them.
+        # Whether a given digest trips the Hex-High-Entropy plugin depends on
+        # the digest's own bytes, so a regenerated golden can start tripping
+        # for a fixture that did not before -- the baseline could never settle.
+        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$|^tests/golden/plugin_install/claude/settings\.json$|^tests/fixtures/migration/|^tests/golden/kernel/migration/'
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.0.0

@@ -23,6 +23,7 @@ from eawf.kernel.store.kinds.events import (
     CacheMislayerAlarmPayload,
     DispatchCostPayload,
     RuntimeSwitchedPayload,
+    SessionClosedPayload,
     SessionContinuedPayload,
     SessionFailoverPayload,
     TracedEventPayload,
@@ -32,6 +33,7 @@ _TS = datetime(2026, 5, 22, tzinfo=UTC)
 
 _UNION_ADAPTER: TypeAdapter[
     RuntimeSwitchedPayload
+    | SessionClosedPayload
     | SessionContinuedPayload
     | SessionFailoverPayload
     | DispatchCostPayload
@@ -72,6 +74,28 @@ def _session_continued(**overrides: object) -> dict[str, object]:
         "session_handle": "sess-abc",
         "session_log_path": "logs/sess-abc.jsonl",
         "prior_turn_count": 7,
+    }
+    data.update(overrides)
+    return data
+
+
+def _session_closed(**overrides: object) -> dict[str, object]:
+    data: dict[str, object] = {
+        "event_type": "session_closed",
+        "payload_schema_version": "2.0",
+        "timestamp": _TS,
+        "opened_at": _TS,
+        "session_id": "sess-abc",
+        "runtime": "claude",
+        "session_log_handle": "urn:eawf:v1:session-log:claude:sess-abc",
+        "wave_id": "W09",
+        "attempt_id": "att-1",
+        "model": "claude-opus",
+        "end_marker": "clean_stop",
+        "input_tokens": 120,
+        "output_tokens": 45,
+        "cache_creation_input_tokens": 10,
+        "cache_read_input_tokens": 90,
     }
     data.update(overrides)
     return data
@@ -144,6 +168,7 @@ def _agent_output_chunk(**overrides: object) -> dict[str, object]:
 
 _BUILDERS = {
     "runtime_switched": (_runtime_switched, RuntimeSwitchedPayload),
+    "session_closed": (_session_closed, SessionClosedPayload),
     "session_continued": (_session_continued, SessionContinuedPayload),
     "session_failover": (_session_failover, SessionFailoverPayload),
     "dispatch_cost": (_dispatch_cost, DispatchCostPayload),
@@ -168,6 +193,19 @@ def test_session_continued_validates() -> None:
     payload = SessionContinuedPayload.model_validate(_session_continued())
     assert payload.event_type == "session_continued"
     assert payload.prior_turn_count == 7
+
+
+def test_session_closed_validates() -> None:
+    payload = SessionClosedPayload.model_validate(_session_closed())
+    assert payload.event_type == "session_closed"
+    assert payload.payload_schema_version == "2.0"
+    assert payload.end_marker == "clean_stop"
+
+
+def test_session_closed_rejects_pre_bump_schema_version() -> None:
+    """The version literal is closed, so a pre-bump payload cannot validate."""
+    with pytest.raises(ValidationError):
+        SessionClosedPayload.model_validate(_session_closed(payload_schema_version="1.0"))
 
 
 def test_session_failover_validates() -> None:

@@ -76,6 +76,10 @@ CLAUDE.md
 .ea/locks/
 .ea/local/
 .ea/indexes/
+# Per-runtime renders of the authored rule corpus (.ea/rules.yaml is the
+# source and stays committed). A view regenerates from the corpus, so
+# committing one only creates a second thing to keep in sync.
+.ea/rules/views/
 .ea/instrument-probe.json
 # instrument-probe cache embeds absolute host paths; the bare glob covers
 # nested copies a doctor / skill run may write under a resolved state dir

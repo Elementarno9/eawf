@@ -1,0 +1,33 @@
+# Lint contract for the vendored console chassis.
+#
+# This package's job is to reproduce a JavaScript prototype's output character for
+# character across 261 frames and 25 journeys, so a reviewer must be able to read a
+# module beside the prototype function it transcribes. The rules dropped below are the
+# ones that fight that job rather than catch a defect in it:
+#
+#   RUF001/2/3  the ambiguous glyphs (x, angle quotes, dashes) ARE the frame content;
+#               "fixing" one changes a golden row and reds the replay
+#   N806/N815   the prototype's own identifiers, and the extracted fixture's JSON keys,
+#               which pydantic matches by name
+#   C901        a renderer is a one-to-one transcription of the prototype's R[route];
+#               splitting it for a complexity budget breaks the reading correspondence
+#   E501        transcribed frame rows and glyph tables that do not survive a wrap
+#   RUF005/SIM108  row-composition style the prototype's shape dictates
+#
+# Everything else -- the correctness rules -- applies here exactly as it does to the
+# rest of the tree. The list shrinks to nothing when the console port replaces this
+# package with code written against the port's own goldens.
+extend = "../../../../../pyproject.toml"
+
+[lint]
+ignore = [
+    "C901",
+    "E501",
+    "N806",
+    "N815",
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    "RUF005",
+    "SIM108",
+]

@@ -1,0 +1,28 @@
+# A complete Milestone create document. Status, uid, urn and revision are
+# absent by construction; supplying any of them is a loader rejection.
+key: MLS-0030
+primary_track_ref: eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/track/TRK-RUNTIME
+contributing_track_refs: []
+title: Publish an installable wheel
+description: The first release an operator can install without a checkout.
+outcome: >-
+  An operator installs the published wheel into a clean environment and the
+  console entry point answers.
+appetite: M
+exclusions:
+  - platform packaging for Windows
+acceptance_journey:
+  - step_id: AS-01
+    actor: operator
+    action: install the published wheel into a clean environment
+    expected_observation: the install completes and reports the published version
+    evidence_kinds: [artifact]
+    required: true
+  - step_id: AS-02
+    actor: system
+    action: run the published console entry point with --version
+    expected_observation: the command exits zero and prints the published version
+    evidence_kinds: [artifact, store_record]
+    required: true
+required_batch_refs:
+  - eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/batch/BAT-0007

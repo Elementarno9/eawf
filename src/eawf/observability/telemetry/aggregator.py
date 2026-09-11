@@ -2,13 +2,19 @@
 
 The aggregator is the pure, typed seam between the source adapters
 (:mod:`eawf.observability.telemetry.sources`) and the projector
-(:mod:`eawf.observability.telemetry.projector`). It owns two responsibilities (C09
+(:mod:`eawf.observability.telemetry.projector`). It owns three responsibilities (C09
 §5.9.4):
 
 * **Session rolling** — a :class:`~eawf.observability.telemetry.models.TelemetrySession`
   yielded by a per-runtime adapter is stamped with the project it belongs
   to (the adapters leave ``project_id`` empty), producing the row the
   projector upserts.
+* **Session derivation** — an :class:`~eawf.kernel.store.envelope.Envelope`
+  carrying a ``session_closed`` event is turned into a session row by
+  :func:`session_from_envelope`. This is the only path that produces
+  session rows for a project whose runtime transcripts are unavailable
+  (a remote or pruned session log), and it is what makes a rebuild over
+  the canonical event store report sessions at all.
 * **Incident classification** — an :class:`~eawf.kernel.store.envelope.Envelope`
   carrying an incident-bearing payload is folded into a
   :class:`~eawf.observability.telemetry.models.TelemetryIncident`. The incident *cause*
@@ -23,7 +29,8 @@ Every function here is pure: given the same envelope it returns the same
 row, with no I/O and no hidden state. Malformed records the source
 adapters already skipped never reach this layer; the aggregator
 fail-fasts (raises) only on a structurally impossible input the caller
-constructed wrong.
+constructed wrong, or on a session payload whose schema version this
+build cannot project (:class:`SessionPayloadSchemaError`).
 """
 
 from __future__ import annotations
@@ -31,15 +38,39 @@ from __future__ import annotations
 import logging
 import math
 from collections.abc import Iterable, Sequence
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from eawf.kernel.state.enums import IncidentCause, IncidentSeverity, StoreKind
 from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.events.session_closed import (
+    SESSION_PAYLOAD_SCHEMA_VERSION,
+    SessionClosedPayload,
+)
 from eawf.observability.telemetry.models import TelemetryIncident, TelemetrySession
 from eawf.observability.telemetry.pricing import lookup_pricing
 
 logger = logging.getLogger(__name__)
+
+#: ``event_type`` discriminator tag of the session-close event the session
+#: derivation owns. Every other tag on the event store belongs to another
+#: consumer and is skipped rather than treated as malformed.
+_SESSION_CLOSED_EVENT_TYPE = "session_closed"
+
+#: One millisecond, used to divide a ``timedelta`` into whole milliseconds
+#: without routing the span through a float (which loses sub-second exactness
+#: on long sessions).
+_ONE_MS = timedelta(milliseconds=1)
+
+
+class SessionPayloadSchemaError(ValueError):
+    """A session-close event carries a payload version this build cannot project.
+
+    Raised by :func:`session_from_envelope` rather than skipped, because a
+    version mismatch is a contract breach across the whole log: skipping it
+    would report a successful rebuild over an empty session table, which is
+    exactly the silent failure the pinned version exists to prevent.
+    """
 
 
 #: Typed map from a runtime-fallback ``RuntimeErrorClass`` value (carried on a
@@ -180,6 +211,74 @@ def roll_session(session: TelemetrySession, *, project_id: str) -> TelemetrySess
         raise ValueError(f"project_id must be non-empty: {project_id!r}")
     return session.model_copy(
         update={"project_id": project_id, "total_cost_usd": price_session(session)}
+    )
+
+
+def session_from_envelope(envelope: Envelope) -> TelemetrySession | None:
+    """Derive a session row from a ``session_closed`` event envelope.
+
+    This is the producer that turns the canonical event store into session
+    rows: the close event carries the session's open + close timestamps, its
+    runtime, and its token tallies, so one line yields one complete row with
+    no cross-line pairing (which an incremental tail scan could not honour).
+
+    The returned row leaves ``project_id`` empty and ``total_cost_usd`` at
+    zero, exactly as the per-runtime adapters do; the projector stamps and
+    prices it through :func:`roll_session`.
+
+    Args:
+        envelope: A store envelope read from the event JSONL store.
+
+    Returns:
+        The derived session row, or ``None`` when *envelope* is not a
+        ``session_closed`` event (a non-event store kind, or an event this
+        derivation does not own).
+
+    Raises:
+        SessionPayloadSchemaError: When the payload's
+            ``payload_schema_version`` is absent or is not
+            :data:`~eawf.kernel.store.kinds.events.session_closed.SESSION_PAYLOAD_SCHEMA_VERSION`.
+        pydantic.ValidationError: When the payload declares the current
+            version but does not match
+            :class:`~eawf.kernel.store.kinds.events.session_closed.SessionClosedPayload`.
+    """
+    if envelope.kind is not StoreKind.EVENT:
+        return None
+    payload = envelope.payload
+    if payload.get("event_type") != _SESSION_CLOSED_EVENT_TYPE:
+        return None
+    version = payload.get("payload_schema_version")
+    if version != SESSION_PAYLOAD_SCHEMA_VERSION:
+        raise SessionPayloadSchemaError(
+            f"session_closed payload_schema_version {version!r} is not projectable; "
+            f"expected {SESSION_PAYLOAD_SCHEMA_VERSION!r} (envelope {envelope.id!r})"
+        )
+    return _session_from_payload(SessionClosedPayload.model_validate(payload))
+
+
+def _session_from_payload(closed: SessionClosedPayload) -> TelemetrySession:
+    """Map a validated close payload onto an unstamped session row.
+
+    ``session_log_path`` receives the opaque session-log handle: the event
+    store is committed to version control, so a close event never carries a
+    real filesystem path, and the handle is the only log reference it has.
+    """
+    return TelemetrySession(
+        session_id=closed.session_id,
+        project_id="",
+        runtime=closed.runtime,
+        wave_id=closed.wave_id,
+        attempt_id=closed.attempt_id,
+        session_log_path=closed.session_log_handle,
+        started_at=closed.opened_at,
+        ended_at=closed.timestamp,
+        duration_ms=(closed.timestamp - closed.opened_at) // _ONE_MS,
+        model_primary=closed.model,
+        total_input_tokens=closed.input_tokens,
+        total_output_tokens=closed.output_tokens,
+        total_cache_read=closed.cache_read_input_tokens,
+        total_cache_write=closed.cache_creation_input_tokens,
+        end_marker=closed.end_marker,
     )
 
 
@@ -415,6 +514,7 @@ def percentile_ms(sorted_values: Sequence[int], quantile: float) -> int | None:
 
 
 __all__ = [
+    "SessionPayloadSchemaError",
     "classify_event_cause",
     "default_severity_for",
     "incident_from_envelope",
@@ -422,4 +522,5 @@ __all__ = [
     "price_session",
     "roll_session",
     "session_durations_ms",
+    "session_from_envelope",
 ]

@@ -1,0 +1,1963 @@
+{
+ "LAYERS": [
+  {
+   "id": "built-in",
+   "kind": "read-only",
+   "where": "compiled defaults"
+  },
+  {
+   "id": "global",
+   "kind": "file",
+   "where": "~/.config/eawf/config.yaml"
+  },
+  {
+   "id": "workspace",
+   "kind": "file",
+   "where": "<workspace>/.ea/config.yaml"
+  },
+  {
+   "id": "repo",
+   "kind": "file",
+   "where": "<repo>/.ea/config.yaml"
+  },
+  {
+   "id": "branch",
+   "kind": "file",
+   "where": "<repo>/.ea/branches/<branch>.yaml"
+  },
+  {
+   "id": "local",
+   "kind": "file",
+   "where": "<repo>/.ea/local/config.yaml"
+  },
+  {
+   "id": "wave",
+   "kind": "runtime",
+   "where": "daemon RAM · dropped on wave close"
+  },
+  {
+   "id": "env",
+   "kind": "runtime",
+   "where": "EAWF_SECTION__KEY"
+  },
+  {
+   "id": "cli",
+   "kind": "runtime",
+   "where": "--flag on the invocation"
+  }
+ ],
+ "WRITABLE": [
+  "global",
+  "workspace",
+  "repo",
+  "branch",
+  "local"
+ ],
+ "SECTIONS": {
+  "acceptance": [
+   [
+    "commands.tests",
+    "n",
+    null
+   ],
+   [
+    "commands.lint",
+    "n",
+    null
+   ],
+   [
+    "commands.typecheck",
+    "n",
+    null
+   ],
+   [
+    "commands.build",
+    "n",
+    null
+   ],
+   [
+    "required_before_ship",
+    "l",
+    [
+     "state"
+    ]
+   ]
+  ],
+  "audit": [
+   [
+    "default_checks",
+    "l",
+    [
+     "state",
+     "tests",
+     "lint",
+     "typecheck",
+     "docs"
+    ]
+   ],
+   [
+    "default_level",
+    "e",
+    "standard",
+    "quick · standard · deep"
+   ],
+   [
+    "flaky_retry_count",
+    "i",
+    1,
+    "0–5"
+   ]
+  ],
+  "cli": [
+   [
+    "canonical_command",
+    "s",
+    "eawf"
+   ],
+   [
+    "preferred_command",
+    "s",
+    "eawf"
+   ],
+   [
+    "install_aliases",
+    "l",
+    [
+     "ea"
+    ]
+   ],
+   [
+    "omit_ea_alias",
+    "b",
+    false
+   ]
+  ],
+  "commands": [
+   [
+    "inventory_policy",
+    "e",
+    "full_io_spec_before_code",
+    "full_io_spec_before_code · incremental"
+   ]
+  ],
+  "config": [
+   [
+    "layers_visible",
+    "b",
+    true,
+    "show the winning layer beside every value"
+   ]
+  ],
+  "daemon": [
+   [
+    "proxy_enabled",
+    "b",
+    true
+   ],
+   [
+    "idle_timeout_seconds",
+    "i",
+    300,
+    "60–3600"
+   ],
+   [
+    "session_handle_ttl_seconds",
+    "i",
+    86400,
+    "3600–604800"
+   ]
+  ],
+  "dispatch": [
+   [
+    "session_policy_default",
+    "e",
+    "fresh",
+    "fresh · reuse · ask"
+   ],
+   [
+    "session_handle_ttl_seconds",
+    "i",
+    86400,
+    "3600–604800"
+   ],
+   [
+    "role_tier_token_cap",
+    "i",
+    2400,
+    "400–20000"
+   ]
+  ],
+  "docs": [
+   [
+    "generated_default_dir",
+    "s",
+    ".ea/artifacts/rendered"
+   ],
+   [
+    "generation_policy",
+    "e",
+    "ask_per_category",
+    "ask_per_category · always · never"
+   ],
+   [
+    "categories",
+    "l",
+    [
+     "roadmap",
+     "research",
+     "audit",
+     "decisions",
+     "incidents",
+     "memory",
+     "status"
+    ]
+   ]
+  ],
+  "estimation": [
+   [
+    "enabled",
+    "b",
+    true
+   ],
+   [
+    "eu_minutes",
+    "i",
+    30,
+    "5–240"
+   ],
+   [
+    "eu_basis",
+    "e",
+    "api_duration",
+    "api_duration · wall_clock"
+   ],
+   [
+    "realtime_recalibration",
+    "b",
+    false
+   ],
+   [
+    "calibration_profile",
+    "s",
+    "eawf_v0_lockbox_2026_05"
+   ],
+   [
+    "idle_policy",
+    "e",
+    "D30_non_agent_gap",
+    "D30_non_agent_gap · none"
+   ],
+   [
+    "display.show_category",
+    "b",
+    false
+   ],
+   [
+    "display.show_raw_eu",
+    "b",
+    true
+   ],
+   [
+    "display.show_expected_time",
+    "b",
+    true
+   ],
+   [
+    "display.show_pessimistic_time",
+    "b",
+    true
+   ],
+   [
+    "display.eu_quantum",
+    "f",
+    0.25,
+    "0.05–1.0"
+   ],
+   [
+    "display.time_quantum_under_2h_minutes",
+    "i",
+    15,
+    "5–60"
+   ],
+   [
+    "display.time_quantum_over_2h_minutes",
+    "i",
+    30,
+    "5–120"
+   ],
+   [
+    "buckets.n_min",
+    "i",
+    5,
+    "1–50"
+   ],
+   [
+    "buckets.high_confidence_n",
+    "i",
+    30,
+    "5–200"
+   ],
+   [
+    "buckets.overrides",
+    "m",
+    {}
+   ]
+  ],
+  "flow": [
+   [
+    "advance_after.research",
+    "b",
+    false
+   ],
+   [
+    "advance_after.prep",
+    "b",
+    false
+   ],
+   [
+    "advance_after.audit",
+    "b",
+    false
+   ],
+   [
+    "advance_after.polish",
+    "b",
+    false
+   ],
+   [
+    "budget.enforce",
+    "e",
+    "soft",
+    "soft · hard"
+   ],
+   [
+    "budget.multiplier",
+    "f",
+    1.5,
+    "1.0–4.0"
+   ],
+   [
+    "max_repair_cycles",
+    "i",
+    3,
+    "0–10"
+   ]
+  ],
+  "hooks": [],
+  "language": [
+   [
+    "runtime",
+    "e",
+    "python",
+    "python · node · go"
+   ],
+   [
+    "fast_extras",
+    "l",
+    []
+   ]
+  ],
+  "mcp": [
+   [
+    "default_policy",
+    "e",
+    "ask_install",
+    "ask_install · always · never"
+   ],
+   [
+    "manage_only_owner",
+    "s",
+    "eawf"
+   ],
+   [
+    "env_ref_syntax",
+    "s",
+    "${ENV:NAME}"
+   ],
+   [
+    "servers",
+    "k",
+    {},
+    "merges by id"
+   ]
+  ],
+  "memory": [
+   [
+    "stores",
+    "o",
+    [
+     "project",
+     "track",
+     "agent",
+     "user"
+    ]
+   ],
+   [
+    "review_on_ship",
+    "b",
+    true
+   ],
+   [
+    "review_on_polish",
+    "b",
+    true
+   ],
+   [
+    "auto_promote",
+    "e",
+    "ask",
+    "ask · always · never"
+   ],
+   [
+    "prune",
+    "e",
+    "ask",
+    "ask · always · never"
+   ],
+   [
+    "max_injected_tokens",
+    "i",
+    2000,
+    "200–20000"
+   ]
+  ],
+  "planning": [
+   [
+    "approval",
+    "e",
+    "ask",
+    "ask · auto · never"
+   ],
+   [
+    "max_parallel_waves",
+    "i",
+    4,
+    "1–16"
+   ],
+   [
+    "require_research_for_unknowns",
+    "b",
+    true
+   ],
+   [
+    "auto_plan",
+    "b",
+    false
+   ]
+  ],
+  "polish": [
+   [
+    "include_memory",
+    "b",
+    true
+   ],
+   [
+    "include_agent_memory",
+    "b",
+    true
+   ]
+  ],
+  "preferences": [
+   [
+    "solution_bias",
+    "e",
+    "balanced",
+    "conservative · balanced · ambitious"
+   ],
+   [
+    "scope_size",
+    "e",
+    "M",
+    "S · M · L"
+   ],
+   [
+    "auto_choose",
+    "e",
+    "off",
+    "off · safe · all"
+   ]
+  ],
+  "prep": [
+   [
+    "auto_resume",
+    "b",
+    true
+   ]
+  ],
+  "profiles": [
+   [
+    "enabled",
+    "o",
+    [
+     "core"
+    ]
+   ],
+   [
+    "catalog",
+    "k",
+    [],
+    "merges by id"
+   ],
+   [
+    "conflict_resolution",
+    "e",
+    "prompt",
+    "prompt · strictest_wins · first_wins"
+   ],
+   [
+    "safety_policy",
+    "e",
+    "strictest_wins",
+    "strictest_wins · profile_order"
+   ],
+   [
+    "trusted",
+    "m",
+    {}
+   ]
+  ],
+  "project": [
+   [
+    "code",
+    "n",
+    null
+   ],
+   [
+    "title",
+    "n",
+    null
+   ],
+   [
+    "slug",
+    "n",
+    null
+   ],
+   [
+    "domains",
+    "l",
+    []
+   ],
+   [
+    "default_track",
+    "n",
+    null
+   ],
+   [
+    "goals",
+    "l",
+    []
+   ],
+   [
+    "success_metrics",
+    "m",
+    {}
+   ]
+  ],
+  "prose": [
+   [
+    "level",
+    "e",
+    "standard",
+    "loose · standard · strict",
+    "floor: a layer may tighten, never loosen"
+   ],
+   [
+    "clarity_judge",
+    "n",
+    null,
+    "null defers to level"
+   ],
+   [
+    "block_on_lint",
+    "n",
+    null,
+    "null defers to level"
+   ]
+  ],
+  "research": [
+   [
+    "folder",
+    "s",
+    ".ea/artifacts/rendered/research"
+   ],
+   [
+    "auto_save",
+    "b",
+    false
+   ],
+   [
+    "default_depth",
+    "e",
+    "standard",
+    "quick · standard · deep"
+   ],
+   [
+    "default_sources",
+    "e",
+    "both",
+    "web · local · both"
+   ],
+   [
+    "agent_count",
+    "i",
+    4,
+    "1–12"
+   ]
+  ],
+  "review": [
+   [
+    "default_level",
+    "e",
+    "medium",
+    "light · medium · deep"
+   ],
+   [
+    "post_default",
+    "e",
+    "ask",
+    "ask · always · never"
+   ],
+   [
+    "template",
+    "s",
+    "default"
+   ],
+   [
+    "require_checks_before_approve",
+    "b",
+    true
+   ]
+  ],
+  "runtime": [
+   [
+    "default",
+    "e",
+    "claude-code",
+    "claude-code · codex · local"
+   ],
+   [
+    "adapters",
+    "l",
+    [
+     "claude-code"
+    ]
+   ],
+   [
+    "preference",
+    "o",
+    [
+     "claude-code"
+    ],
+    "order decides failover"
+   ],
+   [
+    "fallback.enabled",
+    "b",
+    true
+   ],
+   [
+    "slash_commands",
+    "l",
+    []
+   ]
+  ],
+  "security": [
+   [
+    "secrets_policy",
+    "e",
+    "env_refs_only",
+    "env_refs_only · inline_forbidden"
+   ],
+   [
+    "env_ref_syntax",
+    "s",
+    "${ENV:NAME}"
+   ],
+   [
+    "permission_mode",
+    "e",
+    "ask_first",
+    "ask_first · allow · deny"
+   ],
+   [
+    "secret_scan",
+    "b",
+    true
+   ],
+   [
+    "store_scan_before_checkpoint",
+    "b",
+    true
+   ],
+   [
+    "store_scan_on_finding",
+    "e",
+    "block",
+    "block · warn · ignore"
+   ],
+   [
+    "allow_destructive",
+    "e",
+    "ask",
+    "ask · never · always"
+   ]
+  ],
+  "ship": [
+   [
+    "gauntlet",
+    "e",
+    "full",
+    "full · scoped"
+   ],
+   [
+    "use_vcs_policy",
+    "b",
+    true
+   ]
+  ],
+  "state_schema": [
+   [
+    "strictness",
+    "e",
+    "full_strict_schema_before_code",
+    "full_strict_schema_before_code · lenient"
+   ],
+   [
+    "id_padding",
+    "i",
+    2,
+    "2–8"
+   ]
+  ],
+  "statusline": [
+   [
+    "modules_default",
+    "e",
+    "ask_per_module",
+    "ask_per_module · all · none"
+   ],
+   [
+    "modules_available",
+    "o",
+    [
+     "state",
+     "git",
+     "model_session_cwd",
+     "context_tokens",
+     "mcp_health",
+     "hooks_plugins",
+     "memory",
+     "token_saving"
+    ]
+   ],
+   [
+    "glyph_mode",
+    "e",
+    "auto",
+    "auto · unicode · ascii"
+   ],
+   [
+    "color_mode",
+    "e",
+    "auto",
+    "auto · always · never"
+   ],
+   [
+    "rows",
+    "i",
+    1,
+    "1–3"
+   ]
+  ],
+  "storage": [
+   [
+    "state_path",
+    "s",
+    ".ea/state.json"
+   ],
+   [
+    "stores_dir",
+    "s",
+    ".ea/stores"
+   ],
+   [
+    "artifacts_dir",
+    "s",
+    ".ea/artifacts"
+   ],
+   [
+    "rendered_dir",
+    "s",
+    ".ea/artifacts/rendered"
+   ],
+   [
+    "generated_index",
+    "s",
+    ".ea/indexes/generated.json"
+   ],
+   [
+    "content_addressed_blobs",
+    "b",
+    true
+   ],
+   [
+    "commit_jsonl",
+    "e",
+    "all_nonlocal",
+    "all_nonlocal · none · all"
+   ],
+   [
+    "max_inline_chars",
+    "i",
+    2000,
+    "200–20000"
+   ],
+   [
+    "lock_strategy",
+    "e",
+    "sibling_lockfiles",
+    "sibling_lockfiles · flock"
+   ]
+  ],
+  "telemetry": [
+   [
+    "enabled",
+    "b",
+    false
+   ],
+   [
+    "window_default",
+    "s",
+    "7d"
+   ],
+   [
+    "aggregate_window",
+    "s",
+    "24h"
+   ],
+   [
+    "db_kind",
+    "e",
+    "sqlite",
+    "sqlite · none"
+   ]
+  ],
+  "ui": [
+   [
+    "bare_command",
+    "e",
+    "tui",
+    "tui · help · status"
+   ],
+   [
+    "color",
+    "e",
+    "auto",
+    "auto · always · never"
+   ],
+   [
+    "glyphs",
+    "e",
+    "auto",
+    "auto · unicode · ascii"
+   ],
+   [
+    "refresh_ms",
+    "i",
+    1000,
+    "250–10000"
+   ],
+   [
+    "tour_completed",
+    "b",
+    false
+   ],
+   [
+    "dashboard_panes",
+    "o",
+    []
+   ]
+  ],
+  "vcs": [
+   [
+    "conventions.subject_style",
+    "e",
+    "bracket",
+    "bracket · conventional"
+   ],
+   [
+    "conventions.wave_trailer",
+    "s",
+    "Eawf-Wave"
+   ],
+   [
+    "conventions.release.cadence",
+    "e",
+    "manual",
+    "manual · per-phase · continuous"
+   ],
+   [
+    "commit_template",
+    "e",
+    "state_scoped",
+    "state_scoped · plain"
+   ],
+   [
+    "pr_template",
+    "e",
+    "iter",
+    "iter · wave · plain"
+   ],
+   [
+    "branch_pattern",
+    "s",
+    "eawf/{project}/{scope}-{slug}"
+   ],
+   [
+    "checkpoint_requires_commit",
+    "b",
+    true
+   ],
+   [
+    "protected_branches",
+    "l",
+    [
+     "main",
+     "master"
+    ]
+   ],
+   [
+    "auto_commit",
+    "e",
+    "ask",
+    "ask · always · never"
+   ],
+   [
+    "pr_merge_method",
+    "e",
+    "merge",
+    "merge · squash · rebase"
+   ],
+   [
+    "squash_allowed",
+    "b",
+    false
+   ],
+   [
+    "delete_branch_after_merge",
+    "b",
+    false
+   ],
+   [
+    "require_ci_green",
+    "b",
+    true
+   ],
+   [
+    "require_review_before_merge",
+    "b",
+    true
+   ],
+   [
+    "force_push",
+    "e",
+    "forbidden_protected",
+    "forbidden_protected · forbidden · allowed"
+   ],
+   [
+    "coauthor.mode",
+    "e",
+    "runtime",
+    "runtime · fixed · off"
+   ],
+   [
+    "coauthor.default_runtime",
+    "e",
+    "claude",
+    "claude · codex"
+   ],
+   [
+    "coauthor.require_trailer",
+    "b",
+    true
+   ]
+  ],
+  "verify": [
+   [
+    "juror_wall_clock_seconds",
+    "f",
+    600,
+    "60–3600"
+   ],
+   [
+    "odr_blocking",
+    "b",
+    false,
+    "",
+    "ORs onto the profile block · never loosens"
+   ],
+   [
+    "require_iter_audit_accepted",
+    "b",
+    false
+   ],
+   [
+    "waiver_mode",
+    "e",
+    "B",
+    "A · B · C"
+   ]
+  ],
+  "workspace": [
+   [
+    "enabled",
+    "b",
+    false
+   ],
+   [
+    "code",
+    "n",
+    null
+   ],
+   [
+    "state_path",
+    "s",
+    ".ea/state.json"
+   ],
+   [
+    "repos",
+    "m",
+    {}
+   ]
+  ],
+  "worktrees": [
+   [
+    "enabled",
+    "e",
+    "auto",
+    "auto · always · never"
+   ],
+   [
+    "root",
+    "s",
+    ".worktrees"
+   ],
+   [
+    "merge_mode",
+    "e",
+    "cherry_pick",
+    "cherry_pick · merge · rebase"
+   ],
+   [
+    "use_for_parallel_writers",
+    "b",
+    true
+   ],
+   [
+    "use_for_risky_changes",
+    "b",
+    true
+   ],
+   [
+    "use_for_readonly_research",
+    "b",
+    false
+   ],
+   [
+    "preserve_on_conflict",
+    "b",
+    true
+   ],
+   [
+    "remove_when_clean",
+    "b",
+    true
+   ]
+  ]
+ },
+ "SET": {
+  "planning.approval": {
+   "repo": "auto",
+   "local": "ask"
+  },
+  "planning.max_parallel_waves": {
+   "repo": 6
+  },
+  "dispatch.role_tier_token_cap": {
+   "repo": 3200,
+   "branch": 2800
+  },
+  "estimation.eu_minutes": {
+   "global": 45,
+   "repo": 30
+  },
+  "estimation.display.show_category": {
+   "local": true
+  },
+  "flow.budget.enforce": {
+   "repo": "hard"
+  },
+  "memory.max_injected_tokens": {
+   "workspace": 4000
+  },
+  "prose.level": {
+   "local": "loose"
+  },
+  "runtime.default": {
+   "repo": "claude-code",
+   "local": "codex"
+  },
+  "security.permission_mode": {
+   "repo": "ask_first"
+  },
+  "security.allow_destructive": {
+   "repo": "never"
+  },
+  "ui.color": {
+   "local": "always"
+  },
+  "ui.refresh_ms": {
+   "local": 500
+  },
+  "vcs.protected_branches": {
+   "repo": [
+    "main",
+    "master",
+    "release/*"
+   ]
+  },
+  "vcs.auto_commit": {
+   "repo": "never"
+  },
+  "verify.odr_blocking": {
+   "repo": true
+  },
+  "worktrees.enabled": {
+   "repo": "always"
+  }
+ },
+ "RUNTIME": {
+  "ui.color": {
+   "env": "never"
+  },
+  "planning.approval": {
+   "cli": "never"
+  },
+  "dispatch.session_policy_default": {
+   "wave": "reuse"
+  }
+ },
+ "FLOOR": {
+  "prose.level": {
+   "floor": "standard",
+   "by": "profile agent-driven",
+   "order": [
+    "loose",
+    "standard",
+    "strict"
+   ]
+  },
+  "verify.odr_blocking": {
+   "floor": true,
+   "by": "profile block",
+   "order": [
+    false,
+    true
+   ]
+  }
+ },
+ "TYPE": {
+  "b": "bool",
+  "i": "int",
+  "f": "float",
+  "s": "string",
+  "e": "enum",
+  "n": "nullable",
+  "l": "list",
+  "o": "ordered",
+  "k": "keyed",
+  "m": "map"
+ },
+ "UNSET": "‹unset›",
+ "DOC": {
+  "audit.default_level": [
+   "how wide the default /audit check plan runs",
+   "quick narrows to a smoke set · standard is the full default set · deep is the widest"
+  ],
+  "audit.default_checks": [
+   "the checks /audit runs when none are named"
+  ],
+  "audit.flaky_retry_count": [
+   "how often a flaky check is retried before it counts as failed"
+  ],
+  "cli.canonical_command": [
+   "the command name the docs and errors use"
+  ],
+  "cli.install_aliases": [
+   "extra shell aliases installed beside the canonical command"
+  ],
+  "config.layers_visible": [
+   "show which layer contributed each value in eawf config get"
+  ],
+  "daemon.idle_timeout_seconds": [
+   "how long the daemon stays resident with nothing to do"
+  ],
+  "daemon.proxy_enabled": [
+   "route runtime calls through the daemon rather than per process"
+  ],
+  "dispatch.session_policy_default": [
+   "whether a dispatch reuses an agent session or starts clean",
+   "fresh starts a new session · reuse keeps the handle · ask decides per dispatch"
+  ],
+  "dispatch.role_tier_token_cap": [
+   "the token ceiling one role-tier block may weigh before dispatch refuses"
+  ],
+  "docs.generation_policy": [
+   "whether generated docs are written without asking"
+  ],
+  "estimation.enabled": [
+   "whether work carries estimates at all"
+  ],
+  "estimation.eu_minutes": [
+   "how many minutes one estimation unit is worth"
+  ],
+  "estimation.eu_basis": [
+   "what an estimate is measured against",
+   "api_duration counts agent API time · wall_clock counts elapsed time"
+  ],
+  "estimation.idle_policy": [
+   "what counts as idle and is excluded from an estimate",
+   "D30_non_agent_gap treats a gap over 30s with no agent activity as idle"
+  ],
+  "estimation.realtime_recalibration": [
+   "re-fit estimates while work runs rather than after"
+  ],
+  "estimation.display.eu_quantum": [
+   "the smallest estimation-unit step a display will show"
+  ],
+  "estimation.buckets.n_min": [
+   "the fewest samples a bucket needs before it reports at all"
+  ],
+  "estimation.buckets.high_confidence_n": [
+   "the sample count at which a bucket is called high confidence"
+  ],
+  "flow.budget.enforce": [
+   "what happens when a wave passes its token budget",
+   "soft warns and lets it continue · hard halts it at the cap via SIGTERM then SIGKILL"
+  ],
+  "flow.budget.multiplier": [
+   "how much headroom the enforced cap adds over the base budget"
+  ],
+  "flow.max_repair_cycles": [
+   "stop re-entering a failing flow stage past this many repair cycles"
+  ],
+  "flow.advance_after.research": [
+   "authorise advancing automatically once research completes"
+  ],
+  "flow.advance_after.prep": [
+   "authorise advancing automatically once prep completes"
+  ],
+  "language.runtime": [
+   "the language runtime a scope is built and tested against"
+  ],
+  "mcp.default_policy": [
+   "whether an MCP server may be installed without asking"
+  ],
+  "mcp.manage_only_owner": [
+   "only touch MCP entries this owner wrote, never a hand-edited one"
+  ],
+  "memory.stores": [
+   "which memory stores are read and written"
+  ],
+  "memory.auto_promote": [
+   "whether a finding is promoted into a durable store without asking"
+  ],
+  "memory.max_injected_tokens": [
+   "the ceiling on memory injected into an agent prompt"
+  ],
+  "planning.approval": [
+   "who authorises a plan before it dispatches",
+   "ask stops for you · auto dispatches the plan · never refuses to dispatch at all"
+  ],
+  "planning.max_parallel_waves": [
+   "how many waves may run at once"
+  ],
+  "planning.require_research_for_unknowns": [
+   "refuse to plan over an unknown until it is researched"
+  ],
+  "planning.auto_plan": [
+   "skip the plan proposal and dispatch inline",
+   "false enters plan mode and shows the wave DAG before any state mutation"
+  ],
+  "preferences.solution_bias": [
+   "how adventurous a proposed solution should be"
+  ],
+  "preferences.scope_size": [
+   "the default size a new scope is cut to"
+  ],
+  "preferences.auto_choose": [
+   "whether the planner answers its own questions",
+   "off always asks · safe answers only reversible questions · all answers everything"
+  ],
+  "prep.auto_resume": [
+   "lead /prep with a dispatch resume so a leaked pause cannot reject the batch"
+  ],
+  "profiles.enabled": [
+   "which profiles compose the active behaviour, in order"
+  ],
+  "profiles.conflict_resolution": [
+   "what happens when two profiles set the same thing",
+   "prompt asks · strictest_wins takes the tighter value · first_wins takes profile order"
+  ],
+  "profiles.safety_policy": [
+   "how safety settings combine across profiles — tightening only"
+  ],
+  "project.code": [
+   "the short project token that prefixes every task id"
+  ],
+  "prose.level": [
+   "the doc-clarity strictness floor",
+   "a layer may tighten this floor, never loosen it — a looser value is stored and inert"
+  ],
+  "prose.clarity_judge": [
+   "run the clarity judge · unset defers to the level"
+  ],
+  "research.default_depth": [
+   "how deep a research pass goes by default"
+  ],
+  "research.default_sources": [
+   "where research reads from"
+  ],
+  "research.agent_count": [
+   "how many agents a research pass fans out to"
+  ],
+  "review.default_level": [
+   "how thorough a review is by default"
+  ],
+  "review.require_checks_before_approve": [
+   "refuse an approval until the checks are green"
+  ],
+  "runtime.default": [
+   "which runtime a dispatch uses when none is named"
+  ],
+  "runtime.preference": [
+   "failover order — the first healthy runtime wins"
+  ],
+  "runtime.fallback.enabled": [
+   "fail over to the next runtime rather than stopping"
+  ],
+  "security.secrets_policy": [
+   "how secrets may be referenced",
+   "env_refs_only permits only environment references · inline_forbidden also blocks literals"
+  ],
+  "security.permission_mode": [
+   "what an agent may do without asking",
+   "ask_first stops for permission · allow proceeds · deny refuses"
+  ],
+  "security.secret_scan": [
+   "scan for secrets before they can be written"
+  ],
+  "security.store_scan_on_finding": [
+   "what a secret found in a store does",
+   "block refuses the write · warn records it · ignore proceeds"
+  ],
+  "security.allow_destructive": [
+   "whether a destructive action may run without asking"
+  ],
+  "ship.gauntlet": [
+   "how much of the ship gauntlet runs",
+   "full runs every gate, mandatory for migration waves and iter close · scoped is legal only for re-runs"
+  ],
+  "ship.use_vcs_policy": [
+   "apply the vcs policy when shipping rather than shipping bare"
+  ],
+  "state_schema.id_padding": [
+   "how many digits an entity id is padded to"
+  ],
+  "statusline.modules_default": [
+   "which statusline modules are on without asking"
+  ],
+  "storage.commit_jsonl": [
+   "which event journals are committed to the repository"
+  ],
+  "storage.content_addressed_blobs": [
+   "store blobs by content hash, so an identical artifact is stored once"
+  ],
+  "storage.max_inline_chars": [
+   "the size at which a value spills to a blob instead of storing inline"
+  ],
+  "storage.lock_strategy": [
+   "how concurrent writers are kept from colliding"
+  ],
+  "telemetry.enabled": [
+   "collect local telemetry · nothing leaves the machine either way"
+  ],
+  "ui.color": [
+   "whether colour is used",
+   "auto follows the terminal · always forces it · never renders severity by glyph alone"
+  ],
+  "ui.glyphs": [
+   "which glyph set the frames draw with",
+   "auto follows the terminal · unicode uses sigils · ascii uses their ASCII twins"
+  ],
+  "ui.refresh_ms": [
+   "how often a live frame re-renders"
+  ],
+  "ui.bare_command": [
+   "what the bare command opens with no arguments"
+  ],
+  "vcs.protected_branches": [
+   "branches that may never be force-pushed or deleted"
+  ],
+  "vcs.auto_commit": [
+   "whether a checkpoint commits without asking"
+  ],
+  "vcs.force_push": [
+   "when a force push is permitted",
+   "forbidden_protected allows it except on protected branches · forbidden never · allowed always"
+  ],
+  "vcs.checkpoint_requires_commit": [
+   "refuse a checkpoint that is not backed by a commit"
+  ],
+  "vcs.require_ci_green": [
+   "refuse a merge while CI is not green"
+  ],
+  "vcs.require_review_before_merge": [
+   "refuse a merge that no one has reviewed"
+  ],
+  "vcs.branch_pattern": [
+   "the pattern new branches are named from"
+  ],
+  "vcs.coauthor.mode": [
+   "how the co-author trailer is chosen",
+   "runtime uses the runtime that did the work · fixed uses one name · off writes none"
+  ],
+  "verify.juror_wall_clock_seconds": [
+   "how long a juror may take before it is abandoned"
+  ],
+  "verify.odr_blocking": [
+   "let the Oracle-Determinism-Ratio floor refuse an iter close",
+   "this ORs onto the profile block — a layer can tighten it, never loosen it"
+  ],
+  "verify.waiver_mode": [
+   "which waiver regime applies to a failed gate"
+  ],
+  "workspace.enabled": [
+   "treat several repositories as one workspace"
+  ],
+  "worktrees.enabled": [
+   "whether risky or parallel work runs in a separate worktree",
+   "auto decides per wave · always isolates every wave · never works in place"
+  ],
+  "worktrees.merge_mode": [
+   "how a worktree comes back",
+   "cherry_pick replays commits · merge joins the branch · rebase moves it onto the base"
+  ],
+  "worktrees.preserve_on_conflict": [
+   "keep a conflicted worktree rather than removing it"
+  ]
+ },
+ "CHOICES": {
+  "acceptance.required_before_ship": [
+   "state",
+   "tests",
+   "lint",
+   "typecheck",
+   "docs",
+   "build"
+  ],
+  "audit.default_checks": [
+   "state",
+   "tests",
+   "lint",
+   "typecheck",
+   "docs",
+   "build"
+  ],
+  "docs.categories": [
+   "roadmap",
+   "research",
+   "audit",
+   "decisions",
+   "incidents",
+   "memory",
+   "status"
+  ],
+  "memory.stores": [
+   "project",
+   "track",
+   "agent",
+   "user"
+  ],
+  "runtime.adapters": [
+   "claude-code",
+   "codex",
+   "local"
+  ],
+  "runtime.preference": [
+   "claude-code",
+   "codex",
+   "local"
+  ],
+  "statusline.modules_available": [
+   "state",
+   "git",
+   "model_session_cwd",
+   "context_tokens",
+   "mcp_health",
+   "hooks_plugins",
+   "memory",
+   "token_saving"
+  ],
+  "ui.dashboard_panes": [
+   "attention",
+   "activity",
+   "usage",
+   "timeline",
+   "health"
+  ]
+ },
+ "CATS": [
+  [
+   "EXECUTION",
+   [
+    "dispatch",
+    "flow",
+    "planning",
+    "prep",
+    "research",
+    "runtime",
+    "ship",
+    "worktrees"
+   ]
+  ],
+  [
+   "IDENTITY",
+   [
+    "preferences",
+    "profiles",
+    "project",
+    "workspace"
+   ]
+  ],
+  [
+   "INTERFACE",
+   [
+    "cli",
+    "commands",
+    "docs",
+    "statusline",
+    "ui"
+   ]
+  ],
+  [
+   "QUALITY",
+   [
+    "audit",
+    "estimation",
+    "polish",
+    "prose",
+    "review",
+    "verify"
+   ]
+  ],
+  [
+   "SAFETY",
+   [
+    "acceptance",
+    "hooks",
+    "mcp",
+    "security"
+   ]
+  ],
+  [
+   "SYSTEM",
+   [
+    "config",
+    "daemon",
+    "language",
+    "memory",
+    "state_schema",
+    "storage",
+    "telemetry",
+    "vcs"
+   ]
+  ]
+ ],
+ "RAIL": [
+  {
+   "cat": "EXECUTION"
+  },
+  {
+   "section": "dispatch",
+   "cat": "EXECUTION"
+  },
+  {
+   "section": "flow",
+   "cat": "EXECUTION"
+  },
+  {
+   "section": "planning",
+   "cat": "EXECUTION"
+  },
+  {
+   "section": "prep",
+   "cat": "EXECUTION"
+  },
+  {
+   "section": "research",
+   "cat": "EXECUTION"
+  },
+  {
+   "section": "runtime",
+   "cat": "EXECUTION"
+  },
+  {
+   "section": "ship",
+   "cat": "EXECUTION"
+  },
+  {
+   "section": "worktrees",
+   "cat": "EXECUTION"
+  },
+  {
+   "cat": "IDENTITY"
+  },
+  {
+   "section": "preferences",
+   "cat": "IDENTITY"
+  },
+  {
+   "section": "profiles",
+   "cat": "IDENTITY"
+  },
+  {
+   "section": "project",
+   "cat": "IDENTITY"
+  },
+  {
+   "section": "workspace",
+   "cat": "IDENTITY"
+  },
+  {
+   "cat": "INTERFACE"
+  },
+  {
+   "section": "cli",
+   "cat": "INTERFACE"
+  },
+  {
+   "section": "commands",
+   "cat": "INTERFACE"
+  },
+  {
+   "section": "docs",
+   "cat": "INTERFACE"
+  },
+  {
+   "section": "statusline",
+   "cat": "INTERFACE"
+  },
+  {
+   "section": "ui",
+   "cat": "INTERFACE"
+  },
+  {
+   "cat": "QUALITY"
+  },
+  {
+   "section": "audit",
+   "cat": "QUALITY"
+  },
+  {
+   "section": "estimation",
+   "cat": "QUALITY"
+  },
+  {
+   "section": "polish",
+   "cat": "QUALITY"
+  },
+  {
+   "section": "prose",
+   "cat": "QUALITY"
+  },
+  {
+   "section": "review",
+   "cat": "QUALITY"
+  },
+  {
+   "section": "verify",
+   "cat": "QUALITY"
+  },
+  {
+   "cat": "SAFETY"
+  },
+  {
+   "section": "acceptance",
+   "cat": "SAFETY"
+  },
+  {
+   "section": "hooks",
+   "cat": "SAFETY"
+  },
+  {
+   "section": "mcp",
+   "cat": "SAFETY"
+  },
+  {
+   "section": "security",
+   "cat": "SAFETY"
+  },
+  {
+   "cat": "SYSTEM"
+  },
+  {
+   "section": "config",
+   "cat": "SYSTEM"
+  },
+  {
+   "section": "daemon",
+   "cat": "SYSTEM"
+  },
+  {
+   "section": "language",
+   "cat": "SYSTEM"
+  },
+  {
+   "section": "memory",
+   "cat": "SYSTEM"
+  },
+  {
+   "section": "state_schema",
+   "cat": "SYSTEM"
+  },
+  {
+   "section": "storage",
+   "cat": "SYSTEM"
+  },
+  {
+   "section": "telemetry",
+   "cat": "SYSTEM"
+  },
+  {
+   "section": "vcs",
+   "cat": "SYSTEM"
+  }
+ ],
+ "SECTION_ROWS": [
+  {
+   "section": "dispatch",
+   "cat": "EXECUTION"
+  },
+  {
+   "section": "flow",
+   "cat": "EXECUTION"
+  },
+  {
+   "section": "planning",
+   "cat": "EXECUTION"
+  },
+  {
+   "section": "prep",
+   "cat": "EXECUTION"
+  },
+  {
+   "section": "research",
+   "cat": "EXECUTION"
+  },
+  {
+   "section": "runtime",
+   "cat": "EXECUTION"
+  },
+  {
+   "section": "ship",
+   "cat": "EXECUTION"
+  },
+  {
+   "section": "worktrees",
+   "cat": "EXECUTION"
+  },
+  {
+   "section": "preferences",
+   "cat": "IDENTITY"
+  },
+  {
+   "section": "profiles",
+   "cat": "IDENTITY"
+  },
+  {
+   "section": "project",
+   "cat": "IDENTITY"
+  },
+  {
+   "section": "workspace",
+   "cat": "IDENTITY"
+  },
+  {
+   "section": "cli",
+   "cat": "INTERFACE"
+  },
+  {
+   "section": "commands",
+   "cat": "INTERFACE"
+  },
+  {
+   "section": "docs",
+   "cat": "INTERFACE"
+  },
+  {
+   "section": "statusline",
+   "cat": "INTERFACE"
+  },
+  {
+   "section": "ui",
+   "cat": "INTERFACE"
+  },
+  {
+   "section": "audit",
+   "cat": "QUALITY"
+  },
+  {
+   "section": "estimation",
+   "cat": "QUALITY"
+  },
+  {
+   "section": "polish",
+   "cat": "QUALITY"
+  },
+  {
+   "section": "prose",
+   "cat": "QUALITY"
+  },
+  {
+   "section": "review",
+   "cat": "QUALITY"
+  },
+  {
+   "section": "verify",
+   "cat": "QUALITY"
+  },
+  {
+   "section": "acceptance",
+   "cat": "SAFETY"
+  },
+  {
+   "section": "hooks",
+   "cat": "SAFETY"
+  },
+  {
+   "section": "mcp",
+   "cat": "SAFETY"
+  },
+  {
+   "section": "security",
+   "cat": "SAFETY"
+  },
+  {
+   "section": "config",
+   "cat": "SYSTEM"
+  },
+  {
+   "section": "daemon",
+   "cat": "SYSTEM"
+  },
+  {
+   "section": "language",
+   "cat": "SYSTEM"
+  },
+  {
+   "section": "memory",
+   "cat": "SYSTEM"
+  },
+  {
+   "section": "state_schema",
+   "cat": "SYSTEM"
+  },
+  {
+   "section": "storage",
+   "cat": "SYSTEM"
+  },
+  {
+   "section": "telemetry",
+   "cat": "SYSTEM"
+  },
+  {
+   "section": "vcs",
+   "cat": "SYSTEM"
+  }
+ ],
+ "sectionOrder": [
+  "dispatch",
+  "flow",
+  "planning",
+  "prep",
+  "research",
+  "runtime",
+  "ship",
+  "worktrees",
+  "preferences",
+  "profiles",
+  "project",
+  "workspace",
+  "cli",
+  "commands",
+  "docs",
+  "statusline",
+  "ui",
+  "audit",
+  "estimation",
+  "polish",
+  "prose",
+  "review",
+  "verify",
+  "acceptance",
+  "hooks",
+  "mcp",
+  "security",
+  "config",
+  "daemon",
+  "language",
+  "memory",
+  "state_schema",
+  "storage",
+  "telemetry",
+  "vcs"
+ ],
+ "names": [
+  "acceptance",
+  "audit",
+  "cli",
+  "commands",
+  "config",
+  "daemon",
+  "dispatch",
+  "docs",
+  "estimation",
+  "flow",
+  "hooks",
+  "language",
+  "mcp",
+  "memory",
+  "planning",
+  "polish",
+  "preferences",
+  "prep",
+  "profiles",
+  "project",
+  "prose",
+  "research",
+  "review",
+  "runtime",
+  "security",
+  "ship",
+  "state_schema",
+  "statusline",
+  "storage",
+  "telemetry",
+  "ui",
+  "vcs",
+  "verify",
+  "workspace",
+  "worktrees"
+ ]
+}

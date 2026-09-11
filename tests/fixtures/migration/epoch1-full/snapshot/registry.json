@@ -1,0 +1,9 @@
+{
+  "repos": [
+    {
+      "code": "DEMO",
+      "root": "."
+    }
+  ],
+  "schema_version": "1.0"
+}

@@ -7,6 +7,13 @@ session timeline survives state-cache rewrites.
 Per-(scope, runtime) uniqueness is enforced at ``start`` time: starting a new
 session whose ``(scope_id, runtime)`` pair already has an ``ACTIVE`` entry in
 ``state.agent_sessions`` raises :class:`SessionConflict`.
+
+Every terminal path here (:func:`close_session`, :func:`terminalize_session`,
+:func:`stamp_session_end_at_exit`, and :func:`reconcile_orphaned_sessions`
+through the first of those) also emits the typed ``session_closed`` event the
+telemetry projection derives its session rows from. The flat ``session.close``
+row stays the human timeline; the typed row is the projectable record, and it
+is what makes a rebuild report the sessions that actually ran.
 """
 
 from __future__ import annotations
@@ -357,6 +364,33 @@ def checkpoint(
     return SessionResult(session=session, event=event)
 
 
+def _emit_session_closed(events_path: Path, session: AgentSession) -> None:
+    """Emit the typed ``session_closed`` telemetry event for a terminal session.
+
+    Called from every terminal path in this module so the telemetry projection
+    has a producer: without it the session table rebuilds empty no matter how
+    many sessions ran. The typed event is distinct from the flat
+    ``session.close`` row each path already writes -- that one is the human
+    timeline, this one is the projectable record.
+
+    Failure is swallowed and logged rather than raised: a telemetry event is
+    secondary to the terminal outcome the caller is persisting, exactly as
+    :func:`terminalize_session` already treats its own close-event write.
+
+    Args:
+        events_path: Path to ``event.jsonl``.
+        session: The terminalized session row.
+    """
+    # Imported lazily: ``dispatch_runner`` transitively imports this module,
+    # so a module-level import here is a boot-time circular import.
+    from eawf.runtime.daemon.dispatch_runner import emit_session_closed
+
+    try:
+        emit_session_closed(events_path, session=session)
+    except Exception as exc:
+        logger.warning(f"_emit_session_closed id={session.id} event_status=failed error={exc!r}")
+
+
 def close_session(
     *,
     state: State,
@@ -375,6 +409,7 @@ def close_session(
         now=now,
     )
     commit_event(events_path, staged.event)
+    _emit_session_closed(events_path, staged.session)
     logger.info(f"close_session id={session_id} status={status.value}")
     return staged
 
@@ -453,6 +488,7 @@ def terminalize_session(
             f"terminalize_session id={session_id} status={status.value} "
             f"event_status=failed error={exc!r}"
         )
+    _emit_session_closed(events_path, staged.session)
     logger.info(f"terminalize_session id={session_id} status={status.value}")
     return staged
 
@@ -632,6 +668,7 @@ def stamp_session_end_at_exit(
         commit_event(events_path, staged.event)
     except Exception as exc:
         logger.warning(f"stamp_session_end_at_exit id={target} event_status=failed error={exc!r}")
+    _emit_session_closed(events_path, staged.session)
     logger.info(
         f"stamp_session_end_at_exit id={target} status={status.value} ended_at={moment.isoformat()}"
     )

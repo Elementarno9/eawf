@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -351,12 +350,19 @@ def test_file_exists_terminal_receipt_reuses_without_execution(
 
 #: A gate whose argv kills its own RUNNER outright, mid-run. In process the
 #: runner IS the daemon, so this argv would take the daemon down; out of
-#: process it kills only the disposable child.
-_CRASH_ARGV = [
-    sys.executable,
-    "-c",
-    "import os, signal; os.kill(os.getppid(), signal.SIGKILL)",
-]
+#: process it kills only the disposable child. The kill rides a collected
+#: pytest module rather than a bare ``python -c`` because the gate runner
+#: spawns only argv heads the L0 policy allowlists, and a path-qualified
+#: interpreter is not one of them.
+_CRASH_MODULE_NAME = "test_crash_gate.py"
+_CRASH_ARGV = ["pytest", "-p", "no:cacheprovider", "-q", _CRASH_MODULE_NAME]
+_CRASH_MODULE_SOURCE = "import os\nimport signal\n\nos.kill(os.getppid(), signal.SIGKILL)\n"
+
+
+def _plant_crash_module(cwd: Path) -> None:
+    """Write the module whose import SIGKILLs the gate runner into *cwd*."""
+    (cwd / _CRASH_MODULE_NAME).write_text(_CRASH_MODULE_SOURCE, encoding="utf-8")
+
 
 _POSIX_ONLY = pytest.mark.skipif(
     os.name == "nt",
@@ -384,6 +390,7 @@ def test_crashing_gate_returns_a_failed_receipt_and_daemon_ping_still_answers(
     """
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True)
+    _plant_crash_module(tmp_path)
     context = gate_execution.GateExecutionContext(state_path=state_path, attempt_id="CA-01")
 
     with pytest.raises(gate_execution.GateChildCrashError) as excinfo:
@@ -415,6 +422,7 @@ def test_crashing_gate_child_leaves_exactly_one_orphan_claim(tmp_path: Path) -> 
     """The dead child's pre-execution claim is the only durable residue."""
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True)
+    _plant_crash_module(tmp_path)
     context = gate_execution.GateExecutionContext(state_path=state_path, attempt_id="CA-07")
 
     with pytest.raises(gate_execution.GateChildCrashError):
@@ -448,7 +456,7 @@ def test_crashing_gate_requeues_the_close_attempt_for_resume(
     lands as an infrastructure retry.
     """
     repo, state_path, ctx = _repo_with_state(tmp_path)
-    monkeypatch.setattr(close_module, "_schedule", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(close_module, "schedule_attempt", lambda *_args, **_kwargs: False)
     close_module._SHUTTING_DOWN = False
 
     async def _submit() -> str:

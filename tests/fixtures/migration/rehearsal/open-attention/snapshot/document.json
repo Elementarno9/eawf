@@ -1,0 +1,138 @@
+{
+ "actuals": {},
+ "agent_sessions": {},
+ "artifacts": {
+  "ART-01": {
+   "created_at": "2026-01-01T00:00:00Z",
+   "id": "ART-01",
+   "kind": "research",
+   "uri": ".ea/artifacts/research/ART-01.md",
+   "urn": "urn:eawf:artifact:ART-01"
+  }
+ },
+ "audits": {
+  "A001": {
+   "created_at": "2026-01-01T00:00:00Z",
+   "id": "A001",
+   "kind": "review",
+   "scope_id": "P01-I01",
+   "status": "complete",
+   "verdict": "blocked"
+  }
+ },
+ "backlog": {
+  "B001": {
+   "created_at": "2026-01-01T00:00:00Z",
+   "id": "B001",
+   "scope_id": "DEMO",
+   "status": "open",
+   "title": "Widen the rehearsal fixture set"
+  },
+  "B002": {
+   "created_at": "2026-01-01T00:00:00Z",
+   "id": "B002",
+   "scope_id": "DEMO",
+   "status": "open",
+   "title": "Measure the residual document"
+  }
+ },
+ "claims": null,
+ "close_attempts": {},
+ "current": {
+  "iter_id": "P01-I01",
+  "phase_id": "P01",
+  "wave_id": null
+ },
+ "decisions": {
+  "D01": {
+   "created_at": "2026-01-01T00:00:00Z",
+   "id": "D01",
+   "rationale": "recorded at the time of the call",
+   "scope_id": "DEMO",
+   "status": "accepted",
+   "title": "Rehearse before the flag day"
+  }
+ },
+ "dispatch_paused": false,
+ "estimates": {},
+ "fleet_run": null,
+ "goals": {},
+ "health": null,
+ "hypotheses": null,
+ "incidents": {
+  "INC01": {
+   "cause": "the gate was wired to a criterion nobody produced",
+   "id": "INC01",
+   "opened_at": "2026-01-01T00:00:00Z",
+   "scope_id": "DEMO",
+   "severity": "low",
+   "status": "open",
+   "title": "A gate scored nothing"
+  }
+ },
+ "indexes": {},
+ "iters": {
+  "P01-I01": {
+   "id": "P01-I01",
+   "opened_at": "2026-01-01T00:00:00Z",
+   "phase_id": "P01",
+   "status": "active",
+   "title": "Close the attention iter",
+   "wave_ids": [
+    "P01-I01-W01"
+   ]
+  }
+ },
+ "mcp_grants": null,
+ "mcp_servers": null,
+ "memory_index": {
+  "MEM01": {
+   "confidence": "high",
+   "id": "MEM01",
+   "scope_id": "DEMO",
+   "status": "active",
+   "summary": "the rehearsal covers four legs per fixture",
+   "tier": "project"
+  }
+ },
+ "open_questions": null,
+ "outcomes": null,
+ "phases": {
+  "P01": {
+   "id": "P01",
+   "iter_ids": [
+    "P01-I01"
+   ],
+   "opened_at": "2026-01-01T00:00:00Z",
+   "scope_id": "P01",
+   "status": "active",
+   "title": "Deliver the attention phase"
+  }
+ },
+ "plugins": {},
+ "project": {
+  "code": "DEMO",
+  "created_at": "2026-01-01T00:00:00Z",
+  "title": "the rehearsal demo project"
+ },
+ "sandbox_policies": {},
+ "schema_version": "1.19",
+ "scope_kind": "project",
+ "tracks": null,
+ "updated_at": "2026-01-01T00:00:00Z",
+ "urn": "urn:eawf:project:DEMO",
+ "wave_dependency_barriers": {},
+ "wave_dependency_bindings": {},
+ "wave_integrations": {},
+ "waves": {
+  "P01-I01-W01": {
+   "id": "P01-I01-W01",
+   "iter_id": "P01-I01",
+   "opened_at": "2026-01-01T00:00:00Z",
+   "status": "pending",
+   "title": "Plan the next wave"
+  }
+ },
+ "workspace": null,
+ "worktrees": {}
+}

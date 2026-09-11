@@ -1,0 +1,16 @@
+{
+  "disposition": "refuses",
+  "fixture": "corrupt-reference",
+  "refusal": {
+    "apply_code": "migration_fabrication_detected",
+    "message_names": [
+      "waves/P01-I01-W02.batch_ref",
+      "P09-I99"
+    ],
+    "plan_code": "migration_fabrication_detected",
+    "retry_code": "migration_fabrication_detected",
+    "target_unchanged": true
+  },
+  "scrub_findings": 0,
+  "source_bytes": 2245
+}

@@ -10,12 +10,14 @@ Covers the three load-bearing guarantees of P27-W19:
 - **CI pairing gate** — ``tools/snapshot_pairing_gate.py`` fails when a
   *managed* golden surface is mutated (status ``M`` / ``D`` / ``R``)
   without a paired ``[P##-W##] test:`` commit, and passes for paired
-  mutations, pure additions, and non-inventory golden trees.
+  mutations, pure additions, non-inventory golden trees, and phase PRs
+  (ranges whose commits declare a phase the repo's state says it opened).
 """
 
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -387,6 +389,22 @@ def _write_golden(repo: Path, rel: str, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def _write_state(repo: Path, *, phases: dict[str, str]) -> None:
+    """Write a minimal ``.ea/state.json`` naming *phases* as ``id -> status``.
+
+    The gate corroborates commit-declared phase scope against this document;
+    only ids and statuses are read, so the fixture carries nothing else.
+    """
+    state_path = repo / ".ea" / "state.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    document = {
+        "phases": {
+            phase_id: {"id": phase_id, "status": status} for phase_id, status in phases.items()
+        }
+    }
+    state_path.write_text(json.dumps(document), encoding="utf-8")
+
+
 def _head(repo: Path) -> str:
     out = subprocess.run(
         ["git", "-C", str(repo), "rev-parse", "HEAD"],
@@ -573,24 +591,27 @@ def test_gate_main_no_base_is_noop(gate: Any) -> None:
     assert gate.main(["prog", "", ""]) == 0
 
 
-def test_iter_key_extracts_phase_and_iter_scope(gate: Any) -> None:
-    """iter_key maps a subject to its phase/iter scope key (boundary forms)."""
-    assert gate.iter_key("[P27-I04-W04] feat: x") == "P27-I04"
-    assert gate.iter_key("[P27-W19] test: x") == "P27"
-    assert gate.iter_key("[P27-CORE] state: x") == "P27"
-    assert gate.iter_key("no tag here") is None
+def test_phase_key_extracts_the_declared_phase(gate: Any) -> None:
+    """phase_key maps a commit to the phase it declares (boundary forms)."""
+    assert gate.phase_key(gate.CommitRecord("a" * 40, "[P27-I04-W04] feat: x", "", ())) == "P27"
+    assert gate.phase_key(gate.CommitRecord("a" * 40, "[P27-W19] test: x", "", ())) == "P27"
+    assert gate.phase_key(gate.CommitRecord("a" * 40, "[P27] state: x", "", ())) == "P27"
+    trailer = gate.CommitRecord("a" * 40, "fix: x", "Eawf-Wave: P27-I04-W04\n", ())
+    assert gate.phase_key(trailer) == "P27"
+    assert gate.phase_key(gate.CommitRecord("a" * 40, "no tag here", "", ())) is None
 
 
 def test_gate_main_phase_pr_does_not_block(
     tmp_path: Path, gate: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A multi-iter (phase-PR) range surfaces unpaired golden commits, not blocks.
+    """A phase-PR range surfaces unpaired golden commits, not blocks.
 
     The whole phase ships as one reviewed unit and the snapshot tests pin
     golden freshness, so per-commit ``test:`` pairing is deferred: the gate
     lists the bundled golden commit and exits 0.
     """
     repo = _init_repo(tmp_path)
+    _write_state(repo, phases={"P27": "active"})
     _write_golden(repo, "tests/golden/envelope/ok.json", '{"v": 1}\n')
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "[P27-I02-W01] test: seed envelope golden")
@@ -606,10 +627,15 @@ def test_gate_main_phase_pr_does_not_block(
     assert "bundle golden drift" in out
 
 
-def test_gate_main_single_iter_blocks(
+def test_gate_main_uncorroborated_range_blocks(
     tmp_path: Path, gate: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A single-iter (small-CL) range still hard-fails an unpaired golden mutation."""
+    """A range no state document corroborates hard-fails an unpaired mutation.
+
+    The fixture repo carries no ``.ea/state.json``, so the ``[P27-...]`` tags
+    name a phase nothing in the repo says was opened -- ordinary work, and
+    the per-commit contract applies.
+    """
     repo = _init_repo(tmp_path)
     _write_golden(repo, "tests/golden/envelope/ok.json", '{"v": 1}\n')
     _git(repo, "add", "-A")

@@ -13,13 +13,26 @@ The child writes its own claim before executing, so a child that dies mid-gate
 leaves exactly the orphaned claim the recovery path reads as indeterminate.
 This module doubles as that child's entry point (``python -m
 eawf.runtime.daemon.gate_execution --run-gate <request> <response>``).
+
+A child interpreter would otherwise INHERIT the daemon's runtime directory and
+state path, so a gate suite that drives eawf's own RPCs would drive them
+against the live ledger and the live dispatch loop. Every child therefore runs
+against a throwaway sandbox (:func:`gate_sandbox`) seeded from a snapshot of
+both, with the live daemon's transport handles deliberately left behind. Gate
+reads still see a faithful copy of the ledger; gate writes land in the copy and
+die with it. The daemon's OWN bookkeeping (claims, receipts) is unaffected
+because it addresses the live state path explicitly rather than through the
+environment.
 """
 
 from __future__ import annotations
 
+import logging
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import uuid
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
@@ -41,11 +54,14 @@ from eawf.runtime.daemon.gate_receipt_hygiene import (
     load_gate_diagnostic,
     scrub_gate_receipt_store,
 )
+from eawf.runtime.daemon.runtime_dir import runtime_dir
 from eawf.runtime.lock import portalock
 from eawf.workflow.audit_dsl.models import (
     CheckResult,
     CheckSpec,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class GateExecutionClaim(BaseModel):
@@ -396,6 +412,201 @@ def _crash_result(spec: CheckSpec, *, exit_status: int | None, stderr: str) -> C
     )
 
 
+#: Runtime-dir entries a sandbox never inherits. The socket, PID file, and
+#: lock files are handles onto the LIVE daemon: copying them would point a
+#: sandboxed client straight back at the process that owns the live ledger and
+#: the dispatch loop, which is the exposure the sandbox exists to close.
+_LIVE_DAEMON_HANDLES: frozenset[str] = frozenset(
+    {"eawfd.sock", "eawfd.pid", "eawfd.lock", "eawfd.spawn.lock"}
+)
+
+#: Per-file ceiling for the runtime-dir snapshot. The daemon log and its
+#: rotations are unbounded (hundreds of megabytes) and hold nothing a gate
+#: reads, so the snapshot skips anything larger rather than paying that copy
+#: once per gate.
+SNAPSHOT_FILE_BYTE_CAP: int = 1 << 20
+
+#: State-dir entries seeded next to the ledger file: the layered config a
+#: mutation validates against and the append-only stores it writes. Heavy
+#: read-only trees (``artifacts``) are absent because a gate reads those
+#: through the repo working tree, and daemon-local scratch (``local``) is
+#: absent because the live daemon's claims and locks must stay its own.
+_SEEDED_STATE_ENTRIES: tuple[str, ...] = (
+    "config.yaml",
+    "profile.yaml",
+    "profiles",
+    "store",
+)
+
+
+class GateSandbox(BaseModel):
+    """One throwaway runtime directory + state ledger a gate child runs in."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    root: Path
+    runtime_dir: Path
+    state_path: Path
+
+
+def _snapshot_ignore(directory: str, names: list[str]) -> set[str]:
+    """Return the entries of *directory* the runtime snapshot must not copy.
+
+    Args:
+        directory: Directory being walked, as :func:`shutil.copytree` passes it.
+        names: Entry names inside *directory*.
+
+    Returns:
+        The subset of *names* to skip: live-daemon handles, anything that is
+        not a regular file or directory (a Unix socket cannot be copied at
+        all), and regular files above :data:`SNAPSHOT_FILE_BYTE_CAP`.
+    """
+    base = Path(directory)
+    skipped: set[str] = set()
+    for name in names:
+        if name in _LIVE_DAEMON_HANDLES:
+            skipped.add(name)
+            continue
+        entry = base / name
+        if entry.is_dir():
+            continue
+        if not entry.is_file():
+            skipped.add(name)
+            continue
+        try:
+            oversized = entry.stat().st_size > SNAPSHOT_FILE_BYTE_CAP
+        except OSError:
+            skipped.add(name)
+            continue
+        if oversized:
+            skipped.add(name)
+    return skipped
+
+
+def _seed_runtime_dir(live_runtime_dir: Path, target: Path) -> None:
+    """Copy the snapshot-eligible part of *live_runtime_dir* into *target*."""
+    target.mkdir(parents=True, exist_ok=True)
+    if not live_runtime_dir.is_dir():
+        return
+    shutil.copytree(
+        live_runtime_dir,
+        target,
+        ignore=_snapshot_ignore,
+        dirs_exist_ok=True,
+    )
+
+
+def _seed_state_dir(live_state_path: Path, target_state_path: Path) -> None:
+    """Copy the ledger file and its config/store siblings into the sandbox.
+
+    Size-uncapped on purpose: the ledger and its stores ARE the surface a
+    sandboxed RPC reads and writes, so a truncated copy would answer reads
+    with a lie rather than with the live tree's own content.
+    """
+    target_dir = target_state_path.parent
+    target_dir.mkdir(parents=True, exist_ok=True)
+    if live_state_path.is_file():
+        shutil.copy2(live_state_path, target_state_path)
+    live_dir = live_state_path.parent
+    for name in _SEEDED_STATE_ENTRIES:
+        source = live_dir / name
+        if source.is_dir():
+            shutil.copytree(source, target_dir / name, dirs_exist_ok=True)
+        elif source.is_file():
+            shutil.copy2(source, target_dir / name)
+
+
+def seed_gate_sandbox(
+    *,
+    root: Path,
+    live_state_path: Path,
+    live_runtime_dir: Path,
+) -> GateSandbox:
+    """Materialise an isolated runtime dir + state ledger under *root*.
+
+    A live state file that does not exist yet is not an error: the sandbox is
+    then an empty ledger directory, which still routes every gate write away
+    from the live tree.
+
+    Args:
+        root: Directory the sandbox is built in. Created when absent.
+        live_state_path: The live ``state.json`` the ledger is snapshotted
+            from; its parent supplies the config and store siblings.
+        live_runtime_dir: The live daemon runtime directory to snapshot.
+
+    Returns:
+        The seeded :class:`GateSandbox`.
+
+    Raises:
+        ValueError: *root* exists as a non-directory, or *live_state_path*
+            exists but is not a regular file.
+    """
+    if root.exists() and not root.is_dir():
+        raise ValueError(f"gate sandbox root is not a directory: {str(root)!r}")
+    if live_state_path.exists() and not live_state_path.is_file():
+        raise ValueError(f"live state path is not a file: {str(live_state_path)!r}")
+    sandbox = GateSandbox(
+        root=root,
+        runtime_dir=root / "runtime",
+        state_path=root / live_state_path.parent.name / live_state_path.name,
+    )
+    _seed_runtime_dir(live_runtime_dir, sandbox.runtime_dir)
+    _seed_state_dir(live_state_path, sandbox.state_path)
+    logger.debug(
+        f"seed_gate_sandbox root={str(sandbox.root)!r} runtime_dir={str(sandbox.runtime_dir)!r}"
+    )
+    return sandbox
+
+
+@contextmanager
+def gate_sandbox(*, live_state_path: Path) -> Iterator[GateSandbox]:
+    """Yield a sandbox seeded from the live runtime dir + ledger, then drop it.
+
+    The root sits under the system temp directory rather than under the live
+    state directory: a gate that walks upward from the sandbox must not find
+    the live tree, and the 104-byte AF_UNIX path cap leaves no room for a deep
+    in-repo path when a sandboxed client auto-spawns its own daemon.
+
+    Args:
+        live_state_path: The live ``state.json`` to snapshot.
+
+    Yields:
+        The seeded :class:`GateSandbox`, removed on exit even when the body
+        raises.
+    """
+    root = Path(tempfile.mkdtemp(prefix="eawf-gate-"))
+    try:
+        yield seed_gate_sandbox(
+            root=root,
+            live_state_path=live_state_path,
+            live_runtime_dir=runtime_dir(),
+        )
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def gate_child_env(sandbox: GateSandbox) -> dict[str, str]:
+    """Return the child environment with every live-tree seam repointed.
+
+    ``EAWF_RUNTIME_DIR`` and ``EA_STATE`` are the two overrides both resolvers
+    consult first, so pinning them denies a gate suite the live daemon socket
+    and the live ledger in one move. The spec-cache override is dropped rather
+    than pinned: unset, it derives from the sandbox runtime dir, while an
+    inherited absolute value would leak a live path back in.
+
+    Args:
+        sandbox: The sandbox the child must run against.
+
+    Returns:
+        A copy of the current environment with the sandbox bindings applied.
+    """
+    env = dict(os.environ)
+    env["EAWF_RUNTIME_DIR"] = str(sandbox.runtime_dir)
+    env["EA_STATE"] = str(sandbox.state_path)
+    env.pop("EAWF_SPEC_CACHE_DIR", None)
+    return env
+
+
 def run_gate_out_of_process(
     spec: CheckSpec,
     *,
@@ -429,20 +640,22 @@ def run_gate_out_of_process(
     )
     try:
         request_path.write_bytes(orjson.dumps(request.model_dump(mode="json")))
-        completed = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "eawf.runtime.daemon.gate_execution",
-                _CHILD_FLAG,
-                str(request_path),
-                str(response_path),
-            ],
-            cwd=str(cwd),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        with gate_sandbox(live_state_path=context.state_path) as sandbox:
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "eawf.runtime.daemon.gate_execution",
+                    _CHILD_FLAG,
+                    str(request_path),
+                    str(response_path),
+                ],
+                cwd=str(cwd),
+                capture_output=True,
+                text=True,
+                check=False,
+                env=gate_child_env(sandbox),
+            )
         response = _read_child_response(response_path)
         if response is None:
             result = _crash_result(
@@ -522,13 +735,17 @@ __all__ = [
     "GateChildCrashError",
     "GateExecutionClaim",
     "GateExecutionContext",
+    "GateSandbox",
     "claim_gate_execution",
     "claim_path",
     "complete_gate_execution",
     "current_gate_context",
     "durable_gate_context",
+    "gate_child_env",
     "gate_receipt_id",
+    "gate_sandbox",
     "run_gate_out_of_process",
+    "seed_gate_sandbox",
 ]
 
 

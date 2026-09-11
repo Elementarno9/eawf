@@ -14,6 +14,11 @@ The v0.4 verify spine has four concerns:
   gate runner executes. v0.4.0 compiles only
   ``evidence_kind="deterministic"`` gates; ``"jury"`` + ``"attested"``
   return ``None`` and defer to v0.4.1+.
+* :func:`~eawf.workflow.verify.sandboxed_checks.run_checks_out_of_process`
+  — the one execution seam every readiness check passes through. It runs
+  the compiled checks in a child interpreter pinned to a throwaway
+  sandbox, so a floor check that drives eawf's own RPCs cannot reach the
+  caller's live runtime directory or live ledger.
 * Waivers — operator-attested gate overrides honoured by the
   readiness compute via SHA-bound freshness on
   :class:`~eawf.kernel.store.kinds.evidence.EvidenceRecord` rows.
@@ -48,21 +53,33 @@ from eawf.workflow.verify.dispatch_close import (
     VerifyResult,
     verify_close_readiness,
 )
+from eawf.workflow.verify.hosted_close import (
+    CloseSessionMode,
+    HostedCloseDecision,
+    count_scope_waivers,
+    resolve_hosted_close,
+)
 from eawf.workflow.verify.models import (
     CloseReadiness,
     CriterionView,
     GateResult,
 )
 from eawf.workflow.verify.readiness import compute, load_active_verify_block
+from eawf.workflow.verify.sandboxed_checks import run_checks_out_of_process
 
 __all__ = [
     "CloseReadiness",
+    "CloseSessionMode",
     "CriterionView",
     "DispatchCloseBlockedError",
     "GateResult",
+    "HostedCloseDecision",
     "VerifyResult",
     "compile_gate",
     "compute",
+    "count_scope_waivers",
     "load_active_verify_block",
+    "resolve_hosted_close",
+    "run_checks_out_of_process",
     "verify_close_readiness",
 ]

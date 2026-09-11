@@ -33,7 +33,7 @@ from eawf.kernel.spec.publication import (
 from eawf.kernel.spec.release import ReleaseTargetStatus
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.kinds import PAYLOAD_MODELS
-from tests.unit.kernel.release.conftest import dev1_config
+from tests._release_helpers import dev1_config
 
 FIXTURE = (
     Path(__file__).resolve().parents[3]

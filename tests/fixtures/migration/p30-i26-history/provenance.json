@@ -1,0 +1,62 @@
+{
+ "backfilled_collections": [
+  "close_attempts",
+  "wave_dependency_barriers",
+  "wave_dependency_bindings",
+  "wave_integrations"
+ ],
+ "dropped_phase_field": "iter_ids",
+ "note": "A slice and a projection of the epoch-1 corpus at the pinned revision. Regenerate with tests.integration.kernel.migration._historical_freeze.write_frozen_snapshot.",
+ "row_counts_at_revision": {
+  "actuals": 849,
+  "agent_sessions": 45,
+  "artifacts": 88,
+  "audits": 76,
+  "backlog": 129,
+  "current": 6,
+  "decisions": 58,
+  "estimates": 996,
+  "goals": 1,
+  "incidents": 9,
+  "indexes": 0,
+  "iters": 75,
+  "memory_index": 41,
+  "phases": 31,
+  "plugins": 0,
+  "project": 10,
+  "sandbox_policies": 1,
+  "waves": 1284,
+  "worktrees": 336
+ },
+ "row_counts_frozen": {
+  "actuals": 24,
+  "agent_sessions": 45,
+  "artifacts": 88,
+  "audits": 76,
+  "backlog": 129,
+  "close_attempts": 0,
+  "current": 6,
+  "decisions": 58,
+  "estimates": 24,
+  "goals": 1,
+  "incidents": 9,
+  "indexes": 0,
+  "iters": 1,
+  "memory_index": 41,
+  "phases": 1,
+  "plugins": 0,
+  "project": 10,
+  "sandbox_policies": 1,
+  "wave_dependency_barriers": 0,
+  "wave_dependency_bindings": 0,
+  "wave_integrations": 0,
+  "waves": 24,
+  "worktrees": 336
+ },
+ "scrub_findings": 0,
+ "slice": {
+  "iter_id": "P30-I26",
+  "phase_id": "P30"
+ },
+ "source_revision": "9edef45aed746a153edbba8f351209ef5fc20793"
+}

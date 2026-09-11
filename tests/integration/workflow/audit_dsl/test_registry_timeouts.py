@@ -26,7 +26,6 @@ from __future__ import annotations
 import hashlib
 import os
 import subprocess
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -68,13 +67,36 @@ def _run_citation_check(args: dict[str, Any], cwd: Path, *, name: str = "cit") -
     return CHECK_REGISTRY["citation_resolves"](spec, cwd.resolve())
 
 
-def _echo_env_argv(var: str) -> list[str]:
-    """Argv that prints the value of *var* to stdout."""
-    return [
-        sys.executable,
-        "-c",
-        f"import os; print(os.environ.get({var!r}, ''), end='')",
-    ]
+#: An allowlisted argv that exits 0 anywhere, for gates whose command is
+#: beside the point of what the test asserts.
+_NOOP_ARGV = ["ruff", "--version"]
+
+#: The vehicle for a gate that has to run arbitrary observation code. The L0
+#: argv policy admits only allowlisted heads, so the probe rides a collected
+#: ``pytest`` module rather than a bare ``python -c``: pass -> exit 0,
+#: failed assertion -> non-zero, which is exactly the gate's own contract.
+_PROBE_MODULE_NAME = "test_gate_probe.py"
+_PROBE_ARGV = ["pytest", "-p", "no:cacheprovider", "-q", _PROBE_MODULE_NAME]
+
+
+def _plant_probe(cwd: Path, body: str) -> list[str]:
+    """Plant a probe module running *body* in *cwd* and return its gate argv.
+
+    Args:
+        cwd: The directory the gate runs in; the module lands there so the
+            relative argv entry resolves.
+        body: Python source for the probe's single test, un-indented. It
+            may import whatever it needs; ``os`` is already in scope.
+
+    Returns:
+        The argv a ``command_exit_zero`` spec should carry to run the probe.
+    """
+    indented = "\n".join(f"    {line}" for line in body.splitlines())
+    (cwd / _PROBE_MODULE_NAME).write_text(
+        f"import os\n\n\ndef test_probe() -> None:\n    assert os is not None\n{indented}\n",
+        encoding="utf-8",
+    )
+    return list(_PROBE_ARGV)
 
 
 # ---- timeout-class constant ------------------------------------------------
@@ -245,7 +267,7 @@ def test_gate_freshness_input_rejects_unknown_field() -> None:
 def test_command_exit_zero_happy_with_explicit_quick(tmp_path: Path) -> None:
     """A fast no-op under timeout_class='quick' passes and exits cleanly."""
     result = _run_command_check(
-        {"argv": [sys.executable, "-c", "pass"], "timeout_class": "quick", "scope": "all"},
+        {"argv": _NOOP_ARGV, "timeout_class": "quick", "scope": "all"},
         tmp_path,
     )
     assert result.passed is True
@@ -275,7 +297,7 @@ def test_command_exit_zero_claims_freshness_before_subprocess(
             CheckSpec(
                 kind="command_exit_zero",
                 name="claimed-gate",
-                args={"argv": ["gate"], "scope": "all"},
+                args={"argv": _NOOP_ARGV, "scope": "all"},
             )
         ],
         cwd=tmp_path,
@@ -310,7 +332,7 @@ def test_command_exit_zero_reuses_exact_claim_result_without_subprocess(
             CheckSpec(
                 kind="command_exit_zero",
                 name="receipt-hit",
-                args={"argv": ["gate"], "scope": "all"},
+                args={"argv": _NOOP_ARGV, "scope": "all"},
             )
         ],
         cwd=tmp_path,
@@ -390,7 +412,7 @@ def test_command_exit_zero_timeout_returns_blocked(
     monkeypatch.setitem(_TIMEOUT_CLASS_SECONDS, "quick", 1)
     result = _run_command_check(
         {
-            "argv": [sys.executable, "-c", "import time; time.sleep(5)"],
+            "argv": _plant_probe(tmp_path, "import time\ntime.sleep(30)"),
             "timeout_class": "quick",
             "scope": "all",
         },
@@ -865,16 +887,19 @@ def test_gate_files_env_carries_separated_list(tmp_path: Path) -> None:
     ):
         result = _run_command_check(
             {
-                "argv": _echo_env_argv(_GATE_FILES_ENV),
+                "argv": _plant_probe(
+                    tmp_path,
+                    f"assert os.environ[{_GATE_FILES_ENV!r}] == 'alpha.py\\nbeta.py'",
+                ),
                 "timeout_class": "quick",
                 "scope": "changed",
             },
             tmp_path,
         )
-    # The child exits 0 (just prints the env var); the granular split
-    # behaviour is exercised by test_gate_files_env_contains_separator
-    # below — here we pin the smoke path that the env var is wired.
-    assert result.passed is True
+    # The probe exits 0 only when the child saw the resolved set; the
+    # granular split behaviour is exercised by
+    # test_gate_files_env_contains_separator below.
+    assert result.passed is True, result.details
 
 
 def test_gate_files_env_set_even_when_empty(
@@ -883,18 +908,14 @@ def test_gate_files_env_set_even_when_empty(
     """EAWF_GATE_FILES is set on the child even when the resolved set is empty.
 
     Asserts: the var IS in the child env (returncode=0), even when no
-    file changed. The child checks "env var present" via a Python
-    exit code that distinguishes missing from empty.
+    file changed. The probe distinguishes missing from empty, which an
+    exit code alone could not.
     """
     monkeypatch.delenv(_GATE_FILES_ENV, raising=False)
     with patch("eawf.workflow.audit_dsl.registry.changed_files", return_value=[]):
         result = _run_command_check(
             {
-                "argv": [
-                    sys.executable,
-                    "-c",
-                    f"import sys, os; sys.exit(0 if {_GATE_FILES_ENV!r} in os.environ else 7)",
-                ],
+                "argv": _plant_probe(tmp_path, f"assert {_GATE_FILES_ENV!r} in os.environ"),
                 "timeout_class": "quick",
                 "scope": "changed",
             },
@@ -918,16 +939,11 @@ def test_gate_files_env_contains_separator(tmp_path: Path, monkeypatch: pytest.M
     ):
         result = _run_command_check(
             {
-                "argv": [
-                    sys.executable,
-                    "-c",
-                    (
-                        "import sys, os;"
-                        f" raw = os.environ[{_GATE_FILES_ENV!r}];"
-                        " parts = raw.split(chr(10));"
-                        " sys.exit(0 if parts == ['a.py', 'b.py', 'c.py'] else 9)"
-                    ),
-                ],
+                "argv": _plant_probe(
+                    tmp_path,
+                    f"raw = os.environ[{_GATE_FILES_ENV!r}]\n"
+                    "assert raw.split(chr(10)) == ['a.py', 'b.py', 'c.py']",
+                ),
                 "timeout_class": "quick",
                 "scope": "changed",
             },
@@ -944,14 +960,7 @@ def test_gate_files_env_empty_string_when_no_files(
     with patch("eawf.workflow.audit_dsl.registry.changed_files", return_value=[]):
         result = _run_command_check(
             {
-                "argv": [
-                    sys.executable,
-                    "-c",
-                    (
-                        "import sys, os;"
-                        f" sys.exit(0 if os.environ.get({_GATE_FILES_ENV!r}) == '' else 11)"
-                    ),
-                ],
+                "argv": _plant_probe(tmp_path, f"assert os.environ.get({_GATE_FILES_ENV!r}) == ''"),
                 "timeout_class": "quick",
                 "scope": "changed",
             },
@@ -983,7 +992,7 @@ def test_diff_base_from_wave_id_uses_derive_wave_sha(
     with patch("eawf.workflow.audit_dsl.registry.changed_files", side_effect=_spy):
         _run_command_check(
             {
-                "argv": [sys.executable, "-c", "pass"],
+                "argv": _NOOP_ARGV,
                 "timeout_class": "quick",
                 "scope": "changed",
                 "wave_id": "P28-I01-W15",
@@ -1013,7 +1022,7 @@ def test_diff_base_falls_back_to_merge_base_when_wave_sha_missing(
     with patch("eawf.workflow.audit_dsl.registry.changed_files", side_effect=_spy):
         _run_command_check(
             {
-                "argv": [sys.executable, "-c", "pass"],
+                "argv": _NOOP_ARGV,
                 "timeout_class": "quick",
                 "scope": "changed",
                 "wave_id": "P99-I99-W99",  # legitimate-shape but unmatched
@@ -1039,7 +1048,7 @@ def test_diff_base_without_wave_id_uses_merge_base(
 
     with patch("eawf.workflow.audit_dsl.registry.changed_files", side_effect=_spy):
         _run_command_check(
-            {"argv": [sys.executable, "-c", "pass"], "timeout_class": "quick", "scope": "changed"},
+            {"argv": _NOOP_ARGV, "timeout_class": "quick", "scope": "changed"},
             tmp_path,
         )
     assert captured["base"] == "JUSTMERGEBASE"
@@ -1058,7 +1067,7 @@ def test_command_exit_zero_back_compat_no_new_kwargs(
     )
     with patch("eawf.workflow.audit_dsl.registry.changed_files", return_value=[]):
         result = _run_command_check(
-            {"argv": [sys.executable, "-c", "import sys; sys.exit(0)"]},
+            {"argv": _NOOP_ARGV},
             tmp_path,
         )
     assert result.passed is True
@@ -1079,15 +1088,10 @@ def test_gate_files_env_overrides_parent_value(
     ):
         result = _run_command_check(
             {
-                "argv": [
-                    sys.executable,
-                    "-c",
-                    (
-                        "import sys, os;"
-                        f" raw = os.environ.get({_GATE_FILES_ENV!r}, '');"
-                        " sys.exit(0 if raw == 'only_this.py' else 13)"
-                    ),
-                ],
+                "argv": _plant_probe(
+                    tmp_path,
+                    f"assert os.environ.get({_GATE_FILES_ENV!r}, '') == 'only_this.py'",
+                ),
                 "timeout_class": "quick",
                 "scope": "changed",
             },

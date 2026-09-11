@@ -21,7 +21,7 @@ fallthrough. Error-path: a gate that raises is caught and skipped (it never
 aborts the escalation), and when only a raising gate exists the runner falls
 through to the verdict tier rather than propagating.
 
-Every external seam (``compile_gate``, ``run_checks``,
+Every external seam (``compile_gate``, ``run_checks_out_of_process``,
 ``verify_wave_verdict_gate``, ``convene_cross_vendor_jury``,
 ``verdict_requirement``) is monkeypatched on the :mod:`oracle` module so
 each branch is driven deterministically with no live jury, no subprocess,
@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from eawf.kernel.spec.common import CriterionSpec, GateSpec, OracleTier
 from eawf.kernel.state.models import Wave
@@ -45,7 +46,12 @@ from eawf.observability.eval.jury_validation import BlockAuthority
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.verify import oracle
-from eawf.workflow.verify.oracle import OracleResult, run_oracle
+from eawf.workflow.verify.oracle import (
+    DETAIL_MAX_CHARS,
+    DETAIL_TRUNCATION_MARKER,
+    OracleResult,
+    run_oracle,
+)
 
 _T0 = datetime(2026, 6, 6, 12, 0, 0, tzinfo=UTC)
 
@@ -159,7 +165,9 @@ def test_run_oracle_passing_t1_gate_returns_t1_without_jury(
         lambda gate, *, criterion: CheckSpec(kind="file_exists", name=gate.id),
     )
     monkeypatch.setattr(
-        oracle, "run_checks", lambda specs, *, cwd=None: [_check_result(status="pass")]
+        oracle,
+        "run_checks_out_of_process",
+        lambda specs, *, cwd=None, live_state_path=None: [_check_result(status="pass")],
     )
     monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _forbidden_jury)
     monkeypatch.setattr(
@@ -186,7 +194,9 @@ def test_run_oracle_failing_required_gate_returns_fail_without_jury(
         lambda gate, *, criterion: CheckSpec(kind="file_exists", name=gate.id),
     )
     monkeypatch.setattr(
-        oracle, "run_checks", lambda specs, *, cwd=None: [_check_result(status="fail")]
+        oracle,
+        "run_checks_out_of_process",
+        lambda specs, *, cwd=None, live_state_path=None: [_check_result(status="fail")],
     )
     monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _forbidden_jury)
     monkeypatch.setattr(
@@ -214,9 +224,9 @@ def test_run_oracle_failing_required_gate_returns_fail_without_jury(
 def test_run_oracle_slow_deterministic_gate_does_not_starve_loop(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """CR-01: run_checks runs via asyncio.to_thread, keeping the loop responsive.
+    """CR-01: the gate child runs via asyncio.to_thread, keeping the loop responsive.
 
-    ``run_checks`` is monkeypatched to a synchronous blocker that parks its
+    ``run_checks_out_of_process`` is monkeypatched to a synchronous blocker that parks its
     caller until a concurrent driver releases it. If ``run_oracle`` called it
     inline on the event loop, the blocking call would freeze the loop and the
     concurrent driver could not advance until the gate returned. Because the
@@ -230,7 +240,12 @@ def test_run_oracle_slow_deterministic_gate_does_not_starve_loop(
     gate_entered = threading.Event()
     release = threading.Event()
 
-    def _blocking_run(specs: list[CheckSpec], *, cwd: Path | None = None) -> list[CheckResult]:
+    def _blocking_run(
+        specs: list[CheckSpec],
+        *,
+        cwd: Path | None = None,
+        live_state_path: Path | None = None,
+    ) -> list[CheckResult]:
         order.append("gate_enter")
         gate_entered.set()
         # Parks the CALLER: a worker thread when offloaded (loop stays free), the
@@ -245,7 +260,7 @@ def test_run_oracle_slow_deterministic_gate_does_not_starve_loop(
         "compile_gate",
         lambda gate, *, criterion: CheckSpec(kind="file_exists", name=gate.id),
     )
-    monkeypatch.setattr(oracle, "run_checks", _blocking_run)
+    monkeypatch.setattr(oracle, "run_checks_out_of_process", _blocking_run)
     monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _forbidden_jury)
 
     async def _drive() -> OracleResult:
@@ -335,12 +350,17 @@ def test_run_oracle_tries_gates_in_ascending_tier_order(
         seen.append(gate.id)
         return CheckSpec(kind="file_exists", name=gate.id)
 
-    def _raising_run(specs: list[CheckSpec], *, cwd: Path | None = None) -> list[CheckResult]:
+    def _raising_run(
+        specs: list[CheckSpec],
+        *,
+        cwd: Path | None = None,
+        live_state_path: Path | None = None,
+    ) -> list[CheckResult]:
         raise RuntimeError("gate unavailable")
 
     # Raised gates are skipped, so the runner exhausts every gate before falling through.
     monkeypatch.setattr(oracle, "compile_gate", _spy_compile)
-    monkeypatch.setattr(oracle, "run_checks", _raising_run)
+    monkeypatch.setattr(oracle, "run_checks_out_of_process", _raising_run)
     monkeypatch.setattr(oracle, "verdict_requirement", lambda wave: "skip")
 
     class _Gate:
@@ -370,11 +390,16 @@ def test_run_oracle_unknown_kind_gate_sorts_last(
         seen.append(gate.id)
         return CheckSpec(kind="file_exists", name=gate.id)
 
-    def _raising_run(specs: list[CheckSpec], *, cwd: Path | None = None) -> list[CheckResult]:
+    def _raising_run(
+        specs: list[CheckSpec],
+        *,
+        cwd: Path | None = None,
+        live_state_path: Path | None = None,
+    ) -> list[CheckResult]:
         raise RuntimeError("gate unavailable")
 
     monkeypatch.setattr(oracle, "compile_gate", _spy_compile)
-    monkeypatch.setattr(oracle, "run_checks", _raising_run)
+    monkeypatch.setattr(oracle, "run_checks_out_of_process", _raising_run)
     monkeypatch.setattr(oracle, "verdict_requirement", lambda wave: "skip")
 
     class _Gate:
@@ -737,7 +762,12 @@ def test_run_oracle_raising_gate_is_caught_and_skipped(
 ) -> None:
     """A gate whose run raises is caught (not propagated) and escalation continues."""
 
-    def _raising_run(specs: list[CheckSpec], *, cwd: Path | None = None) -> list[CheckResult]:
+    def _raising_run(
+        specs: list[CheckSpec],
+        *,
+        cwd: Path | None = None,
+        live_state_path: Path | None = None,
+    ) -> list[CheckResult]:
         raise RuntimeError("gate blew up")
 
     monkeypatch.setattr(
@@ -745,7 +775,7 @@ def test_run_oracle_raising_gate_is_caught_and_skipped(
         "compile_gate",
         lambda gate, *, criterion: CheckSpec(kind="file_exists", name=gate.id),
     )
-    monkeypatch.setattr(oracle, "run_checks", _raising_run)
+    monkeypatch.setattr(oracle, "run_checks_out_of_process", _raising_run)
     monkeypatch.setattr(oracle, "verdict_requirement", lambda wave: "skip")
 
     class _Gate:
@@ -774,7 +804,9 @@ def test_run_oracle_compile_returns_none_skips_gate(
 
     monkeypatch.setattr(oracle, "compile_gate", _compile)
     monkeypatch.setattr(
-        oracle, "run_checks", lambda specs, *, cwd=None: [_check_result(status="pass")]
+        oracle,
+        "run_checks_out_of_process",
+        lambda specs, *, cwd=None, live_state_path=None: [_check_result(status="pass")],
     )
     monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _forbidden_jury)
 
@@ -832,3 +864,108 @@ def test_failing_detail_raises_on_passing_result() -> None:
 
     with pytest.raises(ValueError, match="passed: no failing detail"):
         result.failing_detail()
+
+
+# --------------------------------------------------------------------------- #
+# OracleResult.detail -- a gate's unbounded output must not crash the close.
+# --------------------------------------------------------------------------- #
+
+
+def test_detail_at_the_bound_is_kept_verbatim() -> None:
+    """A detail exactly at the bound is not truncated."""
+    detail = "x" * DETAIL_MAX_CHARS
+
+    result = OracleResult(
+        tier=OracleTier.T1_STATIC,
+        status="fail",
+        criterion_id="CR-01",
+        detail=detail,
+    )
+
+    assert result.detail == detail
+    assert DETAIL_TRUNCATION_MARKER not in result.detail
+
+
+def test_detail_one_over_the_bound_is_clamped_not_refused() -> None:
+    """One character past the bound clamps; it does not raise ValidationError.
+
+    A gate that SCORED a verdict must not have that verdict turned into a
+    crashed close by the size of its own output.
+    """
+    result = OracleResult(
+        tier=OracleTier.T1_STATIC,
+        status="fail",
+        criterion_id="CR-01",
+        detail="x" * (DETAIL_MAX_CHARS + 1),
+    )
+
+    assert len(result.detail) == DETAIL_MAX_CHARS
+    assert result.detail.endswith(DETAIL_TRUNCATION_MARKER)
+
+
+def test_detail_far_over_the_bound_keeps_its_head() -> None:
+    """A kilobyte-scale gate dump keeps the leading, load-bearing summary."""
+    head = "mockup golden mismatch for 'm.txt': region=@@ -1,60 +1,60 @@"
+    result = OracleResult(
+        tier=OracleTier.T5_GOLDEN,
+        status="fail",
+        criterion_id="CR-01",
+        detail=head + "\n" + "\n".join("-" + "e" * 100 for _ in range(200)),
+    )
+
+    assert len(result.detail) == DETAIL_MAX_CHARS
+    assert result.detail.startswith(head)
+    assert result.failing_detail().endswith(DETAIL_TRUNCATION_MARKER)
+
+
+def test_detail_empty_stays_empty() -> None:
+    """The empty default is below the bound and untouched."""
+    result = OracleResult(tier=OracleTier.T1_STATIC, status="pass", criterion_id="CR-01")
+
+    assert result.detail == ""
+
+
+def test_detail_non_str_still_raises_a_type_error() -> None:
+    """The clamp normalises length only; a wrong TYPE is still refused."""
+    with pytest.raises(ValidationError):
+        OracleResult(
+            tier=OracleTier.T1_STATIC,
+            status="fail",
+            criterion_id="CR-01",
+            detail=object(),  # type: ignore[arg-type]
+        )
+
+
+def test_score_gate_run_survives_an_oversized_gate_detail(tmp_path: Path) -> None:
+    """An oversized check output is scored, not raised, and is kept in full.
+
+    This is the production shape of the clamp: the scorer reads
+    ``CheckResult.details`` straight off a gate whose output is unbounded, and
+    the untruncated text stays reachable on ``check_result``.
+    """
+    details = "\n".join("-" + "e" * 100 for _ in range(200))
+    check = CheckResult(
+        name="mockup_golden_diff",
+        kind="mockup_golden_diff",
+        passed=False,
+        status="fail",
+        details=details,
+        started_at=datetime(2026, 9, 10, tzinfo=UTC),
+        ended_at=datetime(2026, 9, 10, tzinfo=UTC),
+    )
+
+    scored = oracle._score_gate_run(
+        _criterion(gate_ids=["G-T5"]),
+        _gate("G-T5", "mockup_golden_diff"),
+        result=check,
+        tier=int(OracleTier.T5_GOLDEN),
+        scope_id="P32-I01-W46",
+        state_path=tmp_path / "state.json",
+        after_gate_execute=None,
+    )
+
+    assert scored is not None
+    assert scored.status == "fail"
+    assert len(scored.detail) == DETAIL_MAX_CHARS
+    assert scored.check_result is not None
+    assert scored.check_result.details == details

@@ -17,6 +17,7 @@ Pins the W10 sc:
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
@@ -598,11 +599,16 @@ def test_scoped_pytest_floor_carries_scoped_targets_not_whole_tree(
 
     captured: list[CheckSpec] = []
 
-    def _fake_run(specs: list[CheckSpec], *, cwd: Path) -> list[CheckResult]:
+    def _fake_run(
+        specs: Sequence[CheckSpec],
+        *,
+        cwd: Path,
+        live_state_path: Path | None = None,
+    ) -> list[CheckResult]:
         captured.extend(specs)
         return [CheckResult(name=s.name, kind=s.kind, passed=True) for s in specs]
 
-    monkeypatch.setattr(readiness_mod, "run_checks", _fake_run)
+    monkeypatch.setattr(readiness_mod, "run_checks_out_of_process", _fake_run)
 
     block = VerifyBlock(
         argv_allowlist=[],

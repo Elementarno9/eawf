@@ -277,6 +277,7 @@ Dispatch hook events through the Eä hook runner.
 
 | Verb | Summary |
 |---|---|
+| `agent-output` | Ingest one output chunk forwarded for an externally dispatched session. |
 | `dispatch` | Seed an interim verdict cohort from an ``agent_end`` event read from stdin. |
 | `eawf002-log-key` | Reject ``_id``-suffixed wave/iter/phase keys in library log messages. |
 | `eawf003-logger-acquire` | Reject library ``getLogger`` calls that do not pass ``__name__``. |
@@ -462,14 +463,25 @@ Project-level lifecycle (init).
 
 ### `eawf release`
 
-Tag releases and render release notes / changelog reports.
+Tag releases and drive the release train's checkpoint records.
 
 | Verb | Summary |
 |---|---|
+| `adopt` | Adopt a publication that ran without a release record. |
+| `advance` | Walk the train onto its next rung, or refuse and change nothing. |
+| `approve` | Approve a candidate against a readiness sweep, and record it. |
+| `burn` | Burn the version: record the spent checkpoint as partially released. |
+| `cancel` | Abandon a checkpoint that never touched a registry, or refuse. |
 | `changelog` | Mine the current ``CHANGELOG.md`` unreleased section. |
+| `create` | Open one checkpoint's DRAFT record, after measured admission. |
 | `notes` | Render a scrubbed release-notes draft. |
 | `observe` | Read one publication target back and settle it against the manifest. |
-| `preflight` | Compute every release readiness signal for one checkpoint. |
+| `preflight` | Sweep every readiness signal for one checkpoint over this checkout. |
+| `publish` | Open the publication episode and return its reference at once. |
+| `readiness` | Ask the daemon for a checkpoint's readiness sweep. |
+| `reconcile` | Settle one leg against what its publish job finally reported. |
+| `retry` | Re-queue one leg of the open episode under the idempotency proof. |
+| `show` | Describe the train ladder, one checkpoint rung, and its record. |
 | `tag` | Create the ``v<version>`` release tag and (with ``--push``) trigger the pipeline. |
 
 ### `eawf repo`
@@ -558,6 +570,7 @@ Manage phase / iter / wave specs (init / validate / promote / archive / show).
 | `convert-legacy` | Convert a scope's legacy criterion rows to typed, gated rows. |
 | `init` | Scaffold a new spec via daemon proxy (or in-process fallback). |
 | `promote` | Forward-graduate DRAFT → READY → IMPLEMENTED through the daemon. |
+| `repoint-gates` | Rewrite the recorded gate argv of a CLOSED wave after a tree move. |
 | `show` | Print a spec body (cache + on-disk; ``--from-git`` walks history). |
 | `sync` | Parse a wave spec body + materialise its criteria + gates onto state. |
 | `validate` | Re-hash the on-disk spec body + refresh the daemon cache row. |
@@ -657,11 +670,15 @@ Workspace-scoped state and repo linkage.
 
 | Verb | Summary |
 |---|---|
+| `add` | Register a workspace record with an explicit membership. |
 | `add-repo` | Append a :class:`WorkspaceRepoRef` to the workspace index. |
 | `init` | Create a workspace state document at the resolved state path. |
+| `list` | List every registered workspace, ordered by key. Read-only. |
 | `registry-list` | Enumerate repos in ``~/.eawf/registry.json``. |
 | `registry-status` | Render the workspace dashboard as text (top strip + W02 quadrant). |
 | `remove-repo` | Drop a :class:`WorkspaceRepoRef` from the workspace index. |
+| `select` | Select a workspace for the current session only. |
+| `show` | Show one workspace record, resolving it when no key is given. |
 | `status` | Print the workspace metadata + linked-repos summary. |
 | `validate` | Check that every linked repo path exists and contains ``.ea/state.json``. |
 

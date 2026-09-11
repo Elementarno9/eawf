@@ -1,11 +1,24 @@
-"""``eawf release`` Typer sub-app."""
+"""``eawf release`` Typer sub-app.
+
+Two kinds of verb live here. ``tag``, ``changelog``, ``notes``,
+``preflight`` and ``train show`` are local: they read the checkout and
+the authored checkpoint and print. The rest dispatch to the daemon's
+``release.*`` JSON-RPC namespace, because they read or write records the
+daemon owns.
+
+:data:`RELEASE_RPC_METHODS` is the parity map between the two -- every
+registered ``release.*`` method names the subcommand that reaches it, so
+a verb added to the daemon without an operator surface reds the parity
+test rather than shipping as substrate nobody can call.
+"""
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any, Final
 
 import orjson
 import typer
@@ -23,9 +36,28 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+#: ``eawf release <subcommand>`` -> the ``release.*`` JSON-RPC method it
+#: dispatches to. The map is asserted total over the daemon's registered
+#: release namespace, so it is the contract "no release verb is
+#: unreachable", not a convenience index.
+RELEASE_RPC_METHODS: Final[Mapping[str, str]] = {
+    "show": "release.show",
+    "readiness": "release.compute_readiness",
+    "create": "release.create",
+    "approve": "release.approve",
+    "publish": "release.publish",
+    "retry": "release.retry_target",
+    "reconcile": "release.reconcile",
+    "observe": "release.observe_target",
+    "burn": "release.burn",
+    "adopt": "release.adopt",
+    "cancel": "release.cancel",
+    "advance": "release.advance_train",
+}
+
 release_app = typer.Typer(
     name="release",
-    help="Tag releases and render release notes / changelog reports.",
+    help="Tag releases and drive the release train's checkpoint records.",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -88,7 +120,11 @@ def _sweep_release(
 
     The tag chokepoint and the ``preflight`` verb both come through
     here, so the sweep an operator inspects is the one the push is
-    gated on rather than a second opinion computed elsewhere.
+    gated on rather than a second opinion computed elsewhere. The
+    composition itself lives in
+    :func:`~eawf.runtime.release.chokepoint.sweep_for_tag`; what this
+    wrapper adds is the CLI's configuration resolution and its error
+    vocabulary.
 
     Args:
         version: Checkpoint version being swept.
@@ -107,26 +143,19 @@ def _sweep_release(
     from datetime import UTC, datetime
 
     from eawf import __version__
-    from eawf.workflow.verify.release_probes import TagPreflightInputs, build_tag_probes
-    from eawf.workflow.verify.release_readiness import compute_readiness
+    from eawf.runtime.release import sweep_for_tag
 
     config = _checkpoint_config(version)
     try:
-        probes = build_tag_probes(
-            TagPreflightInputs(
-                repo_root=repo_root,
-                version=version,
-                tag=f"v{version}",
-                package_version=__version__,
-                remote=remote,
-            )
-        )
-        return compute_readiness(
+        return sweep_for_tag(
             config,
-            probes=probes,
-            observed_revision=source,
-            computed_at=datetime.now(UTC),
+            version=version,
+            repo_root=repo_root,
+            remote=remote,
+            package_version=__version__,
+            source=source,
             waiver_count=waiver_count,
+            computed_at=datetime.now(UTC),
         )
     except ValueError as exc:
         raise cli_errors.ValidationError(str(exc)) from exc
@@ -537,6 +566,81 @@ def _read_json_document(path: Path, *, label: str) -> dict[str, object]:
     return decoded
 
 
+def _release_document(path: Path, release_key: str) -> dict[str, Any]:
+    """Return the serialized release record at *path*, keyed as expected.
+
+    Args:
+        path: File holding the serialized record.
+        release_key: The key the operator named on the command line.
+
+    Returns:
+        The decoded record.
+
+    Raises:
+        cli_errors.UserError: When the file cannot be read, or holds a
+            record for a different release -- acting on the wrong
+            checkpoint is the mistake worth a refusal here.
+        cli_errors.ValidationError: When the file is not a JSON object.
+    """
+    record = _read_json_document(path, label="release record")
+    if record.get("key") != release_key:
+        raise cli_errors.UserError(
+            f"{path} holds release {record.get('key')!r}, not {release_key!r}",
+            kind="InvalidInput",
+        )
+    return record
+
+
+def _dispatch(method: str, params: dict[str, Any]) -> dict[str, Any]:
+    """Call one ``release.*`` JSON-RPC method and return its result.
+
+    Args:
+        method: Fully-qualified method name, e.g. ``release.publish``.
+        params: Already-assembled JSON-RPC params.
+
+    Returns:
+        The handler's result object.
+
+    Raises:
+        cli_errors.UserError: With ``data.kind="DaemonError"`` when the
+            daemon refuses the call or cannot be reached. The refusal is
+            surfaced verbatim: a release verb denied for a named reason
+            is the answer, not a failure to be reworded.
+    """
+    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+    try:
+        with DaemonClient() as client:
+            return client.call(method, params)
+    except DaemonRpcError as exc:
+        raise cli_errors.UserError(
+            f"daemon rejected {method}: code={exc.code} {exc.message}", kind="DaemonError"
+        ) from exc
+    except (OSError, RuntimeError) as exc:
+        raise cli_errors.UserError(
+            f"daemon unavailable for {method}: {exc}", kind="DaemonError"
+        ) from exc
+
+
+def _record_line(result: dict[str, Any]) -> str:
+    """Return the one-line summary of a reply carrying a release record."""
+    record = result.get("release") or {}
+    return f"{record.get('key')} {record.get('status')} revision={record.get('revision')}"
+
+
+def _operation_line(result: dict[str, Any]) -> str:
+    """Return the operator-facing summary of a publication-verb reply."""
+    operation = result.get("operation") or {}
+    rows = operation.get("publication_receipts") or ()
+    legs = ", ".join(
+        f"{row.get('target_id')}#{row.get('attempt')}={row.get('status')}"
+        for row in rows
+        if isinstance(row, dict)
+    )
+    replayed = " (replayed)" if result.get("replayed") else ""
+    return f"{_record_line(result)}{replayed}\n  operation: {result.get('operation_ref')}\n  {legs}"
+
+
 @release_app.command("observe")
 def release_observe(
     ctx: typer.Context,
@@ -584,17 +688,10 @@ def release_observe(
     reports ``registry_unreachable`` and the verb refuses -- which is the
     honest answer for a registry nobody queried.
     """
-    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
-
     flags: GlobalFlags = ctx.obj
     try:
-        record = _read_json_document(release_file, label="release record")
-        if record.get("key") != release_key:
-            raise cli_errors.UserError(
-                f"{release_file} holds release {record.get('key')!r}, not {release_key!r}",
-                kind="InvalidInput",
-            )
-        params: dict[str, object] = {
+        record = _release_document(release_file, release_key)
+        params: dict[str, Any] = {
             "release": record,
             "expected_revision": record.get("revision", 0),
             "idempotency_key": idempotency_key,
@@ -604,27 +701,9 @@ def release_observe(
         }
         if response_file is not None:
             params["response"] = _read_json_document(response_file, label="recorded response")
-        with DaemonClient() as client:
-            result = client.call("release.observe_target", params)
+        result = _dispatch(RELEASE_RPC_METHODS["observe"], params)
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
-        return
-    except DaemonRpcError as exc:
-        cli_errors.emit_error(
-            cli_errors.UserError(
-                f"daemon rejected release.observe_target: code={exc.code} {exc.message}",
-                kind="DaemonError",
-            ),
-            flags=flags,
-        )
-        return
-    except (OSError, RuntimeError) as exc:
-        cli_errors.emit_error(
-            cli_errors.UserError(
-                f"daemon unavailable for release.observe_target: {exc}", kind="DaemonError"
-            ),
-            flags=flags,
-        )
         return
     observation = result.get("observation") or {}
     observed = result.get("release") or {}
@@ -655,7 +734,7 @@ def release_preflight(
         typer.Option("--waiver-count", help="Gate waivers recorded against the checkpoint."),
     ] = 0,
 ) -> None:
-    """Compute every release readiness signal for one checkpoint.
+    """Sweep every readiness signal for one checkpoint over this checkout.
 
     The sweep never fail-fasts: all twelve signals are reported on every
     run, so one pass shows the whole repair list rather than the first
@@ -666,6 +745,11 @@ def release_preflight(
     the same one the release workflow runs before its publish job, so a
     tag pushed by hand meets it too. A non-ready sweep exits non-zero
     after printing every row -- the whole repair list, then the refusal.
+
+    It runs the tag probes against the working copy, which is what makes
+    it the tag chokepoint. ``eawf release readiness`` asks the daemon for
+    the same sweep without them, and is the verb to reach for when the
+    question is which status a candidate record would land in.
     """
     flags: GlobalFlags = ctx.obj
     try:
@@ -694,4 +778,566 @@ def release_preflight(
         raise typer.Exit(exit_codes.STATE_CONFLICT)
 
 
-__all__ = ["release_app"]
+@release_app.command("show")
+def release_show(
+    ctx: typer.Context,
+    version: Annotated[
+        str | None,
+        typer.Argument(help="Checkpoint version to describe (default: the open rung)."),
+    ] = None,
+) -> None:
+    """Describe the train ladder, one checkpoint rung, and its record.
+
+    "Which rung exists" and "has that rung been cut" are different
+    questions. The ladder answers the first from source; the second is
+    the recorded release, which the daemon reads back -- so an operator
+    asking where a checkpoint stands never has to open a store file. A
+    rung nobody has opened answers ``record: none`` rather than refusing.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        result = _dispatch(RELEASE_RPC_METHODS["show"], {"version": version})
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    checkpoint = result.get("checkpoint") or {}
+    record = result.get("record")
+    standing = "none (never opened)" if record is None else _record_line({"release": record})
+    text = (
+        f"{result.get('train_id')} -> {result.get('target_version')}  "
+        f"index={result.get('current_checkpoint_index')}\n"
+        f"  checkpoint: {checkpoint.get('version')} ({checkpoint.get('release_key')})\n"
+        f"  record: {standing}"
+    )
+    emit_json_or_text(result, text, flags=flags)
+
+
+@release_app.command("readiness")
+def release_readiness(
+    ctx: typer.Context,
+    version: Annotated[str, typer.Argument(help="Checkpoint version, e.g. 0.7.0.dev1.")],
+    release_file: Annotated[
+        Path | None,
+        typer.Option("--release", help="Candidate record the sweep result is applied to."),
+    ] = None,
+    source: Annotated[
+        str | None,
+        typer.Option("--source", help="Source revision the sweep is computed against."),
+    ] = None,
+    waiver_count: Annotated[
+        int,
+        typer.Option("--waiver-count", help="Gate waivers recorded against the checkpoint."),
+    ] = 0,
+    waivers_file: Annotated[
+        Path | None,
+        typer.Option("--waivers", help="JSON object with a 'waivers' list explaining the count."),
+    ] = None,
+    acknowledgements_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--acknowledgements",
+            help="JSON object with an 'acknowledgements' list accepting the waivers.",
+        ),
+    ] = None,
+) -> None:
+    """Ask the daemon for a checkpoint's readiness sweep.
+
+    Pass ``--release`` to also learn which status the sweep result moves
+    that candidate into, which is the question worth asking before
+    approving it.
+
+    A counted waiver with no rows behind it classifies ``unexplained``
+    and no acknowledgement can clear it, so ``--waivers`` and
+    ``--acknowledgements`` carry the rows rather than leaving the count
+    unexplained. Both files are JSON objects holding the list under the
+    option's own name.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        params: dict[str, Any] = {
+            "version": version,
+            "observed_revision": source,
+            "waiver_count": waiver_count,
+        }
+        if waivers_file is not None:
+            params["waivers"] = _read_json_document(waivers_file, label="waiver rows")["waivers"]
+        if acknowledgements_file is not None:
+            params["acknowledgements"] = _read_json_document(
+                acknowledgements_file, label="acknowledgement rows"
+            )["acknowledgements"]
+        if release_file is not None:
+            params["release"] = _read_json_document(release_file, label="release record")
+        result = _dispatch(RELEASE_RPC_METHODS["readiness"], params)
+    except KeyError as exc:
+        cli_errors.emit_error(
+            cli_errors.ValidationError(f"waiver document is missing the {exc} key"), flags=flags
+        )
+        return
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    readiness = result.get("readiness") or {}
+    rows = readiness.get("signals") or ()
+    lines = [
+        f"{readiness.get('release_key')}  ready={readiness.get('ready')}  "
+        f"waivers={readiness.get('waiver_count')}"
+    ]
+    lines.extend(
+        f"  {row.get('signal'):<20} {row.get('status')}" for row in rows if isinstance(row, dict)
+    )
+    if result.get("first_red") is not None:
+        lines.append(f"first red: {result['first_red']}")
+    if "next_status" in result:
+        lines.append(f"candidate would become: {result['next_status']}")
+    emit_json_or_text(result, "\n".join(lines), flags=flags)
+
+
+@release_app.command("create")
+def release_create(
+    ctx: typer.Context,
+    version: Annotated[str, typer.Argument(help="Checkpoint version to open, e.g. 0.7.0.dev2.")],
+    membership_ref: Annotated[
+        list[str] | None,
+        typer.Option("--membership-ref", help="Milestone acceptance bundle; repeatable."),
+    ] = None,
+) -> None:
+    """Open one checkpoint's DRAFT record, after measured admission.
+
+    A checkpoint the admission table covers cannot be opened until every
+    measured contract backing it is promoted and resolvable. The refusal
+    names the single missing contract plus the command that promotes it,
+    so the next action is in the error rather than in a runbook.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        result = _dispatch(
+            RELEASE_RPC_METHODS["create"],
+            {"version": version, "membership_refs": list(membership_ref or ())},
+        )
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    contracts = ", ".join(result.get("measured_contracts") or ()) or "(none required)"
+    text = (
+        f"{_record_line(result)}\n"
+        f"  record: {result.get('release_record_id')}\n"
+        f"  measured contracts: {contracts}"
+    )
+    emit_json_or_text(result, text, flags=flags)
+
+
+@release_app.command("approve")
+def release_approve(
+    ctx: typer.Context,
+    release_key: Annotated[
+        str, typer.Argument(help="Release key to approve, e.g. REL-0.7.0.dev1.")
+    ],
+    release_file: Annotated[
+        Path,
+        typer.Option("--release", help="Path to the serialized candidate record."),
+    ],
+    readiness_file: Annotated[
+        Path,
+        typer.Option("--readiness", help="Path to the readiness sweep the approval binds."),
+    ],
+    approval_ref: Annotated[
+        str, typer.Option("--approval-ref", help="Reference to the approval receipt.")
+    ],
+) -> None:
+    """Approve a candidate against a readiness sweep, and record it.
+
+    The approval is the decision the whole publication path is authorised
+    by, so it is written to the release-record collection before the
+    reply is built. A sweep whose required signals are not all passing
+    denies ``release_not_ready`` naming the first red row.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        result = _dispatch(
+            RELEASE_RPC_METHODS["approve"],
+            {
+                "release": _release_document(release_file, release_key),
+                "readiness": _read_json_document(readiness_file, label="readiness sweep"),
+                "approval_ref": approval_ref,
+            },
+        )
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    text = f"{_record_line(result)}\n  record: {result.get('release_record_id')}"
+    emit_json_or_text(result, text, flags=flags)
+
+
+@release_app.command("publish")
+def release_publish(
+    ctx: typer.Context,
+    release_key: Annotated[
+        str, typer.Argument(help="Release key to publish, e.g. REL-0.7.0.dev1.")
+    ],
+    release_file: Annotated[
+        Path,
+        typer.Option("--release", help="Path to the serialized approved record."),
+    ],
+    approved_manifest_digest: Annotated[
+        str, typer.Option("--approved-manifest-digest", help="Manifest digest the approval bound.")
+    ],
+    proof_digest: Annotated[
+        str, typer.Option("--proof-digest", help="Digest binding the exact artifact set.")
+    ],
+    idempotency_key: Annotated[
+        str, typer.Option("--idempotency-key", help="Replay identity of this publication.")
+    ],
+    source: Annotated[
+        str | None,
+        typer.Option("--source", help="Source revision the chokepoint sweep runs at."),
+    ] = None,
+    waiver_count: Annotated[
+        int,
+        typer.Option("--waiver-count", help="Gate waivers recorded against the checkpoint."),
+    ] = 0,
+) -> None:
+    """Open the publication episode and return its reference at once.
+
+    The chokepoint sweep is recomputed here rather than trusted from the
+    approval, because the last thing to run before external effect has to
+    be a fresh preflight. The legs are queued, not awaited, so the verb
+    returns the operation reference immediately and a slow registry
+    cannot hold the call open. Replaying the same idempotency key with
+    the same payload returns the original receipt instead of publishing
+    twice.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        record = _release_document(release_file, release_key)
+        result = _dispatch(
+            RELEASE_RPC_METHODS["publish"],
+            {
+                "release": record,
+                "expected_revision": record.get("revision", 0),
+                "idempotency_key": idempotency_key,
+                "approved_manifest_digest": approved_manifest_digest,
+                "proof_digest": proof_digest,
+                "observed_revision": source,
+                "waiver_count": waiver_count,
+            },
+        )
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    emit_json_or_text(result, _operation_line(result), flags=flags)
+
+
+@release_app.command("retry")
+def release_retry(
+    ctx: typer.Context,
+    release_key: Annotated[str, typer.Argument(help="Release key whose leg is re-queued.")],
+    target: Annotated[str, typer.Option("--target", help="The single leg to re-queue.")],
+    release_file: Annotated[
+        Path,
+        typer.Option("--release", help="Path to the serialized record being retried."),
+    ],
+    proof_digest: Annotated[
+        str,
+        typer.Option("--proof-digest", help="Artifact-set digest; must equal the operation's."),
+    ],
+    idempotency_key: Annotated[
+        str, typer.Option("--idempotency-key", help="Replay identity of this retry.")
+    ],
+) -> None:
+    """Re-queue one leg of the open episode under the idempotency proof.
+
+    The proof digest must equal the open operation's: a retry against a
+    different artifact set is a different publication wearing the same
+    version, and the verb refuses it ``unsafe_release_retry`` rather than
+    letting one version mean two builds.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        record = _release_document(release_file, release_key)
+        result = _dispatch(
+            RELEASE_RPC_METHODS["retry"],
+            {
+                "release": record,
+                "expected_revision": record.get("revision", 0),
+                "idempotency_key": idempotency_key,
+                "target_id": target,
+                "proof_digest": proof_digest,
+            },
+        )
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    emit_json_or_text(result, _operation_line(result), flags=flags)
+
+
+@release_app.command("reconcile")
+def release_reconcile(
+    ctx: typer.Context,
+    release_key: Annotated[str, typer.Argument(help="Release key whose leg is settled.")],
+    target: Annotated[str, typer.Option("--target", help="The leg whose adapter reported late.")],
+    release_file: Annotated[
+        Path,
+        typer.Option("--release", help="Path to the serialized record being reconciled."),
+    ],
+    idempotency_key: Annotated[
+        str, typer.Option("--idempotency-key", help="Replay identity of this reconciliation.")
+    ],
+    status: Annotated[
+        str | None,
+        typer.Option(
+            "--status", help="Asserted result: reported_success/reported_failure/unknown."
+        ),
+    ] = None,
+    receipt_file: Annotated[
+        Path | None,
+        typer.Option("--receipt", help="The publish job's own receipt, which decides the status."),
+    ] = None,
+    effect_receipt_ref: Annotated[
+        str | None,
+        typer.Option("--effect-receipt", help="Adapter receipt the reported status points at."),
+    ] = None,
+) -> None:
+    """Settle one leg against what its publish job finally reported.
+
+    The word arrives either as an operator-asserted ``--status`` or as
+    the job's downloaded ``--receipt``, never both: attaching a green
+    receipt to a failure claim would leave the ledger holding the claim.
+    Neither door reaches an ``observed_*`` status -- confirming an
+    artifact is really on the registry is ``eawf release observe``.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        if (status is None) == (receipt_file is None):
+            raise cli_errors.UserError(
+                "reconcile takes exactly one of --status (the asserted result) or --receipt "
+                "(the publish job's own, which decides the status)",
+                kind="InvalidInput",
+            )
+        record = _release_document(release_file, release_key)
+        params: dict[str, Any] = {
+            "release": record,
+            "expected_revision": record.get("revision", 0),
+            "idempotency_key": idempotency_key,
+            "target_id": target,
+            "effect_receipt_ref": effect_receipt_ref,
+        }
+        if status is not None:
+            params["status"] = status
+        else:
+            params["receipt"] = _read_json_document(
+                Path(str(receipt_file)), label="publication receipt"
+            )
+        result = _dispatch(RELEASE_RPC_METHODS["reconcile"], params)
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    emit_json_or_text(result, _operation_line(result), flags=flags)
+
+
+@release_app.command("burn")
+def release_burn(
+    ctx: typer.Context,
+    release_key: Annotated[str, typer.Argument(help="Release key to burn, e.g. REL-0.7.0.dev1.")],
+    release_file: Annotated[
+        Path,
+        typer.Option("--release", help="Path to the serialized recovering record."),
+    ],
+    reason: Annotated[
+        str, typer.Option("--reason", help="Why the version is spent; recorded with the burn.")
+    ],
+    idempotency_key: Annotated[
+        str, typer.Option("--idempotency-key", help="Replay identity of this burn.")
+    ],
+) -> None:
+    """Burn the version: record the spent checkpoint as partially released.
+
+    The burn is terminal. It freezes the pinned source, tree and manifest
+    exactly as recovery found them, abandons the open publication
+    operation, and leaves a record that can never return to draft or
+    cancelled -- a burned version is corrected by the next version, never
+    by reopening this one. ``--reason`` is mandatory and is written
+    beside the burned record: a terminal status with no stated cause
+    reads as an outcome rather than as an abandonment.
+
+    The verb refuses ``recovery_budget_available`` while any configured
+    leg still has a retry left, so a version cannot be declared spent
+    while recovery could still succeed.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        record = _release_document(release_file, release_key)
+        result = _dispatch(
+            RELEASE_RPC_METHODS["burn"],
+            {
+                "release": record,
+                "expected_revision": record.get("revision", 0),
+                "idempotency_key": idempotency_key,
+                "reason": reason,
+            },
+        )
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    settled = _operation_line(result) if result.get("operation_ref") else _record_line(result)
+    text = (
+        f"{settled}\n  record: {result.get('release_record_id')}\n  reason: {result.get('reason')}"
+    )
+    emit_json_or_text(result, text, flags=flags)
+
+
+@release_app.command("adopt")
+def release_adopt(
+    ctx: typer.Context,
+    release_key: Annotated[
+        str, typer.Argument(help="Release key to adopt into, e.g. REL-0.7.0.dev1.")
+    ],
+    release_file: Annotated[
+        Path,
+        typer.Option("--release", help="Path to the serialized draft record."),
+    ],
+    adoption_file: Annotated[
+        Path,
+        typer.Option("--adoption", help="Path to the observed per-target facts, as JSON."),
+    ],
+) -> None:
+    """Adopt a publication that ran without a release record.
+
+    The verb writes observed facts and nothing else: one independent
+    read-back per target, the incident they belong to, and why the
+    version is being written up this way. It asserts no approval, runs
+    no readiness sweep and pins no manifest, because none of the three
+    happened -- and the record model forbids an adoption beside an
+    approval reference, so the adopted checkpoint can never be mistaken
+    for one that earned its approval.
+
+    Every configured target must carry a read-back or the call is
+    refused; a target the checkpoint never declared is recorded and
+    named back, because an uncontrolled publication can reach somewhere
+    the configuration does not know about.
+
+    The record stays a draft. ``eawf release burn`` ends it, and
+    ``eawf release cancel`` is refused on it from here on.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        record = _release_document(release_file, release_key)
+        result = _dispatch(
+            RELEASE_RPC_METHODS["adopt"],
+            {
+                "release": record,
+                "expected_revision": record.get("revision", 0),
+                "adoption": _read_json_document(adoption_file, label="adoption"),
+            },
+        )
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    observed = result.get("observed_targets") or {}
+    legs = ", ".join(f"{target}={status}" for target, status in sorted(observed.items()))
+    unconfigured = ", ".join(result.get("unconfigured_targets") or ()) or "(none)"
+    text = (
+        f"{_record_line(result)}\n"
+        f"  record: {result.get('release_record_id')}\n"
+        f"  observed: {legs}\n"
+        f"  not configured: {unconfigured}"
+    )
+    emit_json_or_text(result, text, flags=flags)
+
+
+@release_app.command("cancel")
+def release_cancel(
+    ctx: typer.Context,
+    release_key: Annotated[str, typer.Argument(help="Release key to cancel, e.g. REL-0.7.0.dev1.")],
+    release_file: Annotated[
+        Path,
+        typer.Option("--release", help="Path to the serialized record being abandoned."),
+    ],
+    reason: Annotated[
+        str, typer.Option("--reason", help="Why the checkpoint is abandoned; recorded with it.")
+    ],
+) -> None:
+    """Abandon a checkpoint that never touched a registry, or refuse.
+
+    A cancellation asserts that nothing was published under this
+    version, so the assertion is checked against the record itself: an
+    adopted publication, an opened publication operation or any leg past
+    ``not_started`` denies ``release_effect_already_started``. A spent
+    version is burned, never cancelled.
+
+    ``--reason`` is mandatory for the same reason the burn's is:
+    ``cancelled`` is terminal, so no later transition can explain it.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        record = _release_document(release_file, release_key)
+        result = _dispatch(
+            RELEASE_RPC_METHODS["cancel"],
+            {
+                "release": record,
+                "expected_revision": record.get("revision", 0),
+                "reason": reason,
+            },
+        )
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    text = (
+        f"{_record_line(result)}\n"
+        f"  record: {result.get('release_record_id')}\n"
+        f"  reason: {result.get('reason')}"
+    )
+    emit_json_or_text(result, text, flags=flags)
+
+
+@release_app.command("advance")
+def release_advance(
+    ctx: typer.Context,
+    release_key: Annotated[str, typer.Argument(help="Release key standing at the open rung.")],
+    release_file: Annotated[
+        Path,
+        typer.Option("--release", help="Path to the serialized record at the open checkpoint."),
+    ],
+    receipt_file: Annotated[
+        list[Path] | None,
+        typer.Option("--receipt", help="A checkpoint gate receipt, as JSON; repeatable."),
+    ] = None,
+    membership_ref: Annotated[
+        list[str] | None,
+        typer.Option("--membership-ref", help="Milestone bundle for the rung being opened."),
+    ] = None,
+) -> None:
+    """Walk the train onto its next rung, or refuse and change nothing.
+
+    The index moves only from a baked or released checkpoint whose every
+    required gate receipt still binds its exact source and manifest. The
+    closing record comes back unchanged beside the opened DRAFT, so the
+    caller can assert the prior rung was not rewritten.
+    """
+    flags: GlobalFlags = ctx.obj
+    try:
+        result = _dispatch(
+            RELEASE_RPC_METHODS["advance"],
+            {
+                "release": _release_document(release_file, release_key),
+                "receipts": [
+                    _read_json_document(path, label="gate receipt") for path in (receipt_file or ())
+                ],
+                "membership_refs": list(membership_ref or ()),
+            },
+        )
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    closed = result.get("closed") or {}
+    opened = result.get("opened") or {}
+    train = result.get("train") or {}
+    text = (
+        f"closed {closed.get('key')} ({closed.get('status')}) -> "
+        f"opened {opened.get('key')} ({opened.get('status')})\n"
+        f"  index: {train.get('current_checkpoint_index')}\n"
+        f"  receipts: {', '.join(result.get('receipt_refs') or ()) or '(none)'}"
+    )
+    emit_json_or_text(result, text, flags=flags)
+
+
+__all__ = ["RELEASE_RPC_METHODS", "release_app"]

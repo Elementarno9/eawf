@@ -12,6 +12,9 @@ walk, or import-from-discovery path. This package ships:
 - :mod:`eawf.platform.registry.staleness`: the 14-day OR-chain
   (:func:`is_stale`) plus the mtime / state-load helpers that feed
   it.
+- :mod:`eawf.platform.registry.workspace`: the workspace resolution
+  ladder (:func:`resolve_workspace`) and the membership algebra the
+  daemon mutator and its daemonless fallback share.
 
 The mutator side lives in :mod:`eawf.surfaces.cli.commands.repo` (which
 dispatches to the daemon's ``registry.update`` RPC by default per
@@ -31,6 +34,7 @@ from eawf.platform.registry.models import (
     Registry,
     RegistryReadError,
     RegistryRepoEntry,
+    WorkspaceRecord,
     default_registry_path,
     read_registry,
     reject_implicit_growth,
@@ -42,20 +46,51 @@ from eawf.platform.registry.staleness import (
     registry_mtime,
     repo_state_mtime,
 )
+from eawf.platform.registry.workspace import (
+    WORKSPACE_ALREADY_REGISTERED,
+    WORKSPACE_AMBIGUOUS,
+    WORKSPACE_NOT_REGISTERED,
+    WORKSPACE_REVISION_CONFLICT,
+    WorkspaceMutationError,
+    WorkspaceResolution,
+    WorkspaceResolutionError,
+    WorkspaceSource,
+    create_workspace,
+    get_workspace,
+    list_workspaces,
+    project_codes_at_root,
+    resolve_workspace,
+    update_membership,
+)
 
 __all__ = [
     "EXPLICIT_GROWTH_SURFACES",
     "FORBIDDEN_GROWTH_PATHS",
     "STALE_AFTER",
+    "WORKSPACE_ALREADY_REGISTERED",
+    "WORKSPACE_AMBIGUOUS",
+    "WORKSPACE_NOT_REGISTERED",
+    "WORKSPACE_REVISION_CONFLICT",
     "ImplicitRegistryGrowthError",
     "Registry",
     "RegistryReadError",
     "RegistryRepoEntry",
+    "WorkspaceMutationError",
+    "WorkspaceRecord",
+    "WorkspaceResolution",
+    "WorkspaceResolutionError",
+    "WorkspaceSource",
+    "create_workspace",
     "default_registry_path",
+    "get_workspace",
     "is_stale",
+    "list_workspaces",
+    "project_codes_at_root",
     "read_registry",
     "read_repo_state",
     "registry_mtime",
     "reject_implicit_growth",
     "repo_state_mtime",
+    "resolve_workspace",
+    "update_membership",
 ]

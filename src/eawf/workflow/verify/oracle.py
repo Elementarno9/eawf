@@ -13,8 +13,15 @@ The runner is a thin orchestrator over three pre-existing seams:
 * :func:`eawf.workflow.verify.compile.compile_gate` turns a typed gate +
   criterion into a runnable :class:`~eawf.workflow.audit_dsl.models.CheckSpec`
   (only ``evidence_kind == "deterministic"`` compiles; else ``None``).
-* :func:`eawf.workflow.audit_dsl.runner.run_checks` executes a compiled
-  spec against the checkout.
+* :func:`eawf.workflow.verify.sandboxed_checks.run_checks_out_of_process`
+  (advisory scoring) and
+  :func:`eawf.runtime.daemon.gate_execution.run_gate_out_of_process`
+  (durable scoring) execute a compiled spec against the checkout from a
+  child interpreter pinned to a throwaway runtime directory and ledger.
+  Deterministic gates are routinely whole test suites, and a suite that
+  exercises eawf's own RPCs drives whichever runtime pair its process
+  points at; scoring in the calling process would make that the LIVE
+  pair, so no branch here executes a check itself.
 * the jury tier consults either the async cross-vendor jury
   (:func:`eawf.observability.eval.cross_vendor_jury.convene_cross_vendor_jury`)
   when the wave's :func:`eawf.workflow.dispatch.verdict.verdict_requirement`
@@ -28,11 +35,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from functools import partial
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from eawf.kernel.spec.common import (
     CriterionSpec,
@@ -41,6 +47,7 @@ from eawf.kernel.spec.common import (
     _StrictModel,
     _tier_for_gate_kind,
 )
+from eawf.kernel.spec.falsifiability import unfalsifiable_argv
 from eawf.kernel.state.enums import RiskTier
 from eawf.kernel.state.models import IdStr, State, Wave
 from eawf.observability.eval.cross_vendor_jury import (
@@ -50,13 +57,18 @@ from eawf.observability.eval.cross_vendor_jury import (
 from eawf.observability.eval.jury import JuryAggregateOutcome
 from eawf.observability.eval.jury_validation import BlockAuthority
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec, GateFreshnessInput
-from eawf.workflow.audit_dsl.runner import run_checks
 from eawf.workflow.dispatch.verdict import (
     verdict_requirement,
     verify_wave_verdict_gate,
 )
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.verify.compile import compile_gate
+from eawf.workflow.verify.gate_receipts import (
+    append_gate_execution_receipt,
+    gate_execution_receipt,
+)
+from eawf.workflow.verify.sandboxed_checks import run_checks_out_of_process
+from eawf.workflow.verify.vacuous_gate import vacuous_gate_run
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +77,16 @@ BeforeGateExecute = Callable[
     CheckResult | None,
 ]
 AfterGateExecute = Callable[[str, str, CheckResult], None]
+
+#: Character bound on :attr:`OracleResult.detail`. The detail rides into
+#: the close-refusal message and into the state-resident evidence row, so
+#: it is a summary field with a deliberate bound.
+DETAIL_MAX_CHARS: int = 2000
+
+#: Suffix marking a detail that was clamped to :data:`DETAIL_MAX_CHARS`,
+#: so a reader can tell a short detail from the head slice of a long one
+#: and knows the untruncated output is still on ``check_result``.
+DETAIL_TRUNCATION_MARKER: str = "... (truncated; full output on check_result)"
 
 
 class OracleResult(_StrictModel):
@@ -83,8 +105,37 @@ class OracleResult(_StrictModel):
     status: Literal["pass", "fail", "blocked", "needs_user"]
     criterion_id: IdStr
     gate_id: IdStr | None = None
-    detail: Annotated[str, Field(max_length=2000)] = ""
+    detail: Annotated[str, Field(max_length=DETAIL_MAX_CHARS)] = ""
     check_result: CheckResult | None = None
+
+    @field_validator("detail", mode="before")
+    @classmethod
+    def _clamp_detail(cls, value: object) -> object:
+        """Clamp an over-long detail rather than refusing to build the result.
+
+        A gate's own output is unbounded: a failing pytest run dumps kilobytes,
+        and a golden mismatch inlines a unified diff of a full-width screen.
+        Letting that overflow the field turns a gate the oracle SCORED into a
+        ``ValidationError`` raised out of the scorer, which crashes the close
+        instead of blocking it -- the loudest possible way to lose a verdict
+        that had already been reached. The head slice is kept because the
+        load-bearing part of every detail (the summary sentence, the diff
+        region marker, the first changed line) sits at the front, and the
+        untruncated output stays on ``check_result``.
+
+        Args:
+            value: The raw ``detail`` input, of any type.
+
+        Returns:
+            *value* unchanged when it is not an over-long string, else its
+            head slice with :data:`DETAIL_TRUNCATION_MARKER` appended. A
+            non-``str`` passes through so the field's own type error is the
+            one the caller sees.
+        """
+        if not isinstance(value, str) or len(value) <= DETAIL_MAX_CHARS:
+            return value
+        head = DETAIL_MAX_CHARS - len(DETAIL_TRUNCATION_MARKER)
+        return value[:head] + DETAIL_TRUNCATION_MARKER
 
     def failing_detail(self) -> str:
         """Return the concrete failing-check output for a refused criterion.
@@ -158,29 +209,221 @@ def _reused_pass_result(
     )
 
 
+def _gate_argv(gate: GateSpec) -> list[str]:
+    """Return the gate's argv vector, empty for a gate kind that runs none.
+
+    Args:
+        gate: The gate row whose ``args`` may carry an ``argv`` vector.
+
+    Returns:
+        The argv tokens as strings; empty when the kind carries no argv.
+    """
+    argv = gate.args.get("argv")
+    if not isinstance(argv, list):
+        return []
+    return [str(token) for token in argv]
+
+
+def _record_gate_execution(
+    state_path: Path,
+    *,
+    scope_id: str,
+    criterion_id: str,
+    gate_id: str,
+    result: CheckResult | None,
+    status: Literal["pass", "fail", "blocked"],
+    argv: list[str] | None = None,
+) -> None:
+    """Persist one durable receipt for a gate this close just executed.
+
+    A receipt is best-effort with respect to the close: a store that
+    refuses the append must not convert a scored gate into a crashed
+    close, so the failure is logged and the scoring continues.
+
+    Args:
+        state_path: Path to ``state.json``; anchors the evidence store.
+        scope_id: Wave URN the gate scored.
+        criterion_id: Criterion the gate was attached to.
+        gate_id: Id of the gate that ran.
+        result: The runner's result, or ``None`` when the gate died
+            before producing one.
+        status: The closed outcome word recorded on the receipt.
+        argv: Fallback argv, used when *result* is ``None``.
+    """
+    try:
+        append_gate_execution_receipt(
+            state_path,
+            gate_execution_receipt(
+                scope_id=scope_id,
+                criterion_id=criterion_id,
+                gate_id=gate_id,
+                argv=(result.argv if result is not None else argv),
+                exit_status=(result.exit_status if result is not None else None),
+                status=status,
+                executed_at=(result.ended_at if result is not None else None),
+            ),
+        )
+    except Exception as exc:
+        logger.warning(
+            f"_record_gate_execution status=skip scope_id={scope_id!r} "
+            f"gate={gate_id!r} detail={exc!s}"
+        )
+
+
+def _score_gate_run(
+    criterion: CriterionSpec,
+    gate: GateSpec,
+    *,
+    result: CheckResult,
+    tier: int,
+    scope_id: str,
+    state_path: Path,
+    after_gate_execute: AfterGateExecute | None,
+) -> OracleResult | None:
+    """Turn one completed gate run into a decisive result, or into nothing.
+
+    Receipts the run, then classifies it. ``None`` means the run was not
+    decisive for the criterion and the caller moves to the next gate: either a
+    non-blocking verdict, which the close may ignore, or a run that observed
+    nothing, which there is no honest way to score.
+
+    A run can exit non-zero having asserted nothing at all -- a pytest selector
+    that matched no test, a named path that does not resolve. Reading that as
+    the criterion failing accuses the wave's work of a defect the gate never
+    looked for, so it is refused the way an argv that cannot red is refused, and
+    its receipt records ``blocked`` rather than claiming a tree observation.
+
+    Args:
+        criterion: The criterion the gate is attached to.
+        gate: The gate that ran.
+        result: The runner's terminal result.
+        tier: The gate's oracle tier.
+        scope_id: Wave URN the receipt scopes to.
+        state_path: Path to ``state.json``; anchors the receipt store.
+        after_gate_execute: The durable receipt-persisting hook, or ``None``.
+
+    Returns:
+        The decisive :class:`OracleResult`, or ``None`` when this gate settles
+        nothing for the criterion.
+    """
+    if after_gate_execute is not None and result.started_at is not None:
+        after_gate_execute(criterion.id, gate.id, result)
+    blocking = gate.required and gate.policy == "block"
+    vacuous = vacuous_gate_run(
+        result.argv if result.argv is not None else _gate_argv(gate),
+        exit_status=result.exit_status,
+    )
+    gate_status: Literal["pass", "fail", "blocked"] = (
+        "blocked" if vacuous is not None else _check_result_status(result)
+    )
+    _record_gate_execution(
+        state_path,
+        scope_id=scope_id,
+        criterion_id=criterion.id,
+        gate_id=gate.id,
+        result=result,
+        status=gate_status,
+    )
+    if vacuous is not None:
+        logger.warning(
+            f"run_oracle status=gate-vacuous criterion={criterion.id!r} gate={gate.id!r} "
+            f"blocking={blocking} exit_status={result.exit_status} detail={vacuous.reason!r}"
+        )
+        if not blocking:
+            return None
+        return OracleResult(
+            tier=OracleTier(tier),
+            status="blocked",
+            criterion_id=criterion.id,
+            gate_id=gate.id,
+            detail=f"gate argv observed nothing: {vacuous.message()}",
+            check_result=result,
+        )
+    if gate_status != "pass" and not blocking:
+        logger.debug(
+            f"run_oracle mode=deterministic criterion={criterion.id!r} gate={gate.id!r} "
+            f"tier={tier} status={gate_status} blocking=False"
+        )
+        return None
+    logger.info(
+        f"run_oracle mode=deterministic criterion={criterion.id!r} gate={gate.id!r} "
+        f"tier={tier} status={gate_status} blocking={blocking}"
+    )
+    return OracleResult(
+        tier=OracleTier(tier),
+        status=gate_status,
+        criterion_id=criterion.id,
+        gate_id=gate.id,
+        detail=result.details or "",
+        check_result=result,
+    )
+
+
 async def _run_deterministic_gates(  # noqa: C901
     criterion: CriterionSpec,
     ordered: list[GateSpec],
     *,
+    scope_id: str,
     repo_root: Path,
+    state_path: Path,
     freshness_by_gate: dict[str, GateFreshnessInput] | None,
     reusable_pass_gate_ids: set[str] | None,
     before_gate_execute: BeforeGateExecute | None,
     after_gate_execute: AfterGateExecute | None,
     require_all_deterministic: bool,
+    close_attempt_id: str,
 ) -> OracleResult | None:
     """Run ordered deterministic gates and return the first decisive result."""
     from eawf.runtime.daemon.gate_execution import (
         GateChildCrashError,
+        GateExecutionContext,
         current_gate_context,
         run_gate_out_of_process,
     )
 
     gate_context = current_gate_context()
+    durable = before_gate_execute is not None
+    if gate_context is None and durable and close_attempt_id:
+        # A durable close whose identity arrived as a claim CALLBACK rather
+        # than as bound context still has to execute out of process. The
+        # callback cannot be pickled into a child, but the identity behind it
+        # -- the live ledger path plus the attempt id -- is plain data, so it
+        # is rebuilt here and handed down as the child's claim descriptor. The
+        # child then re-runs the identical claim against the identical live
+        # ledger, which is why the callback itself is NOT invoked in this
+        # process: a parent-side claim would be seen by the child as an
+        # already-claimed key and block every gate as indeterminate.
+        gate_context = GateExecutionContext(
+            state_path=state_path,
+            attempt_id=close_attempt_id,
+        )
     last_pass: OracleResult | None = None
     for gate in ordered:
         tier = _gate_sort_key(gate)
-        if before_gate_execute is None:
+        unfalsifiable = unfalsifiable_argv(_gate_argv(gate))
+        if unfalsifiable is not None:
+            # The gate names a command whose exit status cannot depend on the
+            # tree, so running it would record a pass that proves nothing. A
+            # required blocking gate refuses the close outright; a non-blocking
+            # one is dropped, because a verdict it cannot fail is not evidence.
+            if gate.required and gate.policy == "block":
+                logger.warning(
+                    f"run_oracle status=gate-unfalsifiable criterion={criterion.id!r} "
+                    f"gate={gate.id!r} detail={unfalsifiable.reason!r}"
+                )
+                return OracleResult(
+                    tier=OracleTier(tier),
+                    status="blocked",
+                    criterion_id=criterion.id,
+                    gate_id=gate.id,
+                    detail=f"gate argv cannot fail: {unfalsifiable.message()}",
+                )
+            logger.warning(
+                f"run_oracle status=gate-unfalsifiable-skipped criterion={criterion.id!r} "
+                f"gate={gate.id!r} detail={unfalsifiable.reason!r}"
+            )
+            continue
+        if not durable:
             reused = _reused_pass_result(
                 criterion,
                 gate,
@@ -218,26 +461,26 @@ async def _run_deterministic_gates(  # noqa: C901
                     criterion_id=criterion.id,
                     gate_id=gate.id,
                 )
-            elif before_gate_execute is None:
+            elif not durable:
+                # Advisory scoring claims nothing, so the cheaper batch runner
+                # is enough -- but it still runs in a sandboxed child, because
+                # the gate itself is the hazard, not the bookkeeping around it.
                 results = await asyncio.to_thread(
-                    run_checks,
+                    run_checks_out_of_process,
                     [spec],
                     cwd=repo_root,
+                    live_state_path=state_path,
                 )
                 result = results[0]
             else:
-                before_execute = partial(
-                    before_gate_execute,
-                    criterion.id,
-                    gate.id,
+                # Fail closed. A durable close that names no attempt cannot
+                # claim its freshness key in the child, and running it here
+                # instead would point a gate suite at the live runtime pair --
+                # the one thing this branch must never do.
+                raise ValueError(
+                    "durable gate execution has no claimable attempt identity: "
+                    f"gate={gate.id!r} criterion={criterion.id!r}"
                 )
-                results = await asyncio.to_thread(
-                    run_checks,
-                    [spec],
-                    cwd=repo_root,
-                    before_execute=before_execute,
-                )
-                result = results[0]
         except GateChildCrashError:
             # A crashed runner proved nothing about the wave, so it must not be
             # recorded as a gate verdict; it surfaces as a harness fault that
@@ -248,7 +491,20 @@ async def _run_deterministic_gates(  # noqa: C901
                 f"run_oracle status=gate-blocked criterion={criterion.id!r} "
                 f"gate={gate.id!r} detail={exc!s}"
             )
-            if before_gate_execute is not None and gate.required and gate.policy == "block":
+            # A gate that died before returning a verdict still ran, and a
+            # verification history that silently omits it is the hole this
+            # receipt closes: the row records the argv that was attempted and
+            # a blocked outcome with no exit status.
+            _record_gate_execution(
+                state_path,
+                scope_id=scope_id,
+                criterion_id=criterion.id,
+                gate_id=gate.id,
+                result=None,
+                status="blocked",
+                argv=_gate_argv(gate),
+            )
+            if durable and gate.required and gate.policy == "block":
                 return OracleResult(
                     tier=OracleTier(tier),
                     status="blocked",
@@ -257,42 +513,21 @@ async def _run_deterministic_gates(  # noqa: C901
                     detail=f"durable gate execution blocked: {exc!s}",
                 )
             continue
-        if after_gate_execute is not None and result.started_at is not None:
-            after_gate_execute(criterion.id, gate.id, result)
-        gate_status = _check_result_status(result)
-        if gate_status == "pass":
-            logger.info(
-                f"run_oracle status=pass criterion={criterion.id!r} gate={gate.id!r} tier={tier}"
-            )
-            passed_result = OracleResult(
-                tier=OracleTier(tier),
-                status="pass",
-                criterion_id=criterion.id,
-                gate_id=gate.id,
-                detail=result.details or "",
-                check_result=result,
-            )
-            if not require_all_deterministic:
-                return passed_result
-            last_pass = passed_result
-            continue
-        if gate.required and gate.policy == "block":
-            logger.info(
-                f"run_oracle mode=deterministic criterion={criterion.id!r} "
-                f"gate={gate.id!r} tier={tier} status={gate_status} blocking=True"
-            )
-            return OracleResult(
-                tier=OracleTier(tier),
-                status=gate_status,
-                criterion_id=criterion.id,
-                gate_id=gate.id,
-                detail=result.details or "",
-                check_result=result,
-            )
-        logger.debug(
-            f"run_oracle mode=deterministic criterion={criterion.id!r} "
-            f"gate={gate.id!r} tier={tier} status={gate_status} blocking=False"
+        scored = _score_gate_run(
+            criterion,
+            gate,
+            result=result,
+            tier=tier,
+            scope_id=scope_id,
+            state_path=state_path,
+            after_gate_execute=after_gate_execute,
         )
+        if scored is None:
+            continue
+        if scored.status == "pass" and require_all_deterministic:
+            last_pass = scored
+            continue
+        return scored
     return last_pass
 
 
@@ -312,6 +547,7 @@ async def run_oracle(
     before_gate_execute: BeforeGateExecute | None = None,
     after_gate_execute: AfterGateExecute | None = None,
     require_all_deterministic: bool = False,
+    close_attempt_id: str = "",
 ) -> OracleResult:
     """Score *criterion* by escalating its gates from cheapest tier upward.
 
@@ -323,14 +559,24 @@ async def run_oracle(
        kind sorts last so it never crashes the sort or jumps a known
        deterministic gate.
     2. For each gate, when ``criterion.evidence_kind == "deterministic"``,
-       compile it (:func:`compile_gate`) and run it
-       (:func:`run_checks`, offloaded to a worker thread via
+       compile it (:func:`compile_gate`) and run it in a SANDBOXED CHILD --
+       :func:`~eawf.runtime.daemon.gate_execution.run_gate_out_of_process`
+       under a durable identity, else
+       :func:`~eawf.workflow.verify.sandboxed_checks.run_checks_out_of_process`
+       -- offloaded to a worker thread via
        :func:`asyncio.to_thread` so the subprocess-bearing gate never starves
-       the daemon event loop). The FIRST required/blocking deterministic gate
+       the daemon event loop. The FIRST required/blocking deterministic gate
        that yields ``status in {"fail", "blocked"}`` returns a non-pass
        result at that gate's tier; the first deterministic ``pass`` returns a
        pass at that tier. A gate that raises is caught and recorded as a
-       ``blocked`` skip (it never aborts the escalation).
+       ``blocked`` skip (it never aborts the escalation). Every gate that
+       reaches execution leaves one durable receipt
+       (:func:`eawf.workflow.verify.gate_receipts.gate_execution_receipt`)
+       carrying its argv, exit status and timestamp, and a gate whose argv
+       cannot exit non-zero
+       (:func:`eawf.kernel.spec.falsifiability.unfalsifiable_argv`) is
+       refused before it runs rather than scored as a pass it could not
+       have failed.
     3. When no deterministic gate produced a blocking result or pass (or none
        exist), consult the
        jury tier: the async cross-vendor jury when
@@ -355,7 +601,9 @@ async def run_oracle(
             jury (mutated in place by the convener as each juror
             registers its session).
         state_path: Path to ``state.json``; the verdict stores resolve
-            under its sibling ``store/`` directory.
+            under its sibling ``store/`` directory, the deterministic tier
+            snapshots it into each gate child's sandbox ledger, and a durable
+            close claims its freshness keys against it.
         events_path: Path to ``event.jsonl`` for per-juror session-start
             events.
         repo_root: Repository root the deterministic checks run against
@@ -374,11 +622,18 @@ async def run_oracle(
         reusable_pass_gate_ids: Gates whose persisted pass receipts match the
             caller's complete frozen-input identity.
         before_gate_execute: Optional durable pre-execution claim callback.
-            Returning a result suppresses the subprocess.
+            Its PRESENCE marks the close durable; the claim itself is made by
+            the gate child under the same identity, so the callback is not
+            invoked here (claiming in both processes would read as a
+            double-claim and block every gate).
         after_gate_execute: Optional terminal-result callback. Called only for
             results with execution timestamps, including receipt reuse.
         require_all_deterministic: Run every required deterministic gate
             instead of returning after the first pass.
+        close_attempt_id: Durable close attempt the gate child claims its
+            freshness keys under. Required whenever *before_gate_execute* is
+            set and no gate context is bound; an empty value there refuses the
+            gate rather than falling back to in-process execution.
 
     Returns:
         An :class:`OracleResult` carrying the tier that produced the
@@ -401,12 +656,15 @@ async def run_oracle(
         deterministic = await _run_deterministic_gates(
             criterion,
             ordered,
+            scope_id=wave.id,
             repo_root=repo_root,
+            state_path=state_path,
             freshness_by_gate=freshness_by_gate,
             reusable_pass_gate_ids=reusable_pass_gate_ids,
             before_gate_execute=before_gate_execute,
             after_gate_execute=after_gate_execute,
             require_all_deterministic=require_all_deterministic,
+            close_attempt_id=close_attempt_id,
         )
         if deterministic is not None:
             return deterministic

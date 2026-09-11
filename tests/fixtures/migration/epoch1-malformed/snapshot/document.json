@@ -1,0 +1,83 @@
+{
+  "actuals": {},
+  "agent_sessions": {},
+  "artifacts": {
+    "ART-01": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "ART-01",
+      "kind": 7,
+      "uri": ".ea/artifacts/research/ART-01.md",
+      "urn": "urn:eawf:artifact:ART-01"
+    }
+  },
+  "audits": {
+    "A001": {
+      "id": "A001",
+      "kind": "evaluation",
+      "scope_id": "P01-I01",
+      "status": "complete",
+      "verdict": "pass"
+    }
+  },
+  "backlog": {
+    "": {
+      "created_at": "2026-01-01T00:00:00Z",
+      "id": "B001",
+      "scope_id": "DEMO",
+      "status": "open",
+      "title": "Backlog B001"
+    }
+  },
+  "claims": null,
+  "close_attempts": {},
+  "current": {},
+  "decisions": {
+    "D01": "a decision that never became an object"
+  },
+  "dispatch_paused": false,
+  "estimates": {},
+  "fleet_run": null,
+  "goals": {},
+  "health": null,
+  "hypotheses": null,
+  "incidents": {
+    "INC01": {
+      "id": "INC01",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "scope_id": "DEMO",
+      "severity": "low",
+      "status": "closed",
+      "title": "Incident INC01"
+    }
+  },
+  "indexes": {},
+  "iters": {
+    "P01-I01": {
+      "id": "P01-I99",
+      "opened_at": "2026-01-01T00:00:00Z",
+      "phase_id": "P01",
+      "status": "CLOSED",
+      "title": "Close P01-I99"
+    }
+  },
+  "mcp_grants": null,
+  "mcp_servers": null,
+  "memory_index": {},
+  "open_questions": null,
+  "outcomes": null,
+  "phases": null,
+  "plugins": {},
+  "project": {},
+  "sandbox_policies": {},
+  "schema_version": "1.19",
+  "scope_kind": "project",
+  "tracks": null,
+  "updated_at": "2026-01-01T00:00:00Z",
+  "urn": {},
+  "wave_dependency_barriers": {},
+  "wave_dependency_bindings": {},
+  "wave_integrations": {},
+  "waves": [],
+  "workspace": null,
+  "worktrees": {}
+}

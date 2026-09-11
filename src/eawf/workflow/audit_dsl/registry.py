@@ -7,14 +7,26 @@ input so an unknown kind cannot reach the dispatch table.
 Sandbox-policy boundary
 -----------------------
 
-:func:`_check_command_exit_zero` shells out via :func:`subprocess.run`.
-The DSL runner does NOT enforce the sandbox/permission policy table
-in v0.2 — callers (the ``audit run`` command, CI driver, etc.) are
-responsible for invoking ``eawf wave policy show`` and refusing
-disallowed argv. Tracked as backlog item B074 for v0.4 hardening
-via :func:`eawf.runtime.sandbox.argv_policy.validate_gate_argv`. See
-``docs/architecture/audit-checks.md`` for the full boundary
-discussion.
+:func:`_check_command_exit_zero` shells out via :func:`subprocess.run`,
+and the argv it spawns can come from free-form agent-supplied
+directives, so the runner is itself a policy boundary rather than a
+callers-know-best pass-through. Two controls sit in front of the spawn:
+
+* Every argv is routed through
+  :func:`eawf.runtime.sandbox.argv_policy.validate_gate_argv` against
+  :data:`~eawf.kernel.spec.promotion.DEFAULT_GATE_ARGV_ALLOWLIST`. The
+  reject raises before the child starts, so an argv the L0 policy
+  refuses is never executed no matter which caller assembled it.
+* The child environment is built by
+  :func:`eawf.runtime.sandbox.env_scrub.build_child_env` on the no-auth
+  :data:`~eawf.runtime.sandbox.env_scrub.GATE_RUNTIME_LANE`, so the
+  parent's credentials do not reach a gate that authenticates to
+  nothing.
+
+Both controls bind every caller of the runner, including the
+out-of-process close child, because they live below the dispatch table
+rather than in any one front-end. See
+``docs/architecture/audit-checks.md`` for the full boundary discussion.
 
 W15 hardening
 -------------
@@ -49,7 +61,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 import platform
 import re
 import shlex
@@ -62,6 +73,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from eawf.kernel.spec.promotion import DEFAULT_GATE_ARGV_ALLOWLIST
 from eawf.platform.artifacts.references import (
     Citation,
     CitationValidationError,
@@ -69,6 +81,12 @@ from eawf.platform.artifacts.references import (
     validate_dense_citation_refs,
 )
 from eawf.platform.lint._conditional import changed_files
+from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, validate_gate_argv
+from eawf.runtime.sandbox.env_scrub import (
+    GATE_RUNTIME_LANE,
+    build_child_env,
+    resolve_binary_dir,
+)
 from eawf.workflow.audit_dsl.kinds.affordance_parity import check_affordance_parity
 from eawf.workflow.audit_dsl.kinds.backlog_resolution import BACKLOG_RESOLUTION_KIND
 from eawf.workflow.audit_dsl.kinds.criterion_in_diff import check_criterion_in_diff
@@ -662,6 +680,20 @@ def _check_command_exit_zero(
     publishes the resolved set through :data:`_GATE_FILES_ENV`, and
     maps :class:`subprocess.TimeoutExpired` to
     ``CheckResult(status="blocked", passed=False)``.
+
+    A ``CheckSpec`` reaching this runner can carry an argv assembled from
+    free-form agent-supplied directives, so the argv is checked against
+    the L0 policy and the child environment is built from the no-auth
+    allowlist floor -- both BEFORE the scope resolution that would
+    otherwise shell out on the rejected spec's behalf.
+
+    Raises:
+        ValueError: When ``spec.args`` does not validate against
+            :class:`CommandExitZeroArgs`.
+        ArgvPolicyError: When ``args['argv']`` is rejected by the L0
+            argv policy. Raised before any child process is spawned, and
+            a :class:`ValueError` subclass so callers that already map
+            invalid args onto a typed error need no new branch.
     """
     try:
         args = CommandExitZeroArgs.model_validate(spec.args)
@@ -670,6 +702,16 @@ def _check_command_exit_zero(
             f"check {spec.name!r} kind=command_exit_zero: invalid args: {exc}"
         ) from exc
     argv = list(args.argv)
+    try:
+        validate_gate_argv(argv, allowlist=list(DEFAULT_GATE_ARGV_ALLOWLIST))
+    except ArgvPolicyError as exc:
+        logger.warning(
+            f"_check_command_exit_zero reject gate_id={spec.name!r} "
+            f"reason=argv-policy detail={str(exc)!r}"
+        )
+        raise ArgvPolicyError(
+            f"check {spec.name!r} kind=command_exit_zero: argv rejected by L0 policy: {exc}"
+        ) from exc
     timeout_class = args.timeout_class
     seconds = (
         args.timeout_s if args.timeout_s is not None else _TIMEOUT_CLASS_SECONDS[timeout_class]
@@ -682,7 +724,17 @@ def _check_command_exit_zero(
         diff_base=diff_base,
         cwd=cwd,
     )
-    child_env = {**os.environ, _GATE_FILES_ENV: _GATE_FILES_SEPARATOR.join(selected_files)}
+    # The child gets the env-scrub floor, never the parent environment: a
+    # gate command authenticates to nothing, so handing it the operator's
+    # AWS / GH / vendor credentials only widens what a hostile gate can
+    # exfiltrate. The resolved binary's own directory is re-admitted to the
+    # pinned PATH so an allowlisted tool installed outside the floor still
+    # execs.
+    child_env = build_child_env(
+        GATE_RUNTIME_LANE,
+        extra_path_dir=resolve_binary_dir(argv[0]),
+    )
+    child_env[_GATE_FILES_ENV] = _GATE_FILES_SEPARATOR.join(selected_files)
     selected_digest = _selected_file_digest(selected_files)
     supplied_freshness = spec.freshness
     runner_fingerprint, environment_fingerprint = _execution_fingerprints(spec)
@@ -704,8 +756,6 @@ def _check_command_exit_zero(
         f"files={len(selected_files)}"
     )
 
-    # Sandbox-policy enforcement is the caller's responsibility in v0.2;
-    # see docs/architecture/audit-checks.md (B074 follow-up).
     started_at = datetime.now(UTC)
     started_ns = time.perf_counter_ns()
     try:

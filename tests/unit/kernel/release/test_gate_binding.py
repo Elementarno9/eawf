@@ -43,7 +43,7 @@ from eawf.kernel.spec.release import ReleaseGateProfile
 from eawf.kernel.spec.release_config import ReleaseGateName
 from eawf.workflow.release.train import DEV1_GATE_BINDINGS_YAML, gate_bindings_for
 from eawf.workflow.verify.release_readiness import GATE_SIGNAL_BINDINGS
-from tests.unit.kernel.release.conftest import SOURCE_SHA, dev1_binding_rows
+from tests._release_helpers import SOURCE_SHA, dev1_binding_rows
 
 
 def _table(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -119,10 +119,15 @@ def test_dev1_binds_exactly_three_proof_commands() -> None:
 
 def test_readiness_projection_is_derived_from_the_authored_table() -> None:
     bindings = gate_bindings_for(ReleaseGateProfile.DEV1)
-    assert {
-        gate: binding.required_signal for gate, binding in bindings.items()
-    } == GATE_SIGNAL_BINDINGS
+    projected = {gate: binding.required_signal for gate, binding in bindings.items()}
+    assert projected.items() <= GATE_SIGNAL_BINDINGS.items()
     assert set(GATE_SIGNAL_BINDINGS) == set(ReleaseGateName)
+
+
+def test_readiness_projection_covers_every_authored_profile() -> None:
+    bindings = gate_bindings_for(ReleaseGateProfile.DEV2)
+    projected = {gate: binding.required_signal for gate, binding in bindings.items()}
+    assert projected == GATE_SIGNAL_BINDINGS
 
 
 # --- an unbound profile gate ----------------------------------------
@@ -158,7 +163,7 @@ def test_load_rejects_an_undeclared_profile() -> None:
 
 def test_profile_gates_rejects_an_undeclared_profile() -> None:
     with pytest.raises(GateBindingError) as excinfo:
-        profile_gates(ReleaseGateProfile.DEV2)
+        profile_gates(ReleaseGateProfile.NATIVE_CANARY)
     assert excinfo.value.code is GateBindingRejection.UNDECLARED_PROFILE
 
 
@@ -197,6 +202,15 @@ def test_load_rejects_a_component_on_a_signal_that_declares_none() -> None:
 def test_load_rejects_a_gate_the_profile_does_not_admit() -> None:
     rows = dev1_binding_rows()
     rows[0]["gate"] = "migration"
+    with pytest.raises(GateBindingError) as excinfo:
+        load_gate_bindings(_table(rows), profile=ReleaseGateProfile.DEV1)
+    assert excinfo.value.code is GateBindingRejection.UNBOUND_GATE_OUTSIDE_PROFILE
+    assert "migration" in str(excinfo.value)
+
+
+def test_load_rejects_a_gate_name_the_vocabulary_does_not_declare() -> None:
+    rows = dev1_binding_rows()
+    rows[0]["gate"] = "reproducibility_vibes"
     with pytest.raises(GateBindingError) as excinfo:
         load_gate_bindings(_table(rows), profile=ReleaseGateProfile.DEV1)
     assert excinfo.value.code is GateBindingRejection.SCHEMA_INVALID

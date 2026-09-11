@@ -25,7 +25,6 @@ reporting ``unavailable`` -- an unproven signal, not a passing one.
 from __future__ import annotations
 
 import logging
-import os
 import re
 import subprocess
 from dataclasses import dataclass, field
@@ -41,6 +40,12 @@ from eawf.platform.lint.exclusion_expiry import (
     decision_ids_from_state,
     expired_exclusions,
     validate_renewals,
+)
+from eawf.workflow.evidence.migration_rehearsal import (
+    REHEARSED_CORPORA,
+    rehearsal_evidence_refs,
+    rehearsal_findings,
+    summarise,
 )
 from eawf.workflow.verify.release_readiness import (
     ReleaseSignalContext,
@@ -295,33 +300,71 @@ def _probe_changelog(
     return _passing(f"{CHANGELOG_FILENAME}:{inputs.version}")
 
 
-def _probe_migration(
-    inputs: TagPreflightInputs, context: ReleaseSignalContext
-) -> ReleaseSignalOutcome:
-    """Report whether the changelog section states the migration outcome.
+def _migration_note_gap(inputs: TagPreflightInputs) -> str:
+    """Return why the changelog does not state the migration outcome.
 
     A release that needs no migration says so in one line. Silence is
-    indistinguishable from a forgotten migration note, so it fails.
+    indistinguishable from a forgotten migration note, so it counts as a
+    gap.
 
     Args:
         inputs: The chokepoint's inputs.
-        context: The sweep's context (unused; the note lives beside the
-            changelog entries).
 
     Returns:
-        Passing when a line of the section names the migration outcome.
+        The gap in one line, or ``""`` when the section names the
+        migration outcome.
     """
-    del context
     path = inputs.repo_root / CHANGELOG_FILENAME
     if not path.exists():
-        return _failing(f"{CHANGELOG_FILENAME} is absent; the migration outcome is unstated")
+        return f"{CHANGELOG_FILENAME} is absent, so the migration outcome is unstated"
     section = _changelog_section(path.read_text(encoding="utf-8"), inputs.version)
     if not any(_MIGRATION_RE.search(line) for line in section):
-        return _failing(
-            f"the {inputs.version!r} changelog section states no migration outcome; name the "
-            f"migration or say none is required"
+        return (
+            f"the {inputs.version!r} changelog section states no migration outcome; name "
+            f"the migration or say none is required"
         )
-    return _passing(f"{CHANGELOG_FILENAME}:{inputs.version}:migration")
+    return ""
+
+
+def _probe_migration(
+    inputs: TagPreflightInputs, context: ReleaseSignalContext
+) -> ReleaseSignalOutcome:
+    """Report whether the cutover is rehearsed and its outcome is stated.
+
+    The row carries two readings of one claim. The load-bearing one is
+    the committed rehearsal: every corpus of
+    :data:`~eawf.workflow.evidence.migration_rehearsal.REHEARSED_CORPORA`
+    has a record, and every leg of every record holds. The second is the
+    changelog note, which is what a reader of the release -- rather than
+    a reader of the evidence -- actually sees.
+
+    An absent record is reported ``unavailable`` and a disagreeing leg
+    ``fail``, because they are different repairs: the first needs the
+    rehearsal run, the second needs the cutover fixed. Both carry the
+    ``migration_unproven`` failure code, so neither reads as a pass.
+
+    Args:
+        inputs: The chokepoint's inputs, naming the checkout the
+            rehearsal records were committed in.
+        context: The sweep's context (unused; the rehearsal is a
+            property of the tree, not of the checkpoint).
+
+    Returns:
+        Passing when every declared corpus is rehearsed, every leg
+        holds, and the changelog states the outcome.
+    """
+    del context
+    findings = rehearsal_findings(inputs.repo_root)
+    note_gap = _migration_note_gap(inputs)
+    if not findings and not note_gap:
+        return _passing(*rehearsal_evidence_refs())
+    detail = "; ".join(part for part in (summarise(findings), note_gap) if part)
+    remediation = (
+        f"the cutover is not proven over the {len(REHEARSED_CORPORA)} rehearsed corpora: {detail}"
+    )
+    if findings and all(finding.is_absence for finding in findings):
+        return _unproven(remediation)
+    return _failing(remediation)
 
 
 def _probe_module_length_exclusion(
@@ -400,54 +443,6 @@ def _probe_module_length_exclusion(
     )
 
 
-def _probe_credentials(
-    inputs: TagPreflightInputs, context: ReleaseSignalContext
-) -> ReleaseSignalOutcome:
-    """Report whether every declared publication handle is held here.
-
-    Only targets that declare a ``credential_handle`` are checked. A
-    target without one holds no handle by construction -- PyPI trusted
-    publishing exchanges an OIDC token at publish time, GitHub releases
-    ride the ambient workflow token -- so there is nothing to look for
-    and claiming otherwise would red on a target that is fine.
-
-    Presence is all that is checked, never the value: a handle that is
-    set but wrong fails at publish, which no pre-publish sweep can
-    foresee without spending the credential. The failure this catches is
-    the cheap and common one -- the handle is not wired into the
-    environment running the publish at all.
-
-    Args:
-        inputs: The chokepoint's inputs (unused; a handle is a property
-            of the environment, not of the checkout).
-        context: The sweep's per-signal context, read for the
-            checkpoint's declared targets.
-
-    Returns:
-        Passing when every required target's declared handle is set and
-        non-empty; failing and naming the handles that are not.
-    """
-    del inputs
-    declared = tuple(
-        (target.target_id, target.credential_handle)
-        for target in context.config.targets
-        if target.required and target.credential_handle is not None
-    )
-    if not declared:
-        return _passing("credentials:no-handle-bearing-target")
-    missing = tuple(
-        f"{target_id}:{handle}" for target_id, handle in declared if not os.environ.get(handle, "")
-    )
-    if missing:
-        return _failing(
-            f"{len(missing)} publication handle(s) not set in this environment: "
-            f"{', '.join(missing)}; export them before sweeping, or run the sweep where "
-            f"the publish runs",
-            *(f"credential-missing:{ref}" for ref in missing),
-        )
-    return _passing(*(f"credential-present:{target_id}:{handle}" for target_id, handle in declared))
-
-
 def build_tag_probes(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, ReleaseSignalProbe]:
     """Return the probe registry the tag chokepoint sweeps *inputs* with.
 
@@ -461,6 +456,13 @@ def build_tag_probes(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, Rele
         partial member: it can red the row on a lapsed module-length
         exemption but never greens it, since the rest of the realization
         assertions have no producer.
+
+        ``credentials`` is deliberately not among them. Every target on
+        this train authenticates by OIDC or the ambient workflow token,
+        so no shipped checkpoint holds a named handle for the probe to
+        look for; the probe could only ever return its own no-op pass,
+        which is a green row that measures nothing. The row reports
+        ``unavailable`` -- no producer -- which is the honest answer.
     """
     logger.info(
         f"build_tag_probes version={inputs.version!r} tag={inputs.tag!r} remote={inputs.remote!r}"
@@ -472,7 +474,6 @@ def build_tag_probes(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, Rele
         ReleaseSignalName.TREE_CLEANLINESS: partial(_probe_tree_cleanliness, inputs),
         ReleaseSignalName.MIGRATION: partial(_probe_migration, inputs),
         ReleaseSignalName.PERFECT_REALIZATION: partial(_probe_module_length_exclusion, inputs),
-        ReleaseSignalName.CREDENTIALS: partial(_probe_credentials, inputs),
     }
 
 

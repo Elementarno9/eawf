@@ -34,6 +34,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -81,6 +82,19 @@ _SETTLE_MAX_CYCLES: int = 20
 #: cap only guards against an unbounded log dump if the two frames diverge
 #: wholesale (e.g. an empty capture vs a populated golden).
 _DRIFT_DIFF_MAX_LINES: int = 200
+
+#: Upper bound on the CHARACTERS a close-gate golden-mismatch detail may
+#: inline. A line cap alone does not bound the payload: a full-width TUI
+#: frame is ~100 columns, so :data:`_DRIFT_DIFF_MAX_LINES` of it is ~20 KB,
+#: and the detail flows onward into a state-resident evidence row. The
+#: budget sits below the close scorer's own detail bound so the region
+#: header and the first hunk survive the refusal message intact.
+_GOLDEN_DIFF_DETAIL_MAX_CHARS: int = 1200
+
+#: Characters held back from a diff-body budget for the truncation marker,
+#: so the marker is never the line that does not fit. Comfortably wider than
+#: the rendered marker for any plausible line count.
+_DIFF_TRUNCATION_RESERVE: int = 64
 
 #: Upper bound on the mtime-poll backstop pump cycles. A tight poll cadence
 #: (set via ``EAWF_POLL_INTERVAL_S``) ticks within a couple of message-pump
@@ -873,6 +887,22 @@ def mockup_golden_diff_detail(golden_path: Path, expected: str, captured: str) -
     The first unified-diff hunk marker is surfaced in the opening sentence as
     ``region=...`` so close-gate errors name the changed region even when the
     caller truncates the multiline diff.
+
+    The diff body is bounded twice -- by :data:`_DRIFT_DIFF_MAX_LINES` and by
+    :data:`_GOLDEN_DIFF_DETAIL_MAX_CHARS` -- because the line cap alone does
+    not bound the payload: a full-width frame diverging wholesale yields a
+    diff of the frame's own width times the line cap, and this detail travels
+    on into a close-refusal message and a state-resident evidence row.
+
+    Args:
+        golden_path: The approved golden the capture was compared against.
+        expected: The golden text (the ``---`` side of the diff).
+        captured: The live, normalised capture (the ``+++`` side).
+
+    Returns:
+        A header sentence naming the golden, the changed region and the first
+        changed line, followed by as much of the unified diff as the character
+        budget allows. The header is never truncated.
     """
     diff = difflib.unified_diff(
         expected.splitlines(),
@@ -894,11 +924,52 @@ def mockup_golden_diff_detail(golden_path: Path, expected: str, captured: str) -
         ),
         "none",
     )
-    body = "\n".join(capped)
-    return (
+    header = (
         f"mockup golden mismatch for {golden_path.name!r}: "
-        f"region={region} first_change={first_change}\n{body}"
+        f"region={region} first_change={first_change}"
     )
+    body = _budgeted_diff_body(capped, budget=_GOLDEN_DIFF_DETAIL_MAX_CHARS)
+    return f"{header}\n{body}"
+
+
+def _budgeted_diff_body(lines: Sequence[str], *, budget: int) -> str:
+    """Join *lines* into a diff body no longer than *budget* characters.
+
+    Whole lines are kept so the body stays a readable diff. The first line
+    that would breach the budget, and every line after it, is dropped in
+    favour of one marker naming how many lines went unshown -- a truncated
+    body that does not SAY it was truncated reads as a complete diff, which
+    is how a reader concludes the frames agree past the last line shown.
+    Room for that marker is reserved before any line is kept, so the marker
+    can never itself be the thing that does not fit. A lone first line wider
+    than the whole budget is sliced, so every input honours the budget.
+
+    Args:
+        lines: The unified-diff lines, in order.
+        budget: Maximum characters the joined body may occupy. Must exceed
+            :data:`_DIFF_TRUNCATION_RESERVE`; the only caller's constant
+            clears it by a factor of eighteen.
+
+    Returns:
+        The joined body, at most *budget* characters long.
+    """
+    kept: list[str] = []
+    used = 0
+    shown = 0
+    line_budget = budget - _DIFF_TRUNCATION_RESERVE
+    for line in lines:
+        cost = len(line) + (1 if kept else 0)
+        if used + cost > line_budget:
+            break
+        kept.append(line)
+        used += cost
+        shown += 1
+    if shown == len(lines):
+        return "\n".join(kept)
+    marker = f"... (diff truncated at {shown} of {len(lines)} lines)"
+    if not kept:
+        return marker[:budget]
+    return "\n".join([*kept, marker])
 
 
 def _drift_message(golden_path: Path, expected: str, captured: str) -> str:

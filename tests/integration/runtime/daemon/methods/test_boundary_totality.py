@@ -29,9 +29,9 @@ import pytest
 from eawf.workflow.release import (
     ledger,
     lifecycle,
-    observe,
     preflight,
     publication,
+    settlement,
     target_machine,
 )
 from eawf.workflow.release.boundaries import (
@@ -56,16 +56,19 @@ EXPECTED_SITES = frozenset(
     {
         "ledger:record_operation",
         "lifecycle:advance_release",
-        "observe:bake_release",
-        "observe:observe_target",
-        "observe:route_after_observation",
+        "lifecycle:cancel_release",
         "preflight:approve_release",
         "preflight:record_preflight_result",
         "publication:begin_publication",
         "publication:begin_verification",
+        "publication:_burn_adopted",
         "publication:burn_release",
         "publication:reconcile_target",
         "publication:retry_publication",
+        "records:record_release",
+        "settlement:bake_release",
+        "settlement:observe_target",
+        "settlement:route_after_observation",
         "target_machine:advance_target_attempt",
         "target_machine:open_target_attempt",
     }
@@ -147,7 +150,7 @@ def test_tag_push_is_the_only_boundary_the_package_scan_cannot_reach() -> None:
 def test_package_sources_reads_every_module_but_the_package_init() -> None:
     sources = package_sources()
     assert "__init__" not in sources
-    assert {"ledger", "lifecycle", "observe", "publication", "target_machine"} <= set(sources)
+    assert {"ledger", "lifecycle", "settlement", "publication", "target_machine"} <= set(sources)
 
 
 @pytest.mark.parametrize(
@@ -164,7 +167,7 @@ def test_package_sources_reads_every_module_but_the_package_init() -> None:
             },
         ),
         (publication.reconcile_target, {PublicationBoundary.EFFECT_RECEIPT_WRITE}),
-        (observe.observe_target, {PublicationBoundary.OBSERVATION_RECEIPT_WRITE}),
+        (settlement.observe_target, {PublicationBoundary.OBSERVATION_RECEIPT_WRITE}),
         (
             publication.begin_publication,
             {

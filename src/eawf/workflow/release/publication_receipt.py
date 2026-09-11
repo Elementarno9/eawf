@@ -14,7 +14,7 @@ three reported statuses. The mapping deliberately cannot reach either
 ``observed_*`` status -- a receipt is the publisher's own word about its
 own call, which is exactly what a reported status means. Confirming that
 the artifact is really on the registry is a separate read-back, and
-:func:`~eawf.workflow.release.observe.observe_target` owns it.
+:func:`~eawf.workflow.release.settlement.observe_target` owns it.
 
 An absent receipt is not a failure. A job that was cancelled, timed out
 or died before its final step leaves nothing behind, and the honest

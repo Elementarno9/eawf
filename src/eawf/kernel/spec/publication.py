@@ -43,6 +43,7 @@ from pydantic import ConfigDict, Field, model_validator
 
 from eawf.kernel.spec.common import _StrictModel
 from eawf.kernel.spec.release import (
+    OBSERVED_TARGET_STATUSES,
     ReferenceStr,
     ReleaseKeyStr,
     ReleaseTargetStatus,
@@ -119,11 +120,6 @@ EFFECT_REPORTED_STATUSES: Final[frozenset[ReleaseTargetStatus]] = frozenset(
         ReleaseTargetStatus.OBSERVED_SUCCESS,
         ReleaseTargetStatus.OBSERVED_MISMATCH,
     }
-)
-
-#: Target statuses reachable only through an independent read-back.
-OBSERVED_TARGET_STATUSES: Final[frozenset[ReleaseTargetStatus]] = frozenset(
-    {ReleaseTargetStatus.OBSERVED_SUCCESS, ReleaseTargetStatus.OBSERVED_MISMATCH}
 )
 
 

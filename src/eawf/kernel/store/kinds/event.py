@@ -55,6 +55,7 @@ EventKind = Literal[
     "runtime_paused",
     "runtime_auth_failed",
     "runtime_unavailable",
+    "session_closed",
     "session_continued",
     "session_failover",
     "session_handle_pruned",

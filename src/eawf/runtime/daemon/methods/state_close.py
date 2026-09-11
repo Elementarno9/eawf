@@ -499,6 +499,125 @@ class WaveCloseRefusalError(LifecycleError):
         )
 
 
+#: The tier word :func:`resolve_close_gate_tier` returns when the close gate
+#: has nothing left to score and the caller should return no evidence.
+CLOSE_GATE_TIER_SKIP: str = "skip"
+
+
+def resolve_close_gate_tier(
+    tier: str,
+    *,
+    wave: Wave,
+    uiux_bands: Collection[str],
+) -> str:
+    """Return the oracle tier *wave*'s close gate scores at.
+
+    Whole-fleet ``verify.enforce`` (a profile declaring no ``uiux_bands``) is
+    risk-weighted, and the weighting is about the EXPENSIVE tier: a mechanical
+    wave -- one whose :func:`~eawf.workflow.dispatch.verdict.verdict_requirement`
+    is ``"sampled"`` or ``"skip"`` rather than ``"always"`` -- earns no fresh
+    auditor and no cross-vendor jury, because a judgment call on a small
+    executor wave is not worth three vendor spawns.
+
+    It must not also skip the wave's own deterministic gates. Those are the
+    cheap rung of the same escalation ladder and they are the falsifiers the
+    wave itself declared, so a close that skipped the whole scoring pass for a
+    mechanical wave completed against a non-empty ``required_gate_ids`` with
+    zero receipts: a wave that reads as verified on every surface while nothing
+    ever observed its tree. The narrowing is therefore to the tier, not to the
+    pass -- a mechanical wave scores ``"deterministic"``, where the tier filter
+    in :func:`score_required_criteria` drops every un-gated criterion and so
+    keeps the jury tier unreached.
+
+    A band-scoped profile (non-empty *uiux_bands*) is untouched: its resolver
+    has already narrowed ``enforce`` to ``False`` for a non-band wave, so any
+    wave reaching here under a banded block is in-band and keeps *tier*.
+
+    Args:
+        tier: The tier the caller asked for (``"all"`` / ``"deterministic"`` /
+            ``"verdict"``).
+        wave: The closing wave, classified for its verdict requirement.
+        uiux_bands: The resolved verify block's band tokens; empty means a
+            whole-fleet (non-band-scoped) profile.
+
+    Returns:
+        The tier to score at, or :data:`CLOSE_GATE_TIER_SKIP` when there is
+        nothing for this pass to score (a mechanical wave asked for the verdict
+        tier it does not earn).
+    """
+    from eawf.workflow.dispatch.verdict import verdict_requirement
+
+    if uiux_bands or verdict_requirement(wave) == "always":
+        return tier
+    resolved = CLOSE_GATE_TIER_SKIP if tier == "verdict" else "deterministic"
+    logger.info(
+        f"resolve_close_gate_tier wave={wave.id} requirement=mechanical "
+        f"requested={tier} resolved={resolved} spawn=skipped"
+    )
+    return resolved
+
+
+def enforce_close_gate_receipt_floor(
+    wave: Wave,
+    *,
+    state_path: Path,
+    gate_specs: list[Any],
+    close_attempt_id: str,
+) -> None:
+    """Refuse a durable close whose obliged gates left no receipt.
+
+    The terminal check of the close gate. Everything ahead of it decides what
+    to run; this asks only whether the run left proof. Each scoring arm can
+    return an empty evidence list for a reason of its own -- a gate that
+    compiled to nothing, a criterion a tier filter dropped, a runner that died
+    before observing -- and none of those is distinguishable at the close
+    boundary from a wave that owed no deterministic proof at all. The floor
+    makes them distinguishable by reading the persisted record instead of
+    trusting the pass that produced it.
+
+    Scoped to a durable close on purpose: an advisory or daemonless close binds
+    no attempt, so it has no receipt ledger to be held to. A named attempt that
+    does not resolve to a row is likewise skipped -- there is no ledger to read,
+    and the under-lock apply snapshot refuses that close on its own terms, so
+    refusing it here would only relabel a stale close as a receipt gap.
+
+    Args:
+        wave: The closing wave; its criteria say which gates are obliged.
+        state_path: Path to the live ``state.json``. Re-read here rather than
+            taken from the caller's snapshot: the receipt ids are bound by a
+            separate commit from inside the scoring pass, so the pre-flight
+            snapshot cannot see them.
+        gate_specs: The wave's typed gate rows, as the scorer saw them.
+        close_attempt_id: The durable attempt, or ``""`` for a non-durable
+            close (the floor is then a no-op).
+
+    Raises:
+        GateReceiptFloorError: When an obliged gate has no receipt; the message
+            names the receiptless gates.
+    """
+    from eawf.runtime.daemon.methods.state_context import read_state
+    from eawf.workflow.verify.gate_receipt_floor import (
+        enforce_gate_receipt_floor,
+        receipted_gate_ids,
+    )
+
+    if not close_attempt_id:
+        return
+    attempt = read_state(state_path)[0].close_attempts.get(close_attempt_id)
+    if attempt is None:
+        logger.warning(
+            f"enforce_close_gate_receipt_floor wave={wave.id} "
+            f"attempt={close_attempt_id!r} status=skip reason=attempt-row-absent"
+        )
+        return
+    enforce_gate_receipt_floor(
+        scope_id=wave.id,
+        criteria=wave.success_criteria,
+        gates=gate_specs,
+        receipted=receipted_gate_ids(state_path, receipt_ids=attempt.gate_receipt_ids),
+    )
+
+
 async def score_required_criteria(
     wave: Wave,
     *,
@@ -580,6 +699,7 @@ async def score_required_criteria(
             before_gate_execute=before_gate_execute,
             after_gate_execute=on_gate_result,
             require_all_deterministic=bool(close_attempt_id),
+            close_attempt_id=close_attempt_id,
         )
         if result.status != "pass":
             logger.warning(

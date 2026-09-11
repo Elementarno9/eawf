@@ -37,6 +37,7 @@ from collections.abc import Iterable
 from typing import Final
 
 from eawf.kernel.spec.common import GateSpec
+from eawf.kernel.spec.falsifiability import unfalsifiable_argv
 from eawf.runtime.sandbox.argv_policy import (
     ArgvPolicyError,
     validate_gate_argv,
@@ -121,12 +122,18 @@ def validate_argv_gates(
         allowlist: Optional iterable of permitted argv heads. Defaults
             to :data:`DEFAULT_GATE_ARGV_ALLOWLIST` when ``None``.
 
+    A surviving argv is then checked for falsifiability via
+    :func:`eawf.kernel.spec.falsifiability.unfalsifiable_argv`: an argv
+    whose exit status cannot depend on the tree scores a pass on every
+    close, so it is refused here rather than promoted into a gate
+    manifest that no defect can ever red.
+
     Raises:
         SpecPromoteValidationError: When any argv-bearing gate's
-            ``args["argv"]`` is missing, mis-shaped, or rejected by the
-            L0 argv-policy. The message names the offending gate id
-            and the underlying reason so callers can re-emit it
-            verbatim.
+            ``args["argv"]`` is missing, mis-shaped, rejected by the
+            L0 argv-policy, or fixed at exit 0 whatever the tree holds.
+            The message names the offending gate id and the underlying
+            reason so callers can re-emit it verbatim.
     """
     # The annotation is load-bearing: a ``Final`` tuple of string literals
     # narrows to its literal element types, so an unannotated ``list(...)``
@@ -157,6 +164,15 @@ def validate_argv_gates(
             raise SpecPromoteValidationError(
                 f"gate {gate.id!r} argv rejected by L0 policy: {reason}"
             ) from exc
+        unfalsifiable = unfalsifiable_argv(argv)
+        if unfalsifiable is not None:
+            logger.warning(
+                f"validate_argv_gates reject gate={gate.id!r} reason=unfalsifiable-argv "
+                f"detail={unfalsifiable.reason!r}"
+            )
+            raise SpecPromoteValidationError(
+                f"gate {gate.id!r} argv cannot fail: {unfalsifiable.message()}"
+            )
 
 
 __all__ = [

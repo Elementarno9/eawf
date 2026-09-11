@@ -520,6 +520,9 @@ def test_store_kind_values() -> None:
         "commit_repin",
         # P31-I01-W27 -- publication operations + per-target attempt ledger.
         "release",
+        # The checkpoint record itself, kept apart from the publication
+        # ledger so the two never share an envelope id namespace.
+        "release_record",
     }
     actual = {m.value for m in enums.StoreKind}
     assert actual == expected

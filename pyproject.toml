@@ -604,10 +604,14 @@ path = "src/eawf/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/eawf"]
-# ``_data/`` is populated at wheel-build time by the custom build hook
-# below (it does not exist in the source tree). Force-include keeps it
-# in the wheel even though it is gitignored / generated.
-force-include = { "src/eawf/_data" = "eawf/_data" }
+# ``_data/`` is generated (and gitignored) -- the custom build hook below
+# writes it under ``src/eawf/`` before the archive is assembled, so the
+# ``packages`` glob above is the single mechanism that carries it into the
+# wheel. ``artifacts`` only lifts the VCS-ignore exclusion for that tree; a
+# ``force-include`` here would add every file a second time and abort the
+# build with a duplicate archive member whenever the hook had already run
+# in place.
+artifacts = ["/src/eawf/_data/**"]
 
 [tool.hatch.build.targets.wheel.hooks.custom]
 # Custom build hook that populates ``src/eawf/_data/`` from the
@@ -628,26 +632,14 @@ service_templates = [
     "eawfd.service.j2",
     "dev.eawf.eawfd.plist.j2",
 ]
-# Wheel-size ceiling enforced by the packaging gate (bytes). The C10
-# design targeted 1 MB against a ~350 KB source-only wheel; the tree grew
-# through P22-P27 so the literal 1 MB target is unreachable. After the
-# P27-I05 layered regroup + dead-code trim the bundled wheel measured
-# ~1.47 MB and the ceiling was set at 1.6 MiB (~14 % headroom). The P28-I03
-# verify-spine + IntentBrief-consumer surface (W57 / W60) added flag help
-# text and dispatch wiring that pushed the wheel to ~1.61 MB. Recalibrate
-# 2026-05-28 to 2 MiB (2097152) so headroom returns to ~19 % while still
-# catching a large regression (e.g. accidentally bundling all three plugin
-# trees or the rendered docs subset). Recalibrate down once the plugin
-# trees move behind install extras. P29 (v0.5) added the EAWF016-019 lint
-# suite, the math doc-type, the plugin skill bodies, and the 1.5 schema —
-# all pure src code (verified: no .vale / golden / plugin-tree bundling) —
-# pushing the wheel to ~2.06 MiB; recalibrate to 2.5 MiB (~21 % headroom).
-# P30 (the binding pass, 67 waves: fleet drive-loop, Track substrate, trust
-# validation, TUI cockpit) grew the pure-src wheel to ~2.6 MiB (verified: still
-# no .ea / golden / tests / plugin-tree bundling, only eawf/** modules);
-# recalibrate to 3 MiB (~10 % headroom) — the gate still catches accidental
-# data-bundling bloat. The v0.6.1 lifecycle guards and doctor diagnostics grew
-# the wheel to ~3.03 MiB without changing the two-file service-template bundle;
-# recalibrate to 3.5 MiB (~16 % headroom) so legitimate source growth remains
-# distinct from accidental plugin-tree or docs bundling.
-wheel_max_bytes = 3670016
+# Wheel-size ceiling enforced by the packaging gate (bytes). Every archive
+# member lives under the ``eawf/**`` package tree -- modules, the profile data
+# YAMLs, and the two service templates above -- so the ceiling is a bloat
+# alarm: it catches an accidental bundle of the plugin trees, the rendered
+# docs subset, or the golden fixtures, and is not a cap on legitimate source
+# growth. Measured 3713148 bytes (~3.54 MiB) on 2026-09-10; 4 MiB (4194304)
+# leaves ~13% headroom over that measurement, enough for ordinary module
+# growth while any data-tree bundling overshoots by whole megabytes. Raise it
+# only against a fresh ``uv build --wheel`` measurement, and read the archive
+# member list first to confirm the growth really is package code.
+wheel_max_bytes = 4194304

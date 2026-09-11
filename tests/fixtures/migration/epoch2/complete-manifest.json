@@ -1,0 +1,1153 @@
+{
+  "backup": null,
+  "git_evidence": {
+    "evidence_digest": "03fb1132cfc39f01c1900bb05c5a6b222a0d7ae7eda54a213826c9c04c09492f",
+    "facts": [
+      {
+        "address": "backlog/B003",
+        "field": "commit",
+        "kind": "commit",
+        "value": "0f1e2d3"
+      }
+    ]
+  },
+  "idempotence_digest": "9b56dce229e8afef040a9fc3420b23171b085854fb7492f36b496386e4198d11",
+  "manifest_digest": "5ee341fccf3f67b5366230a116ad18d37cdeb6516aff30ec527267db99bc7b77",
+  "mapping_rules": [
+    {
+      "implementation_version": "epoch2-1",
+      "rule_digest": "96b1910e934cbe66791ee6cb06bda80f18b071a91ec8b732c384a5fed3d26349",
+      "rule_id": "DOM-004",
+      "source_kind": "document",
+      "title": "Migration is total: every collection, status and required field has a declared rule"
+    },
+    {
+      "implementation_version": "epoch2-1",
+      "rule_digest": "c6a51a5a45dfa107c8a4fdffdbaa0e1ba79bac2f626ef61b6b3bb2da87d4deb8",
+      "rule_id": "DOM-017",
+      "source_kind": "estimates",
+      "title": "An estimate re-points at the Task its map key names, never at its own row id"
+    },
+    {
+      "implementation_version": "epoch2-1",
+      "rule_digest": "ca7891e549e5cc813643ed3d2cd10dbb99fa75df38d59a1744855c6ca6243280",
+      "rule_id": "DOM-018",
+      "source_kind": "backlog",
+      "title": "Obsolescence reads the allowed-legacy-symbol allowlist; a rename is not a deletion"
+    },
+    {
+      "implementation_version": "epoch2-1",
+      "rule_digest": "24565fd1ba7954b3570775883013f04e086b34119986e735176d3e7902693a1a",
+      "rule_id": "DOM-019",
+      "source_kind": "actuals",
+      "title": "An actual re-points with its quality marker and exclusion flag verbatim"
+    },
+    {
+      "implementation_version": "epoch2-1",
+      "rule_digest": "8c3cee9b0c648ec30281102a966ebcfec549b66cf71469500105e7bf8be8c30e",
+      "rule_id": "DOM-041",
+      "source_kind": "agent_sessions",
+      "title": "A Run is minted only from a resolving claim entry or a wave attempt entry"
+    },
+    {
+      "implementation_version": "epoch2-1",
+      "rule_digest": "599868fca784e40b26de3696cbb8613dc02f58ba69c9d45276b3944f3d6e5135",
+      "rule_id": "DOM-043",
+      "source_kind": "waves",
+      "title": "A legacy claim-session id is a string on the envelope and never a canonical reference"
+    },
+    {
+      "implementation_version": "epoch2-1",
+      "rule_digest": "24f2867fbfc9a419e051261faed46756c733202b8ea9e6de1ddfa2f1f732797c",
+      "rule_id": "DOM-044",
+      "source_kind": "backlog",
+      "title": "A closed backlog row drops through a total ordered four-arm classifier"
+    },
+    {
+      "implementation_version": "epoch2-1",
+      "rule_digest": "b8ce3510d7a8086d897c34120f2596831c44841117523357081f6b49f6021f95",
+      "rule_id": "DOM-045",
+      "source_kind": "audits",
+      "title": "The audit population is the union of the audits collection and the audit ledger"
+    }
+  ],
+  "rollback_boundary": "plan_only",
+  "row_mappings": [
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "actuals",
+      "source_row_count": 5,
+      "source_tier": "ledger",
+      "target_collection": "actual",
+      "target_row_count": 5,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "split_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "agent_sessions",
+      "source_row_count": 45,
+      "source_tier": "ledger",
+      "target_collection": "run|legacy",
+      "target_row_count": 45,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "artifacts",
+      "source_row_count": 3,
+      "source_tier": "ledger",
+      "target_collection": "artifact",
+      "target_row_count": 3,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "audits",
+      "source_row_count": 81,
+      "source_tier": "ledger",
+      "target_collection": "audit",
+      "target_row_count": 105,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "backlog",
+      "source_row_count": 3,
+      "source_tier": "document|ledger",
+      "target_collection": "task",
+      "target_row_count": 3,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": "null_not_empty",
+      "shape": "keyed_rows",
+      "source_collection": "claims",
+      "source_row_count": null,
+      "source_tier": "ledger",
+      "target_collection": "claim",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "explicit_drop",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "close_attempts",
+      "source_row_count": 1,
+      "source_tier": "-",
+      "target_collection": "-",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "derived_projection",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "mapping",
+      "source_collection": "current",
+      "source_row_count": 3,
+      "source_tier": "document",
+      "target_collection": "current",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "decisions",
+      "source_row_count": 2,
+      "source_tier": "ledger",
+      "target_collection": "decision",
+      "target_row_count": 0,
+      "unresolved_row_count": 2
+    },
+    {
+      "disposition": "derived_projection",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "scalar",
+      "source_collection": "dispatch_paused",
+      "source_row_count": null,
+      "source_tier": "derived",
+      "target_collection": "dispatch_paused",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "estimates",
+      "source_row_count": 6,
+      "source_tier": "ledger",
+      "target_collection": "estimate",
+      "target_row_count": 6,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "derived_projection",
+      "operator_assignment_count": 0,
+      "proof_form": "null_not_empty",
+      "shape": "mapping",
+      "source_collection": "fleet_run",
+      "source_row_count": null,
+      "source_tier": "derived",
+      "target_collection": "fleet_run",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 1,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "goals",
+      "source_row_count": 1,
+      "source_tier": "document",
+      "target_collection": "track_outcome",
+      "target_row_count": 1,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "derived_projection",
+      "operator_assignment_count": 0,
+      "proof_form": "null_not_empty",
+      "shape": "mapping",
+      "source_collection": "health",
+      "source_row_count": null,
+      "source_tier": "derived",
+      "target_collection": "health_view",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": "null_not_empty",
+      "shape": "keyed_rows",
+      "source_collection": "hypotheses",
+      "source_row_count": null,
+      "source_tier": "ledger",
+      "target_collection": "hypothesis",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "incidents",
+      "source_row_count": 1,
+      "source_tier": "ledger",
+      "target_collection": "incident",
+      "target_row_count": 0,
+      "unresolved_row_count": 1
+    },
+    {
+      "disposition": "derived_projection",
+      "operator_assignment_count": 0,
+      "proof_form": "zero_rows",
+      "shape": "mapping",
+      "source_collection": "indexes",
+      "source_row_count": 0,
+      "source_tier": "derived",
+      "target_collection": "indexes",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "iters",
+      "source_row_count": 3,
+      "source_tier": "document|ledger",
+      "target_collection": "batch",
+      "target_row_count": 3,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": "null_not_empty",
+      "shape": "keyed_rows",
+      "source_collection": "mcp_grants",
+      "source_row_count": null,
+      "source_tier": "document",
+      "target_collection": "tool_authority",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": "null_not_empty",
+      "shape": "keyed_rows",
+      "source_collection": "mcp_servers",
+      "source_row_count": null,
+      "source_tier": "document",
+      "target_collection": "capability",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "memory_index",
+      "source_row_count": 2,
+      "source_tier": "ledger",
+      "target_collection": "memory",
+      "target_row_count": 2,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": "null_not_empty",
+      "shape": "keyed_rows",
+      "source_collection": "open_questions",
+      "source_row_count": null,
+      "source_tier": "document",
+      "target_collection": "open_question",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": "null_not_empty",
+      "shape": "keyed_rows",
+      "source_collection": "outcomes",
+      "source_row_count": null,
+      "source_tier": "document",
+      "target_collection": "track_outcome",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 3,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "phases",
+      "source_row_count": 3,
+      "source_tier": "document|ledger",
+      "target_collection": "milestone",
+      "target_row_count": 3,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "immutable_legacy_record",
+      "operator_assignment_count": 0,
+      "proof_form": "zero_rows",
+      "shape": "keyed_rows",
+      "source_collection": "plugins",
+      "source_row_count": 0,
+      "source_tier": "ledger",
+      "target_collection": "legacy",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "mapping",
+      "source_collection": "project",
+      "source_row_count": 3,
+      "source_tier": "document",
+      "target_collection": "project",
+      "target_row_count": 0,
+      "unresolved_row_count": 1
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "sandbox_policies",
+      "source_row_count": 1,
+      "source_tier": "document",
+      "target_collection": "sandbox_policy",
+      "target_row_count": 0,
+      "unresolved_row_count": 1
+    },
+    {
+      "disposition": null,
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "scalar",
+      "source_collection": "schema_version",
+      "source_row_count": null,
+      "source_tier": "metadata",
+      "target_collection": "-",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": null,
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "scalar",
+      "source_collection": "scope_kind",
+      "source_row_count": null,
+      "source_tier": "metadata",
+      "target_collection": "-",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": "null_not_empty",
+      "shape": "keyed_rows",
+      "source_collection": "tracks",
+      "source_row_count": null,
+      "source_tier": "document",
+      "target_collection": "track",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": null,
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "scalar",
+      "source_collection": "updated_at",
+      "source_row_count": null,
+      "source_tier": "metadata",
+      "target_collection": "-",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": null,
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "scalar",
+      "source_collection": "urn",
+      "source_row_count": null,
+      "source_tier": "metadata",
+      "target_collection": "-",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "explicit_drop",
+      "operator_assignment_count": 0,
+      "proof_form": "zero_rows",
+      "shape": "keyed_rows",
+      "source_collection": "wave_dependency_barriers",
+      "source_row_count": 0,
+      "source_tier": "-",
+      "target_collection": "-",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "explicit_drop",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "wave_dependency_bindings",
+      "source_row_count": 1,
+      "source_tier": "-",
+      "target_collection": "-",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "explicit_drop",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "wave_integrations",
+      "source_row_count": 1,
+      "source_tier": "-",
+      "target_collection": "-",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "waves",
+      "source_row_count": 3,
+      "source_tier": "document|ledger",
+      "target_collection": "task",
+      "target_row_count": 3,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "native_conversion",
+      "operator_assignment_count": 0,
+      "proof_form": "null_not_empty",
+      "shape": "mapping",
+      "source_collection": "workspace",
+      "source_row_count": null,
+      "source_tier": "document",
+      "target_collection": "workspace",
+      "target_row_count": 0,
+      "unresolved_row_count": 0
+    },
+    {
+      "disposition": "immutable_legacy_record",
+      "operator_assignment_count": 0,
+      "proof_form": null,
+      "shape": "keyed_rows",
+      "source_collection": "worktrees",
+      "source_row_count": 336,
+      "source_tier": "ledger",
+      "target_collection": "legacy",
+      "target_row_count": 336,
+      "unresolved_row_count": 0
+    }
+  ],
+  "schema_version": "2",
+  "seal_digest": "8e9c5e0aa4cb836423f7a6759a6f2ef9507bb0c5317421b69b74be14bd2a57b6",
+  "seal_state": "sealed",
+  "sealed_at": "2026-01-01T00:00:00Z",
+  "sealed_by": "fixture-operator",
+  "source": {
+    "identity": {
+      "project_key": "PRJ-DEMO",
+      "repository_key": "REP-DEMO",
+      "workspace_key": "WSP-DEFAULT"
+    },
+    "snapshot": {
+      "snapshot_digest": "f51ab5a127549a8c9f1e60eadf3a801eb2ef1cb84978fbcfae503460cfc29f9f",
+      "surfaces": [
+        {
+          "byte_length": 52,
+          "digest": "9a2ac2b127ae3e30a8c84c3ad6ecfd6aac4cb094df5af5a93ddc71ebf5ed9f5d",
+          "locator": "config/base.yaml",
+          "surface": "config"
+        },
+        {
+          "byte_length": 52,
+          "digest": "5ab9d6c0c1ba0ad83cdfc41a4eb42a46632e36575956958f3814eb8e0051a424",
+          "locator": "config/overlay.yaml",
+          "surface": "config"
+        },
+        {
+          "byte_length": 130462,
+          "digest": "cf06c2148eeaa422ed0b7a387f6f81cc11b0ad93f3fb4b263a3d0c49ee03af35",
+          "locator": "document.json",
+          "surface": "document"
+        },
+        {
+          "byte_length": 100,
+          "digest": "b50a9a3dd2d21a6391d71e070f8f2876163e70a9a3a771c3c3b7c660da9e6544",
+          "locator": "registry.json",
+          "surface": "registry"
+        },
+        {
+          "byte_length": 26460,
+          "digest": "591545c1d2cd3dfe2e3f6847e50e69910734a949a6072a8959d225c0fcce985e",
+          "locator": "store/audit.jsonl",
+          "surface": "store"
+        },
+        {
+          "byte_length": 364,
+          "digest": "fa8a5c317b44e61ca8b780a0bd668679c22e8b62769d87197ea45b80920718f3",
+          "locator": "store/decision.jsonl",
+          "surface": "store"
+        },
+        {
+          "byte_length": 114,
+          "digest": "de617f868501a40fd024938bb7e3ebbfea4e924fd44abe80a466438a051aac84",
+          "locator": "telemetry.json",
+          "surface": "telemetry"
+        }
+      ]
+    },
+    "source_schema_version": "1.19"
+  },
+  "source_census": {
+    "audits": {
+      "document_rows": 81,
+      "ledger_rows": 105,
+      "refs_resolving_in_neither": [
+        "A999"
+      ],
+      "store_only_imported": 24,
+      "union_rows": 105
+    },
+    "collections": [
+      {
+        "disposition": "native_conversion",
+        "proof_form": null,
+        "row_count": 5,
+        "shape": "keyed_rows",
+        "source_collection": "actuals",
+        "target_collection": "actual",
+        "tier": "ledger"
+      },
+      {
+        "disposition": "split_conversion",
+        "proof_form": null,
+        "row_count": 45,
+        "shape": "keyed_rows",
+        "source_collection": "agent_sessions",
+        "target_collection": "run|legacy",
+        "tier": "ledger"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": null,
+        "row_count": 3,
+        "shape": "keyed_rows",
+        "source_collection": "artifacts",
+        "target_collection": "artifact",
+        "tier": "ledger"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": null,
+        "row_count": 81,
+        "shape": "keyed_rows",
+        "source_collection": "audits",
+        "target_collection": "audit",
+        "tier": "ledger"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": null,
+        "row_count": 3,
+        "shape": "keyed_rows",
+        "source_collection": "backlog",
+        "target_collection": "task",
+        "tier": "document|ledger"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": "null_not_empty",
+        "row_count": null,
+        "shape": "keyed_rows",
+        "source_collection": "claims",
+        "target_collection": "claim",
+        "tier": "ledger"
+      },
+      {
+        "disposition": "explicit_drop",
+        "proof_form": null,
+        "row_count": 1,
+        "shape": "keyed_rows",
+        "source_collection": "close_attempts",
+        "target_collection": "-",
+        "tier": "-"
+      },
+      {
+        "disposition": "derived_projection",
+        "proof_form": null,
+        "row_count": 3,
+        "shape": "mapping",
+        "source_collection": "current",
+        "target_collection": "current",
+        "tier": "document"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": null,
+        "row_count": 2,
+        "shape": "keyed_rows",
+        "source_collection": "decisions",
+        "target_collection": "decision",
+        "tier": "ledger"
+      },
+      {
+        "disposition": "derived_projection",
+        "proof_form": null,
+        "row_count": null,
+        "shape": "scalar",
+        "source_collection": "dispatch_paused",
+        "target_collection": "dispatch_paused",
+        "tier": "derived"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": null,
+        "row_count": 6,
+        "shape": "keyed_rows",
+        "source_collection": "estimates",
+        "target_collection": "estimate",
+        "tier": "ledger"
+      },
+      {
+        "disposition": "derived_projection",
+        "proof_form": "null_not_empty",
+        "row_count": null,
+        "shape": "mapping",
+        "source_collection": "fleet_run",
+        "target_collection": "fleet_run",
+        "tier": "derived"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": null,
+        "row_count": 1,
+        "shape": "keyed_rows",
+        "source_collection": "goals",
+        "target_collection": "track_outcome",
+        "tier": "document"
+      },
+      {
+        "disposition": "derived_projection",
+        "proof_form": "null_not_empty",
+        "row_count": null,
+        "shape": "mapping",
+        "source_collection": "health",
+        "target_collection": "health_view",
+        "tier": "derived"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": "null_not_empty",
+        "row_count": null,
+        "shape": "keyed_rows",
+        "source_collection": "hypotheses",
+        "target_collection": "hypothesis",
+        "tier": "ledger"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": null,
+        "row_count": 1,
+        "shape": "keyed_rows",
+        "source_collection": "incidents",
+        "target_collection": "incident",
+        "tier": "ledger"
+      },
+      {
+        "disposition": "derived_projection",
+        "proof_form": "zero_rows",
+        "row_count": 0,
+        "shape": "mapping",
+        "source_collection": "indexes",
+        "target_collection": "indexes",
+        "tier": "derived"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": null,
+        "row_count": 3,
+        "shape": "keyed_rows",
+        "source_collection": "iters",
+        "target_collection": "batch",
+        "tier": "document|ledger"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": "null_not_empty",
+        "row_count": null,
+        "shape": "keyed_rows",
+        "source_collection": "mcp_grants",
+        "target_collection": "tool_authority",
+        "tier": "document"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": "null_not_empty",
+        "row_count": null,
+        "shape": "keyed_rows",
+        "source_collection": "mcp_servers",
+        "target_collection": "capability",
+        "tier": "document"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": null,
+        "row_count": 2,
+        "shape": "keyed_rows",
+        "source_collection": "memory_index",
+        "target_collection": "memory",
+        "tier": "ledger"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": "null_not_empty",
+        "row_count": null,
+        "shape": "keyed_rows",
+        "source_collection": "open_questions",
+        "target_collection": "open_question",
+        "tier": "document"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": "null_not_empty",
+        "row_count": null,
+        "shape": "keyed_rows",
+        "source_collection": "outcomes",
+        "target_collection": "track_outcome",
+        "tier": "document"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": null,
+        "row_count": 3,
+        "shape": "keyed_rows",
+        "source_collection": "phases",
+        "target_collection": "milestone",
+        "tier": "document|ledger"
+      },
+      {
+        "disposition": "immutable_legacy_record",
+        "proof_form": "zero_rows",
+        "row_count": 0,
+        "shape": "keyed_rows",
+        "source_collection": "plugins",
+        "target_collection": "legacy",
+        "tier": "ledger"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": null,
+        "row_count": 3,
+        "shape": "mapping",
+        "source_collection": "project",
+        "target_collection": "project",
+        "tier": "document"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": null,
+        "row_count": 1,
+        "shape": "keyed_rows",
+        "source_collection": "sandbox_policies",
+        "target_collection": "sandbox_policy",
+        "tier": "document"
+      },
+      {
+        "disposition": null,
+        "proof_form": null,
+        "row_count": null,
+        "shape": "scalar",
+        "source_collection": "schema_version",
+        "target_collection": "-",
+        "tier": "metadata"
+      },
+      {
+        "disposition": null,
+        "proof_form": null,
+        "row_count": null,
+        "shape": "scalar",
+        "source_collection": "scope_kind",
+        "target_collection": "-",
+        "tier": "metadata"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": "null_not_empty",
+        "row_count": null,
+        "shape": "keyed_rows",
+        "source_collection": "tracks",
+        "target_collection": "track",
+        "tier": "document"
+      },
+      {
+        "disposition": null,
+        "proof_form": null,
+        "row_count": null,
+        "shape": "scalar",
+        "source_collection": "updated_at",
+        "target_collection": "-",
+        "tier": "metadata"
+      },
+      {
+        "disposition": null,
+        "proof_form": null,
+        "row_count": null,
+        "shape": "scalar",
+        "source_collection": "urn",
+        "target_collection": "-",
+        "tier": "metadata"
+      },
+      {
+        "disposition": "explicit_drop",
+        "proof_form": "zero_rows",
+        "row_count": 0,
+        "shape": "keyed_rows",
+        "source_collection": "wave_dependency_barriers",
+        "target_collection": "-",
+        "tier": "-"
+      },
+      {
+        "disposition": "explicit_drop",
+        "proof_form": null,
+        "row_count": 1,
+        "shape": "keyed_rows",
+        "source_collection": "wave_dependency_bindings",
+        "target_collection": "-",
+        "tier": "-"
+      },
+      {
+        "disposition": "explicit_drop",
+        "proof_form": null,
+        "row_count": 1,
+        "shape": "keyed_rows",
+        "source_collection": "wave_integrations",
+        "target_collection": "-",
+        "tier": "-"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": null,
+        "row_count": 3,
+        "shape": "keyed_rows",
+        "source_collection": "waves",
+        "target_collection": "task",
+        "tier": "document|ledger"
+      },
+      {
+        "disposition": "native_conversion",
+        "proof_form": "null_not_empty",
+        "row_count": null,
+        "shape": "mapping",
+        "source_collection": "workspace",
+        "target_collection": "workspace",
+        "tier": "document"
+      },
+      {
+        "disposition": "immutable_legacy_record",
+        "proof_form": null,
+        "row_count": 336,
+        "shape": "keyed_rows",
+        "source_collection": "worktrees",
+        "target_collection": "legacy",
+        "tier": "ledger"
+      }
+    ],
+    "identity": {
+      "snapshot_digest": "f51ab5a127549a8c9f1e60eadf3a801eb2ef1cb84978fbcfae503460cfc29f9f",
+      "surfaces": [
+        {
+          "byte_length": 52,
+          "digest": "9a2ac2b127ae3e30a8c84c3ad6ecfd6aac4cb094df5af5a93ddc71ebf5ed9f5d",
+          "locator": "config/base.yaml",
+          "surface": "config"
+        },
+        {
+          "byte_length": 52,
+          "digest": "5ab9d6c0c1ba0ad83cdfc41a4eb42a46632e36575956958f3814eb8e0051a424",
+          "locator": "config/overlay.yaml",
+          "surface": "config"
+        },
+        {
+          "byte_length": 130462,
+          "digest": "cf06c2148eeaa422ed0b7a387f6f81cc11b0ad93f3fb4b263a3d0c49ee03af35",
+          "locator": "document.json",
+          "surface": "document"
+        },
+        {
+          "byte_length": 100,
+          "digest": "b50a9a3dd2d21a6391d71e070f8f2876163e70a9a3a771c3c3b7c660da9e6544",
+          "locator": "registry.json",
+          "surface": "registry"
+        },
+        {
+          "byte_length": 26460,
+          "digest": "591545c1d2cd3dfe2e3f6847e50e69910734a949a6072a8959d225c0fcce985e",
+          "locator": "store/audit.jsonl",
+          "surface": "store"
+        },
+        {
+          "byte_length": 364,
+          "digest": "fa8a5c317b44e61ca8b780a0bd668679c22e8b62769d87197ea45b80920718f3",
+          "locator": "store/decision.jsonl",
+          "surface": "store"
+        },
+        {
+          "byte_length": 114,
+          "digest": "de617f868501a40fd024938bb7e3ebbfea4e924fd44abe80a466438a051aac84",
+          "locator": "telemetry.json",
+          "surface": "telemetry"
+        }
+      ]
+    },
+    "mapping_rules": [
+      {
+        "implementation_version": "epoch2-1",
+        "rule_digest": "96b1910e934cbe66791ee6cb06bda80f18b071a91ec8b732c384a5fed3d26349",
+        "rule_id": "DOM-004",
+        "source_kind": "document",
+        "title": "Migration is total: every collection, status and required field has a declared rule"
+      },
+      {
+        "implementation_version": "epoch2-1",
+        "rule_digest": "b8ce3510d7a8086d897c34120f2596831c44841117523357081f6b49f6021f95",
+        "rule_id": "DOM-045",
+        "source_kind": "audits",
+        "title": "The audit population is the union of the audits collection and the audit ledger"
+      }
+    ],
+    "row_failures": []
+  },
+  "source_digest": "f51ab5a127549a8c9f1e60eadf3a801eb2ef1cb84978fbcfae503460cfc29f9f",
+  "store_mappings": [
+    {
+      "collection": "batch",
+      "row_count": 3,
+      "tier": "ledger"
+    },
+    {
+      "collection": "legacy",
+      "row_count": 502,
+      "tier": "ledger"
+    },
+    {
+      "collection": "milestone",
+      "row_count": 3,
+      "tier": "ledger"
+    },
+    {
+      "collection": "task",
+      "row_count": 6,
+      "tier": "ledger"
+    },
+    {
+      "collection": "track_outcome",
+      "row_count": 1,
+      "tier": "document"
+    }
+  ],
+  "target_census": {
+    "by_collection": {
+      "batch": 3,
+      "legacy": 502,
+      "milestone": 3,
+      "task": 6,
+      "track_outcome": 1
+    },
+    "by_entity_kind": {
+      "batch": 3,
+      "legacy-record": 502,
+      "milestone": 3,
+      "task": 6
+    },
+    "census_digest": "cc6415aef55b60a600d1024552693e22084f5cb7b497de45ee44b10fe8362814",
+    "planned_rows": 1,
+    "total_rows": 515
+  },
+  "tier_placement": null,
+  "track_assignments": [
+    {
+      "address": "phases/P01",
+      "candidates": [],
+      "reason": "source_has_no_field",
+      "source_collection": "phases",
+      "target_collection": "milestone",
+      "target_field": "primary_track_ref"
+    },
+    {
+      "address": "phases/P02",
+      "candidates": [],
+      "reason": "source_has_no_field",
+      "source_collection": "phases",
+      "target_collection": "milestone",
+      "target_field": "primary_track_ref"
+    },
+    {
+      "address": "phases/P03",
+      "candidates": [],
+      "reason": "source_has_no_field",
+      "source_collection": "phases",
+      "target_collection": "milestone",
+      "target_field": "primary_track_ref"
+    },
+    {
+      "address": "goals/G01",
+      "candidates": [],
+      "reason": "source_has_no_field",
+      "source_collection": "goals",
+      "target_collection": "track_outcome",
+      "target_field": "track_ref"
+    }
+  ],
+  "unresolved_rows": [
+    {
+      "address": "decisions/D01",
+      "detail": "'decisions' declares a conversion no importer rule implements, so the cutover has nowhere to write the row",
+      "reason": "no_converter",
+      "source_collection": "decisions"
+    },
+    {
+      "address": "decisions/D02",
+      "detail": "'decisions' declares a conversion no importer rule implements, so the cutover has nowhere to write the row",
+      "reason": "no_converter",
+      "source_collection": "decisions"
+    },
+    {
+      "address": "incidents/INC01",
+      "detail": "'incidents' declares a conversion no importer rule implements, so the cutover has nowhere to write the row",
+      "reason": "no_converter",
+      "source_collection": "incidents"
+    },
+    {
+      "address": "project",
+      "detail": "'project' declares a conversion no importer rule implements, so the cutover has nowhere to write the row",
+      "reason": "no_converter",
+      "source_collection": "project"
+    },
+    {
+      "address": "sandbox_policies/SP01",
+      "detail": "'sandbox_policies' declares a conversion no importer rule implements, so the cutover has nowhere to write the row",
+      "reason": "no_converter",
+      "source_collection": "sandbox_policies"
+    }
+  ],
+  "validation_results": [
+    {
+      "alias_collisions": [],
+      "aliased_rows": 514,
+      "canonical_references": 14,
+      "dangling_references": [],
+      "fabrication_findings": [],
+      "identity_digest": "301eb89112d6c87300671ca87ddd3948d4bde7643e1a1b82c1fd512a27890363",
+      "minted_records": 514,
+      "pass_index": 1,
+      "payload_byte_length": 2999,
+      "report_digest": "a47edb09355c3eae558081ba1ace797cef64fcf2e1b5ff1b59eacb7f542bd90b",
+      "source_rows": 514
+    },
+    {
+      "alias_collisions": [],
+      "aliased_rows": 514,
+      "canonical_references": 14,
+      "dangling_references": [],
+      "fabrication_findings": [],
+      "identity_digest": "301eb89112d6c87300671ca87ddd3948d4bde7643e1a1b82c1fd512a27890363",
+      "minted_records": 514,
+      "pass_index": 2,
+      "payload_byte_length": 2999,
+      "report_digest": "a47edb09355c3eae558081ba1ace797cef64fcf2e1b5ff1b59eacb7f542bd90b",
+      "source_rows": 514
+    }
+  ]
+}

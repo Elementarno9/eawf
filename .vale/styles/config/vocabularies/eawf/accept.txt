@@ -130,6 +130,7 @@ fsync
 functional_suitability
 Graphviz
 iff
+idempotency
 insort
 IPs
 JSON-RPC

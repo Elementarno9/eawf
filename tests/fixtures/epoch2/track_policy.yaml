@@ -1,0 +1,21 @@
+# The strict nested TrackPolicy document of the epoch-2 domain contract.
+# Every nested shape is closed: an unknown key anywhere below fails the
+# loader rather than being dropped.
+revision: 1
+wip:
+  active_milestones: 1
+  active_batches_per_repo: 1
+ownership_principal:
+  principal_kind: operator
+  principal_id: OP-0001
+permitted_milestone_kinds: [product]
+campaign_templates: []
+outcome_metrics:
+  - metric_id: MET-INSTALLABLE
+    unit: boolean
+    measurement_locus: milestone_acceptance
+promotion_rules: []
+integration_priority: 50
+presentation:
+  default_view: roadmap
+  color_token: accent_blue

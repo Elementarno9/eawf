@@ -7,7 +7,7 @@ pin the tree, neither of which says anything about the classifier.
 
 The wiring cases at the end are the ones that matter most. A producer
 that exists but is not in
-:data:`~eawf.workflow.release.producers.DEFAULT_RELEASE_PROBES` leaves
+:data:`~eawf.workflow.release.signal_probes.DEFAULT_RELEASE_PROBES` leaves
 the ``dependencies`` row exactly as ``unavailable`` as it was before the
 producer was written.
 """
@@ -42,14 +42,14 @@ from eawf.workflow.release.dependencies import (
     normalized_name,
     shipped_distributions,
 )
-from eawf.workflow.release.producers import (
+from eawf.workflow.release.pipeline_receipts import receipt_path, write_receipt
+from eawf.workflow.release.signal_probes import (
     DEFAULT_RELEASE_PROBES,
     build_receipt_probes,
     dependencies_probe,
 )
-from eawf.workflow.release.receipts import receipt_path, write_receipt
 from eawf.workflow.release.vulnerability import VulnerabilityReport
-from tests.unit.kernel.release.conftest import dev1_config
+from tests._release_helpers import dev1_config
 
 pytestmark = pytest.mark.unit
 

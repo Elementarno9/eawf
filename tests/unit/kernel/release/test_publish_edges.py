@@ -45,7 +45,7 @@ from eawf.workflow.release.publication import (
 )
 from eawf.workflow.release.target_machine import advance_target_attempt
 from eawf.workflow.verify.release_readiness import ReleaseReadiness, compute_readiness
-from tests.unit.kernel.release.conftest import (
+from tests._release_helpers import (
     MANIFEST_DIGEST,
     NOW,
     all_passing,
@@ -447,13 +447,28 @@ def test_burned_version_never_returns_to_draft_or_cancelled() -> None:
     burned, _abandoned = burn_release(record, config, operation)
     assert RELEASE_TRANSITIONS[burned.status] == frozenset()
     assert burned.status in TERMINAL_RELEASE_STATUSES
-    for forbidden in (ReleaseStatus.DRAFT, ReleaseStatus.CANCELLED):
-        with pytest.raises(ReleaseTransitionError) as excinfo:
-            burn_release(
-                Release.model_validate(
-                    burned.model_copy(update={"status": forbidden}).model_dump(mode="json")
-                ),
-                config,
-                operation,
-            )
-        assert excinfo.value.code is ReleaseDenialCode.ILLEGAL_RELEASE_TRANSITION
+
+
+def test_burn_from_cancelled_is_an_illegal_edge() -> None:
+    record, operation, config = exhausted()
+    burned, _abandoned = burn_release(record, config, operation)
+    cancelled = Release.model_validate(
+        burned.model_copy(update={"status": ReleaseStatus.CANCELLED}).model_dump(mode="json")
+    )
+
+    with pytest.raises(ReleaseTransitionError) as excinfo:
+        burn_release(cancelled, config, operation)
+
+    assert excinfo.value.code is ReleaseDenialCode.ILLEGAL_RELEASE_TRANSITION
+
+
+def test_burn_from_draft_without_an_adoption_is_refused() -> None:
+    """The draft burn is the adoption route, not a way past approval."""
+    record, operation, config = exhausted()
+    burned, _abandoned = burn_release(record, config, operation)
+    drafted = Release.model_validate(
+        burned.model_copy(update={"status": ReleaseStatus.DRAFT}).model_dump(mode="json")
+    )
+
+    with pytest.raises(ValueError, match="no publication operation and no adoption"):
+        burn_release(drafted, config, operation)

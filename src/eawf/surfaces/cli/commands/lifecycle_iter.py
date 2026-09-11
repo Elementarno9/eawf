@@ -652,7 +652,15 @@ def iter_close_cmd(
     exists; the pre-flight below refuses before any wire traffic so the
     daemon-proxy path is gated too, and ``close_iter`` re-checks under the
     write lock for the in-process path.
+
+    The ODR dials (``verify.odr_floor`` / ``verify.odr_blocking``) ride the
+    same resolved verify block this path already reads for strict audit
+    acceptance, so a repo that opted into blocking ODR is refused here exactly
+    as it is daemon-side. Without that threading the gate would enforce or not
+    purely by whether the daemon happened to be reachable, and this in-process
+    path is the sanctioned CI / one-shot / recovery route.
     """
+    from eawf.observability.metrics.odr import DEFAULT_ODR_FLOOR
     from eawf.workflow.lifecycle._audit_acceptance import AUDIT_MINOR_BACKLOG_TRIAGE
     from eawf.workflow.lifecycle.transitions import close_iter
     from eawf.workflow.verify.readiness import load_active_verify_block
@@ -692,6 +700,8 @@ def iter_close_cmd(
             audit_id=audit,
             checkpoint_commit=checkpoint,
             project_root=config_root,
+            odr_floor=DEFAULT_ODR_FLOOR if verify_block is None else verify_block.odr_floor,
+            odr_blocking=verify_block is not None and verify_block.odr_blocking,
             require_audit_accepted=bool(
                 verify_block is not None and verify_block.require_iter_audit_accepted
             ),

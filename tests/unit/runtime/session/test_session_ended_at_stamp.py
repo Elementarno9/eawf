@@ -26,6 +26,7 @@ import pytest
 
 from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
 from eawf.kernel.state.models import AgentSession, State
+from eawf.kernel.store.kinds.events.session_closed import SessionClosedPayload
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.hooks.event import HookEvent, HookEventType
 from eawf.runtime.hooks.runner import stamp_session_end_on_exit
@@ -130,7 +131,12 @@ def test_exit_stamped_ended_at_survives_the_boot_reconcile(tmp_path: Path) -> No
 
 
 def test_stamp_ended_at_appends_a_close_event(tmp_path: Path) -> None:
-    """The exit stamp leaves a ``session.close`` row in the event store."""
+    """The exit stamp leaves the human ``session.close`` row plus its typed twin.
+
+    The flat row is the operator-facing timeline; the typed ``session_closed``
+    row beside it is what the telemetry projection derives a session from, so
+    the exit path must write both.
+    """
     state_path = _write_state(
         tmp_path, _session("SES-1", runtime_session_id="vendor-1", scope_id=_SCOPE)
     )
@@ -140,7 +146,10 @@ def test_stamp_ended_at_appends_a_close_event(tmp_path: Path) -> None:
 
     lines = events_path.read_text(encoding="utf-8").strip().splitlines()
     payloads = [orjson.loads(line)["payload"] for line in lines]
-    assert [row["event_type"] for row in payloads] == ["session.close"]
+    assert [row["event_type"] for row in payloads] == ["session.close", "session_closed"]
+    typed = SessionClosedPayload.model_validate(payloads[1])
+    assert typed.timestamp == _EXITED
+    assert typed.opened_at == _STARTED
 
 
 def test_stamp_ended_at_resolves_the_sole_live_session_without_vendor_id(tmp_path: Path) -> None:

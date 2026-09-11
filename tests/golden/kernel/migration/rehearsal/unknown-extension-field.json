@@ -1,0 +1,15 @@
+{
+  "disposition": "refuses",
+  "fixture": "unknown-extension-field",
+  "refusal": {
+    "apply_code": "migration_collection_unknown",
+    "message_names": [
+      "experimental_capabilities"
+    ],
+    "plan_code": "migration_collection_unknown",
+    "retry_code": "migration_collection_unknown",
+    "target_unchanged": true
+  },
+  "scrub_findings": 0,
+  "source_bytes": 2191
+}

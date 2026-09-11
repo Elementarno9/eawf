@@ -19,6 +19,16 @@ Two rules shape the table and are worth stating before reading it:
   ``VERIFYING -> RELEASED`` are guarded on independently observed
   target states, so three adapters reporting success can never by
   themselves finish a release.
+
+DRAFT carries two edges beyond the pin, and both exist because a
+publication can happen without this machine's participation. A draft
+that touched nothing may be abandoned through ``DRAFT -> CANCELLED``;
+one that adopted an uncontrolled publication may not, because the
+``no_external_effect`` guard is computed from the record by
+:func:`external_effect_started` rather than supplied by the caller.
+``DRAFT -> PARTIALLY_RELEASED`` is where such a record stops: the burn,
+reached with no publication operation to exhaust because none was ever
+opened.
 """
 
 from __future__ import annotations
@@ -29,7 +39,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
-from eawf.kernel.spec.release import Release, ReleaseStatus
+from eawf.kernel.spec.release import Release, ReleaseStatus, ReleaseTargetStatus
 from eawf.workflow.release.boundaries import PublicationBoundary, durable_boundary
 
 logger = logging.getLogger(__name__)
@@ -56,8 +66,9 @@ class ReleaseGuardName(StrEnum):
         IDEMPOTENT_RETRY: The retry carries an idempotency proof and the
             source, tag and artifact digests are unchanged, with retry
             budget remaining.
-        RECOVERY_EXHAUSTED: The recovery budget is spent and the
-            operator acknowledges the burned version.
+        RECOVERY_EXHAUSTED: The recovery budget is spent -- or never
+            existed, for a publication that ran outside the machinery --
+            and the operator acknowledges the burned version.
     """
 
     NONE = "none"
@@ -171,7 +182,13 @@ class ReleaseGuardContext:
 RELEASE_TRANSITIONS: Final[
     dict[ReleaseStatus, frozenset[tuple[ReleaseStatus, ReleaseGuardName]]]
 ] = {
-    ReleaseStatus.DRAFT: frozenset({(ReleaseStatus.CANDIDATE, ReleaseGuardName.MANIFEST_COMPLETE)}),
+    ReleaseStatus.DRAFT: frozenset(
+        {
+            (ReleaseStatus.CANDIDATE, ReleaseGuardName.MANIFEST_COMPLETE),
+            (ReleaseStatus.CANCELLED, ReleaseGuardName.NO_EXTERNAL_EFFECT),
+            (ReleaseStatus.PARTIALLY_RELEASED, ReleaseGuardName.RECOVERY_EXHAUSTED),
+        }
+    ),
     ReleaseStatus.CANDIDATE: frozenset(
         {
             (ReleaseStatus.PREFLIGHT_FAILED, ReleaseGuardName.NONE),
@@ -234,6 +251,12 @@ RELEASE_TRANSITIONS: Final[
 #: unguarded (``NONE``) edges do not, because they cannot be denied.
 RELEASE_DENIALS: Final[Mapping[tuple[ReleaseStatus, ReleaseStatus], ReleaseDenialCode]] = {
     (ReleaseStatus.DRAFT, ReleaseStatus.CANDIDATE): (ReleaseDenialCode.RELEASE_MANIFEST_INCOMPLETE),
+    (ReleaseStatus.DRAFT, ReleaseStatus.CANCELLED): (
+        ReleaseDenialCode.RELEASE_EFFECT_ALREADY_STARTED
+    ),
+    (ReleaseStatus.DRAFT, ReleaseStatus.PARTIALLY_RELEASED): (
+        ReleaseDenialCode.RECOVERY_BUDGET_AVAILABLE
+    ),
     (ReleaseStatus.CANDIDATE, ReleaseStatus.APPROVED): (ReleaseDenialCode.RELEASE_NOT_READY),
     (ReleaseStatus.CANDIDATE, ReleaseStatus.DRAFT): (
         ReleaseDenialCode.RELEASE_EFFECT_ALREADY_STARTED
@@ -300,6 +323,67 @@ def _guard_satisfied(guard: ReleaseGuardName, ctx: ReleaseGuardContext) -> bool:
         ReleaseGuardName.IDEMPOTENT_RETRY: ctx.idempotent_retry,
         ReleaseGuardName.RECOVERY_EXHAUSTED: ctx.recovery_exhausted,
     }[guard]
+
+
+def external_effect_started(release: Release) -> bool:
+    """Return whether *release* carries evidence of external effect.
+
+    The ``no_external_effect`` guard used to be answered by whichever
+    caller happened to be moving the record, and no caller ever computed
+    it -- which is how a version published to four registries could
+    still have satisfied it. The answer belongs to the record, so it is
+    derived here from the three facts a record can hold about the world:
+    an adopted uncontrolled publication, an opened publication episode,
+    or any leg that got past ``not_started``.
+
+    Args:
+        release: The record to interrogate.
+
+    Returns:
+        ``True`` when the record itself can see that something was
+        published, queued or adopted under this version.
+    """
+    return (
+        release.adoption is not None
+        or release.publication_operation_ref is not None
+        or any(
+            status is not ReleaseTargetStatus.NOT_STARTED
+            for status in release.target_statuses.values()
+        )
+    )
+
+
+@durable_boundary(PublicationBoundary.TRANSITION_APPLY)
+def cancel_release(release: Release) -> Release:
+    """Abandon *release* before any external effect, or refuse.
+
+    A cancellation is a claim that nothing was published under this
+    version, so the claim is checked against the record rather than
+    taken from the caller: the guard context is built by
+    :func:`external_effect_started`, not accepted as an argument. A
+    record that adopted an uncontrolled publication, opened an episode
+    or moved a leg is refused ``release_effect_already_started``.
+
+    Args:
+        release: The record to cancel.
+
+    Returns:
+        The successor record at :attr:`ReleaseStatus.CANCELLED`.
+
+    Raises:
+        ReleaseTransitionError: With
+            :attr:`ReleaseDenialCode.RELEASE_EFFECT_ALREADY_STARTED`
+            when the record can see external effect, or
+            :attr:`ReleaseDenialCode.ILLEGAL_RELEASE_TRANSITION` when
+            the status it stands in has no cancel edge at all.
+    """
+    cancelled = advance_release(
+        release,
+        ReleaseStatus.CANCELLED,
+        ReleaseGuardContext(external_effect_started=external_effect_started(release)),
+    )
+    logger.info(f"cancel_release key={release.key!r} frm={release.status.value!r}")
+    return cancelled
 
 
 def next_release_statuses(status: ReleaseStatus) -> frozenset[ReleaseStatus]:
@@ -412,6 +496,8 @@ __all__ = [
     "ReleaseGuardName",
     "ReleaseTransitionError",
     "advance_release",
+    "cancel_release",
+    "external_effect_started",
     "next_release_statuses",
     "validate_release_transition",
 ]
